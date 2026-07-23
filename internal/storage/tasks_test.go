@@ -50,8 +50,8 @@ func TestResolveTaskOwner(t *testing.T) {
 	// interface on node-a. The node placement lives on the INTERFACE; a task carries
 	// no node column (its placement projects from its interface).
 	if _, err := conn.Exec(ctx, `insert into interface (name, type, component, node_name, params) values
-		('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), (select principal_id from node where name = 'node-a'), '{"target":"10.0.0.1:22"}'::jsonb),
-		('shared-tcp', 'tcp', null, (select principal_id from node where name = 'node-a'), '{"target":"10.0.0.2:22"}'::jsonb)`); err != nil {
+		('disp-1-tcp', (select id from interface_type where name = 'tcp'), (select id from component where name = 'disp-1'), (select principal_id from node where name = 'node-a'), '{"target":"10.0.0.1:22"}'::jsonb),
+		('shared-tcp', (select id from interface_type where name = 'tcp'), null, (select principal_id from node where name = 'node-a'), '{"target":"10.0.0.2:22"}'::jsonb)`); err != nil {
 		t.Fatalf("insert interfaces: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, interface_id, enabled) values

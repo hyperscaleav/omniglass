@@ -202,7 +202,7 @@ func (p *PG) ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (Tas
 		ifaceNode *string
 	)
 	err := p.pool.QueryRow(ctx, `
-		select (select c.name from component c where c.id = i.component), (select n.name from node n where n.principal_id = i.node_name), i.name, i.type
+		select (select c.name from component c where c.id = i.component), (select n.name from node n where n.principal_id = i.node_name), i.name, (select it.name from interface_type it where it.id = i.type)
 		from task t
 		join interface i on i.id = t.interface_id
 		where t.id = $1`, taskID).Scan(&component, &ifaceNode, &owner.InterfaceName, &owner.InterfaceType)

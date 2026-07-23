@@ -21,8 +21,8 @@ func TestPlatformTierRename(t *testing.T) {
 	ctx := context.Background()
 	conn := connectMigrated(t)
 
-	mustExec(t, conn, `insert into location_type (id, display_name) values ('site', 'Site') on conflict do nothing`)
-	mustExec(t, conn, `insert into secret_type (id, display_name) values ('password', 'Password') on conflict do nothing`)
+	mustExec(t, conn, `insert into location_type (name, display_name) values ('site', 'Site') on conflict do nothing`)
+	mustExec(t, conn, `insert into secret_type (name, display_name) values ('password', 'Password') on conflict do nothing`)
 	mustExec(t, conn, `insert into tag (name) values ('environment')`)
 
 	// The renamed value is accepted on every table that carries the tier.
@@ -31,7 +31,7 @@ func TestPlatformTierRename(t *testing.T) {
 		values ('snmp_community', 'string', 'platform', '"public"'::jsonb)`)
 	mustExec(t, conn, `
 		insert into secret (name, secret_type, owner_kind)
-		values ('snmp_auth', 'password', 'platform')`)
+		values ('snmp_auth', (select id from secret_type where name = 'password'), 'platform')`)
 	mustExec(t, conn, `
 		insert into tag_binding (tag_id, owner_kind, value)
 		select id, 'platform', 'prod' from tag where name = 'environment'`)
@@ -113,6 +113,7 @@ func TestPlatformTierRenamePreservesResolution(t *testing.T) {
 	}
 	rollbackBelow(t, conn, dsn, platformTierVersion)
 
+	// After the rollback the leaf registries are back to slug primary keys.
 	mustExec(t, conn, `insert into location_type (id, display_name) values ('site', 'Site') on conflict do nothing`)
 	mustExec(t, conn, `insert into location (name, location_type) values ('ceres', 'site')`)
 	mustExec(t, conn, `

@@ -24,7 +24,7 @@ const vendors: Vendor[] = [
   { id: "u-crestron", name: "crestron", display_name: "Crestron", kind: "manufacturer", official: true },
   { id: "u-acme-av", name: "acme-av", display_name: "Acme AV", kind: "integrator", official: false },
 ];
-const drivers: Driver[] = [{ id: "crestron-ct", display_name: "Crestron CT", official: true }];
+const drivers: Driver[] = [{ id: "crestron-ct", name: "crestron-ct", display_name: "Crestron CT", official: true }];
 const capabilities: Capability[] = [{ id: "u-touchscreen", name: "touchscreen", display_name: "Touchscreen", official: true }];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };

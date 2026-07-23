@@ -353,7 +353,7 @@ func (p *PG) RecordHeartbeat(ctx context.Context, name string) error {
 // worklist subject. An unknown node returns an empty worklist, not an error.
 func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	rows, err := p.pool.Query(ctx, `
-		select t.id, t.mode, i.name, i.type, i.params, t.spec
+		select t.id, t.mode, i.name, (select it.name from interface_type it where it.id = i.type), i.params, t.spec
 		from task t
 		join interface i on i.id = t.interface_id
 		where i.node_name = (select principal_id from node where name = $1) and t.enabled = true

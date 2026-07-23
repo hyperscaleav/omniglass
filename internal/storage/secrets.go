@@ -31,7 +31,9 @@ var (
 // origin that drive encryption, masking, and the create gate. official marks the
 // ship-with set, mirroring the other type registries.
 type SecretType struct {
+	// ID is the uuid primary key, Name the renameable slug handle (ADR-0062).
 	ID                    string
+	Name                  string
 	Official              bool
 	DisplayName           string
 	DefaultAdminSensitive bool // seeds the create form's admin_sensitive default
@@ -41,7 +43,7 @@ type SecretType struct {
 // Shape adapts the registry row to the pure secret.Shape the primitive validates
 // and masks against, so the crypto core never imports storage.
 func (st SecretType) Shape() secret.Shape {
-	return secret.Shape{Name: st.ID, Official: st.Official, Fields: st.Fields}
+	return secret.Shape{Name: st.Name, Official: st.Official, Fields: st.Fields}
 }
 
 // Secret is one cascaded, encrypted value: its name (the cascade key), its type,
@@ -116,19 +118,19 @@ func (p *PG) UpsertSecretType(ctx context.Context, st SecretType) error {
 		return fmt.Errorf("storage: marshal secret_type %q schema: %w", st.ID, err)
 	}
 	if _, err := p.pool.Exec(ctx, `
-		insert into secret_type (id, official, display_name, schema, default_admin_sensitive)
+		insert into secret_type (name, official, display_name, schema, default_admin_sensitive)
 		values ($1, $2, $3, $4, $5)
-		on conflict (id) do update
+		on conflict (name) do update
 			set official = excluded.official, display_name = excluded.display_name,
 			    schema = excluded.schema, default_admin_sensitive = excluded.default_admin_sensitive`,
-		st.ID, st.Official, st.DisplayName, schema, st.DefaultAdminSensitive); err != nil {
-		return fmt.Errorf("storage: upsert secret_type %q: %w", st.ID, err)
+		st.Name, st.Official, st.DisplayName, schema, st.DefaultAdminSensitive); err != nil {
+		return fmt.Errorf("storage: upsert secret_type %q: %w", st.Name, err)
 	}
 	return nil
 }
 
 func (p *PG) ListSecretTypes(ctx context.Context) ([]SecretType, error) {
-	rows, err := p.pool.Query(ctx, `select id, official, display_name, default_admin_sensitive, schema from secret_type order by id`)
+	rows, err := p.pool.Query(ctx, `select id, name, official, display_name, default_admin_sensitive, schema from secret_type order by name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list secret_types: %w", err)
 	}
@@ -146,7 +148,7 @@ func (p *PG) ListSecretTypes(ctx context.Context) ([]SecretType, error) {
 
 func (p *PG) GetSecretType(ctx context.Context, id string) (*SecretType, error) {
 	st, err := scanSecretType(p.pool.QueryRow(ctx,
-		`select id, official, display_name, default_admin_sensitive, schema from secret_type where id = $1`, id))
+		`select id, name, official, display_name, default_admin_sensitive, schema from secret_type where `+registryRefCol("secret_type", id)+` = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUnknownSecretType
 	}
@@ -156,7 +158,7 @@ func (p *PG) GetSecretType(ctx context.Context, id string) (*SecretType, error) 
 func scanSecretType(row pgx.Row) (*SecretType, error) {
 	var st SecretType
 	var schema []byte
-	if err := row.Scan(&st.ID, &st.Official, &st.DisplayName, &st.DefaultAdminSensitive, &schema); err != nil {
+	if err := row.Scan(&st.ID, &st.Name, &st.Official, &st.DisplayName, &st.DefaultAdminSensitive, &schema); err != nil {
 		return nil, err
 	}
 	if err := json.Unmarshal(schema, &st.Fields); err != nil {
@@ -167,7 +169,7 @@ func scanSecretType(row pgx.Row) (*SecretType, error) {
 
 // --- secret CRUD -------------------------------------------------------------
 
-const secretCols = `id, name, secret_type, owner_kind, component_id, system_id, location_id, value, created_at, updated_at, admin_sensitive`
+const secretCols = `id, name, (select st.name from secret_type st where st.id = secret.secret_type) as secret_type, owner_kind, component_id, system_id, location_id, value, created_at, updated_at, admin_sensitive`
 
 // CreateSecret seals a new secret at its owner scope. The owner is resolved and
 // scope-checked (a platform secret needs an all create scope; a scoped one needs
@@ -227,7 +229,7 @@ func (p *PG) CreateSecret(ctx context.Context, actorID string, spec SecretSpec, 
 	compID, sysID, locID := arcColumns(spec.OwnerKind, ownerID)
 	s, err := scanSecretRow(tx.QueryRow(ctx, `
 		insert into secret (name, secret_type, owner_kind, component_id, system_id, location_id, value, admin_sensitive)
-		values ($1, $2, $3, $4, $5, $6, $7, $8)
+		values ($1, (select id from secret_type where name = $2), $3, $4, $5, $6, $7, $8)
 		returning `+secretCols,
 		spec.Name, spec.SecretType, spec.OwnerKind, compID, sysID, locID, valueJSON, adminSensitive), shape)
 	if err != nil {
@@ -532,7 +534,7 @@ owners(owner_kind, owner_id, band, depth) as (
     union all   select 'component', id,         3, depth from comp_chain
 ),
 ranked as (
-    select s.id, s.name, s.secret_type, s.owner_kind, o.owner_id, o.band, o.depth, s.value,
+    select s.id, s.name, (select st.name from secret_type st where st.id = s.secret_type) as secret_type, s.owner_kind, o.owner_id, o.band, o.depth, s.value,
            row_number() over (partition by s.name order by o.band desc, o.depth asc) as rnk
     from secret s
     join owners o
@@ -711,7 +713,7 @@ func (p *PG) secretRowForAction(ctx context.Context, q querier, id string, read,
 		value          []byte
 	)
 	err := q.QueryRow(ctx, `
-		select id, name, secret_type, owner_kind, component_id, system_id, location_id, admin_sensitive, value
+		select id, name, (select st.name from secret_type st where st.id = secret.secret_type) as secret_type, owner_kind, component_id, system_id, location_id, admin_sensitive, value
 		from secret where id = $1`, id).
 		Scan(&row.id, &row.name, &secType, &row.ownerKind, &comp, &sys, &loc, &row.adminSensitive, &value)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -766,7 +768,7 @@ func (p *PG) secretOwnerInScope(ctx context.Context, q querier, kind string, id 
 	return inScopeTree(ctx, q, tbl, *id, set)
 }
 
-// shapeIndex loads every secret_type shape keyed by id, for masking a batch of
+// shapeIndex loads every secret_type shape keyed by name, for masking a batch of
 // resolved or listed secrets without a query per row.
 func (p *PG) shapeIndex(ctx context.Context) (map[string]secret.Shape, error) {
 	types, err := p.ListSecretTypes(ctx)
@@ -775,7 +777,7 @@ func (p *PG) shapeIndex(ctx context.Context) (map[string]secret.Shape, error) {
 	}
 	out := make(map[string]secret.Shape, len(types))
 	for _, st := range types {
-		out[st.ID] = st.Shape()
+		out[st.Name] = st.Shape()
 	}
 	return out, nil
 }
@@ -848,7 +850,7 @@ func scanSecretListRow(row pgx.Row, shapes map[string]secret.Shape) (*Secret, st
 }
 
 func secretColsQualified(alias string) string {
-	return alias + ".id, " + alias + ".name, " + alias + ".secret_type, " + alias + ".owner_kind, " +
+	return alias + ".id, " + alias + ".name, (select st.name from secret_type st where st.id = " + alias + ".secret_type) as secret_type, " + alias + ".owner_kind, " +
 		alias + ".component_id, " + alias + ".system_id, " + alias + ".location_id, " +
 		alias + ".value, " + alias + ".created_at, " + alias + ".updated_at, " + alias + ".admin_sensitive"
 }

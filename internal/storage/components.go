@@ -313,7 +313,7 @@ type ComponentInterface struct {
 // interfaces by the verified name.
 func (p *PG) ListComponentInterfaces(ctx context.Context, componentName string) ([]ComponentInterface, error) {
 	rows, err := p.pool.Query(ctx, `
-		select i.name, i.type, coalesce((select n.name from node n where n.principal_id = i.node_name), ''), i.params
+		select i.name, (select it.name from interface_type it where it.id = i.type), coalesce((select n.name from node n where n.principal_id = i.node_name), ''), i.params
 		from interface i
 		where i.component = (select id from component where name = $1)
 		order by i.name asc`, componentName)

@@ -11,7 +11,8 @@ import (
 // driverBody is the wire shape of a driver registry row. The registry lists
 // alphabetically by display_name, like vendor.
 type driverBody struct {
-	ID          string `json:"id"`
+	ID          string `json:"id" doc:"The driver's uuid, the stable handle that survives a rename"`
+	Name        string `json:"name" doc:"The kebab handle an operator reads and types; renameable"`
 	DisplayName string `json:"display_name"`
 	Version     string `json:"version,omitempty"`
 	Official    bool   `json:"official"`
@@ -19,7 +20,7 @@ type driverBody struct {
 
 func toDriverBody(d *storage.Driver) driverBody {
 	return driverBody{
-		ID: d.ID, DisplayName: d.DisplayName, Version: d.Version, Official: d.Official,
+		ID: d.ID, Name: d.Name, DisplayName: d.DisplayName, Version: d.Version, Official: d.Official,
 	}
 }
 
@@ -35,7 +36,7 @@ type driverPathInput struct {
 
 type createDriverInput struct {
 	Body struct {
-		ID          string `json:"id" minLength:"1" doc:"Globally unique driver id"`
+		Name        string `json:"name" minLength:"1" doc:"The globally unique kebab handle; renameable"`
 		DisplayName string `json:"display_name" minLength:"1"`
 		Version     string `json:"version,omitempty"`
 	}
@@ -86,7 +87,7 @@ func registerDriverRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Description:   "Creates a custom (non-official) driver. Gated by driver:create.",
 	}, "driver", "create"), func(ctx context.Context, in *createDriverInput) (*driverOutput, error) {
 		d, err := gw.CreateDriver(ctx, actorID(ctx), storage.Driver{
-			ID: in.Body.ID, DisplayName: in.Body.DisplayName, Version: in.Body.Version,
+			Name: in.Body.Name, DisplayName: in.Body.DisplayName, Version: in.Body.Version,
 		})
 		if err != nil {
 			return nil, mapTypeErr(err, "driver")

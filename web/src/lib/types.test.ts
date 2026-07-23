@@ -51,19 +51,19 @@ describe("types data layer", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({ id: "wing", display_name: "Wing", icon: "map-pin", official: false }, 201),
     );
-    await createType("location", { id: "wing", display_name: "Wing", icon: "map-pin" });
+    await createType("location", { name: "wing", display_name: "Wing", icon: "map-pin" });
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("POST");
     expect(req.url).toContain("/api/v1/location-types");
     const sent = await req.json();
-    expect(sent).toMatchObject({ id: "wing", display_name: "Wing", icon: "map-pin" });
+    expect(sent).toMatchObject({ name: "wing", display_name: "Wing", icon: "map-pin" });
   });
 
   it("creates a location type with allowed_parent_types", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({ id: "wing", display_name: "Wing", icon: "map-pin", official: false, allowed_parent_types: ["campus"] }, 201),
     );
-    await createType("location", { id: "wing", display_name: "Wing", icon: "map-pin", allowed_parent_types: ["campus"] });
+    await createType("location", { name: "wing", display_name: "Wing", icon: "map-pin", allowed_parent_types: ["campus"] });
     const req = fetchMock.mock.calls[0][0] as Request;
     const sent = await req.json();
     expect(sent).toMatchObject({ allowed_parent_types: ["campus"] });
@@ -71,7 +71,7 @@ describe("types data layer", () => {
 
   it("rejects creating a secret type without calling fetch", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch");
-    await expect(createType("secret", { id: "x", display_name: "X" })).rejects.toThrow(/read-only/);
+    await expect(createType("secret", { name: "x", display_name: "X" })).rejects.toThrow(/read-only/);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

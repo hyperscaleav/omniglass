@@ -23,20 +23,20 @@ func TestDriverCRUD(t *testing.T) {
 
 	// Create a custom driver; it is official=false.
 	d, err := gw.CreateDriver(ctx, "", storage.Driver{
-		ID: "acme-agent", DisplayName: "Acme Agent", Version: "2.0.0",
+		Name: "acme-agent", DisplayName: "Acme Agent", Version: "2.0.0",
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if d.ID != "acme-agent" {
-		t.Fatalf("create id = %q, want acme-agent", d.ID)
+	if d.Name != "acme-agent" {
+		t.Fatalf("create name = %q, want acme-agent", d.Name)
 	}
 	if d.Official {
 		t.Fatalf("new driver official=true, want false")
 	}
 
 	// Duplicate id is ErrTypeExists.
-	if _, err := gw.CreateDriver(ctx, "", storage.Driver{ID: "acme-agent", DisplayName: "Dup"}); !errors.Is(err, storage.ErrTypeExists) {
+	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "acme-agent", DisplayName: "Dup"}); !errors.Is(err, storage.ErrTypeExists) {
 		t.Fatalf("dup create err = %v, want ErrTypeExists", err)
 	}
 
@@ -54,7 +54,7 @@ func TestDriverCRUD(t *testing.T) {
 	}
 	var found *storage.Driver
 	for i := range all {
-		if all[i].ID == "acme-agent" {
+		if all[i].Name == "acme-agent" {
 			found = &all[i]
 			break
 		}
@@ -83,7 +83,7 @@ func TestDriverCRUD(t *testing.T) {
 	}
 
 	// Official rows are read-only.
-	if err := gw.UpsertDriver(ctx, storage.Driver{ID: "official-driver", DisplayName: "Official Driver", Official: true}); err != nil {
+	if err := gw.UpsertDriver(ctx, storage.Driver{Name: "official-driver", DisplayName: "Official Driver", Official: true}); err != nil {
 		t.Fatalf("upsert official: %v", err)
 	}
 	if _, err := gw.UpdateDriver(ctx, "", "official-driver", storage.DriverPatch{DisplayName: &dn}); !errors.Is(err, storage.ErrTypeOfficial) {

@@ -19,7 +19,8 @@ type productBody struct {
 	DisplayName     string   `json:"display_name"`
 	Vendor          string   `json:"vendor,omitempty" doc:"The vendor's handle"`
 	VendorID        string   `json:"vendor_id,omitempty" doc:"The vendor's uuid; the stable form of vendor"`
-	DriverID        string   `json:"driver_id,omitempty"`
+	Driver          string   `json:"driver,omitempty" doc:"The driver's handle"`
+	DriverID        string   `json:"driver_id,omitempty" doc:"The driver's uuid; the stable form of driver"`
 	Kind            string   `json:"kind" enum:"device,app,service,vm"`
 	ParentProduct   string   `json:"parent_product,omitempty" doc:"The parent product's handle"`
 	ParentProductID string   `json:"parent_product_id,omitempty" doc:"The parent product's uuid; the stable form of parent_product"`
@@ -65,7 +66,7 @@ func toProductBody(m *storage.Product) productBody {
 	return productBody{
 		ID: m.ID, Name: m.Name, DisplayName: m.DisplayName,
 		Vendor: derefStr(m.VendorName), VendorID: derefStr(m.VendorID),
-		DriverID:      derefStr(m.DriverID),
+		Driver: derefStr(m.DriverName), DriverID: derefStr(m.DriverID),
 		Kind:          m.Kind,
 		ParentProduct: derefStr(m.ParentProductName), ParentProductID: derefStr(m.ParentProductID),
 		Capabilities: caps, Official: m.Official,

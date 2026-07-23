@@ -44,10 +44,9 @@ func TestProductCRUD(t *testing.T) {
 	if m.Kind != "device" {
 		t.Fatalf("create kind = %q, want device", m.Kind)
 	}
-	// The vendor arc stores a uuid and the handle comes back beside it; the driver
-	// registry has not converted yet, so its reference is still its slug.
-	if m.VendorName == nil || *m.VendorName != "cisco" || m.DriverID == nil || *m.DriverID != "cisco-xapi" {
-		t.Fatalf("create refs = vendor:%v driver:%v, want cisco/cisco-xapi", m.VendorName, m.DriverID)
+	// Both arcs store uuids; the handles come back beside them.
+	if m.VendorName == nil || *m.VendorName != "cisco" || m.DriverName == nil || *m.DriverName != "cisco-xapi" {
+		t.Fatalf("create refs = vendor:%v driver:%v, want cisco/cisco-xapi", m.VendorName, m.DriverName)
 	}
 	if got := caps(m.Capabilities); got != "camera,microphone,speaker" {
 		t.Fatalf("create capabilities = %q, want camera,microphone,speaker", got)

@@ -203,7 +203,7 @@ export function CreateDriverForm(p: { onCreated: (id: string) => void }): JSX.El
     setFormErr(null);
     try {
       await createDriver({
-        id: id().trim(),
+        name: id().trim(),
         display_name: displayName().trim(),
         version: version().trim() || undefined,
       });

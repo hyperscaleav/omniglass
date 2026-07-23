@@ -250,7 +250,7 @@ gates on **`secret:reveal`**, a permission the `*:read` floor does **not** carry
 everything" grant sees only masks and **only admin (`secret:*`) and owner (`>`) reveal**. Every
 `:reveal` writes an [audit](/architecture/audit/) row (verb `reveal`) in the same call.
 
-- `GET /secret-types` lists the shape registry, each `{id, display_name, official, fields:[{name, type,
+- `GET /secret-types` lists the shape registry, each `{id, name, display_name, official, fields:[{name, type,
   secret, origin}]}` (`secret:read`).
 - `GET /secrets` is the **all-scope admin directory** (`{secrets: [secret]}`); like the principal
   directory it needs an all-scope grant, and a non-all scope is a 403 (`secret:read`).
@@ -333,20 +333,26 @@ list and read routes sit on the viewer floor (`vendor:read` / `driver:read` / `c
 `<resource>:delete`, all at the admin tier, exactly like `type:*`. An **official** (seed-owned) row is
 read-only (`PATCH` and `DELETE` both 422).
 
+**Every registry body carries both handles** ([ADR-0062](/architecture/decisions/#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle)):
+a uuid **`id`** (stable identity, the target every foreign key stores) and a unique, renameable **`name`**
+(the kebab handle an operator reads and types). A create takes `name`; the uuid is the database's to mint.
+A path or a reference (`vendor`, `driver`, a parent) resolves whichever form it is given, since a kebab
+handle can never look like a uuid.
+
 A **vendor** (Crestron, Biamp, ...) names an organization, generalizing the former manufacturer-only
 `component_make` with a **`kind`** of `manufacturer` / `integrator` / `developer` (default
 `manufacturer`, a 422 for any other value).
 
 - `GET /vendors` lists the registry, ordered alphabetically by display name (`{vendors: [vendor]}`,
   `vendor:read`).
-- `POST /vendors` mints a custom vendor from `{id, display_name, kind?, icon?, support_phone?, website?}`
+- `POST /vendors` mints a custom vendor from `{name, display_name, kind?, icon?, support_phone?, website?}`
   (201, `vendor:create`, admin).
 - `GET /vendors/{id}` reads one (`vendor:read`).
 - `PATCH /vendors/{id}` updates `{display_name?, kind?, icon?, support_phone?, website?}` (`vendor:update`,
   admin).
 - `DELETE /vendors/{id}` removes a custom vendor (204, `vendor:delete`, admin).
 
-A `vendor` body is `{id, display_name, kind, icon, support_phone, website, official}`. `website` is
+A `vendor` body is `{id, name, display_name, kind, icon, support_phone, website, official}`. `website` is
 validated to an `http`/`https` scheme on write (a 422 for any other scheme, for example `javascript:`).
 
 A **driver** (Generic SNMP, Cisco xAPI, ...) names the implementation that gets, emits, or sets a
@@ -354,12 +360,12 @@ product's signals, with an optional **`version`**.
 
 - `GET /drivers` lists the registry, ordered alphabetically by display name (`{drivers: [driver]}`,
   `driver:read`).
-- `POST /drivers` mints a custom driver from `{id, display_name, version?}` (201, `driver:create`, admin).
+- `POST /drivers` mints a custom driver from `{name, display_name, version?}` (201, `driver:create`, admin).
 - `GET /drivers/{id}` reads one (`driver:read`).
 - `PATCH /drivers/{id}` updates `{display_name?, version?}` (`driver:update`, admin).
 - `DELETE /drivers/{id}` removes a custom driver (204, `driver:delete`, admin).
 
-A `driver` body is `{id, display_name, version, official}`.
+A `driver` body is `{id, name, display_name, version, official}`.
 
 A **capability** (Microphone, Display, ...) names what a component can do. It is the vocabulary two other
 surfaces consume: a **product** declares the set its instances provide, a **component** adds to or
@@ -368,13 +374,13 @@ suppresses that set with [its own facts](#roles-a-system-declares-a-slot-a-compo
 
 - `GET /capabilities` lists the registry, ordered alphabetically by display name
   (`{capabilities: [capability]}`, `capability:read`).
-- `POST /capabilities` mints a custom capability from `{id, display_name}` (201, `capability:create`,
+- `POST /capabilities` mints a custom capability from `{name, display_name}` (201, `capability:create`,
   admin).
 - `GET /capabilities/{id}` reads one (`capability:read`).
 - `PATCH /capabilities/{id}` updates `{display_name?}` (`capability:update`, admin).
 - `DELETE /capabilities/{id}` removes a custom capability (204, `capability:delete`, admin).
 
-A `capability` body is `{id, display_name, official}`.
+A `capability` body is `{id, name, display_name, official}`.
 
 A **product** ([core entities](/architecture/core-entities/#catalog-reference-data-product)) is the
 concrete **SKU** that ties the leaf catalogs together: a **vendor** (who makes it), a **driver** (what
@@ -398,7 +404,8 @@ read-only (`PATCH` and `DELETE` both 422).
   refused (422), and a product still referenced by a component is refused (409).
 
 A `product` body is
-`{id, display_name, kind, vendor_id, driver_id, parent_product_id, capabilities, official}`. An unknown
+`{id, name, display_name, kind, vendor, vendor_id, driver, driver_id, parent_product_id, capabilities, official}`.
+The `vendor` and `driver` handles read the referenced registry's current name beside its uuid. An unknown
 vendor / driver / parent / capability reference is a 422.
 
 A **standard** ([core entities](/architecture/core-entities/#catalog-reference-data-standard)) is the
@@ -410,14 +417,14 @@ gate on `standard:create` / `:update` / `:delete` at the admin tier.
 
 - `GET /standards` lists the catalog, ordered alphabetically by display name (`{standards: [standard]}`,
   `standard:read`).
-- `POST /standards` mints a standard from `{id, display_name, parent_standard_id?}` (201,
+- `POST /standards` mints a standard from `{name, display_name, parent_standard_id?}` (201,
   `standard:create`, admin).
 - `GET /standards/{id}` reads one (`standard:read`).
 - `PATCH /standards/{id}` updates `{display_name?, parent_standard_id?}` (`standard:update`, admin).
 - `DELETE /standards/{id}` removes one (204, `standard:delete`, admin); a standard still referenced by a
   system is refused (409).
 
-A `standard` body is `{id, display_name, parent_standard_id, official}`. An unknown parent is a 422. The
+A `standard` body is `{id, name, display_name, parent_standard_id, official}`. An unknown parent is a 422. The
 **shipped** standards are `official: false`, so unlike a seeded product they are fully editable
 ([the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs)).
 

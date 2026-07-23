@@ -851,13 +851,13 @@ Creates a custom (non-official) driver. Gated by driver:create.
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) |  |
-| `--id` | string | (none) | Globally unique driver id |
+| `--name` | string | (none) | The globally unique kebab handle; renameable |
 | `--version` | string | (none) |  |
 
 Example:
 
 ```sh
-omniglass driver create --display-name display_name --id id
+omniglass driver create --display-name display_name --name name
 ```
 
 ### `omniglass driver delete`
@@ -1402,12 +1402,12 @@ Creates a custom (non-official) location_type. Gated by type:create.
 | `--allowed-parent-types` | string | (none) | location_type ids and/or the reserved root sentinel this type may be placed under; empty means unconstrained |
 | `--display-name` | string | (none) |  |
 | `--icon` | string | (none) | A glyph key; the console falls back to map-pin when empty |
-| `--id` | string | (none) | Globally unique type id (kebab, e.g. wing); "root" is reserved |
+| `--name` | string | (none) | The globally unique kebab handle (e.g. wing); "root" is reserved |
 
 Example:
 
 ```sh
-omniglass location-type create --display-name display_name --id id
+omniglass location-type create --display-name display_name --name name
 ```
 
 ### `omniglass location-type delete`

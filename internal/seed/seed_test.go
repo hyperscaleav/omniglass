@@ -70,7 +70,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 		t.Errorf("official location_types = %d, want 0 (a shipped location type is operator-owned)", officialTypes)
 	}
 	var topType string
-	if err := conn.QueryRow(ctx, `select id from location_type order by display_name, id limit 1`).Scan(&topType); err != nil {
+	if err := conn.QueryRow(ctx, `select name from location_type order by display_name, name limit 1`).Scan(&topType); err != nil {
 		t.Fatalf("read top location_type: %v", err)
 	}
 	if topType != "building" {
@@ -78,15 +78,15 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	}
 	// Each shipped type seeds its glyph key, and re-running Run keeps it (the icon
 	// is part of the idempotent upsert, not just the initial insert).
-	for id, wantIcon := range map[string]string{
+	for name, wantIcon := range map[string]string{
 		"campus": "landmark", "building": "building", "floor": "layers", "room": "door-open",
 	} {
 		var icon string
-		if err := conn.QueryRow(ctx, `select icon from location_type where id = $1`, id).Scan(&icon); err != nil {
-			t.Fatalf("read %s icon: %v", id, err)
+		if err := conn.QueryRow(ctx, `select icon from location_type where name = $1`, name).Scan(&icon); err != nil {
+			t.Fatalf("read %s icon: %v", name, err)
 		}
 		if icon != wantIcon {
-			t.Errorf("%s icon = %q, want %q", id, icon, wantIcon)
+			t.Errorf("%s icon = %q, want %q", name, icon, wantIcon)
 		}
 	}
 
@@ -218,10 +218,10 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	// The type default seeds the create form: a device type is operational, the
 	// OAuth2 integration type is admin-sensitive.
 	var snmpDefault, oauthDefault bool
-	if err := conn.QueryRow(ctx, `select default_admin_sensitive from secret_type where id = 'snmp-community'`).Scan(&snmpDefault); err != nil {
+	if err := conn.QueryRow(ctx, `select default_admin_sensitive from secret_type where name = 'snmp-community'`).Scan(&snmpDefault); err != nil {
 		t.Fatalf("read snmp-community default_admin_sensitive: %v", err)
 	}
-	if err := conn.QueryRow(ctx, `select default_admin_sensitive from secret_type where id = 'oauth2-client'`).Scan(&oauthDefault); err != nil {
+	if err := conn.QueryRow(ctx, `select default_admin_sensitive from secret_type where name = 'oauth2-client'`).Scan(&oauthDefault); err != nil {
 		t.Fatalf("read oauth2-client default_admin_sensitive: %v", err)
 	}
 	if snmpDefault {
@@ -231,7 +231,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 		t.Error("oauth2-client default_admin_sensitive = false, want true (platform credential)")
 	}
 	var community string
-	if err := conn.QueryRow(ctx, `select schema->0->>'name' from secret_type where id = 'snmp-community'`).Scan(&community); err != nil {
+	if err := conn.QueryRow(ctx, `select schema->0->>'name' from secret_type where name = 'snmp-community'`).Scan(&community); err != nil {
 		t.Fatalf("read snmp-community schema: %v", err)
 	}
 	if community != "community" {
@@ -247,7 +247,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	}
 	for id, want := range wantParents {
 		var got []string
-		if err := conn.QueryRow(ctx, `select allowed_parent_types from location_type where id = $1`, id).Scan(&got); err != nil {
+		if err := conn.QueryRow(ctx, `select allowed_parent_types from location_type where name = $1`, id).Scan(&got); err != nil {
 			t.Fatalf("read %s allowed_parent_types: %v", id, err)
 		}
 		if len(got) != len(want) {

@@ -59,6 +59,7 @@ type Product struct {
 	VendorID          *string
 	VendorName        *string
 	DriverID          *string
+	DriverName        *string
 	ParentProductID   *string
 	ParentProductName *string
 	Kind              string
@@ -86,7 +87,7 @@ type ProductPatch struct {
 // `order by name` ambiguous.
 const productCols = `id, name, display_name,
 	vendor_id, (select v.name from vendor v where v.id = product.vendor_id) as vendor_handle,
-	driver_id, kind,
+	driver_id, (select d.name from driver d where d.id = product.driver_id) as driver_handle, kind,
 	parent_product_id, (select q.name from product q where q.id = product.parent_product_id) as parent_handle,
 	official, created_at, updated_at`
 
@@ -130,6 +131,13 @@ func productRefs(ctx context.Context, q querier, m *Product) error {
 		}
 		m.VendorID = &id
 	}
+	if m.DriverID != nil && *m.DriverID != "" {
+		id, err := resolveDriverRef(ctx, q, *m.DriverID)
+		if err != nil {
+			return err
+		}
+		m.DriverID = &id
+	}
 	if m.ParentProductID != nil && *m.ParentProductID != "" {
 		id, err := resolveProductRef(ctx, q, *m.ParentProductID)
 		if err != nil {
@@ -140,9 +148,18 @@ func productRefs(ctx context.Context, q querier, m *Product) error {
 	return nil
 }
 
+// resolveDriverRef turns a driver handle or uuid into the driver's uuid.
+func resolveDriverRef(ctx context.Context, q querier, ref string) (string, error) {
+	var id string
+	if err := q.QueryRow(ctx, `select id from driver where `+registryRefCol("driver", ref)+` = $1`, ref).Scan(&id); err != nil {
+		return "", ErrProductRefNotFound
+	}
+	return id, nil
+}
+
 func scanProduct(row pgx.Row) (*Product, error) {
 	var m Product
-	if err := row.Scan(&m.ID, &m.Name, &m.DisplayName, &m.VendorID, &m.VendorName, &m.DriverID, &m.Kind, &m.ParentProductID, &m.ParentProductName, &m.Official, &m.CreatedAt, &m.UpdatedAt); err != nil {
+	if err := row.Scan(&m.ID, &m.Name, &m.DisplayName, &m.VendorID, &m.VendorName, &m.DriverID, &m.DriverName, &m.Kind, &m.ParentProductID, &m.ParentProductName, &m.Official, &m.CreatedAt, &m.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &m, nil
@@ -395,6 +412,12 @@ func (p *PG) UpdateProduct(ctx context.Context, actorID, id string, patch Produc
 	if err := guardTypeMutable(ctx, tx, "product", id); err != nil {
 		return nil, err
 	}
+	// A patch's references arrive as handles or uuids; the columns store uuids, so
+	// resolve each before the update (an unset one stays nil and is left unchanged).
+	resolved := Product{VendorID: patch.VendorID, DriverID: patch.DriverID, ParentProductID: patch.ParentProductID}
+	if err := productRefs(ctx, tx, &resolved); err != nil {
+		return nil, err
+	}
 	m, err := scanProduct(tx.QueryRow(ctx, `
 		update product set
 			display_name      = coalesce($2, display_name),
@@ -405,7 +428,7 @@ func (p *PG) UpdateProduct(ctx context.Context, actorID, id string, patch Produc
 			updated_at        = now()
 		where `+productRefCol(id)+` = $1
 		returning `+productCols,
-		id, patch.DisplayName, patch.VendorID, patch.DriverID, patch.Kind, patch.ParentProductID))
+		id, patch.DisplayName, resolved.VendorID, resolved.DriverID, patch.Kind, resolved.ParentProductID))
 	if err != nil {
 		return nil, mapProductWriteErr(err)
 	}
