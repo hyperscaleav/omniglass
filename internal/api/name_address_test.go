@@ -60,12 +60,11 @@ var idOnlyIsCorrect = map[string]string{
 // The nine component-classification registries used to live here, back when their
 // name WAS their primary key; epic #262 gave each a uuid key and a renameable
 // name, so they moved into referenceFields and now carry both like any reference.
-// What remains is a still-slug-keyed taxonomy (`datapoint_type`, whose id is its
-// written kind) and a set of row ids that address rows with no separate name of
+// What remains is a set of row ids that address rows with no separate name of
 // their own (an alarm, an event, an audit row, a rule, a contract line, a role,
 // a tag binding's key).
 var exemptRefs = map[string]bool{
-	"datapoint_type_id": true, "role_id": true, "alarm_id": true,
+	"role_id": true, "alarm_id": true,
 	"event_id": true, "audit_id": true, "source_rule_id": true,
 	"product_property_id": true, "tag_id": true,
 }
