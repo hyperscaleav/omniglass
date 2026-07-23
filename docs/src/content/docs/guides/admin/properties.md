@@ -3,7 +3,7 @@ title: Properties
 description: "The Properties catalog and the values behind it: the canonical typed names, the contract a product, standard, or location type declares, and the value a component, system, or location sets."
 ---
 
-**Catalog > Properties** (with `property:read`, covered by every viewer's `*:read` floor) is the
+**Catalog > Properties** (with `property_type:read`, covered by every viewer's `*:read` floor) is the
 estate's **signal catalog**: one directory of the typed names that identify what is tracked. A
 **property** is a name plus a data type (and an optional label, unit, and validation), identified by
 its **key** (its canonical name), and the same property is the same concept wherever it appears,
@@ -28,15 +28,15 @@ every reader; the write gates decide who may change it.
   `state` (a discrete condition), or `log` (an event). A property with no kind is a **declared**
   attribute, something an operator sets, like `serial_number`, that is never collected off a
   device.
-- **New property** (with `property:create`, granted to operators) opens a create **drawer**: name
+- **New property** (with `property_type:create`, granted to operators) opens a create **drawer**: name
   the **key** (lowercase, dot-hierarchied, for example `serial_number` or `interface.reachable`),
   choose its **data type**, and optionally add a **display name**, **description**, **unit**, and
   **kind**. Leave the kind as **declared** for an operator-set attribute. An invalid key (an
   uppercase letter, a hyphen, a leading digit, a stray dot) is refused with a message.
-- Pick a row to open its **detail blade**. The footer **Edit** pencil (with `property:update`) edits
+- Pick a row to open its **detail blade**. The footer **Edit** pencil (with `property_type:update`) edits
   the label, description, and unit; the data type and kind are fixed at creation, since changing
   a property's type under the values that already use it is unsafe. **Delete** (with
-  `property:delete`) removes a custom property, behind a confirm.
+  `property_type:delete`) removes a custom property, behind a confirm.
 - A property can carry a **validation** JSON Schema (for example a `pattern` on a MAC address, an
   `enum` on a state, or `minimum` / `maximum` on a number), shown read-only on the blade. Editing
   the schema in the console is a follow-up; set it through the API for now.

@@ -464,8 +464,8 @@ contract, on identical route shapes:
   while its contract hangs off the plural `/location-types` collection.
 
 The list returns `{properties: [contractProperty]}` ordered by property name, each
-`{property_name, property_type_id, default_value, required}`: the label and type are the catalog's to serve, so a surface
-that wants them reads `/properties` alongside. `PUT` takes `{default_value?, required?}`. `DELETE`
+`{property_type_name, property_type_id, default_value, required}`: the label and type are the catalog's to serve, so a surface
+that wants them reads `/property-types` alongside. `PUT` takes `{default_value?, required?}`. `DELETE`
 withdraws the line (204); instances **keep** any value they set for it, now off contract. An **official**
 (seed-owned) classifier is read-only (422), an unknown classifier is a 404, and a property the catalog
 does not know is a 422.

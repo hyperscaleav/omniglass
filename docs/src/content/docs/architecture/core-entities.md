@@ -150,7 +150,7 @@ every system that conforms, until that system overrides one. See the
 A classifier does not only classify, it **declares what its instances expose**. Three tables carry that
 declaration, one per classifier, all the same shape: **`product_property`** (a component's), **`standard_property`**
 (a system's), and **`location_type_property`** (a location's). Each is one row per declared property
-(`<classifier>_id`, `property_name` referencing the [`property` catalog](/architecture/variables/), an
+(`<classifier>_id`, `property_type_name` referencing the [`property_type` catalog](/architecture/variables/), an
 optional `default_value` in jsonb, and a `required` flag), unique per `(classifier, property)`. Type and
 validation are deliberately **not** repeated here: they live on the property, which stays the single
 source for what a name means.

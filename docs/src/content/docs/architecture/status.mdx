@@ -2032,6 +2032,9 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   pass, as the collapse did); the storage structs (`PropertyType`, `Property`), the API bodies, the
   generated OpenAPI, typed client, CLI, and JSONSchema, and the console all follow. This closes the
   `datapoint_type`-to-`property` divergence the docs carried: the registry is `property_type`
-  everywhere. The **public resource surface** (`/properties` route, the `property:*` permission) is a
-  deliberate thin cut, renamed in a follow-up. The fuller ADR-0063 model (the provenance-keyed cache,
-  the `event_type` family, the `command` pillar) is still staged.
+  everywhere. The rename is **complete, not a thin cut**: the public resource surface moves too (the
+  registry is `GET/POST /property-types` under the `property_type:*` permission, while the owner-scoped
+  `/{owner}/properties` value routes stay), the both-forms name pair reads `(property_type_id,
+  property_type_name)`, the audit resources are `property_type` / `property`, and a second migration
+  block renames every dependent constraint and index in line with its table. The fuller ADR-0063 model
+  (the provenance-keyed cache, the `event_type` family, the `command` pillar) is still staged.
