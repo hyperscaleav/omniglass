@@ -7,6 +7,10 @@ sidebar:
     variant: caution
 ---
 
+:::caution[Direction: ADR-0063 keeps `event` and `event_type` separate]
+[ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables) confirms the separation this page describes: `event_type` stays its own registry, and the earlier plan to rename the occurrence table to `log` is dropped (a log is a *collection* of events). The datapoint registry it references is renamed `property_type`. This page is rewritten to that model in the slice that builds it.
+:::
+
 An **event** is *our semantic assertion that something happened*, in our vocabulary: a discrete, point-in-time occurrence the action layer reacts to, owned through the same exclusive-arc as a datapoint. It is **not** a datapoint (a datapoint records a value; an event records an occurrence, see [the has-a-value-now razor](/architecture/datapoints/#the-has-a-value-now-razor-datapoint-vs-event)). Datapoints are what rules read; events are what event rules produce. The rules that produce events live on [calculations](/architecture/calculations/); the alarms paired events drive, and the actions that respond, live on [alarms and actions](/architecture/alarms-actions/).
 
 ## The event_type registry

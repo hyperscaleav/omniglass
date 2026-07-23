@@ -7,6 +7,10 @@ sidebar:
     variant: note
 ---
 
+:::caution[Direction: ADR-0063 renames the registry and the value store]
+[ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables) renames the `datapoint_type` registry on this page to **`property_type`** (`kind` in `{metric, state}`) and the `property_value` store to **`property`**, a latest-value cache keyed by series and provenance; `log` occurrences move to the `event` family. This page is rewritten to that model in the slice that builds it.
+:::
+
 :::note[Partial]
 The observed **metric** path is built for reachability: a node's tcp probe produces `tcp.open` /
 `tcp.connect_time` and its icmp (ping) probe produces `icmp.reachable` / `icmp.rtt_avg`, and the ingest consumer writes them to `metric` with `provenance=observed`, the

@@ -7,6 +7,10 @@ sidebar:
     variant: note
 ---
 
+:::caution[Direction: ADR-0063 makes the value store a provenance-keyed cache]
+Under [ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables) the `property_value` store becomes **`property`**, a latest-value cache keyed by `(owner, property_type, instance, provenance)`; `declared` config resolves on demand from the cascade rather than rowing into it, while `intended` is stored for command settlement. This page is rewritten to that model in the slice that builds it.
+:::
+
 :::note[Partial: the secret and variable members are built; config is Design]
 Two members are built. The **`secret`** member ([ADR-0017](/architecture/decisions/#adr-0017-credential-is-renamed-secret-the-cascade-is-the-reuse-mechanism),
 [#155](https://github.com/hyperscaleav/omniglass/issues/155)): the typed encrypted-at-rest cell owned on the
