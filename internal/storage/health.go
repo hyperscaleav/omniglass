@@ -329,11 +329,11 @@ func recordHealth(ctx context.Context, q txQuerier, ownerKind, ownerID string, v
 	// The WHERE is the transition rule: no previous row (is distinct from null) or
 	// a different one writes; the same value writes nothing.
 	owner := ownerArcExpr(ownerKind)
-	sql := fmt.Sprintf(`insert into state_datapoint (ts, owner_kind, %[1]s, key, instance, value, provenance, source_rule)
-		select clock_timestamp(), $1::text, %[3]s, $3::text, '', $4::text, 'calculated', $5::text
+	sql := fmt.Sprintf(`insert into state_datapoint (ts, owner_kind, %[1]s, property_id, instance, value, provenance, source_rule)
+		select clock_timestamp(), $1::text, %[3]s, (select id from property where name = $3::text), '', $4::text, 'calculated', $5::text
 		where $4::text is distinct from (
 			select value from state_datapoint
-			where %[1]s = %[3]s and key = $3::text and instance = ''
+			where %[1]s = %[3]s and property_id = (select id from property where name = $3::text) and instance = ''
 			order by id desc
 			limit 1)`, col, col, owner)
 	if _, err := q.Exec(ctx, sql, ownerKind, ownerID, healthKey, v.String(), healthRule); err != nil {
@@ -479,7 +479,7 @@ func (p *PG) locationVerdict(ctx context.Context, q txQuerier, locationName stri
 		)
 		select distinct on (sd.system_id) sd.value
 		from state_datapoint sd
-		where sd.key = $2
+		where sd.property_id = (select id from property where name = $2)
 		  and sd.system_id in (select id from system where location_id in (select id from subtree))
 		order by sd.system_id, sd.id desc`, locationName, healthKey)
 	if err != nil {
@@ -737,7 +737,7 @@ func (p *PG) subtreeSystemHealth(ctx context.Context, q txQuerier, locationName 
 		)
 		select s.name, coalesce((
 			select sd.value from state_datapoint sd
-			where sd.system_id = s.id and sd.key = $2 and sd.instance = ''
+			where sd.system_id = s.id and sd.property_id = (select id from property where name = $2) and sd.instance = ''
 			order by sd.id desc
 			limit 1
 		), 'healthy')
@@ -769,7 +769,7 @@ func healthTransitions(ctx context.Context, q txQuerier, ownerKind, ownerID stri
 		return nil, err
 	}
 	sql := fmt.Sprintf(`select ts, value from state_datapoint
-		where %s = %s and key = $2 and instance = '' and ts >= $3
+		where %s = %s and property_id = (select id from property where name = $2) and instance = '' and ts >= $3
 		order by ts asc, id asc`, col, ownerArcExprN(ownerKind, 1))
 	rows, err := q.Query(ctx, sql, ownerID, healthKey, since)
 	if err != nil {

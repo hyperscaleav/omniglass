@@ -11,6 +11,10 @@ import (
 // are raw jsonb passed through. Official marks a seed-owned, read-only property. A
 // property is addressed by its key (a canonical dotted identifier).
 type Property struct {
+	// ID is the uuid primary key; Name is the renameable handle (ADR-0062). A
+	// property is addressed by name on the wire, and the id is the stable form the
+	// contract and telemetry foreign keys store.
+	ID           string
 	Name         string
 	DisplayName  string
 	Kind         *string
@@ -53,7 +57,7 @@ func (p *PG) UpsertProperty(ctx context.Context, prop Property) error {
 // ListProperties returns every registered property (official and custom). No
 // scope.Set: the registry is estate-wide reference data, not a scoped resource.
 func (p *PG) ListProperties(ctx context.Context) ([]Property, error) {
-	rows, err := p.pool.Query(ctx, `select name, coalesce(display_name, ''), kind, data_type, unit, precision, validation, fusion_policy, description, official from property`)
+	rows, err := p.pool.Query(ctx, `select id, name, coalesce(display_name, ''), kind, data_type, unit, precision, validation, fusion_policy, description, official from property`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list properties: %w", err)
 	}
@@ -61,7 +65,7 @@ func (p *PG) ListProperties(ctx context.Context) ([]Property, error) {
 	var out []Property
 	for rows.Next() {
 		var prop Property
-		if err := rows.Scan(&prop.Name, &prop.DisplayName, &prop.Kind, &prop.DataType, &prop.Unit, &prop.Precision, &prop.Validation, &prop.FusionPolicy, &prop.Description, &prop.Official); err != nil {
+		if err := rows.Scan(&prop.ID, &prop.Name, &prop.DisplayName, &prop.Kind, &prop.DataType, &prop.Unit, &prop.Precision, &prop.Validation, &prop.FusionPolicy, &prop.Description, &prop.Official); err != nil {
 			return nil, fmt.Errorf("storage: scan property: %w", err)
 		}
 		out = append(out, prop)

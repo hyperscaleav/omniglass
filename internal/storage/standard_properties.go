@@ -36,7 +36,7 @@ type StandardPropertySpec struct {
 }
 
 const standardPropertyCols = `id, standard_id,
-	(select s.name from standard s where s.id = standard_property.standard_id) as standard_handle, property_name, default_value, required, created_at, updated_at`
+	(select s.name from standard s where s.id = standard_property.standard_id) as standard_handle, (select pr.name from property pr where pr.id = standard_property.property_id) as property_name, default_value, required, created_at, updated_at`
 
 func scanStandardProperty(row pgx.Row) (*StandardProperty, error) {
 	var (
@@ -62,7 +62,7 @@ func mapStandardPropertyWriteErr(err error) error {
 		case "23505": // unique_violation
 			return ErrTypeExists
 		case "23503": // foreign_key_violation
-			if pgErr.ConstraintName == "standard_property_property_name_fkey" {
+			if pgErr.ConstraintName == "standard_property_property_id_fkey" {
 				return ErrPropertyNotFound
 			}
 			return ErrTypeNotFound
@@ -81,10 +81,13 @@ func upsertStandardPropertyRow(ctx context.Context, q querier, standardID string
 	if err := q.QueryRow(ctx, `select true from standard where `+registryRefCol("standard", standardID)+` = $1`, standardID).Scan(&known); err != nil {
 		return nil, ErrTypeNotFound
 	}
+	if err := requireProperty(ctx, q, spec.PropertyName); err != nil {
+		return nil, err
+	}
 	pp, err := scanStandardProperty(q.QueryRow(ctx, `
-		insert into standard_property (standard_id, property_name, default_value, required)
-		values ((select id from standard where `+registryRefCol("standard", standardID)+` = $1), $2, $3, $4)
-		on conflict (standard_id, property_name) do update
+		insert into standard_property (standard_id, property_id, default_value, required)
+		values ((select id from standard where `+registryRefCol("standard", standardID)+` = $1), (select id from property where name = $2), $3, $4)
+		on conflict (standard_id, property_id) do update
 			set default_value = excluded.default_value,
 			    required      = excluded.required,
 			    updated_at    = now()
@@ -101,7 +104,7 @@ func upsertStandardPropertyRow(ctx context.Context, q querier, standardID string
 // standard is indistinguishable from one with an empty contract, since the read
 // side has nothing to disclose.
 func (p *PG) ListStandardProperties(ctx context.Context, standardID string) ([]StandardProperty, error) {
-	rows, err := p.pool.Query(ctx, `select `+standardPropertyCols+` from standard_property where standard_id = (select id from standard where `+registryRefCol("standard", standardID)+` = $1) order by property_name`, standardID)
+	rows, err := p.pool.Query(ctx, `select `+standardPropertyCols+` from standard_property where standard_id = (select id from standard where `+registryRefCol("standard", standardID)+` = $1) order by (select pr.name from property pr where pr.id = standard_property.property_id)`, standardID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list standard properties %q: %w", standardID, err)
 	}
@@ -136,7 +139,7 @@ func (p *PG) SetStandardProperty(ctx context.Context, actorID, standardID string
 	// The before-image decides create vs update and gives the audit its old side.
 	var before any
 	prior, err := scanStandardProperty(tx.QueryRow(ctx,
-		`select `+standardPropertyCols+` from standard_property where standard_id = (select id from standard where `+registryRefCol("standard", standardID)+` = $1) and property_name = $2`,
+		`select `+standardPropertyCols+` from standard_property where standard_id = (select id from standard where `+registryRefCol("standard", standardID)+` = $1) and property_id = (select id from property where name = $2)`,
 		standardID, spec.PropertyName))
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
@@ -180,7 +183,7 @@ func (p *PG) DeleteStandardProperty(ctx context.Context, actorID, standardID, pr
 	// the withdrawn declaration and a missing row is caught without a second read.
 	before, err := scanStandardProperty(tx.QueryRow(ctx, `
 		delete from standard_property
-		where standard_id = (select id from standard where `+registryRefCol("standard", standardID)+` = $1) and property_name = $2
+		where standard_id = (select id from standard where `+registryRefCol("standard", standardID)+` = $1) and property_id = (select id from property where name = $2)
 		returning `+standardPropertyCols, standardID, propertyName))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrTypeNotFound

@@ -15,6 +15,7 @@ import (
 // for an observed property; validation is a JSON Schema fragment; official marks a
 // seed-owned, read-only property.
 type propertyBody struct {
+	ID          string          `json:"id" doc:"The property's uuid, the stable form the contract and telemetry keys store"`
 	Name        string          `json:"name"`
 	DataType    string          `json:"data_type"`
 	DisplayName string          `json:"display_name,omitempty"`
@@ -27,7 +28,7 @@ type propertyBody struct {
 
 func toPropertyBody(p *storage.Property) propertyBody {
 	b := propertyBody{
-		Name: p.Name, DataType: p.DataType, DisplayName: p.DisplayName,
+		ID: p.ID, Name: p.Name, DataType: p.DataType, DisplayName: p.DisplayName,
 		Description: p.Description, Unit: p.Unit, Kind: p.Kind, Official: p.Official,
 	}
 	if len(p.Validation) > 0 {

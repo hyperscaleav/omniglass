@@ -116,8 +116,8 @@ func (f *healthFixture) recorded(t *testing.T, ctx context.Context, ownerKind, o
 	owner := `(select id from ` + ownerKind + ` where name = $1)`
 	if err := f.conn.QueryRow(ctx, `
 		select count(*), (select value from state_datapoint
-			where `+col+` = `+owner+` and key = 'health' order by id desc limit 1)
-		from state_datapoint where `+col+` = `+owner+` and key = 'health'`, ownerID).Scan(&n, &latest); err != nil {
+			where `+col+` = `+owner+` and property_id = (select id from property where name = 'health') order by id desc limit 1)
+		from state_datapoint where `+col+` = `+owner+` and property_id = (select id from property where name = 'health')`, ownerID).Scan(&n, &latest); err != nil {
 		t.Fatalf("read recorded health %s/%s: %v", ownerKind, ownerID, err)
 	}
 	if latest == nil {

@@ -2923,6 +2923,9 @@ components:
           type: string
         display_name:
           type: string
+        id:
+          description: The property's uuid, the stable form the contract and telemetry keys store
+          type: string
         kind:
           type: string
         name:
@@ -2934,6 +2937,7 @@ components:
         validation:
           description: A JSON Schema fragment constraining the value
       required:
+        - id
         - name
         - data_type
         - official

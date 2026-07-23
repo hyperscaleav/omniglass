@@ -49,6 +49,7 @@ var registryHandles = map[string]bool{
 	"vendor":     true,
 	"capability": true,
 	"standard":   true,
+	"property":   true,
 }
 
 // registryRefCol picks the column that addresses a registry row.
@@ -144,4 +145,15 @@ func isReferencedViolation(err error) bool {
 		return pgErr.Code == "23503" || pgErr.Code == "23001"
 	}
 	return false
+}
+
+// requireProperty resolves a property reference (handle or uuid) and returns
+// ErrPropertyNotFound when it names nothing, so an unknown property on a contract
+// write is the named catalog error rather than a NULL that trips the arc opaquely.
+func requireProperty(ctx context.Context, q querier, ref string) error {
+	var known bool
+	if err := q.QueryRow(ctx, `select true from property where `+registryRefCol("property", ref)+` = $1`, ref).Scan(&known); err != nil {
+		return ErrPropertyNotFound
+	}
+	return nil
 }

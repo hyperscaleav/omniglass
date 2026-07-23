@@ -83,8 +83,8 @@ func (p *PG) InsertMetricDatapoints(ctx context.Context, evs []MetricDatapointEv
 		if err != nil {
 			return fmt.Errorf("storage: datapoint %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
-		sql := fmt.Sprintf(`insert into metric_datapoint (ts, owner_kind, %s, key, instance, value, provenance, source)
-			values ($1, $2, $3, $4, $5, $6, 'observed', $7)`, col)
+		sql := fmt.Sprintf(`insert into metric_datapoint (ts, owner_kind, %s, property_id, instance, value, provenance, source)
+			values ($1, $2, $3, (select id from property where name = $4), $5, $6, 'observed', $7)`, col)
 		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arc, ev.Key, ev.Instance, ev.Value, ev.Source); err != nil {
 			return fmt.Errorf("storage: insert datapoint %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
@@ -100,9 +100,11 @@ func (p *PG) InsertMetricDatapoints(ctx context.Context, evs []MetricDatapointEv
 func (p *PG) LatestMetric(ctx context.Context, componentName, key string) (*MetricDatapoint, error) {
 	var dp MetricDatapoint
 	err := p.pool.QueryRow(ctx, `
-		select ts, owner_kind, key, instance, value, provenance, source
+		select ts, owner_kind,
+			(select p.name from property p where p.id = metric_datapoint.property_id), instance, value, provenance, source
 		from metric_datapoint
-		where component_id = (select id from component where name = $1) and key = $2
+		where component_id = (select id from component where name = $1)
+		  and property_id = (select id from property where name = $2)
 		order by ts desc
 		limit 1`, componentName, key).Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -121,9 +123,11 @@ func (p *PG) LatestMetric(ctx context.Context, componentName, key string) (*Metr
 func (p *PG) LatestMetricInstance(ctx context.Context, componentName, key, instance string) (*MetricDatapoint, error) {
 	var dp MetricDatapoint
 	err := p.pool.QueryRow(ctx, `
-		select ts, owner_kind, key, instance, value, provenance, source
+		select ts, owner_kind,
+			(select p.name from property p where p.id = metric_datapoint.property_id), instance, value, provenance, source
 		from metric_datapoint
-		where component_id = (select id from component where name = $1) and key = $2 and instance = $3
+		where component_id = (select id from component where name = $1)
+		  and property_id = (select id from property where name = $2) and instance = $3
 		order by ts desc
 		limit 1`, componentName, key, instance).Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source)
 	if errors.Is(err, pgx.ErrNoRows) {

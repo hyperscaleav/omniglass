@@ -39,7 +39,8 @@ type ProductPropertySpec struct {
 // caller reads what it wrote rather than an opaque key.
 const productPropertyCols = `id, product_id,
 	(select p.name from product p where p.id = product_property.product_id) as product_handle,
-	property_name, default_value, required, created_at, updated_at`
+	(select pr.name from property pr where pr.id = product_property.property_id) as property_name,
+	default_value, required, created_at, updated_at`
 
 func scanProductProperty(row pgx.Row) (*ProductProperty, error) {
 	var (
@@ -65,7 +66,7 @@ func mapProductPropertyWriteErr(err error) error {
 		case "23505": // unique_violation
 			return ErrTypeExists
 		case "23503": // foreign_key_violation
-			if pgErr.ConstraintName == "product_property_property_name_fkey" {
+			if pgErr.ConstraintName == "product_property_property_id_fkey" {
 				return ErrPropertyNotFound
 			}
 			return ErrTypeNotFound
@@ -83,10 +84,14 @@ func upsertProductPropertyRow(ctx context.Context, q querier, productID string, 
 	if _, err := resolveProductRef(ctx, q, productID); err != nil {
 		return nil, ErrTypeNotFound
 	}
+	if err := requireProperty(ctx, q, spec.PropertyName); err != nil {
+		return nil, err
+	}
 	pp, err := scanProductProperty(q.QueryRow(ctx, `
-		insert into product_property (product_id, property_name, default_value, required)
-		values ((select id from product where `+productRefCol(productID)+` = $1), $2, $3, $4)
-		on conflict (product_id, property_name) do update
+		insert into product_property (product_id, property_id, default_value, required)
+		values ((select id from product where `+productRefCol(productID)+` = $1),
+		        (select id from property where name = $2), $3, $4)
+		on conflict (product_id, property_id) do update
 			set default_value = excluded.default_value,
 			    required      = excluded.required,
 			    updated_at    = now()
@@ -103,7 +108,7 @@ func upsertProductPropertyRow(ctx context.Context, q querier, productID string, 
 // product is indistinguishable from one with an empty contract, since the read
 // side has nothing to disclose.
 func (p *PG) ListProductProperties(ctx context.Context, productID string) ([]ProductProperty, error) {
-	rows, err := p.pool.Query(ctx, `select `+productPropertyCols+` from product_property where product_id = (select id from product where `+productRefCol(productID)+` = $1) order by property_name`, productID)
+	rows, err := p.pool.Query(ctx, `select `+productPropertyCols+` from product_property where product_id = (select id from product where `+productRefCol(productID)+` = $1) order by (select pr.name from property pr where pr.id = product_property.property_id)`, productID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list product properties %q: %w", productID, err)
 	}
@@ -138,7 +143,7 @@ func (p *PG) SetProductProperty(ctx context.Context, actorID, productID string, 
 	// The before-image decides create vs update and gives the audit its old side.
 	var before any
 	prior, err := scanProductProperty(tx.QueryRow(ctx,
-		`select `+productPropertyCols+` from product_property where product_id = (select id from product where `+productRefCol(productID)+` = $1) and property_name = $2`,
+		`select `+productPropertyCols+` from product_property where product_id = (select id from product where `+productRefCol(productID)+` = $1) and property_id = (select id from property where name = $2)`,
 		productID, spec.PropertyName))
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
@@ -182,7 +187,7 @@ func (p *PG) DeleteProductProperty(ctx context.Context, actorID, productID, prop
 	// the withdrawn declaration and a missing row is caught without a second read.
 	before, err := scanProductProperty(tx.QueryRow(ctx, `
 		delete from product_property
-		where product_id = (select id from product where `+productRefCol(productID)+` = $1) and property_name = $2
+		where product_id = (select id from product where `+productRefCol(productID)+` = $1) and property_id = (select id from property where name = $2)
 		returning `+productPropertyCols, productID, propertyName))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrTypeNotFound
