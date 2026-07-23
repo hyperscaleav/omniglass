@@ -1992,6 +1992,16 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   state do, so exposing it is just a projection. The guard accepts `key` as property_id's name pair on the
   telemetry body; `key` stays forward-covered rather than joining the reverse set, since it is also a
   tag-binding field and so ambiguous. Every registry reference in the API now carries both forms.
+- **The migration chain is collapsed to a single init.** The 69 per-slice migrations that carried the
+  schema from the first commit through the uuid-key epic are squashed into one `db/migrations` file that
+  reproduces the current schema exactly. Verified by round trip: a fresh apply of the full chain and a fresh
+  apply of the lone init produce a **byte-identical** `pg_dump`. It is pure DDL (no seed rows, which a squash
+  drops), reuses the original initial migration's version so an existing database treats it as already
+  applied, and carries a real `down` that drops every table. The workflow is unchanged going forward: the
+  next schema change is still a new migration on top, never an edit to this one. One migration-history test
+  that rolled the database back to a now-absent version was removed; the resolution behaviour it checked is
+  covered by the cascade suite. (The stale constraint names the renames left, `component_make_*` on `vendor`
+  and so on, are preserved faithfully by the squash; renaming them is a separate cosmetic pass.)
 - **The observation tables lose the `_datapoint` genus**: `metric_datapoint` becomes `metric` and
   `state_datapoint` becomes `state`, matching their bare-noun sibling `event` on the principle that the
   noun is the entity and classification takes a `_type` / `_kind` suffix (the `datapoint_type` classifier
