@@ -71,7 +71,7 @@ func TestPropertiesAndEventsSurviveARename(t *testing.T) {
 	}
 	var found bool
 	for _, p := range props {
-		if p.PropertyName == "model_number" && p.IsSet {
+		if p.PropertyTypeName == "model_number" && p.IsSet {
 			found = true
 		}
 	}

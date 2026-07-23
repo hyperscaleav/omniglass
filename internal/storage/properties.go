@@ -105,7 +105,7 @@ func (p *PG) CreatePropertyType(ctx context.Context, actorID string, spec Proper
 		}
 		return nil, fmt.Errorf("storage: insert property %q: %w", spec.Name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "create", "property", spec.Name, nil, spec); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "create", "property_type", spec.Name, nil, spec); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -143,7 +143,7 @@ func (p *PG) UpdatePropertyType(ctx context.Context, actorID, name string, patch
 	if err != nil {
 		return nil, fmt.Errorf("storage: reload property %q: %w", name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "property", name, nil, prop); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "property_type", name, nil, prop); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -167,7 +167,7 @@ func (p *PG) DeletePropertyType(ctx context.Context, actorID, name string) error
 	if _, err := tx.Exec(ctx, `delete from property_type where name = $1`, name); err != nil {
 		return fmt.Errorf("storage: delete property %q: %w", name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "property", name, map[string]string{"name": name}, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "property_type", name, map[string]string{"name": name}, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

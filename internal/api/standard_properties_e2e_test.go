@@ -16,9 +16,9 @@ import (
 // standardPropertyWire is the decoded contract line: the property the standard
 // declares, its optional default, and whether a conforming system must set it.
 type standardPropertyWire struct {
-	PropertyName string          `json:"property_name"`
-	DefaultValue json.RawMessage `json:"default_value"`
-	Required     bool            `json:"required"`
+	PropertyTypeName string          `json:"property_type_name"`
+	DefaultValue     json.RawMessage `json:"default_value"`
+	Required         bool            `json:"required"`
 }
 
 // standardPropertiesWire is the decoded list body.
@@ -62,7 +62,7 @@ func TestStandardPropertiesAPI(t *testing.T) {
 		map[string]any{"default_value": "MN-UNSET", "required": true}, http.StatusOK), &set); err != nil {
 		t.Fatalf("decode set: %v", err)
 	}
-	if set.PropertyName != "model_number" || !set.Required || string(set.DefaultValue) != `"MN-UNSET"` {
+	if set.PropertyTypeName != "model_number" || !set.Required || string(set.DefaultValue) != `"MN-UNSET"` {
 		t.Fatalf("set = %+v, want model_number required with default \"MN-UNSET\"", set)
 	}
 
@@ -71,7 +71,7 @@ func TestStandardPropertiesAPI(t *testing.T) {
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/acme-room/properties", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode list: %v", err)
 	}
-	if len(listed.Properties) != 1 || listed.Properties[0].PropertyName != "model_number" {
+	if len(listed.Properties) != 1 || listed.Properties[0].PropertyTypeName != "model_number" {
 		t.Fatalf("contract = %+v, want one model_number line", listed.Properties)
 	}
 

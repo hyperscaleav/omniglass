@@ -324,7 +324,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 	// default stays nil. The upsert is keyed on (product, property), so a re-run
 	// rewrites the same row rather than adding one.
 	for _, pp := range doc.ProductProperties {
-		spec := storage.ProductPropertySpec{PropertyName: pp.Property, Required: pp.Required}
+		spec := storage.ProductPropertySpec{PropertyTypeName: pp.Property, Required: pp.Required}
 		if pp.Default != nil {
 			raw, err := json.Marshal(pp.Default)
 			if err != nil {

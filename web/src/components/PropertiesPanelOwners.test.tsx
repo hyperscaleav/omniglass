@@ -15,11 +15,11 @@ import { ME_KEY, type Me } from "../lib/auth";
 // is needed; the set / clear writes are faked where a test drives a Save.
 const seed: EffectiveProperty[] = [
   // On contract, not overridden: the contract default is what applies.
-  { property_name: "seat_count", property_type_id: "seat_count-id", display_name: "Seat count", data_type: "int", required: false, is_set: false, from_contract: true, default_value: 12, value: 12 },
+  { property_type_name: "seat_count", property_type_id: "seat_count-id", display_name: "Seat count", data_type: "int", required: false, is_set: false, from_contract: true, default_value: 12, value: 12 },
   // On contract, overridden: the owner's value wins over the default.
-  { property_name: "site.timezone", property_type_id: "site.timezone-id", display_name: "Time zone", data_type: "string", required: false, is_set: true, from_contract: true, default_value: "UTC", set_value: "America/Denver", value: "America/Denver", value_id: "v-tz" },
+  { property_type_name: "site.timezone", property_type_id: "site.timezone-id", display_name: "Time zone", data_type: "string", required: false, is_set: true, from_contract: true, default_value: "UTC", set_value: "America/Denver", value: "America/Denver", value_id: "v-tz" },
   // Off contract: set directly on this owner, declared by no classifier.
-  { property_name: "site.note", property_type_id: "site.note-id", display_name: "Note", data_type: "string", required: false, is_set: true, from_contract: false, set_value: "leased", value: "leased", value_id: "v-note" },
+  { property_type_name: "site.note", property_type_id: "site.note-id", display_name: "Note", data_type: "string", required: false, is_set: true, from_contract: false, set_value: "leased", value: "leased", value_id: "v-note" },
 ];
 
 const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };
@@ -54,7 +54,7 @@ function captureWrites(): Call[] {
     try { body = await req.clone().text(); } catch { body = ""; }
     calls.push({ method: req.method, url: req.url, body });
     if (req.method === "DELETE") return new Response(null, { status: 204 });
-    if (req.method === "PUT") return json({ property_name: "x", property_type_id: "x-id", value: null, value_id: "v" });
+    if (req.method === "PUT") return json({ property_type_name: "x", property_type_id: "x-id", value: null, value_id: "v" });
     return json({ properties: seed });
   });
   return calls;

@@ -37,11 +37,11 @@ type locationPropertyOutput struct {
 // locationPropertyValueBody is the write reply: the stored override, echoed back
 // so a client that just set a value holds its id without re-reading the list.
 type locationPropertyBody struct {
-	Location       string          `json:"location"`
-	PropertyName   string          `json:"property_name"`
-	PropertyTypeID string          `json:"property_type_id" doc:"The catalog property's uuid, the stable form of property_name"`
-	Value          json.RawMessage `json:"value" doc:"The stored value, shape given by the property's data_type"`
-	ValueID        string          `json:"value_id" doc:"The stored value's id"`
+	Location         string          `json:"location"`
+	PropertyTypeName string          `json:"property_type_name"`
+	PropertyTypeID   string          `json:"property_type_id" doc:"The catalog property's uuid, the stable form of property_type_name"`
+	Value            json.RawMessage `json:"value" doc:"The stored value, shape given by the property's data_type"`
+	ValueID          string          `json:"value_id" doc:"The stored value's id"`
 }
 
 // locationPropertyPathInput addresses one property on one location.
@@ -100,11 +100,11 @@ func registerLocationPropertyRoutes(api huma.API, a *authenticator, gw storage.G
 			return nil, mapLocationPropertyErr(err)
 		}
 		return &locationPropertyOutput{Body: locationPropertyBody{
-			Location:       in.Name,
-			PropertyName:   pv.PropertyName,
-			PropertyTypeID: pv.PropertyTypeID,
-			Value:          json.RawMessage(pv.Value),
-			ValueID:        pv.ID,
+			Location:         in.Name,
+			PropertyTypeName: pv.PropertyTypeName,
+			PropertyTypeID:   pv.PropertyTypeID,
+			Value:            json.RawMessage(pv.Value),
+			ValueID:          pv.ID,
 		}}, nil
 	})
 

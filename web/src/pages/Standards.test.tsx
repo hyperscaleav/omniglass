@@ -18,7 +18,7 @@ const seed: Standard[] = [
   { id: "u-huddle-space", name: "huddle-space", display_name: "Huddle space", official: false, parent_standard: "meeting-room", parent_standard_id: "u-meeting-room" },
 ];
 
-const contract: ClassifierProperty[] = [{ property_name: "seat_count", property_type_id: "seat_count-id", default_value: 8, required: true }];
+const contract: ClassifierProperty[] = [{ property_type_name: "seat_count", property_type_id: "seat_count-id", default_value: 8, required: true }];
 const catalog: PropertyRow[] = [
   { name: "seat_count", data_type: "int", display_name: "Seat count", official: true },
   { name: "has_camera", data_type: "bool", display_name: "Has camera", official: true },

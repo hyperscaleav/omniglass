@@ -387,10 +387,10 @@ components:
           type: string
         component:
           type: string
-        property_name:
-          type: string
         property_type_id:
-          description: The catalog property's uuid, the stable form of property_name
+          description: The catalog property's uuid, the stable form of property_type_name
+          type: string
+        property_type_name:
           type: string
         value:
           description: The stored value, shape given by the property's data_type
@@ -399,7 +399,7 @@ components:
           type: string
       required:
         - component
-        - property_name
+        - property_type_name
         - property_type_id
         - value
         - value_id
@@ -1164,11 +1164,11 @@ components:
         is_set:
           description: True when the component overrides the contract default
           type: boolean
-        property_name:
-          description: The catalog property name
-          type: string
         property_type_id:
-          description: The catalog property's uuid, the stable form of property_name
+          description: The catalog property's uuid, the stable form of property_type_name
+          type: string
+        property_type_name:
+          description: The catalog property name
           type: string
         required:
           description: Whether the product contract requires a value; always false off-contract
@@ -1181,7 +1181,7 @@ components:
           description: The stored value's id when set; omitted when the property is unset
           type: string
       required:
-        - property_name
+        - property_type_name
         - property_type_id
         - data_type
         - required
@@ -2607,10 +2607,10 @@ components:
           type: string
         location:
           type: string
-        property_name:
-          type: string
         property_type_id:
-          description: The catalog property's uuid, the stable form of property_name
+          description: The catalog property's uuid, the stable form of property_type_name
+          type: string
+        property_type_name:
           type: string
         value:
           description: The stored value, shape given by the property's data_type
@@ -2619,7 +2619,7 @@ components:
           type: string
       required:
         - location
-        - property_name
+        - property_type_name
         - property_type_id
         - value
         - value_id
@@ -2672,17 +2672,17 @@ components:
           type: string
         default_value:
           description: The contract default, shape given by the property's data_type; omitted when the contract sets none
-        property_name:
-          description: The catalog property this location type declares
-          type: string
         property_type_id:
-          description: The catalog property's uuid, the stable form of property_name
+          description: The catalog property's uuid, the stable form of property_type_name
+          type: string
+        property_type_name:
+          description: The catalog property this location type declares
           type: string
         required:
           description: Whether every location of this type must set the property
           type: boolean
       required:
-        - property_name
+        - property_type_name
         - property_type_id
         - required
       type: object
@@ -2944,17 +2944,17 @@ components:
           type: string
         default_value:
           description: The contract default, shape given by the property's data_type; omitted when the contract sets none
-        property_name:
-          description: The catalog property this product declares
-          type: string
         property_type_id:
-          description: The catalog property's uuid, the stable form of property_name
+          description: The catalog property's uuid, the stable form of property_type_name
+          type: string
+        property_type_name:
+          description: The catalog property this product declares
           type: string
         required:
           description: Whether every instance of this product must set the property
           type: boolean
       required:
-        - property_name
+        - property_type_name
         - property_type_id
         - required
       type: object
@@ -3857,17 +3857,17 @@ components:
           type: string
         default_value:
           description: The contract default, shape given by the property's data_type; omitted when the contract sets none
-        property_name:
-          description: The catalog property this standard declares
-          type: string
         property_type_id:
-          description: The catalog property's uuid, the stable form of property_name
+          description: The catalog property's uuid, the stable form of property_type_name
+          type: string
+        property_type_name:
+          description: The catalog property this standard declares
           type: string
         required:
           description: Whether every system conforming to this standard must set the property
           type: boolean
       required:
-        - property_name
+        - property_type_name
         - property_type_id
         - required
       type: object
@@ -3988,10 +3988,10 @@ components:
           format: uri
           readOnly: true
           type: string
-        property_name:
-          type: string
         property_type_id:
-          description: The catalog property's uuid, the stable form of property_name
+          description: The catalog property's uuid, the stable form of property_type_name
+          type: string
+        property_type_name:
           type: string
         system:
           type: string
@@ -4002,7 +4002,7 @@ components:
           type: string
       required:
         - system
-        - property_name
+        - property_type_name
         - property_type_id
         - value
         - value_id
@@ -8120,10 +8120,10 @@ paths:
           description: Error
       summary: Declare a property on a product
       x-omniglass-permission: product:update
-  /properties:
+  /property-types:
     get:
-      description: Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property:read.
-      operationId: list-property
+      description: Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property_type:read.
+      operationId: list-property-type
       responses:
         "200":
           content:
@@ -8138,10 +8138,10 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List properties
-      x-omniglass-permission: property:read
+      x-omniglass-permission: property_type:read
     post:
-      description: Registers a custom property (official=false). The name must be a valid property key. Gated by property:create.
-      operationId: create-property
+      description: Registers a custom property (official=false). The name must be a valid property key. Gated by property_type:create.
+      operationId: create-property-type
       requestBody:
         content:
           application/json:
@@ -8162,11 +8162,11 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Create a property
-      x-omniglass-permission: property:create
-  /properties/{name}:
+      x-omniglass-permission: property_type:create
+  /property-types/{name}:
     delete:
-      description: Removes a custom property by name. Official properties are read-only. Gated by property:delete.
-      operationId: delete-property
+      description: Removes a custom property by name. Official properties are read-only. Gated by property_type:delete.
+      operationId: delete-property-type
       parameters:
         - description: The property's name
           in: path
@@ -8185,10 +8185,10 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Delete a property
-      x-omniglass-permission: property:delete
+      x-omniglass-permission: property_type:delete
     get:
-      description: Returns one property by name. Gated by property:read.
-      operationId: get-property
+      description: Returns one property by name. Gated by property_type:read.
+      operationId: get-property-type
       parameters:
         - description: The property's name
           in: path
@@ -8211,10 +8211,10 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get a property
-      x-omniglass-permission: property:read
+      x-omniglass-permission: property_type:read
     patch:
-      description: Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property:update.
-      operationId: update-property
+      description: Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property_type:update.
+      operationId: update-property-type
       parameters:
         - description: The property's name
           in: path
@@ -8243,7 +8243,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a property
-      x-omniglass-permission: property:update
+      x-omniglass-permission: property_type:update
   /roles:
     get:
       description: Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read:admin capability.

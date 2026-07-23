@@ -16,9 +16,9 @@ import (
 // productPropertyWire is the decoded contract line: the property the product
 // declares, its optional default, and whether an instance must set it.
 type productPropertyWire struct {
-	PropertyName string          `json:"property_name"`
-	DefaultValue json.RawMessage `json:"default_value"`
-	Required     bool            `json:"required"`
+	PropertyTypeName string          `json:"property_type_name"`
+	DefaultValue     json.RawMessage `json:"default_value"`
+	Required         bool            `json:"required"`
 }
 
 // productPropertiesWire is the decoded list body.
@@ -64,7 +64,7 @@ func TestProductPropertiesAPI(t *testing.T) {
 		map[string]any{"default_value": "SN-UNSET", "required": true}, http.StatusOK), &set); err != nil {
 		t.Fatalf("decode set: %v", err)
 	}
-	if set.PropertyName != "serial_number" || !set.Required || string(set.DefaultValue) != `"SN-UNSET"` {
+	if set.PropertyTypeName != "serial_number" || !set.Required || string(set.DefaultValue) != `"SN-UNSET"` {
 		t.Fatalf("set = %+v, want serial_number required with default \"SN-UNSET\"", set)
 	}
 
@@ -73,7 +73,7 @@ func TestProductPropertiesAPI(t *testing.T) {
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/products/acme-panel/properties", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode list: %v", err)
 	}
-	if len(listed.Properties) != 1 || listed.Properties[0].PropertyName != "serial_number" {
+	if len(listed.Properties) != 1 || listed.Properties[0].PropertyTypeName != "serial_number" {
 		t.Fatalf("contract = %+v, want one serial_number line", listed.Properties)
 	}
 

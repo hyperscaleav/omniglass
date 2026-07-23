@@ -19,18 +19,18 @@ import (
 // upsert rather than a create/update pair.
 
 type locationTypePropertyBody struct {
-	PropertyName   string          `json:"property_name" doc:"The catalog property this location type declares"`
-	PropertyTypeID string          `json:"property_type_id" doc:"The catalog property's uuid, the stable form of property_name"`
-	DefaultValue   json.RawMessage `json:"default_value,omitempty" doc:"The contract default, shape given by the property's data_type; omitted when the contract sets none"`
-	Required       bool            `json:"required" doc:"Whether every location of this type must set the property"`
+	PropertyTypeName string          `json:"property_type_name" doc:"The catalog property this location type declares"`
+	PropertyTypeID   string          `json:"property_type_id" doc:"The catalog property's uuid, the stable form of property_type_name"`
+	DefaultValue     json.RawMessage `json:"default_value,omitempty" doc:"The contract default, shape given by the property's data_type; omitted when the contract sets none"`
+	Required         bool            `json:"required" doc:"Whether every location of this type must set the property"`
 }
 
 func toLocationTypePropertyBody(lp *storage.LocationTypeProperty) locationTypePropertyBody {
 	return locationTypePropertyBody{
-		PropertyName:   lp.PropertyName,
-		PropertyTypeID: lp.PropertyTypeID,
-		DefaultValue:   json.RawMessage(lp.DefaultValue),
-		Required:       lp.Required,
+		PropertyTypeName: lp.PropertyTypeName,
+		PropertyTypeID:   lp.PropertyTypeID,
+		DefaultValue:     json.RawMessage(lp.DefaultValue),
+		Required:         lp.Required,
 	}
 }
 
@@ -98,9 +98,9 @@ func registerLocationTypePropertyRoutes(api huma.API, a *authenticator, gw stora
 			return nil, err
 		}
 		lp, err := gw.SetLocationTypeProperty(ctx, actorID(ctx), in.ID, storage.LocationTypePropertySpec{
-			PropertyName: in.Property,
-			DefaultValue: def,
-			Required:     in.Body.Required,
+			PropertyTypeName: in.Property,
+			DefaultValue:     def,
+			Required:         in.Body.Required,
 		})
 		if err != nil {
 			return nil, mapLocationTypePropertyErr(err)

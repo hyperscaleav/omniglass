@@ -17,7 +17,7 @@ import (
 func byName(props []storage.EffectiveProperty) map[string]storage.EffectiveProperty {
 	m := make(map[string]storage.EffectiveProperty, len(props))
 	for _, p := range props {
-		m[p.PropertyName] = p
+		m[p.PropertyTypeName] = p
 	}
 	return m
 }
@@ -49,12 +49,12 @@ func TestEffectiveProperties(t *testing.T) {
 		t.Fatalf("create product: %v", err)
 	}
 	if _, err := gw.SetProductProperty(ctx, "", "acme-panel", storage.ProductPropertySpec{
-		PropertyName: "firmware_version", DefaultValue: json.RawMessage(`"1.0.0"`),
+		PropertyTypeName: "firmware_version", DefaultValue: json.RawMessage(`"1.0.0"`),
 	}); err != nil {
 		t.Fatalf("set contract firmware_version: %v", err)
 	}
 	if _, err := gw.SetProductProperty(ctx, "", "acme-panel", storage.ProductPropertySpec{
-		PropertyName: "serial_number", Required: true,
+		PropertyTypeName: "serial_number", Required: true,
 	}); err != nil {
 		t.Fatalf("set contract serial_number: %v", err)
 	}
@@ -139,7 +139,7 @@ func TestEffectiveProperties(t *testing.T) {
 		t.Fatalf("set on productless: %v", err)
 	}
 	loose := mustResolve(t, gw, "loose-1", all)
-	if len(loose) != 1 || loose[0].PropertyName != "serial_number" || loose[0].FromContract {
+	if len(loose) != 1 || loose[0].PropertyTypeName != "serial_number" || loose[0].FromContract {
 		t.Fatalf("productless component: want a single ad-hoc serial_number, got %+v", loose)
 	}
 

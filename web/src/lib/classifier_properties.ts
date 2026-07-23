@@ -21,7 +21,7 @@ import { api } from "../api/client";
 export type ClassifierKind = "product" | "standard" | "location-type";
 
 export type ClassifierProperty = {
-  property_name: string;
+  property_type_name: string;
   property_type_id: string;
   // The contract default, shaped by the property's data_type; omitted when the
   // contract sets none.

@@ -23,7 +23,7 @@ const seed: TypeRow[] = [
 
 // The location type contract shown on the wing blade, plus the catalog the editor
 // joins each line to for its display name and data type.
-const wingContract: ClassifierProperty[] = [{ property_name: "floor_area_sqm", property_type_id: "floor_area_sqm-id", default_value: 40, required: false }];
+const wingContract: ClassifierProperty[] = [{ property_type_name: "floor_area_sqm", property_type_id: "floor_area_sqm-id", default_value: 40, required: false }];
 const catalog: PropertyRow[] = [
   { name: "floor_area_sqm", data_type: "int", display_name: "Floor area", official: true },
   { name: "seat_count", data_type: "int", display_name: "Seat count", official: true },
@@ -236,7 +236,7 @@ describe("Types page", () => {
       const req = input as Request;
       if (req.method === "PUT") {
         put = req.clone();
-        return new Response(JSON.stringify({ property_name: "seat_count", property_type_id: "seat_count-id", default_value: 12, required: false }), {
+        return new Response(JSON.stringify({ property_type_name: "seat_count", property_type_id: "seat_count-id", default_value: 12, required: false }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         });

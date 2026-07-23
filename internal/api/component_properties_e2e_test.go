@@ -17,16 +17,16 @@ import (
 // effectivePropertyWire is one decoded effective property: the resolved value
 // plus the two flags the surface renders on (is_set, from_contract).
 type effectivePropertyWire struct {
-	PropertyName string          `json:"property_name"`
-	DisplayName  string          `json:"display_name"`
-	DataType     string          `json:"data_type"`
-	Required     bool            `json:"required"`
-	IsSet        bool            `json:"is_set"`
-	FromContract bool            `json:"from_contract"`
-	DefaultValue json.RawMessage `json:"default_value"`
-	SetValue     json.RawMessage `json:"set_value"`
-	Value        json.RawMessage `json:"value"`
-	ValueID      string          `json:"value_id"`
+	PropertyTypeName string          `json:"property_type_name"`
+	DisplayName      string          `json:"display_name"`
+	DataType         string          `json:"data_type"`
+	Required         bool            `json:"required"`
+	IsSet            bool            `json:"is_set"`
+	FromContract     bool            `json:"from_contract"`
+	DefaultValue     json.RawMessage `json:"default_value"`
+	SetValue         json.RawMessage `json:"set_value"`
+	Value            json.RawMessage `json:"value"`
+	ValueID          string          `json:"value_id"`
 }
 
 // componentPropertiesWire is the decoded effective-read body.
@@ -40,7 +40,7 @@ type componentPropertiesWire struct {
 func (w componentPropertiesWire) find(t *testing.T, name string) effectivePropertyWire {
 	t.Helper()
 	for _, p := range w.Properties {
-		if p.PropertyName == name {
+		if p.PropertyTypeName == name {
 			return p
 		}
 	}

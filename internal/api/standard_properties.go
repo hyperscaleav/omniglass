@@ -19,18 +19,18 @@ import (
 // create/update pair.
 
 type standardPropertyBody struct {
-	PropertyName   string          `json:"property_name" doc:"The catalog property this standard declares"`
-	PropertyTypeID string          `json:"property_type_id" doc:"The catalog property's uuid, the stable form of property_name"`
-	DefaultValue   json.RawMessage `json:"default_value,omitempty" doc:"The contract default, shape given by the property's data_type; omitted when the contract sets none"`
-	Required       bool            `json:"required" doc:"Whether every system conforming to this standard must set the property"`
+	PropertyTypeName string          `json:"property_type_name" doc:"The catalog property this standard declares"`
+	PropertyTypeID   string          `json:"property_type_id" doc:"The catalog property's uuid, the stable form of property_type_name"`
+	DefaultValue     json.RawMessage `json:"default_value,omitempty" doc:"The contract default, shape given by the property's data_type; omitted when the contract sets none"`
+	Required         bool            `json:"required" doc:"Whether every system conforming to this standard must set the property"`
 }
 
 func toStandardPropertyBody(sp *storage.StandardProperty) standardPropertyBody {
 	return standardPropertyBody{
-		PropertyName:   sp.PropertyName,
-		PropertyTypeID: sp.PropertyTypeID,
-		DefaultValue:   json.RawMessage(sp.DefaultValue),
-		Required:       sp.Required,
+		PropertyTypeName: sp.PropertyTypeName,
+		PropertyTypeID:   sp.PropertyTypeID,
+		DefaultValue:     json.RawMessage(sp.DefaultValue),
+		Required:         sp.Required,
 	}
 }
 
@@ -97,9 +97,9 @@ func registerStandardPropertyRoutes(api huma.API, a *authenticator, gw storage.G
 			return nil, err
 		}
 		sp, err := gw.SetStandardProperty(ctx, actorID(ctx), in.ID, storage.StandardPropertySpec{
-			PropertyName: in.Property,
-			DefaultValue: def,
-			Required:     in.Body.Required,
+			PropertyTypeName: in.Property,
+			DefaultValue:     def,
+			Required:         in.Body.Required,
 		})
 		if err != nil {
 			return nil, mapStandardPropertyErr(err)

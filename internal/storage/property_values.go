@@ -18,16 +18,16 @@ import (
 // A declared value is what used to be a field_value; intended (config), observed,
 // and calculated producers land in later slices.
 type Property struct {
-	ID             string
-	OwnerKind      string
-	OwnerID        string
-	PropertyName   string
-	PropertyTypeID string
-	Instance       string
-	Provenance     string
-	Value          json.RawMessage
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	ID               string
+	OwnerKind        string
+	OwnerID          string
+	PropertyTypeName string
+	PropertyTypeID   string
+	Instance         string
+	Provenance       string
+	Value            json.RawMessage
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // EffectiveProperty is one property resolved for a component: the set value when
@@ -37,17 +37,17 @@ type Property struct {
 // (including every property on a productless component), so the surface can show
 // the contract and the off-contract additions differently.
 type EffectiveProperty struct {
-	PropertyName   string
-	PropertyTypeID string
-	DisplayName    string // optional human label; empty when unset
-	DataType       string
-	Required       bool // from the product contract; always false for an ad-hoc property
-	DefaultValue   json.RawMessage
-	SetValue       json.RawMessage // nil when the component has not set it
-	Value          json.RawMessage // coalesce(SetValue, DefaultValue)
-	IsSet          bool
-	FromContract   bool
-	ValueID        string // the property id when set; empty when unset (what the surface clears)
+	PropertyTypeName string
+	PropertyTypeID   string
+	DisplayName      string // optional human label; empty when unset
+	DataType         string
+	Required         bool // from the product contract; always false for an ad-hoc property
+	DefaultValue     json.RawMessage
+	SetValue         json.RawMessage // nil when the component has not set it
+	Value            json.RawMessage // coalesce(SetValue, DefaultValue)
+	IsSet            bool
+	FromContract     bool
+	ValueID          string // the property id when set; empty when unset (what the surface clears)
 }
 
 // Property-value sentinels. Clearing a value the owner never set is the explicit
@@ -63,7 +63,7 @@ var (
 // declares. The column carries the other three for the producers that land later.
 const declaredProvenance = "declared"
 
-const propertyValueCols = `id, owner_kind, (select pr.name from property_type pr where pr.id = property.property_type_id) as property_name, property.property_type_id as property_type_id, instance, provenance, value, created_at, updated_at`
+const propertyValueCols = `id, owner_kind, (select pr.name from property_type pr where pr.id = property.property_type_id) as property_type_name, property.property_type_id as property_type_id, instance, provenance, value, created_at, updated_at`
 
 // scanProperty reads a row into a Property. OwnerID is not in the column
 // list (it lives in whichever arc column the owner kind selects), so the caller
@@ -73,7 +73,7 @@ func scanProperty(row pgx.Row) (*Property, error) {
 		pv    Property
 		value []byte
 	)
-	if err := row.Scan(&pv.ID, &pv.OwnerKind, &pv.PropertyName, &pv.PropertyTypeID, &pv.Instance, &pv.Provenance, &value, &pv.CreatedAt, &pv.UpdatedAt); err != nil {
+	if err := row.Scan(&pv.ID, &pv.OwnerKind, &pv.PropertyTypeName, &pv.PropertyTypeID, &pv.Instance, &pv.Provenance, &value, &pv.CreatedAt, &pv.UpdatedAt); err != nil {
 		return nil, err
 	}
 	pv.Value = copyRaw(value)
@@ -118,7 +118,7 @@ func (p *PG) SetProperty(ctx context.Context, actorID, ownerKind, ownerID, prope
 		return nil, mapPropertyWriteErr(err)
 	}
 	pv.OwnerID = ownerID
-	if err := writeAuditRes(ctx, tx, actorID, "update", "property_value", pv.ID, nil, pv); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "property", pv.ID, nil, pv); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -159,7 +159,7 @@ func (p *PG) ClearProperty(ctx context.Context, actorID, ownerKind, ownerID, pro
 		}
 		return fmt.Errorf("storage: clear property value %s/%s: %w", ownerID, propertyName, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "property_value", id, nil, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "property", id, nil, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -224,7 +224,7 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 
 	// The ad-hoc arm alone when the owner kind has no classifier to inherit from.
 	adHoc := fmt.Sprintf(`
-		select pr.name as property_name, pr.id as property_type_id, pr.display_name, pr.data_type, false as required,
+		select pr.name as property_type_name, pr.id as property_type_id, pr.display_name, pr.data_type, false as required,
 		       null::jsonb as default_value,
 		       pv.value as set_value,
 		       pv.value as effective_value,
@@ -247,7 +247,7 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 		)
 		-- The contract arm: what the instance's classifier declares, resolved
 		-- against the instance's own value.
-		select pr.name as property_name, pr.id as property_type_id, pr.display_name, pr.data_type, c.required,
+		select pr.name as property_type_name, pr.id as property_type_id, pr.display_name, pr.data_type, c.required,
 		       c.default_value,
 		       pv.value as set_value,
 		       coalesce(pv.value, c.default_value) as effective_value,
@@ -288,7 +288,7 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 			displayName   *string // NULL when unset
 			valueID       *string // NULL when the property is unset
 		)
-		if err := rows.Scan(&e.PropertyName, &e.PropertyTypeID, &displayName, &e.DataType, &e.Required,
+		if err := rows.Scan(&e.PropertyTypeName, &e.PropertyTypeID, &displayName, &e.DataType, &e.Required,
 			&def, &set, &val, &e.IsSet, &e.FromContract, &valueID); err != nil {
 			return nil, fmt.Errorf("storage: scan effective property: %w", err)
 		}

@@ -37,11 +37,11 @@ type systemPropertyOutput struct {
 // systemPropertyValueBody is the write reply: the stored override, echoed back so
 // a client that just set a value holds its id without re-reading the list.
 type systemPropertyBody struct {
-	System         string          `json:"system"`
-	PropertyName   string          `json:"property_name"`
-	PropertyTypeID string          `json:"property_type_id" doc:"The catalog property's uuid, the stable form of property_name"`
-	Value          json.RawMessage `json:"value" doc:"The stored value, shape given by the property's data_type"`
-	ValueID        string          `json:"value_id" doc:"The stored value's id"`
+	System           string          `json:"system"`
+	PropertyTypeName string          `json:"property_type_name"`
+	PropertyTypeID   string          `json:"property_type_id" doc:"The catalog property's uuid, the stable form of property_type_name"`
+	Value            json.RawMessage `json:"value" doc:"The stored value, shape given by the property's data_type"`
+	ValueID          string          `json:"value_id" doc:"The stored value's id"`
 }
 
 // systemPropertyPathInput addresses one property on one system.
@@ -100,11 +100,11 @@ func registerSystemPropertyRoutes(api huma.API, a *authenticator, gw storage.Gat
 			return nil, mapSystemPropertyErr(err)
 		}
 		return &systemPropertyOutput{Body: systemPropertyBody{
-			System:         in.Name,
-			PropertyName:   pv.PropertyName,
-			PropertyTypeID: pv.PropertyTypeID,
-			Value:          json.RawMessage(pv.Value),
-			ValueID:        pv.ID,
+			System:           in.Name,
+			PropertyTypeName: pv.PropertyTypeName,
+			PropertyTypeID:   pv.PropertyTypeID,
+			Value:            json.RawMessage(pv.Value),
+			ValueID:          pv.ID,
 		}}, nil
 	})
 

@@ -75,16 +75,16 @@ type updatePropertyInput struct {
 
 // registerPropertyRoutes wires the property catalog: the estate-wide signal
 // directory (no scope injection, it is reference data) and its custom-property CRUD.
-// Read rides the viewer floor; create/update/delete are gated by property:create /
-// property:update / property:delete. Official (seed-owned) properties are read-only.
+// Read rides the viewer floor; create/update/delete are gated by property_type:create /
+// property_type:update / property_type:delete. Official (seed-owned) properties are read-only.
 func registerPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
-		OperationID: "list-property",
+		OperationID: "list-property-type",
 		Method:      http.MethodGet,
-		Path:        "/properties",
+		Path:        "/property-types",
 		Summary:     "List properties",
-		Description: "Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property:read.",
-	}, "property", "read"), func(ctx context.Context, _ *struct{}) (*listPropertiesOutput, error) {
+		Description: "Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property_type:read.",
+	}, "property_type", "read"), func(ctx context.Context, _ *struct{}) (*listPropertiesOutput, error) {
 		properties, err := gw.ListPropertyTypes(ctx)
 		if err != nil {
 			return nil, mapPropertyErr(err)
@@ -98,12 +98,12 @@ func registerPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	})
 
 	huma.Register(api, a.gated(huma.Operation{
-		OperationID: "get-property",
+		OperationID: "get-property-type",
 		Method:      http.MethodGet,
-		Path:        "/properties/{name}",
+		Path:        "/property-types/{name}",
 		Summary:     "Get a property",
-		Description: "Returns one property by name. Gated by property:read.",
-	}, "property", "read"), func(ctx context.Context, in *propertyNameInput) (*propertyOutput, error) {
+		Description: "Returns one property by name. Gated by property_type:read.",
+	}, "property_type", "read"), func(ctx context.Context, in *propertyNameInput) (*propertyOutput, error) {
 		p, err := gw.GetPropertyType(ctx, in.Name)
 		if err != nil {
 			return nil, mapPropertyErr(err)
@@ -112,13 +112,13 @@ func registerPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	})
 
 	huma.Register(api, a.gated(huma.Operation{
-		OperationID:   "create-property",
+		OperationID:   "create-property-type",
 		Method:        http.MethodPost,
-		Path:          "/properties",
+		Path:          "/property-types",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a property",
-		Description:   "Registers a custom property (official=false). The name must be a valid property key. Gated by property:create.",
-	}, "property", "create"), func(ctx context.Context, in *createPropertyInput) (*propertyOutput, error) {
+		Description:   "Registers a custom property (official=false). The name must be a valid property key. Gated by property_type:create.",
+	}, "property_type", "create"), func(ctx context.Context, in *createPropertyInput) (*propertyOutput, error) {
 		validation, err := marshalValidation(in.Body.Validation)
 		if err != nil {
 			return nil, err
@@ -139,12 +139,12 @@ func registerPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	})
 
 	huma.Register(api, a.gated(huma.Operation{
-		OperationID: "update-property",
+		OperationID: "update-property-type",
 		Method:      http.MethodPatch,
-		Path:        "/properties/{name}",
+		Path:        "/property-types/{name}",
 		Summary:     "Update a property",
-		Description: "Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property:update.",
-	}, "property", "update"), func(ctx context.Context, in *updatePropertyInput) (*propertyOutput, error) {
+		Description: "Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property_type:update.",
+	}, "property_type", "update"), func(ctx context.Context, in *updatePropertyInput) (*propertyOutput, error) {
 		validation, err := marshalValidation(in.Body.Validation)
 		if err != nil {
 			return nil, err
@@ -162,13 +162,13 @@ func registerPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	})
 
 	huma.Register(api, a.gated(huma.Operation{
-		OperationID:   "delete-property",
+		OperationID:   "delete-property-type",
 		Method:        http.MethodDelete,
-		Path:          "/properties/{name}",
+		Path:          "/property-types/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a property",
-		Description:   "Removes a custom property by name. Official properties are read-only. Gated by property:delete.",
-	}, "property", "delete"), func(ctx context.Context, in *propertyNameInput) (*struct{}, error) {
+		Description:   "Removes a custom property by name. Official properties are read-only. Gated by property_type:delete.",
+	}, "property_type", "delete"), func(ctx context.Context, in *propertyNameInput) (*struct{}, error) {
 		if err := gw.DeletePropertyType(ctx, actorID(ctx), in.Name); err != nil {
 			return nil, mapPropertyErr(err)
 		}

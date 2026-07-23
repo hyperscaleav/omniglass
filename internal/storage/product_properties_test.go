@@ -41,12 +41,12 @@ func TestProductPropertyCRUD(t *testing.T) {
 
 	// Declare a required property with a default.
 	pp, err := gw.SetProductProperty(ctx, "", "acme-widget", storage.ProductPropertySpec{
-		PropertyName: "serial_number", DefaultValue: json.RawMessage(`"SN-0"`), Required: true,
+		PropertyTypeName: "serial_number", DefaultValue: json.RawMessage(`"SN-0"`), Required: true,
 	})
 	if err != nil {
 		t.Fatalf("set: %v", err)
 	}
-	if pp.ProductName != "acme-widget" || pp.PropertyName != "serial_number" || !pp.Required {
+	if pp.ProductName != "acme-widget" || pp.PropertyTypeName != "serial_number" || !pp.Required {
 		t.Fatalf("set = %+v, want acme-widget/serial_number required", pp)
 	}
 	if string(pp.DefaultValue) != `"SN-0"` {
@@ -56,14 +56,14 @@ func TestProductPropertyCRUD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
-	if len(props) != 1 || props[0].PropertyName != "serial_number" || !props[0].Required || string(props[0].DefaultValue) != `"SN-0"` {
+	if len(props) != 1 || props[0].PropertyTypeName != "serial_number" || !props[0].Required || string(props[0].DefaultValue) != `"SN-0"` {
 		t.Fatalf("list = %+v, want one required serial_number defaulting to \"SN-0\"", props)
 	}
 
 	// Setting the same property again updates the contract in place rather than
 	// adding a second row (the (product, property) pair is the key).
 	if _, err := gw.SetProductProperty(ctx, "", "acme-widget", storage.ProductPropertySpec{
-		PropertyName: "serial_number", DefaultValue: json.RawMessage(`"SN-1"`), Required: false,
+		PropertyTypeName: "serial_number", DefaultValue: json.RawMessage(`"SN-1"`), Required: false,
 	}); err != nil {
 		t.Fatalf("re-set: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestProductPropertyCRUD(t *testing.T) {
 
 	// A contract may declare a property with no default at all; nil round-trips as
 	// nil (a SQL NULL), not as the JSON literal null.
-	noDefault, err := gw.SetProductProperty(ctx, "", "acme-widget", storage.ProductPropertySpec{PropertyName: "firmware_version"})
+	noDefault, err := gw.SetProductProperty(ctx, "", "acme-widget", storage.ProductPropertySpec{PropertyTypeName: "firmware_version"})
 	if err != nil {
 		t.Fatalf("set without default: %v", err)
 	}
@@ -91,16 +91,16 @@ func TestProductPropertyCRUD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list two: %v", err)
 	}
-	// Ordered by property_name: firmware_version before serial_number.
-	if len(props) != 2 || props[0].PropertyName != "firmware_version" || props[1].PropertyName != "serial_number" {
+	// Ordered by property_type_name: firmware_version before serial_number.
+	if len(props) != 2 || props[0].PropertyTypeName != "firmware_version" || props[1].PropertyTypeName != "serial_number" {
 		t.Fatalf("list two = %+v, want firmware_version then serial_number", props)
 	}
 	if props[0].DefaultValue != nil {
 		t.Fatalf("list default = %s, want nil", props[0].DefaultValue)
 	}
 
-	// An unknown property_name is a missing catalog reference, not a silent insert.
-	if _, err := gw.SetProductProperty(ctx, "", "acme-widget", storage.ProductPropertySpec{PropertyName: "nope.not_a_property"}); !errors.Is(err, storage.ErrPropertyTypeNotFound) {
+	// An unknown property_type_name is a missing catalog reference, not a silent insert.
+	if _, err := gw.SetProductProperty(ctx, "", "acme-widget", storage.ProductPropertySpec{PropertyTypeName: "nope.not_a_property"}); !errors.Is(err, storage.ErrPropertyTypeNotFound) {
 		t.Fatalf("unknown property err = %v, want ErrPropertyNotFound", err)
 	}
 
@@ -123,7 +123,7 @@ func TestProductPropertyCRUD(t *testing.T) {
 	}
 
 	// A seeded (official) product's contract is seed-owned and read-only.
-	if _, err := gw.SetProductProperty(ctx, "", "cisco-room-bar", storage.ProductPropertySpec{PropertyName: "serial_number"}); !errors.Is(err, storage.ErrTypeOfficial) {
+	if _, err := gw.SetProductProperty(ctx, "", "cisco-room-bar", storage.ProductPropertySpec{PropertyTypeName: "serial_number"}); !errors.Is(err, storage.ErrTypeOfficial) {
 		t.Fatalf("set official err = %v, want ErrTypeOfficial", err)
 	}
 	if err := gw.DeleteProductProperty(ctx, "", "cisco-room-bar", "serial_number"); !errors.Is(err, storage.ErrTypeOfficial) {
@@ -133,12 +133,12 @@ func TestProductPropertyCRUD(t *testing.T) {
 	// The boot-seed path writes the official product's contract without the guard
 	// and without an audit, and is idempotent.
 	if err := gw.UpsertProductProperty(ctx, "cisco-room-bar", storage.ProductPropertySpec{
-		PropertyName: "serial_number", DefaultValue: json.RawMessage(`"unset"`), Required: true,
+		PropertyTypeName: "serial_number", DefaultValue: json.RawMessage(`"unset"`), Required: true,
 	}); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
 	if err := gw.UpsertProductProperty(ctx, "cisco-room-bar", storage.ProductPropertySpec{
-		PropertyName: "serial_number", DefaultValue: json.RawMessage(`"factory"`), Required: false,
+		PropertyTypeName: "serial_number", DefaultValue: json.RawMessage(`"factory"`), Required: false,
 	}); err != nil {
 		t.Fatalf("re-upsert: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestProductPropertyCRUD(t *testing.T) {
 	// seed declares another property).
 	var serial *storage.ProductProperty
 	for i := range props {
-		if props[i].PropertyName == "serial_number" {
+		if props[i].PropertyTypeName == "serial_number" {
 			serial = &props[i]
 		}
 	}
@@ -161,10 +161,10 @@ func TestProductPropertyCRUD(t *testing.T) {
 
 	// An unknown product is ErrTypeNotFound on the audited path, and on the seed
 	// path the FK reports the same missing product.
-	if _, err := gw.SetProductProperty(ctx, "", "no-such-product", storage.ProductPropertySpec{PropertyName: "serial_number"}); !errors.Is(err, storage.ErrTypeNotFound) {
+	if _, err := gw.SetProductProperty(ctx, "", "no-such-product", storage.ProductPropertySpec{PropertyTypeName: "serial_number"}); !errors.Is(err, storage.ErrTypeNotFound) {
 		t.Fatalf("set unknown product err = %v, want ErrTypeNotFound", err)
 	}
-	if err := gw.UpsertProductProperty(ctx, "no-such-product", storage.ProductPropertySpec{PropertyName: "serial_number"}); !errors.Is(err, storage.ErrTypeNotFound) {
+	if err := gw.UpsertProductProperty(ctx, "no-such-product", storage.ProductPropertySpec{PropertyTypeName: "serial_number"}); !errors.Is(err, storage.ErrTypeNotFound) {
 		t.Fatalf("upsert unknown product err = %v, want ErrTypeNotFound", err)
 	}
 }

@@ -1940,7 +1940,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/properties": {
+    "/property-types": {
         parameters: {
             query?: never;
             header?: never;
@@ -1949,22 +1949,22 @@ export interface paths {
         };
         /**
          * List properties
-         * @description Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property:read.
+         * @description Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property_type:read.
          */
-        get: operations["list-property"];
+        get: operations["list-property-type"];
         put?: never;
         /**
          * Create a property
-         * @description Registers a custom property (official=false). The name must be a valid property key. Gated by property:create.
+         * @description Registers a custom property (official=false). The name must be a valid property key. Gated by property_type:create.
          */
-        post: operations["create-property"];
+        post: operations["create-property-type"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/properties/{name}": {
+    "/property-types/{name}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1973,23 +1973,23 @@ export interface paths {
         };
         /**
          * Get a property
-         * @description Returns one property by name. Gated by property:read.
+         * @description Returns one property by name. Gated by property_type:read.
          */
-        get: operations["get-property"];
+        get: operations["get-property-type"];
         put?: never;
         post?: never;
         /**
          * Delete a property
-         * @description Removes a custom property by name. Official properties are read-only. Gated by property:delete.
+         * @description Removes a custom property by name. Official properties are read-only. Gated by property_type:delete.
          */
-        delete: operations["delete-property"];
+        delete: operations["delete-property-type"];
         options?: never;
         head?: never;
         /**
          * Update a property
-         * @description Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property:update.
+         * @description Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property_type:update.
          */
-        patch: operations["update-property"];
+        patch: operations["update-property-type"];
         trace?: never;
     };
     "/roles": {
@@ -3137,9 +3137,9 @@ export interface components {
              */
             readonly $schema?: string;
             component: string;
-            property_name: string;
-            /** @description The catalog property's uuid, the stable form of property_name */
+            /** @description The catalog property's uuid, the stable form of property_type_name */
             property_type_id: string;
+            property_type_name: string;
             /** @description The stored value, shape given by the property's data_type */
             value: unknown;
             /** @description The stored value's id */
@@ -3568,10 +3568,10 @@ export interface components {
             from_contract: boolean;
             /** @description True when the component overrides the contract default */
             is_set: boolean;
-            /** @description The catalog property name */
-            property_name: string;
-            /** @description The catalog property's uuid, the stable form of property_name */
+            /** @description The catalog property's uuid, the stable form of property_type_name */
             property_type_id: string;
+            /** @description The catalog property name */
+            property_type_name: string;
             /** @description Whether the product contract requires a value; always false off-contract */
             required: boolean;
             /** @description The component's override; omitted when the property is unset */
@@ -4312,9 +4312,9 @@ export interface components {
              */
             readonly $schema?: string;
             location: string;
-            property_name: string;
-            /** @description The catalog property's uuid, the stable form of property_name */
+            /** @description The catalog property's uuid, the stable form of property_type_name */
             property_type_id: string;
+            property_type_name: string;
             /** @description The stored value, shape given by the property's data_type */
             value: unknown;
             /** @description The stored value's id */
@@ -4345,10 +4345,10 @@ export interface components {
             readonly $schema?: string;
             /** @description The contract default, shape given by the property's data_type; omitted when the contract sets none */
             default_value?: unknown;
-            /** @description The catalog property this location type declares */
-            property_name: string;
-            /** @description The catalog property's uuid, the stable form of property_name */
+            /** @description The catalog property's uuid, the stable form of property_type_name */
             property_type_id: string;
+            /** @description The catalog property this location type declares */
+            property_type_name: string;
             /** @description Whether every location of this type must set the property */
             required: boolean;
         };
@@ -4481,10 +4481,10 @@ export interface components {
             readonly $schema?: string;
             /** @description The contract default, shape given by the property's data_type; omitted when the contract sets none */
             default_value?: unknown;
-            /** @description The catalog property this product declares */
-            property_name: string;
-            /** @description The catalog property's uuid, the stable form of property_name */
+            /** @description The catalog property's uuid, the stable form of property_type_name */
             property_type_id: string;
+            /** @description The catalog property this product declares */
+            property_type_name: string;
             /** @description Whether every instance of this product must set the property */
             required: boolean;
         };
@@ -4989,10 +4989,10 @@ export interface components {
             readonly $schema?: string;
             /** @description The contract default, shape given by the property's data_type; omitted when the contract sets none */
             default_value?: unknown;
-            /** @description The catalog property this standard declares */
-            property_name: string;
-            /** @description The catalog property's uuid, the stable form of property_name */
+            /** @description The catalog property's uuid, the stable form of property_type_name */
             property_type_id: string;
+            /** @description The catalog property this standard declares */
+            property_type_name: string;
             /** @description Whether every system conforming to this standard must set the property */
             required: boolean;
         };
@@ -5063,9 +5063,9 @@ export interface components {
              * @example /api/v1/schemas/SystemPropertyBody.json
              */
             readonly $schema?: string;
-            property_name: string;
-            /** @description The catalog property's uuid, the stable form of property_name */
+            /** @description The catalog property's uuid, the stable form of property_type_name */
             property_type_id: string;
+            property_type_name: string;
             system: string;
             /** @description The stored value, shape given by the property's data_type */
             value: unknown;
@@ -9749,7 +9749,7 @@ export interface operations {
             };
         };
     };
-    "list-property": {
+    "list-property-type": {
         parameters: {
             query?: never;
             header?: never;
@@ -9778,7 +9778,7 @@ export interface operations {
             };
         };
     };
-    "create-property": {
+    "create-property-type": {
         parameters: {
             query?: never;
             header?: never;
@@ -9811,7 +9811,7 @@ export interface operations {
             };
         };
     };
-    "get-property": {
+    "get-property-type": {
         parameters: {
             query?: never;
             header?: never;
@@ -9843,7 +9843,7 @@ export interface operations {
             };
         };
     };
-    "delete-property": {
+    "delete-property-type": {
         parameters: {
             query?: never;
             header?: never;
@@ -9873,7 +9873,7 @@ export interface operations {
             };
         };
     };
-    "update-property": {
+    "update-property-type": {
         parameters: {
             query?: never;
             header?: never;
