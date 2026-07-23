@@ -82,7 +82,7 @@ func (p *PG) ListDrivers(ctx context.Context) ([]Driver, error) {
 
 // GetDriver resolves one driver by id. An unknown id is ErrTypeNotFound.
 func (p *PG) GetDriver(ctx context.Context, id string) (*Driver, error) {
-	d, err := scanDriver(p.pool.QueryRow(ctx, `select `+driverCols+` from driver where `+registryRefCol("driver", id)+` = $1`, id))
+	d, err := scanDriver(p.pool.QueryRow(ctx, `select `+driverCols+` from driver where `+registryRefCol(id)+` = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -140,7 +140,7 @@ func (p *PG) UpdateDriver(ctx context.Context, actorID, id string, patch DriverP
 			display_name = coalesce($2, display_name),
 			version      = coalesce($3, version),
 			updated_at   = now()
-		where `+registryRefCol("driver", id)+` = $1
+		where `+registryRefCol(id)+` = $1
 		returning `+driverCols,
 		id, patch.DisplayName, patch.Version))
 	if err != nil {
@@ -168,7 +168,7 @@ func (p *PG) DeleteDriver(ctx context.Context, actorID, id string) error {
 	if err := guardTypeMutable(ctx, tx, "driver", id); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `delete from driver where `+registryRefCol("driver", id)+` = $1`, id); err != nil {
+	if _, err := tx.Exec(ctx, `delete from driver where `+registryRefCol(id)+` = $1`, id); err != nil {
 		return fmt.Errorf("storage: delete driver %q: %w", id, err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "driver", id, map[string]string{"id": id}, nil); err != nil {

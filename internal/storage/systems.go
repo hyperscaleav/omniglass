@@ -175,7 +175,7 @@ func (p *PG) ListStandards(ctx context.Context) ([]Standard, error) {
 
 // GetStandard resolves one standard by id. An unknown id is ErrTypeNotFound.
 func (p *PG) GetStandard(ctx context.Context, id string) (*Standard, error) {
-	st, err := scanStandard(p.pool.QueryRow(ctx, `select `+standardCols+` from standard where `+registryRefCol("standard", id)+` = $1`, id))
+	st, err := scanStandard(p.pool.QueryRow(ctx, `select `+standardCols+` from standard where `+registryRefCol(id)+` = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -204,7 +204,7 @@ func (p *PG) CreateStandard(ctx context.Context, actorID string, st Standard) (*
 
 	if st.ParentStandardID != nil && *st.ParentStandardID != "" {
 		var known bool
-		if err := tx.QueryRow(ctx, `select true from standard where `+registryRefCol("standard", *st.ParentStandardID)+` = $1`, *st.ParentStandardID).Scan(&known); err != nil {
+		if err := tx.QueryRow(ctx, `select true from standard where `+registryRefCol(*st.ParentStandardID)+` = $1`, *st.ParentStandardID).Scan(&known); err != nil {
 			return nil, ErrParentStandardNotFound
 		}
 	}
@@ -243,7 +243,7 @@ func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch Stand
 			display_name       = coalesce($2, display_name),
 			parent_standard_id = coalesce((select id from standard where name = $3 or id::text = $3), parent_standard_id),
 			updated_at         = now()
-		where `+registryRefCol("standard", id)+` = $1
+		where `+registryRefCol(id)+` = $1
 		returning `+standardCols,
 		id, patch.DisplayName, patch.ParentStandardID))
 	if err != nil {
@@ -370,7 +370,7 @@ func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, 
 	var standardID *string
 	if spec.StandardID != nil {
 		var sid string
-		err := tx.QueryRow(ctx, `select id from standard where `+registryRefCol("standard", *spec.StandardID)+` = $1`, *spec.StandardID).Scan(&sid)
+		err := tx.QueryRow(ctx, `select id from standard where `+registryRefCol(*spec.StandardID)+` = $1`, *spec.StandardID).Scan(&sid)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrUnknownStandard
 		} else if err != nil {
@@ -436,7 +436,7 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	var standardPatchID *string
 	if patch.StandardID != nil && *patch.StandardID != "" {
 		var sid string
-		if err := tx.QueryRow(ctx, `select id from standard where `+registryRefCol("standard", *patch.StandardID)+` = $1`, *patch.StandardID).Scan(&sid); err != nil {
+		if err := tx.QueryRow(ctx, `select id from standard where `+registryRefCol(*patch.StandardID)+` = $1`, *patch.StandardID).Scan(&sid); err != nil {
 			return nil, ErrUnknownStandard
 		}
 		standardPatchID = &sid

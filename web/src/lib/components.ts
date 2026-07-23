@@ -19,6 +19,8 @@ export type Component = {
   system?: string;
   system_count: number;
   product_id?: string;
+  // The product's name, the display handle beside the uuid product_id.
+  product?: string;
   actions?: string[];
   effective_tags?: Record<string, string>;
 };

@@ -80,7 +80,7 @@ func (p *PG) ListCapabilities(ctx context.Context) ([]Capability, error) {
 // GetCapability resolves one capability by id. An unknown id is
 // ErrTypeNotFound.
 func (p *PG) GetCapability(ctx context.Context, id string) (*Capability, error) {
-	c, err := scanCapability(p.pool.QueryRow(ctx, `select `+capabilityCols+` from capability where `+registryRefCol("capability", id)+` = $1`, id))
+	c, err := scanCapability(p.pool.QueryRow(ctx, `select `+capabilityCols+` from capability where `+registryRefCol(id)+` = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -137,7 +137,7 @@ func (p *PG) UpdateCapability(ctx context.Context, actorID, id string, patch Cap
 		update capability set
 			display_name = coalesce($2, display_name),
 			updated_at   = now()
-		where `+registryRefCol("capability", id)+` = $1
+		where `+registryRefCol(id)+` = $1
 		returning `+capabilityCols,
 		id, patch.DisplayName))
 	if err != nil {
@@ -165,7 +165,7 @@ func (p *PG) DeleteCapability(ctx context.Context, actorID, id string) error {
 	if err := guardTypeMutable(ctx, tx, "capability", id); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `delete from capability where `+registryRefCol("capability", id)+` = $1`, id); err != nil {
+	if _, err := tx.Exec(ctx, `delete from capability where `+registryRefCol(id)+` = $1`, id); err != nil {
 		return fmt.Errorf("storage: delete capability %q: %w", id, err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "capability", id, map[string]string{"id": id}, nil); err != nil {

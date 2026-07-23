@@ -42,28 +42,27 @@ Create a component with `{"parent": "rack"}` and read it back as `{"parent": "ra
 `{"parent_id": "0198f2c4-..."}`. When that fails, every client has to fetch a second
 collection and join by uuid to render one label, and they each do it slightly differently.
 
-Two exceptions, both narrow:
+One exception, narrow: **an entity with no name** is legitimately addressed by id, an interface
+(its name is unique only within its component), a stored property value, an audit row, a grant, a
+principal. A **registry** used to be a second exception, a slug-keyed catalog whose id *was* its
+name (`product_id: "cisco-room-bar"`); that is gone. Every registry now has a uuid primary key and
+a renameable `name` ([ADR-0062](/architecture/decisions/#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle)),
+so it obeys the rule like any estate entity.
 
-- **An entity with no name** is legitimately addressed by id: an interface (its name is unique
-  only within its component), a stored property value, an audit row, a grant, a principal.
-- **A slug-keyed catalog** already satisfies the rule, because its id *is* the name:
-  `product_id: "cisco-room-bar"`.
-
-**Every foreign key stores the target's primary key**, which for an estate entity is its uuid.
-A rename then has nothing to rewrite: the friendly name is free to change precisely because
-nothing points at it. A `_id` column holding a name, kept alive by `on update cascade`, is the
-shape this rule exists to prevent; the cascade is machinery that only exists to fund the wrong
-choice. The one class of exception is the **slug-keyed catalog** (`product`, `standard`,
-`property`, `interface_type`), where the name *is* the primary key and pointing at it is
-pointing at the key.
+**Every foreign key stores the target's primary key**, a uuid, with no exception. A rename then
+has nothing to rewrite: the friendly name is free to change precisely because nothing points at
+it. A `_id` column holding a name, kept alive by `on update cascade`, is the shape this rule
+exists to prevent; the cascade is machinery that only exists to fund the wrong choice. That
+machinery is now retired everywhere, including the last place it lived, the registries.
 
 **A path or a join field accepts either form.** `GET /components/{ref}` and a body's
 `{"parent": "..."}` both take a uuid or a name; the uuid is tried first, so an id never
 collides with a name. Operators type names, scripts hold ids, and neither has to convert.
 
-`TestResponsesAddressEntitiesByName` enforces this over the generated OpenAPI, so a body
-cannot reintroduce a uuid reference silently. Its allow-list is the whole of the exception,
-and adding to it is a decision: if the target has a name, carry the name.
+`TestReferencesCarryBothForms` enforces this over the generated OpenAPI, so a body cannot
+reintroduce a uuid-only reference silently. Its exempt list is the whole of the remaining
+exception (the nameless entities and a still-slug-keyed taxonomy), and adding to it is a decision:
+if the target has a name, carry the name.
 
 ## Conventions (AIP-style)
 

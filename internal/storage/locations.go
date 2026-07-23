@@ -289,7 +289,7 @@ func (p *PG) UpdateLocationType(ctx context.Context, actorID, id string, patch L
 			display_name         = coalesce($2, display_name),
 			icon                 = coalesce($3, icon),
 			allowed_parent_types = coalesce($4, allowed_parent_types)
-		where `+registryRefCol("location_type", id)+` = $1
+		where `+registryRefCol(id)+` = $1
 		returning id, name, official, display_name, icon, allowed_parent_types`,
 		id, patch.DisplayName, patch.Icon, allowed).
 		Scan(&lt.ID, &lt.Name, &lt.Official, &lt.DisplayName, &lt.Icon, &lt.AllowedParentTypes); err != nil {
