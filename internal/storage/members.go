@@ -126,7 +126,7 @@ func (p *PG) RemoveMember(ctx context.Context, actorID, systemName, componentNam
 	}
 	var staffing int
 	if err := tx.QueryRow(ctx, `
-		select count(*) from role_assignment
+		select count(*) from system_role_assignment
 		where system_id = (select id from system where name = $1)
 		  and component_id = (select id from component where name = $2)`,
 		systemName, componentName).Scan(&staffing); err != nil {

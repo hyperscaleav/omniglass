@@ -213,9 +213,9 @@ Five tables carry it:
 |---|---|---|
 | `system_member` | (`system_id`, `component_id`, **`is_primary`**) | **membership**: the binding a role attaches to, many-valued, cascading from both ends |
 | `system_role` | `owner_kind` + `standard_id` / `system_id` (the arc), `name`, `display_name`, **`quorum`**, **`impact`** | the slot itself; the arc is the one `property_value` uses, with a one-set CHECK and a `unique nulls not distinct` key over the arc plus name |
-| `role_capability` | (`role_id`, `capability_id`) | what the role requires, **conjunctive**: a component must provide **every** listed capability |
+| `system_role_capability` | (`role_id`, `capability_id`) | what the role requires, **conjunctive**: a component must provide **every** listed capability |
 | `component_capability` | (`component_id`, `capability_id`, **`present`**) | the component's **own** capability facts, layered over its product's |
-| `role_assignment` | (`system_id`, `role_id`, `component_id`) | who fills the role here; the component FK is **`on delete restrict`** |
+| `system_role_assignment` | (`system_id`, `role_id`, `component_id`) | who fills the role here; the component FK is **`on delete restrict`** |
 
 ### Membership: what a role attaches to
 
@@ -239,7 +239,7 @@ one system, which is nearly all of them, never meets the concept. A partial uniq
 primary impossible rather than merely unlikely.
 
 Membership **cascades from both ends**, since a binding is meaningless once either side is gone. It
-deliberately does not restrict the component the way `role_assignment` does: that restrict is load-bearing,
+deliberately does not restrict the component the way `system_role_assignment` does: that restrict is load-bearing,
 because deleting a component that fills a job would silently break a system's health, but a membership
 carrying no role is an inventory fact, and refusing the delete for it would add a step to every component
 removal while protecting nothing the role table does not already protect.
@@ -431,7 +431,7 @@ a member of every system it serves.
 The binding itself is the **`system_member`** table, which is **built**: `(system_id, component_id,
 is_primary)`, described under [membership](#membership-what-a-role-attaches-to). The design below layered
 the role onto that same row and pinned it to a frozen template BOM; what shipped keeps the row to the
-binding alone and lets `role_assignment` carry the role, so a member can exist without one.
+binding alone and lets `system_role_assignment` carry the role, so a member can exist without one.
 
 A `system_template_member` declares, per role, a **requirement** (the canonical datapoints and commands a
 member must provide) plus its `health_role`; any component whose template meets the requirement can fill
@@ -442,7 +442,7 @@ the role, validated on assignment. Detailed on [templates](/architecture/templat
 `Design`. The **built** slot is
 [`system_role`](#system-roles-the-slots-a-system-needs-filled), declared on a standard or a system rather
 than frozen into a `system_template_version`, requiring a **capability** set rather than canonical
-datapoints and commands, and assigned through `role_assignment`. Its **`impact`** also replaces the
+datapoints and commands, and assigned through `system_role_assignment`. Its **`impact`** also replaces the
 `health_role` tag above: `required` / `redundant` / `informational` are expressed by quorum plus impact,
 with no fourth vocabulary
 ([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).

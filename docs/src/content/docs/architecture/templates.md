@@ -184,7 +184,7 @@ This section is `Design`. The **built** role slot is
 [`system_role`](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled): declared on a
 **standard** (inherited live by every conforming system) or on one **system**, not frozen into a
 `system_template_version`; requiring a set of **capabilities**, not canonical datapoints and commands; and
-assigned through `role_assignment`, not `system_member`. The strict validate-on-assign this section calls
+assigned through `system_role_assignment`, not `system_member`. The strict validate-on-assign this section calls
 for is built and does refuse by name, over the capability vocabulary. The two models reconcile when
 template pinning lands
 ([ADR-0049](/architecture/decisions/#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)).
