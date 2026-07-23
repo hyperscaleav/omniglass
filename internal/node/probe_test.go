@@ -62,7 +62,7 @@ func TestBuildEvent(t *testing.T) {
 }
 
 // TestBuildEventText: a text (state) datapoint rides the proto string_value, not
-// double_value, so the ingest consumer routes it to state_datapoint.
+// double_value, so the ingest consumer routes it to state.
 func TestBuildEventText(t *testing.T) {
 	dps := []collection.Datapoint{
 		{Name: collection.DatapointTCPOpen, Value: 1},

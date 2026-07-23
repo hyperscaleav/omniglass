@@ -109,14 +109,14 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	reg := collection.NewRegistry(properties)
 
 	// Route by the registry kind (the cp3-deferred "route by kind" note): a metric
-	// name lands in metric_datapoint, a state name in state_datapoint, a log name in
+	// name lands in metric, a state name in state, a log name in
 	// event. All survive the SAME owner-confinement and reject-not-project above; the
 	// split is only the sink, not a second trust decision.
 	//
 	// NOTE(#311): the three sinks each write in their own transaction, then the
 	// message is acked once. Under at-least-once redelivery, a failure in a later
 	// write after an earlier one committed re-runs the committed write on redelivery;
-	// metric_datapoint and event have no uniqueness key, so that double-inserts. This
+	// metric and event have no uniqueness key, so that double-inserts. This
 	// is a pre-existing multi-tx-then-ack characteristic (adding the event write only
 	// widens the window); atomic-or-idempotent ingest is tracked separately.
 	metrics, states, events := deriveDatapoints(&ev, owner, reg)

@@ -13,7 +13,7 @@ import (
 )
 
 // PropertyValue is the current value of a property on an estate owner, per
-// provenance. It carries the same owner exclusive-arc as metric_datapoint and
+// provenance. It carries the same owner exclusive-arc as metric and
 // event: OwnerKind picks the arc, OwnerID is the estate address (the owner's name).
 // A declared value is what used to be a field_value; intended (config), observed,
 // and calculated producers land in later slices.

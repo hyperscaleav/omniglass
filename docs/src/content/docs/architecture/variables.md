@@ -61,7 +61,7 @@ config is not `node`-owned). The three are not three subsystems; they are three 
 ## config: declared device state, keyed to a signal
 
 A **config** item is the **declared side of a canonical signal**. `video.input` is one key with two
-sides: the **observed** value the device reports (a `state_datapoint`, provenance=observed) and the
+sides: the **observed** value the device reports (a `state`, provenance=observed) and the
 **declared** value you set. They share the **key** but not the **storage**: the declared value lives
 in the config table, resolved down the cascade, and is **never a datapoint row**. Same name, opposite
 direction, the observed side flowing *up* from the device and the declared side flowing *down* from
@@ -87,7 +87,7 @@ Each piece of a config item has one home, joined by the canonical key:
 | signal definition | key, kind, value domain, unit | `datapoint_type` (the registry) |
 | get / set binding | how this device class reads and writes the signal | the **component_template** version |
 | declared value | the intent (`HDMI1`), plus the per-item `reconcile` policy | the **config table** (cascaded) |
-| observed value | what the device reports (`HDMI2`) | `state_datapoint` rows (observed) |
+| observed value | what the device reports (`HDMI2`) | `state` rows (observed) |
 | drift | declared ≠ observed | **computed on read**, not stored |
 
 ### Drift and reconcile
@@ -387,7 +387,7 @@ Free-text values ship either way; the question is how much governance a key plac
   read and surface in the clear only through the audited reveal; a variable is plaintext.
 
 The observed side of config is maintained by one **event-driven worker** (the one-worker-plus-stages
-model): when a `state_datapoint` lands whose `(owner, key)` a config item is keyed to, it refreshes
+model): when a `state` lands whose `(owner, key)` a config item is keyed to, it refreshes
 that item's cached observed value, reverse-indexed so "is this datapoint a config's observed side?" is
 a sargable lookup, not a scan. It is the one controlled, one-directional crossing from the timeseries
 back into current-value config.
@@ -398,7 +398,7 @@ classes: { node: { style.border-radius: 8 }; key: { style: { border-radius: 8; b
 operator: operator { class: node }
 declared: "config\ndeclared (spec)" { class: key }
 device: device { class: node }
-state: state_datapoint { class: node }
+state: state { class: node }
 observed: "config\nobserved (status)" { class: key }
 command: "command (intended)" { class: node }
 operator -> declared: declares (cascade)
@@ -415,7 +415,7 @@ Modeling declared state as **config** (and access secrets as **secrets**) keeps 
 datapoint provenances. Datapoints carry three ([observed, calculated,
 intended](/architecture/datapoints/#provenance-how-we-know-a-value)); declared intent lives in config,
 keyed to the same signal but stored down the cascade rather than as a row. The `state` **kind** is
-unchanged: an observed `power.state = on` is still a `state_datapoint`, and a config item is keyed to
+unchanged: an observed `power.state = on` is still a `state`, and a config item is keyed to
 it. What moved is the *declared* value, out of the datapoint tables and into config resolved by the
 cascade. There is no separate property or vault store; config, secrets, and variables are one
 resolution model, and the spec-and-status loop gets a real home instead of overloading datapoint

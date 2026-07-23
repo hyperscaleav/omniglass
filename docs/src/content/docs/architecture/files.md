@@ -113,7 +113,7 @@ References come from:
 - a **`file`** handle;
 - a large `log_datapoint` body;
 - a `collection.failed` raw hash-ref;
-- an **attach event** (a `state_datapoint` or `audit_log` recording "this component was attached
+- an **attach event** (a `state` or `audit_log` recording "this component was attached
   to this file at T").
 
 References disappear two ways: a `file` is deleted, or a referencing **event ages out** (a

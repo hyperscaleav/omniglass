@@ -18,7 +18,7 @@ import (
 //
 // Two rules carry the whole design.
 //
-// Transition-only recording. Health lands in state_datapoint, the same
+// Transition-only recording. Health lands in state, the same
 // transition-only substrate the reachability strip reads: a row is written only
 // when the value differs from the last one recorded for that owner. The history
 // is therefore edges and only edges, which is what makes "when did this break"
@@ -59,7 +59,7 @@ const healthKey = "health"
 
 // healthRule names the producer in the recorded row's lineage. provenance
 // 'calculated' requires a non-null source_rule (and a null event_id), so
-// this constant is what satisfies state_datapoint's lineage CHECK.
+// this constant is what satisfies state's lineage CHECK.
 const healthRule = "health-rollup"
 
 // txQuerier is the surface the recompute needs from its caller's transaction.
@@ -329,10 +329,10 @@ func recordHealth(ctx context.Context, q txQuerier, ownerKind, ownerID string, v
 	// The WHERE is the transition rule: no previous row (is distinct from null) or
 	// a different one writes; the same value writes nothing.
 	owner := ownerArcExpr(ownerKind)
-	sql := fmt.Sprintf(`insert into state_datapoint (ts, owner_kind, %[1]s, property_id, instance, value, provenance, source_rule)
+	sql := fmt.Sprintf(`insert into state (ts, owner_kind, %[1]s, property_id, instance, value, provenance, source_rule)
 		select clock_timestamp(), $1::text, %[3]s, (select id from property where name = $3::text), '', $4::text, 'calculated', $5::text
 		where $4::text is distinct from (
-			select value from state_datapoint
+			select value from state
 			where %[1]s = %[3]s and property_id = (select id from property where name = $3::text) and instance = ''
 			order by id desc
 			limit 1)`, col, col, owner)
@@ -478,7 +478,7 @@ func (p *PG) locationVerdict(ctx context.Context, q txQuerier, locationName stri
 			select c.id from location c join subtree s on c.parent_id = s.id
 		)
 		select distinct on (sd.system_id) sd.value
-		from state_datapoint sd
+		from state sd
 		where sd.property_id = (select id from property where name = $2)
 		  and sd.system_id in (select id from system where location_id in (select id from subtree))
 		order by sd.system_id, sd.id desc`, locationName, healthKey)
@@ -736,7 +736,7 @@ func (p *PG) subtreeSystemHealth(ctx context.Context, q txQuerier, locationName 
 			select c.id from location c join subtree s on c.parent_id = s.id
 		)
 		select s.name, coalesce((
-			select sd.value from state_datapoint sd
+			select sd.value from state sd
 			where sd.system_id = s.id and sd.property_id = (select id from property where name = $2) and sd.instance = ''
 			order by sd.id desc
 			limit 1
@@ -768,7 +768,7 @@ func healthTransitions(ctx context.Context, q txQuerier, ownerKind, ownerID stri
 	if err != nil {
 		return nil, err
 	}
-	sql := fmt.Sprintf(`select ts, value from state_datapoint
+	sql := fmt.Sprintf(`select ts, value from state
 		where %s = %s and property_id = (select id from property where name = $2) and instance = '' and ts >= $3
 		order by ts asc, id asc`, col, ownerArcExprN(ownerKind, 1))
 	rows, err := q.Query(ctx, sql, ownerID, healthKey, since)

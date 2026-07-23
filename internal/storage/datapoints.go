@@ -83,7 +83,7 @@ func (p *PG) InsertMetricDatapoints(ctx context.Context, evs []MetricDatapointEv
 		if err != nil {
 			return fmt.Errorf("storage: datapoint %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
-		sql := fmt.Sprintf(`insert into metric_datapoint (ts, owner_kind, %s, property_id, instance, value, provenance, source)
+		sql := fmt.Sprintf(`insert into metric (ts, owner_kind, %s, property_id, instance, value, provenance, source)
 			values ($1, $2, $3, (select id from property where name = $4), $5, $6, 'observed', $7)`, col)
 		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arc, ev.Key, ev.Instance, ev.Value, ev.Source); err != nil {
 			return fmt.Errorf("storage: insert datapoint %s/%s: %w", ev.OwnerID, ev.Key, err)
@@ -101,8 +101,8 @@ func (p *PG) LatestMetric(ctx context.Context, componentName, key string) (*Metr
 	var dp MetricDatapoint
 	err := p.pool.QueryRow(ctx, `
 		select ts, owner_kind,
-			(select p.name from property p where p.id = metric_datapoint.property_id), instance, value, provenance, source
-		from metric_datapoint
+			(select p.name from property p where p.id = metric.property_id), instance, value, provenance, source
+		from metric
 		where component_id = (select id from component where name = $1)
 		  and property_id = (select id from property where name = $2)
 		order by ts desc
@@ -124,8 +124,8 @@ func (p *PG) LatestMetricInstance(ctx context.Context, componentName, key, insta
 	var dp MetricDatapoint
 	err := p.pool.QueryRow(ctx, `
 		select ts, owner_kind,
-			(select p.name from property p where p.id = metric_datapoint.property_id), instance, value, provenance, source
-		from metric_datapoint
+			(select p.name from property p where p.id = metric.property_id), instance, value, provenance, source
+		from metric
 		where component_id = (select id from component where name = $1)
 		  and property_id = (select id from property where name = $2) and instance = $3
 		order by ts desc

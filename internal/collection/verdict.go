@@ -4,7 +4,7 @@ package collection
 // the raw probe metrics (tcp.open, icmp.reachable). interface.reachable is gated
 // per interface and its value domain is up/down; availability is time_in_state
 // over it. The node computes it and emits it as a state datapoint; the ingest
-// consumer routes it to state_datapoint by the datapoint_type kind.
+// consumer routes it to state by the datapoint_type kind.
 const (
 	// DatapointInterfaceReachable is the seeded state key the verdict lands under.
 	DatapointInterfaceReachable = "interface.reachable"

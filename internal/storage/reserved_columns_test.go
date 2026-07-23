@@ -37,7 +37,7 @@ func TestReservedLineageColumnsDropped(t *testing.T) {
 		return exists
 	}
 
-	for _, table := range []string{"metric_datapoint", "state_datapoint"} {
+	for _, table := range []string{"metric", "state"} {
 		if has(table, "audit_id") {
 			t.Errorf("%s.audit_id still exists, want it dropped (a never-wired, mistyped declared-lineage placeholder)", table)
 		}
@@ -45,10 +45,10 @@ func TestReservedLineageColumnsDropped(t *testing.T) {
 
 	// Kept by design: unbuilt does not mean dead.
 	kept := []struct{ table, column string }{
-		{"metric_datapoint", "source_rule_version"},
-		{"state_datapoint", "source_rule_version"},
+		{"metric", "source_rule_version"},
+		{"state", "source_rule_version"},
 		{"event", "source_rule_version"},
-		{"state_datapoint", "value_json"},
+		{"state", "value_json"},
 	}
 	for _, c := range kept {
 		if !has(c.table, c.column) {

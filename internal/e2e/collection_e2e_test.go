@@ -21,7 +21,7 @@ import (
 // binaries an operator runs: `omniglass server` (embedded NATS + the telemetry
 // ingest consumer) and `omniglass node` (a real tcp probe, a real protobuf Event
 // over JetStream). A node runs one probe against a live listener; the datapoint
-// must land in metric_datapoint owned by the target component. This is the
+// must land in metric owned by the target component. This is the
 // user-facing entry-point tier: the run-mode wiring, not an in-process call.
 func TestCollectionEndToEnd(t *testing.T) {
 	if testing.Short() {
