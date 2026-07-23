@@ -69,7 +69,7 @@ func TestCalculatedSeriesIsCurrentAtHighestID(t *testing.T) {
 		{"healthy", "-5 seconds"},
 	} {
 		if _, err := conn.Exec(ctx, `
-			insert into state_datapoint (ts, owner_kind, system_id, property_id, instance, value, provenance, source_rule)
+			insert into state (ts, owner_kind, system_id, property_id, instance, value, provenance, source_rule)
 			values (clock_timestamp() + $1::interval, 'system',
 			        (select id from system where name = 'room-sys'), (select id from property where name = 'health'), '', $2, 'calculated', 'test')`,
 			r.offset, r.value); err != nil {
@@ -78,12 +78,12 @@ func TestCalculatedSeriesIsCurrentAtHighestID(t *testing.T) {
 	}
 
 	var byID, byTS string
-	if err := conn.QueryRow(ctx, `select value from state_datapoint
+	if err := conn.QueryRow(ctx, `select value from state
 		where system_id = (select id from system where name = 'room-sys') and property_id = (select id from property where name = 'health')
 		order by id desc limit 1`).Scan(&byID); err != nil {
 		t.Fatalf("read by id: %v", err)
 	}
-	if err := conn.QueryRow(ctx, `select value from state_datapoint
+	if err := conn.QueryRow(ctx, `select value from state
 		where system_id = (select id from system where name = 'room-sys') and property_id = (select id from property where name = 'health')
 		order by ts desc limit 1`).Scan(&byTS); err != nil {
 		t.Fatalf("read by ts: %v", err)

@@ -48,7 +48,7 @@ func TestDeriveDatapoints(t *testing.T) {
 }
 
 // TestDeriveDatapointsRoutesByKind: a name registered as state routes to the state
-// slice (not metric_datapoint), a name registered as log routes to the event slice,
+// slice (not metric), a name registered as log routes to the event slice,
 // each stamped with the same task-interface owner; an unregistered name is still
 // dropped (reject-not-project).
 func TestDeriveDatapointsRoutesByKind(t *testing.T) {

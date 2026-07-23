@@ -58,7 +58,7 @@ func (p *PG) InsertStateDatapoints(ctx context.Context, evs []StateDatapointEven
 		if ts.IsZero() {
 			ts = time.Now().UTC()
 		}
-		sql := fmt.Sprintf(`insert into state_datapoint (ts, owner_kind, %s, property_id, instance, value, provenance, source)
+		sql := fmt.Sprintf(`insert into state (ts, owner_kind, %s, property_id, instance, value, provenance, source)
 			values ($1, $2, %s, (select id from property where name = $4), $5, $6, 'observed', $7)`, col, ownerArcExprN(ev.OwnerKind, 3))
 		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, ev.OwnerID, ev.Key, ev.Instance, ev.Value, ev.Source); err != nil {
 			return fmt.Errorf("storage: insert state datapoint %s/%s: %w", ev.OwnerID, ev.Key, err)
@@ -83,8 +83,8 @@ func (p *PG) LatestState(ctx context.Context, componentName, key, instance strin
 	var dp StateDatapoint
 	err := p.pool.QueryRow(ctx, `
 		select ts, owner_kind,
-			(select p.name from property p where p.id = state_datapoint.property_id), instance, value, provenance, source
-		from state_datapoint
+			(select p.name from property p where p.id = state.property_id), instance, value, provenance, source
+		from state
 		where component_id = (select id from component where name = $1)
 		  and property_id = (select id from property where name = $2) and instance = $3
 		order by ts desc, id desc
@@ -104,8 +104,8 @@ func (p *PG) LatestState(ctx context.Context, componentName, key, instance strin
 func (p *PG) StateTransitions(ctx context.Context, componentName, key, instance string, since time.Time) ([]StateDatapoint, error) {
 	rows, err := p.pool.Query(ctx, `
 		select ts, owner_kind,
-			(select p.name from property p where p.id = state_datapoint.property_id), instance, value, provenance, source
-		from state_datapoint
+			(select p.name from property p where p.id = state.property_id), instance, value, provenance, source
+		from state
 		where component_id = (select id from component where name = $1)
 		  and property_id = (select id from property where name = $2) and instance = $3 and ts >= $4
 		order by ts asc`, componentName, key, instance, since)

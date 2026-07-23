@@ -377,7 +377,7 @@ carries:
 - a **CHECK** that exactly the column matching `owner_kind` is set (or all null for `global`).
 
 This makes **system-, location-, node-, and global-level datapoints first-class** (e.g. `health` is a
-`state_datapoint` owned by a system, estate-wide availability is owned by `global`, and a node's
+`state` owned by a system, estate-wide availability is owned by `global`, and a node's
 self-health is owned by the node), the fix for a monitoring tool that can only put state on a single
 host. It is also what carries a recorded [health](/architecture/health/) verdict: a component, a system,
 and a location each own their own transition series under the same `health` key, and the **owner** is what
@@ -388,7 +388,7 @@ pattern and the storage DDL are on [storage](/architecture/storage/).
 ### The event sink: the first arc-owned occurrence
 
 The arc's first built sink beyond the datapoint tables is **`event`**, the **log-kind sink** of the
-collection pipeline. Where a `metric_datapoint` or `state_datapoint` records a **sampled present value**
+collection pipeline. Where a `metric` or `state` records a **sampled present value**
 (a reading that has a value *now*, `last()` is meaningful), an `event` records a **past occurrence**: a
 device log line, something that *happened* and whose "what is it now?" is meaningless (the
 [has-a-value-now razor](/architecture/datapoints/#the-has-a-value-now-razor-datapoint-vs-event)). A
@@ -404,7 +404,7 @@ datapoints beside it: the **same** owner-confinement and reject-not-project gate
 is why the ownership pattern above already named `event` alongside the datapoint tables; it is the same
 arc, now with a built sink on it.
 
-Closing the loop, the reserved **`event_id`** columns on `metric_datapoint` and `state_datapoint` are
+Closing the loop, the reserved **`event_id`** columns on `metric` and `state` are
 now **real foreign keys** to `event(id)` (`on delete set null`): an **intended**-provenance datapoint (a
 value a command set) references the `event` that produced it, so a datapoint's lineage can point at the
 occurrence behind it. See [datapoints](/architecture/datapoints/) for the value sinks and

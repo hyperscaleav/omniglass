@@ -62,7 +62,7 @@ template tables), [collection](/architecture/collection/#storage) (interfaces an
   `collection.failed` event or a dev raw-mode tap ([datapoints](/architecture/datapoints/)). A
   schedule fire is not a record here: it is an `event` with `origin=scheduled`.
   There is no separate rule-execution table: derived rows carry their lineage on the row.
-  **Datapoints** (`metric_datapoint` / `state_datapoint` / `log_datapoint`) are the typed
+  **Datapoints** (`metric` / `state` / `log_datapoint`) are the typed
   observation firehose. **Stateful entities and projections** (`alarm`, `action`, current-value)
   hold state directly or are rebuildable read models, **views by default**. The model is **not
   event-sourced**.
@@ -91,8 +91,8 @@ The relationships, not the columns. The columns of each table live on its owning
 ```d2
 direction: right
 classes: { node: { style.border-radius: 8 } }
-metric: metric_datapoint { class: node }
-state: state_datapoint { class: node }
+metric: metric { class: node }
+state: state { class: node }
 event: event { class: node }
 alarm: alarm { class: node }
 action: action { class: node }
@@ -121,7 +121,7 @@ how the rest of the platform learns it changed.
 - **The data lane (a sink).** Observed and calculated datapoints live on the JetStream data lane.
   The rule engine consumes them directly off NATS; Postgres is the durable record, not the live
   signal. The **persistence consumer** is a durable JetStream consumer that batch-writes the
-  `metric_datapoint` / `state_datapoint` / `log_datapoint` tables as an async sink, idempotent on
+  `metric` / `state` / `log_datapoint` tables as an async sink, idempotent on
   `(series, ts)`, so a redelivery lands the same row and the firehose never blocks on the database.
   Datapoints do **not** flow through CDC: they are already on NATS.
 - **The record/state/intent lane (PG-first, CDC-out).** Events, alarms, actions, and operator
@@ -225,9 +225,9 @@ key, instance, provenance)?
 
 - **Append-only tables are range-partitioned by `ts`** (native declarative partitioning;
   `pg_partman` where the provider permits, else a documented manual roll). The firehose
-  (`metric_datapoint`) is the partitioning-critical one.
-- **Retention is per table**, set by policy, not one blanket TTL: `metric_datapoint` short,
-  `state_datapoint` / `log_datapoint` longer, `audit_log` longest (compliance), `internal_log`
+  (`metric`) is the partitioning-critical one.
+- **Retention is per table**, set by policy, not one blanket TTL: `metric` short,
+  `state` / `log_datapoint` longer, `audit_log` longest (compliance), `internal_log`
   short. On-row lineage ages out with its datapoint. The per-table defaults are **cascade-resolved**
   ([cascade](/architecture/cascade/)) with an install-wide `platform` binding, so a class or entity can
   hold longer or shorter without changing the whole install.
@@ -268,7 +268,7 @@ application read and write goes through the Gateway, the physical backend is swa
   Postgres at scale); the data lane's persistence consumer and the record lane's CDC publisher both
   target this one backend.
 - **tiering**: the firehose does not stay in hot Postgres forever. Aged
-  `metric_datapoint` / `log_datapoint` partitions tier out to a **columnar or object
+  `metric` / `log_datapoint` partitions tier out to a **columnar or object
   store** (Parquet on S3-compatible, or an embedded columnar engine) behind the same gateway, so
   historical queries fan across hot and cold with no model change. The cold tier is partitioned by
   `ts`.

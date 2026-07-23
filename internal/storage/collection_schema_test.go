@@ -11,7 +11,7 @@ import (
 )
 
 // TestCollectionSchema proves the collection migration applies: the six tables
-// exist and the metric_datapoint owner-arc CHECK rejects a row whose owner_kind
+// exist and the metric owner-arc CHECK rejects a row whose owner_kind
 // does not match its id columns. Skipped under -short (needs a container).
 func TestCollectionSchema(t *testing.T) {
 	if testing.Short() {
@@ -24,7 +24,7 @@ func TestCollectionSchema(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 
-	for _, table := range []string{"node", "interface_type", "interface", "task", "property", "metric_datapoint"} {
+	for _, table := range []string{"node", "interface_type", "interface", "task", "property", "metric"} {
 		var exists bool
 		if err := conn.QueryRow(ctx, `select exists (select 1 from information_schema.tables where table_name = $1)`, table).Scan(&exists); err != nil {
 			t.Fatalf("probe %s: %v", table, err)
@@ -39,7 +39,7 @@ func TestCollectionSchema(t *testing.T) {
 		t.Fatalf("seed property: %v", err)
 	}
 	// owner_kind = component but all id columns null violates the owner-arc CHECK.
-	_, err = conn.Exec(ctx, `insert into metric_datapoint (owner_kind, property_id, value, provenance) values ('component', (select id from property where name = 'tcp.open'), 1, 'observed')`)
+	_, err = conn.Exec(ctx, `insert into metric (owner_kind, property_id, value, provenance) values ('component', (select id from property where name = 'tcp.open'), 1, 'observed')`)
 	var pgErr *pgconn.PgError
 	if !errors.As(err, &pgErr) || pgErr.Code != "23514" {
 		t.Fatalf("owner-arc CHECK: want check_violation (23514), got %v", err)

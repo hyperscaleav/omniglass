@@ -12,7 +12,7 @@ The first collection path is live end to end: an edge node runs real **reachabil
 component's interfaces (each an **API named by the protocol it speaks** and typed by its **transport**: `tcp`,
 `ssh`, and `http` interfaces reach by opening the tcp port, `icmp` pings), ships the result as a protobuf
 `Event` over a JetStream durable consumer, and the `tcp.open` / `tcp.connect_time` and `icmp.reachable` /
-`icmp.rtt_avg` datapoints land in `metric_datapoint` owned by the target component. The owner is
+`icmp.rtt_avg` datapoints land in `metric` owned by the target component. The owner is
 bound **server-side** from the task's interface (the node stamps no component identity), and the ingest consumer
 confines a node to its own tasks (an Event carrying another node's `task_id` is orphan-dropped) and rejects
 unregistered datapoint names. The icmp probe rides the same pipeline unchanged (the consumer does not branch on
@@ -20,7 +20,7 @@ probe type); a target that does not answer is DATA (`icmp.reachable=0` with a re
 for a node that cannot do ICMP at all, told apart by a once-cached loopback capability self-check. On top of the
 raw probe metrics the node now computes the per-interface **reachability verdict** `interface.reachable` (up/down,
 the AND of that interface's probe results) and emits it as a built-in **state** datapoint; the ingest consumer
-**routes by the registry kind** (metric to `metric_datapoint`, state to `state_datapoint`, and a **log** to the
+**routes by the registry kind** (metric to `metric`, state to `state`, and a **log** to the
 new **`event`** log sink, no longer dropped, see [ADR-0046](/architecture/decisions/#adr-0046-the-event-log-kind-sink))
 under the same confinement, and the state series is **transition-only** (one row per flip, guarded both at the
 node and at ingest). Of the two collection primitives this pipeline reads, the **interface** is the authored one and the
@@ -414,7 +414,7 @@ A function runs the parse at the **edge**, not server-side:
   a [persistence consumer](/architecture/datapoints/) batch-writes them to the typed tables as
   an async sink, idempotent on `(series, ts)`, while the [rule engine](/architecture/alarms-actions/)
   consumes the same stream live. The compiler still bakes each datapoint's `kind` into the
-  runtime unit, so the routing to `metric_datapoint` versus `state_datapoint` is decided at the
+  runtime unit, so the routing to `metric` versus `state` is decided at the
   edge with no runtime registry lookup, and rides on the published message.
 - **Raw payloads are not stored**, the datapoint is the source: a dev raw-mode taps the wire bytes
   live while developing, and a parse or validation failure emits a `collection.failed` event
