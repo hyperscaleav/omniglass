@@ -22,6 +22,7 @@ type PropertyValue struct {
 	OwnerKind    string
 	OwnerID      string
 	PropertyName string
+	PropertyID   string
 	Instance     string
 	Provenance   string
 	Value        json.RawMessage
@@ -37,6 +38,7 @@ type PropertyValue struct {
 // the contract and the off-contract additions differently.
 type EffectiveProperty struct {
 	PropertyName string
+	PropertyID   string
 	DisplayName  string // optional human label; empty when unset
 	DataType     string
 	Required     bool // from the product contract; always false for an ad-hoc property
@@ -61,7 +63,7 @@ var (
 // declares. The column carries the other three for the producers that land later.
 const declaredProvenance = "declared"
 
-const propertyValueCols = `id, owner_kind, (select pr.name from property pr where pr.id = property_value.property_id) as property_name, instance, provenance, value, created_at, updated_at`
+const propertyValueCols = `id, owner_kind, (select pr.name from property pr where pr.id = property_value.property_id) as property_name, property_value.property_id as property_id, instance, provenance, value, created_at, updated_at`
 
 // scanPropertyValue reads a row into a PropertyValue. OwnerID is not in the column
 // list (it lives in whichever arc column the owner kind selects), so the caller
@@ -71,7 +73,7 @@ func scanPropertyValue(row pgx.Row) (*PropertyValue, error) {
 		pv    PropertyValue
 		value []byte
 	)
-	if err := row.Scan(&pv.ID, &pv.OwnerKind, &pv.PropertyName, &pv.Instance, &pv.Provenance, &value, &pv.CreatedAt, &pv.UpdatedAt); err != nil {
+	if err := row.Scan(&pv.ID, &pv.OwnerKind, &pv.PropertyName, &pv.PropertyID, &pv.Instance, &pv.Provenance, &value, &pv.CreatedAt, &pv.UpdatedAt); err != nil {
 		return nil, err
 	}
 	pv.Value = copyRaw(value)
@@ -222,7 +224,7 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 
 	// The ad-hoc arm alone when the owner kind has no classifier to inherit from.
 	adHoc := fmt.Sprintf(`
-		select pr.name as property_name, pr.display_name, pr.data_type, false as required,
+		select pr.name as property_name, pr.id as property_id, pr.display_name, pr.data_type, false as required,
 		       null::jsonb as default_value,
 		       pv.value as set_value,
 		       pv.value as effective_value,
@@ -245,7 +247,7 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 		)
 		-- The contract arm: what the instance's classifier declares, resolved
 		-- against the instance's own value.
-		select pr.name as property_name, pr.display_name, pr.data_type, c.required,
+		select pr.name as property_name, pr.id as property_id, pr.display_name, pr.data_type, c.required,
 		       c.default_value,
 		       pv.value as set_value,
 		       coalesce(pv.value, c.default_value) as effective_value,
@@ -286,7 +288,7 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 			displayName   *string // NULL when unset
 			valueID       *string // NULL when the property is unset
 		)
-		if err := rows.Scan(&e.PropertyName, &displayName, &e.DataType, &e.Required,
+		if err := rows.Scan(&e.PropertyName, &e.PropertyID, &displayName, &e.DataType, &e.Required,
 			&def, &set, &val, &e.IsSet, &e.FromContract, &valueID); err != nil {
 			return nil, fmt.Errorf("storage: scan effective property: %w", err)
 		}

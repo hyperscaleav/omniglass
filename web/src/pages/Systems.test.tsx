@@ -26,8 +26,8 @@ const standards: Standard[] = [
 // The standard's contract, resolved against the system: one inherited default and
 // one value the system sets directly with nothing declaring it.
 const properties: EffectiveProperty[] = [
-  { property_name: "seat_count", display_name: "Seat count", data_type: "int", required: false, is_set: false, from_contract: true, default_value: 12, value: 12 },
-  { property_name: "room.note", display_name: "Note", data_type: "string", required: false, is_set: true, from_contract: false, set_value: "corner room", value: "corner room", value_id: "v-note" },
+  { property_name: "seat_count", property_id: "seat_count-id", display_name: "Seat count", data_type: "int", required: false, is_set: false, from_contract: true, default_value: 12, value: 12 },
+  { property_name: "room.note", property_id: "room.note-id", display_name: "Note", data_type: "string", required: false, is_set: true, from_contract: false, set_value: "corner room", value: "corner room", value_id: "v-note" },
 ];
 
 function mount(path: string) {
@@ -141,7 +141,7 @@ describe("Systems properties panel", () => {
         return new Response(JSON.stringify(sys), { status: 200, headers: { "Content-Type": "application/json" } });
       }
       if (req.method === "PUT") {
-        return new Response(JSON.stringify({ system: "boardroom", property_name: "seat_count", value: 8, value_id: "v-1" }), {
+        return new Response(JSON.stringify({ system: "boardroom", property_name: "seat_count", property_id: "seat_count-id", value: 8, value_id: "v-1" }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         });

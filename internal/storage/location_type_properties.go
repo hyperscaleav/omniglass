@@ -19,6 +19,7 @@ type LocationTypeProperty struct {
 	ID             string
 	LocationTypeID string
 	PropertyName   string
+	PropertyID     string
 	DefaultValue   json.RawMessage // nil when the contract sets no default
 	Required       bool
 	CreatedAt      time.Time
@@ -34,14 +35,14 @@ type LocationTypePropertySpec struct {
 	Required     bool
 }
 
-const locationTypePropertyCols = `id, location_type_id, (select pr.name from property pr where pr.id = location_type_property.property_id) as property_name, default_value, required, created_at, updated_at`
+const locationTypePropertyCols = `id, location_type_id, (select pr.name from property pr where pr.id = location_type_property.property_id) as property_name, location_type_property.property_id as property_id, default_value, required, created_at, updated_at`
 
 func scanLocationTypeProperty(row pgx.Row) (*LocationTypeProperty, error) {
 	var (
 		pp  LocationTypeProperty
 		def []byte // NULL when the contract sets no default
 	)
-	if err := row.Scan(&pp.ID, &pp.LocationTypeID, &pp.PropertyName, &def, &pp.Required, &pp.CreatedAt, &pp.UpdatedAt); err != nil {
+	if err := row.Scan(&pp.ID, &pp.LocationTypeID, &pp.PropertyName, &pp.PropertyID, &def, &pp.Required, &pp.CreatedAt, &pp.UpdatedAt); err != nil {
 		return nil, err
 	}
 	pp.DefaultValue = copyRaw(def)

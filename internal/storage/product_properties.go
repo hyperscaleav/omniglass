@@ -20,6 +20,7 @@ type ProductProperty struct {
 	ProductID    string
 	ProductName  string
 	PropertyName string
+	PropertyID   string
 	DefaultValue json.RawMessage // nil when the contract sets no default
 	Required     bool
 	CreatedAt    time.Time
@@ -40,6 +41,7 @@ type ProductPropertySpec struct {
 const productPropertyCols = `id, product_id,
 	(select p.name from product p where p.id = product_property.product_id) as product_handle,
 	(select pr.name from property pr where pr.id = product_property.property_id) as property_name,
+	product_property.property_id as property_id,
 	default_value, required, created_at, updated_at`
 
 func scanProductProperty(row pgx.Row) (*ProductProperty, error) {
@@ -47,7 +49,7 @@ func scanProductProperty(row pgx.Row) (*ProductProperty, error) {
 		pp  ProductProperty
 		def []byte // NULL when the contract sets no default
 	)
-	if err := row.Scan(&pp.ID, &pp.ProductID, &pp.ProductName, &pp.PropertyName, &def, &pp.Required, &pp.CreatedAt, &pp.UpdatedAt); err != nil {
+	if err := row.Scan(&pp.ID, &pp.ProductID, &pp.ProductName, &pp.PropertyName, &pp.PropertyID, &def, &pp.Required, &pp.CreatedAt, &pp.UpdatedAt); err != nil {
 		return nil, err
 	}
 	pp.DefaultValue = copyRaw(def)

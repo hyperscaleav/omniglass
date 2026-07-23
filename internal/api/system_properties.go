@@ -39,6 +39,7 @@ type systemPropertyOutput struct {
 type systemPropertyValueBody struct {
 	System       string          `json:"system"`
 	PropertyName string          `json:"property_name"`
+	PropertyID   string          `json:"property_id" doc:"The catalog property's uuid, the stable form of property_name"`
 	Value        json.RawMessage `json:"value" doc:"The stored value, shape given by the property's data_type"`
 	ValueID      string          `json:"value_id" doc:"The stored value's id"`
 }
@@ -101,6 +102,7 @@ func registerSystemPropertyRoutes(api huma.API, a *authenticator, gw storage.Gat
 		return &systemPropertyOutput{Body: systemPropertyValueBody{
 			System:       in.Name,
 			PropertyName: pv.PropertyName,
+			PropertyID:   pv.PropertyID,
 			Value:        json.RawMessage(pv.Value),
 			ValueID:      pv.ID,
 		}}, nil

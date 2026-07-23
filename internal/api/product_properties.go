@@ -19,6 +19,7 @@ import (
 
 type productPropertyBody struct {
 	PropertyName string          `json:"property_name" doc:"The catalog property this product declares"`
+	PropertyID   string          `json:"property_id" doc:"The catalog property's uuid, the stable form of property_name"`
 	DefaultValue json.RawMessage `json:"default_value,omitempty" doc:"The contract default, shape given by the property's data_type; omitted when the contract sets none"`
 	Required     bool            `json:"required" doc:"Whether every instance of this product must set the property"`
 }
@@ -26,6 +27,7 @@ type productPropertyBody struct {
 func toProductPropertyBody(pp *storage.ProductProperty) productPropertyBody {
 	return productPropertyBody{
 		PropertyName: pp.PropertyName,
+		PropertyID:   pp.PropertyID,
 		DefaultValue: json.RawMessage(pp.DefaultValue),
 		Required:     pp.Required,
 	}
