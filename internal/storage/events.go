@@ -27,6 +27,7 @@ type Event struct {
 	TS         time.Time
 	OwnerKind  string
 	Key        string
+	PropertyID string
 	Instance   string
 	Message    string
 	Attributes []byte
@@ -87,7 +88,7 @@ func (p *PG) InsertEvents(ctx context.Context, evs []EventOccurrence) error {
 func (p *PG) ListComponentEvents(ctx context.Context, componentName string, since time.Time, limit int) ([]Event, error) {
 	rows, err := p.pool.Query(ctx, `
 		select id, ts, owner_kind,
-			(select p.name from property p where p.id = event.property_id), instance, message, attributes, provenance, source
+			(select p.name from property p where p.id = event.property_id), event.property_id, instance, message, attributes, provenance, source
 		from event
 		where component_id = (select id from component where name = $1) and ts >= $2
 		order by ts desc
@@ -100,7 +101,7 @@ func (p *PG) ListComponentEvents(ctx context.Context, componentName string, sinc
 	var out []Event
 	for rows.Next() {
 		var e Event
-		if err := rows.Scan(&e.ID, &e.TS, &e.OwnerKind, &e.Key, &e.Instance, &e.Message, &e.Attributes, &e.Provenance, &e.Source); err != nil {
+		if err := rows.Scan(&e.ID, &e.TS, &e.OwnerKind, &e.Key, &e.PropertyID, &e.Instance, &e.Message, &e.Attributes, &e.Provenance, &e.Source); err != nil {
 			return nil, fmt.Errorf("storage: scan event %s: %w", componentName, err)
 		}
 		out = append(out, e)

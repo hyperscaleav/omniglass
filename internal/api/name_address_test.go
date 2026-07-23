@@ -141,6 +141,14 @@ func TestReferencesCarryBothForms(t *testing.T) {
 				continue
 			}
 			checked++
+			// A property's name appears as `property_name` on the contract and value
+			// bodies, but as `key` on the telemetry bodies (the event log), the
+			// datapoint-key vocabulary. Accept either as property_id's name pair.
+			if field == "property_id" {
+				if _, hasKey := sch.Properties["key"]; hasKey {
+					continue
+				}
+			}
 			if _, has := sch.Properties[pair]; !has {
 				t.Errorf("%s carries %q but not %q: a reference carries both, the id as the handle "+
 					"and the name as the label", name, field, pair)
