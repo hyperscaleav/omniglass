@@ -1987,9 +1987,11 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   name-only registry references: the product / standard / location_type contract lines, the
   component / system / location value bodies, and the effective-property resolution. `property_name` joins
   the guard's reverse set, so a contract or value body can no longer name a property without its uuid. The
-  event body's `key` (a telemetry key that is the property name under a different field) stays name-only for
-  now, a noted exception: it cannot share the `property_id` -> `property_name` pairing and a high-volume
-  event read is fine with the name.
+  **event body carries `property_id` beside its `key`** too (`key` is the datapoint-key vocabulary for the
+  property name on the telemetry bodies): the event row already stored `property_id` exactly as metric and
+  state do, so exposing it is just a projection. The guard accepts `key` as property_id's name pair on the
+  telemetry body; `key` stays forward-covered rather than joining the reverse set, since it is also a
+  tag-binding field and so ambiguous. Every registry reference in the API now carries both forms.
 - **The observation tables lose the `_datapoint` genus**: `metric_datapoint` becomes `metric` and
   `state_datapoint` becomes `state`, matching their bare-noun sibling `event` on the principle that the
   noun is the entity and classification takes a `_type` / `_kind` suffix (the `datapoint_type` classifier

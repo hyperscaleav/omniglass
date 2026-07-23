@@ -3748,6 +3748,8 @@ export interface components {
             key: string;
             /** @description The occurrence message */
             message: string;
+            /** @description The property's uuid, the stable form of key */
+            property_id: string;
             /** @description The lineage of the occurrence (observed for direct collection) */
             provenance: string;
             /** @description The interface type that produced the occurrence */

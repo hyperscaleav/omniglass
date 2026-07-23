@@ -1490,6 +1490,9 @@ components:
         message:
           description: The occurrence message
           type: string
+        property_id:
+          description: The property's uuid, the stable form of key
+          type: string
         provenance:
           description: The lineage of the occurrence (observed for direct collection)
           type: string
@@ -1503,6 +1506,7 @@ components:
       required:
         - ts
         - key
+        - property_id
         - message
         - provenance
       type: object

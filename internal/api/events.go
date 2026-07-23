@@ -25,6 +25,7 @@ const (
 type eventBody struct {
 	TS         time.Time       `json:"ts" doc:"When the occurrence was observed"`
 	Key        string          `json:"key" doc:"The property name of the log (e.g. syslog.line)"`
+	PropertyID string          `json:"property_id" doc:"The property's uuid, the stable form of key"`
 	Instance   string          `json:"instance,omitempty" doc:"The series discriminator (e.g. the interface), when set"`
 	Message    string          `json:"message" doc:"The occurrence message"`
 	Attributes json.RawMessage `json:"attributes,omitempty" doc:"Structured attributes, when the occurrence carried a JSON payload"`
@@ -63,8 +64,8 @@ func registerEventRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		out.Body.Events = make([]eventBody, 0, len(rows))
 		for _, e := range rows {
 			out.Body.Events = append(out.Body.Events, eventBody{
-				TS:         e.TS,
-				Key:        e.Key,
+				TS:  e.TS,
+				Key: e.Key, PropertyID: e.PropertyID,
 				Instance:   e.Instance,
 				Message:    e.Message,
 				Attributes: json.RawMessage(e.Attributes),
