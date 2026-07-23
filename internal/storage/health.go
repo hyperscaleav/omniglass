@@ -58,7 +58,7 @@ import (
 const healthKey = "health"
 
 // healthRule names the producer in the recorded row's lineage. provenance
-// 'calculated' requires a non-null source_rule (and null event_id/audit_id), so
+// 'calculated' requires a non-null source_rule (and a null event_id), so
 // this constant is what satisfies state_datapoint's lineage CHECK.
 const healthRule = "health-rollup"
 
@@ -325,7 +325,7 @@ func recordHealth(ctx context.Context, q txQuerier, ownerKind, ownerID string, v
 		return err
 	}
 	// provenance 'calculated' pins the lineage: source_rule names the producer,
-	// event_id and audit_id stay null. The CHECK enforces exactly that shape.
+	// event_id stays null. The CHECK enforces exactly that shape.
 	// The WHERE is the transition rule: no previous row (is distinct from null) or
 	// a different one writes; the same value writes nothing.
 	owner := ownerArcExpr(ownerKind)
