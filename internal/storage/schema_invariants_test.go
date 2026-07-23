@@ -48,7 +48,7 @@ func TestChurnDroppedConstraintsRestored(t *testing.T) {
 
 	// Both indexes existed before the churn and were dropped when their column was
 	// recreated; the sibling tables kept theirs.
-	indexes := []string{"state_datapoint_owner_idx", "product_capability_capability_idx"}
+	indexes := []string{"state_owner_idx", "product_capability_capability_idx"}
 	for _, idx := range indexes {
 		var exists bool
 		if err := conn.QueryRow(ctx,

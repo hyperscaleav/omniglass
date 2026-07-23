@@ -400,7 +400,7 @@ func (p *PG) degradedCapabilities(ctx context.Context, q txQuerier, componentNam
 // whose verdict its condition can move.
 func (p *PG) systemsStaffedBy(ctx context.Context, q txQuerier, componentName string) ([]string, error) {
 	rows, err := q.Query(ctx, `
-		select distinct s.name from role_assignment ra join system s on s.id = ra.system_id
+		select distinct s.name from system_role_assignment ra join system s on s.id = ra.system_id
 		where ra.component_id = (select id from component where name = $1) order by 1`,
 		componentName)
 	if err != nil {
@@ -524,9 +524,9 @@ func (p *PG) resolveHealthRoles(ctx context.Context, q txQuerier, systemName str
 		       -- alarms up by name, and the report displays them.
 		       coalesce(array_agg(distinct ac.name) filter (where ac.name is not null), '{}')
 		from roles
-		left join role_capability rc on rc.role_id = roles.id
+		left join system_role_capability rc on rc.role_id = roles.id
 		left join capability cap on cap.id = rc.capability_id
-		left join role_assignment ra on ra.role_id = roles.id
+		left join system_role_assignment ra on ra.role_id = roles.id
 		     and ra.system_id = (select id from system where name = $1)
 		left join component ac on ac.id = ra.component_id
 		group by roles.id, roles.name, roles.display_name, roles.quorum, roles.impact

@@ -254,7 +254,7 @@ func TestRemoveMemberRefusedWhileStaffingARole(t *testing.T) {
 // A membership is a binding between two things and is meaningless once either is
 // gone, so it cascades from both ends. It deliberately does NOT make a component
 // undeletable: the guard that matters, refusing to delete a component that fills a
-// job, belongs to role_assignment, and duplicating it here would add a step to
+// job, belongs to system_role_assignment, and duplicating it here would add a step to
 // every component removal while protecting nothing new.
 func TestMembershipCascadesFromBothEnds(t *testing.T) {
 	ctx := context.Background()
@@ -283,7 +283,7 @@ func TestMembershipCascadesFromBothEnds(t *testing.T) {
 		t.Fatalf("delete a component that only holds a membership: %v", err)
 	}
 
-	// Staffing a role is what makes it undeletable, and that is role_assignment's
+	// Staffing a role is what makes it undeletable, and that is system_role_assignment's
 	// guard, unchanged by this slice.
 	if _, err := f.gw.SetSystemRole(ctx, "", "system", "room-b", storage.SystemRoleSpec{
 		Name: "mic", DisplayName: "Mic", Quorum: 1,

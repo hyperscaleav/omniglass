@@ -128,7 +128,7 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 	// Scoped to the role id this test just created: matching on name alone would
 	// reach across owners and constrain what any other standard may declare.
 	if _, err := conn.Exec(ctx, `
-		insert into role_capability (role_id, capability_id)
+		insert into system_role_capability (role_id, capability_id)
 		select $1, (select id from capability where name = c) from unnest(array['microphone','speaker']) c`, micRole); err != nil {
 		t.Fatalf("require capabilities: %v", err)
 	}

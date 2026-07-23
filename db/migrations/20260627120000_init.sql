@@ -128,12 +128,12 @@ CREATE TABLE public.blob (
 --
 
 CREATE TABLE public.capability (
-    name text CONSTRAINT capability_id_not_null NOT NULL,
+    name text CONSTRAINT capability_name_not_null NOT NULL,
     display_name text NOT NULL,
     official boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    id uuid DEFAULT uuidv7() CONSTRAINT capability_uuid_id_not_null NOT NULL
+    id uuid DEFAULT uuidv7() CONSTRAINT capability_id_not_null NOT NULL
 );
 
 
@@ -193,13 +193,13 @@ CREATE TABLE public.credential (
 --
 
 CREATE TABLE public.driver (
-    name text CONSTRAINT driver_id_not_null NOT NULL,
+    name text CONSTRAINT driver_name_not_null NOT NULL,
     display_name text NOT NULL,
     version text DEFAULT ''::text NOT NULL,
     official boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    id uuid DEFAULT uuidv7() CONSTRAINT driver_uuid_id_not_null NOT NULL
+    id uuid DEFAULT uuidv7() CONSTRAINT driver_id_not_null NOT NULL
 );
 
 
@@ -319,7 +319,7 @@ CREATE TABLE public.interface_type (
     description text DEFAULT ''::text NOT NULL,
     built boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    id uuid DEFAULT uuidv7() CONSTRAINT interface_type_uuid_id_not_null NOT NULL
+    id uuid DEFAULT uuidv7() CONSTRAINT interface_type_id_not_null NOT NULL
 );
 
 
@@ -343,13 +343,13 @@ CREATE TABLE public.location (
 --
 
 CREATE TABLE public.location_type (
-    name text CONSTRAINT location_type_id_not_null NOT NULL,
+    name text CONSTRAINT location_type_name_not_null NOT NULL,
     official boolean DEFAULT false NOT NULL,
     display_name text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     icon text DEFAULT 'map-pin'::text NOT NULL,
     allowed_parent_types text[] DEFAULT '{}'::text[] NOT NULL,
-    id uuid DEFAULT uuidv7() CONSTRAINT location_type_uuid_id_not_null NOT NULL
+    id uuid DEFAULT uuidv7() CONSTRAINT location_type_id_not_null NOT NULL
 );
 
 
@@ -373,13 +373,13 @@ CREATE TABLE public.location_type_property (
 --
 
 CREATE TABLE public.metric (
-    id bigint CONSTRAINT metric_datapoint_id_not_null NOT NULL,
-    ts timestamp with time zone DEFAULT now() CONSTRAINT metric_datapoint_ts_not_null NOT NULL,
-    owner_kind text CONSTRAINT metric_datapoint_owner_kind_not_null NOT NULL,
-    instance text DEFAULT ''::text CONSTRAINT metric_datapoint_instance_not_null NOT NULL,
-    value double precision CONSTRAINT metric_datapoint_value_not_null NOT NULL,
-    provenance text DEFAULT 'observed'::text CONSTRAINT metric_datapoint_provenance_not_null NOT NULL,
-    source text DEFAULT ''::text CONSTRAINT metric_datapoint_source_not_null NOT NULL,
+    id bigint CONSTRAINT metric_id_not_null NOT NULL,
+    ts timestamp with time zone DEFAULT now() CONSTRAINT metric_ts_not_null NOT NULL,
+    owner_kind text CONSTRAINT metric_owner_kind_not_null NOT NULL,
+    instance text DEFAULT ''::text CONSTRAINT metric_instance_not_null NOT NULL,
+    value double precision CONSTRAINT metric_value_not_null NOT NULL,
+    provenance text DEFAULT 'observed'::text CONSTRAINT metric_provenance_not_null NOT NULL,
+    source text DEFAULT ''::text CONSTRAINT metric_source_not_null NOT NULL,
     source_rule text,
     source_rule_version bigint,
     event_id bigint,
@@ -387,20 +387,20 @@ CREATE TABLE public.metric (
     system_id uuid,
     location_id uuid,
     node_id uuid,
-    property_id uuid CONSTRAINT metric_datapoint_property_id_not_null NOT NULL,
-    CONSTRAINT metric_datapoint_lineage_check CHECK ((((provenance = 'observed'::text) AND (event_id IS NULL)) OR ((provenance = 'calculated'::text) AND (source_rule IS NOT NULL) AND (event_id IS NULL)) OR ((provenance = 'intended'::text) AND (event_id IS NOT NULL) AND (source_rule IS NULL)) OR ((provenance = 'declared'::text) AND (source_rule IS NULL) AND (event_id IS NULL)))),
-    CONSTRAINT metric_datapoint_owner_arc_check CHECK ((((owner_kind = 'component'::text) AND (component_id IS NOT NULL) AND (system_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (component_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'location'::text) AND (location_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'node'::text) AND (node_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (location_id IS NULL)))),
-    CONSTRAINT metric_datapoint_owner_kind_check CHECK ((owner_kind = ANY (ARRAY['component'::text, 'system'::text, 'location'::text, 'node'::text]))),
-    CONSTRAINT metric_datapoint_provenance_check CHECK ((provenance = ANY (ARRAY['observed'::text, 'calculated'::text, 'intended'::text, 'declared'::text])))
+    property_id uuid CONSTRAINT metric_property_id_not_null NOT NULL,
+    CONSTRAINT metric_lineage_check CHECK ((((provenance = 'observed'::text) AND (event_id IS NULL)) OR ((provenance = 'calculated'::text) AND (source_rule IS NOT NULL) AND (event_id IS NULL)) OR ((provenance = 'intended'::text) AND (event_id IS NOT NULL) AND (source_rule IS NULL)) OR ((provenance = 'declared'::text) AND (source_rule IS NULL) AND (event_id IS NULL)))),
+    CONSTRAINT metric_owner_arc_check CHECK ((((owner_kind = 'component'::text) AND (component_id IS NOT NULL) AND (system_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (component_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'location'::text) AND (location_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'node'::text) AND (node_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (location_id IS NULL)))),
+    CONSTRAINT metric_owner_kind_check CHECK ((owner_kind = ANY (ARRAY['component'::text, 'system'::text, 'location'::text, 'node'::text]))),
+    CONSTRAINT metric_provenance_check CHECK ((provenance = ANY (ARRAY['observed'::text, 'calculated'::text, 'intended'::text, 'declared'::text])))
 );
 
 
 --
--- Name: metric_datapoint_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: metric_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 ALTER TABLE public.metric ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
-    SEQUENCE NAME public.metric_datapoint_id_seq
+    SEQUENCE NAME public.metric_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -502,13 +502,13 @@ CREATE TABLE public.principal_group_member (
 --
 
 CREATE TABLE public.product (
-    name text CONSTRAINT product_id_not_null NOT NULL,
+    name text CONSTRAINT product_name_not_null NOT NULL,
     display_name text NOT NULL,
     kind text DEFAULT 'device'::text NOT NULL,
     official boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    id uuid DEFAULT uuidv7() CONSTRAINT product_uuid_id_not_null NOT NULL,
+    id uuid DEFAULT uuidv7() CONSTRAINT product_id_not_null NOT NULL,
     vendor_id uuid,
     parent_product_id uuid,
     driver_id uuid,
@@ -548,19 +548,19 @@ CREATE TABLE public.product_property (
 --
 
 CREATE TABLE public.property (
-    name text CONSTRAINT datapoint_type_name_not_null NOT NULL,
+    name text CONSTRAINT property_name_not_null NOT NULL,
     display_name text,
     kind text,
-    data_type text CONSTRAINT datapoint_type_value_type_not_null NOT NULL,
+    data_type text CONSTRAINT property_value_type_not_null NOT NULL,
     unit text,
     "precision" integer,
     fusion_policy jsonb,
     validation jsonb,
-    description text DEFAULT ''::text CONSTRAINT datapoint_type_description_not_null NOT NULL,
-    registered_at timestamp with time zone DEFAULT now() CONSTRAINT datapoint_type_registered_at_not_null NOT NULL,
+    description text DEFAULT ''::text CONSTRAINT property_description_not_null NOT NULL,
+    registered_at timestamp with time zone DEFAULT now() CONSTRAINT property_registered_at_not_null NOT NULL,
     official boolean DEFAULT false NOT NULL,
-    id uuid DEFAULT uuidv7() CONSTRAINT property_uuid_id_not_null NOT NULL,
-    CONSTRAINT datapoint_type_kind_check CHECK ((kind = ANY (ARRAY['metric'::text, 'state'::text, 'log'::text]))),
+    id uuid DEFAULT uuidv7() CONSTRAINT property_id_not_null NOT NULL,
+    CONSTRAINT property_kind_check CHECK ((kind = ANY (ARRAY['metric'::text, 'state'::text, 'log'::text]))),
     CONSTRAINT property_data_type_check CHECK ((data_type = ANY (ARRAY['string'::text, 'int'::text, 'float'::text, 'bool'::text, 'json'::text])))
 );
 
@@ -605,10 +605,10 @@ CREATE TABLE public.role (
 
 
 --
--- Name: role_assignment; Type: TABLE; Schema: public; Owner: -
+-- Name: system_role_assignment; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.role_assignment (
+CREATE TABLE public.system_role_assignment (
     id uuid DEFAULT uuidv7() NOT NULL,
     role_id uuid NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
@@ -618,10 +618,10 @@ CREATE TABLE public.role_assignment (
 
 
 --
--- Name: role_capability; Type: TABLE; Schema: public; Owner: -
+-- Name: system_role_capability; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.role_capability (
+CREATE TABLE public.system_role_capability (
     id uuid DEFAULT uuidv7() NOT NULL,
     role_id uuid NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
@@ -660,13 +660,13 @@ CREATE TABLE public.secret (
 --
 
 CREATE TABLE public.secret_type (
-    name text CONSTRAINT secret_type_id_not_null NOT NULL,
+    name text CONSTRAINT secret_type_name_not_null NOT NULL,
     official boolean DEFAULT false NOT NULL,
     display_name text NOT NULL,
     schema jsonb DEFAULT '[]'::jsonb NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     default_admin_sensitive boolean DEFAULT true NOT NULL,
-    id uuid DEFAULT uuidv7() CONSTRAINT secret_type_uuid_id_not_null NOT NULL
+    id uuid DEFAULT uuidv7() CONSTRAINT secret_type_id_not_null NOT NULL
 );
 
 
@@ -702,12 +702,12 @@ CREATE TABLE public.setting_override (
 --
 
 CREATE TABLE public.standard (
-    name text CONSTRAINT system_type_id_not_null NOT NULL,
-    official boolean DEFAULT false CONSTRAINT system_type_official_not_null NOT NULL,
-    display_name text CONSTRAINT system_type_display_name_not_null NOT NULL,
-    created_at timestamp with time zone DEFAULT now() CONSTRAINT system_type_created_at_not_null NOT NULL,
+    name text CONSTRAINT standard_name_not_null NOT NULL,
+    official boolean DEFAULT false CONSTRAINT standard_official_not_null NOT NULL,
+    display_name text CONSTRAINT standard_display_name_not_null NOT NULL,
+    created_at timestamp with time zone DEFAULT now() CONSTRAINT standard_created_at_not_null NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    id uuid DEFAULT uuidv7() CONSTRAINT standard_uuid_id_not_null NOT NULL,
+    id uuid DEFAULT uuidv7() CONSTRAINT standard_id_not_null NOT NULL,
     parent_standard_id uuid
 );
 
@@ -732,14 +732,14 @@ CREATE TABLE public.standard_property (
 --
 
 CREATE TABLE public.state (
-    id bigint CONSTRAINT state_datapoint_id_not_null NOT NULL,
-    ts timestamp with time zone DEFAULT now() CONSTRAINT state_datapoint_ts_not_null NOT NULL,
-    owner_kind text CONSTRAINT state_datapoint_owner_kind_not_null NOT NULL,
-    instance text DEFAULT ''::text CONSTRAINT state_datapoint_instance_not_null NOT NULL,
-    value text CONSTRAINT state_datapoint_value_not_null NOT NULL,
+    id bigint CONSTRAINT state_id_not_null NOT NULL,
+    ts timestamp with time zone DEFAULT now() CONSTRAINT state_ts_not_null NOT NULL,
+    owner_kind text CONSTRAINT state_owner_kind_not_null NOT NULL,
+    instance text DEFAULT ''::text CONSTRAINT state_instance_not_null NOT NULL,
+    value text CONSTRAINT state_value_not_null NOT NULL,
     value_json jsonb,
-    provenance text DEFAULT 'observed'::text CONSTRAINT state_datapoint_provenance_not_null NOT NULL,
-    source text DEFAULT ''::text CONSTRAINT state_datapoint_source_not_null NOT NULL,
+    provenance text DEFAULT 'observed'::text CONSTRAINT state_provenance_not_null NOT NULL,
+    source text DEFAULT ''::text CONSTRAINT state_source_not_null NOT NULL,
     source_rule text,
     source_rule_version bigint,
     event_id bigint,
@@ -747,20 +747,20 @@ CREATE TABLE public.state (
     system_id uuid,
     location_id uuid,
     node_id uuid,
-    property_id uuid CONSTRAINT state_datapoint_property_id_not_null NOT NULL,
-    CONSTRAINT state_datapoint_lineage_check CHECK ((((provenance = 'observed'::text) AND (event_id IS NULL)) OR ((provenance = 'calculated'::text) AND (source_rule IS NOT NULL) AND (event_id IS NULL)) OR ((provenance = 'intended'::text) AND (event_id IS NOT NULL) AND (source_rule IS NULL)) OR ((provenance = 'declared'::text) AND (source_rule IS NULL) AND (event_id IS NULL)))),
-    CONSTRAINT state_datapoint_owner_arc_check CHECK ((((owner_kind = 'component'::text) AND (component_id IS NOT NULL) AND (system_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (component_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'location'::text) AND (location_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'node'::text) AND (node_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (location_id IS NULL)))),
-    CONSTRAINT state_datapoint_owner_kind_check CHECK ((owner_kind = ANY (ARRAY['component'::text, 'system'::text, 'location'::text, 'node'::text]))),
-    CONSTRAINT state_datapoint_provenance_check CHECK ((provenance = ANY (ARRAY['observed'::text, 'calculated'::text, 'intended'::text, 'declared'::text])))
+    property_id uuid CONSTRAINT state_property_id_not_null NOT NULL,
+    CONSTRAINT state_lineage_check CHECK ((((provenance = 'observed'::text) AND (event_id IS NULL)) OR ((provenance = 'calculated'::text) AND (source_rule IS NOT NULL) AND (event_id IS NULL)) OR ((provenance = 'intended'::text) AND (event_id IS NOT NULL) AND (source_rule IS NULL)) OR ((provenance = 'declared'::text) AND (source_rule IS NULL) AND (event_id IS NULL)))),
+    CONSTRAINT state_owner_arc_check CHECK ((((owner_kind = 'component'::text) AND (component_id IS NOT NULL) AND (system_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (component_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'location'::text) AND (location_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'node'::text) AND (node_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (location_id IS NULL)))),
+    CONSTRAINT state_owner_kind_check CHECK ((owner_kind = ANY (ARRAY['component'::text, 'system'::text, 'location'::text, 'node'::text]))),
+    CONSTRAINT state_provenance_check CHECK ((provenance = ANY (ARRAY['observed'::text, 'calculated'::text, 'intended'::text, 'declared'::text])))
 );
 
 
 --
--- Name: state_datapoint_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: state_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 ALTER TABLE public.state ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
-    SEQUENCE NAME public.state_datapoint_id_seq
+    SEQUENCE NAME public.state_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -898,16 +898,16 @@ CREATE TABLE public.variable (
 --
 
 CREATE TABLE public.vendor (
-    name text CONSTRAINT component_make_id_not_null NOT NULL,
-    display_name text CONSTRAINT component_make_display_name_not_null NOT NULL,
-    icon text DEFAULT ''::text CONSTRAINT component_make_icon_not_null NOT NULL,
-    support_phone text DEFAULT ''::text CONSTRAINT component_make_support_phone_not_null NOT NULL,
-    website text DEFAULT ''::text CONSTRAINT component_make_website_not_null NOT NULL,
-    official boolean DEFAULT false CONSTRAINT component_make_official_not_null NOT NULL,
-    created_at timestamp with time zone DEFAULT now() CONSTRAINT component_make_created_at_not_null NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() CONSTRAINT component_make_updated_at_not_null NOT NULL,
+    name text CONSTRAINT vendor_name_not_null NOT NULL,
+    display_name text CONSTRAINT vendor_display_name_not_null NOT NULL,
+    icon text DEFAULT ''::text CONSTRAINT vendor_icon_not_null NOT NULL,
+    support_phone text DEFAULT ''::text CONSTRAINT vendor_support_phone_not_null NOT NULL,
+    website text DEFAULT ''::text CONSTRAINT vendor_website_not_null NOT NULL,
+    official boolean DEFAULT false CONSTRAINT vendor_official_not_null NOT NULL,
+    created_at timestamp with time zone DEFAULT now() CONSTRAINT vendor_created_at_not_null NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() CONSTRAINT vendor_updated_at_not_null NOT NULL,
     kind text DEFAULT 'manufacturer'::text NOT NULL,
-    id uuid DEFAULT uuidv7() CONSTRAINT vendor_uuid_id_not_null NOT NULL,
+    id uuid DEFAULT uuidv7() CONSTRAINT vendor_id_not_null NOT NULL,
     CONSTRAINT vendor_kind_check CHECK ((kind = ANY (ARRAY['manufacturer'::text, 'integrator'::text, 'developer'::text])))
 );
 
@@ -1153,11 +1153,11 @@ ALTER TABLE ONLY public.location_type_property
 
 
 --
--- Name: metric metric_datapoint_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: metric metric_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.metric
-    ADD CONSTRAINT metric_datapoint_pkey PRIMARY KEY (id);
+    ADD CONSTRAINT metric_pkey PRIMARY KEY (id);
 
 
 --
@@ -1305,35 +1305,35 @@ ALTER TABLE ONLY public.property_value
 
 
 --
--- Name: role_assignment role_assignment_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: system_role_assignment system_role_assignment_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.role_assignment
-    ADD CONSTRAINT role_assignment_pkey PRIMARY KEY (id);
-
-
---
--- Name: role_assignment role_assignment_system_id_role_id_component_id_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.role_assignment
-    ADD CONSTRAINT role_assignment_system_id_role_id_component_id_key UNIQUE (system_id, role_id, component_id);
+ALTER TABLE ONLY public.system_role_assignment
+    ADD CONSTRAINT system_role_assignment_pkey PRIMARY KEY (id);
 
 
 --
--- Name: role_capability role_capability_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: system_role_assignment system_role_assignment_system_id_role_id_component_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.role_capability
-    ADD CONSTRAINT role_capability_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.system_role_assignment
+    ADD CONSTRAINT system_role_assignment_system_id_role_id_component_id_key UNIQUE (system_id, role_id, component_id);
 
 
 --
--- Name: role_capability role_capability_role_id_capability_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: system_role_capability system_role_capability_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.role_capability
-    ADD CONSTRAINT role_capability_role_id_capability_id_key UNIQUE (role_id, capability_id);
+ALTER TABLE ONLY public.system_role_capability
+    ADD CONSTRAINT system_role_capability_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: system_role_capability system_role_capability_role_id_capability_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.system_role_capability
+    ADD CONSTRAINT system_role_capability_role_id_capability_id_key UNIQUE (role_id, capability_id);
 
 
 --
@@ -1438,11 +1438,11 @@ ALTER TABLE ONLY public.standard_property
 
 
 --
--- Name: state state_datapoint_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: state state_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.state
-    ADD CONSTRAINT state_datapoint_pkey PRIMARY KEY (id);
+    ADD CONSTRAINT state_pkey PRIMARY KEY (id);
 
 
 --
@@ -1676,17 +1676,17 @@ CREATE INDEX location_type_property_property_idx ON public.location_type_propert
 
 
 --
--- Name: metric_datapoint_owner_idx; Type: INDEX; Schema: public; Owner: -
+-- Name: metric_owner_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX metric_datapoint_owner_idx ON public.metric USING btree (component_id, property_id, instance, ts DESC) WHERE (component_id IS NOT NULL);
+CREATE INDEX metric_owner_idx ON public.metric USING btree (component_id, property_id, instance, ts DESC) WHERE (component_id IS NOT NULL);
 
 
 --
--- Name: metric_datapoint_ts_brin; Type: INDEX; Schema: public; Owner: -
+-- Name: metric_ts_brin; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX metric_datapoint_ts_brin ON public.metric USING brin (ts);
+CREATE INDEX metric_ts_brin ON public.metric USING brin (ts);
 
 
 --
@@ -1760,17 +1760,17 @@ CREATE INDEX property_value_component_idx ON public.property_value USING btree (
 
 
 --
--- Name: role_assignment_component_idx; Type: INDEX; Schema: public; Owner: -
+-- Name: system_role_assignment_component_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX role_assignment_component_idx ON public.role_assignment USING btree (component_id);
+CREATE INDEX system_role_assignment_component_idx ON public.system_role_assignment USING btree (component_id);
 
 
 --
--- Name: role_assignment_system_idx; Type: INDEX; Schema: public; Owner: -
+-- Name: system_role_assignment_system_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX role_assignment_system_idx ON public.role_assignment USING btree (system_id);
+CREATE INDEX system_role_assignment_system_idx ON public.system_role_assignment USING btree (system_id);
 
 
 --
@@ -1851,17 +1851,17 @@ CREATE INDEX standard_property_property_idx ON public.standard_property USING bt
 
 
 --
--- Name: state_datapoint_owner_idx; Type: INDEX; Schema: public; Owner: -
+-- Name: state_owner_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX state_datapoint_owner_idx ON public.state USING btree (component_id, property_id, instance, ts DESC) WHERE (component_id IS NOT NULL);
+CREATE INDEX state_owner_idx ON public.state USING btree (component_id, property_id, instance, ts DESC) WHERE (component_id IS NOT NULL);
 
 
 --
--- Name: state_datapoint_ts_brin; Type: INDEX; Schema: public; Owner: -
+-- Name: state_ts_brin; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX state_datapoint_ts_brin ON public.state USING brin (ts);
+CREATE INDEX state_ts_brin ON public.state USING brin (ts);
 
 
 --
@@ -2284,51 +2284,51 @@ ALTER TABLE ONLY public.location_type_property
 
 
 --
--- Name: metric metric_datapoint_component_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: metric metric_component_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.metric
-    ADD CONSTRAINT metric_datapoint_component_id_fkey FOREIGN KEY (component_id) REFERENCES public.component(id) ON DELETE CASCADE;
+    ADD CONSTRAINT metric_component_id_fkey FOREIGN KEY (component_id) REFERENCES public.component(id) ON DELETE CASCADE;
 
 
 --
--- Name: metric metric_datapoint_event_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.metric
-    ADD CONSTRAINT metric_datapoint_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.event(id) ON DELETE SET NULL;
-
-
---
--- Name: metric metric_datapoint_location_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: metric metric_event_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.metric
-    ADD CONSTRAINT metric_datapoint_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.location(id) ON DELETE CASCADE;
+    ADD CONSTRAINT metric_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.event(id) ON DELETE SET NULL;
 
 
 --
--- Name: metric metric_datapoint_node_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.metric
-    ADD CONSTRAINT metric_datapoint_node_id_fkey FOREIGN KEY (node_id) REFERENCES public.node(principal_id) ON DELETE CASCADE;
-
-
---
--- Name: metric metric_datapoint_property_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: metric metric_location_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.metric
-    ADD CONSTRAINT metric_datapoint_property_id_fkey FOREIGN KEY (property_id) REFERENCES public.property(id) ON DELETE CASCADE;
+    ADD CONSTRAINT metric_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.location(id) ON DELETE CASCADE;
 
 
 --
--- Name: metric metric_datapoint_system_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: metric metric_node_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.metric
-    ADD CONSTRAINT metric_datapoint_system_id_fkey FOREIGN KEY (system_id) REFERENCES public.system(id) ON DELETE CASCADE;
+    ADD CONSTRAINT metric_node_id_fkey FOREIGN KEY (node_id) REFERENCES public.node(principal_id) ON DELETE CASCADE;
+
+
+--
+-- Name: metric metric_property_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.metric
+    ADD CONSTRAINT metric_property_id_fkey FOREIGN KEY (property_id) REFERENCES public.property(id) ON DELETE CASCADE;
+
+
+--
+-- Name: metric metric_system_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.metric
+    ADD CONSTRAINT metric_system_id_fkey FOREIGN KEY (system_id) REFERENCES public.system(id) ON DELETE CASCADE;
 
 
 --
@@ -2484,43 +2484,43 @@ ALTER TABLE ONLY public.property_value
 
 
 --
--- Name: role_assignment role_assignment_component_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: system_role_assignment system_role_assignment_component_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.role_assignment
-    ADD CONSTRAINT role_assignment_component_id_fkey FOREIGN KEY (component_id) REFERENCES public.component(id) ON DELETE RESTRICT;
-
-
---
--- Name: role_assignment role_assignment_role_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.role_assignment
-    ADD CONSTRAINT role_assignment_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.system_role(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.system_role_assignment
+    ADD CONSTRAINT system_role_assignment_component_id_fkey FOREIGN KEY (component_id) REFERENCES public.component(id) ON DELETE RESTRICT;
 
 
 --
--- Name: role_assignment role_assignment_system_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: system_role_assignment system_role_assignment_role_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.role_assignment
-    ADD CONSTRAINT role_assignment_system_id_fkey FOREIGN KEY (system_id) REFERENCES public.system(id) ON DELETE CASCADE;
-
-
---
--- Name: role_capability role_capability_capability_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.role_capability
-    ADD CONSTRAINT role_capability_capability_id_fkey FOREIGN KEY (capability_id) REFERENCES public.capability(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.system_role_assignment
+    ADD CONSTRAINT system_role_assignment_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.system_role(id) ON DELETE CASCADE;
 
 
 --
--- Name: role_capability role_capability_role_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: system_role_assignment system_role_assignment_system_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.role_capability
-    ADD CONSTRAINT role_capability_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.system_role(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.system_role_assignment
+    ADD CONSTRAINT system_role_assignment_system_id_fkey FOREIGN KEY (system_id) REFERENCES public.system(id) ON DELETE CASCADE;
+
+
+--
+-- Name: system_role_capability system_role_capability_capability_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.system_role_capability
+    ADD CONSTRAINT system_role_capability_capability_id_fkey FOREIGN KEY (capability_id) REFERENCES public.capability(id) ON DELETE CASCADE;
+
+
+--
+-- Name: system_role_capability system_role_capability_role_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.system_role_capability
+    ADD CONSTRAINT system_role_capability_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.system_role(id) ON DELETE CASCADE;
 
 
 --
@@ -2588,51 +2588,51 @@ ALTER TABLE ONLY public.standard_property
 
 
 --
--- Name: state state_datapoint_component_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: state state_component_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.state
-    ADD CONSTRAINT state_datapoint_component_id_fkey FOREIGN KEY (component_id) REFERENCES public.component(id) ON DELETE CASCADE;
+    ADD CONSTRAINT state_component_id_fkey FOREIGN KEY (component_id) REFERENCES public.component(id) ON DELETE CASCADE;
 
 
 --
--- Name: state state_datapoint_event_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.state
-    ADD CONSTRAINT state_datapoint_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.event(id) ON DELETE SET NULL;
-
-
---
--- Name: state state_datapoint_location_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: state state_event_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.state
-    ADD CONSTRAINT state_datapoint_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.location(id) ON DELETE CASCADE;
+    ADD CONSTRAINT state_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.event(id) ON DELETE SET NULL;
 
 
 --
--- Name: state state_datapoint_node_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.state
-    ADD CONSTRAINT state_datapoint_node_id_fkey FOREIGN KEY (node_id) REFERENCES public.node(principal_id) ON DELETE CASCADE;
-
-
---
--- Name: state state_datapoint_property_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: state state_location_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.state
-    ADD CONSTRAINT state_datapoint_property_id_fkey FOREIGN KEY (property_id) REFERENCES public.property(id) ON DELETE CASCADE;
+    ADD CONSTRAINT state_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.location(id) ON DELETE CASCADE;
 
 
 --
--- Name: state state_datapoint_system_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: state state_node_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.state
-    ADD CONSTRAINT state_datapoint_system_id_fkey FOREIGN KEY (system_id) REFERENCES public.system(id) ON DELETE CASCADE;
+    ADD CONSTRAINT state_node_id_fkey FOREIGN KEY (node_id) REFERENCES public.node(principal_id) ON DELETE CASCADE;
+
+
+--
+-- Name: state state_property_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.state
+    ADD CONSTRAINT state_property_id_fkey FOREIGN KEY (property_id) REFERENCES public.property(id) ON DELETE CASCADE;
+
+
+--
+-- Name: state state_system_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.state
+    ADD CONSTRAINT state_system_id_fkey FOREIGN KEY (system_id) REFERENCES public.system(id) ON DELETE CASCADE;
 
 
 --
@@ -2800,8 +2800,8 @@ drop table if exists product_property cascade;
 drop table if exists property cascade;
 drop table if exists property_value cascade;
 drop table if exists role cascade;
-drop table if exists role_assignment cascade;
-drop table if exists role_capability cascade;
+drop table if exists system_role_assignment cascade;
+drop table if exists system_role_capability cascade;
 drop table if exists secret cascade;
 drop table if exists secret_type cascade;
 drop table if exists service cascade;

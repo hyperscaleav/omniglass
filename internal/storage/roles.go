@@ -158,9 +158,9 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 		       coalesce(array_agg(distinct cap.name) filter (where cap.name is not null), '{}') as caps,
 		       coalesce(array_agg(distinct ac.name) filter (where ac.name is not null), '{}') as assigned
 		from roles
-		left join role_capability rc on rc.role_id = roles.id
+		left join system_role_capability rc on rc.role_id = roles.id
 		left join capability cap on cap.id = rc.capability_id
-		left join role_assignment ra on ra.role_id = roles.id
+		left join system_role_assignment ra on ra.role_id = roles.id
 		     and ra.system_id = (select id from system where name = $1)
 		left join component ac on ac.id = ra.component_id
 		group by roles.id, roles.name, roles.display_name, roles.quorum, roles.impact, roles.from_standard,
@@ -231,14 +231,14 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 		return err
 	}
 	if _, err := tx.Exec(ctx, `
-		insert into role_assignment (system_id, role_id, component_id)
+		insert into system_role_assignment (system_id, role_id, component_id)
 		values ((select id from system where name = $1), $2,
 		        (select id from component where name = $3))
 		on conflict (system_id, role_id, component_id) do nothing`,
 		systemName, roleID, componentName); err != nil {
 		return mapRoleWriteErr(err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "role_assignment", roleID, nil,
+	if err := writeAuditRes(ctx, tx, actorID, "update", "system_role_assignment", roleID, nil,
 		map[string]string{"system": systemName, "role": roleName, "component": componentName}); err != nil {
 		return err
 	}
@@ -276,7 +276,7 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 	}
 	var id string
 	if err := tx.QueryRow(ctx, `
-		delete from role_assignment
+		delete from system_role_assignment
 		where system_id = (select id from system where name = $1) and role_id = $2
 		  and component_id = (select id from component where name = $3)
 		returning id`, systemName, roleID, componentName).Scan(&id); err != nil {
@@ -285,7 +285,7 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 		}
 		return fmt.Errorf("storage: unassign role: %w", err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "role_assignment", id, nil, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "system_role_assignment", id, nil, nil); err != nil {
 		return err
 	}
 	// The assignment row is already gone, so walking the component's assignments
@@ -315,7 +315,7 @@ func (p *PG) resolveRole(ctx context.Context, q querier, systemName, roleName st
 		join system_role r
 		     on (r.owner_kind = 'system' and r.system_id = sys.id)
 		     or (r.owner_kind = 'standard' and r.standard_id = sys.standard_id)
-		left join role_capability rc on rc.role_id = r.id
+		left join system_role_capability rc on rc.role_id = r.id
 		left join capability cap on cap.id = rc.capability_id
 		where r.name = $2
 		group by r.id`, systemName, roleName).Scan(&id, &caps)

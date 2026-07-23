@@ -80,7 +80,7 @@ func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]
 		       coalesce(array_agg(cap.name order by cap.name)
 		                filter (where cap.name is not null), '{}') as caps
 		from system_role r
-		left join role_capability rc on rc.role_id = r.id
+		left join system_role_capability rc on rc.role_id = r.id
 		left join capability cap on cap.id = rc.capability_id
 		where r.owner_kind = $1 and r.%s = %s
 		group by r.id
@@ -168,12 +168,12 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 
 	// Wholesale replacement: clear what the role required, then install the set
 	// the caller sent, so the declaration is the whole truth after the write.
-	if _, err := tx.Exec(ctx, `delete from role_capability where role_id = $1`, r.ID); err != nil {
+	if _, err := tx.Exec(ctx, `delete from system_role_capability where role_id = $1`, r.ID); err != nil {
 		return nil, fmt.Errorf("storage: clear role capabilities %s: %w", r.ID, err)
 	}
 	if len(spec.Capabilities) > 0 {
 		if _, err := tx.Exec(ctx, `
-			insert into role_capability (role_id, capability_id)
+			insert into system_role_capability (role_id, capability_id)
 			select $1, (select id from capability where name = c or id::text = c)
 			from unnest($2::text[]) c
 			on conflict (role_id, capability_id) do nothing`, r.ID, spec.Capabilities); err != nil {
@@ -359,7 +359,7 @@ func (p *PG) SeedSystemRole(ctx context.Context, ownerKind, ownerID string, spec
 		return nil
 	}
 	if _, err := p.pool.Exec(ctx, `
-		insert into role_capability (role_id, capability_id)
+		insert into system_role_capability (role_id, capability_id)
 		select $1, (select id from capability where name = c or id::text = c)
 		from unnest($2::text[]) c
 		on conflict (role_id, capability_id) do nothing`, id, spec.Capabilities); err != nil {

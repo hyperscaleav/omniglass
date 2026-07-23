@@ -138,7 +138,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	}
 	var micCaps []string
 	if err := conn.QueryRow(ctx, `select array_agg(cap.name order by cap.name)
-		from system_role r join role_capability rc on rc.role_id = r.id
+		from system_role r join system_role_capability rc on rc.role_id = r.id
 		join capability cap on cap.id = rc.capability_id
 		where r.standard_id = (select id from standard where name = 'meeting-room') and r.name = 'room-mic'`).Scan(&micCaps); err != nil {
 		t.Fatalf("read room-mic capabilities: %v", err)
