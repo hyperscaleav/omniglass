@@ -23,11 +23,11 @@ func TestGrantsAndOwnerInvariant(t *testing.T) {
 	}
 	defer gw.Close()
 	for _, r := range []storage.Role{
-		{ID: "owner", Official: true, Permissions: []string{"*:*"}},
-		{ID: "viewer", Official: true, Permissions: []string{"*:read"}},
+		{Name: "owner", Official: true, Permissions: []string{"*:*"}},
+		{Name: "viewer", Official: true, Permissions: []string{"*:read"}},
 	} {
 		if err := gw.UpsertRole(ctx, r); err != nil {
-			t.Fatalf("seed role %s: %v", r.ID, err)
+			t.Fatalf("seed role %s: %v", r.Name, err)
 		}
 	}
 	zeros := make([]byte, 32)

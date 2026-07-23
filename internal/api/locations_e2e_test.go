@@ -407,7 +407,7 @@ func setupScopedPrincipal(t *testing.T, ctx context.Context, dsn, label string, 
 	}
 	for _, g := range grants {
 		if _, err := conn.Exec(ctx,
-			`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, $2, $3, $4)`,
+			`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = $2), $3, $4)`,
 			pid, g.role, g.scopeKind, g.scopeID); err != nil {
 			t.Fatalf("insert grant: %v", err)
 		}

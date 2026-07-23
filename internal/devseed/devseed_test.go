@@ -487,7 +487,7 @@ func assertGrant(t *testing.T, conn *pgx.Conn, ctx context.Context, username, ro
 	if err := conn.QueryRow(ctx, `
 		select g.scope_kind, g.scope_op, g.scope_id
 		from principal_grant g join human h on h.principal_id = g.principal_id
-		where h.username = $1 and g.role_id = $2`, username, role).Scan(&gotKind, &gotOp, &gotScopeID); err != nil {
+		where h.username = $1 and g.role_id = (select id from role where name = $2)`, username, role).Scan(&gotKind, &gotOp, &gotScopeID); err != nil {
 		t.Fatalf("read grant for %s/%s: %v", username, role, err)
 	}
 	if gotKind != scopeKind || gotOp != scopeOp {

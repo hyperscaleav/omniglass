@@ -3352,6 +3352,8 @@ components:
           type:
             - array
             - "null"
+        name:
+          type: string
         official:
           type: boolean
         permissions:
@@ -3362,6 +3364,7 @@ components:
             - "null"
       required:
         - id
+        - name
         - official
         - permissions
         - inherits

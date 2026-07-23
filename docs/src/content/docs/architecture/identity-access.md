@@ -188,12 +188,12 @@ are named `ListSystemRoles` / `SetSystemRole` / `DeleteSystemRole` rather than c
 `UpsertRole`.
 :::
 
-A role is a **capability set**: permissions per `(resource, action)`. Roles live in a `role` table keyed by a globally unique `id`, each carrying an **`official` boolean**:
+A role is a **capability set**: permissions per `(resource, action)`. Roles live in a `role` table with a uuid `id` and a globally unique, renameable `name` (the handle `owner` / `viewer` / `admin` / ... are addressed by), each carrying an **`official` boolean**:
 
 - **`official: true`**: ship-with the binary, seeded via the boot phase. A release can patch a default permission via `ON CONFLICT DO UPDATE` on the seed.
 - **`official: false`**: operator-created via the IAM API.
 
-**No overrides**: a role id is globally unique across both kinds (the create paths refuse an `official: false` role whose id matches an `official: true` one, and the seed phase fails-safe with a loud warning if it would collide with an existing operator role). This is a deliberate divergence from `datapoint_type` (where an org-scoped key may shadow an official one of the same name): role override risks lockout with no compensating use case, so a role id resolves to exactly one row.
+**No overrides**: a role name is globally unique across both kinds (the create paths refuse an `official: false` role whose name matches an `official: true` one, and the seed phase fails-safe with a loud warning if it would collide with an existing operator role). This is a deliberate divergence from the shadowable registries (where an org-scoped name may shadow an official one): role override risks lockout with no compensating use case, so a role name resolves to exactly one row.
 
 ### The five official roles
 

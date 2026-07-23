@@ -39,6 +39,7 @@ func TestRolesViewAPI(t *testing.T) {
 	var out struct {
 		Roles []struct {
 			ID                   string   `json:"id"`
+			Name                 string   `json:"name"`
 			DisplayName          string   `json:"display_name"`
 			Description          string   `json:"description"`
 			Official             bool     `json:"official"`
@@ -53,7 +54,7 @@ func TestRolesViewAPI(t *testing.T) {
 		eff           []string
 	}{}
 	for _, r := range out.Roles {
-		byID[r.ID] = struct {
+		byID[r.Name] = struct {
 			display, desc string
 			eff           []string
 		}{r.DisplayName, r.Description, r.EffectivePermissions}
@@ -113,6 +114,7 @@ func TestRolesViewNetPermissions(t *testing.T) {
 		PermissionUniverse []string `json:"permission_universe"`
 		Roles              []struct {
 			ID   string   `json:"id"`
+			Name string   `json:"name"`
 			Held []string `json:"held"`
 		} `json:"roles"`
 	}
@@ -152,10 +154,10 @@ func TestRolesViewNetPermissions(t *testing.T) {
 	for _, r := range out.Roles {
 		for _, h := range r.Held {
 			if !uniSet[h] {
-				t.Errorf("role %s held %q is not in the permission_universe", r.ID, h)
+				t.Errorf("role %s held %q is not in the permission_universe", r.Name, h)
 			}
 		}
-		held[r.ID] = r.Held
+		held[r.Name] = r.Held
 	}
 
 	// Owner (>) holds the entire universe.

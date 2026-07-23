@@ -36,21 +36,21 @@ func TestImpersonationAPI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into role (id, official, permissions, inherits) values ('loc-writer', false, $1, '{}')`,
+	if _, err := conn.Exec(ctx, `insert into role (name, official, permissions, inherits) values ('loc-writer', false, $1, '{}')`,
 		[]string{"location:create,update,delete"}); err != nil {
 		conn.Close(ctx)
 		t.Fatalf("insert role: %v", err)
 	}
 	// user-admin: all-scope principal management (can reach impersonation) with no
 	// infra authority. Inserted before the first request builds the lazy role index.
-	if _, err := conn.Exec(ctx, `insert into role (id, official, permissions, inherits) values ('user-admin', false, $1, '{}')`,
+	if _, err := conn.Exec(ctx, `insert into role (name, official, permissions, inherits) values ('user-admin', false, $1, '{}')`,
 		[]string{"principal:read,impersonate"}); err != nil {
 		conn.Close(ctx)
 		t.Fatalf("insert user-admin role: %v", err)
 	}
 	// grant-admin: authority over grants only (a non-tree resource), for the
 	// non-tree scope-escalation case below. Inserted before the lazy role index.
-	if _, err := conn.Exec(ctx, `insert into role (id, official, permissions, inherits) values ('grant-admin', false, $1, '{}')`,
+	if _, err := conn.Exec(ctx, `insert into role (name, official, permissions, inherits) values ('grant-admin', false, $1, '{}')`,
 		[]string{"principal_grant:create,delete"}); err != nil {
 		conn.Close(ctx)
 		t.Fatalf("insert grant-admin role: %v", err)

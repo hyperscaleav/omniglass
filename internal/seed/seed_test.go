@@ -45,7 +45,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	}
 
 	var ownerPerms []string
-	if err := conn.QueryRow(ctx, `select permissions from role where id = 'owner'`).Scan(&ownerPerms); err != nil {
+	if err := conn.QueryRow(ctx, `select permissions from role where name = 'owner'`).Scan(&ownerPerms); err != nil {
 		t.Fatalf("read owner role: %v", err)
 	}
 	if len(ownerPerms) != 1 || ownerPerms[0] != ">" {

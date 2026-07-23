@@ -1958,6 +1958,16 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   helper collapses in step: the per-registry `productRefCol` / `vendorRefCol` and the `registryHandles`
   set fold into one `registryRefCol(ref)`, since every registry behaves identically now. **Epic #262 is
   complete**: no foreign key anywhere points at a mutable string.
+- **`role` (IAM) takes a uuid primary key**, the last named entity still keyed by its slug. It gains a uuid
+  `id` and demotes the slug to a unique, renameable `name`, and its one inbound reference,
+  `principal_grant.role_id`, moves to the uuid. The RBAC engine is unchanged: it keys roles by name and
+  expands `inherits` by name, so the well-known handles (`owner` / `viewer` / `operator` / `deploy` /
+  `admin`) stay stable and the storage layer resolves `role_id` to a name on read and a name (or uuid) to
+  the uuid on write. The owner invariant, previously holding the literal slug `'owner'` in its trigger,
+  now resolves owner by name (`(select id from role where name = 'owner')`), and the roles view and grant
+  bodies carry the role's name beside the uuid. With this every named entity in the schema is uuid-keyed;
+  the only non-uuid identities left are deliberate (`node.principal_id`, the polymorphic `scope_id` /
+  `resource_id`, content-addressed `blob` / `task`).
 - **The observation tables lose the `_datapoint` genus**: `metric_datapoint` becomes `metric` and
   `state_datapoint` becomes `state`, matching their bare-noun sibling `event` on the principle that the
   noun is the entity and classification takes a `_type` / `_kind` suffix (the `datapoint_type` classifier

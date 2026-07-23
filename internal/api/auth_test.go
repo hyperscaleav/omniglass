@@ -144,7 +144,7 @@ func setupLimitedPrincipal(t *testing.T, ctx context.Context, dsn string) string
 	defer conn.Close(ctx)
 
 	if _, err := conn.Exec(ctx,
-		`insert into role (id, official, permissions, inherits) values ('limited', false, $1, '{}')`,
+		`insert into role (name, official, permissions, inherits) values ('limited', false, $1, '{}')`,
 		[]string{"alarm:ack"}); err != nil {
 		t.Fatalf("insert limited role: %v", err)
 	}
@@ -167,7 +167,7 @@ func setupLimitedPrincipal(t *testing.T, ctx context.Context, dsn string) string
 		t.Fatalf("insert credential: %v", err)
 	}
 	if _, err := conn.Exec(ctx,
-		`insert into principal_grant (principal_id, role_id, scope_kind) values ($1, 'limited', 'all')`,
+		`insert into principal_grant (principal_id, role_id, scope_kind) values ($1, (select id from role where name = 'limited'), 'all')`,
 		pid); err != nil {
 		t.Fatalf("insert grant: %v", err)
 	}

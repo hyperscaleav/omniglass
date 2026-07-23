@@ -44,7 +44,7 @@ func setupAllViewer(t *testing.T, ctx context.Context, dsn, label string) string
 		t.Fatalf("insert credential: %v", err)
 	}
 	if _, err := conn.Exec(ctx,
-		`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, 'viewer', 'all', null)`,
+		`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'viewer'), 'all', null)`,
 		pid); err != nil {
 		t.Fatalf("insert grant: %v", err)
 	}
