@@ -20,8 +20,8 @@ import (
 type interfaceBody struct {
 	ID          string          `json:"id" doc:"The interface's surrogate id (the address)"`
 	Name        string          `json:"name" doc:"The friendly name, unique within the owning component"`
-	Type        string          `json:"type" doc:"The interface_type name (the protocol)"`
-	TypeID      string          `json:"type_id" doc:"The interface_type's uuid, the stable form of type"`
+	Type        string          `json:"interface_type" doc:"The interface_type name (the protocol)"`
+	TypeID      string          `json:"interface_type_id" doc:"The interface_type's uuid, the stable form of interface_type"`
 	Component   *string         `json:"component,omitempty" doc:"The owning component name; absent for a server-hosted interface"`
 	ComponentID *string         `json:"component_id,omitempty" doc:"The owning component's id; the stable form of component"`
 	Node        *string         `json:"node,omitempty" doc:"The node placement name, if assigned"`
@@ -57,7 +57,7 @@ type interfacePathInput struct {
 
 type createInterfaceInput struct {
 	Body struct {
-		Type      string          `json:"type" minLength:"1" doc:"An interface_type name (the protocol); the interface is named by it, unique within the component"`
+		Type      string          `json:"interface_type" minLength:"1" doc:"An interface_type name (the protocol); the interface is named by it, unique within the component"`
 		Component *string         `json:"component,omitempty" doc:"Owning component, by name or id; omit for a server-hosted interface (needs an all-scoped grant)"`
 		Node      *string         `json:"node,omitempty" doc:"Node placement, by name or id"`
 		Params    json.RawMessage `json:"params,omitempty" doc:"Endpoint/target settings (jsonb)"`

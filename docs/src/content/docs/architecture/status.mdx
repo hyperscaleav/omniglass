@@ -1977,6 +1977,12 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   that let those name-only references slip past (the forward scan has no `*_id` field to trip on). `type`
   stays forward-covered on the primary interface body alone, since it also names an RFC-9457 error type
   and a secret field's data type. The `property_name` contract and value bodies are a follow-up.
+- **The interface's registry field is renamed `type` to `interface_type`** (with `interface_type_id`),
+  matching `location_type` and `secret_type` so the interface reference reads uniformly and can join the
+  guard's reverse set (a bare `type` could not, since it also names an RFC-9457 error type and a secret
+  field's data type). The create flag becomes `--interface-type`. The diagnostic reachability row keeps its
+  `interface_type` name-only (a display value never fed back to a write), recorded as an explicit
+  reverse-check exemption.
 - **The observation tables lose the `_datapoint` genus**: `metric_datapoint` becomes `metric` and
   `state_datapoint` becomes `state`, matching their bare-noun sibling `event` on the principle that the
   noun is the entity and classification takes a `_type` / `_kind` suffix (the `datapoint_type` classifier

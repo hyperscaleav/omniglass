@@ -141,7 +141,7 @@ function InterfaceBladeBody(props: { id: string }): JSX.Element {
         <div class="flex flex-col gap-4">
           <div class="flex items-center gap-3">
             <span class="text-base-content/40"><Sliders size={22} /></span>
-            <span class="badge badge-ghost badge-sm">{iface().type}</span>
+            <span class="badge badge-ghost badge-sm">{iface().interface_type}</span>
           </div>
 
           <Show when={err()}>
@@ -153,7 +153,7 @@ function InterfaceBladeBody(props: { id: string }): JSX.Element {
             fallback={
               <div class="grid grid-cols-2 gap-4">
                 <KVStacked label="Name" value={<span class="font-data">{iface().name}</span>} />
-                <KVStacked label="Type" value={<span class="badge badge-ghost badge-sm">{iface().type}</span>} />
+                <KVStacked label="Type" value={<span class="badge badge-ghost badge-sm">{iface().interface_type}</span>} />
                 <KVStacked label="Component" value={iface().component ? <span class="font-data">{iface().component}</span> : <span class="text-base-content/40">server-hosted</span>} />
                 <KVStacked label="Node" value={iface().node ? <span class="font-data">{iface().node}</span> : <span class="text-base-content/40">unassigned</span>} />
                 <KVStacked label="Target" value={interfaceTarget(iface()) ? <span class="font-data">{interfaceTarget(iface())}</span> : <span class="text-base-content/40">not set</span>} />
@@ -231,7 +231,7 @@ function CreateInterfaceForm(props: { onCreated: (i: Interface) => void; compone
     setErr(null);
     try {
       const created = await createInterface({
-        type: type(),
+        interface_type: type(),
         component: component() || undefined,
         node: node() || undefined,
         params: target().trim() ? { target: target().trim() } : undefined,

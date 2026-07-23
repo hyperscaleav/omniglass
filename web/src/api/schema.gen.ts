@@ -3252,12 +3252,12 @@ export interface components {
             readonly $schema?: string;
             /** @description Owning component, by name or id; omit for a server-hosted interface (needs an all-scoped grant) */
             component?: string;
+            /** @description An interface_type name (the protocol); the interface is named by it, unique within the component */
+            interface_type: string;
             /** @description Node placement, by name or id */
             node?: string;
             /** @description Endpoint/target settings (jsonb) */
             params?: unknown;
-            /** @description An interface_type name (the protocol); the interface is named by it, unique within the component */
-            type: string;
         };
         CreateLocationInputBody: {
             /**
@@ -3936,6 +3936,10 @@ export interface components {
             component_id?: string;
             /** @description The interface's surrogate id (the address) */
             id: string;
+            /** @description The interface_type name (the protocol) */
+            interface_type: string;
+            /** @description The interface_type's uuid, the stable form of interface_type */
+            interface_type_id: string;
             /** @description The friendly name, unique within the owning component */
             name: string;
             /** @description The node placement name, if assigned */
@@ -3944,10 +3948,6 @@ export interface components {
             node_id?: string;
             /** @description The endpoint/target settings (jsonb) */
             params?: unknown;
-            /** @description The interface_type name (the protocol) */
-            type: string;
-            /** @description The interface_type's uuid, the stable form of type */
-            type_id: string;
         };
         Keybindings: {
             /**
@@ -4524,12 +4524,12 @@ export interface components {
             history: components["schemas"]["ReachHistoryBody"][] | null;
             /** @description The interface name */
             interface: string;
+            /** @description The interface type (icmp, tcp, ...) */
+            interface_type: string;
             /** @description The per-layer probe signals that compose the verdict */
             layers: components["schemas"]["ReachLayerBody"][] | null;
             /** @description The node that probes this interface */
             node?: string;
-            /** @description The interface type (icmp, tcp, ...) */
-            type: string;
             /** @description The latest reachability verdict, or null if none yet */
             verdict: components["schemas"]["ReachVerdictBody"];
         };

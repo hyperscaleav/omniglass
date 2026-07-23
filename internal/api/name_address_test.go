@@ -41,7 +41,7 @@ var referenceFields = map[string]string{
 	"driver_id":          "driver",
 	"standard_id":        "standard",
 	"parent_standard_id": "parent_standard",
-	"type_id":            "type",
+	"interface_type_id":  "interface_type",
 	"location_type_id":   "location_type",
 	"secret_type_id":     "secret_type",
 }
@@ -50,13 +50,24 @@ var referenceFields = map[string]string{
 // registry by its handle must ALSO carry the uuid, so a name-only reference (which
 // the forward `*_id` scan cannot see, because there is no id field to trip on)
 // cannot slip through. Keyed by the NAME field, valued by the id field it requires.
-// Only unambiguous registry-name fields belong here: `type` is deliberately absent
-// (it also names an RFC-9457 error type and a secret-field data type, and the
-// diagnostic reachability row carries it name-only on purpose), so it stays
-// forward-covered on the primary interface body alone.
+// Only unambiguous registry-name fields belong here. The interface's registry
+// reference is `interface_type` (not a bare `type`, which also names an RFC-9457
+// error type and a secret field's data type), so it can be reverse-checked like
+// `location_type` and `secret_type`.
 var registryNameRefs = map[string]string{
-	"location_type": "location_type_id",
-	"secret_type":   "secret_type_id",
+	"location_type":  "location_type_id",
+	"secret_type":    "secret_type_id",
+	"interface_type": "interface_type_id",
+}
+
+// reverseNameOnlyOK exempts a specific `Schema.field` from the reverse check: a
+// diagnostic BFF row that carries a registry name for display where the id would
+// be dead weight. ReachInterfaceBody is the per-component reachability read; it
+// names its interface and its interface_type for the operator's eyes and is never
+// fed back to a write, so it carries them name-only on purpose, exactly as it
+// carries the interface name-only.
+var reverseNameOnlyOK = map[string]bool{
+	"ReachInterfaceBody.interface_type": true,
 }
 
 // Schemas where a *_id field addresses something with no name to pair it with.
@@ -137,6 +148,9 @@ func TestReferencesCarryBothForms(t *testing.T) {
 		// trip the forward scan, so check the curated registry-name fields directly.
 		for nameField, idField := range registryNameRefs {
 			if _, hasName := sch.Properties[nameField]; !hasName {
+				continue
+			}
+			if reverseNameOnlyOK[name+"."+nameField] {
 				continue
 			}
 			checked++

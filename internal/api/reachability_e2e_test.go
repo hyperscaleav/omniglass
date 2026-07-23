@@ -23,7 +23,7 @@ type reachResp struct {
 	Component  string `json:"component"`
 	Interfaces []struct {
 		Interface string `json:"interface"`
-		Type      string `json:"type"`
+		Type      string `json:"interface_type"`
 		Endpoint  string `json:"endpoint"`
 		Node      string `json:"node"`
 		Verdict   *struct {

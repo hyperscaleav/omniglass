@@ -113,7 +113,7 @@ function InterfaceRow(p: { iface: ReachInterface; manageId?: string; onManage?: 
           <div class="flex w-52 shrink-0 flex-col gap-0.5">
             <span class="truncate text-sm">{p.iface.interface}</span>
             <span class="truncate font-data text-[11px] text-base-content/50">
-              {p.iface.type}
+              {p.iface.interface_type}
               <Show when={p.iface.endpoint}> · {p.iface.endpoint}</Show>
             </span>
           </div>

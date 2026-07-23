@@ -1053,14 +1053,14 @@ Creates an interface owned by a component (or a server-hosted one, which needs a
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--component` | string | (none) | Owning component, by name or id; omit for a server-hosted interface (needs an all-scoped grant) |
+| `--interface-type` | string | (none) | An interface_type name (the protocol); the interface is named by it, unique within the component |
 | `--node` | string | (none) | Node placement, by name or id |
 | `--params` | string | (none) | Endpoint/target settings (jsonb) |
-| `--type` | string | (none) | An interface_type name (the protocol); the interface is named by it, unique within the component |
 
 Example:
 
 ```sh
-omniglass interface create --type type
+omniglass interface create --interface-type interface_type
 ```
 
 ### `omniglass interface delete`

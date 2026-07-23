@@ -141,9 +141,9 @@ automatically):
 
 ```sh
 # An interface owned by a component, placed on a node, with its probe target in params.
-# It is named by its protocol: --type is the interface_type, there is no --name flag.
+# It is named by its protocol: --interface-type is the interface_type, there is no --name flag.
 omniglass interface create \
-  --type tcp --component disp-1 --node edge-hq \
+  --interface-type tcp --component disp-1 --node edge-hq \
   --params '{"target":"10.0.0.1:22"}'                          # needs interface:create
 
 omniglass interface list
@@ -157,7 +157,7 @@ omniglass task get <id>
 ```
 
 The four built interface types are `icmp`, `tcp`, `ssh`, and `http`, and an interface is
-**named by its protocol** (the `--type`), unique within its component. An interface `update`
+**named by its protocol** (the `--interface-type`), unique within its component. An interface `update`
 changes only its node placement and params. A **task** is **derived** when its interface is
 created, so there is no `task create`, `update`, or `delete`; its placement follows the
 interface's. A node purge cascades its interfaces and their derived tasks.
