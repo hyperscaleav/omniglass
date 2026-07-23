@@ -42,7 +42,7 @@ var referenceFields = map[string]string{
 	"standard_id":        "standard",
 	"parent_standard_id": "parent_standard",
 	"interface_type_id":  "interface_type",
-	"property_id":        "property_name",
+	"property_type_id":   "property_type_name",
 	"location_type_id":   "location_type",
 	"secret_type_id":     "secret_type",
 }
@@ -56,10 +56,10 @@ var referenceFields = map[string]string{
 // error type and a secret field's data type), so it can be reverse-checked like
 // `location_type` and `secret_type`.
 var registryNameRefs = map[string]string{
-	"location_type":  "location_type_id",
-	"secret_type":    "secret_type_id",
-	"interface_type": "interface_type_id",
-	"property_name":  "property_id",
+	"location_type":      "location_type_id",
+	"secret_type":        "secret_type_id",
+	"interface_type":     "interface_type_id",
+	"property_type_name": "property_type_id",
 }
 
 // reverseNameOnlyOK exempts a specific `Schema.field` from the reverse check: a
@@ -141,10 +141,10 @@ func TestReferencesCarryBothForms(t *testing.T) {
 				continue
 			}
 			checked++
-			// A property's name appears as `property_name` on the contract and value
+			// A property's name appears as `property_type_name` on the contract and value
 			// bodies, but as `key` on the telemetry bodies (the event log), the
-			// datapoint-key vocabulary. Accept either as property_id's name pair.
-			if field == "property_id" {
+			// datapoint-key vocabulary. Accept either as property_type_id's name pair.
+			if field == "property_type_id" {
 				if _, hasKey := sch.Properties["key"]; hasKey {
 					continue
 				}

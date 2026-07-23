@@ -101,7 +101,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 		return
 	}
 
-	properties, err := s.store.ListProperties(ctx)
+	properties, err := s.store.ListPropertyTypes(ctx)
 	if err != nil {
 		s.nakOrTerm(msg) // transient registry read failure: redeliver (bounded)
 		return

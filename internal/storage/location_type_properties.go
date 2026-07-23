@@ -16,33 +16,33 @@ import (
 // The property catalog owns data_type and validation, so neither is repeated
 // here; a contract row only names the property and how the location type presents it.
 type LocationTypeProperty struct {
-	ID             string
-	LocationTypeID string
-	PropertyName   string
-	PropertyID     string
-	DefaultValue   json.RawMessage // nil when the contract sets no default
-	Required       bool
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	ID               string
+	LocationTypeID   string
+	PropertyTypeName string
+	PropertyTypeID   string
+	DefaultValue     json.RawMessage // nil when the contract sets no default
+	Required         bool
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // LocationTypePropertySpec is the write payload for one contract line. The property
 // is addressed by name, so a spec is complete on its own: there is no separate
 // create and update shape (a set is an upsert on the location type/property pair).
 type LocationTypePropertySpec struct {
-	PropertyName string
-	DefaultValue json.RawMessage
-	Required     bool
+	PropertyTypeName string
+	DefaultValue     json.RawMessage
+	Required         bool
 }
 
-const locationTypePropertyCols = `id, location_type_id, (select pr.name from property pr where pr.id = location_type_property.property_id) as property_name, location_type_property.property_id as property_id, default_value, required, created_at, updated_at`
+const locationTypePropertyCols = `id, location_type_id, (select pr.name from property_type pr where pr.id = location_type_property.property_type_id) as property_type_name, location_type_property.property_type_id as property_type_id, default_value, required, created_at, updated_at`
 
 func scanLocationTypeProperty(row pgx.Row) (*LocationTypeProperty, error) {
 	var (
 		pp  LocationTypeProperty
 		def []byte // NULL when the contract sets no default
 	)
-	if err := row.Scan(&pp.ID, &pp.LocationTypeID, &pp.PropertyName, &pp.PropertyID, &def, &pp.Required, &pp.CreatedAt, &pp.UpdatedAt); err != nil {
+	if err := row.Scan(&pp.ID, &pp.LocationTypeID, &pp.PropertyTypeName, &pp.PropertyTypeID, &def, &pp.Required, &pp.CreatedAt, &pp.UpdatedAt); err != nil {
 		return nil, err
 	}
 	pp.DefaultValue = copyRaw(def)
@@ -61,8 +61,8 @@ func mapLocationTypePropertyWriteErr(err error) error {
 		case "23505": // unique_violation
 			return ErrTypeExists
 		case "23503": // foreign_key_violation
-			if pgErr.ConstraintName == "location_type_property_property_id_fkey" {
-				return ErrPropertyNotFound
+			if pgErr.ConstraintName == "location_type_property_property_type_id_fkey" {
+				return ErrPropertyTypeNotFound
 			}
 			return ErrTypeNotFound
 		}
@@ -71,23 +71,23 @@ func mapLocationTypePropertyWriteErr(err error) error {
 }
 
 // upsertLocationTypePropertyRow writes one contract line, keyed by the unique
-// (location_type_id, property_name): the first write inserts, a later one revises the
+// (location_type_id, property_type_name): the first write inserts, a later one revises the
 // default and the required flag in place. Shared by the audited operator path
 // and the boot-seed path so both keep the same semantics. It runs on any
 // querier, so the seed path needs no transaction for its single statement.
 func upsertLocationTypePropertyRow(ctx context.Context, q querier, locationTypeID string, spec LocationTypePropertySpec) (*LocationTypeProperty, error) {
-	if err := requireProperty(ctx, q, spec.PropertyName); err != nil {
+	if err := requireProperty(ctx, q, spec.PropertyTypeName); err != nil {
 		return nil, err
 	}
 	pp, err := scanLocationTypeProperty(q.QueryRow(ctx, `
-		insert into location_type_property (location_type_id, property_id, default_value, required)
-		values ((select id from location_type where `+registryRefCol(locationTypeID)+` = $1), (select id from property where name = $2), $3, $4)
-		on conflict (location_type_id, property_id) do update
+		insert into location_type_property (location_type_id, property_type_id, default_value, required)
+		values ((select id from location_type where `+registryRefCol(locationTypeID)+` = $1), (select id from property_type where name = $2), $3, $4)
+		on conflict (location_type_id, property_type_id) do update
 			set default_value = excluded.default_value,
 			    required      = excluded.required,
 			    updated_at    = now()
 		returning `+locationTypePropertyCols,
-		locationTypeID, spec.PropertyName, []byte(spec.DefaultValue), spec.Required))
+		locationTypeID, spec.PropertyTypeName, []byte(spec.DefaultValue), spec.Required))
 	if err != nil {
 		return nil, mapLocationTypePropertyWriteErr(err)
 	}
@@ -99,7 +99,7 @@ func upsertLocationTypePropertyRow(ctx context.Context, q querier, locationTypeI
 // location type is indistinguishable from one with an empty contract, since the read
 // side has nothing to disclose.
 func (p *PG) ListLocationTypeProperties(ctx context.Context, locationTypeID string) ([]LocationTypeProperty, error) {
-	rows, err := p.pool.Query(ctx, `select `+locationTypePropertyCols+` from location_type_property where location_type_id = (select id from location_type where `+registryRefCol(locationTypeID)+` = $1) order by (select pr.name from property pr where pr.id = location_type_property.property_id)`, locationTypeID)
+	rows, err := p.pool.Query(ctx, `select `+locationTypePropertyCols+` from location_type_property where location_type_id = (select id from location_type where `+registryRefCol(locationTypeID)+` = $1) order by (select pr.name from property_type pr where pr.id = location_type_property.property_type_id)`, locationTypeID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list location type properties %q: %w", locationTypeID, err)
 	}
@@ -134,12 +134,12 @@ func (p *PG) SetLocationTypeProperty(ctx context.Context, actorID, locationTypeI
 	// The before-image decides create vs update and gives the audit its old side.
 	var before any
 	prior, err := scanLocationTypeProperty(tx.QueryRow(ctx,
-		`select `+locationTypePropertyCols+` from location_type_property where location_type_id = (select id from location_type where `+registryRefCol(locationTypeID)+` = $1) and property_id = (select id from property where name = $2)`,
-		locationTypeID, spec.PropertyName))
+		`select `+locationTypePropertyCols+` from location_type_property where location_type_id = (select id from location_type where `+registryRefCol(locationTypeID)+` = $1) and property_type_id = (select id from property_type where name = $2)`,
+		locationTypeID, spec.PropertyTypeName))
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 	case err != nil:
-		return nil, fmt.Errorf("storage: load location type property %q/%q: %w", locationTypeID, spec.PropertyName, err)
+		return nil, fmt.Errorf("storage: load location type property %q/%q: %w", locationTypeID, spec.PropertyTypeName, err)
 	default:
 		before = prior
 	}
@@ -178,7 +178,7 @@ func (p *PG) DeleteLocationTypeProperty(ctx context.Context, actorID, locationTy
 	// the withdrawn declaration and a missing row is caught without a second read.
 	before, err := scanLocationTypeProperty(tx.QueryRow(ctx, `
 		delete from location_type_property
-		where location_type_id = (select id from location_type where `+registryRefCol(locationTypeID)+` = $1) and property_id = (select id from property where name = $2)
+		where location_type_id = (select id from location_type where `+registryRefCol(locationTypeID)+` = $1) and property_type_id = (select id from property_type where name = $2)
 		returning `+locationTypePropertyCols, locationTypeID, propertyName))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrTypeNotFound

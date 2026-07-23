@@ -14,7 +14,7 @@ const seed: ComponentEvents = {
     {
       ts: nowIso,
       key: "syslog.line",
-      property_id: "0192a5f0-1111-7000-8000-0000000000a1",
+      property_type_id: "0192a5f0-1111-7000-8000-0000000000a1",
       instance: "eth0",
       message: "link state changed to up",
       provenance: "observed",
@@ -24,7 +24,7 @@ const seed: ComponentEvents = {
     {
       ts: nowIso,
       key: "snmp.trap",
-      property_id: "0192a5f0-2222-7000-8000-0000000000a2",
+      property_type_id: "0192a5f0-2222-7000-8000-0000000000a2",
       message: "coldStart",
       provenance: "observed",
       source: "snmp",

@@ -18,7 +18,7 @@ import (
 // and reject-not-project drops an unregistered name (no row produced for it).
 func TestDeriveDatapoints(t *testing.T) {
 	metric := "metric"
-	reg := collection.NewRegistry([]storage.Property{
+	reg := collection.NewRegistry([]storage.PropertyType{
 		{Name: "tcp.open", Kind: &metric},
 		{Name: "tcp.connect_time", Kind: &metric},
 	})
@@ -53,7 +53,7 @@ func TestDeriveDatapoints(t *testing.T) {
 // dropped (reject-not-project).
 func TestDeriveDatapointsRoutesByKind(t *testing.T) {
 	metric, state, logKind := "metric", "state", "log"
-	reg := collection.NewRegistry([]storage.Property{
+	reg := collection.NewRegistry([]storage.PropertyType{
 		{Name: "tcp.open", Kind: &metric},
 		{Name: "interface.reachable", Kind: &state},
 		{Name: "some.log", Kind: &logKind},

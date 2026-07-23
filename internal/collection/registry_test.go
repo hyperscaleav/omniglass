@@ -9,7 +9,7 @@ import (
 
 func TestRegistryAllows(t *testing.T) {
 	metric := "metric"
-	reg := collection.NewRegistry([]storage.Property{
+	reg := collection.NewRegistry([]storage.PropertyType{
 		{Name: "tcp.open", Kind: &metric},
 		{Name: "icmp.reachable", Kind: &metric},
 	})

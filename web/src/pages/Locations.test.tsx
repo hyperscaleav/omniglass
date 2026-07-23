@@ -26,8 +26,8 @@ const types: LocationType[] = [
 // The campus type's contract, resolved against hq: one inherited default, plus one
 // value hq sets that no contract declares.
 const hqProperties: EffectiveProperty[] = [
-  { property_name: "site.timezone", property_id: "site.timezone-id", display_name: "Time zone", data_type: "string", required: false, is_set: false, from_contract: true, default_value: "UTC", value: "UTC" },
-  { property_name: "site.note", property_id: "site.note-id", display_name: "Note", data_type: "string", required: false, is_set: true, from_contract: false, set_value: "leased", value: "leased", value_id: "v-note" },
+  { property_type_name: "site.timezone", property_type_id: "site.timezone-id", display_name: "Time zone", data_type: "string", required: false, is_set: false, from_contract: true, default_value: "UTC", value: "UTC" },
+  { property_type_name: "site.note", property_type_id: "site.note-id", display_name: "Note", data_type: "string", required: false, is_set: true, from_contract: false, set_value: "leased", value: "leased", value_id: "v-note" },
 ];
 
 function mount(path: string, extraLocations: Location[] = []) {
@@ -222,7 +222,7 @@ describe("Locations properties panel", () => {
       try { body = await req.clone().text(); } catch { body = ""; }
       calls.push({ method: req.method, url: req.url, body });
       if (req.method === "PUT") {
-        return new Response(JSON.stringify({ location: "hq", property_name: "site.timezone", property_id: "site.timezone-id", value: "America/Denver", value_id: "v-1" }), {
+        return new Response(JSON.stringify({ location: "hq", property_type_name: "site.timezone", property_type_id: "site.timezone-id", value: "America/Denver", value_id: "v-1" }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         });

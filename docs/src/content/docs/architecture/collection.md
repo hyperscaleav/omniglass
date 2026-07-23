@@ -202,7 +202,7 @@ names what to read.
 Every fixed built-in name (`icmp.reachable`/`icmp.rtt_avg`, `tcp.open`/
 `tcp.connect_time`, `udp.open`, `snmp.reachable`, `http.reachable`/
 `http.status_code`/`http.response_time`, and `<proto>.reachable`/`<proto>.response_time`
-for the text family) is a **registered canonical `datapoint_type`** in the ship-with registry,
+for the text family) is a **registered canonical `property_type`** in the ship-with registry,
 so probe/liveness results persist as datapoints, not only as raw wire
 bytes. They are owner-agnostic measurements like any other: unregistered,
 reject-not-project would drop them at ingest. `registry.seed_validation_test`'s
@@ -213,7 +213,7 @@ un-derived.
 For `snmp`, each OID is carried in its **native SNMP type**: numeric OIDs as
 numbers, string OIDs (OctetString / IPAddress / OID) as text, so a string-valued
 OID (an enum or label) lands as a `state` datapoint and a numeric one as
-`metric`. The owning table is decided at ingest from the key's `datapoint_type`
+`metric`. The owning table is decided at ingest from the key's `property_type`
 kind. Per-OID declared typing and richer collection specs live on the component
 template (the template declares the OID set, demoting `task.params.oids` to an
 override). SNMP runs v2c with a plaintext community or v3 with auth/priv; the
@@ -372,7 +372,7 @@ datapoints:
 ```
 
 The extractor names a `key`. What that key *means* (kind, value type, unit, validation,
-fusion) lives on the [`datapoint_type`](/architecture/datapoints/#the-datapoint_type-registry) registry at some
+fusion) lives on the [`property_type`](/architecture/datapoints/#the-property_type-registry) registry at some
 [scope](/architecture/datapoints/#key-scope-template-org-official): a template declares its own keys at
 **template** scope (no registry friction), or references an **org** / **official** key. Compile-time
 validation resolves every key to a reachable scope (template keys self-resolve; referenced org/official
@@ -494,8 +494,8 @@ it (against the codec, occupancy) before downing the room. See [health](/archite
 
 A multiplexed source emits a row tagged with an external identity (a Zoom Room ID, a controller's
 slot number); binding that row to an Omniglass owner is a lookup against a **value-to-owner index**.
-The index is an **identity arc** on identity config: a `(datapoint_type, value) -> owner` mapping,
-where `datapoint_type` is the **match key** (the canonical identity key, e.g. `zoom.room_id`) and
+The index is an **identity arc** on identity config: a `(property_type, value) -> owner` mapping,
+where `property_type` is the **match key** (the canonical identity key, e.g. `zoom.room_id`) and
 `value` is the external identity the source emitted. The index resolves **in the cascade scope** the
 identity config is set at, so an identity declared at a system or location scope binds the rows of
 every member below it.
@@ -504,10 +504,10 @@ Two sides can supply the match value, and **precedence** is explicit:
 
 - A **declared identity config value** (an identity the operator set on the target) **wins**.
 - It falls back to the **observed identity datapoint** that shares the same key (a value the device
-  itself reported under that `datapoint_type`).
+  itself reported under that `property_type`).
 
 So ownership resolution reads the **resolved identity** for the key (declared over observed), matches
-the emitted `(datapoint_type, value)` against the index, and binds the row to the owner the index
+the emitted `(property_type, value)` against the index, and binds the row to the owner the index
 names. The [datapoints](/architecture/datapoints/) ownership-resolution machinery reads this same
 index.
 
@@ -515,15 +515,15 @@ index.
 
 A `discovery_rule` turns the **orphan / unmatched stream** into proposed entities. Its **input** is
 every emitted identity that the value-to-owner index does **not** resolve: an unmatched
-`(datapoint_type, value)` from a shared-API batch, plus the **out-of-placement labels** a node emits
+`(property_type, value)` from a shared-API batch, plus the **out-of-placement labels** a node emits
 for owners outside its placement visible_set (above). Pointing a `discovery_rule` at a source is the
 onboarding win: it auto-creates the entities and sets their identity, so you never hand-map.
 
 - **What it creates.** Candidate components or owners, each seeded with the identity that surfaced it
-  (the `(datapoint_type, value)` becomes the new entity's identity arc), so the next batch from the
+  (the `(property_type, value)` becomes the new entity's identity arc), so the next batch from the
   same source resolves through the index instead of orphaning.
 - **Idempotent on re-discovery.** Re-seeing an identity the rule already materialized does **not**
-  create a duplicate: the rule keys on the `(datapoint_type, value)` it already bound, so a steady
+  create a duplicate: the rule keys on the `(property_type, value)` it already bound, so a steady
   stream of the same orphan resolves to one candidate.
 - **Scope and standing.** A `discovery_rule` carries a cascade **scope** and an `official` / private
   standing like the other rule families (`event_rule`, calc), so a ship-with `official` rule and an

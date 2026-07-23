@@ -3114,8 +3114,8 @@ func generatedCommands() []*cobra.Command {
 	}())
 	roots = append(roots, func() *cobra.Command {
 		parent := &cobra.Command{
-			Use:   "property",
-			Short: "Commands for the property resource",
+			Use:   "property-type",
+			Short: "Commands for the property-type resource",
 		}
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
@@ -3129,11 +3129,11 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a property",
-					Long:    "Registers a custom property (official=false). The name must be a valid property key. Gated by property:create.",
-					Example: "  omniglass property create --data-type data_type --name name",
+					Long:    "Registers a custom property (official=false). The name must be a valid property key. Gated by property_type:create.",
+					Example: "  omniglass property-type create --data-type data_type --name name",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/properties")
+						path := fmt.Sprintf("/api/v1/property-types")
 						body := map[string]any{}
 						if cmd.Flags().Changed("data-type") {
 							body["data_type"] = fDataType
@@ -3177,11 +3177,11 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <name>",
 					Short:   "Delete a property",
-					Long:    "Removes a custom property by name. Official properties are read-only. Gated by property:delete.",
-					Example: "  omniglass property delete <name>",
+					Long:    "Removes a custom property by name. Official properties are read-only. Gated by property_type:delete.",
+					Example: "  omniglass property-type delete <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/properties/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/property-types/%s", url.PathEscape(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -3194,11 +3194,11 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "get <name>",
 					Short:   "Get a property",
-					Long:    "Returns one property by name. Gated by property:read.",
-					Example: "  omniglass property get <name>",
+					Long:    "Returns one property by name. Gated by property_type:read.",
+					Example: "  omniglass property-type get <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/properties/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/property-types/%s", url.PathEscape(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -3211,11 +3211,11 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List properties",
-					Long:    "Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property:read.",
-					Example: "  omniglass property list",
+					Long:    "Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property_type:read.",
+					Example: "  omniglass property-type list",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/properties")
+						path := fmt.Sprintf("/api/v1/property-types")
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -3232,11 +3232,11 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a property",
-					Long:    "Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property:update.",
-					Example: "  omniglass property update <name>",
+					Long:    "Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property_type:update.",
+					Example: "  omniglass property-type update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/properties/%s", url.PathEscape(args[0]))
+						path := fmt.Sprintf("/api/v1/property-types/%s", url.PathEscape(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("description") {
 							body["description"] = fDescription

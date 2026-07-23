@@ -8,7 +8,7 @@ sidebar:
 ---
 
 :::caution[Direction: ADR-0063 makes the value store a provenance-keyed cache]
-Under [ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables) the `property_value` store becomes **`property`**, a latest-value cache keyed by `(owner, property_type, instance, provenance)`; `declared` config resolves on demand from the cascade rather than rowing into it, while `intended` is stored for command settlement. This page is rewritten to that model in the slice that builds it.
+The store is now named `property` per [ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables) (was `property_value`, built). Still directional, not yet built: making it a latest-value cache keyed by `(owner, property_type, instance, provenance)`, with `declared` config resolved on demand from the cascade rather than stored, while `intended` is stored for command settlement.
 :::
 
 :::note[Partial: the secret and variable members are built; config is Design]
@@ -31,7 +31,7 @@ store** are built for the `declared` provenance on a component, system, location
 cross-owner cascade, macro interpolation, and the other provenance producers are
 deferred; its section is below. (The standalone **fields** feature folded into it: a field was a property with
 `declared` provenance,
-[ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value).) The
+[ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property).) The
 **config** member stays `Design`, so this page is `Partial`. (`secret` was renamed from `credential`; the ADR
 anchor keeps the old term.)
 :::
@@ -41,7 +41,7 @@ most-specific-wins down the [cascade](/architecture/cascade/) on every poll and 
 kinds share that resolution but differ in what they are keyed to and what lifecycle they carry:
 
 - **config** (`Design`): a device setting you declare. Keyed by a **canonical signal** (a
-  `datapoint_type`), so it has an observed side and can be reconciled.
+  `property_type`), so it has an observed side and can be reconciled.
 - **secret** (**built**): an access secret, encrypted at rest. Its own `secret_type` shape registry,
   envelope crypto behind a pluggable KEK provider, resolved down the cascade and consumed by a `$sec:`
   token.
@@ -51,7 +51,7 @@ kinds share that resolution but differ in what they are keyed to and what lifecy
 | | **config** | **secret** | **variable** (macro) |
 |---|---|---|---|
 | what it is | a declared device setting | an access secret, encrypted at rest | a free interpolated value |
-| keyed by | a canonical signal (`datapoint_type`) | its own `secret_type` shape name | an org config key (cascade namespace) |
+| keyed by | a canonical signal (`property_type`) | its own `secret_type` shape name | an org config key (cascade namespace) |
 | has an observed side? | yes, a datapoint via a get function | its **validity**, not the secret value | no |
 | lifecycle | drift → reconcile (a set function) | refresh + rotation + expiry (deferred) | none; resolved and interpolated |
 | example | `video.input = HDMI1` | an `snmp-community`, a `basic-auth` | `poll_interval = 30s`, a base URL, a label |
@@ -75,7 +75,7 @@ tables); it is one signal with two homes, and their gap is **drift**.
 Keying config to the signal registry instead of a private name is what removes the import problem: a
 component template **brings no keys, it references registered ones**, exactly as it does for the
 datapoints it reads. Two display templates that both touch `video.input` are two references to one
-governed key, not a collision. Config reuses the `datapoint_type`'s value domain, so a declared value
+governed key, not a collision. Config reuses the `property_type`'s value domain, so a declared value
 is validated against the same `{values: […]}` the observed side uses.
 
 **The template is the source of truth for configurability.** A signal becomes settable on a device
@@ -88,7 +88,7 @@ Each piece of a config item has one home, joined by the canonical key:
 
 | Piece | What it holds | Lives in |
 |---|---|---|
-| signal definition | key, kind, value domain, unit | `datapoint_type` (the registry) |
+| signal definition | key, kind, value domain, unit | `property_type` (the registry) |
 | get / set binding | how this device class reads and writes the signal | the **component_template** version |
 | declared value | the intent (`HDMI1`), plus the per-item `reconcile` policy | the **config table** (cascaded) |
 | observed value | what the device reports (`HDMI2`) | `state` rows (observed) |
@@ -277,7 +277,7 @@ JSON Schema `validation`, plus a nullable observed `kind`), with seed-owned `off
 ([ADR-0043](/architecture/decisions/#adr-0043-the-property-catalog)). Three **classifier contracts** carry
 the declaration, all the same shape: **`product_property`** (for a component), **`standard_property`** (for
 a system), and **`location_type_property`** (for a location), each naming a catalog property with an
-optional `default_value` and a `required` flag, unique per `(classifier, property)`. **`property_value`** is
+optional `default_value` and a `required` flag, unique per `(classifier, property)`. **`property`** is
 the value store, on the **same owner exclusive-arc** as the datapoint sinks and `event`, carrying an
 `instance` discriminator and a **`provenance`**; the write path fills `provenance=declared`. The read is
 **`EffectiveProperties(ownerKind, ownerID)`**, one parameterized query serving **component, system,
@@ -290,7 +290,7 @@ permission, the values gated by the owning entity's `:read` / `:update` and ABAC
 the generated CLI and typed client, and the console (a **Declared properties** editor on the product,
 standard, and location type blades, and a **Properties** panel on the component, system, and location
 details). The rest of the design below is **deferred**, listed plainly so a built badge never hides drift
-([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)).
+([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property)).
 :::
 
 A **property** is one typed name used three ways: the **catalog** says the name exists and what it means,
@@ -328,7 +328,7 @@ What the design intends, and this slice does **not** yet do:
   **node** still has no classifier to declare one, by design.
 
 The Properties panel can set, re-set, and **clear** a value: the effective read returns the
-`property_value` id (`value_id`) alongside the literal, so each override row offers a **revert** control
+`property` id (`value_id`) alongside the literal, so each override row offers a **revert** control
 that deletes the value and falls back to the contract default (the owning entity's own `:update` write,
 since a value belongs to its owner).
 
@@ -369,7 +369,7 @@ a `maintenance_window`.
 Value-domain normalization. Key normalization is settled (the governed registry plus the `tag:create`
 gate). The open part is the **value** side: whether a tag key may **constrain** its values (an enum or
 `value_type` on the key, so `environment` accepts only its allowed set, validated and autocompleted like
-a `datapoint_type` domain), and whether it may **normalize** them on input through an Expr transform
+a `property_type` domain), and whether it may **normalize** them on input through an Expr transform
 (lowercase, trim whitespace, fold synonyms) so `Prod`, `prod `, and `PROD` resolve to one value.
 Free-text values ship either way; the question is how much governance a key places on its values.
 :::
@@ -385,7 +385,7 @@ Free-text values ship either way; the question is how much governance a key plac
   not `node`-owned).
 - **Typing.** A secret takes a structured `secret_type` shape registry (per-field secrecy and origin);
   a variable types inline against its `value_type` (a scalar, validated in the app, no registry); config
-  instead borrows the `datapoint_type`'s domain, because its key *is* a signal.
+  instead borrows the `property_type`'s domain, because its key *is* a signal.
 - **Interpolation** renders variables (`$var:`) and secret fields (`$sec:`) into requests (a later
   consumer slice for both); config is read by key like a datapoint. Secrets are **masked** in every
   read and surface in the clear only through the audited reveal; a variable is plaintext.
@@ -444,7 +444,7 @@ exclusive-arc scope either way.
 | `variable` | (name, **owner arc**), **value_type** (`string`/`int`/`float`/`bool`/`json`), **value** (jsonb) | **Built.** The plaintext variable cell and the `$var:` cascade key; scope is the exclusive arc. Typed inline (no `variable_type` registry: the value is validated against `value_type` in the app), no observed side. The **config** cell (declared/observed/reconcile) is a separate, deferred member |
 | `property` | name (PK), **official**, **data_type** (`string`/`int`/`float`/`bool`/`json`), nullable **kind** (`metric`/`state`/`log`), display_name, unit, **validation** (JSON Schema) | **Built.** The primitive-agnostic **catalog** of typed names, the single source for what a name means whoever produces it; seed-owned `official` rows are read-only. Value tables key by the **name string**, so the catalog governs the vocabulary without owning the values ([ADR-0043](/architecture/decisions/#adr-0043-the-property-catalog)) |
 | `product_property` / `standard_property` / `location_type_property` | (**classifier**, **property**), **default_value** (jsonb), **required** | **Built.** The classifier's declared-property **contract**, one table per classifier and all the same shape: which catalog properties every instance of that product, standard, or location type exposes, with an optional default and a required flag, unique per pair. `data_type` and `validation` are **not** repeated here, they stay on `property`. Replaces the retired `field_definition`. A driver access/mode column is deferred; a `node` has no classifier by design |
-| `property_value` | (**owner arc**, property, **instance**, **provenance**), **value** (jsonb) | **Built for `declared` on all four owner kinds.** The value store, on the **same exclusive arc** as the datapoint sinks and `event`; the series key is `unique nulls not distinct`, since the arc leaves three owner columns NULL. The effective read is **contract-default-or-override** plus the off-contract set (`is_set` marks the override, `value_id` carries the row id so the UI can clear it), resolved by one owner-generic query and ABAC-scoped on **every** arc, read and write. Replaces the retired `field_value`. The `observed`/`calculated`/`intended` producers, macro-string values, and the cross-owner cascade are deferred |
+| `property` | (**owner arc**, property, **instance**, **provenance**), **value** (jsonb) | **Built for `declared` on all four owner kinds.** The value store, on the **same exclusive arc** as the datapoint sinks and `event`; the series key is `unique nulls not distinct`, since the arc leaves three owner columns NULL. The effective read is **contract-default-or-override** plus the off-contract set (`is_set` marks the override, `value_id` carries the row id so the UI can clear it), resolved by one owner-generic query and ABAC-scoped on **every** arc, read and write. Replaces the retired `field_value`. The `observed`/`calculated`/`intended` producers, macro-string values, and the cross-owner cascade are deferred |
 | `tag` | name, applies_to, propagates | **Built.** The **tenant-wide governed key vocabulary**; minting a key needs `tag:create` ([identity and access](/architecture/identity-access/)). No `_type`, no namespace; values bind via `tag_binding`. See [tags](/architecture/tags/) |
 | `tag_binding` | (tag, **owner arc**), value | **Built.** The `key: value` binding: **union on key, override on value** down the [cascade](/architecture/cascade/), owned on the exclusive arc (`platform / location / system / component`); setting a value is the owner's own `update` write. Binding via groups and a `template`-scoped binding are deferred |
 

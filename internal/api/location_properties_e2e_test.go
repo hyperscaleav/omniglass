@@ -25,7 +25,7 @@ type locationPropertiesWire struct {
 func (w locationPropertiesWire) find(t *testing.T, name string) effectivePropertyWire {
 	t.Helper()
 	for _, p := range w.Properties {
-		if p.PropertyName == name {
+		if p.PropertyTypeName == name {
 			return p
 		}
 	}

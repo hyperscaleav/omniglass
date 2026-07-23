@@ -17,11 +17,11 @@ trees with full scoped CRUD; a delete is refused while a structural child remain
 carries an **optional classifier** that declares what its instances expose: a component points at its
 **`product`**, a system conforms to a **`standard`**, a location is typed by its **`location_type`**
 (the `component_type` registry retired,
-[ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value); the
+[ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property); the
 `system_type` registry was promoted to `standard`,
 [ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)). The
 **exclusive-arc** owner columns are now real, carrying the datapoint sinks, the **`event`** log sink
-(see [The event sink](#the-event-sink-the-first-arc-owned-occurrence) below), and **`property_value`**
+(see [The event sink](#the-event-sink-the-first-arc-owned-occurrence) below), and **`property`**
 (see [Declared properties](#declared-properties-the-classifier-contracts-and-the-value-store) below); a
 component, system, and location each own a recorded **[health](/architecture/health/)** series on that
 same arc. A system also declares the **roles** it needs filled, staffed by components whose **resolved
@@ -150,12 +150,12 @@ every system that conforms, until that system overrides one. See the
 A classifier does not only classify, it **declares what its instances expose**. Three tables carry that
 declaration, one per classifier, all the same shape: **`product_property`** (a component's), **`standard_property`**
 (a system's), and **`location_type_property`** (a location's). Each is one row per declared property
-(`<classifier>_id`, `property_name` referencing the [`property` catalog](/architecture/variables/), an
+(`<classifier>_id`, `property_type_name` referencing the [`property_type` catalog](/architecture/variables/), an
 optional `default_value` in jsonb, and a `required` flag), unique per `(classifier, property)`. Type and
 validation are deliberately **not** repeated here: they live on the property, which stays the single
 source for what a name means.
 
-The value lives in **`property_value`**, which carries the **same owner exclusive-arc** as the datapoint
+The value lives in **`property`**, which carries the **same owner exclusive-arc** as the datapoint
 sinks and `event` (`owner_kind` plus `component_id` / `system_id` / `location_id` / `node_id`, one-set
 CHECK), plus the property name, an `instance` discriminator, a **`provenance`**, and the jsonb `value`.
 Provenance is what makes the fold work: the same table holds a value an operator **declared**, a value a
@@ -191,7 +191,7 @@ is a non-disclosing 404, not a silent success.
 
 This pair replaces the retired `field_definition` / `field_value` feature: a "field" was always a property
 with **declared** provenance, and the catalog it hung off is now the classifier's contract
-([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)). See
+([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property)). See
 the [Properties guide](/guides/admin/properties/) for the operator surface.
 
 ### System roles: the slots a system needs filled
@@ -212,7 +212,7 @@ Five tables carry it:
 | Table | Key columns | Notes |
 |---|---|---|
 | `system_member` | (`system_id`, `component_id`, **`is_primary`**) | **membership**: the binding a role attaches to, many-valued, cascading from both ends |
-| `system_role` | `owner_kind` + `standard_id` / `system_id` (the arc), `name`, `display_name`, **`quorum`**, **`impact`** | the slot itself; the arc is the one `property_value` uses, with a one-set CHECK and a `unique nulls not distinct` key over the arc plus name |
+| `system_role` | `owner_kind` + `standard_id` / `system_id` (the arc), `name`, `display_name`, **`quorum`**, **`impact`** | the slot itself; the arc is the one `property` uses, with a one-set CHECK and a `unique nulls not distinct` key over the arc plus name |
 | `system_role_capability` | (`role_id`, `capability_id`) | what the role requires, **conjunctive**: a component must provide **every** listed capability |
 | `component_capability` | (`component_id`, `capability_id`, **`present`**) | the component's **own** capability facts, layered over its product's |
 | `system_role_assignment` | (`system_id`, `role_id`, `component_id`) | who fills the role here; the component FK is **`on delete restrict`** |
@@ -368,7 +368,7 @@ guidance if a use case needs more. The depth-resolution and rollup semantics the
 ## Ownership: the exclusive-arc
 
 Everything observed, asserted, or set in Omniglass attaches to exactly one structural entity, through
-the **exclusive-arc**. Every datapoint table, plus `event`, `property_value`, `alarm`, and `variable`,
+the **exclusive-arc**. Every datapoint table, plus `event`, `property`, `alarm`, and `variable`,
 carries:
 
 - an **`owner_kind`** enum, plus

@@ -291,12 +291,12 @@ type Gateway interface {
 
 	// The collection registries: estate-wide reference data (no scope.Set),
 	// seeded official and operator-extensible at org/template scope later.
-	UpsertProperty(ctx context.Context, prop Property) error
-	ListProperties(ctx context.Context) ([]Property, error)
-	GetProperty(ctx context.Context, name string) (*Property, error)
-	CreateProperty(ctx context.Context, actorID string, spec PropertySpec) (*Property, error)
-	UpdateProperty(ctx context.Context, actorID, name string, patch PropertyPatch) (*Property, error)
-	DeleteProperty(ctx context.Context, actorID, name string) error
+	UpsertPropertyType(ctx context.Context, prop PropertyType) error
+	ListPropertyTypes(ctx context.Context) ([]PropertyType, error)
+	GetPropertyType(ctx context.Context, name string) (*PropertyType, error)
+	CreatePropertyType(ctx context.Context, actorID string, spec PropertyTypeSpec) (*PropertyType, error)
+	UpdatePropertyType(ctx context.Context, actorID, name string, patch PropertyTypePatch) (*PropertyType, error)
+	DeletePropertyType(ctx context.Context, actorID, name string) error
 	UpsertInterfaceType(ctx context.Context, it InterfaceType) error
 	ListInterfaceTypes(ctx context.Context) ([]InterfaceType, error)
 
@@ -393,8 +393,8 @@ type Gateway interface {
 	UpsertProductProperty(ctx context.Context, productID string, spec ProductPropertySpec) error
 	SetProductProperty(ctx context.Context, actorID, productID string, spec ProductPropertySpec) (*ProductProperty, error)
 	DeleteProductProperty(ctx context.Context, actorID, productID, propertyName string) error
-	SetPropertyValue(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, value json.RawMessage, write scope.Set) (*PropertyValue, error)
-	ClearPropertyValue(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, write scope.Set) error
+	SetProperty(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, value json.RawMessage, write scope.Set) (*Property, error)
+	ClearProperty(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, write scope.Set) error
 	EffectiveProperties(ctx context.Context, ownerKind, ownerID string, read scope.Set) ([]EffectiveProperty, error)
 
 	// Membership: the binding a role attaches to. Many-valued on purpose, since a

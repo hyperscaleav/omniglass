@@ -46,7 +46,7 @@ func TestPropertiesAndEventsSurviveARename(t *testing.T) {
 		t.Fatalf("component: %v", err)
 	}
 
-	if _, err := gw.SetPropertyValue(ctx, "", "system", "old-sys", "model_number", "",
+	if _, err := gw.SetProperty(ctx, "", "system", "old-sys", "model_number", "",
 		[]byte(`"HR-2"`), all); err != nil {
 		t.Fatalf("set property: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestPropertiesAndEventsSurviveARename(t *testing.T) {
 	}
 	var found bool
 	for _, p := range props {
-		if p.PropertyName == "model_number" && p.IsSet {
+		if p.PropertyTypeName == "model_number" && p.IsSet {
 			found = true
 		}
 	}

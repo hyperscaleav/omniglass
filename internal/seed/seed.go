@@ -236,7 +236,7 @@ func seedProperties(ctx context.Context, gw storage.Gateway) error {
 			}
 			validation = b
 		}
-		if err := gw.UpsertProperty(ctx, storage.Property{
+		if err := gw.UpsertPropertyType(ctx, storage.PropertyType{
 			Name: p.Name, DisplayName: p.DisplayName, Kind: kind, DataType: p.DataType,
 			Unit: unit, Validation: validation, Description: p.Description, Official: true,
 		}); err != nil {
@@ -352,7 +352,7 @@ func seedProducts(ctx context.Context, gw storage.Gateway) error {
 				def = json.RawMessage(prop.Default)
 			}
 			if err := gw.UpsertProductProperty(ctx, p.ID, storage.ProductPropertySpec{
-				PropertyName: prop.Name, DefaultValue: def, Required: prop.Required,
+				PropertyTypeName: prop.Name, DefaultValue: def, Required: prop.Required,
 			}); err != nil {
 				return fmt.Errorf("seed: product %s property %s: %w", p.ID, prop.Name, err)
 			}

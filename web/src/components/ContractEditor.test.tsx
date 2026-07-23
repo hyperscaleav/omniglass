@@ -14,8 +14,8 @@ import { ME_KEY, type Me } from "../lib/auth";
 // cache so no server is needed; the PUT / DELETE fetches are faked where a test
 // drives them.
 const contract: ClassifierProperty[] = [
-  { property_name: "seat_count", property_id: "seat_count-id", required: true },
-  { property_name: "display_count", property_id: "display_count-id", default_value: 2, required: false },
+  { property_type_name: "seat_count", property_type_id: "seat_count-id", required: true },
+  { property_type_name: "display_count", property_type_id: "display_count-id", default_value: 2, required: false },
 ];
 
 const catalog: PropertyRow[] = [
@@ -66,7 +66,7 @@ describe("ContractEditor on a standard", () => {
       const req = input as Request;
       if (req.method === "PUT") {
         put = req.clone();
-        return json({ property_name: "has_camera", property_id: "has_camera-id", default_value: true, required: false });
+        return json({ property_type_name: "has_camera", property_type_id: "has_camera-id", default_value: true, required: false });
       }
       return json({ properties: contract });
     });
@@ -91,7 +91,7 @@ describe("ContractEditor on a standard", () => {
       const req = input as Request;
       if (req.method === "PUT") {
         put = req.clone();
-        return json({ property_name: "display_count", property_id: "display_count-id", default_value: 3, required: false });
+        return json({ property_type_name: "display_count", property_type_id: "display_count-id", default_value: 3, required: false });
       }
       return json({ properties: contract });
     });
@@ -160,7 +160,7 @@ describe("ContractEditor on a location type", () => {
       const req = input as Request;
       if (req.method === "PUT") {
         put = req.clone();
-        return json({ property_name: "has_camera", property_id: "has_camera-id", required: true });
+        return json({ property_type_name: "has_camera", property_type_id: "has_camera-id", required: true });
       }
       return json({ properties: contract });
     });

@@ -2469,19 +2469,19 @@ Example:
 omniglass product update <id>
 ```
 
-## `omniglass property`
+## `omniglass property-type`
 
-Commands for the property resource
+Commands for the property-type resource
 
-### `omniglass property create`
+### `omniglass property-type create`
 
 Create a property
 
 ```
-omniglass property create [flags]
+omniglass property-type create [flags]
 ```
 
-Registers a custom property (official=false). The name must be a valid property key. Gated by property:create.
+Registers a custom property (official=false). The name must be a valid property key. Gated by property_type:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2496,66 +2496,66 @@ Registers a custom property (official=false). The name must be a valid property 
 Example:
 
 ```sh
-omniglass property create --data-type data_type --name name
+omniglass property-type create --data-type data_type --name name
 ```
 
-### `omniglass property delete`
+### `omniglass property-type delete`
 
 Delete a property
 
 ```
-omniglass property delete <name>
+omniglass property-type delete <name>
 ```
 
-Removes a custom property by name. Official properties are read-only. Gated by property:delete.
+Removes a custom property by name. Official properties are read-only. Gated by property_type:delete.
 
 Example:
 
 ```sh
-omniglass property delete <name>
+omniglass property-type delete <name>
 ```
 
-### `omniglass property get`
+### `omniglass property-type get`
 
 Get a property
 
 ```
-omniglass property get <name>
+omniglass property-type get <name>
 ```
 
-Returns one property by name. Gated by property:read.
+Returns one property by name. Gated by property_type:read.
 
 Example:
 
 ```sh
-omniglass property get <name>
+omniglass property-type get <name>
 ```
 
-### `omniglass property list`
+### `omniglass property-type list`
 
 List properties
 
 ```
-omniglass property list
+omniglass property-type list
 ```
 
-Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property:read.
+Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property_type:read.
 
 Example:
 
 ```sh
-omniglass property list
+omniglass property-type list
 ```
 
-### `omniglass property update`
+### `omniglass property-type update`
 
 Update a property
 
 ```
-omniglass property update <name> [flags]
+omniglass property-type update <name> [flags]
 ```
 
-Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property:update.
+Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2567,7 +2567,7 @@ Patches a custom property's label, description, unit, or validation (a nil field
 Example:
 
 ```sh
-omniglass property update <name>
+omniglass property-type update <name>
 ```
 
 ## `omniglass role`

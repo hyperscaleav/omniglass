@@ -54,7 +54,7 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 		t.Fatalf("sub-product: %v", err)
 	}
 	if _, err := gw.SetProductProperty(ctx, "", "acme-bar", storage.ProductPropertySpec{
-		PropertyName: "serial_number", Required: true}); err != nil {
+		PropertyTypeName: "serial_number", Required: true}); err != nil {
 		t.Fatalf("property: %v", err)
 	}
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
@@ -97,7 +97,7 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list properties: %v", err)
 	}
-	if len(props) != 1 || props[0].PropertyName != "serial_number" {
+	if len(props) != 1 || props[0].PropertyTypeName != "serial_number" {
 		t.Errorf("contract = %v, want serial_number still declared", props)
 	}
 	comp, err := gw.GetComponent(ctx, "bar-1", all)
@@ -144,20 +144,20 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 	// Slice 3: a property rename follows its contract line, a declared value, AND
 	// a telemetry series, since the telemetry key is now a real foreign key.
 	if _, err := gw.SetProductProperty(ctx, "", "acme-soundbar", storage.ProductPropertySpec{
-		PropertyName: "serial_number", Required: true}); err != nil {
+		PropertyTypeName: "serial_number", Required: true}); err != nil {
 		t.Fatalf("contract: %v", err)
 	}
-	if _, err := gw.SetPropertyValue(ctx, "", "component", "bar-1", "serial_number", "", []byte(`"SN-1"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "component", "bar-1", "serial_number", "", []byte(`"SN-1"`), all); err != nil {
 		t.Fatalf("value: %v", err)
 	}
 	if err := gw.InsertMetricDatapoints(ctx, []storage.MetricDatapointEvent{{
 		OwnerKind: "component", OwnerID: "bar-1", Key: "tcp.open", Value: 1, Source: "test"}}); err != nil {
 		t.Fatalf("datapoint: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `update property set name = 'serial_no' where name = 'serial_number'`); err != nil {
+	if _, err := conn.Exec(ctx, `update property_type set name = 'serial_no' where name = 'serial_number'`); err != nil {
 		t.Fatalf("rename property: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `update property set name = 'tcp.reachable' where name = 'tcp.open'`); err != nil {
+	if _, err := conn.Exec(ctx, `update property_type set name = 'tcp.reachable' where name = 'tcp.open'`); err != nil {
 		t.Fatalf("rename telemetry property: %v", err)
 	}
 	// The contract reads the property's new handle.
@@ -165,7 +165,7 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list contract after rename: %v", err)
 	}
-	if len(props2) != 1 || props2[0].PropertyName != "serial_no" {
+	if len(props2) != 1 || props2[0].PropertyTypeName != "serial_no" {
 		t.Errorf("contract property = %v, want serial_no", props2)
 	}
 	// The datapoint's key follows the property rename, which is the point of the
@@ -209,7 +209,7 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 		t.Fatalf("location type: %v", err)
 	}
 	if _, err := gw.SetLocationTypeProperty(ctx, "", "wing", storage.LocationTypePropertySpec{
-		PropertyName: "serial_no", Required: true}); err != nil {
+		PropertyTypeName: "serial_no", Required: true}); err != nil {
 		t.Fatalf("location type property: %v", err)
 	}
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "west-wing", LocationType: "wing"}, all); err != nil {
@@ -229,7 +229,7 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list location type properties by the renamed type: %v", err)
 	}
-	if len(ltProps) != 1 || ltProps[0].PropertyName != "serial_no" {
+	if len(ltProps) != 1 || ltProps[0].PropertyTypeName != "serial_no" {
 		t.Errorf("location type contract = %v, want serial_no still declared", ltProps)
 	}
 

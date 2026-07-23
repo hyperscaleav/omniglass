@@ -8,18 +8,18 @@ sidebar:
 ---
 
 :::caution[Direction: ADR-0063 keeps `event` and `event_type` separate]
-[ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables) confirms the separation this page describes: `event_type` stays its own registry, and the earlier plan to rename the occurrence table to `log` is dropped (a log is a *collection* of events). The datapoint registry it references is renamed `property_type`. This page is rewritten to that model in the slice that builds it.
+[ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables) confirms the separation this page describes, and renames the datapoint registry it references to `property_type` (built). A log is a *collection* of events, so the occurrence table stays `event`. Still directional, not yet built: the richer `event` occurrence (origin, causation, correlation) and its `event_type` payload schema, plus the `command` / `command_type` pillar the action layer drives.
 :::
 
 An **event** is *our semantic assertion that something happened*, in our vocabulary: a discrete, point-in-time occurrence the action layer reacts to, owned through the same exclusive-arc as a datapoint. It is **not** a datapoint (a datapoint records a value; an event records an occurrence, see [the has-a-value-now razor](/architecture/datapoints/#the-has-a-value-now-razor-datapoint-vs-event)). Datapoints are what rules read; events are what event rules produce. The rules that produce events live on [calculations](/architecture/calculations/); the alarms paired events drive, and the actions that respond, live on [alarms and actions](/architecture/alarms-actions/).
 
 ## The event_type registry
 
-A datapoint and an event are different shapes (a datapoint has a value; an event is an occurrence), so each gets a registry named for what it holds. The datapoint half is [`datapoint_type`](/architecture/datapoints/#the-datapoint_type-registry); the event half is `event_type`. We do **not** force them into one universal registry, that would be the false unification the rest of the model avoids.
+A datapoint and an event are different shapes (a datapoint has a value; an event is an occurrence), so each gets a registry named for what it holds. The datapoint half is [`property_type`](/architecture/datapoints/#the-property_type-registry); the event half is `event_type`. We do **not** force them into one universal registry, that would be the false unification the rest of the model avoids.
 
 **`event_type`** describes every event key: `(name, display_name, payload_schema, scope, ...)`, with the same **`scope`** (template / org / official) as the datapoint registry; a template can define a template-local event. Declaring event types (`call.started`, `cable.unplugged`, `command.sent`) is first-class and valuable: it gives events a known schema, makes them inspectable, and is what lets an event rule promote a raw log line into a *registered* event. An event key is registered here; an unregistered occurrence stays a `log_datapoint` line until a rule promotes it.
 
-The naming convention is consistent: a `_type` registry defines what a thing *is*, named for the thing (`datapoint_type`, `event_type`, like `location_type`, `interface_type`). Events get their own registry because an event is a different shape from a datapoint. The `scope` axis works the same way as for datapoints: see [key scope](/architecture/datapoints/#key-scope-template-org-official).
+The naming convention is consistent: a `_type` registry defines what a thing *is*, named for the thing (`property_type`, `event_type`, like `location_type`, `interface_type`). Events get their own registry because an event is a different shape from a datapoint. The `scope` axis works the same way as for datapoints: see [key scope](/architecture/datapoints/#key-scope-template-org-official).
 
 ## Events: caught, caused, derived, scheduled
 
@@ -41,6 +41,6 @@ An event is **born in a Postgres transaction**, on the record lane. When an `eve
 | Table | Key columns | Notes |
 |---|---|---|
 | `event` | id, ts, key, **origin** (caught/caused/derived/scheduled), owner arc, payload (jsonb), correlation_id, **caused_by_event_id** (nullable), **alarm_id** (nullable), + lineage | the semantic-occurrence log; a momentary event has null `alarm_id`, an alarm edge carries it; `caused_by_event_id` is the parent edge: the **durable, read-side** causation pointer (the live cycle guard at dispatch walks the NATS header chain, this is its persisted form), while the flat `correlation_id` threads the chain. A schedule fire is an event with `origin=scheduled` (no separate schedule table) |
-| `event_type` | name, display_name, **payload_schema (jsonb)**, **scope** | the event-key registry; lets an event_rule promote a raw log line into a registered event. `scope` (template / org / official) works the same way as `datapoint_type` |
+| `event_type` | name, display_name, **payload_schema (jsonb)**, **scope** | the event-key registry; lets an event_rule promote a raw log line into a registered event. `scope` (template / org / official) works the same way as `property_type` |
 
 Related: [calculations](/architecture/calculations/) (the `event_rule` that produces events), [alarms and actions](/architecture/alarms-actions/) (alarms and the response layer), [datapoints](/architecture/datapoints/) (the data events read), and [the glossary](/architecture/glossary/).

@@ -21,7 +21,7 @@ func (f *healthFixture) healthSeries(t *testing.T, ctx context.Context, ownerKin
 	}
 	rows, err := f.conn.Query(ctx, `select value from state
 		where `+col+` = (select id from `+ownerKind+` where name = $1)
-		  and property_id = (select id from property where name = 'health') order by ts asc, id asc`, ownerID)
+		  and property_type_id = (select id from property_type where name = 'health') order by ts asc, id asc`, ownerID)
 	if err != nil {
 		t.Fatalf("read health series %s/%s: %v", ownerKind, ownerID, err)
 	}
@@ -59,7 +59,7 @@ func (f *healthFixture) assertTransitionOnly(t *testing.T, ctx context.Context) 
 		left join system    s on s.id = sd.system_id
 		left join location  l on l.id = sd.location_id
 		left join node      n on n.principal_id = sd.node_id
-		where sd.property_id = (select id from property where name = 'health')
+		where sd.property_type_id = (select id from property_type where name = 'health')
 		order by owner, sd.id asc`)
 	if err != nil {
 		t.Fatalf("read all health rows: %v", err)

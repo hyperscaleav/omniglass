@@ -10,8 +10,8 @@ import { ME_KEY, type Me } from "../lib/auth";
 // each defaults to. Data is seeded into the query cache so no server is needed; the
 // PUT / DELETE fetches are faked where a test drives them.
 const contract: ProductProperty[] = [
-  { property_name: "serial_number", property_id: "serial_number-id", required: true },
-  { property_name: "firmware_version", property_id: "firmware_version-id", default_value: "1.4.2", required: false },
+  { property_type_name: "serial_number", property_type_id: "serial_number-id", required: true },
+  { property_type_name: "firmware_version", property_type_id: "firmware_version-id", default_value: "1.4.2", required: false },
 ];
 
 const catalog: PropertyRow[] = [
@@ -78,7 +78,7 @@ describe("ProductContractEditor", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const method = typeof input === "string" ? "GET" : req.method;
-      if (method === "PUT") return json({ property_name: "port_count", property_id: "port_count-id", default_value: 8, required: true });
+      if (method === "PUT") return json({ property_type_name: "port_count", property_type_id: "port_count-id", default_value: 8, required: true });
       return json({ properties: contract });
     });
 
@@ -102,7 +102,7 @@ describe("ProductContractEditor", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const method = typeof input === "string" ? "GET" : req.method;
-      if (method === "PUT") return json({ property_name: "firmware_version", property_id: "firmware_version-id", default_value: "2.0.0", required: false });
+      if (method === "PUT") return json({ property_type_name: "firmware_version", property_type_id: "firmware_version-id", default_value: "2.0.0", required: false });
       return json({ properties: contract });
     });
 
