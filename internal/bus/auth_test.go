@@ -29,7 +29,7 @@ func (f fakeStore) RecordHeartbeat(context.Context, string) error { return nil }
 func (f fakeStore) ResolveTaskOwner(context.Context, string, string) (storage.TaskOwner, bool, error) {
 	return storage.TaskOwner{}, false, nil
 }
-func (f fakeStore) ListProperties(context.Context) ([]storage.Property, error) {
+func (f fakeStore) ListPropertyTypes(context.Context) ([]storage.PropertyType, error) {
 	return nil, nil
 }
 func (f fakeStore) InsertMetricDatapoints(context.Context, []storage.MetricDatapointEvent) error {

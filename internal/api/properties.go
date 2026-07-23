@@ -26,7 +26,7 @@ type propertyBody struct {
 	Official    bool            `json:"official"`
 }
 
-func toPropertyBody(p *storage.Property) propertyBody {
+func toPropertyBody(p *storage.PropertyType) propertyBody {
 	b := propertyBody{
 		ID: p.ID, Name: p.Name, DataType: p.DataType, DisplayName: p.DisplayName,
 		Description: p.Description, Unit: p.Unit, Kind: p.Kind, Official: p.Official,
@@ -85,7 +85,7 @@ func registerPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Summary:     "List properties",
 		Description: "Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property:read.",
 	}, "property", "read"), func(ctx context.Context, _ *struct{}) (*listPropertiesOutput, error) {
-		properties, err := gw.ListProperties(ctx)
+		properties, err := gw.ListPropertyTypes(ctx)
 		if err != nil {
 			return nil, mapPropertyErr(err)
 		}
@@ -104,7 +104,7 @@ func registerPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Summary:     "Get a property",
 		Description: "Returns one property by name. Gated by property:read.",
 	}, "property", "read"), func(ctx context.Context, in *propertyNameInput) (*propertyOutput, error) {
-		p, err := gw.GetProperty(ctx, in.Name)
+		p, err := gw.GetPropertyType(ctx, in.Name)
 		if err != nil {
 			return nil, mapPropertyErr(err)
 		}
@@ -123,7 +123,7 @@ func registerPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		if err != nil {
 			return nil, err
 		}
-		p, err := gw.CreateProperty(ctx, actorID(ctx), storage.PropertySpec{
+		p, err := gw.CreatePropertyType(ctx, actorID(ctx), storage.PropertyTypeSpec{
 			Name:        in.Body.Name,
 			DataType:    in.Body.DataType,
 			DisplayName: in.Body.DisplayName,
@@ -149,7 +149,7 @@ func registerPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		if err != nil {
 			return nil, err
 		}
-		p, err := gw.UpdateProperty(ctx, actorID(ctx), in.Name, storage.PropertyPatch{
+		p, err := gw.UpdatePropertyType(ctx, actorID(ctx), in.Name, storage.PropertyTypePatch{
 			DisplayName: in.Body.DisplayName,
 			Description: in.Body.Description,
 			Unit:        in.Body.Unit,
@@ -169,7 +169,7 @@ func registerPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Summary:       "Delete a property",
 		Description:   "Removes a custom property by name. Official properties are read-only. Gated by property:delete.",
 	}, "property", "delete"), func(ctx context.Context, in *propertyNameInput) (*struct{}, error) {
-		if err := gw.DeleteProperty(ctx, actorID(ctx), in.Name); err != nil {
+		if err := gw.DeletePropertyType(ctx, actorID(ctx), in.Name); err != nil {
 			return nil, mapPropertyErr(err)
 		}
 		return nil, nil
@@ -192,13 +192,13 @@ func marshalValidation(v any) ([]byte, error) {
 // mapPropertyErr translates the gateway's property sentinels into HTTP status.
 func mapPropertyErr(err error) error {
 	switch {
-	case errors.Is(err, storage.ErrPropertyNotFound):
+	case errors.Is(err, storage.ErrPropertyTypeNotFound):
 		return huma.Error404NotFound("property not found")
-	case errors.Is(err, storage.ErrPropertyExists):
+	case errors.Is(err, storage.ErrPropertyTypeExists):
 		return huma.Error409Conflict("a property with this name already exists")
-	case errors.Is(err, storage.ErrPropertyOfficial):
+	case errors.Is(err, storage.ErrPropertyTypeOfficial):
 		return huma.Error409Conflict("an official property is read-only")
-	case errors.Is(err, storage.ErrPropertyInvalid):
+	case errors.Is(err, storage.ErrPropertyTypeInvalid):
 		return huma.Error422UnprocessableEntity(err.Error())
 	default:
 		return huma.Error500InternalServerError("property operation failed")

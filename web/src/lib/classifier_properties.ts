@@ -22,7 +22,7 @@ export type ClassifierKind = "product" | "standard" | "location-type";
 
 export type ClassifierProperty = {
   property_name: string;
-  property_id: string;
+  property_type_id: string;
   // The contract default, shaped by the property's data_type; omitted when the
   // contract sets none.
   default_value?: unknown;

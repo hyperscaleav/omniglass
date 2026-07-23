@@ -85,7 +85,7 @@ func TestEffectiveProperties(t *testing.T) {
 	}
 
 	// Override a contract property: the set value wins and is marked.
-	if _, err := gw.SetPropertyValue(ctx, "", "component", "panel-1", "firmware_version", "", json.RawMessage(`"2.5.1"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "component", "panel-1", "firmware_version", "", json.RawMessage(`"2.5.1"`), all); err != nil {
 		t.Fatalf("set firmware override: %v", err)
 	}
 	idx = byName(mustResolve(t, gw, "panel-1", all))
@@ -96,7 +96,7 @@ func TestEffectiveProperties(t *testing.T) {
 
 	// A repeat set of the same series updates in place (idempotent save), it does
 	// not conflict or add a second row.
-	if _, err := gw.SetPropertyValue(ctx, "", "component", "panel-1", "firmware_version", "", json.RawMessage(`"2.5.2"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "component", "panel-1", "firmware_version", "", json.RawMessage(`"2.5.2"`), all); err != nil {
 		t.Fatalf("re-set firmware override: %v", err)
 	}
 	idx = byName(mustResolve(t, gw, "panel-1", all))
@@ -106,7 +106,7 @@ func TestEffectiveProperties(t *testing.T) {
 
 	// An ad-hoc property the contract does not declare still resolves, flagged
 	// off-contract.
-	if _, err := gw.SetPropertyValue(ctx, "", "component", "panel-1", "mac_address", "", json.RawMessage(`"aa:bb:cc:dd:ee:ff"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "component", "panel-1", "mac_address", "", json.RawMessage(`"aa:bb:cc:dd:ee:ff"`), all); err != nil {
 		t.Fatalf("set ad-hoc mac_address: %v", err)
 	}
 	idx = byName(mustResolve(t, gw, "panel-1", all))
@@ -120,22 +120,22 @@ func TestEffectiveProperties(t *testing.T) {
 
 	// Clearing an override falls back to the contract default; clearing again is an
 	// explicit miss.
-	if err := gw.ClearPropertyValue(ctx, "", "component", "panel-1", "firmware_version", "", all); err != nil {
+	if err := gw.ClearProperty(ctx, "", "component", "panel-1", "firmware_version", "", all); err != nil {
 		t.Fatalf("clear firmware override: %v", err)
 	}
 	idx = byName(mustResolve(t, gw, "panel-1", all))
 	if fw = idx["firmware_version"]; string(fw.Value) != `"1.0.0"` || fw.IsSet {
 		t.Fatalf("after clear: want the default back and is_set=false, got %+v", fw)
 	}
-	if err := gw.ClearPropertyValue(ctx, "", "component", "panel-1", "firmware_version", "", all); !errors.Is(err, storage.ErrPropertyValueNotFound) {
-		t.Fatalf("clear an unset property: want ErrPropertyValueNotFound, got %v", err)
+	if err := gw.ClearProperty(ctx, "", "component", "panel-1", "firmware_version", "", all); !errors.Is(err, storage.ErrPropertyNotFound) {
+		t.Fatalf("clear an unset property: want ErrPropertyNotFound, got %v", err)
 	}
 
 	// A productless component has no contract, only what it sets directly.
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "loose-1"}, all); err != nil {
 		t.Fatalf("create productless component: %v", err)
 	}
-	if _, err := gw.SetPropertyValue(ctx, "", "component", "loose-1", "serial_number", "", json.RawMessage(`"SN-9"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "component", "loose-1", "serial_number", "", json.RawMessage(`"SN-9"`), all); err != nil {
 		t.Fatalf("set on productless: %v", err)
 	}
 	loose := mustResolve(t, gw, "loose-1", all)
@@ -144,11 +144,11 @@ func TestEffectiveProperties(t *testing.T) {
 	}
 
 	// A value naming a property outside the catalog trips the property FK.
-	if _, err := gw.SetPropertyValue(ctx, "", "component", "panel-1", "not.a.property", "", json.RawMessage(`1`), all); !errors.Is(err, storage.ErrPropertyRefNotFound) {
+	if _, err := gw.SetProperty(ctx, "", "component", "panel-1", "not.a.property", "", json.RawMessage(`1`), all); !errors.Is(err, storage.ErrPropertyRefNotFound) {
 		t.Fatalf("unknown property: want ErrPropertyRefNotFound, got %v", err)
 	}
 	// An unknown component is the non-disclosing not-found, never an opaque FK error.
-	if _, err := gw.SetPropertyValue(ctx, "", "component", "ghost", "serial_number", "", json.RawMessage(`"x"`), all); !errors.Is(err, storage.ErrComponentNotFound) {
+	if _, err := gw.SetProperty(ctx, "", "component", "ghost", "serial_number", "", json.RawMessage(`"x"`), all); !errors.Is(err, storage.ErrComponentNotFound) {
 		t.Fatalf("unknown component: want ErrComponentNotFound, got %v", err)
 	}
 }

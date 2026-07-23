@@ -147,17 +147,17 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 		PropertyName: "serial_number", Required: true}); err != nil {
 		t.Fatalf("contract: %v", err)
 	}
-	if _, err := gw.SetPropertyValue(ctx, "", "component", "bar-1", "serial_number", "", []byte(`"SN-1"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "component", "bar-1", "serial_number", "", []byte(`"SN-1"`), all); err != nil {
 		t.Fatalf("value: %v", err)
 	}
 	if err := gw.InsertMetricDatapoints(ctx, []storage.MetricDatapointEvent{{
 		OwnerKind: "component", OwnerID: "bar-1", Key: "tcp.open", Value: 1, Source: "test"}}); err != nil {
 		t.Fatalf("datapoint: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `update property set name = 'serial_no' where name = 'serial_number'`); err != nil {
+	if _, err := conn.Exec(ctx, `update property_type set name = 'serial_no' where name = 'serial_number'`); err != nil {
 		t.Fatalf("rename property: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `update property set name = 'tcp.reachable' where name = 'tcp.open'`); err != nil {
+	if _, err := conn.Exec(ctx, `update property_type set name = 'tcp.reachable' where name = 'tcp.open'`); err != nil {
 		t.Fatalf("rename telemetry property: %v", err)
 	}
 	// The contract reads the property's new handle.

@@ -18,18 +18,18 @@ import (
 // by name, which makes the write a PUT upsert rather than a create/update pair.
 
 type productPropertyBody struct {
-	PropertyName string          `json:"property_name" doc:"The catalog property this product declares"`
-	PropertyID   string          `json:"property_id" doc:"The catalog property's uuid, the stable form of property_name"`
-	DefaultValue json.RawMessage `json:"default_value,omitempty" doc:"The contract default, shape given by the property's data_type; omitted when the contract sets none"`
-	Required     bool            `json:"required" doc:"Whether every instance of this product must set the property"`
+	PropertyName   string          `json:"property_name" doc:"The catalog property this product declares"`
+	PropertyTypeID string          `json:"property_type_id" doc:"The catalog property's uuid, the stable form of property_name"`
+	DefaultValue   json.RawMessage `json:"default_value,omitempty" doc:"The contract default, shape given by the property's data_type; omitted when the contract sets none"`
+	Required       bool            `json:"required" doc:"Whether every instance of this product must set the property"`
 }
 
 func toProductPropertyBody(pp *storage.ProductProperty) productPropertyBody {
 	return productPropertyBody{
-		PropertyName: pp.PropertyName,
-		PropertyID:   pp.PropertyID,
-		DefaultValue: json.RawMessage(pp.DefaultValue),
-		Required:     pp.Required,
+		PropertyName:   pp.PropertyName,
+		PropertyTypeID: pp.PropertyTypeID,
+		DefaultValue:   json.RawMessage(pp.DefaultValue),
+		Required:       pp.Required,
 	}
 }
 
@@ -142,7 +142,7 @@ func encodePropertyJSON(v any, field string) (json.RawMessage, error) {
 // type-registry mapping, where the product is the type: not-found 404, official
 // read-only 422.
 func mapProductPropertyErr(err error) error {
-	if errors.Is(err, storage.ErrPropertyNotFound) {
+	if errors.Is(err, storage.ErrPropertyTypeNotFound) {
 		return huma.Error422UnprocessableEntity("unknown property")
 	}
 	return mapTypeErr(err, "product property")

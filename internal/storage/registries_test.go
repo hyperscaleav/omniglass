@@ -29,7 +29,7 @@ func TestRegistrySeed(t *testing.T) {
 		t.Fatalf("seed (2nd, idempotent): %v", err)
 	}
 
-	props, err := gw.ListProperties(ctx)
+	props, err := gw.ListPropertyTypes(ctx)
 	if err != nil {
 		t.Fatalf("list properties: %v", err)
 	}

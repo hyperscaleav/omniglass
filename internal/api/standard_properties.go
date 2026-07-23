@@ -19,18 +19,18 @@ import (
 // create/update pair.
 
 type standardPropertyBody struct {
-	PropertyName string          `json:"property_name" doc:"The catalog property this standard declares"`
-	PropertyID   string          `json:"property_id" doc:"The catalog property's uuid, the stable form of property_name"`
-	DefaultValue json.RawMessage `json:"default_value,omitempty" doc:"The contract default, shape given by the property's data_type; omitted when the contract sets none"`
-	Required     bool            `json:"required" doc:"Whether every system conforming to this standard must set the property"`
+	PropertyName   string          `json:"property_name" doc:"The catalog property this standard declares"`
+	PropertyTypeID string          `json:"property_type_id" doc:"The catalog property's uuid, the stable form of property_name"`
+	DefaultValue   json.RawMessage `json:"default_value,omitempty" doc:"The contract default, shape given by the property's data_type; omitted when the contract sets none"`
+	Required       bool            `json:"required" doc:"Whether every system conforming to this standard must set the property"`
 }
 
 func toStandardPropertyBody(sp *storage.StandardProperty) standardPropertyBody {
 	return standardPropertyBody{
-		PropertyName: sp.PropertyName,
-		PropertyID:   sp.PropertyID,
-		DefaultValue: json.RawMessage(sp.DefaultValue),
-		Required:     sp.Required,
+		PropertyName:   sp.PropertyName,
+		PropertyTypeID: sp.PropertyTypeID,
+		DefaultValue:   json.RawMessage(sp.DefaultValue),
+		Required:       sp.Required,
 	}
 }
 
@@ -128,7 +128,7 @@ func registerStandardPropertyRoutes(api huma.API, a *authenticator, gw storage.G
 // through to the shared type-registry mapping, where the standard is the type:
 // not-found 404, official read-only 422.
 func mapStandardPropertyErr(err error) error {
-	if errors.Is(err, storage.ErrPropertyNotFound) {
+	if errors.Is(err, storage.ErrPropertyTypeNotFound) {
 		return huma.Error422UnprocessableEntity("unknown property")
 	}
 	return mapTypeErr(err, "standard property")

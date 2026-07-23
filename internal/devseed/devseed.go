@@ -41,7 +41,7 @@ type Doc struct {
 	Systems           []System          `yaml:"systems"`
 	Members           []Member          `yaml:"members"`
 	RoleAssignments   []RoleAssignment  `yaml:"role_assignments"`
-	PropertyValues    []PropertyValue   `yaml:"property_values"`
+	PropertyValues    []Property        `yaml:"property_values"`
 }
 
 // System is one example system: a thing in a room that either works or does not.
@@ -99,7 +99,7 @@ type Component struct {
 // contract: an override so the effective-properties panel teaches
 // direct-vs-inherited. Value is decoded from YAML and re-encoded to jsonb, exactly
 // like a Variable.
-type PropertyValue struct {
+type Property struct {
 	Component string `yaml:"component"`
 	Property  string `yaml:"property"`
 	Value     any    `yaml:"value"`
@@ -412,7 +412,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 		if err != nil {
 			return fmt.Errorf("devseed: encode property value %s/%s: %w", pv.Component, pv.Property, err)
 		}
-		if _, err := gw.SetPropertyValue(ctx, actorID, "component", pv.Component, pv.Property, "", raw, all); err != nil {
+		if _, err := gw.SetProperty(ctx, actorID, "component", pv.Component, pv.Property, "", raw, all); err != nil {
 			return fmt.Errorf("devseed: set property value %s/%s: %w", pv.Component, pv.Property, err)
 		}
 	}

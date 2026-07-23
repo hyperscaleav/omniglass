@@ -216,7 +216,7 @@ func TestRunIdempotent(t *testing.T) {
 		t.Errorf("property-seed components = %d, want 1 (lobby-display)", comps)
 	}
 	if err := conn.QueryRow(ctx, `
-		select count(*) from property_value
+		select count(*) from property
 		where owner_kind = 'component'
 		  and component_id = (select id from component where name = 'lobby-display')`).Scan(&propVals); err != nil {
 		t.Fatalf("count property values: %v", err)

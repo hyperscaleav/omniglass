@@ -3129,6 +3129,22 @@ export interface components {
             component: string;
             properties: components["schemas"]["EffectivePropertyBody"][] | null;
         };
+        ComponentPropertyBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ComponentPropertyBody.json
+             */
+            readonly $schema?: string;
+            component: string;
+            property_name: string;
+            /** @description The catalog property's uuid, the stable form of property_name */
+            property_type_id: string;
+            /** @description The stored value, shape given by the property's data_type */
+            value: unknown;
+            /** @description The stored value's id */
+            value_id: string;
+        };
         CreateCapabilityInputBody: {
             /**
              * Format: uri
@@ -3552,10 +3568,10 @@ export interface components {
             from_contract: boolean;
             /** @description True when the component overrides the contract default */
             is_set: boolean;
-            /** @description The catalog property's uuid, the stable form of property_name */
-            property_id: string;
             /** @description The catalog property name */
             property_name: string;
+            /** @description The catalog property's uuid, the stable form of property_name */
+            property_type_id: string;
             /** @description Whether the product contract requires a value; always false off-contract */
             required: boolean;
             /** @description The component's override; omitted when the property is unset */
@@ -3564,22 +3580,6 @@ export interface components {
             value?: unknown;
             /** @description The stored value's id when set; omitted when the property is unset */
             value_id?: string;
-        };
-        EffectivePropertyValueBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/EffectivePropertyValueBody.json
-             */
-            readonly $schema?: string;
-            component: string;
-            /** @description The catalog property's uuid, the stable form of property_name */
-            property_id: string;
-            property_name: string;
-            /** @description The stored value, shape given by the property's data_type */
-            value: unknown;
-            /** @description The stored value's id */
-            value_id: string;
         };
         EffectiveRoleBody: {
             /**
@@ -3749,7 +3749,7 @@ export interface components {
             /** @description The occurrence message */
             message: string;
             /** @description The property's uuid, the stable form of key */
-            property_id: string;
+            property_type_id: string;
             /** @description The lineage of the occurrence (observed for direct collection) */
             provenance: string;
             /** @description The interface type that produced the occurrence */
@@ -4304,17 +4304,17 @@ export interface components {
             location: string;
             properties: components["schemas"]["EffectivePropertyBody"][] | null;
         };
-        LocationPropertyValueBody: {
+        LocationPropertyBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/LocationPropertyValueBody.json
+             * @example /api/v1/schemas/LocationPropertyBody.json
              */
             readonly $schema?: string;
             location: string;
-            /** @description The catalog property's uuid, the stable form of property_name */
-            property_id: string;
             property_name: string;
+            /** @description The catalog property's uuid, the stable form of property_name */
+            property_type_id: string;
             /** @description The stored value, shape given by the property's data_type */
             value: unknown;
             /** @description The stored value's id */
@@ -4345,10 +4345,10 @@ export interface components {
             readonly $schema?: string;
             /** @description The contract default, shape given by the property's data_type; omitted when the contract sets none */
             default_value?: unknown;
-            /** @description The catalog property's uuid, the stable form of property_name */
-            property_id: string;
             /** @description The catalog property this location type declares */
             property_name: string;
+            /** @description The catalog property's uuid, the stable form of property_name */
+            property_type_id: string;
             /** @description Whether every location of this type must set the property */
             required: boolean;
         };
@@ -4481,10 +4481,10 @@ export interface components {
             readonly $schema?: string;
             /** @description The contract default, shape given by the property's data_type; omitted when the contract sets none */
             default_value?: unknown;
-            /** @description The catalog property's uuid, the stable form of property_name */
-            property_id: string;
             /** @description The catalog property this product declares */
             property_name: string;
+            /** @description The catalog property's uuid, the stable form of property_name */
+            property_type_id: string;
             /** @description Whether every instance of this product must set the property */
             required: boolean;
         };
@@ -4989,10 +4989,10 @@ export interface components {
             readonly $schema?: string;
             /** @description The contract default, shape given by the property's data_type; omitted when the contract sets none */
             default_value?: unknown;
-            /** @description The catalog property's uuid, the stable form of property_name */
-            property_id: string;
             /** @description The catalog property this standard declares */
             property_name: string;
+            /** @description The catalog property's uuid, the stable form of property_name */
+            property_type_id: string;
             /** @description Whether every system conforming to this standard must set the property */
             required: boolean;
         };
@@ -5056,16 +5056,16 @@ export interface components {
             properties: components["schemas"]["EffectivePropertyBody"][] | null;
             system: string;
         };
-        SystemPropertyValueBody: {
+        SystemPropertyBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/SystemPropertyValueBody.json
+             * @example /api/v1/schemas/SystemPropertyBody.json
              */
             readonly $schema?: string;
-            /** @description The catalog property's uuid, the stable form of property_name */
-            property_id: string;
             property_name: string;
+            /** @description The catalog property's uuid, the stable form of property_name */
+            property_type_id: string;
             system: string;
             /** @description The stored value, shape given by the property's data_type */
             value: unknown;
@@ -6686,7 +6686,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EffectivePropertyValueBody"];
+                    "application/json": components["schemas"]["ComponentPropertyBody"];
                 };
             };
             /** @description Error */
@@ -7878,7 +7878,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LocationPropertyValueBody"];
+                    "application/json": components["schemas"]["LocationPropertyBody"];
                 };
             };
             /** @description Error */
@@ -11050,7 +11050,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SystemPropertyValueBody"];
+                    "application/json": components["schemas"]["SystemPropertyBody"];
                 };
             };
             /** @description Error */

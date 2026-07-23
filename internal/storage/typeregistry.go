@@ -139,8 +139,8 @@ func isReferencedViolation(err error) bool {
 // write is the named catalog error rather than a NULL that trips the arc opaquely.
 func requireProperty(ctx context.Context, q querier, ref string) error {
 	var known bool
-	if err := q.QueryRow(ctx, `select true from property where `+registryRefCol(ref)+` = $1`, ref).Scan(&known); err != nil {
-		return ErrPropertyNotFound
+	if err := q.QueryRow(ctx, `select true from property_type where `+registryRefCol(ref)+` = $1`, ref).Scan(&known); err != nil {
+		return ErrPropertyTypeNotFound
 	}
 	return nil
 }

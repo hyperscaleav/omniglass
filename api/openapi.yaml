@@ -375,6 +375,35 @@ components:
         - component
         - properties
       type: object
+    ComponentPropertyBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ComponentPropertyBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component:
+          type: string
+        property_name:
+          type: string
+        property_type_id:
+          description: The catalog property's uuid, the stable form of property_name
+          type: string
+        value:
+          description: The stored value, shape given by the property's data_type
+        value_id:
+          description: The stored value's id
+          type: string
+      required:
+        - component
+        - property_name
+        - property_type_id
+        - value
+        - value_id
+      type: object
     CreateCapabilityInputBody:
       additionalProperties: false
       properties:
@@ -1135,11 +1164,11 @@ components:
         is_set:
           description: True when the component overrides the contract default
           type: boolean
-        property_id:
-          description: The catalog property's uuid, the stable form of property_name
-          type: string
         property_name:
           description: The catalog property name
+          type: string
+        property_type_id:
+          description: The catalog property's uuid, the stable form of property_name
           type: string
         required:
           description: Whether the product contract requires a value; always false off-contract
@@ -1153,40 +1182,11 @@ components:
           type: string
       required:
         - property_name
-        - property_id
+        - property_type_id
         - data_type
         - required
         - is_set
         - from_contract
-      type: object
-    EffectivePropertyValueBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/EffectivePropertyValueBody.json
-          format: uri
-          readOnly: true
-          type: string
-        component:
-          type: string
-        property_id:
-          description: The catalog property's uuid, the stable form of property_name
-          type: string
-        property_name:
-          type: string
-        value:
-          description: The stored value, shape given by the property's data_type
-        value_id:
-          description: The stored value's id
-          type: string
-      required:
-        - component
-        - property_name
-        - property_id
-        - value
-        - value_id
       type: object
     EffectiveRoleBody:
       additionalProperties: false
@@ -1490,7 +1490,7 @@ components:
         message:
           description: The occurrence message
           type: string
-        property_id:
+        property_type_id:
           description: The property's uuid, the stable form of key
           type: string
         provenance:
@@ -1506,7 +1506,7 @@ components:
       required:
         - ts
         - key
-        - property_id
+        - property_type_id
         - message
         - provenance
       type: object
@@ -2595,22 +2595,22 @@ components:
         - location
         - properties
       type: object
-    LocationPropertyValueBody:
+    LocationPropertyBody:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
           examples:
-            - /api/v1/schemas/LocationPropertyValueBody.json
+            - /api/v1/schemas/LocationPropertyBody.json
           format: uri
           readOnly: true
           type: string
         location:
           type: string
-        property_id:
-          description: The catalog property's uuid, the stable form of property_name
-          type: string
         property_name:
+          type: string
+        property_type_id:
+          description: The catalog property's uuid, the stable form of property_name
           type: string
         value:
           description: The stored value, shape given by the property's data_type
@@ -2620,7 +2620,7 @@ components:
       required:
         - location
         - property_name
-        - property_id
+        - property_type_id
         - value
         - value_id
       type: object
@@ -2672,18 +2672,18 @@ components:
           type: string
         default_value:
           description: The contract default, shape given by the property's data_type; omitted when the contract sets none
-        property_id:
-          description: The catalog property's uuid, the stable form of property_name
-          type: string
         property_name:
           description: The catalog property this location type declares
+          type: string
+        property_type_id:
+          description: The catalog property's uuid, the stable form of property_name
           type: string
         required:
           description: Whether every location of this type must set the property
           type: boolean
       required:
         - property_name
-        - property_id
+        - property_type_id
         - required
       type: object
     LoginInputBody:
@@ -2944,18 +2944,18 @@ components:
           type: string
         default_value:
           description: The contract default, shape given by the property's data_type; omitted when the contract sets none
-        property_id:
-          description: The catalog property's uuid, the stable form of property_name
-          type: string
         property_name:
           description: The catalog property this product declares
+          type: string
+        property_type_id:
+          description: The catalog property's uuid, the stable form of property_name
           type: string
         required:
           description: Whether every instance of this product must set the property
           type: boolean
       required:
         - property_name
-        - property_id
+        - property_type_id
         - required
       type: object
     PropertyBody:
@@ -3857,18 +3857,18 @@ components:
           type: string
         default_value:
           description: The contract default, shape given by the property's data_type; omitted when the contract sets none
-        property_id:
-          description: The catalog property's uuid, the stable form of property_name
-          type: string
         property_name:
           description: The catalog property this standard declares
+          type: string
+        property_type_id:
+          description: The catalog property's uuid, the stable form of property_name
           type: string
         required:
           description: Whether every system conforming to this standard must set the property
           type: boolean
       required:
         - property_name
-        - property_id
+        - property_type_id
         - required
       type: object
     SvcBody:
@@ -3978,20 +3978,20 @@ components:
         - system
         - properties
       type: object
-    SystemPropertyValueBody:
+    SystemPropertyBody:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
           examples:
-            - /api/v1/schemas/SystemPropertyValueBody.json
+            - /api/v1/schemas/SystemPropertyBody.json
           format: uri
           readOnly: true
           type: string
-        property_id:
-          description: The catalog property's uuid, the stable form of property_name
-          type: string
         property_name:
+          type: string
+        property_type_id:
+          description: The catalog property's uuid, the stable form of property_name
           type: string
         system:
           type: string
@@ -4003,7 +4003,7 @@ components:
       required:
         - system
         - property_name
-        - property_id
+        - property_type_id
         - value
         - value_id
       type: object
@@ -5646,7 +5646,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EffectivePropertyValueBody"
+                $ref: "#/components/schemas/ComponentPropertyBody"
           description: OK
         default:
           content:
@@ -6605,7 +6605,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/LocationPropertyValueBody"
+                $ref: "#/components/schemas/LocationPropertyBody"
           description: OK
         default:
           content:
@@ -9214,7 +9214,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SystemPropertyValueBody"
+                $ref: "#/components/schemas/SystemPropertyBody"
           description: OK
         default:
           content:

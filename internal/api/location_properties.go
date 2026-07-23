@@ -31,17 +31,17 @@ type locationPropertiesOutput struct {
 }
 
 type locationPropertyOutput struct {
-	Body locationPropertyValueBody
+	Body locationPropertyBody
 }
 
 // locationPropertyValueBody is the write reply: the stored override, echoed back
 // so a client that just set a value holds its id without re-reading the list.
-type locationPropertyValueBody struct {
-	Location     string          `json:"location"`
-	PropertyName string          `json:"property_name"`
-	PropertyID   string          `json:"property_id" doc:"The catalog property's uuid, the stable form of property_name"`
-	Value        json.RawMessage `json:"value" doc:"The stored value, shape given by the property's data_type"`
-	ValueID      string          `json:"value_id" doc:"The stored value's id"`
+type locationPropertyBody struct {
+	Location       string          `json:"location"`
+	PropertyName   string          `json:"property_name"`
+	PropertyTypeID string          `json:"property_type_id" doc:"The catalog property's uuid, the stable form of property_name"`
+	Value          json.RawMessage `json:"value" doc:"The stored value, shape given by the property's data_type"`
+	ValueID        string          `json:"value_id" doc:"The stored value's id"`
 }
 
 // locationPropertyPathInput addresses one property on one location.
@@ -94,17 +94,17 @@ func registerLocationPropertyRoutes(api huma.API, a *authenticator, gw storage.G
 		if err != nil {
 			return nil, err
 		}
-		pv, err := gw.SetPropertyValue(ctx, actorID(ctx), "location", in.Name, in.Property,
+		pv, err := gw.SetProperty(ctx, actorID(ctx), "location", in.Name, in.Property,
 			locationPropertyInstance, raw, a.scopeFor(ctx, "location", "update"))
 		if err != nil {
 			return nil, mapLocationPropertyErr(err)
 		}
-		return &locationPropertyOutput{Body: locationPropertyValueBody{
-			Location:     in.Name,
-			PropertyName: pv.PropertyName,
-			PropertyID:   pv.PropertyID,
-			Value:        json.RawMessage(pv.Value),
-			ValueID:      pv.ID,
+		return &locationPropertyOutput{Body: locationPropertyBody{
+			Location:       in.Name,
+			PropertyName:   pv.PropertyName,
+			PropertyTypeID: pv.PropertyTypeID,
+			Value:          json.RawMessage(pv.Value),
+			ValueID:        pv.ID,
 		}}, nil
 	})
 
@@ -116,7 +116,7 @@ func registerLocationPropertyRoutes(api huma.API, a *authenticator, gw storage.G
 		Summary:       "Clear a property on a location",
 		Description:   "Removes the location's declared value, so the property falls back to the location type contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the location never set is a 404. Gated by location:update; an out-of-scope location is a non-disclosing 404.",
 	}, "location", "update"), func(ctx context.Context, in *locationPropertyPathInput) (*struct{}, error) {
-		if err := gw.ClearPropertyValue(ctx, actorID(ctx), "location", in.Name, in.Property,
+		if err := gw.ClearProperty(ctx, actorID(ctx), "location", in.Name, in.Property,
 			locationPropertyInstance, a.scopeFor(ctx, "location", "update")); err != nil {
 			return nil, mapLocationPropertyErr(err)
 		}
@@ -130,7 +130,7 @@ func registerLocationPropertyRoutes(api huma.API, a *authenticator, gw storage.G
 // sentinels keep the location routes' non-disclosing mapping.
 func mapLocationPropertyErr(err error) error {
 	switch {
-	case errors.Is(err, storage.ErrPropertyValueNotFound):
+	case errors.Is(err, storage.ErrPropertyNotFound):
 		return huma.Error404NotFound("property not set on this location")
 	case errors.Is(err, storage.ErrPropertyRefNotFound):
 		return huma.Error422UnprocessableEntity("unknown property")

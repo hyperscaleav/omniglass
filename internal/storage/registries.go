@@ -5,12 +5,12 @@ import (
 	"fmt"
 )
 
-// Property is a canonical registered signal: the typed keyspace entry a datapoint
+// PropertyType is a canonical registered signal: the typed keyspace entry a datapoint
 // observes and a field declares. Unit/Precision are observed-only; Kind
 // (metric/state/log) is null for a declared-only property; Validation/FusionPolicy
 // are raw jsonb passed through. Official marks a seed-owned, read-only property. A
 // property is addressed by its key (a canonical dotted identifier).
-type Property struct {
+type PropertyType struct {
 	// ID is the uuid primary key; Name is the renameable handle (ADR-0062). A
 	// property is addressed by name on the wire, and the id is the stable form the
 	// contract and telemetry foreign keys store.
@@ -36,12 +36,12 @@ type InterfaceType struct {
 	Built       bool
 }
 
-// UpsertProperty installs an official property, authoritative on conflict (the
+// UpsertPropertyType installs an official property, authoritative on conflict (the
 // boot-seed bucket): an operator's custom properties (official=false) are keyed by a
 // distinct name and untouched.
-func (p *PG) UpsertProperty(ctx context.Context, prop Property) error {
+func (p *PG) UpsertPropertyType(ctx context.Context, prop PropertyType) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into property (name, display_name, kind, data_type, unit, precision, validation, fusion_policy, description, official)
+		insert into property_type (name, display_name, kind, data_type, unit, precision, validation, fusion_policy, description, official)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		on conflict (name) do update set
 			display_name = excluded.display_name, kind = excluded.kind, data_type = excluded.data_type,
@@ -54,17 +54,17 @@ func (p *PG) UpsertProperty(ctx context.Context, prop Property) error {
 	return nil
 }
 
-// ListProperties returns every registered property (official and custom). No
+// ListPropertyTypes returns every registered property (official and custom). No
 // scope.Set: the registry is estate-wide reference data, not a scoped resource.
-func (p *PG) ListProperties(ctx context.Context) ([]Property, error) {
-	rows, err := p.pool.Query(ctx, `select id, name, coalesce(display_name, ''), kind, data_type, unit, precision, validation, fusion_policy, description, official from property`)
+func (p *PG) ListPropertyTypes(ctx context.Context) ([]PropertyType, error) {
+	rows, err := p.pool.Query(ctx, `select id, name, coalesce(display_name, ''), kind, data_type, unit, precision, validation, fusion_policy, description, official from property_type`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list properties: %w", err)
 	}
 	defer rows.Close()
-	var out []Property
+	var out []PropertyType
 	for rows.Next() {
-		var prop Property
+		var prop PropertyType
 		if err := rows.Scan(&prop.ID, &prop.Name, &prop.DisplayName, &prop.Kind, &prop.DataType, &prop.Unit, &prop.Precision, &prop.Validation, &prop.FusionPolicy, &prop.Description, &prop.Official); err != nil {
 			return nil, fmt.Errorf("storage: scan property: %w", err)
 		}

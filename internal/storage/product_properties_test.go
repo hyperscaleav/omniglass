@@ -100,7 +100,7 @@ func TestProductPropertyCRUD(t *testing.T) {
 	}
 
 	// An unknown property_name is a missing catalog reference, not a silent insert.
-	if _, err := gw.SetProductProperty(ctx, "", "acme-widget", storage.ProductPropertySpec{PropertyName: "nope.not_a_property"}); !errors.Is(err, storage.ErrPropertyNotFound) {
+	if _, err := gw.SetProductProperty(ctx, "", "acme-widget", storage.ProductPropertySpec{PropertyName: "nope.not_a_property"}); !errors.Is(err, storage.ErrPropertyTypeNotFound) {
 		t.Fatalf("unknown property err = %v, want ErrPropertyNotFound", err)
 	}
 

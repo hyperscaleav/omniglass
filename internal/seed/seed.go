@@ -236,7 +236,7 @@ func seedProperties(ctx context.Context, gw storage.Gateway) error {
 			}
 			validation = b
 		}
-		if err := gw.UpsertProperty(ctx, storage.Property{
+		if err := gw.UpsertPropertyType(ctx, storage.PropertyType{
 			Name: p.Name, DisplayName: p.DisplayName, Kind: kind, DataType: p.DataType,
 			Unit: unit, Validation: validation, Description: p.Description, Official: true,
 		}); err != nil {

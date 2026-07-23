@@ -13,13 +13,13 @@ import { ME_KEY, type Me } from "../lib/auth";
 // where a test drives a Save.
 const seed: EffectiveProperty[] = [
   // On contract, not overridden: the contract default is what applies.
-  { property_name: "display.diagonal_in", property_id: "display.diagonal_in-id", display_name: "Diagonal inches", data_type: "int", required: false, is_set: false, from_contract: true, default_value: 55, value: 55 },
+  { property_name: "display.diagonal_in", property_type_id: "display.diagonal_in-id", display_name: "Diagonal inches", data_type: "int", required: false, is_set: false, from_contract: true, default_value: 55, value: 55 },
   // On contract, overridden: the component's value wins over the default.
-  { property_name: "display.resolution", property_id: "display.resolution-id", display_name: "Resolution", data_type: "string", required: false, is_set: true, from_contract: true, default_value: "1920x1080", set_value: "3840x2160", value: "3840x2160", value_id: "v-res" },
+  { property_name: "display.resolution", property_type_id: "display.resolution-id", display_name: "Resolution", data_type: "string", required: false, is_set: true, from_contract: true, default_value: "1920x1080", set_value: "3840x2160", value: "3840x2160", value_id: "v-res" },
   // On contract and required: always overridden, and it must carry a value.
-  { property_name: "net.hostname", property_id: "net.hostname-id", display_name: "Hostname", data_type: "string", required: true, is_set: true, from_contract: true, set_value: "disp-1.hq", value: "disp-1.hq", value_id: "v-host" },
+  { property_name: "net.hostname", property_type_id: "net.hostname-id", display_name: "Hostname", data_type: "string", required: true, is_set: true, from_contract: true, set_value: "disp-1.hq", value: "disp-1.hq", value_id: "v-host" },
   // Off contract: set directly on this component, declared by no product.
-  { property_name: "mount.height_cm", property_id: "mount.height_cm-id", display_name: "Mount height", data_type: "int", required: false, is_set: true, from_contract: false, set_value: 210, value: 210, value_id: "v-mount" },
+  { property_name: "mount.height_cm", property_type_id: "mount.height_cm-id", display_name: "Mount height", data_type: "int", required: false, is_set: true, from_contract: false, set_value: 210, value: 210, value_id: "v-mount" },
 ];
 
 const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };
@@ -56,7 +56,7 @@ function captureWrites(): Call[] {
     calls.push({ method: req.method, url: req.url, body });
     if (req.url.includes("/auth/me")) return json(owner);
     if (req.method === "DELETE") return new Response(null, { status: 204 });
-    if (req.method === "PUT") return json({ component: "disp-1", property_name: "x", property_id: "x-id", value: null, value_id: "v" });
+    if (req.method === "PUT") return json({ component: "disp-1", property_name: "x", property_type_id: "x-id", value: null, value_id: "v" });
     return json({ component: "disp-1", properties: seed });
   });
   return calls;
@@ -144,7 +144,7 @@ describe("PropertiesPanel", () => {
   // component would silently stop following the product when the default changed.
   it("leaves a required property that has a contract default inheriting, and writes nothing for it", async () => {
     const requiredWithDefault: EffectiveProperty[] = [
-      { property_name: "net.domain", property_id: "net.domain-id", display_name: "Domain", data_type: "string", required: true, is_set: false, from_contract: true, default_value: "hq.example", value: "hq.example" },
+      { property_name: "net.domain", property_type_id: "net.domain-id", display_name: "Domain", data_type: "string", required: true, is_set: false, from_contract: true, default_value: "hq.example", value: "hq.example" },
     ];
     const calls = captureWrites();
     const edit = createEditSlot();

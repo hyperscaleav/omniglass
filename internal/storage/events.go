@@ -23,16 +23,16 @@ type EventOccurrence struct {
 
 // Event is a stored occurrence row (read side).
 type Event struct {
-	ID         int64
-	TS         time.Time
-	OwnerKind  string
-	Key        string
-	PropertyID string
-	Instance   string
-	Message    string
-	Attributes []byte
-	Provenance string
-	Source     string
+	ID             int64
+	TS             time.Time
+	OwnerKind      string
+	Key            string
+	PropertyTypeID string
+	Instance       string
+	Message        string
+	Attributes     []byte
+	Provenance     string
+	Source         string
 }
 
 // InsertEvents writes observed occurrence rows in one transaction. Each row sets
@@ -64,8 +64,8 @@ func (p *PG) InsertEvents(ctx context.Context, evs []EventOccurrence) error {
 		if len(ev.Attributes) > 0 {
 			attrs = string(ev.Attributes)
 		}
-		sql := fmt.Sprintf(`insert into event (ts, owner_kind, %s, property_id, instance, message, attributes, provenance, source)
-			values ($1, $2, $3, (select id from property where name = $4), $5, $6, $7, 'observed', $8)`, col)
+		sql := fmt.Sprintf(`insert into event (ts, owner_kind, %s, property_type_id, instance, message, attributes, provenance, source)
+			values ($1, $2, $3, (select id from property_type where name = $4), $5, $6, $7, 'observed', $8)`, col)
 		// The arc points at the primary key, so the owner reference resolves to a
 		// uuid before it is stored. A node still stores its name until the
 		// collection tier converts.
@@ -88,7 +88,7 @@ func (p *PG) InsertEvents(ctx context.Context, evs []EventOccurrence) error {
 func (p *PG) ListComponentEvents(ctx context.Context, componentName string, since time.Time, limit int) ([]Event, error) {
 	rows, err := p.pool.Query(ctx, `
 		select id, ts, owner_kind,
-			(select p.name from property p where p.id = event.property_id), event.property_id, instance, message, attributes, provenance, source
+			(select p.name from property_type p where p.id = event.property_type_id), event.property_type_id, instance, message, attributes, provenance, source
 		from event
 		where component_id = (select id from component where name = $1) and ts >= $2
 		order by ts desc
@@ -101,7 +101,7 @@ func (p *PG) ListComponentEvents(ctx context.Context, componentName string, sinc
 	var out []Event
 	for rows.Next() {
 		var e Event
-		if err := rows.Scan(&e.ID, &e.TS, &e.OwnerKind, &e.Key, &e.PropertyID, &e.Instance, &e.Message, &e.Attributes, &e.Provenance, &e.Source); err != nil {
+		if err := rows.Scan(&e.ID, &e.TS, &e.OwnerKind, &e.Key, &e.PropertyTypeID, &e.Instance, &e.Message, &e.Attributes, &e.Provenance, &e.Source); err != nil {
 			return nil, fmt.Errorf("storage: scan event %s: %w", componentName, err)
 		}
 		out = append(out, e)

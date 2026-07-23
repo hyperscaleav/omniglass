@@ -254,22 +254,22 @@ func (UnimplementedGateway) ListTasks(context.Context, scope.Set) ([]Task, error
 func (UnimplementedGateway) GetTask(context.Context, string, scope.Set) (*Task, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpsertProperty(context.Context, Property) error {
+func (UnimplementedGateway) UpsertPropertyType(context.Context, PropertyType) error {
 	return nil
 }
-func (UnimplementedGateway) ListProperties(context.Context) ([]Property, error) {
+func (UnimplementedGateway) ListPropertyTypes(context.Context) ([]PropertyType, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) GetProperty(context.Context, string) (*Property, error) {
+func (UnimplementedGateway) GetPropertyType(context.Context, string) (*PropertyType, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) CreateProperty(context.Context, string, PropertySpec) (*Property, error) {
+func (UnimplementedGateway) CreatePropertyType(context.Context, string, PropertyTypeSpec) (*PropertyType, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpdateProperty(context.Context, string, string, PropertyPatch) (*Property, error) {
+func (UnimplementedGateway) UpdatePropertyType(context.Context, string, string, PropertyTypePatch) (*PropertyType, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) DeleteProperty(context.Context, string, string) error {
+func (UnimplementedGateway) DeletePropertyType(context.Context, string, string) error {
 	return nil
 }
 func (UnimplementedGateway) UpsertInterfaceType(context.Context, InterfaceType) error {
@@ -438,10 +438,10 @@ func (UnimplementedGateway) SetProductProperty(context.Context, string, string, 
 func (UnimplementedGateway) DeleteProductProperty(context.Context, string, string, string) error {
 	return nil
 }
-func (UnimplementedGateway) SetPropertyValue(context.Context, string, string, string, string, string, json.RawMessage, scope.Set) (*PropertyValue, error) {
+func (UnimplementedGateway) SetProperty(context.Context, string, string, string, string, string, json.RawMessage, scope.Set) (*Property, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) ClearPropertyValue(context.Context, string, string, string, string, string, scope.Set) error {
+func (UnimplementedGateway) ClearProperty(context.Context, string, string, string, string, string, scope.Set) error {
 	return nil
 }
 func (UnimplementedGateway) EffectiveProperties(context.Context, string, string, scope.Set) ([]EffectiveProperty, error) {

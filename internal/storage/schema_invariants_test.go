@@ -29,10 +29,10 @@ func TestChurnDroppedConstraintsRestored(t *testing.T) {
 	// the same table kept it.
 	notNull := []struct{ table, column string }{
 		{"product_property", "product_id"},
-		{"product_property", "property_id"},
+		{"product_property", "property_type_id"},
 		{"product_capability", "product_id"},
-		{"standard_property", "property_id"},
-		{"location_type_property", "property_id"},
+		{"standard_property", "property_type_id"},
+		{"location_type_property", "property_type_id"},
 	}
 	for _, c := range notNull {
 		var nullable string
