@@ -103,7 +103,7 @@ func TestRevokeCutsScopeLiveSessionAPI(t *testing.T) {
 		t.Fatalf("connect: %v", err)
 	}
 	if _, err := conn.Exec(ctx,
-		`insert into role (id, official, permissions, inherits) values ('location-writer', false, $1, '{}')`,
+		`insert into role (name, official, permissions, inherits) values ('location-writer', false, $1, '{}')`,
 		[]string{"location:create,update,delete"}); err != nil {
 		conn.Close(ctx)
 		t.Fatalf("insert location-writer role: %v", err)

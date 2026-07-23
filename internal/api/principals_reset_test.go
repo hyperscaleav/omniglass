@@ -104,7 +104,7 @@ func TestResetScopeEscalation(t *testing.T) {
 	}
 	// A custom role granting only the reset capability (an all-scope reset-password
 	// grant, without the target's other capabilities).
-	if err := gw.UpsertRole(ctx, storage.Role{ID: "resetter", Permissions: []string{"principal:reset-password"}}); err != nil {
+	if err := gw.UpsertRole(ctx, storage.Role{Name: "resetter", Permissions: []string{"principal:reset-password"}}); err != nil {
 		t.Fatalf("seed resetter role: %v", err)
 	}
 	srv := httptest.NewServer(api.NewHandler(gw))

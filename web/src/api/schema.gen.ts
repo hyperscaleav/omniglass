@@ -4710,6 +4710,7 @@ export interface components {
             held: string[] | null;
             id: string;
             inherits: string[] | null;
+            name: string;
             official: boolean;
             permissions: string[] | null;
         };

@@ -25,7 +25,7 @@ func TestPrincipalDirectory(t *testing.T) {
 	}
 	defer gw.Close()
 
-	if err := gw.UpsertRole(ctx, storage.Role{ID: "owner", Official: true, Permissions: []string{"*:*"}}); err != nil {
+	if err := gw.UpsertRole(ctx, storage.Role{Name: "owner", Official: true, Permissions: []string{"*:*"}}); err != nil {
 		t.Fatalf("seed owner role: %v", err)
 	}
 	// Bootstrap the owner with an all-zero bearer secret so we can resolve its id

@@ -28,7 +28,7 @@ func TestPasswordRotationClearsLockout(t *testing.T) {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := gw.UpsertRole(ctx, storage.Role{ID: "owner", Official: true, Permissions: []string{"*:*", ">"}}); err != nil {
+	if err := gw.UpsertRole(ctx, storage.Role{Name: "owner", Official: true, Permissions: []string{"*:*", ">"}}); err != nil {
 		t.Fatalf("seed owner: %v", err)
 	}
 	zeros := make([]byte, 32)

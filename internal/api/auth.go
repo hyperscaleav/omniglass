@@ -132,7 +132,7 @@ func (a *authenticator) roleIndex(ctx context.Context) (rbac.RoleIndex, error) {
 		}
 		rr := make([]rbac.Role, 0, len(roles))
 		for _, r := range roles {
-			rr = append(rr, rbac.Role{ID: r.ID, Permissions: r.Permissions, Inherits: r.Inherits})
+			rr = append(rr, rbac.Role{ID: r.Name, Permissions: r.Permissions, Inherits: r.Inherits})
 		}
 		a.index = rbac.NewRoleIndex(rr)
 	})
@@ -972,6 +972,7 @@ type rolesOutput struct {
 
 type roleBody struct {
 	ID          string   `json:"id"`
+	Name        string   `json:"name"`
 	DisplayName string   `json:"display_name,omitempty"`
 	Description string   `json:"description,omitempty"`
 	Official    bool     `json:"official"`
@@ -1003,7 +1004,7 @@ func (a *authenticator) rolesHandler(gw storage.Gateway) func(context.Context, *
 		out.Body.PermissionUniverse = universe
 		out.Body.Roles = make([]roleBody, 0, len(roles))
 		for _, r := range roles {
-			eff := idx.Flatten([]string{r.ID})
+			eff := idx.Flatten([]string{r.Name})
 			held := make([]string, 0, len(universe))
 			for _, p := range universe {
 				if eff.Allows(strings.Split(p, ":")...) {
@@ -1011,7 +1012,7 @@ func (a *authenticator) rolesHandler(gw storage.Gateway) func(context.Context, *
 				}
 			}
 			out.Body.Roles = append(out.Body.Roles, roleBody{
-				ID: r.ID, DisplayName: r.DisplayName, Description: r.Description,
+				ID: r.ID, Name: r.Name, DisplayName: r.DisplayName, Description: r.Description,
 				Official: r.Official, Permissions: r.Permissions, Inherits: r.Inherits,
 				EffectivePermissions: eff.Strings(),
 				Held:                 held,

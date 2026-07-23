@@ -365,7 +365,7 @@ func (p *PG) CreateGroupGrant(ctx context.Context, actorID, groupID string, spec
 
 	var gid string
 	err = tx.QueryRow(ctx,
-		`insert into principal_grant (group_id, role_id, scope_kind, scope_id, scope_op) values ($1, $2, $3, $4, $5) returning id`,
+		`insert into principal_grant (group_id, role_id, scope_kind, scope_id, scope_op) values ($1, (select id from role where `+registryRefCol(spec.Role)+` = $2), $3, $4, $5) returning id`,
 		groupID, spec.Role, spec.ScopeKind, nullize(spec.ScopeID), spec.ScopeOp).Scan(&gid)
 	if err != nil {
 		return nil, mapGrantWriteErr(err)
@@ -397,7 +397,7 @@ func (p *PG) RevokeGroupGrant(ctx context.Context, actorID, groupID, grantID str
 
 	var g Grant
 	err = tx.QueryRow(ctx,
-		`select id, role_id, scope_kind, scope_id, scope_op from principal_grant where id = $1 and group_id = $2`,
+		`select id, (select name from role where id = principal_grant.role_id), scope_kind, scope_id, scope_op from principal_grant where id = $1 and group_id = $2`,
 		grantID, groupID).Scan(&g.ID, &g.Role, &g.ScopeKind, &g.ScopeID, &g.ScopeOp)
 	if err != nil {
 		return notFoundOr(err, ErrGrantNotFound)
@@ -417,7 +417,7 @@ func (p *PG) ListGroupGrants(ctx context.Context, groupID string, read scope.Set
 		return nil, ErrPrincipalForbidden
 	}
 	rows, err := p.pool.Query(ctx,
-		`select id, role_id, scope_kind, scope_id, scope_op from principal_grant where group_id = $1 order by created_at`, groupID)
+		`select id, (select name from role where id = principal_grant.role_id), scope_kind, scope_id, scope_op from principal_grant where group_id = $1 order by created_at`, groupID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list group grants: %w", err)
 	}

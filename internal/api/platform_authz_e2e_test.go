@@ -151,7 +151,7 @@ func insertRole(t *testing.T, ctx context.Context, dsn, id string, perms []strin
 	}
 	defer conn.Close(ctx)
 	if _, err := conn.Exec(ctx,
-		`insert into role (id, official, permissions, inherits) values ($1, false, $2, '{}')`,
+		`insert into role (name, official, permissions, inherits) values ($1, false, $2, '{}')`,
 		id, perms); err != nil {
 		t.Fatalf("insert role %s: %v", id, err)
 	}

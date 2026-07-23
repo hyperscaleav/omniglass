@@ -24,7 +24,7 @@ func TestBootstrapOwnerIdempotent(t *testing.T) {
 	defer gw.Close()
 
 	// The owner@all grant references the owner role, so it must exist first.
-	if err := gw.UpsertRole(ctx, storage.Role{ID: "owner", Official: true, Permissions: []string{"*:*"}}); err != nil {
+	if err := gw.UpsertRole(ctx, storage.Role{Name: "owner", Official: true, Permissions: []string{"*:*"}}); err != nil {
 		t.Fatalf("seed owner role: %v", err)
 	}
 
@@ -62,7 +62,7 @@ func TestBootstrapOwnerIdempotent(t *testing.T) {
 	}{
 		{"human", `select count(*) from human where username = 'root'`, 1},
 		{"credential", `select count(*) from credential c join human h on h.principal_id = c.principal_id where h.username = 'root'`, 1},
-		{"owner@all grant", `select count(*) from principal_grant g join human h on h.principal_id = g.principal_id where h.username = 'root' and g.role_id = 'owner' and g.scope_kind = 'all'`, 1},
+		{"owner@all grant", `select count(*) from principal_grant g join human h on h.principal_id = g.principal_id where h.username = 'root' and g.role_id = (select id from role where name = 'owner') and g.scope_kind = 'all'`, 1},
 	} {
 		var got int
 		if err := conn.QueryRow(ctx, c.sql).Scan(&got); err != nil {

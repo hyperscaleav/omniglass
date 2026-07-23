@@ -17,10 +17,10 @@ const tierRank = (id: string) => {
 
 const columns: FlatColumn<Role>[] = [
   {
-    key: "name", label: "Name", sortVal: (r) => tierRank(r.id), cell: (r) => (
+    key: "name", label: "Name", sortVal: (r) => tierRank(r.name), cell: (r) => (
       <span class="inline-flex items-center gap-2">
-        <span class="font-semibold">{r.display_name || r.id}</span>
-        <span class="badge badge-ghost badge-sm font-data">{r.id}</span>
+        <span class="font-semibold">{r.display_name || r.name}</span>
+        <span class="badge badge-ghost badge-sm font-data">{r.name}</span>
         <Show when={r.official}><span class="badge badge-soft badge-info badge-sm">official</span></Show>
       </span>
     ),
@@ -40,7 +40,7 @@ const columns: FlatColumn<Role>[] = [
 
 export default function Roles() {
   const roles = useQuery(() => ({ queryKey: ROLES_KEY, queryFn: () => listRoles() }));
-  const ordered = createMemo(() => [...(roles.data ?? [])].sort((a, b) => tierRank(a.id) - tierRank(b.id) || a.id.localeCompare(b.id)));
+  const ordered = createMemo(() => [...(roles.data ?? [])].sort((a, b) => tierRank(a.name) - tierRank(b.name) || a.name.localeCompare(b.name)));
 
   return (
     <FlatList<Role>

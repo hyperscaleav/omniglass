@@ -18,6 +18,7 @@ import (
 // kept authoritative by the boot-seed phase.
 type Role struct {
 	ID          string
+	Name        string
 	Official    bool
 	Permissions []string
 	Inherits    []string
@@ -38,17 +39,17 @@ func (p *PG) UpsertRole(ctx context.Context, r Role) error {
 		r.Inherits = []string{}
 	}
 	_, err := p.pool.Exec(ctx, `
-		insert into role (id, official, permissions, inherits, display_name, description)
+		insert into role (name, official, permissions, inherits, display_name, description)
 		values ($1, $2, $3, $4, $5, $6)
-		on conflict (id) do update
+		on conflict (name) do update
 			set official     = excluded.official,
 			    permissions  = excluded.permissions,
 			    inherits     = excluded.inherits,
 			    display_name = excluded.display_name,
 			    description  = excluded.description`,
-		r.ID, r.Official, r.Permissions, r.Inherits, nullize(r.DisplayName), nullize(r.Description))
+		r.Name, r.Official, r.Permissions, r.Inherits, nullize(r.DisplayName), nullize(r.Description))
 	if err != nil {
-		return fmt.Errorf("storage: upsert role %q: %w", r.ID, err)
+		return fmt.Errorf("storage: upsert role %q: %w", r.Name, err)
 	}
 	return nil
 }
@@ -114,7 +115,7 @@ func (p *PG) BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, 
 		}
 	}
 	if _, err := tx.Exec(ctx,
-		`insert into principal_grant (principal_id, role_id, scope_kind) values ($1, 'owner', 'all')`,
+		`insert into principal_grant (principal_id, role_id, scope_kind) values ($1, (select id from role where name = 'owner'), 'all')`,
 		pid); err != nil {
 		return false, fmt.Errorf("storage: bootstrap grant: %w", err)
 	}
@@ -1103,7 +1104,7 @@ func (p *PG) CreateGrant(ctx context.Context, actorID, principalID string, spec 
 
 	var gid string
 	err = tx.QueryRow(ctx,
-		`insert into principal_grant (principal_id, role_id, scope_kind, scope_id, scope_op) values ($1, $2, $3, $4, $5) returning id`,
+		`insert into principal_grant (principal_id, role_id, scope_kind, scope_id, scope_op) values ($1, (select id from role where `+registryRefCol(spec.Role)+` = $2), $3, $4, $5) returning id`,
 		principalID, spec.Role, spec.ScopeKind, nullize(spec.ScopeID), spec.ScopeOp).Scan(&gid)
 	if err != nil {
 		return nil, mapGrantWriteErr(err)
@@ -1137,7 +1138,7 @@ func (p *PG) RevokeGrant(ctx context.Context, actorID, principalID, grantID stri
 
 	var g Grant
 	err = tx.QueryRow(ctx,
-		`select id, role_id, scope_kind, scope_id, scope_op from principal_grant where id = $1 and principal_id = $2`,
+		`select id, (select name from role where id = principal_grant.role_id), scope_kind, scope_id, scope_op from principal_grant where id = $1 and principal_id = $2`,
 		grantID, principalID).Scan(&g.ID, &g.Role, &g.ScopeKind, &g.ScopeID, &g.ScopeOp)
 	var pgErr *pgconn.PgError
 	switch {
@@ -1227,7 +1228,7 @@ func activeOwnerRemains(ctx context.Context, tx pgx.Tx) (bool, error) {
 		select exists(
 			select 1 from principal_grant g
 			join principal pr on pr.id = g.principal_id
-			where g.role_id = 'owner' and g.scope_kind = 'all' and pr.active
+			where g.role_id = (select id from role where name = 'owner') and g.scope_kind = 'all' and pr.active
 		)`).Scan(&ok)
 	return ok, err
 }
@@ -1357,6 +1358,8 @@ func mapGrantWriteErr(err error) error {
 		switch pgErr.Code {
 		case "23505": // unique_violation
 			return ErrGrantExists
+		case "23502": // not_null_violation (spec.Role resolved to no role)
+			return ErrUnknownRole
 		case "23503": // foreign_key_violation
 			if pgErr.ConstraintName == "principal_grant_role_id_fkey" {
 				return ErrUnknownRole
@@ -1418,7 +1421,7 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 	// both read pr.Grants, so a member inherits a group's role and scope here and
 	// nowhere else. group_id tags an inherited grant so callers can tell it apart.
 	rows, err := p.pool.Query(ctx,
-		`select g.id, g.role_id, g.scope_kind, g.scope_id, g.scope_op, g.group_id, coalesce(pg.display_name, pg.name)
+		`select g.id, (select name from role where id = g.role_id), g.scope_kind, g.scope_id, g.scope_op, g.group_id, coalesce(pg.display_name, pg.name)
 		   from principal_grant g
 		   left join principal_group pg on pg.id = g.group_id
 		  where g.principal_id = $1
@@ -1461,7 +1464,7 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 
 // ListRoles returns every role, for building the in-process role index.
 func (p *PG) ListRoles(ctx context.Context) ([]Role, error) {
-	rows, err := p.pool.Query(ctx, `select id, official, permissions, inherits, coalesce(display_name, ''), coalesce(description, '') from role order by id`)
+	rows, err := p.pool.Query(ctx, `select id, name, official, permissions, inherits, coalesce(display_name, ''), coalesce(description, '') from role order by name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list roles: %w", err)
 	}
@@ -1469,7 +1472,7 @@ func (p *PG) ListRoles(ctx context.Context) ([]Role, error) {
 	var out []Role
 	for rows.Next() {
 		var r Role
-		if err := rows.Scan(&r.ID, &r.Official, &r.Permissions, &r.Inherits, &r.DisplayName, &r.Description); err != nil {
+		if err := rows.Scan(&r.ID, &r.Name, &r.Official, &r.Permissions, &r.Inherits, &r.DisplayName, &r.Description); err != nil {
 			return nil, fmt.Errorf("storage: scan role: %w", err)
 		}
 		out = append(out, r)

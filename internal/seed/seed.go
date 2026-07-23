@@ -441,7 +441,7 @@ func seedRoles(ctx context.Context, gw storage.Gateway) error {
 	}
 	for _, r := range doc.Roles {
 		if err := gw.UpsertRole(ctx, storage.Role{
-			ID:          r.ID,
+			Name:        r.ID,
 			Official:    true,
 			Permissions: r.Permissions,
 			Inherits:    r.Inherits,
