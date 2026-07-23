@@ -12,20 +12,21 @@ import (
 // locationBody is the wire shape of a location: name-addressable, classified by
 // location_type, optionally nested under a parent (by id).
 type locationBody struct {
-	ID            string            `json:"id"`
-	Name          string            `json:"name"`
-	DisplayName   string            `json:"display_name,omitempty"`
-	LocationType  string            `json:"location_type"`
-	ParentID      *string           `json:"parent_id,omitempty" doc:"The parent location's id, the canonical handle"`
-	Parent        *string           `json:"parent,omitempty" doc:"The parent location's name, for display; absent for a site root"`
-	Actions       []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
-	EffectiveTags map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this location (platform and its location tree); for the Tags column."`
+	ID             string            `json:"id"`
+	Name           string            `json:"name"`
+	DisplayName    string            `json:"display_name,omitempty"`
+	LocationType   string            `json:"location_type" doc:"The location_type name"`
+	LocationTypeID string            `json:"location_type_id" doc:"The location_type's uuid, the stable form of location_type"`
+	ParentID       *string           `json:"parent_id,omitempty" doc:"The parent location's id, the canonical handle"`
+	Parent         *string           `json:"parent,omitempty" doc:"The parent location's name, for display; absent for a site root"`
+	Actions        []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
+	EffectiveTags  map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this location (platform and its location tree); for the Tags column."`
 }
 
 func toLocationBody(l *storage.Location) locationBody {
 	return locationBody{
 		ID: l.ID, Name: l.Name, DisplayName: l.DisplayName,
-		LocationType: l.LocationType, ParentID: l.ParentID, Parent: l.ParentName,
+		LocationType: l.LocationType, LocationTypeID: l.LocationTypeID, ParentID: l.ParentID, Parent: l.ParentName,
 	}
 }
 

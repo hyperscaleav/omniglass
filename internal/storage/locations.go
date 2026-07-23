@@ -106,11 +106,12 @@ func (p *PG) locationIsDescendant(ctx context.Context, q querier, targetID, cand
 // Location is a place in the estate tree: name-addressable (name is globally
 // unique), classified by location_type, and nested under an optional parent.
 type Location struct {
-	ID           string
-	Name         string
-	DisplayName  string
-	LocationType string
-	ParentID     *string
+	ID             string
+	Name           string
+	DisplayName    string
+	LocationType   string
+	LocationTypeID string
+	ParentID       *string
 	// The name the API addresses the parent by; ParentID above is internal.
 	ParentName *string
 	CreatedAt  time.Time
@@ -313,13 +314,13 @@ func (p *PG) DeleteLocationType(ctx context.Context, actorID, id string) error {
 
 // locationCols is the column list every location read scans, in struct order.
 const locationCols = `id, name, coalesce(display_name, ''),
-	(select t.name from location_type t where t.id = location.location_type) as location_type, parent_id,
+	(select t.name from location_type t where t.id = location.location_type) as location_type, location.location_type as location_type_id, parent_id,
 	(select p.name from location p where p.id = location.parent_id) as parent_name,
 	created_at, updated_at`
 
 func scanLocation(row pgx.Row) (*Location, error) {
 	var l Location
-	if err := row.Scan(&l.ID, &l.Name, &l.DisplayName, &l.LocationType, &l.ParentID, &l.ParentName,
+	if err := row.Scan(&l.ID, &l.Name, &l.DisplayName, &l.LocationType, &l.LocationTypeID, &l.ParentID, &l.ParentName,
 		&l.CreatedAt, &l.UpdatedAt); err != nil {
 		return nil, err
 	}

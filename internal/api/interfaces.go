@@ -20,7 +20,8 @@ import (
 type interfaceBody struct {
 	ID          string          `json:"id" doc:"The interface's surrogate id (the address)"`
 	Name        string          `json:"name" doc:"The friendly name, unique within the owning component"`
-	Type        string          `json:"type"`
+	Type        string          `json:"type" doc:"The interface_type name (the protocol)"`
+	TypeID      string          `json:"type_id" doc:"The interface_type's uuid, the stable form of type"`
 	Component   *string         `json:"component,omitempty" doc:"The owning component name; absent for a server-hosted interface"`
 	ComponentID *string         `json:"component_id,omitempty" doc:"The owning component's id; the stable form of component"`
 	Node        *string         `json:"node,omitempty" doc:"The node placement name, if assigned"`
@@ -30,7 +31,7 @@ type interfaceBody struct {
 
 func toInterfaceBody(it *storage.Interface) interfaceBody {
 	b := interfaceBody{
-		ID: it.ID, Name: it.Name, Type: it.Type,
+		ID: it.ID, Name: it.Name, Type: it.Type, TypeID: it.TypeID,
 		Component: it.Component, ComponentID: it.ComponentID,
 		Node: it.Node, NodeID: it.NodeID,
 	}

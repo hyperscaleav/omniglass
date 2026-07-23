@@ -33,6 +33,7 @@ type Interface struct {
 	ID          string
 	Name        string
 	Type        string
+	TypeID      string
 	Component   *string
 	ComponentID *string
 	Node        *string
@@ -73,12 +74,12 @@ type InterfacePatch struct {
 // `name` and make `order by name` ambiguous.
 const (
 	interfaceCols = `id, name,
-		(select t.name from interface_type t where t.id = interface.type) as type,
+		(select t.name from interface_type t where t.id = interface.type) as type, interface.type as type_id,
 		(select c.name from component c where c.id = interface.component) as component_name, component,
 		(select n.name from node n where n.principal_id = interface.node_name) as node_name_ref, node_name,
 		params, created_at, updated_at`
 	interfaceColsJoin = `i.id, i.name,
-		(select t2.name from interface_type t2 where t2.id = i.type) as type,
+		(select t2.name from interface_type t2 where t2.id = i.type) as type, i.type as type_id,
 		(select c2.name from component c2 where c2.id = i.component) as component_name, i.component,
 		(select n.name from node n where n.principal_id = i.node_name) as node_name_ref, i.node_name,
 		i.params, i.created_at, i.updated_at`
@@ -86,7 +87,7 @@ const (
 
 func scanInterface(row pgx.Row) (*Interface, error) {
 	var it Interface
-	if err := row.Scan(&it.ID, &it.Name, &it.Type, &it.Component, &it.ComponentID, &it.Node, &it.NodeID, &it.Params, &it.CreatedAt, &it.UpdatedAt); err != nil {
+	if err := row.Scan(&it.ID, &it.Name, &it.Type, &it.TypeID, &it.Component, &it.ComponentID, &it.Node, &it.NodeID, &it.Params, &it.CreatedAt, &it.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &it, nil

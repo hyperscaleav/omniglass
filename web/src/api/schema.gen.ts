@@ -3944,7 +3944,10 @@ export interface components {
             node_id?: string;
             /** @description The endpoint/target settings (jsonb) */
             params?: unknown;
+            /** @description The interface_type name (the protocol) */
             type: string;
+            /** @description The interface_type's uuid, the stable form of type */
+            type_id: string;
         };
         Keybindings: {
             /**
@@ -4275,7 +4278,10 @@ export interface components {
                 [key: string]: string;
             };
             id: string;
+            /** @description The location_type name */
             location_type: string;
+            /** @description The location_type's uuid, the stable form of location_type */
+            location_type_id: string;
             name: string;
             /** @description The parent location's name, for display; absent for a site root */
             parent?: string;
@@ -4592,7 +4598,10 @@ export interface components {
             owner_id?: string;
             owner_kind: string;
             owner_name?: string;
+            /** @description The secret_type name */
             secret_type: string;
+            /** @description The secret_type's uuid */
+            secret_type_id: string;
             /** @description True for the resolved secret; false for a shadowed candidate */
             winner: boolean;
         };
@@ -4762,7 +4771,10 @@ export interface components {
             owner_id?: string;
             owner_kind: string;
             owner_name?: string;
+            /** @description The secret_type name */
             secret_type: string;
+            /** @description The secret_type's uuid, the stable form of secret_type */
+            secret_type_id: string;
         };
         SecretFieldBody: {
             name: string;

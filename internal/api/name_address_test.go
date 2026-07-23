@@ -41,6 +41,22 @@ var referenceFields = map[string]string{
 	"driver_id":          "driver",
 	"standard_id":        "standard",
 	"parent_standard_id": "parent_standard",
+	"type_id":            "type",
+	"location_type_id":   "location_type",
+	"secret_type_id":     "secret_type",
+}
+
+// registryNameRefs is the reverse direction: a response that names a renameable
+// registry by its handle must ALSO carry the uuid, so a name-only reference (which
+// the forward `*_id` scan cannot see, because there is no id field to trip on)
+// cannot slip through. Keyed by the NAME field, valued by the id field it requires.
+// Only unambiguous registry-name fields belong here: `type` is deliberately absent
+// (it also names an RFC-9457 error type and a secret-field data type, and the
+// diagnostic reachability row carries it name-only on purpose), so it stays
+// forward-covered on the primary interface body alone.
+var registryNameRefs = map[string]string{
+	"location_type": "location_type_id",
+	"secret_type":   "secret_type_id",
 }
 
 // Schemas where a *_id field addresses something with no name to pair it with.
@@ -115,6 +131,18 @@ func TestReferencesCarryBothForms(t *testing.T) {
 			if _, has := sch.Properties[pair]; !has {
 				t.Errorf("%s carries %q but not %q: a reference carries both, the id as the handle "+
 					"and the name as the label", name, field, pair)
+			}
+		}
+		// Reverse direction: a name-only registry reference has no `*_id` field to
+		// trip the forward scan, so check the curated registry-name fields directly.
+		for nameField, idField := range registryNameRefs {
+			if _, hasName := sch.Properties[nameField]; !hasName {
+				continue
+			}
+			checked++
+			if _, hasID := sch.Properties[idField]; !hasID {
+				t.Errorf("%s carries the registry name %q but not %q: a registry reference carries both, "+
+					"the name as the label and the id as the stable handle", name, nameField, idField)
 			}
 		}
 	}
