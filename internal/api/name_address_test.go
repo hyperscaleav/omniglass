@@ -42,6 +42,7 @@ var referenceFields = map[string]string{
 	"standard_id":        "standard",
 	"parent_standard_id": "parent_standard",
 	"interface_type_id":  "interface_type",
+	"property_id":        "property_name",
 	"location_type_id":   "location_type",
 	"secret_type_id":     "secret_type",
 }
@@ -58,6 +59,7 @@ var registryNameRefs = map[string]string{
 	"location_type":  "location_type_id",
 	"secret_type":    "secret_type_id",
 	"interface_type": "interface_type_id",
+	"property_name":  "property_id",
 }
 
 // reverseNameOnlyOK exempts a specific `Schema.field` from the reverse check: a

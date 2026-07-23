@@ -20,6 +20,7 @@ type StandardProperty struct {
 	StandardID   string
 	StandardName string
 	PropertyName string
+	PropertyID   string
 	DefaultValue json.RawMessage // nil when the contract sets no default
 	Required     bool
 	CreatedAt    time.Time
@@ -36,14 +37,14 @@ type StandardPropertySpec struct {
 }
 
 const standardPropertyCols = `id, standard_id,
-	(select s.name from standard s where s.id = standard_property.standard_id) as standard_handle, (select pr.name from property pr where pr.id = standard_property.property_id) as property_name, default_value, required, created_at, updated_at`
+	(select s.name from standard s where s.id = standard_property.standard_id) as standard_handle, (select pr.name from property pr where pr.id = standard_property.property_id) as property_name, standard_property.property_id as property_id, default_value, required, created_at, updated_at`
 
 func scanStandardProperty(row pgx.Row) (*StandardProperty, error) {
 	var (
 		pp  StandardProperty
 		def []byte // NULL when the contract sets no default
 	)
-	if err := row.Scan(&pp.ID, &pp.StandardID, &pp.StandardName, &pp.PropertyName, &def, &pp.Required, &pp.CreatedAt, &pp.UpdatedAt); err != nil {
+	if err := row.Scan(&pp.ID, &pp.StandardID, &pp.StandardName, &pp.PropertyName, &pp.PropertyID, &def, &pp.Required, &pp.CreatedAt, &pp.UpdatedAt); err != nil {
 		return nil, err
 	}
 	pp.DefaultValue = copyRaw(def)

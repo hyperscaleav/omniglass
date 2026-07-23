@@ -24,6 +24,7 @@ const componentPropertyInstance = ""
 
 type effectivePropertyBody struct {
 	PropertyName string          `json:"property_name" doc:"The catalog property name"`
+	PropertyID   string          `json:"property_id" doc:"The catalog property's uuid, the stable form of property_name"`
 	DisplayName  string          `json:"display_name,omitempty" doc:"The property's human label; omitted when unset"`
 	DataType     string          `json:"data_type" doc:"The declared value type, from the property catalog"`
 	Required     bool            `json:"required" doc:"Whether the product contract requires a value; always false off-contract"`
@@ -38,6 +39,7 @@ type effectivePropertyBody struct {
 func toEffectivePropertyBody(e *storage.EffectiveProperty) effectivePropertyBody {
 	return effectivePropertyBody{
 		PropertyName: e.PropertyName,
+		PropertyID:   e.PropertyID,
 		DisplayName:  e.DisplayName,
 		DataType:     e.DataType,
 		Required:     e.Required,
@@ -66,6 +68,7 @@ type componentPropertyOutput struct {
 type effectivePropertyValueBody struct {
 	Component    string          `json:"component"`
 	PropertyName string          `json:"property_name"`
+	PropertyID   string          `json:"property_id" doc:"The catalog property's uuid, the stable form of property_name"`
 	Value        json.RawMessage `json:"value" doc:"The stored value, shape given by the property's data_type"`
 	ValueID      string          `json:"value_id" doc:"The stored value's id"`
 }
@@ -128,6 +131,7 @@ func registerComponentPropertyRoutes(api huma.API, a *authenticator, gw storage.
 		return &componentPropertyOutput{Body: effectivePropertyValueBody{
 			Component:    in.Name,
 			PropertyName: pv.PropertyName,
+			PropertyID:   pv.PropertyID,
 			Value:        json.RawMessage(pv.Value),
 			ValueID:      pv.ID,
 		}}, nil

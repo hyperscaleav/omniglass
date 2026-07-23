@@ -3552,6 +3552,8 @@ export interface components {
             from_contract: boolean;
             /** @description True when the component overrides the contract default */
             is_set: boolean;
+            /** @description The catalog property's uuid, the stable form of property_name */
+            property_id: string;
             /** @description The catalog property name */
             property_name: string;
             /** @description Whether the product contract requires a value; always false off-contract */
@@ -3571,6 +3573,8 @@ export interface components {
              */
             readonly $schema?: string;
             component: string;
+            /** @description The catalog property's uuid, the stable form of property_name */
+            property_id: string;
             property_name: string;
             /** @description The stored value, shape given by the property's data_type */
             value: unknown;
@@ -4306,6 +4310,8 @@ export interface components {
              */
             readonly $schema?: string;
             location: string;
+            /** @description The catalog property's uuid, the stable form of property_name */
+            property_id: string;
             property_name: string;
             /** @description The stored value, shape given by the property's data_type */
             value: unknown;
@@ -4337,6 +4343,8 @@ export interface components {
             readonly $schema?: string;
             /** @description The contract default, shape given by the property's data_type; omitted when the contract sets none */
             default_value?: unknown;
+            /** @description The catalog property's uuid, the stable form of property_name */
+            property_id: string;
             /** @description The catalog property this location type declares */
             property_name: string;
             /** @description Whether every location of this type must set the property */
@@ -4471,6 +4479,8 @@ export interface components {
             readonly $schema?: string;
             /** @description The contract default, shape given by the property's data_type; omitted when the contract sets none */
             default_value?: unknown;
+            /** @description The catalog property's uuid, the stable form of property_name */
+            property_id: string;
             /** @description The catalog property this product declares */
             property_name: string;
             /** @description Whether every instance of this product must set the property */
@@ -4977,6 +4987,8 @@ export interface components {
             readonly $schema?: string;
             /** @description The contract default, shape given by the property's data_type; omitted when the contract sets none */
             default_value?: unknown;
+            /** @description The catalog property's uuid, the stable form of property_name */
+            property_id: string;
             /** @description The catalog property this standard declares */
             property_name: string;
             /** @description Whether every system conforming to this standard must set the property */
@@ -5049,6 +5061,8 @@ export interface components {
              * @example /api/v1/schemas/SystemPropertyValueBody.json
              */
             readonly $schema?: string;
+            /** @description The catalog property's uuid, the stable form of property_name */
+            property_id: string;
             property_name: string;
             system: string;
             /** @description The stored value, shape given by the property's data_type */
