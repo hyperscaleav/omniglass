@@ -31,21 +31,22 @@ func TestProductCRUD(t *testing.T) {
 	// Create a custom product with a vendor, driver, kind, and capabilities. It
 	// is official=false; capabilities come back sorted by id.
 	m, err := gw.CreateProduct(ctx, "", storage.Product{
-		ID: "room-bar", DisplayName: "Room Bar",
+		Name: "room-bar", DisplayName: "Room Bar",
 		VendorID: &vendor, DriverID: &driver, Kind: "device",
 		Capabilities: []string{"speaker", "microphone", "camera"},
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if m.ID != "room-bar" || m.Official {
-		t.Fatalf("create = %+v, want id=room-bar official=false", m)
+	if m.Name != "room-bar" || m.Official {
+		t.Fatalf("create = %+v, want name=room-bar official=false", m)
 	}
 	if m.Kind != "device" {
 		t.Fatalf("create kind = %q, want device", m.Kind)
 	}
-	if m.VendorID == nil || *m.VendorID != "cisco" || m.DriverID == nil || *m.DriverID != "cisco-xapi" {
-		t.Fatalf("create refs = vendor:%v driver:%v, want cisco/cisco-xapi", m.VendorID, m.DriverID)
+	// Both arcs store uuids; the handles come back beside them.
+	if m.VendorName == nil || *m.VendorName != "cisco" || m.DriverName == nil || *m.DriverName != "cisco-xapi" {
+		t.Fatalf("create refs = vendor:%v driver:%v, want cisco/cisco-xapi", m.VendorName, m.DriverName)
 	}
 	if got := caps(m.Capabilities); got != "camera,microphone,speaker" {
 		t.Fatalf("create capabilities = %q, want camera,microphone,speaker", got)
@@ -67,7 +68,7 @@ func TestProductCRUD(t *testing.T) {
 	}
 	var found *storage.Product
 	for i := range all {
-		if all[i].ID == "room-bar" {
+		if all[i].Name == "room-bar" {
 			found = &all[i]
 			break
 		}
@@ -80,24 +81,24 @@ func TestProductCRUD(t *testing.T) {
 	}
 
 	// Duplicate id is ErrTypeExists.
-	if _, err := gw.CreateProduct(ctx, "", storage.Product{ID: "room-bar", DisplayName: "Dup", Kind: "device"}); !errors.Is(err, storage.ErrTypeExists) {
+	if _, err := gw.CreateProduct(ctx, "", storage.Product{Name: "room-bar", DisplayName: "Dup", Kind: "device"}); !errors.Is(err, storage.ErrTypeExists) {
 		t.Fatalf("dup create err = %v, want ErrTypeExists", err)
 	}
 
 	// An unknown vendor reference is ErrProductRefNotFound (422-worthy).
 	badVendor := "nonexistent-vendor"
-	if _, err := gw.CreateProduct(ctx, "", storage.Product{ID: "bad-ref", DisplayName: "Bad", VendorID: &badVendor, Kind: "device"}); !errors.Is(err, storage.ErrProductRefNotFound) {
+	if _, err := gw.CreateProduct(ctx, "", storage.Product{Name: "bad-ref", DisplayName: "Bad", VendorID: &badVendor, Kind: "device"}); !errors.Is(err, storage.ErrProductRefNotFound) {
 		t.Fatalf("bad vendor err = %v, want ErrProductRefNotFound", err)
 	}
 
 	// An unknown capability is ErrProductRefNotFound too.
-	if _, err := gw.CreateProduct(ctx, "", storage.Product{ID: "bad-cap", DisplayName: "Bad", Kind: "device", Capabilities: []string{"nonexistent-cap"}}); !errors.Is(err, storage.ErrProductRefNotFound) {
+	if _, err := gw.CreateProduct(ctx, "", storage.Product{Name: "bad-cap", DisplayName: "Bad", Kind: "device", Capabilities: []string{"nonexistent-cap"}}); !errors.Is(err, storage.ErrProductRefNotFound) {
 		t.Fatalf("bad capability err = %v, want ErrProductRefNotFound", err)
 	}
 
 	// An out-of-set kind is ErrProductInvalidKind (422-worthy), rejected before
 	// the DB CHECK.
-	if _, err := gw.CreateProduct(ctx, "", storage.Product{ID: "bad-kind", DisplayName: "Bad", Kind: "gizmo"}); !errors.Is(err, storage.ErrProductInvalidKind) {
+	if _, err := gw.CreateProduct(ctx, "", storage.Product{Name: "bad-kind", DisplayName: "Bad", Kind: "gizmo"}); !errors.Is(err, storage.ErrProductInvalidKind) {
 		t.Fatalf("bad kind err = %v, want ErrProductInvalidKind", err)
 	}
 
@@ -118,8 +119,8 @@ func TestProductCRUD(t *testing.T) {
 	if caps(upd.Capabilities) != "codec" {
 		t.Fatalf("update capabilities = %q, want codec", caps(upd.Capabilities))
 	}
-	if upd.VendorID == nil || *upd.VendorID != "cisco" {
-		t.Fatalf("update vendor = %v, want unchanged cisco", upd.VendorID)
+	if upd.VendorName == nil || *upd.VendorName != "cisco" {
+		t.Fatalf("update vendor = %v, want unchanged cisco", upd.VendorName)
 	}
 
 	// An out-of-set kind on update is ErrProductInvalidKind.
@@ -129,7 +130,7 @@ func TestProductCRUD(t *testing.T) {
 	}
 
 	// Official rows are read-only, and an upsert sets their capabilities.
-	if err := gw.UpsertProduct(ctx, storage.Product{ID: "official-prod", DisplayName: "Official", Kind: "device", Official: true, Capabilities: []string{"speaker"}}); err != nil {
+	if err := gw.UpsertProduct(ctx, storage.Product{Name: "official-prod", DisplayName: "Official", Kind: "device", Official: true, Capabilities: []string{"speaker"}}); err != nil {
 		t.Fatalf("upsert official: %v", err)
 	}
 	op, err := gw.GetProduct(ctx, "official-prod")

@@ -1,9 +1,9 @@
 import { api } from "../api/client";
 
 // The secrets data layer: thin typed wrappers over the generated client. A
-// secret is a typed, encrypted-at-rest value owned on the exclusive arc (global,
-// or one of the location / system / component trees) and resolved down the
-// cascade. Fields come back masked: a secret field's value is the fixed
+// secret is a typed, encrypted-at-rest value owned on the exclusive arc
+// (platform, or one of the location / system / component trees) and resolved
+// down the cascade. Fields come back masked: a secret field's value is the fixed
 // placeholder, a non-secret field's value is its plaintext.
 
 export type SecretField = {
@@ -31,7 +31,7 @@ export type Secret = {
   name: string;
   secret_type: string;
   owner_kind: string;
-  owner_id?: string;
+
   owner_name?: string;
   fields: SecretField[];
 };
@@ -40,7 +40,7 @@ export const SECRETS_KEY = ["secrets"] as const;
 export const SECRET_TYPES_KEY = ["types", "secret"] as const;
 
 export async function listSecretTypes(): Promise<SecretType[]> {
-  const { data, error } = await api.GET("/types/secret");
+  const { data, error } = await api.GET("/secret-types");
   if (error) throw error;
   return (data?.secret_types ?? []) as SecretType[];
 }
@@ -51,7 +51,7 @@ export async function listSecrets(): Promise<Secret[]> {
   return (data?.secrets ?? []) as Secret[];
 }
 
-export type OwnerKind = "global" | "location" | "system" | "component";
+export type OwnerKind = "platform" | "location" | "system" | "component";
 
 export type CreateSecret = {
   name: string;

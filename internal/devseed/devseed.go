@@ -41,7 +41,7 @@ type Doc struct {
 	Systems           []System          `yaml:"systems"`
 	Members           []Member          `yaml:"members"`
 	RoleAssignments   []RoleAssignment  `yaml:"role_assignments"`
-	PropertyValues    []PropertyValue   `yaml:"property_values"`
+	PropertyValues    []Property        `yaml:"property_values"`
 }
 
 // System is one example system: a thing in a room that either works or does not.
@@ -99,7 +99,7 @@ type Component struct {
 // contract: an override so the effective-properties panel teaches
 // direct-vs-inherited. Value is decoded from YAML and re-encoded to jsonb, exactly
 // like a Variable.
-type PropertyValue struct {
+type Property struct {
 	Component string `yaml:"component"`
 	Property  string `yaml:"property"`
 	Value     any    `yaml:"value"`
@@ -115,14 +115,14 @@ type File struct {
 	Sensitive   bool   `yaml:"sensitive"`
 }
 
-// Tag is one example key in the governed vocabulary, optionally with a global
+// Tag is one example key in the governed vocabulary, optionally with a platform
 // default value. Propagates is a pointer so an omitted field defaults to true (a
 // tag cascades unless the fixture opts out).
 type Tag struct {
-	Name        string   `yaml:"name"`
-	AppliesTo   []string `yaml:"applies_to"`
-	Propagates  *bool    `yaml:"propagates"`
-	GlobalValue string   `yaml:"global_value"`
+	Name          string   `yaml:"name"`
+	AppliesTo     []string `yaml:"applies_to"`
+	Propagates    *bool    `yaml:"propagates"`
+	PlatformValue string   `yaml:"platform_value"`
 }
 
 // TagBinding is one example scoped binding, setting a key's value at a fixture
@@ -133,9 +133,9 @@ type TagBinding struct {
 	Value    string `yaml:"value"`
 }
 
-// Variable is one example global variable (a macro). Value is decoded from YAML
+// Variable is one example platform variable (a macro). Value is decoded from YAML
 // and re-encoded to jsonb, so `value: 30` seeds the number and `value: {a: 1}` the
-// object. Global scope keeps the fixture free of an owner dependency.
+// object. The platform tier keeps the fixture free of an owner dependency.
 type Variable struct {
 	Name      string `yaml:"name"`
 	ValueType string `yaml:"value_type"`
@@ -248,16 +248,16 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 		}
 	}
 
-	// Global variables: a couple of example macros so the Variables directory comes
-	// up populated. A variable that already exists (ErrVariableExists) is left as
-	// is, so a re-run adds nothing.
+	// Platform variables: a couple of example macros so the Variables directory
+	// comes up populated. A variable that already exists (ErrVariableExists) is
+	// left as is, so a re-run adds nothing.
 	for _, v := range doc.Variables {
 		raw, err := json.Marshal(v.Value)
 		if err != nil {
 			return fmt.Errorf("devseed: encode variable %q: %w", v.Name, err)
 		}
 		_, err = gw.CreateVariable(ctx, actorID, storage.VariableSpec{
-			Name: v.Name, ValueType: v.ValueType, OwnerKind: "global", Value: raw,
+			Name: v.Name, ValueType: v.ValueType, OwnerKind: "platform", Value: raw,
 		}, all)
 		if errors.Is(err, storage.ErrVariableExists) {
 			continue
@@ -281,9 +281,9 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 		if err != nil && !errors.Is(err, storage.ErrTagExists) {
 			return fmt.Errorf("devseed: create tag %q: %w", tg.Name, err)
 		}
-		if tg.GlobalValue != "" {
-			if _, err := gw.SetTagBinding(ctx, actorID, tg.Name, "global", nil, tg.GlobalValue, all, all); err != nil {
-				return fmt.Errorf("devseed: set global tag %q: %w", tg.Name, err)
+		if tg.PlatformValue != "" {
+			if _, err := gw.SetTagBinding(ctx, actorID, tg.Name, "platform", nil, tg.PlatformValue, all, all); err != nil {
+				return fmt.Errorf("devseed: set platform tag %q: %w", tg.Name, err)
 			}
 		}
 	}
@@ -324,7 +324,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 	// default stays nil. The upsert is keyed on (product, property), so a re-run
 	// rewrites the same row rather than adding one.
 	for _, pp := range doc.ProductProperties {
-		spec := storage.ProductPropertySpec{PropertyName: pp.Property, Required: pp.Required}
+		spec := storage.ProductPropertySpec{PropertyTypeName: pp.Property, Required: pp.Required}
 		if pp.Default != nil {
 			raw, err := json.Marshal(pp.Default)
 			if err != nil {
@@ -412,7 +412,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 		if err != nil {
 			return fmt.Errorf("devseed: encode property value %s/%s: %w", pv.Component, pv.Property, err)
 		}
-		if _, err := gw.SetPropertyValue(ctx, actorID, "component", pv.Component, pv.Property, "", raw, all); err != nil {
+		if _, err := gw.SetProperty(ctx, actorID, "component", pv.Component, pv.Property, "", raw, all); err != nil {
 			return fmt.Errorf("devseed: set property value %s/%s: %w", pv.Component, pv.Property, err)
 		}
 	}

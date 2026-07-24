@@ -156,6 +156,12 @@ var sensitiveResources = map[string]bool{
 	// the authn-only /settings/me (client-visible namespaces), never the admin
 	// read-with-provenance. admin/owner hold it via the explicit settings grant.
 	"settings": true,
+	// platform is not a resource anyone reads, it is install-wide AUTHORITY: the
+	// right to write at the cascade's least-specific tier, the value that applies to
+	// the whole install. Full-estate REACH must not confer it (that is the whole
+	// point of the second gate), and a bare resource wildcard is reach, so it does
+	// not name the tier. Only a literal grant, a `platform:*`, or owner's `>` does.
+	"platform": true,
 }
 
 // match reports whether a grant pattern matches a required permission path (both

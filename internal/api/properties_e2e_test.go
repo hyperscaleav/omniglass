@@ -14,7 +14,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// TestPropertyAPI drives the /properties catalog over HTTP: an owner registers, reads,
+// TestPropertyAPI drives the /property-types catalog over HTTP: an owner registers, reads,
 // updates, and deletes a custom property; an official (seeded) property is read-only; a
 // malformed name and a duplicate are rejected; and an ungranted principal is
 // forbidden to create.
@@ -43,7 +43,7 @@ func TestPropertyAPI(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	// Register a custom property.
-	created := c.do(ownerTok, http.MethodPost, "/properties", map[string]any{
+	created := c.do(ownerTok, http.MethodPost, "/property-types", map[string]any{
 		"name": "rack_unit", "data_type": "int", "display_name": "Rack unit",
 		"validation": map[string]any{"minimum": 1, "maximum": 48},
 	}, http.StatusCreated)
@@ -58,7 +58,7 @@ func TestPropertyAPI(t *testing.T) {
 	}
 
 	// Get it back.
-	c.do(ownerTok, http.MethodGet, "/properties/rack_unit", nil, http.StatusOK)
+	c.do(ownerTok, http.MethodGet, "/property-types/rack_unit", nil, http.StatusOK)
 
 	// List includes the custom property and the seeded official ones.
 	var listed struct {
@@ -66,7 +66,7 @@ func TestPropertyAPI(t *testing.T) {
 			Name string `json:"name"`
 		} `json:"properties"`
 	}
-	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/properties", nil, http.StatusOK), &listed)
+	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/property-types", nil, http.StatusOK), &listed)
 	names := map[string]bool{}
 	for _, pp := range listed.Properties {
 		names[pp.Name] = true
@@ -76,25 +76,25 @@ func TestPropertyAPI(t *testing.T) {
 	}
 
 	// Update a mutable field.
-	c.do(ownerTok, http.MethodPatch, "/properties/rack_unit", map[string]any{"display_name": "Rack Unit (U)"}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, "/property-types/rack_unit", map[string]any{"display_name": "Rack Unit (U)"}, http.StatusOK)
 
 	// A malformed name is a 422.
-	c.do(ownerTok, http.MethodPost, "/properties", map[string]any{"name": "Bad-Name", "data_type": "string"}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPost, "/property-types", map[string]any{"name": "Bad-Name", "data_type": "string"}, http.StatusUnprocessableEntity)
 
 	// A duplicate name is a 409.
-	c.do(ownerTok, http.MethodPost, "/properties", map[string]any{"name": "rack_unit", "data_type": "int"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodPost, "/property-types", map[string]any{"name": "rack_unit", "data_type": "int"}, http.StatusConflict)
 
 	// An official (seeded) property is read-only (409).
-	c.do(ownerTok, http.MethodPatch, "/properties/serial_number", map[string]any{"display_name": "x"}, http.StatusConflict)
-	c.do(ownerTok, http.MethodDelete, "/properties/serial_number", nil, http.StatusConflict)
+	c.do(ownerTok, http.MethodPatch, "/property-types/serial_number", map[string]any{"display_name": "x"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodDelete, "/property-types/serial_number", nil, http.StatusConflict)
 
 	// An unknown property is a 404.
-	c.do(ownerTok, http.MethodGet, "/properties/nope", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodGet, "/property-types/nope", nil, http.StatusNotFound)
 
 	// Delete the custom property.
-	c.do(ownerTok, http.MethodDelete, "/properties/rack_unit", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/property-types/rack_unit", nil, http.StatusNoContent)
 
 	// An ungranted principal is forbidden to create.
 	noneTok := principalWithGrants(t, ctx, dsn, "noprops", nil)
-	c.do(noneTok, http.MethodPost, "/properties", map[string]any{"name": "nope_prop", "data_type": "string"}, http.StatusForbidden)
+	c.do(noneTok, http.MethodPost, "/property-types", map[string]any{"name": "nope_prop", "data_type": "string"}, http.StatusForbidden)
 }

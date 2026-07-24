@@ -12,8 +12,10 @@ import { api } from "../api/client";
 // is the classifier-generic layer in lib/classifier_properties.
 export type Standard = {
   id: string;
+  name: string;
   display_name: string;
   official: boolean;
+  parent_standard?: string;
   parent_standard_id?: string;
 };
 
@@ -26,7 +28,8 @@ export async function listStandards(): Promise<Standard[]> {
 }
 
 export type CreateStandard = {
-  id: string;
+  // The kebab handle. The uuid is the database\'s to mint.
+  name: string;
   display_name: string;
   parent_standard_id?: string;
 };

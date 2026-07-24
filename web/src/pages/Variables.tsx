@@ -1,11 +1,11 @@
+import { entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import TreeSelect from "../components/TreeSelect";
 import KVStacked from "../components/KVStacked";
 import FieldRow from "../components/FieldRow";
-import Button from "../components/Button";
-import { DrawerFooter } from "../components/Drawer";
+import { useFormActions } from "../lib/formactions";
 import { Plus } from "../components/icons";
 import { type TreeNode } from "../lib/treeselect";
 import {
@@ -24,20 +24,20 @@ import {
 import { SYSTEMS_KEY, listSystems } from "../lib/systems";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { COMPONENTS_KEY, listComponents } from "../lib/components";
-import { useMe, can } from "../lib/auth";
+import { useMe, can, canAtPlatform, platformTierGap, platformAuthorityHint } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Variables: the macro directory on the FlatList surface. A variable is a typed,
-// plaintext free value owned at one scope (global, or a location / system /
+// plaintext free value owned at one scope (platform, or a location / system /
 // component) and resolved down the cascade; this page is the admin directory
 // (create, inspect, edit, delete). A variable reaches a component by being sourced
 // into a field; this directory manages the cells themselves.
 
-const OWNER_KINDS: OwnerKind[] = ["global", "location", "system", "component"];
+const OWNER_KINDS: OwnerKind[] = ["platform", "location", "system", "component"];
 
 function ownerLabel(v: Variable): string {
-  if (v.owner_kind === "global") return "Global";
+  if (v.owner_kind === "platform") return "Platform";
   const tier = v.owner_kind.charAt(0).toUpperCase() + v.owner_kind.slice(1);
   return v.owner_name ? `${tier}: ${v.owner_name}` : tier;
 }
@@ -146,10 +146,23 @@ function VariableBladeBody(p: { id: string }): JSX.Element {
     }
   }
 
+  // A variable at the platform tier is install-wide, so the server gates its write
+  // on platform:<action> on top of variable:<action>. The footer gates on the same
+  // pair, so an operator never earns a 403 from a control the blade offered; below
+  // the tier the resource permission alone still decides.
+  const mayWrite = (action: string) => {
+    const v = variable();
+    if (!v) return false;
+    return v.owner_kind === "platform" ? canAtPlatform(me.data, "variable", action) : can(me.data, "variable", action);
+  };
+  // Holding the resource half without the tier half is the one state worth
+  // explaining: the actions are gone and nothing else on the blade says why.
+  const tierGap = () => (variable()?.owner_kind === "platform" ? platformTierGap(me.data, "variable", ["update", "delete"]) : []);
+
   edit.bind({
-    editable: () => !!variable() && can(me.data, "variable", "update"),
+    editable: () => mayWrite("update"),
     save,
-    destructive: () => (variable() && can(me.data, "variable", "delete") ? { label: "Delete", tone: "danger", onClick: removeVariable } : undefined),
+    destructive: () => (mayWrite("delete") ? { label: "Delete", tone: "danger", onClick: removeVariable } : undefined),
   });
 
   return (
@@ -158,6 +171,11 @@ function VariableBladeBody(p: { id: string }): JSX.Element {
         <div class="flex flex-col gap-4">
           <Show when={err()}>
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
+          </Show>
+          <Show when={tierGap().length > 0}>
+            <div role="status" class="alert alert-info alert-soft text-sm">
+              <span>{platformAuthorityHint("A variable", tierGap())}</span>
+            </div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
             <KVStacked label="Type" value={<span class="badge badge-ghost badge-sm">{v().value_type}</span>} />
@@ -224,29 +242,49 @@ export function ValueInput(p: { valueType: ValueType; value: string; onInput: (v
 // again server-side.
 function CreateVariableForm(p: { onCreated: () => void }): JSX.Element {
   const qc = useQueryClient();
+  const me = useMe();
   const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
 
   const [name, setName] = createSignal("");
   const [valueType, setValueType] = createSignal<ValueType>("string");
-  const [ownerKind, setOwnerKind] = createSignal<OwnerKind>("global");
+  const [ownerKind, setOwnerKind] = createSignal<OwnerKind>("platform");
   const [owner, setOwner] = createSignal("");
   const [value, setValue] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
 
+  // The Scope select offers only the tiers this principal may actually write at.
+  // The platform tier is install-wide, gated server-side on platform:create on top
+  // of variable:create, so offering it to a caller holding only the resource half
+  // would be offering a control the server refuses.
+  const tierGap = () => platformTierGap(me.data, "variable", ["create"]);
+  const ownerKinds = createMemo(() => (tierGap().length > 0 ? OWNER_KINDS.filter((k) => k !== "platform") : OWNER_KINDS));
+  // Keep the choice inside the offered set: /auth/me may resolve after the form
+  // mounts, and the default ("platform") is exactly the one that can fall away.
+  createEffect(() => {
+    if (!ownerKinds().includes(ownerKind())) setOwnerKind(ownerKinds()[0]);
+  });
+
   const ownerTree = createMemo<TreeNode[]>(() => {
     switch (ownerKind()) {
-      case "location": return (locations.data ?? []).map((l) => ({ id: l.id, value: l.name, label: l.display_name || l.name, parentId: l.parent_id }));
-      case "system": return (systems.data ?? []).map((s) => ({ id: s.id, value: s.name, label: s.display_name || s.name, parentId: s.parent_id }));
-      case "component": return (components.data ?? []).map((c) => ({ id: c.id, value: c.name, label: c.display_name || c.name, parentId: c.parent_id }));
+      case "location": return (locations.data ?? []).map((l) => ({ id: l.name, value: l.name, label: entityLabel(l), parentId: l.parent }));
+      case "system": return (systems.data ?? []).map((s) => ({ id: s.name, value: s.name, label: entityLabel(s), parentId: s.parent }));
+      case "component": return (components.data ?? []).map((c) => ({ id: c.name, value: c.name, label: entityLabel(c), parentId: c.parent }));
       default: return [];
     }
   });
 
-  async function submit(e: Event) {
-    e.preventDefault();
+  useFormActions().bind({
+    submitLabel: "Create variable",
+    submitIcon: Plus,
+    submit: () => void submit(),
+    busy,
+    disabled: () => !name().trim() || (ownerKind() !== "platform" && !owner()),
+  });
+
+  async function submit() {
     setBusy(true);
     setFormErr(null);
     let parsed: unknown;
@@ -262,7 +300,7 @@ function CreateVariableForm(p: { onCreated: () => void }): JSX.Element {
         name: name().trim(),
         value_type: valueType(),
         owner_kind: ownerKind(),
-        owner: ownerKind() === "global" ? undefined : owner() || undefined,
+        owner: ownerKind() === "platform" ? undefined : owner() || undefined,
         value: parsed,
       });
       await qc.invalidateQueries({ queryKey: VARIABLES_KEY });
@@ -275,7 +313,7 @@ function CreateVariableForm(p: { onCreated: () => void }): JSX.Element {
   }
 
   return (
-    <form class="flex min-h-full flex-col gap-4" onSubmit={submit}>
+    <form class="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
@@ -290,15 +328,16 @@ function CreateVariableForm(p: { onCreated: () => void }): JSX.Element {
         </FieldRow>
         <FieldRow
           label="Scope"
-          info="The estate scope this variable attaches to. It cascades down onto the components below it: global, or a location, system, or component."
+          info="The estate scope this variable attaches to. It cascades down onto the components below it: platform, or a location, system, or component."
           docHref="https://docs.omniglass.hyperscaleav.com/architecture/variables/"
+          hint={tierGap().length > 0 ? platformAuthorityHint("A variable", tierGap()) : undefined}
         >
           <select class="select select-bordered w-full" value={ownerKind()} onChange={(e) => { setOwnerKind(e.currentTarget.value as OwnerKind); setOwner(""); }}>
-            <For each={OWNER_KINDS}>{(k) => <option value={k}>{k.charAt(0).toUpperCase() + k.slice(1)}</option>}</For>
+            <For each={ownerKinds()}>{(k) => <option value={k}>{k.charAt(0).toUpperCase() + k.slice(1)}</option>}</For>
           </select>
         </FieldRow>
       </div>
-      <Show when={ownerKind() !== "global"}>
+      <Show when={ownerKind() !== "platform"}>
         <FieldRow label={ownerKind().charAt(0).toUpperCase() + ownerKind().slice(1)}>
           <TreeSelect items={ownerTree()} value={owner()} onChange={setOwner} rootLabel="Choose…" />
         </FieldRow>
@@ -306,9 +345,6 @@ function CreateVariableForm(p: { onCreated: () => void }): JSX.Element {
       <FieldRow label="Value" hint={valueType() === "json" ? "A JSON object, array, or scalar." : valueType() === "bool" ? "true or false." : undefined}>
         <ValueInput valueType={valueType()} value={value()} onInput={setValue} />
       </FieldRow>
-      <DrawerFooter>
-        <Button type="submit" intent="action" icon={Plus} disabled={busy() || !name().trim() || (ownerKind() !== "global" && !owner())}>Create variable</Button>
-      </DrawerFooter>
     </form>
   );
 }

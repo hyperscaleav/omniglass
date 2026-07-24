@@ -5,7 +5,7 @@ import { api } from "../api/client";
 // settings engine (issue #271). The read side carries provenance (which cascade
 // level a key resolved from) and lock state; the write side is an RFC 7386 merge
 // patch per namespace, a namespace restore, and a factory reset. Slice-0 acts on
-// the global scope only. The client-safe /settings/me feeds the SPA theme.
+// the platform scope only. The client-safe /settings/me feeds the SPA theme.
 
 // A settings document is namespace to key to value; values stay generic (the
 // engine merges presence, not typed fields).
@@ -39,6 +39,21 @@ export function useSettings() {
   }));
 }
 
+// Every settings write lands at the platform tier, the least-specific level of the
+// cascade, so the server gates all three on platform:update on top of
+// settings:update. The console hides the controls from a principal missing either
+// half, but a grant revoked mid-session still reaches the server: a 403 then reads
+// as the authority gap it is, not as a generic save failure.
+export const PLATFORM_AUTHORITY_HINT =
+  "A setting applies to the whole install, so changing one needs the platform:update permission as well as settings:update.";
+
+// writeErrorMessage maps a failed settings write to what the operator should read:
+// the install-wide authority hint on a 403, the caller's own wording otherwise. Pure,
+// so the mapping is unit-tested without a query client.
+export function writeErrorMessage(status: number, fallback: string): string {
+  return status === 403 ? PLATFORM_AUTHORITY_HINT : fallback;
+}
+
 // useSettingsMe reads the caller's effective settings (client-visible namespaces
 // only). Authn-only, so any signed-in principal may read it; it feeds the theme.
 export function useSettingsMe() {
@@ -52,7 +67,7 @@ export function useSettingsMe() {
   }));
 }
 
-// usePatchNamespace merge-patches a namespace's global override, then invalidates
+// usePatchNamespace merge-patches a namespace's platform override, then invalidates
 // the read (and /settings/me, since a client-visible change re-themes the SPA). A
 // null value on a key restores that one key to the lower layer.
 export function usePatchNamespace() {
@@ -61,39 +76,39 @@ export function usePatchNamespace() {
     namespace: string,
     patch: Record<string, unknown>,
   ): Promise<{ ok: true } | { ok: false; message: string }> => {
-    const { error } = await api.PATCH("/settings/{namespace}", {
+    const { error, response } = await api.PATCH("/settings/{namespace}", {
       params: { path: { namespace } },
       body: patch,
     });
-    if (error) return { ok: false, message: "Could not save the setting." };
+    if (error) return { ok: false, message: writeErrorMessage(response.status, "Could not save the setting.") };
     await qc.invalidateQueries({ queryKey: SETTINGS_KEY });
     await qc.invalidateQueries({ queryKey: SETTINGS_ME_KEY });
     return { ok: true };
   };
 }
 
-// useRestoreNamespace drops a namespace's global override, restoring the file and
-// code defaults, then invalidates the read and /settings/me.
+// useRestoreNamespace drops a namespace's platform override, restoring the file layer
+// and the declared defaults, then invalidates the read and /settings/me.
 export function useRestoreNamespace() {
   const qc = useQueryClient();
   return async (namespace: string): Promise<{ ok: true } | { ok: false; message: string }> => {
-    const { error } = await api.DELETE("/settings/{namespace}", {
+    const { error, response } = await api.DELETE("/settings/{namespace}", {
       params: { path: { namespace } },
     });
-    if (error) return { ok: false, message: "Could not restore the namespace." };
+    if (error) return { ok: false, message: writeErrorMessage(response.status, "Could not restore the namespace.") };
     await qc.invalidateQueries({ queryKey: SETTINGS_KEY });
     await qc.invalidateQueries({ queryKey: SETTINGS_ME_KEY });
     return { ok: true };
   };
 }
 
-// useRestoreAllDefaults removes every global override (a factory reset), then
+// useRestoreAllDefaults removes every platform override (a factory reset), then
 // invalidates the read and /settings/me.
 export function useRestoreAllDefaults() {
   const qc = useQueryClient();
   return async (): Promise<{ ok: true } | { ok: false; message: string }> => {
-    const { error } = await api.POST("/settings:restoreDefaults");
-    if (error) return { ok: false, message: "Could not restore defaults." };
+    const { error, response } = await api.POST("/settings:restoreDefaults");
+    if (error) return { ok: false, message: writeErrorMessage(response.status, "Could not restore defaults.") };
     await qc.invalidateQueries({ queryKey: SETTINGS_KEY });
     await qc.invalidateQueries({ queryKey: SETTINGS_ME_KEY });
     return { ok: true };

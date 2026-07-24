@@ -56,16 +56,16 @@ func TestSecretAPI(t *testing.T) {
 	json.Unmarshal(compRaw, &comp)
 
 	// The create form's shape list.
-	types := c.do(ownerTok, http.MethodGet, "/types/secret", nil, http.StatusOK)
+	types := c.do(ownerTok, http.MethodGet, "/secret-types", nil, http.StatusOK)
 	if !bytes.Contains(types, []byte("snmp-community")) {
 		t.Fatalf("secret types missing snmp-community: %s", types)
 	}
 
-	// Seal "poll" at global, room, and the component; distinct values.
-	c.do(ownerTok, http.MethodPost, "/secrets", secretReq("poll", "global", "", "global-community"), http.StatusCreated)
+	// Seal "poll" at the platform tier, room, and the component; distinct values.
+	c.do(ownerTok, http.MethodPost, "/secrets", secretReq("poll", "platform", "", "platform-community"), http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/secrets", secretReq("poll", "location", "room", "room-community"), http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/secrets", secretReq("poll", "component", "codec-1", "codec-community"), http.StatusCreated)
-	// A global secret with no all-scope grant would be forbidden; the owner has all, so it works.
+	// A platform secret with no all-scope grant would be forbidden; the owner has all, so it works.
 
 	// Duplicate at the same owner is a conflict.
 	c.do(ownerTok, http.MethodPost, "/secrets", secretReq("poll", "component", "codec-1", "dup"), http.StatusConflict)
@@ -171,7 +171,7 @@ func TestSecretAPI(t *testing.T) {
 	c.do(opTok, http.MethodPost, "/secrets/"+opCreated.ID+":copy", nil, http.StatusOK)
 	// The operator's directory is scoped to its subtree: it sees the two
 	// component-owned secrets (the owner's poll and its own op-poll), not the
-	// global or room-owned poll placed above it.
+	// platform or room-owned poll placed above it.
 	var opList struct {
 		Secrets []struct {
 			OwnerKind string `json:"owner_kind"`
@@ -233,17 +233,17 @@ func TestSecretAdminSensitive(t *testing.T) {
 	// Owner seals three secrets:
 	//   dev @ codec-1       operational device secret (snmp, type default not sensitive)
 	//   zoom @ codec-1      platform credential (oauth2-client, type default admin-sensitive)
-	//   global-dev @ global operational device secret placed above the operator's scope
+	//   platform-dev @ platform  operational device secret placed above the operator's scope
 	c.do(ownerTok, http.MethodPost, "/secrets", secretReq("dev", "component", "codec-1", "dev-community"), http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/secrets", oauth2Req("zoom", "component", "codec-1"), http.StatusCreated)
-	c.do(ownerTok, http.MethodPost, "/secrets", secretReq("global-dev", "global", "", "global-community"), http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/secrets", secretReq("platform-dev", "platform", "", "platform-community"), http.StatusCreated)
 
 	// The owner directory shows all three, with the admin_sensitive flag surfaced.
 	owned := listSecrets(t, c, ownerTok)
 	if len(owned) != 3 {
 		t.Fatalf("owner list = %d, want 3", len(owned))
 	}
-	var zoomID, globalDevID string
+	var zoomID, platformDevID string
 	for _, s := range owned {
 		switch s.Name {
 		case "zoom":
@@ -251,16 +251,16 @@ func TestSecretAdminSensitive(t *testing.T) {
 			if !s.AdminSensitive {
 				t.Error("zoom should be admin_sensitive by its type default")
 			}
-		case "global-dev":
-			globalDevID = s.ID
+		case "platform-dev":
+			platformDevID = s.ID
 		case "dev":
 			if s.AdminSensitive {
 				t.Error("dev (snmp) should not be admin_sensitive")
 			}
 		}
 	}
-	if zoomID == "" || globalDevID == "" {
-		t.Fatal("owner list missing zoom/global-dev")
+	if zoomID == "" || platformDevID == "" {
+		t.Fatal("owner list missing zoom/platform-dev")
 	}
 
 	// The owner reveals the platform credential (owner `>` reaches the admin tier).
@@ -275,7 +275,7 @@ func TestSecretAdminSensitive(t *testing.T) {
 	// A component-scoped OPERATOR (secret:read,reveal,create,update, no admin tier).
 	opTok := setupScopedViewer(t, ctx, dsn, "operator-codec", "operator", "component", comp.ID)
 	// Its directory shows only the operational, in-subtree secret: the admin-sensitive
-	// zoom is filtered out (its existence and field names never leak), and the global
+	// zoom is filtered out (its existence and field names never leak), and the platform
 	// dev secret is out of scope.
 	opList := listSecrets(t, c, opTok)
 	if len(opList) != 1 || opList[0].Name != "dev" {
@@ -284,8 +284,8 @@ func TestSecretAdminSensitive(t *testing.T) {
 	// The admin-sensitive secret is a non-disclosing 404 on reveal (not a 403), so its
 	// existence does not leak, even though it sits within the operator's scope.
 	c.do(opTok, http.MethodPost, "/secrets/"+zoomID+":reveal", nil, http.StatusNotFound)
-	// The out-of-scope global device secret is likewise a non-disclosing 404.
-	c.do(opTok, http.MethodPost, "/secrets/"+globalDevID+":reveal", nil, http.StatusNotFound)
+	// The out-of-scope platform device secret is likewise a non-disclosing 404.
+	c.do(opTok, http.MethodPost, "/secrets/"+platformDevID+":reveal", nil, http.StatusNotFound)
 	// The operator reveals the operational secret in its scope.
 	var opReveal struct {
 		Fields map[string]string `json:"fields"`
@@ -306,7 +306,7 @@ func TestSecretAdminSensitive(t *testing.T) {
 	admTok := setupScopedViewer(t, ctx, dsn, "admin-codec", "admin", "component", comp.ID)
 	admList := listSecrets(t, c, admTok)
 	// The admin sees every in-subtree secret, including the admin-sensitive zoom the
-	// operator could not (dev, zoom, op-ok). The global one is out of scope.
+	// operator could not (dev, zoom, op-ok). The platform one is out of scope.
 	if len(admList) != 3 {
 		t.Fatalf("admin scoped list = %d, want 3 (dev, zoom, op-ok)", len(admList))
 	}

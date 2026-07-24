@@ -27,7 +27,8 @@ type secretTypeFieldBody struct {
 }
 
 type secretTypeBody struct {
-	ID                    string                `json:"id"`
+	ID                    string                `json:"id" doc:"The secret type's uuid, the stable handle that survives a rename"`
+	Name                  string                `json:"name" doc:"The kebab handle an operator reads and types; renameable"`
 	DisplayName           string                `json:"display_name"`
 	Official              bool                  `json:"official"`
 	DefaultAdminSensitive bool                  `json:"default_admin_sensitive" doc:"The admin_sensitive value the create form seeds for this type"`
@@ -38,9 +39,10 @@ type secretTypeBody struct {
 type secretBody struct {
 	ID             string            `json:"id"`
 	Name           string            `json:"name"`
-	SecretType     string            `json:"secret_type"`
+	SecretType     string            `json:"secret_type" doc:"The secret_type name"`
+	SecretTypeID   string            `json:"secret_type_id" doc:"The secret_type's uuid, the stable form of secret_type"`
 	OwnerKind      string            `json:"owner_kind"`
-	OwnerID        *string           `json:"owner_id,omitempty"`
+	OwnerID        *string           `json:"owner_id,omitempty" doc:"The owning entity's id, the canonical handle; absent for a global owner"`
 	OwnerName      string            `json:"owner_name,omitempty"`
 	AdminSensitive bool              `json:"admin_sensitive" doc:"When true, only the admin tier may see or reveal this secret, regardless of placement"`
 	Fields         []secretFieldBody `json:"fields"`
@@ -56,7 +58,7 @@ func toSecretFieldBodies(fs []storage.ResolvedField) []secretFieldBody {
 
 func toSecretBody(s *storage.Secret) secretBody {
 	return secretBody{
-		ID: s.ID, Name: s.Name, SecretType: s.SecretType,
+		ID: s.ID, Name: s.Name, SecretType: s.SecretType, SecretTypeID: s.SecretTypeID,
 		OwnerKind: s.OwnerKind, OwnerID: s.OwnerID, OwnerName: s.OwnerName,
 		AdminSensitive: s.AdminSensitive,
 		Fields:         toSecretFieldBodies(s.Fields),
@@ -83,8 +85,8 @@ type createSecretInput struct {
 	Body struct {
 		Name           string            `json:"name" minLength:"1" doc:"The cascade key; unique per owner"`
 		SecretType     string            `json:"secret_type" minLength:"1" doc:"A secret_type id"`
-		OwnerKind      string            `json:"owner_kind" enum:"global,location,system,component" doc:"Which tier owns this secret"`
-		Owner          *string           `json:"owner,omitempty" doc:"The owning entity's name; omit for a global secret"`
+		OwnerKind      string            `json:"owner_kind" enum:"platform,location,system,component" doc:"Which tier owns this secret"`
+		Owner          *string           `json:"owner,omitempty" doc:"The owning entity's name; omit for a platform secret"`
 		AdminSensitive *bool             `json:"admin_sensitive,omitempty" doc:"Admin-only visibility; omit to use the type default. Setting true requires the admin tier"`
 		Fields         map[string]string `json:"fields" doc:"The operator field map, validated against the type shape"`
 	}
@@ -120,11 +122,71 @@ func (a *authenticator) canSecretAdmin(ctx context.Context, action string) bool 
 	return ok && perms.Allows("secret", action, "admin")
 }
 
+// resolvedSecretBody is one entry in a component's effective-secrets cascade. Its
+// fields are MASKED exactly as the directory masks them: this surface answers
+// which secret applies to a device and where it comes from, never what it
+// contains. Plaintext stays behind the audited reveal.
+type resolvedSecretBody struct {
+	ID           string            `json:"id"`
+	Name         string            `json:"name"`
+	SecretType   string            `json:"secret_type" doc:"The secret_type name"`
+	SecretTypeID string            `json:"secret_type_id" doc:"The secret_type's uuid"`
+	OwnerKind    string            `json:"owner_kind"`
+	OwnerID      *string           `json:"owner_id,omitempty" doc:"The owning entity's id, the canonical handle; absent for a platform owner"`
+	OwnerName    string            `json:"owner_name,omitempty"`
+	Band         int               `json:"band" doc:"Cascade tier: 0 platform, 1 location, 3 component"`
+	Depth        int               `json:"depth" doc:"Distance up the tier's tree from the component (0 nearest)"`
+	Winner       bool              `json:"winner" doc:"True for the resolved secret; false for a shadowed candidate"`
+	Fields       []secretFieldBody `json:"fields"`
+}
+
+type effectiveSecretsInput struct {
+	Name string `path:"name" doc:"The component's name"`
+}
+
+type effectiveSecretsOutput struct {
+	Body struct {
+		Secrets []resolvedSecretBody `json:"secrets"`
+	}
+}
+
 func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "effective-secrets",
+		Method:      http.MethodGet,
+		Path:        "/components/{name}/effective-secrets",
+		Summary:     "Effective secrets for a component",
+		Description: "Resolves the secrets that cascade onto a component (platform -> location -> component), with the winner and the shadowed candidates it overrode. There is NO system band: a secret is device-facing, and the room a component happens to serve is the wrong owner for a credential the device itself answers with. Fields are masked, as in the directory; plaintext is only ever the audited reveal. Gated by secret:read, which the viewer floor does not carry, and admin-sensitive secrets appear only to the admin tier.",
+	}, "secret", "read"), func(ctx context.Context, in *effectiveSecretsInput) (*effectiveSecretsOutput, error) {
+		comp, err := gw.GetComponent(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
+		if err != nil {
+			return nil, mapComponentErr(err)
+		}
+		resolved, err := gw.ResolveSecrets(ctx, comp.ID, a.scopeFor(ctx, "secret", "read"), a.canSecretAdmin(ctx, "read"))
+		if err != nil {
+			return nil, mapSecretErr(err)
+		}
+		out := &effectiveSecretsOutput{}
+		out.Body.Secrets = make([]resolvedSecretBody, 0, len(resolved))
+		for i := range resolved {
+			r := &resolved[i]
+			fields := make([]secretFieldBody, 0, len(r.Fields))
+			for _, f := range r.Fields {
+				fields = append(fields, secretFieldBody{Name: f.Name, Value: f.Value, Secret: f.Secret})
+			}
+			out.Body.Secrets = append(out.Body.Secrets, resolvedSecretBody{
+				ID: r.ID, Name: r.Name, SecretType: r.SecretType, SecretTypeID: r.SecretTypeID,
+				OwnerKind: r.OwnerKind, OwnerID: r.OwnerID, OwnerName: r.OwnerName,
+				Band: r.Band, Depth: r.Depth, Winner: r.Winner, Fields: fields,
+			})
+		}
+		return out, nil
+	})
+
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-secret-types",
 		Method:      http.MethodGet,
-		Path:        "/types/secret",
+		Path:        "/secret-types",
 		Summary:     "List secret types",
 		Description: "Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.",
 	}, "secret", "read"), func(ctx context.Context, _ *struct{}) (*listSecretTypesOutput, error) {
@@ -135,7 +197,7 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		out := &listSecretTypesOutput{}
 		out.Body.SecretTypes = make([]secretTypeBody, 0, len(types))
 		for _, st := range types {
-			b := secretTypeBody{ID: st.ID, DisplayName: st.DisplayName, Official: st.Official, DefaultAdminSensitive: st.DefaultAdminSensitive}
+			b := secretTypeBody{ID: st.ID, Name: st.Name, DisplayName: st.DisplayName, Official: st.Official, DefaultAdminSensitive: st.DefaultAdminSensitive}
 			for _, f := range st.Fields {
 				b.Fields = append(b.Fields, secretTypeFieldBody{Name: f.Name, Type: f.Type, Secret: f.Secret, Origin: string(f.Origin)})
 			}
@@ -163,14 +225,20 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return out, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.platformGated(a.gated(huma.Operation{
 		OperationID:   "create-secret",
 		Method:        http.MethodPost,
 		Path:          "/secrets",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a secret",
-		Description:   "Seals a secret at an owner scope (a global secret needs an all-scoped grant). Fields are validated and encrypted against the type shape. Gated by secret:create.",
-	}, "secret", "create"), func(ctx context.Context, in *createSecretInput) (*secretOutput, error) {
+		Description:   "Seals a secret at an owner scope. Fields are validated and encrypted against the type shape. Gated by secret:create, plus platform:create when owner_kind is platform (the install-wide tier).",
+	}, "secret", "create"), "create"), func(ctx context.Context, in *createSecretInput) (*secretOutput, error) {
+		// The body says which tier the write lands at, so the tier gate runs here.
+		if in.Body.OwnerKind == platformTier {
+			if err := a.requirePlatform(ctx, "create"); err != nil {
+				return nil, err
+			}
+		}
 		s, err := gw.CreateSecret(ctx, actorID(ctx), storage.SecretSpec{
 			Name:           in.Body.Name,
 			SecretType:     in.Body.SecretType,
@@ -185,31 +253,35 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return &secretOutput{Body: toSecretBody(s)}, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.platformGated(a.gated(huma.Operation{
 		OperationID: "update-secret",
 		Method:      http.MethodPatch,
 		Path:        "/secrets/{id}",
 		Summary:     "Update a secret's field values",
-		Description: "Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update.",
-	}, "secret", "update"), func(ctx context.Context, in *updateSecretInput) (*secretOutput, error) {
+		Description: "Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update, plus platform:update when the secret sits at the platform tier.",
+	}, "secret", "update"), "update"), func(ctx context.Context, in *updateSecretInput) (*secretOutput, error) {
+		// Only the stored row knows its tier, so the resolved permission rides with
+		// the call and the Gateway applies it beside the scope split.
 		s, err := gw.UpdateSecret(ctx, actorID(ctx), in.ID, in.Body.Fields,
-			a.scopeFor(ctx, "secret", "read"), a.scopeFor(ctx, "secret", "update"), a.canSecretAdmin(ctx, "update"))
+			a.scopeFor(ctx, "secret", "read"), a.scopeFor(ctx, "secret", "update"),
+			a.canSecretAdmin(ctx, "update"), a.canPlatform(ctx, "update"))
 		if err != nil {
 			return nil, mapSecretErr(err)
 		}
 		return &secretOutput{Body: toSecretBody(s)}, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.platformGated(a.gated(huma.Operation{
 		OperationID:   "delete-secret",
 		Method:        http.MethodDelete,
 		Path:          "/secrets/{id}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a secret",
-		Description:   "Removes a secret by id. Gated by secret:delete; read and delete scopes on the owner drive the 404 versus 403 split.",
-	}, "secret", "delete"), func(ctx context.Context, in *secretIDInput) (*struct{}, error) {
+		Description:   "Removes a secret by id. Gated by secret:delete, plus platform:delete when the secret sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.",
+	}, "secret", "delete"), "delete"), func(ctx context.Context, in *secretIDInput) (*struct{}, error) {
 		if err := gw.DeleteSecret(ctx, actorID(ctx), in.ID,
-			a.scopeFor(ctx, "secret", "read"), a.scopeFor(ctx, "secret", "delete"), a.canSecretAdmin(ctx, "delete")); err != nil {
+			a.scopeFor(ctx, "secret", "read"), a.scopeFor(ctx, "secret", "delete"),
+			a.canSecretAdmin(ctx, "delete"), a.canPlatform(ctx, "delete")); err != nil {
 			return nil, mapSecretErr(err)
 		}
 		return nil, nil

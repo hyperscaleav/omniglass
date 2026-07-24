@@ -23,7 +23,7 @@ type tagBindingBody struct {
 	Key       string  `json:"key"`
 	Value     string  `json:"value"`
 	OwnerKind string  `json:"owner_kind"`
-	OwnerID   *string `json:"owner_id,omitempty"`
+	OwnerID   *string `json:"owner_id,omitempty" doc:"The owning entity's id, the canonical handle; absent for a global owner"`
 	OwnerName string  `json:"owner_name,omitempty"`
 }
 
@@ -34,9 +34,9 @@ type resolvedTagBody struct {
 	Key       string  `json:"key"`
 	Value     string  `json:"value"`
 	OwnerKind string  `json:"owner_kind"`
-	OwnerID   *string `json:"owner_id,omitempty"`
+	OwnerID   *string `json:"owner_id,omitempty" doc:"The owning entity's id, the canonical handle; absent for a global owner"`
 	OwnerName string  `json:"owner_name,omitempty"`
-	Band      int     `json:"band" doc:"Cascade tier: 0 global, 1 location, 2 system, 3 component"`
+	Band      int     `json:"band" doc:"Cascade tier: 0 platform, 1 location, 2 system, 3 component"`
 	Depth     int     `json:"depth" doc:"Distance up the tier's tree from the component (0 nearest)"`
 	Winner    bool    `json:"winner" doc:"True for the resolved value; false for a shadowed candidate"`
 }
@@ -48,7 +48,7 @@ func toTagBody(t *storage.Tag) tagBody {
 func toTagBindingBody(b *storage.TagBinding) tagBindingBody {
 	return tagBindingBody{
 		Key: b.Key, Value: b.Value,
-		OwnerKind: b.OwnerKind, OwnerID: b.OwnerID, OwnerName: b.OwnerName,
+		OwnerKind: b.OwnerKind, OwnerName: b.OwnerName,
 	}
 }
 
@@ -90,7 +90,7 @@ type tagNameInput struct {
 	Name string `path:"name" doc:"The tag key"`
 }
 
-type globalBindingInput struct {
+type platformBindingInput struct {
 	Name string `path:"name" doc:"The tag key"`
 	Body struct {
 		Value string `json:"value" minLength:"1" doc:"The bound value"`
@@ -108,7 +108,8 @@ type entityTagsOutput struct {
 }
 
 type effectiveTagsInput struct {
-	Name string `path:"name" doc:"The component's name"`
+	Name   string `path:"name" doc:"The component's name"`
+	System string `query:"system" doc:"Resolve against this system, which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand."`
 }
 
 type effectiveTagsOutput struct {
@@ -119,9 +120,9 @@ type effectiveTagsOutput struct {
 
 // registerTagRoutes wires the tag surface: the governed key vocabulary (minting
 // gated by tag:create, an admin action), the per-entity value bindings (gated by
-// the owner's own update permission), the global binding (tag:update), and the
-// per-component effective-tags cascade. Reading the vocabulary and an entity's
-// tags rides the viewer floor.
+// the owner's own update permission), the platform binding (tag:update plus
+// platform:update), and the per-component effective-tags cascade. Reading the
+// vocabulary and an entity's tags rides the viewer floor.
 func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-tags",
@@ -210,17 +211,22 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return nil, nil
 	})
 
-	// Global binding: a tenant-wide default value for a key, gated by tag:update
-	// (there is no owning entity to defer to). Modeled as custom methods on the
-	// key so the generated CLI reads `tag set-global <key>` / `tag clear-global`.
-	huma.Register(api, a.gated(huma.Operation{
-		OperationID: "set-global-tag",
+	// Platform binding: an install-wide default value for a key at the cascade's
+	// least-specific tier, gated by tag:update (there is no owning entity to defer
+	// to) plus platform:update, since the write always lands at the tier. Modeled as
+	// custom methods on the key so the generated CLI reads `tag setPlatform <key>` /
+	// `tag clearPlatform`.
+	huma.Register(api, a.platformGated(a.gated(huma.Operation{
+		OperationID: "set-platform-tag",
 		Method:      http.MethodPost,
-		Path:        "/tags/{name}:setGlobal",
-		Summary:     "Set a global tag value",
-		Description: "Binds a tenant-wide default value for a key at the global scope. Gated by tag:update (all-scope).",
-	}, "tag", "update"), func(ctx context.Context, in *globalBindingInput) (*tagBindingOutput, error) {
-		b, err := gw.SetTagBinding(ctx, actorID(ctx), in.Name, "global", nil, in.Body.Value,
+		Path:        "/tags/{name}:setPlatform",
+		Summary:     "Set a platform tag value",
+		Description: "Binds an install-wide default value for a key at the platform tier. Gated by tag:update (all-scope) and platform:update.",
+	}, "tag", "update"), "update"), func(ctx context.Context, in *platformBindingInput) (*tagBindingOutput, error) {
+		if err := a.requirePlatform(ctx, "update"); err != nil {
+			return nil, err
+		}
+		b, err := gw.SetTagBinding(ctx, actorID(ctx), in.Name, platformTier, nil, in.Body.Value,
 			a.scopeFor(ctx, "tag", "update"), a.scopeFor(ctx, "tag", "update"))
 		if err != nil {
 			return nil, mapTagErr(err)
@@ -228,15 +234,18 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return &tagBindingOutput{Body: toTagBindingBody(b)}, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
-		OperationID:   "clear-global-tag",
+	huma.Register(api, a.platformGated(a.gated(huma.Operation{
+		OperationID:   "clear-platform-tag",
 		Method:        http.MethodPost,
-		Path:          "/tags/{name}:clearGlobal",
+		Path:          "/tags/{name}:clearPlatform",
 		DefaultStatus: http.StatusNoContent,
-		Summary:       "Clear a global tag value",
-		Description:   "Removes the global binding for a key. Gated by tag:update (all-scope).",
-	}, "tag", "update"), func(ctx context.Context, in *tagNameInput) (*struct{}, error) {
-		if err := gw.DeleteTagBinding(ctx, actorID(ctx), in.Name, "global", nil,
+		Summary:       "Clear a platform tag value",
+		Description:   "Removes the platform-tier binding for a key. Gated by tag:update (all-scope) and platform:update.",
+	}, "tag", "update"), "update"), func(ctx context.Context, in *tagNameInput) (*struct{}, error) {
+		if err := a.requirePlatform(ctx, "update"); err != nil {
+			return nil, err
+		}
+		if err := gw.DeleteTagBinding(ctx, actorID(ctx), in.Name, platformTier, nil,
 			a.scopeFor(ctx, "tag", "update"), a.scopeFor(ctx, "tag", "update")); err != nil {
 			return nil, mapTagErr(err)
 		}
@@ -254,13 +263,13 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/effective-tags",
 		Summary:     "Effective tags for a component",
-		Description: "Resolves the tags that cascade onto a component (global -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. Gated by component:read; the component must be in the caller's component read scope.",
+		Description: "Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.",
 	}, "component", "read"), func(ctx context.Context, in *effectiveTagsInput) (*effectiveTagsOutput, error) {
 		comp, err := gw.GetComponent(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
 			return nil, mapComponentErr(err)
 		}
-		resolved, err := gw.ResolveTags(ctx, comp.ID, a.scopeFor(ctx, "component", "read"))
+		resolved, err := gw.ResolveTags(ctx, comp.ID, in.System, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
 			return nil, mapTagErr(err)
 		}

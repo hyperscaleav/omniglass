@@ -18,7 +18,7 @@ import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 const hq: Location = { id: "l-hq", name: "hq", display_name: "HQ", location_type: "campus", effective_tags: {} };
 const lab: Location = { id: "l-lab", name: "lab", display_name: "Lab", location_type: "campus", effective_tags: {} };
-const hqB1: Location = { id: "l-b1", name: "hq-b1", display_name: "HQ B1", location_type: "building", parent_id: "l-hq", effective_tags: {} };
+const hqB1: Location = { id: "l-b1", name: "hq-b1", display_name: "HQ B1", location_type: "building", parent: "hq", effective_tags: {} };
 const types: LocationType[] = [
   { id: "campus", display_name: "Campus", icon: "landmark", official: true, allowed_parent_types: ["root"] },
   { id: "building", display_name: "Building", icon: "building", official: true, allowed_parent_types: ["root", "campus"] },
@@ -26,8 +26,8 @@ const types: LocationType[] = [
 // The campus type's contract, resolved against hq: one inherited default, plus one
 // value hq sets that no contract declares.
 const hqProperties: EffectiveProperty[] = [
-  { property_name: "site.timezone", display_name: "Time zone", data_type: "string", required: false, is_set: false, from_contract: true, default_value: "UTC", value: "UTC" },
-  { property_name: "site.note", display_name: "Note", data_type: "string", required: false, is_set: true, from_contract: false, set_value: "leased", value: "leased", value_id: "v-note" },
+  { property_type_name: "site.timezone", property_type_id: "site.timezone-id", display_name: "Time zone", data_type: "string", required: false, is_set: false, from_contract: true, default_value: "UTC", value: "UTC" },
+  { property_type_name: "site.note", property_type_id: "site.note-id", display_name: "Note", data_type: "string", required: false, is_set: true, from_contract: false, set_value: "leased", value: "leased", value_id: "v-note" },
 ];
 
 function mount(path: string, extraLocations: Location[] = []) {
@@ -142,7 +142,7 @@ describe("Locations create-as-route", () => {
       const url = req.url;
       if (method === "PATCH" && url.includes("/locations/b2")) {
         captured = JSON.parse(await req.clone().text());
-        return new Response(JSON.stringify({ ...b2, parent_id: "l-hq" }), { status: 200, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ ...b2, parent: "hq" }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
       throw new Error(`unexpected fetch in this test: ${method} ${url}`);
     });
@@ -222,7 +222,7 @@ describe("Locations properties panel", () => {
       try { body = await req.clone().text(); } catch { body = ""; }
       calls.push({ method: req.method, url: req.url, body });
       if (req.method === "PUT") {
-        return new Response(JSON.stringify({ location: "hq", property_name: "site.timezone", value: "America/Denver", value_id: "v-1" }), {
+        return new Response(JSON.stringify({ location: "hq", property_type_name: "site.timezone", property_type_id: "site.timezone-id", value: "America/Denver", value_id: "v-1" }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         });
@@ -249,5 +249,83 @@ describe("Locations properties panel", () => {
       expect(put!.url).toContain("/locations/hq/properties/site.timezone");
       expect(JSON.parse(put!.body)).toEqual({ value: "America/Denver" });
     });
+  });
+});
+
+// The list row carries BOTH identities: the display name an operator reads, and
+// the key the API and CLI address the row by. The key is what somebody types into
+// `omniglass location get <key>`, so it is on the row rather than behind a hover:
+// hover does not exist on touch, is not discoverable, and cannot be selected to
+// copy.
+//
+// Before this the row showed one or the other and never both, and the rule that
+// picked between them was written out six times across the console.
+describe("Locations list identity", () => {
+  afterEach(() => window.history.pushState({}, "", "/"));
+
+  it("shows the display name with the key beneath it", async () => {
+    mount("/locations");
+    await waitFor(() => expect(screen.getByText("HQ")).toBeTruthy());
+    // Both, on the same row, not one standing in for the other.
+    const row = screen.getByText("HQ").closest("tr")!;
+    expect(within(row).getByText("hq")).toBeTruthy();
+  });
+
+  it("shows the key once when the entity has no display name", async () => {
+    const bare: Location = { id: "l-bare", name: "hq-boardroom-nvx-tx", location_type: "campus", effective_tags: {} };
+    mount("/locations", [bare]);
+    await waitFor(() => expect(screen.getByText("hq-boardroom-nvx-tx")).toBeTruthy());
+    // Rendered once, not duplicated as label-plus-key: the label IS the key, and
+    // nothing is derived from it (a sentence-cased "Hq boardroom nvx tx" would
+    // read as a typo and mangle every acronym in the domain).
+    expect(screen.getAllByText("hq-boardroom-nvx-tx")).toHaveLength(1);
+  });
+});
+
+// The create form leads with the display name and derives the key from it, so an
+// operator types "Conf Room 301" and never has to invent `conf-room-301` or think
+// about the character class the API enforces.
+//
+// What each tier can actually witness, which is worth being precise about:
+//
+//   - THIS file proves the page is WIRED to the primitive. Remove the derivation
+//     and both tests below fail. A unit test on the hook cannot tell you a page
+//     forgot to use it.
+//   - lib/entities.test.ts proves the SUPPRESSION: that a hand-edited key stops
+//     following. That cannot be asserted from here. Once a user types into an
+//     input, its DOM value property no longer tracks the signal, so `key.value`
+//     returns what the test typed and would pass even with the rule removed. The
+//     hint tracks ownership rather than suppression, so it cannot witness it
+//     either. Mutation-checked in both files.
+describe("Locations create identity", () => {
+  afterEach(() => window.history.pushState({}, "", "/"));
+
+  const fields = async () => {
+    mount("/locations/create");
+    await waitFor(() => expect(screen.getByText("New location")).toBeTruthy());
+    const display = screen.getByPlaceholderText("Conf Room 301") as HTMLInputElement;
+    const key = screen.getByPlaceholderText("hq-a-301") as HTMLInputElement;
+    return { display, key };
+  };
+
+  it("derives the key as the display name is typed", async () => {
+    const { display, key } = await fields();
+    fireEvent.input(display, { target: { value: "Conf Room 301" } });
+    await waitFor(() => expect(key.value).toBe("conf-room-301"));
+  });
+
+  it("stops advertising the key as derived once it is edited by hand", async () => {
+    const { display, key } = await fields();
+    fireEvent.input(display, { target: { value: "Conf Room 301" } });
+    await waitFor(() => expect(key.value).toBe("conf-room-301"));
+
+    fireEvent.input(key, { target: { value: "hq-a-301" } });
+    fireEvent.input(display, { target: { value: "Conference Room 301 East" } });
+
+    // The observable this CAN assert: the field stops advertising itself as
+    // derived once the operator takes it, which is what they see.
+    await waitFor(() => expect(display.value).toBe("Conference Room 301 East"));
+    expect(screen.getByText(/Globally unique address/)).toBeTruthy();
+    expect(screen.queryByText(/Derived from the display name/)).toBeNull();
   });
 });

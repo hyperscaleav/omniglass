@@ -1,6 +1,6 @@
 import { api } from "../api/client";
 
-// The Properties catalog data layer: thin typed wrappers over the /properties
+// The Properties catalog data layer: thin typed wrappers over the /property-types
 // surface. A property is a canonical, typed signal named by a key (a dot-hierarchied
 // identifier) that a datapoint observes and a field declares. Official properties are
 // seed-owned and read-only; custom properties are operator created. validation is a
@@ -27,7 +27,7 @@ export type PropertyRow = {
 export const PROPERTIES_KEY = ["properties"] as const;
 
 export async function listProperties(): Promise<PropertyRow[]> {
-  const { data, error } = await api.GET("/properties");
+  const { data, error } = await api.GET("/property-types");
   if (error) throw error;
   return (data?.properties ?? []) as PropertyRow[];
 }
@@ -43,7 +43,7 @@ export type CreateProperty = {
 };
 
 export async function createProperty(body: CreateProperty): Promise<void> {
-  const { error } = await api.POST("/properties", { body });
+  const { error } = await api.POST("/property-types", { body });
   if (error) throw error;
 }
 
@@ -55,11 +55,11 @@ export type UpdateProperty = {
 };
 
 export async function updateProperty(name: string, body: UpdateProperty): Promise<void> {
-  const { error } = await api.PATCH("/properties/{name}", { params: { path: { name } }, body });
+  const { error } = await api.PATCH("/property-types/{name}", { params: { path: { name } }, body });
   if (error) throw error;
 }
 
 export async function deleteProperty(name: string): Promise<void> {
-  const { error } = await api.DELETE("/properties/{name}", { params: { path: { name } } });
+  const { error } = await api.DELETE("/property-types/{name}", { params: { path: { name } } });
   if (error) throw error;
 }

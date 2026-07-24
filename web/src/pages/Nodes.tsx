@@ -1,9 +1,11 @@
+import { entityLabel } from "../lib/entities";
 import { Show, For, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { Dialog } from "@kobalte/core/dialog";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Button from "../components/Button";
-import { Check, Copy, Server } from "../components/icons";
+import { useFormActions } from "../lib/formactions";
+import { Check, Copy, Plus, Server } from "../components/icons";
 import KVStacked from "../components/KVStacked";
 import TagAdder from "../components/TagAdder";
 import TagPills from "../components/TagPills";
@@ -294,7 +296,7 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
             >
               <select class="select select-bordered w-full" value={location()} onChange={(e) => setLocation(e.currentTarget.value)}>
                 <option value="">(unplaced)</option>
-                <For each={locations.data ?? []}>{(l) => <option value={l.name}>{l.display_name || l.name}</option>}</For>
+                <For each={locations.data ?? []}>{(l) => <option value={l.name}>{entityLabel(l)}</option>}</For>
               </select>
             </Show>
           </div>
@@ -364,8 +366,16 @@ function CreateNodeForm(props: { close: () => void; onEnrolled: (out: EnrollOutp
   const [busy, setBusy] = createSignal(false);
   const [err, setErr] = createSignal<string | null>(null);
 
-  async function submit(e: SubmitEvent) {
-    e.preventDefault();
+  useFormActions().bind({
+    submitLabel: "Create node",
+    submitIcon: Plus,
+    submit: () => void submit(),
+    busy,
+    disabled: () => !name().trim(),
+    cancel: props.close,
+  });
+
+  async function submit() {
     setBusy(true);
     setErr(null);
     try {
@@ -388,7 +398,7 @@ function CreateNodeForm(props: { close: () => void; onEnrolled: (out: EnrollOutp
   }
 
   return (
-    <form class="flex flex-col gap-3" onSubmit={submit}>
+    <form class="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
       <p class="text-xs text-base-content/50">Registers an edge node and mints its enrollment token. The name is the node's address (no dots or whitespace); the token is shown once.</p>
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
@@ -405,19 +415,12 @@ function CreateNodeForm(props: { close: () => void; onEnrolled: (out: EnrollOutp
         <label class="eyebrow mb-1.5 block" for="new-node-location">Location</label>
         <select id="new-node-location" class="select select-bordered w-full" value={location()} onChange={(e) => setLocation(e.currentTarget.value)} disabled={busy()}>
           <option value="">(unplaced)</option>
-          <For each={locations.data ?? []}>{(l) => <option value={l.name}>{l.display_name || l.name}</option>}</For>
+          <For each={locations.data ?? []}>{(l) => <option value={l.name}>{entityLabel(l)}</option>}</For>
         </select>
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-node-desc">Description</label>
         <input id="new-node-desc" autocomplete="off" class="input input-bordered w-full" value={description()} placeholder="HQ network closet" onInput={(e) => setDescription(e.currentTarget.value)} disabled={busy()} />
-      </div>
-      <div class="mt-1 flex justify-end gap-2">
-        <Button type="button" intent="quiet" onClick={props.close} disabled={busy()}>Cancel</Button>
-        <Button type="submit" intent="action" disabled={busy() || !name().trim()}>
-          <Show when={busy()}><span class="loading loading-spinner loading-xs" /></Show>
-          Create node
-        </Button>
       </div>
     </form>
   );

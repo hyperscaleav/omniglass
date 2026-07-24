@@ -4,7 +4,9 @@ import "fmt"
 
 // Level is one contribution to the cascade: a named layer, its document, and the
 // key-paths it locks per namespace. Levels are passed to Resolve broad to specific
-// (code, file, global, then later group, user).
+// (default, file, platform, then later group, user). "default" is the type's own
+// declaration rather than a binding: it is what the setting is when nobody set it,
+// and it never appears as a row.
 type Level struct {
 	Name  string
 	Doc   Doc
@@ -23,13 +25,13 @@ type Resolved struct {
 // Resolve computes the effective document. Without locks, a more-specific level
 // wins (later in the argument list). A lock at level L pins the value contributed
 // at or below L and forbids any more-specific level from overriding it; when two
-// levels lock the same key, the broader (earlier) lock wins, so a global lock is
+// levels lock the same key, the broader (earlier) lock wins, so a platform lock is
 // absolute over a group or user lock. Provenance (Sources) and the winning lock
 // level (Locks) are recorded per key.
 func Resolve(levels ...Level) Resolved {
 	// Lock identity keys on the level name, so names must be unique: a duplicate
 	// would let a more-specific level bypass a broader level's lock. Level names are
-	// engine constants (code, file, global, group, user), so a collision is a
+	// engine constants (default, file, platform, group, user), so a collision is a
 	// programming defect, not a runtime condition.
 	seen := make(map[string]bool, len(levels))
 	for _, lvl := range levels {

@@ -11,7 +11,8 @@ export type InterfaceParams = { target?: string; port?: number | string } & Reco
 export type Interface = {
   id: string;
   name: string;
-  type: string;
+  interface_type: string;
+  interface_type_id?: string;
   component?: string;
   node?: string;
   params?: InterfaceParams;
@@ -49,7 +50,7 @@ export async function getInterface(id: string): Promise<Interface> {
 // The interface is protocol-named: its name is DERIVED server-side from its type,
 // so the create body carries no name.
 export type CreateInterface = {
-  type: string;
+  interface_type: string;
   component?: string;
   node?: string;
   params?: InterfaceParams;
@@ -81,6 +82,6 @@ export async function deleteInterface(id: string): Promise<void> {
 // is client-side over the loaded rows via lib/predicate.
 export const interfaceFilterKeys: FilterKey<Interface>[] = [
   { key: "name", type: "string", hint: "substring", get: (i) => i.name },
-  { key: "type", type: "string", hint: "exact", get: (i) => i.type, values: (rows) => [...new Set(rows.map((r) => r.type))].sort() },
+  { key: "type", type: "string", hint: "exact", get: (i) => i.interface_type, values: (rows) => [...new Set(rows.map((r) => r.interface_type))].sort() },
   { key: "component", type: "string", hint: "exact", get: (i) => i.component ?? "", values: (rows) => [...new Set(rows.map((r) => r.component).filter(Boolean) as string[])].sort() },
 ];

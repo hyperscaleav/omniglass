@@ -75,7 +75,7 @@ func TestSystemRolesAPI(t *testing.T) {
 	// A standard that wants a table mic (microphone AND speaker, two of them),
 	// and a system that conforms to it.
 	c.do(ownerTok, http.MethodPost, "/standards", map[string]any{
-		"id": "acme-room", "display_name": "Acme Room",
+		"name": "acme-room", "display_name": "Acme Room",
 	}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPut, "/standards/acme-room/roles/table-mic", map[string]any{
 		"display_name": "Table Microphone", "quorum": 2,

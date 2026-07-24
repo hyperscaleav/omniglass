@@ -17,9 +17,9 @@ import (
 // location type declares, its optional default, and whether a location of the
 // type must set it.
 type locationTypePropertyWire struct {
-	PropertyName string          `json:"property_name"`
-	DefaultValue json.RawMessage `json:"default_value"`
-	Required     bool            `json:"required"`
+	PropertyTypeName string          `json:"property_type_name"`
+	DefaultValue     json.RawMessage `json:"default_value"`
+	Required         bool            `json:"required"`
 }
 
 // locationTypePropertiesWire is the decoded list body.
@@ -53,8 +53,8 @@ func TestLocationTypePropertiesAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	c.do(ownerTok, http.MethodPost, "/types/location", map[string]any{
-		"id": "annex", "display_name": "Annex", "allowed_parent_types": []string{"campus"},
+	c.do(ownerTok, http.MethodPost, "/location-types", map[string]any{
+		"name": "annex", "display_name": "Annex", "allowed_parent_types": []string{"campus"},
 	}, http.StatusCreated)
 
 	// PUT declares the line. The property must already exist in the catalog
@@ -64,7 +64,7 @@ func TestLocationTypePropertiesAPI(t *testing.T) {
 		map[string]any{"default_value": "MN-UNSET", "required": true}, http.StatusOK), &set); err != nil {
 		t.Fatalf("decode set: %v", err)
 	}
-	if set.PropertyName != "model_number" || !set.Required || string(set.DefaultValue) != `"MN-UNSET"` {
+	if set.PropertyTypeName != "model_number" || !set.Required || string(set.DefaultValue) != `"MN-UNSET"` {
 		t.Fatalf("set = %+v, want model_number required with default \"MN-UNSET\"", set)
 	}
 
@@ -73,7 +73,7 @@ func TestLocationTypePropertiesAPI(t *testing.T) {
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/location-types/annex/properties", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode list: %v", err)
 	}
-	if len(listed.Properties) != 1 || listed.Properties[0].PropertyName != "model_number" {
+	if len(listed.Properties) != 1 || listed.Properties[0].PropertyTypeName != "model_number" {
 		t.Fatalf("contract = %+v, want one model_number line", listed.Properties)
 	}
 

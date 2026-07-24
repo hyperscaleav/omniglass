@@ -18,16 +18,18 @@ import (
 // by name, which makes the write a PUT upsert rather than a create/update pair.
 
 type productPropertyBody struct {
-	PropertyName string          `json:"property_name" doc:"The catalog property this product declares"`
-	DefaultValue json.RawMessage `json:"default_value,omitempty" doc:"The contract default, shape given by the property's data_type; omitted when the contract sets none"`
-	Required     bool            `json:"required" doc:"Whether every instance of this product must set the property"`
+	PropertyTypeName string          `json:"property_type_name" doc:"The catalog property this product declares"`
+	PropertyTypeID   string          `json:"property_type_id" doc:"The catalog property's uuid, the stable form of property_type_name"`
+	DefaultValue     json.RawMessage `json:"default_value,omitempty" doc:"The contract default, shape given by the property's data_type; omitted when the contract sets none"`
+	Required         bool            `json:"required" doc:"Whether every instance of this product must set the property"`
 }
 
 func toProductPropertyBody(pp *storage.ProductProperty) productPropertyBody {
 	return productPropertyBody{
-		PropertyName: pp.PropertyName,
-		DefaultValue: json.RawMessage(pp.DefaultValue),
-		Required:     pp.Required,
+		PropertyTypeName: pp.PropertyTypeName,
+		PropertyTypeID:   pp.PropertyTypeID,
+		DefaultValue:     json.RawMessage(pp.DefaultValue),
+		Required:         pp.Required,
 	}
 }
 
@@ -94,9 +96,9 @@ func registerProductPropertyRoutes(api huma.API, a *authenticator, gw storage.Ga
 			return nil, err
 		}
 		pp, err := gw.SetProductProperty(ctx, actorID(ctx), in.ID, storage.ProductPropertySpec{
-			PropertyName: in.Property,
-			DefaultValue: def,
-			Required:     in.Body.Required,
+			PropertyTypeName: in.Property,
+			DefaultValue:     def,
+			Required:         in.Body.Required,
 		})
 		if err != nil {
 			return nil, mapProductPropertyErr(err)
@@ -140,7 +142,7 @@ func encodePropertyJSON(v any, field string) (json.RawMessage, error) {
 // type-registry mapping, where the product is the type: not-found 404, official
 // read-only 422.
 func mapProductPropertyErr(err error) error {
-	if errors.Is(err, storage.ErrPropertyNotFound) {
+	if errors.Is(err, storage.ErrPropertyTypeNotFound) {
 		return huma.Error422UnprocessableEntity("unknown property")
 	}
 	return mapTypeErr(err, "product property")

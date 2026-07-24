@@ -104,7 +104,7 @@ describe("principals data layer", () => {
 // permission (a substring over the role's effective permission strings). These
 // pin the filtering behavior the FilterBar/ListShell drives, independent of the
 // page render.
-const role = (p: Partial<Role>): Role => ({ id: "x", official: true, permissions: [], inherits: [], ...p });
+const role = (p: Partial<Role>): Role => ({ id: p.id ?? "x", name: p.id ?? "x", official: true, permissions: [], inherits: [], ...p });
 
 const roles: Role[] = [
   role({ id: "viewer", display_name: "Viewer", effective_permissions: ["*:read"] }),

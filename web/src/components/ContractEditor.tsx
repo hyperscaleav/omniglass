@@ -89,8 +89,8 @@ export default function ContractEditor(props: {
   const byName = createMemo(() => new Map((catalog.data ?? []).map((p) => [p.name, p])));
   const rows = createMemo<ContractRow[]>(() =>
     [...(q.data ?? [])]
-      .sort((a, b) => a.property_name.localeCompare(b.property_name))
-      .map((line) => ({ line, meta: byName().get(line.property_name) })),
+      .sort((a, b) => a.property_type_name.localeCompare(b.property_type_name))
+      .map((line) => ({ line, meta: byName().get(line.property_type_name) })),
   );
 
   // A read-only contract: an official classifier is seed-owned, and declaring is
@@ -102,7 +102,7 @@ export default function ContractEditor(props: {
   // The catalog minus what the classifier already declares: a property is declared
   // at most once, so the picker cannot offer a duplicate.
   const declarable = createMemo(() => {
-    const taken = new Set((q.data ?? []).map((r) => r.property_name));
+    const taken = new Set((q.data ?? []).map((r) => r.property_type_name));
     return [...(catalog.data ?? [])].filter((p) => !taken.has(p.name)).sort((a, b) => a.name.localeCompare(b.name));
   });
 
@@ -118,7 +118,7 @@ export default function ContractEditor(props: {
   const [addRequired, setAddRequired] = createSignal(false);
 
   function openEdit(r: ContractRow) {
-    setEditing(r.line.property_name);
+    setEditing(r.line.property_type_name);
     setDraftDefault(displayValue(r.line.default_value));
     setDraftRequired(r.line.required);
     setErr(null);
@@ -162,7 +162,7 @@ export default function ContractEditor(props: {
     setErr(null);
     const body = buildBody(dataTypeOf(r.meta), draftDefault(), draftRequired());
     if (!body) return;
-    await write(r.line.property_name, body, () => setEditing(null));
+    await write(r.line.property_type_name, body, () => setEditing(null));
   }
 
   async function declare() {
@@ -217,18 +217,18 @@ export default function ContractEditor(props: {
               <div class="flex flex-col gap-1 px-3 py-2">
                 <div class="flex items-center gap-2">
                   <span class="min-w-0 flex-1 truncate">
-                    <span class="font-data text-sm">{r.line.property_name}</span>
+                    <span class="font-data text-sm">{r.line.property_type_name}</span>
                     <Show when={r.meta?.display_name}>
                       <span class="ml-2 text-[11px] text-base-content/50">{r.meta?.display_name}</span>
                     </Show>
                   </span>
                   <span class="badge badge-ghost badge-sm shrink-0 font-data">{r.meta?.data_type ?? "string"}</span>
-                  <Show when={canDeclare() && editing() !== r.line.property_name}>
+                  <Show when={canDeclare() && editing() !== r.line.property_type_name}>
                     <Button
                       square
                       size="xs"
                       icon={Pencil}
-                      label={`Edit ${r.line.property_name}`}
+                      label={`Edit ${r.line.property_type_name}`}
                       title="Edit"
                       onClick={() => openEdit(r)}
                     />
@@ -238,16 +238,16 @@ export default function ContractEditor(props: {
                       square
                       size="xs"
                       icon={Trash}
-                      label={`Withdraw ${r.line.property_name}`}
+                      label={`Withdraw ${r.line.property_type_name}`}
                       title="Withdraw"
                       disabled={busy()}
-                      onClick={() => withdraw(r.line.property_name)}
+                      onClick={() => withdraw(r.line.property_type_name)}
                     />
                   </Show>
                 </div>
 
                 <Show
-                  when={editing() === r.line.property_name}
+                  when={editing() === r.line.property_type_name}
                   fallback={
                     <div class="flex items-center gap-2 text-[11px]">
                       <span class="text-base-content/40">default</span>
@@ -271,7 +271,7 @@ export default function ContractEditor(props: {
                     <input
                       class="input input-bordered input-sm min-w-0 flex-1 font-data"
                       placeholder={`default (${dataTypeOf(r.meta)}), blank for none`}
-                      aria-label={`Default for ${r.line.property_name}`}
+                      aria-label={`Default for ${r.line.property_type_name}`}
                       value={draftDefault()}
                       onInput={(e) => setDraftDefault(e.currentTarget.value)}
                     />
@@ -284,7 +284,7 @@ export default function ContractEditor(props: {
                       />
                       required
                     </label>
-                    <Button square size="xs" intent="action" icon={Check} label={`Save ${r.line.property_name}`} title="Save" disabled={busy()} onClick={() => saveEdit(r)} />
+                    <Button square size="xs" intent="action" icon={Check} label={`Save ${r.line.property_type_name}`} title="Save" disabled={busy()} onClick={() => saveEdit(r)} />
                     <Button square size="xs" icon={X} label="Cancel" title="Cancel" onClick={() => setEditing(null)} />
                   </div>
                 </Show>

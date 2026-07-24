@@ -14,18 +14,22 @@ and credentials](/architecture/variables/).
 
 **Values > Variables** (with `variable:read`) is the directory of every
 [variable](/architecture/variables/). Each row shows its name, a **type badge** (`string`,
-`int`, `float`, `bool`, `json`), a **scope** label (Global, or the location / system / component it
+`int`, `float`, `bool`, `json`), a **scope** label (Platform, or the location / system / component it
 attaches to), and the **value in the clear** (no mask, no reveal).
 
 ::screenshot{#variables}
 
 - **New variable** (with `variable:create`) opens a create **drawer**: name the key, pick a **type** and
   a **scope**, choose the entity from the shared tree picker, then enter the value in a
-  **type-aware editor** (a number input, a toggle for a bool, a textarea for json). A global variable
-  needs an all-scope grant. `variable:create` is on the **operator** role.
+  **type-aware editor** (a number input, a toggle for a bool, a textarea for json). A **platform**
+  variable is install-wide, so it needs an all-scope grant plus `platform:create` on top of
+  `variable:create`. `variable:create` is on the **operator** role; `platform:*` starts at **admin**.
+  Without `platform:create` the **Platform** scope is not offered at all, and the form says which
+  capability that takes.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `variable:update`, also an
   operator permission) opens the type-aware value editor; **Delete** (with `variable:delete`, admin and
-  owner) sits behind a confirm.
+  owner) sits behind a confirm. On a **Platform** row both also need the matching `platform:<action>`;
+  holding only the variable half leaves the blade read-only with a note naming what is missing.
 
 From the CLI the same surface is `omniglass variable list` / `create` / `update` / `delete` (see the
 [CLI reference](/reference/cli/)).

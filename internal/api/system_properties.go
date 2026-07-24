@@ -31,16 +31,17 @@ type systemPropertiesOutput struct {
 }
 
 type systemPropertyOutput struct {
-	Body systemPropertyValueBody
+	Body systemPropertyBody
 }
 
 // systemPropertyValueBody is the write reply: the stored override, echoed back so
 // a client that just set a value holds its id without re-reading the list.
-type systemPropertyValueBody struct {
-	System       string          `json:"system"`
-	PropertyName string          `json:"property_name"`
-	Value        json.RawMessage `json:"value" doc:"The stored value, shape given by the property's data_type"`
-	ValueID      string          `json:"value_id" doc:"The stored value's id"`
+type systemPropertyBody struct {
+	System           string          `json:"system"`
+	PropertyTypeName string          `json:"property_type_name"`
+	PropertyTypeID   string          `json:"property_type_id" doc:"The catalog property's uuid, the stable form of property_type_name"`
+	Value            json.RawMessage `json:"value" doc:"The stored value, shape given by the property's data_type"`
+	ValueID          string          `json:"value_id" doc:"The stored value's id"`
 }
 
 // systemPropertyPathInput addresses one property on one system.
@@ -93,16 +94,17 @@ func registerSystemPropertyRoutes(api huma.API, a *authenticator, gw storage.Gat
 		if err != nil {
 			return nil, err
 		}
-		pv, err := gw.SetPropertyValue(ctx, actorID(ctx), "system", in.Name, in.Property,
+		pv, err := gw.SetProperty(ctx, actorID(ctx), "system", in.Name, in.Property,
 			systemPropertyInstance, raw, a.scopeFor(ctx, "system", "update"))
 		if err != nil {
 			return nil, mapSystemPropertyErr(err)
 		}
-		return &systemPropertyOutput{Body: systemPropertyValueBody{
-			System:       in.Name,
-			PropertyName: pv.PropertyName,
-			Value:        json.RawMessage(pv.Value),
-			ValueID:      pv.ID,
+		return &systemPropertyOutput{Body: systemPropertyBody{
+			System:           in.Name,
+			PropertyTypeName: pv.PropertyTypeName,
+			PropertyTypeID:   pv.PropertyTypeID,
+			Value:            json.RawMessage(pv.Value),
+			ValueID:          pv.ID,
 		}}, nil
 	})
 
@@ -114,7 +116,7 @@ func registerSystemPropertyRoutes(api huma.API, a *authenticator, gw storage.Gat
 		Summary:       "Clear a property on a system",
 		Description:   "Removes the system's declared value, so the property falls back to the standard contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the system never set is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
 	}, "system", "update"), func(ctx context.Context, in *systemPropertyPathInput) (*struct{}, error) {
-		if err := gw.ClearPropertyValue(ctx, actorID(ctx), "system", in.Name, in.Property,
+		if err := gw.ClearProperty(ctx, actorID(ctx), "system", in.Name, in.Property,
 			systemPropertyInstance, a.scopeFor(ctx, "system", "update")); err != nil {
 			return nil, mapSystemPropertyErr(err)
 		}
@@ -128,7 +130,7 @@ func registerSystemPropertyRoutes(api huma.API, a *authenticator, gw storage.Gat
 // sentinels keep the system routes' non-disclosing mapping.
 func mapSystemPropertyErr(err error) error {
 	switch {
-	case errors.Is(err, storage.ErrPropertyValueNotFound):
+	case errors.Is(err, storage.ErrPropertyNotFound):
 		return huma.Error404NotFound("property not set on this system")
 	case errors.Is(err, storage.ErrPropertyRefNotFound):
 		return huma.Error422UnprocessableEntity("unknown property")

@@ -480,6 +480,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components/{name}/effective-secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Effective secrets for a component
+         * @description Resolves the secrets that cascade onto a component (platform -> location -> component), with the winner and the shadowed candidates it overrode. There is NO system band: a secret is device-facing, and the room a component happens to serve is the wrong owner for a credential the device itself answers with. Fields are masked, as in the directory; plaintext is only ever the audited reveal. Gated by secret:read, which the viewer floor does not carry, and admin-sensitive secrets appear only to the admin tier.
+         */
+        get: operations["effective-secrets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/components/{name}/effective-tags": {
         parameters: {
             query?: never;
@@ -489,9 +509,29 @@ export interface paths {
         };
         /**
          * Effective tags for a component
-         * @description Resolves the tags that cascade onto a component (global -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. Gated by component:read; the component must be in the caller's component read scope.
+         * @description Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.
          */
         get: operations["effective-tags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/effective-variables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Effective variables for a component
+         * @description Resolves the variables that cascade onto a component (platform -> location -> system -> component): names union, values override most-specific-wins, with the winner and the shadowed candidates it overrode. The system band comes from the component's PRIMARY membership; resolving against a named system is not offered here yet, unlike effective-tags. Gated by variable:read; the component must be in the caller's component read scope.
+         */
+        get: operations["effective-variables"];
         put?: never;
         post?: never;
         delete?: never;
@@ -874,6 +914,54 @@ export interface paths {
          * @description Patches an interface's node placement or params. Gated by interface:update; read and update scopes (through the component) drive the 404 versus 403 split.
          */
         patch: operations["update-interface"];
+        trace?: never;
+    };
+    "/location-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List location types
+         * @description Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by type:read.
+         */
+        get: operations["list-location-types"];
+        put?: never;
+        /**
+         * Create a location type
+         * @description Creates a custom (non-official) location_type. Gated by type:create.
+         */
+        post: operations["create-location-type"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/location-types/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a location type
+         * @description Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.
+         */
+        delete: operations["delete-location-type"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a location type
+         * @description Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by type:update.
+         */
+        patch: operations["update-location-type"];
         trace?: never;
     };
     "/location-types/{id}/properties": {
@@ -1852,7 +1940,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/properties": {
+    "/property-types": {
         parameters: {
             query?: never;
             header?: never;
@@ -1861,22 +1949,22 @@ export interface paths {
         };
         /**
          * List properties
-         * @description Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property:read.
+         * @description Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property_type:read.
          */
-        get: operations["list-property"];
+        get: operations["list-property-type"];
         put?: never;
         /**
          * Create a property
-         * @description Registers a custom property (official=false). The name must be a valid property key. Gated by property:create.
+         * @description Registers a custom property (official=false). The name must be a valid property key. Gated by property_type:create.
          */
-        post: operations["create-property"];
+        post: operations["create-property-type"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/properties/{name}": {
+    "/property-types/{name}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1885,23 +1973,23 @@ export interface paths {
         };
         /**
          * Get a property
-         * @description Returns one property by name. Gated by property:read.
+         * @description Returns one property by name. Gated by property_type:read.
          */
-        get: operations["get-property"];
+        get: operations["get-property-type"];
         put?: never;
         post?: never;
         /**
          * Delete a property
-         * @description Removes a custom property by name. Official properties are read-only. Gated by property:delete.
+         * @description Removes a custom property by name. Official properties are read-only. Gated by property_type:delete.
          */
-        delete: operations["delete-property"];
+        delete: operations["delete-property-type"];
         options?: never;
         head?: never;
         /**
          * Update a property
-         * @description Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property:update.
+         * @description Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property_type:update.
          */
-        patch: operations["update-property"];
+        patch: operations["update-property-type"];
         trace?: never;
     };
     "/roles": {
@@ -1916,6 +2004,26 @@ export interface paths {
          * @description Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read:admin capability.
          */
         get: operations["list-roles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/secret-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List secret types
+         * @description Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.
+         */
+        get: operations["list-secret-types"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1939,7 +2047,7 @@ export interface paths {
         put?: never;
         /**
          * Create a secret
-         * @description Seals a secret at an owner scope (a global secret needs an all-scoped grant). Fields are validated and encrypted against the type shape. Gated by secret:create.
+         * @description Seals a secret at an owner scope. Fields are validated and encrypted against the type shape. Gated by secret:create, plus platform:create when owner_kind is platform (the install-wide tier).
          */
         post: operations["create-secret"];
         delete?: never;
@@ -1960,14 +2068,14 @@ export interface paths {
         post?: never;
         /**
          * Delete a secret
-         * @description Removes a secret by id. Gated by secret:delete; read and delete scopes on the owner drive the 404 versus 403 split.
+         * @description Removes a secret by id. Gated by secret:delete, plus platform:delete when the secret sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.
          */
         delete: operations["delete-secret"];
         options?: never;
         head?: never;
         /**
          * Update a secret's field values
-         * @description Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update.
+         * @description Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update, plus platform:update when the secret sits at the platform tier.
          */
         patch: operations["update-secret"];
         trace?: never;
@@ -2064,14 +2172,14 @@ export interface paths {
         post?: never;
         /**
          * Restore a settings namespace to defaults
-         * @description Drops the namespace's global override, restoring file and code defaults. Gated by settings:update.
+         * @description Drops the namespace's platform override, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.
          */
         delete: operations["delete-settings-namespace"];
         options?: never;
         head?: never;
         /**
          * Update a settings namespace
-         * @description Applies an RFC 7386 JSON Merge Patch to the namespace's global override; null on a key restores it. Gated by settings:update.
+         * @description Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it. Gated by settings:update and platform:update.
          */
         patch: operations["patch-settings-namespace"];
         trace?: never;
@@ -2087,7 +2195,7 @@ export interface paths {
         put?: never;
         /**
          * Restore all settings to defaults
-         * @description Removes every global override (a factory reset). Gated by settings:update.
+         * @description Removes every platform override (a factory reset). Gated by settings:update and platform:update.
          */
         post: operations["restore-settings-defaults"];
         delete?: never;
@@ -2612,7 +2720,7 @@ export interface paths {
         patch: operations["update-tag"];
         trace?: never;
     };
-    "/tags/{name}:clearGlobal": {
+    "/tags/{name}:clearPlatform": {
         parameters: {
             query?: never;
             header?: never;
@@ -2622,17 +2730,17 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Clear a global tag value
-         * @description Removes the global binding for a key. Gated by tag:update (all-scope).
+         * Clear a platform tag value
+         * @description Removes the platform-tier binding for a key. Gated by tag:update (all-scope) and platform:update.
          */
-        post: operations["clear-global-tag"];
+        post: operations["clear-platform-tag"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/tags/{name}:setGlobal": {
+    "/tags/{name}:setPlatform": {
         parameters: {
             query?: never;
             header?: never;
@@ -2642,10 +2750,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Set a global tag value
-         * @description Binds a tenant-wide default value for a key at the global scope. Gated by tag:update (all-scope).
+         * Set a platform tag value
+         * @description Binds an install-wide default value for a key at the platform tier. Gated by tag:update (all-scope) and platform:update.
          */
-        post: operations["set-global-tag"];
+        post: operations["set-platform-tag"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2712,74 +2820,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/types/location": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List location types
-         * @description Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by type:read.
-         */
-        get: operations["list-location-types"];
-        put?: never;
-        /**
-         * Create a location type
-         * @description Creates a custom (non-official) location_type. Gated by type:create.
-         */
-        post: operations["create-location-type"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/types/location/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete a location type
-         * @description Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.
-         */
-        delete: operations["delete-location-type"];
-        options?: never;
-        head?: never;
-        /**
-         * Update a location type
-         * @description Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by type:update.
-         */
-        patch: operations["update-location-type"];
-        trace?: never;
-    };
-    "/types/secret": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List secret types
-         * @description Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.
-         */
-        get: operations["list-secret-types"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/variables": {
         parameters: {
             query?: never;
@@ -2795,7 +2835,7 @@ export interface paths {
         put?: never;
         /**
          * Create a variable
-         * @description Sets a variable at an owner scope (a global variable needs an all-scoped grant). The value is validated against value_type. Gated by variable:create.
+         * @description Sets a variable at an owner scope. The value is validated against value_type. Gated by variable:create, plus platform:create when owner_kind is platform (the install-wide tier).
          */
         post: operations["create-variable"];
         delete?: never;
@@ -2816,14 +2856,14 @@ export interface paths {
         post?: never;
         /**
          * Delete a variable
-         * @description Removes a variable by id. Gated by variable:delete; read and delete scopes on the owner drive the 404 versus 403 split.
+         * @description Removes a variable by id. Gated by variable:delete, plus platform:delete when the variable sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.
          */
         delete: operations["delete-variable"];
         options?: never;
         head?: never;
         /**
          * Update a variable's value
-         * @description Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update.
+         * @description Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.
          */
         patch: operations["update-variable"];
         trace?: never;
@@ -2964,7 +3004,10 @@ export interface components {
              */
             readonly $schema?: string;
             display_name: string;
+            /** @description The capability's uuid, the stable handle that survives a rename */
             id: string;
+            /** @description The kebab handle an operator reads and types; renameable */
+            name: string;
             official: boolean;
         };
         ChangePasswordInputBody: {
@@ -3042,11 +3085,27 @@ export interface components {
                 [key: string]: string;
             };
             id: string;
+            /** @description The location's name, for display */
+            location?: string;
+            /** @description The location's id, the canonical handle */
             location_id?: string;
             name: string;
+            /** @description The parent component's name, for display; absent for a root component */
+            parent?: string;
+            /** @description The parent component's id, the canonical handle */
             parent_id?: string;
-            /** @description The product (catalog SKU) this component is an instance of, if any. */
+            /** @description The product's name, for display; the form a body round-trips. */
+            product?: string;
+            /** @description The product (catalog SKU) this component is an instance of, if any; the stable handle that survives a rename. */
             product_id?: string;
+            /** @description Name of the component's primary system, its default when no system is named. A component may belong to several; read /components/{name}/memberships for all of them. */
+            system?: string;
+            /**
+             * Format: int64
+             * @description How many systems this component belongs to; more than one means it is shared.
+             */
+            system_count: number;
+            /** @description The primary system's id, the canonical handle */
             system_id?: string;
         };
         ComponentCapabilitiesOutputBody: {
@@ -3070,6 +3129,22 @@ export interface components {
             component: string;
             properties: components["schemas"]["EffectivePropertyBody"][] | null;
         };
+        ComponentPropertyBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ComponentPropertyBody.json
+             */
+            readonly $schema?: string;
+            component: string;
+            /** @description The catalog property's uuid, the stable form of property_type_name */
+            property_type_id: string;
+            property_type_name: string;
+            /** @description The stored value, shape given by the property's data_type */
+            value: unknown;
+            /** @description The stored value's id */
+            value_id: string;
+        };
         CreateCapabilityInputBody: {
             /**
              * Format: uri
@@ -3078,8 +3153,8 @@ export interface components {
              */
             readonly $schema?: string;
             display_name: string;
-            /** @description Globally unique capability id */
-            id: string;
+            /** @description The globally unique kebab handle; renameable */
+            name: string;
         };
         CreateComponentInputBody: {
             /**
@@ -3108,8 +3183,8 @@ export interface components {
              */
             readonly $schema?: string;
             display_name: string;
-            /** @description Globally unique driver id */
-            id: string;
+            /** @description The globally unique kebab handle; renameable */
+            name: string;
             version?: string;
         };
         CreateFileInputBody: {
@@ -3191,14 +3266,14 @@ export interface components {
              * @example /api/v1/schemas/CreateInterfaceInputBody.json
              */
             readonly $schema?: string;
-            /** @description Owning component name; omit for a server-hosted interface (needs an all-scoped grant) */
+            /** @description Owning component, by name or id; omit for a server-hosted interface (needs an all-scoped grant) */
             component?: string;
-            /** @description Node placement name */
+            /** @description An interface_type name (the protocol); the interface is named by it, unique within the component */
+            interface_type: string;
+            /** @description Node placement, by name or id */
             node?: string;
             /** @description Endpoint/target settings (jsonb) */
             params?: unknown;
-            /** @description An interface_type name (the protocol); the interface is named by it, unique within the component */
-            type: string;
         };
         CreateLocationInputBody: {
             /**
@@ -3227,8 +3302,8 @@ export interface components {
             display_name: string;
             /** @description A glyph key; the console falls back to map-pin when empty */
             icon?: string;
-            /** @description Globally unique type id (kebab, e.g. wing); "root" is reserved */
-            id: string;
+            /** @description The globally unique kebab handle (e.g. wing); "root" is reserved */
+            name: string;
         };
         CreateMeTokenInputBody: {
             /**
@@ -3271,7 +3346,7 @@ export interface components {
             description?: string;
             /** @description Operator label; falls back to the name when empty */
             display_name?: string;
-            /** @description Optional location the node sits in (descriptive placement, not scope) */
+            /** @description Optional location the node sits in, by name or id (descriptive placement, not scope) */
             location?: string;
             /** @description Globally unique node name (also its NATS subject token, so no dots or whitespace) */
             name: string;
@@ -3301,14 +3376,16 @@ export interface components {
             capabilities?: string[] | null;
             display_name: string;
             driver_id?: string;
-            /** @description Globally unique product id */
-            id: string;
             /**
              * @default device
              * @enum {string}
              */
             kind: "device" | "app" | "service" | "vm";
+            /** @description The globally unique kebab handle; renameable */
+            name: string;
+            /** @description The parent product, by handle or uuid */
             parent_product_id?: string;
+            /** @description The vendor, by handle or uuid */
             vendor_id?: string;
         };
         CreatePropertyInputBody: {
@@ -3354,13 +3431,13 @@ export interface components {
             };
             /** @description The cascade key; unique per owner */
             name: string;
-            /** @description The owning entity's name; omit for a global secret */
+            /** @description The owning entity's name; omit for a platform secret */
             owner?: string;
             /**
              * @description Which tier owns this secret
              * @enum {string}
              */
-            owner_kind: "global" | "location" | "system" | "component";
+            owner_kind: "platform" | "location" | "system" | "component";
             /** @description A secret_type id */
             secret_type: string;
         };
@@ -3372,9 +3449,9 @@ export interface components {
              */
             readonly $schema?: string;
             display_name: string;
-            /** @description Globally unique standard id */
-            id: string;
-            /** @description A standard this one is a variant of */
+            /** @description The globally unique kebab handle; renameable */
+            name: string;
+            /** @description A standard this one is a variant of, by handle or uuid */
             parent_standard_id?: string;
         };
         CreateSystemInputBody: {
@@ -3419,13 +3496,13 @@ export interface components {
             readonly $schema?: string;
             /** @description The cascade key; unique per owner */
             name: string;
-            /** @description The owning entity's name; omit for a global variable */
+            /** @description The owning entity's name; omit for a platform variable */
             owner?: string;
             /**
              * @description Which tier owns this variable
              * @enum {string}
              */
-            owner_kind: "global" | "location" | "system" | "component";
+            owner_kind: "platform" | "location" | "system" | "component";
             /** @description The value, validated against value_type */
             value: unknown;
             /**
@@ -3443,13 +3520,13 @@ export interface components {
             readonly $schema?: string;
             display_name: string;
             icon?: string;
-            /** @description Globally unique vendor id */
-            id: string;
             /**
              * @default manufacturer
              * @enum {string}
              */
             kind: "manufacturer" | "integrator" | "developer";
+            /** @description The globally unique kebab handle; renameable */
+            name: string;
             support_phone?: string;
             website?: string;
         };
@@ -3473,7 +3550,10 @@ export interface components {
              */
             readonly $schema?: string;
             display_name: string;
+            /** @description The driver's uuid, the stable handle that survives a rename */
             id: string;
+            /** @description The kebab handle an operator reads and types; renameable */
+            name: string;
             official: boolean;
             version?: string;
         };
@@ -3488,8 +3568,10 @@ export interface components {
             from_contract: boolean;
             /** @description True when the component overrides the contract default */
             is_set: boolean;
+            /** @description The catalog property's uuid, the stable form of property_type_name */
+            property_type_id: string;
             /** @description The catalog property name */
-            property_name: string;
+            property_type_name: string;
             /** @description Whether the product contract requires a value; always false off-contract */
             required: boolean;
             /** @description The component's override; omitted when the property is unset */
@@ -3498,20 +3580,6 @@ export interface components {
             value?: unknown;
             /** @description The stored value's id when set; omitted when the property is unset */
             value_id?: string;
-        };
-        EffectivePropertyValueBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/EffectivePropertyValueBody.json
-             */
-            readonly $schema?: string;
-            component: string;
-            property_name: string;
-            /** @description The stored value, shape given by the property's data_type */
-            value: unknown;
-            /** @description The stored value's id */
-            value_id: string;
         };
         EffectiveRoleBody: {
             /**
@@ -3537,6 +3605,15 @@ export interface components {
              */
             understaffed: number;
         };
+        EffectiveSecretsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EffectiveSecretsOutputBody.json
+             */
+            readonly $schema?: string;
+            secrets: components["schemas"]["ResolvedSecretBody"][] | null;
+        };
         EffectiveTagsOutputBody: {
             /**
              * Format: uri
@@ -3545,6 +3622,15 @@ export interface components {
              */
             readonly $schema?: string;
             tags: components["schemas"]["ResolvedTagBody"][] | null;
+        };
+        EffectiveVariablesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EffectiveVariablesOutputBody.json
+             */
+            readonly $schema?: string;
+            variables: components["schemas"]["ResolvedVariableBody"][] | null;
         };
         EnrollOutputBody: {
             /**
@@ -3662,6 +3748,8 @@ export interface components {
             key: string;
             /** @description The occurrence message */
             message: string;
+            /** @description The property's uuid, the stable form of key */
+            property_type_id: string;
             /** @description The lineage of the occurrence (observed for direct collection) */
             provenance: string;
             /** @description The interface type that produced the occurrence */
@@ -3699,16 +3787,6 @@ export interface components {
             sha256: string;
             /** Format: int64 */
             size: number;
-        };
-        GlobalBindingInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/GlobalBindingInputBody.json
-             */
-            readonly $schema?: string;
-            /** @description The bound value */
-            value: string;
         };
         GrantBody: {
             /**
@@ -3860,15 +3938,22 @@ export interface components {
             readonly $schema?: string;
             /** @description The owning component name; absent for a server-hosted interface */
             component?: string;
+            /** @description The owning component's id; the stable form of component */
+            component_id?: string;
             /** @description The interface's surrogate id (the address) */
             id: string;
+            /** @description The interface_type name (the protocol) */
+            interface_type: string;
+            /** @description The interface_type's uuid, the stable form of interface_type */
+            interface_type_id: string;
             /** @description The friendly name, unique within the owning component */
             name: string;
             /** @description The node placement name, if assigned */
             node?: string;
+            /** @description The placed node's id; the stable form of node */
+            node_id?: string;
             /** @description The endpoint/target settings (jsonb) */
             params?: unknown;
-            type: string;
         };
         Keybindings: {
             /**
@@ -4199,13 +4284,19 @@ export interface components {
             /** @description The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces. */
             actions?: string[] | null;
             display_name?: string;
-            /** @description The resolved effective tags (key -> winning value) that cascade onto this location (global and its location tree); for the Tags column. */
+            /** @description The resolved effective tags (key -> winning value) that cascade onto this location (platform and its location tree); for the Tags column. */
             effective_tags?: {
                 [key: string]: string;
             };
             id: string;
+            /** @description The location_type name */
             location_type: string;
+            /** @description The location_type's uuid, the stable form of location_type */
+            location_type_id: string;
             name: string;
+            /** @description The parent location's name, for display; absent for a site root */
+            parent?: string;
+            /** @description The parent location's id, the canonical handle */
             parent_id?: string;
         };
         LocationPropertiesOutputBody: {
@@ -4218,15 +4309,17 @@ export interface components {
             location: string;
             properties: components["schemas"]["EffectivePropertyBody"][] | null;
         };
-        LocationPropertyValueBody: {
+        LocationPropertyBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/LocationPropertyValueBody.json
+             * @example /api/v1/schemas/LocationPropertyBody.json
              */
             readonly $schema?: string;
             location: string;
-            property_name: string;
+            /** @description The catalog property's uuid, the stable form of property_type_name */
+            property_type_id: string;
+            property_type_name: string;
             /** @description The stored value, shape given by the property's data_type */
             value: unknown;
             /** @description The stored value's id */
@@ -4242,7 +4335,10 @@ export interface components {
             allowed_parent_types: string[] | null;
             display_name: string;
             icon: string;
+            /** @description The location type's uuid, the stable handle that survives a rename */
             id: string;
+            /** @description The kebab handle an operator reads and types; renameable */
+            name: string;
             official: boolean;
         };
         LocationTypePropertyBody: {
@@ -4254,8 +4350,10 @@ export interface components {
             readonly $schema?: string;
             /** @description The contract default, shape given by the property's data_type; omitted when the contract sets none */
             default_value?: unknown;
+            /** @description The catalog property's uuid, the stable form of property_type_name */
+            property_type_id: string;
             /** @description The catalog property this location type declares */
-            property_name: string;
+            property_type_name: string;
             /** @description Whether every location of this type must set the property */
             required: boolean;
         };
@@ -4297,7 +4395,7 @@ export interface components {
             readonly $schema?: string;
             description?: string;
             display_name?: string;
-            /** @description The resolved effective tags (key -> winning value) on this node: its direct bindings plus propagating global tags. For the Tags column and the blade pills. */
+            /** @description The resolved effective tags (key -> winning value) on this node: its direct bindings plus propagating platform tags. For the Tags column and the blade pills. */
             effective_tags?: {
                 [key: string]: string;
             };
@@ -4308,7 +4406,19 @@ export interface components {
             last_heartbeat_at?: string;
             /** @description The location the node sits in (descriptive placement, not scope) */
             location?: string;
+            /** @description The location's id; the stable form of location */
+            location_id?: string;
             name: string;
+        };
+        PlatformBindingInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/PlatformBindingInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The bound value */
+            value: string;
         };
         PrincipalBody: {
             /**
@@ -4347,12 +4457,24 @@ export interface components {
             readonly $schema?: string;
             capabilities: string[] | null;
             display_name: string;
+            /** @description The driver's handle */
+            driver?: string;
+            /** @description The driver's uuid; the stable form of driver */
             driver_id?: string;
+            /** @description The product's uuid, the stable handle that survives a rename */
             id: string;
             /** @enum {string} */
             kind: "device" | "app" | "service" | "vm";
+            /** @description The kebab handle an operator reads and types; renameable */
+            name: string;
             official: boolean;
+            /** @description The parent product's handle */
+            parent_product?: string;
+            /** @description The parent product's uuid; the stable form of parent_product */
             parent_product_id?: string;
+            /** @description The vendor's handle */
+            vendor?: string;
+            /** @description The vendor's uuid; the stable form of vendor */
             vendor_id?: string;
         };
         ProductPropertyBody: {
@@ -4364,8 +4486,10 @@ export interface components {
             readonly $schema?: string;
             /** @description The contract default, shape given by the property's data_type; omitted when the contract sets none */
             default_value?: unknown;
+            /** @description The catalog property's uuid, the stable form of property_type_name */
+            property_type_id: string;
             /** @description The catalog property this product declares */
-            property_name: string;
+            property_type_name: string;
             /** @description Whether every instance of this product must set the property */
             required: boolean;
         };
@@ -4379,6 +4503,8 @@ export interface components {
             data_type: string;
             description?: string;
             display_name?: string;
+            /** @description The property's uuid, the stable form the contract and telemetry keys store */
+            id: string;
             kind?: string;
             name: string;
             official: boolean;
@@ -4415,12 +4541,12 @@ export interface components {
             history: components["schemas"]["ReachHistoryBody"][] | null;
             /** @description The interface name */
             interface: string;
+            /** @description The interface type (icmp, tcp, ...) */
+            interface_type: string;
             /** @description The per-layer probe signals that compose the verdict */
             layers: components["schemas"]["ReachLayerBody"][] | null;
             /** @description The node that probes this interface */
             node?: string;
-            /** @description The interface type (icmp, tcp, ...) */
-            type: string;
             /** @description The latest reachability verdict, or null if none yet */
             verdict: components["schemas"]["ReachVerdictBody"];
         };
@@ -4471,10 +4597,35 @@ export interface components {
             /** @description The new password (at least 12 characters, not a common password, not containing the username) */
             password: string;
         };
+        ResolvedSecretBody: {
+            /**
+             * Format: int64
+             * @description Cascade tier: 0 platform, 1 location, 3 component
+             */
+            band: number;
+            /**
+             * Format: int64
+             * @description Distance up the tier's tree from the component (0 nearest)
+             */
+            depth: number;
+            fields: components["schemas"]["SecretFieldBody"][] | null;
+            id: string;
+            name: string;
+            /** @description The owning entity's id, the canonical handle; absent for a platform owner */
+            owner_id?: string;
+            owner_kind: string;
+            owner_name?: string;
+            /** @description The secret_type name */
+            secret_type: string;
+            /** @description The secret_type's uuid */
+            secret_type_id: string;
+            /** @description True for the resolved secret; false for a shadowed candidate */
+            winner: boolean;
+        };
         ResolvedTagBody: {
             /**
              * Format: int64
-             * @description Cascade tier: 0 global, 1 location, 2 system, 3 component
+             * @description Cascade tier: 0 platform, 1 location, 2 system, 3 component
              */
             band: number;
             /**
@@ -4483,10 +4634,34 @@ export interface components {
              */
             depth: number;
             key: string;
+            /** @description The owning entity's id, the canonical handle; absent for a global owner */
             owner_id?: string;
             owner_kind: string;
             owner_name?: string;
             value: string;
+            /** @description True for the resolved value; false for a shadowed candidate */
+            winner: boolean;
+        };
+        ResolvedVariableBody: {
+            /**
+             * Format: int64
+             * @description Cascade tier: 0 platform, 1 location, 2 system, 3 component
+             */
+            band: number;
+            /**
+             * Format: int64
+             * @description Distance up the tier's tree from the component (0 nearest)
+             */
+            depth: number;
+            id: string;
+            name: string;
+            /** @description The owning entity's id, the canonical handle; absent for a platform owner */
+            owner_id?: string;
+            owner_kind: string;
+            owner_name?: string;
+            /** @description The value, shape given by value_type */
+            value: unknown;
+            value_type: string;
             /** @description True for the resolved value; false for a shadowed candidate */
             winner: boolean;
         };
@@ -4561,6 +4736,7 @@ export interface components {
             held: string[] | null;
             id: string;
             inherits: string[] | null;
+            name: string;
             official: boolean;
             permissions: string[] | null;
         };
@@ -4608,10 +4784,14 @@ export interface components {
             fields: components["schemas"]["SecretFieldBody"][] | null;
             id: string;
             name: string;
+            /** @description The owning entity's id, the canonical handle; absent for a global owner */
             owner_id?: string;
             owner_kind: string;
             owner_name?: string;
+            /** @description The secret_type name */
             secret_type: string;
+            /** @description The secret_type's uuid, the stable form of secret_type */
+            secret_type_id: string;
         };
         SecretFieldBody: {
             name: string;
@@ -4624,7 +4804,10 @@ export interface components {
             default_admin_sensitive: boolean;
             display_name: string;
             fields: components["schemas"]["SecretTypeFieldBody"][] | null;
+            /** @description The secret type's uuid, the stable handle that survives a rename */
             id: string;
+            /** @description The kebab handle an operator reads and types; renameable */
+            name: string;
             official: boolean;
         };
         SecretTypeFieldBody: {
@@ -4778,7 +4961,7 @@ export interface components {
             locks: {
                 [key: string]: string;
             };
-            /** @description key 'namespace.key' to the winning level (code|file|global) */
+            /** @description key 'namespace.key' to the winning level (default|file|platform) */
             sources: {
                 [key: string]: string;
             };
@@ -4792,8 +4975,14 @@ export interface components {
              */
             readonly $schema?: string;
             display_name: string;
+            /** @description The standard's uuid, the stable handle that survives a rename */
             id: string;
+            /** @description The kebab handle an operator reads and types; renameable */
+            name: string;
             official: boolean;
+            /** @description The parent standard's handle */
+            parent_standard?: string;
+            /** @description The parent standard's uuid; the stable form of parent_standard */
             parent_standard_id?: string;
         };
         StandardPropertyBody: {
@@ -4805,8 +4994,10 @@ export interface components {
             readonly $schema?: string;
             /** @description The contract default, shape given by the property's data_type; omitted when the contract sets none */
             default_value?: unknown;
+            /** @description The catalog property's uuid, the stable form of property_type_name */
+            property_type_id: string;
             /** @description The catalog property this standard declares */
-            property_name: string;
+            property_type_name: string;
             /** @description Whether every system conforming to this standard must set the property */
             required: boolean;
         };
@@ -4823,11 +5014,14 @@ export interface components {
             /** @description The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces. */
             actions?: string[] | null;
             display_name?: string;
-            /** @description The resolved effective tags (key -> winning value) that cascade onto this system (global, its location, its system tree); for the Tags column. */
+            /** @description The resolved effective tags (key -> winning value) that cascade onto this system (platform, its location, its system tree); for the Tags column. */
             effective_tags?: {
                 [key: string]: string;
             };
             id: string;
+            /** @description The location's name, for display */
+            location?: string;
+            /** @description The location's id, the canonical handle */
             location_id?: string;
             /**
              * Format: int64
@@ -4835,8 +5029,13 @@ export interface components {
              */
             member_count: number;
             name: string;
+            /** @description The parent system's name, for display; absent for a root system */
+            parent?: string;
+            /** @description The parent system's id, the canonical handle */
             parent_id?: string;
-            /** @description The standard this system conforms to; omitted for a one-off system */
+            /** @description The standard's handle, for display; omitted for a one-off system */
+            standard?: string;
+            /** @description The standard's uuid; the stable form of standard */
             standard_id?: string;
         };
         SystemMemberBody: {
@@ -4862,14 +5061,16 @@ export interface components {
             properties: components["schemas"]["EffectivePropertyBody"][] | null;
             system: string;
         };
-        SystemPropertyValueBody: {
+        SystemPropertyBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/SystemPropertyValueBody.json
+             * @example /api/v1/schemas/SystemPropertyBody.json
              */
             readonly $schema?: string;
-            property_name: string;
+            /** @description The catalog property's uuid, the stable form of property_type_name */
+            property_type_id: string;
+            property_type_name: string;
             system: string;
             /** @description The stored value, shape given by the property's data_type */
             value: unknown;
@@ -4905,6 +5106,7 @@ export interface components {
              */
             readonly $schema?: string;
             key: string;
+            /** @description The owning entity's id, the canonical handle; absent for a global owner */
             owner_id?: string;
             owner_kind: string;
             owner_name?: string;
@@ -4948,8 +5150,10 @@ export interface components {
             /** @description The interface's surrogate id this task runs over */
             interface_id: string;
             mode: string;
-            /** @description The node placement, projected from the interface */
+            /** @description The node placement name, projected from the interface */
             node?: string;
+            /** @description The placed node's id; the stable form of node */
+            node_id?: string;
             /** @description The inline probe settings (jsonb) */
             spec?: unknown;
         };
@@ -5017,7 +5221,7 @@ export interface components {
              * @example /api/v1/schemas/UpdateInterfaceInputBody.json
              */
             readonly $schema?: string;
-            /** @description Reassign the node placement */
+            /** @description Reassign the node placement, by name or id */
             node?: string;
             /** @description Replace the endpoint/target settings (jsonb) */
             params?: unknown;
@@ -5067,7 +5271,7 @@ export interface components {
             readonly $schema?: string;
             description?: string;
             display_name?: string;
-            /** @description Set the node's location, or "" to clear it */
+            /** @description Set the node's location by name or id, or "" to clear it */
             location?: string;
         };
         UpdatePrincipalInputBody: {
@@ -5196,6 +5400,7 @@ export interface components {
             readonly $schema?: string;
             id: string;
             name: string;
+            /** @description The owning entity's id, the canonical handle; absent for a global owner */
             owner_id?: string;
             owner_kind: string;
             owner_name?: string;
@@ -5212,9 +5417,12 @@ export interface components {
             readonly $schema?: string;
             display_name: string;
             icon?: string;
+            /** @description The vendor's uuid, the stable handle that survives a rename */
             id: string;
             /** @enum {string} */
             kind: "manufacturer" | "integrator" | "developer";
+            /** @description The kebab handle an operator reads and types; renameable */
+            name: string;
             official: boolean;
             support_phone?: string;
             website?: string;
@@ -6264,7 +6472,7 @@ export interface operations {
             };
         };
     };
-    "effective-tags": {
+    "effective-secrets": {
         parameters: {
             query?: never;
             header?: never;
@@ -6282,7 +6490,74 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    "application/json": components["schemas"]["EffectiveSecretsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "effective-tags": {
+        parameters: {
+            query?: {
+                /** @description Resolve against this system, which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand. */
+                system?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The component's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
                     "application/json": components["schemas"]["EffectiveTagsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "effective-variables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectiveVariablesOutputBody"];
                 };
             };
             /** @description Error */
@@ -6416,7 +6691,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EffectivePropertyValueBody"];
+                    "application/json": components["schemas"]["ComponentPropertyBody"];
                 };
             };
             /** @description Error */
@@ -7132,6 +7407,133 @@ export interface operations {
             };
         };
     };
+    "list-location-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListLocationTypesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-location-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateLocationTypeInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-location-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location_type id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-location-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateLocationTypeInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-location-type-properties": {
         parameters: {
             query?: never;
@@ -7481,7 +7883,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LocationPropertyValueBody"];
+                    "application/json": components["schemas"]["LocationPropertyBody"];
                 };
             };
             /** @description Error */
@@ -9352,7 +9754,7 @@ export interface operations {
             };
         };
     };
-    "list-property": {
+    "list-property-type": {
         parameters: {
             query?: never;
             header?: never;
@@ -9381,7 +9783,7 @@ export interface operations {
             };
         };
     };
-    "create-property": {
+    "create-property-type": {
         parameters: {
             query?: never;
             header?: never;
@@ -9414,7 +9816,7 @@ export interface operations {
             };
         };
     };
-    "get-property": {
+    "get-property-type": {
         parameters: {
             query?: never;
             header?: never;
@@ -9446,7 +9848,7 @@ export interface operations {
             };
         };
     };
-    "delete-property": {
+    "delete-property-type": {
         parameters: {
             query?: never;
             header?: never;
@@ -9476,7 +9878,7 @@ export interface operations {
             };
         };
     };
-    "update-property": {
+    "update-property-type": {
         parameters: {
             query?: never;
             header?: never;
@@ -9528,6 +9930,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RolesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-secret-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListSecretTypesOutputBody"];
                 };
             };
             /** @description Error */
@@ -10624,7 +11055,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SystemPropertyValueBody"];
+                    "application/json": components["schemas"]["SystemPropertyBody"];
                 };
             };
             /** @description Error */
@@ -11103,7 +11534,7 @@ export interface operations {
             };
         };
     };
-    "clear-global-tag": {
+    "clear-platform-tag": {
         parameters: {
             query?: never;
             header?: never;
@@ -11133,7 +11564,7 @@ export interface operations {
             };
         };
     };
-    "set-global-tag": {
+    "set-platform-tag": {
         parameters: {
             query?: never;
             header?: never;
@@ -11145,7 +11576,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["GlobalBindingInputBody"];
+                "application/json": components["schemas"]["PlatformBindingInputBody"];
             };
         };
         responses: {
@@ -11249,162 +11680,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "list-location-types": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ListLocationTypesOutputBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "create-location-type": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateLocationTypeInputBody"];
-            };
-        };
-        responses: {
-            /** @description Created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocationTypeBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "delete-location-type": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The location_type id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "update-location-type": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateLocationTypeInputBody"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocationTypeBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "list-secret-types": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ListSecretTypesOutputBody"];
                 };
             };
             /** @description Error */

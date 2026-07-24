@@ -40,6 +40,11 @@ available, with no need to enter edit mode: a red **Delete** for a group (a user
 user's is **Disable / Enable**), each behind a confirm. Secondary actions like **Impersonate** fold into a
 **⋯** menu. Edit appears only if your grants allow it, and a read-only blade (a role) shows no bar at all.
 
+The same bar carries **create**. A form that opens in a slide-over (New user, New tag key, Upload
+file) or as its own blade (New interface) puts its **Create** button in the bar at the foot of the
+panel, never floating after the last field, and greys it out until the form is complete. **Cancel**
+sits beside it on the forms that offer one; where it does not, the header **x** closes the panel.
+
 ## Create, edit, delete
 
 - **New** opens a **draft** at the entity's own `/create` address (a form for name, classifier,
@@ -140,9 +145,9 @@ and when survives the fix. Clearing one twice is a plain miss rather than a sile
 Both writes take effect immediately and completely: the room's verdict, the location above it, and the
 recorded history all move in the same transaction as the alarm. There is no wait and no refresh cycle.
 
-From the CLI: `omniglass component alarms <name> [--include-cleared]`,
-`omniglass component raise-alarm <name> --severity <level> --message <text> --capabilities <ids>`, and
-`omniglass component clear-alarm <name> <id>`.
+From the CLI: `omniglass component alarm list <name> [--include-cleared]`,
+`omniglass component alarm create <name> --severity <level> --message <text> --capabilities <ids>`, and
+`omniglass component alarm delete <name> <id>`.
 
 ## Health on a system or location
 
@@ -182,7 +187,7 @@ over the last 30 days. It is not a sample and not a redraw of what somebody happ
 was written at the moment the estate changed, by the write that changed it. That is what makes "it broke
 Friday at 18:40 and came back Monday at 09:15" answerable on Tuesday.
 
-From the CLI: `omniglass system health <name>` and `omniglass location health <name>`.
+From the CLI: `omniglass system health list <name>` and `omniglass location health list <name>`.
 
 ## The whole loop, end to end
 

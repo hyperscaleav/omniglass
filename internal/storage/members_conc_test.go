@@ -42,7 +42,7 @@ func TestFirstMembershipRaceIsSerialized(t *testing.T) {
 	all := scope.Set{All: true}
 
 	std := "race-standard"
-	if err := gw.UpsertStandard(ctx, storage.Standard{ID: std, DisplayName: "Race"}); err != nil {
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, DisplayName: "Race"}); err != nil {
 		t.Fatalf("standard: %v", err)
 	}
 	for _, s := range []string{"race-a", "race-b"} {
@@ -69,7 +69,9 @@ func TestFirstMembershipRaceIsSerialized(t *testing.T) {
 	// serialization that makes it safe.
 	const lock = `select pg_advisory_xact_lock(hashtextextended($1, 0))`
 	const ins = `insert into system_member (system_id, component_id, is_primary)
-		select $1, $2, not exists (select 1 from system_member where component_id = $2)
+		select s.id, c.id, not exists (select 1 from system_member where component_id = c.id)
+		from system s, component c
+		where s.name = $1 and c.name = $2
 		on conflict (system_id, component_id) do nothing`
 
 	txA, err := a.Begin(ctx)
@@ -137,7 +139,9 @@ func TestFirstMembershipRaceIsSerialized(t *testing.T) {
 	}
 
 	// Both memberships exist and exactly one is the default.
-	rows, err := a.Query(ctx, `select system_id, is_primary from system_member where component_id = 'race-dsp'`)
+	rows, err := a.Query(ctx, `select s.name, m.is_primary from system_member m
+		join system s on s.id = m.system_id
+		where m.component_id = (select id from component where name = 'race-dsp')`)
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}

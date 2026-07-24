@@ -3,17 +3,24 @@ import { api } from "../api/client";
 // The components data layer: thin typed wrappers over the generated client, so
 // the page stays declarative and the calls are unit-testable against a mocked
 // client. Shapes follow the OpenAPI (see api/components.go). Components form a
-// tree (parent_id), and each is bound to a primary system and a location by id.
+// tree (parent_id), is placed at a location, and belongs to zero or more systems
+// through membership.
 // A component's shape comes from the product it is an instance of (product_id),
 // whose contract declares the properties every instance exposes.
 export type Component = {
   id: string;
   name: string;
   display_name?: string;
-  location_id?: string;
-  parent_id?: string;
-  system_id?: string;
+  location?: string;
+  parent?: string;
+  // The name of the component's primary system, its default when no system is
+  // named, and how many it belongs to in total. Derived from membership: a
+  // component can be in several, so there is no single pointer to read.
+  system?: string;
+  system_count: number;
   product_id?: string;
+  // The product's name, the display handle beside the uuid product_id.
+  product?: string;
   actions?: string[];
   effective_tags?: Record<string, string>;
 };

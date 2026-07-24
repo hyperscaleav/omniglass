@@ -11,9 +11,9 @@ import { ME_KEY, type Me } from "../lib/auth";
 // read-only, same invariant as the Types catalog's official rows: no edit
 // pencil, no Delete. Data is seeded into the query cache so no server is needed.
 const seed: Vendor[] = [
-  { id: "crestron", display_name: "Crestron", kind: "manufacturer", official: true, icon: "crestron-logo" },
-  { id: "acme-av", display_name: "Acme AV", kind: "integrator", official: false, website: "https://acme.example" },
-  { id: "evil-corp", display_name: "Evil Corp", kind: "manufacturer", official: false, website: "javascript:alert(document.cookie)" },
+  { id: "u-crestron", name: "crestron", display_name: "Crestron", kind: "manufacturer", official: true, icon: "crestron-logo" },
+  { id: "u-acme-av", name: "acme-av", display_name: "Acme AV", kind: "integrator", official: false, website: "https://acme.example" },
+  { id: "u-evil-corp", name: "evil-corp", display_name: "Evil Corp", kind: "manufacturer", official: false, website: "javascript:alert(document.cookie)" },
 ];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };

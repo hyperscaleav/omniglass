@@ -179,9 +179,13 @@ export async function fetchMyAvatar(): Promise<string | null> {
 // `:read` floor, so the viewer floor (`*:read`) cannot enumerate them. A literal
 // grant, a `<resource>:*`, and owner's `>` still name them. `secret` is here so a
 // field tech does not see the platform-credential directory (per-secret
-// admin_sensitivity, enforced server-side, then fences individual rows). Keep this
-// in sync with the Go set.
-const SENSITIVE_RESOURCES = new Set(["secret"]);
+// admin_sensitivity, enforced server-side, then fences individual rows).
+// `platform` is here for a different reason: it is not a resource anyone reads, it
+// is install-wide AUTHORITY (the right to write at the cascade's least-specific
+// tier), and full-estate reach must not confer it. Keep this in sync with the Go
+// set: the server's copy is what admits the request, and a console that disagrees
+// either hides a control that works or offers one the server refuses.
+const SENSITIVE_RESOURCES = new Set(["secret", "platform"]);
 
 // A permission is a colon-delimited topic pattern, matched exactly like the server
 // rbac core that authorizes the request: a literal matches itself, `*` matches
@@ -244,4 +248,29 @@ export function can(me: Me | null | undefined, ...tokens: string[]): boolean {
     }
   }
   return false;
+}
+
+// A write at the `platform` tier, the cascade's least-specific rung, applies to the
+// whole install, so the server gates it on `platform:<action>` on top of the
+// resource permission: full-estate SCOPE is reach, not install-wide authority.
+// canAtPlatform is that pair, the check a console control writing at the tier gates
+// on, so the console never offers a control the server refuses.
+export function canAtPlatform(me: Me | null | undefined, resource: string, action: string): boolean {
+  return can(me, resource, action) && can(me, "platform", action);
+}
+
+// platformTierGap lists the install-wide capabilities a principal would need for
+// the given actions but does not hold, counting only the actions it holds the
+// resource half of. Empty means nothing to explain: either it holds both halves, or
+// it holds neither and the control is absent for the ordinary reason.
+export function platformTierGap(me: Me | null | undefined, resource: string, actions: string[]): string[] {
+  return actions.filter((a) => can(me, resource, a) && !can(me, "platform", a)).map((a) => `platform:${a}`);
+}
+
+// platformAuthorityHint is what a half-held principal reads instead of meeting a
+// 403: the tier's blast radius, then the capabilities it is missing by name. `what`
+// names the thing being written ("A variable"), `missing` comes from
+// platformTierGap.
+export function platformAuthorityHint(what: string, missing: string[]): string {
+  return `${what} at the platform tier applies to the whole install, so writing one needs ${missing.join(" and ")} on top of the resource permission.`;
 }

@@ -17,11 +17,11 @@ trees with full scoped CRUD; a delete is refused while a structural child remain
 carries an **optional classifier** that declares what its instances expose: a component points at its
 **`product`**, a system conforms to a **`standard`**, a location is typed by its **`location_type`**
 (the `component_type` registry retired,
-[ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value); the
+[ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property); the
 `system_type` registry was promoted to `standard`,
 [ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)). The
 **exclusive-arc** owner columns are now real, carrying the datapoint sinks, the **`event`** log sink
-(see [The event sink](#the-event-sink-the-first-arc-owned-occurrence) below), and **`property_value`**
+(see [The event sink](#the-event-sink-the-first-arc-owned-occurrence) below), and **`property`**
 (see [Declared properties](#declared-properties-the-classifier-contracts-and-the-value-store) below); a
 component, system, and location each own a recorded **[health](/architecture/health/)** series on that
 same arc. A system also declares the **roles** it needs filled, staffed by components whose **resolved
@@ -51,7 +51,7 @@ Three nouns describe what you operate, plus the edge process that collects for t
   It is classified by `location_type` and, unlike component and system, has **no template**: for a
   location the type is the only shape-definer. A starter `location_type` set ships seeded (and is
   operator-owned, see [the seed model](#the-seed-model-forked-templates-versus-canonical-catalogs)),
-  readable at `GET /types/location` (alphabetically by display name), which is what the type picker on the location form
+  readable at `GET /location-types` (alphabetically by display name), which is what the type picker on the location form
   lists so a location is classified by a known type rather than a free-typed string. Each type also
   carries an `icon` (a glyph key like `building` or `landmark`) that the console renders as the
   leading glyph on every location of that type, so a campus reads differently from a building at a
@@ -81,9 +81,11 @@ system -> c2
 system -> c3
 ```
 
-Above the four sits the singleton **`global`** estate root: the top owner above every location where
-estate-wide health and KPIs roll up, and the top of the [cascade](/architecture/cascade/). One per
-deployment, no FK.
+Above the four sits the singleton **`global`** estate owner: the top owner above every location where
+estate-wide health and KPIs roll up. One per deployment, no FK. It is an **owner**, nothing else: it is
+not a location (the location tree is a forest of N unparented tops with no root) and it is not the
+[cascade](/architecture/cascade/)'s least-specific binding tier, which is **`platform`**
+([ADR-0057](/architecture/decisions/#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier)).
 
 | Entity | What it is | Key columns |
 |---|---|---|
@@ -148,12 +150,12 @@ every system that conforms, until that system overrides one. See the
 A classifier does not only classify, it **declares what its instances expose**. Three tables carry that
 declaration, one per classifier, all the same shape: **`product_property`** (a component's), **`standard_property`**
 (a system's), and **`location_type_property`** (a location's). Each is one row per declared property
-(`<classifier>_id`, `property_name` referencing the [`property` catalog](/architecture/variables/), an
+(`<classifier>_id`, `property_type_name` referencing the [`property_type` catalog](/architecture/variables/), an
 optional `default_value` in jsonb, and a `required` flag), unique per `(classifier, property)`. Type and
 validation are deliberately **not** repeated here: they live on the property, which stays the single
 source for what a name means.
 
-The value lives in **`property_value`**, which carries the **same owner exclusive-arc** as the datapoint
+The value lives in **`property`**, which carries the **same owner exclusive-arc** as the datapoint
 sinks and `event` (`owner_kind` plus `component_id` / `system_id` / `location_id` / `node_id`, one-set
 CHECK), plus the property name, an `instance` discriminator, a **`provenance`**, and the jsonb `value`.
 Provenance is what makes the fold work: the same table holds a value an operator **declared**, a value a
@@ -189,7 +191,7 @@ is a non-disclosing 404, not a silent success.
 
 This pair replaces the retired `field_definition` / `field_value` feature: a "field" was always a property
 with **declared** provenance, and the catalog it hung off is now the classifier's contract
-([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)). See
+([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property)). See
 the [Properties guide](/guides/admin/properties/) for the operator surface.
 
 ### System roles: the slots a system needs filled
@@ -210,10 +212,10 @@ Five tables carry it:
 | Table | Key columns | Notes |
 |---|---|---|
 | `system_member` | (`system_id`, `component_id`, **`is_primary`**) | **membership**: the binding a role attaches to, many-valued, cascading from both ends |
-| `system_role` | `owner_kind` + `standard_id` / `system_id` (the arc), `name`, `display_name`, **`quorum`**, **`impact`** | the slot itself; the arc is the one `property_value` uses, with a one-set CHECK and a `unique nulls not distinct` key over the arc plus name |
-| `role_capability` | (`role_id`, `capability_id`) | what the role requires, **conjunctive**: a component must provide **every** listed capability |
+| `system_role` | `owner_kind` + `standard_id` / `system_id` (the arc), `name`, `display_name`, **`quorum`**, **`impact`** | the slot itself; the arc is the one `property` uses, with a one-set CHECK and a `unique nulls not distinct` key over the arc plus name |
+| `system_role_capability` | (`role_id`, `capability_id`) | what the role requires, **conjunctive**: a component must provide **every** listed capability |
 | `component_capability` | (`component_id`, `capability_id`, **`present`**) | the component's **own** capability facts, layered over its product's |
-| `role_assignment` | (`system_id`, `role_id`, `component_id`) | who fills the role here; the component FK is **`on delete restrict`** |
+| `system_role_assignment` | (`system_id`, `role_id`, `component_id`) | who fills the role here; the component FK is **`on delete restrict`** |
 
 ### Membership: what a role attaches to
 
@@ -237,7 +239,7 @@ one system, which is nearly all of them, never meets the concept. A partial uniq
 primary impossible rather than merely unlikely.
 
 Membership **cascades from both ends**, since a binding is meaningless once either side is gone. It
-deliberately does not restrict the component the way `role_assignment` does: that restrict is load-bearing,
+deliberately does not restrict the component the way `system_role_assignment` does: that restrict is load-bearing,
 because deleting a component that fills a job would silently break a system's health, but a membership
 carrying no role is an inventory fact, and refusing the delete for it would add a step to every component
 removal while protecting nothing the role table does not already protect.
@@ -366,7 +368,7 @@ guidance if a use case needs more. The depth-resolution and rollup semantics the
 ## Ownership: the exclusive-arc
 
 Everything observed, asserted, or set in Omniglass attaches to exactly one structural entity, through
-the **exclusive-arc**. Every datapoint table, plus `event`, `property_value`, `alarm`, and `variable`,
+the **exclusive-arc**. Every datapoint table, plus `event`, `property`, `alarm`, and `variable`,
 carries:
 
 - an **`owner_kind`** enum, plus
@@ -375,7 +377,7 @@ carries:
 - a **CHECK** that exactly the column matching `owner_kind` is set (or all null for `global`).
 
 This makes **system-, location-, node-, and global-level datapoints first-class** (e.g. `health` is a
-`state_datapoint` owned by a system, estate-wide availability is owned by `global`, and a node's
+`state` owned by a system, estate-wide availability is owned by `global`, and a node's
 self-health is owned by the node), the fix for a monitoring tool that can only put state on a single
 host. It is also what carries a recorded [health](/architecture/health/) verdict: a component, a system,
 and a location each own their own transition series under the same `health` key, and the **owner** is what
@@ -386,7 +388,7 @@ pattern and the storage DDL are on [storage](/architecture/storage/).
 ### The event sink: the first arc-owned occurrence
 
 The arc's first built sink beyond the datapoint tables is **`event`**, the **log-kind sink** of the
-collection pipeline. Where a `metric_datapoint` or `state_datapoint` records a **sampled present value**
+collection pipeline. Where a `metric` or `state` records a **sampled present value**
 (a reading that has a value *now*, `last()` is meaningful), an `event` records a **past occurrence**: a
 device log line, something that *happened* and whose "what is it now?" is meaningless (the
 [has-a-value-now razor](/architecture/datapoints/#the-has-a-value-now-razor-datapoint-vs-event)). A
@@ -402,7 +404,7 @@ datapoints beside it: the **same** owner-confinement and reject-not-project gate
 is why the ownership pattern above already named `event` alongside the datapoint tables; it is the same
 arc, now with a built sink on it.
 
-Closing the loop, the reserved **`event_id`** columns on `metric_datapoint` and `state_datapoint` are
+Closing the loop, the reserved **`event_id`** columns on `metric` and `state` are
 now **real foreign keys** to `event(id)` (`on delete set null`): an **intended**-provenance datapoint (a
 value a command set) references the `event` that produced it, so a datapoint's lineage can point at the
 occurrence behind it. See [datapoints](/architecture/datapoints/) for the value sinks and
@@ -429,7 +431,7 @@ a member of every system it serves.
 The binding itself is the **`system_member`** table, which is **built**: `(system_id, component_id,
 is_primary)`, described under [membership](#membership-what-a-role-attaches-to). The design below layered
 the role onto that same row and pinned it to a frozen template BOM; what shipped keeps the row to the
-binding alone and lets `role_assignment` carry the role, so a member can exist without one.
+binding alone and lets `system_role_assignment` carry the role, so a member can exist without one.
 
 A `system_template_member` declares, per role, a **requirement** (the canonical datapoints and commands a
 member must provide) plus its `health_role`; any component whose template meets the requirement can fill
@@ -440,7 +442,7 @@ the role, validated on assignment. Detailed on [templates](/architecture/templat
 `Design`. The **built** slot is
 [`system_role`](#system-roles-the-slots-a-system-needs-filled), declared on a standard or a system rather
 than frozen into a `system_template_version`, requiring a **capability** set rather than canonical
-datapoints and commands, and assigned through `role_assignment`. Its **`impact`** also replaces the
+datapoints and commands, and assigned through `system_role_assignment`. Its **`impact`** also replaces the
 `health_role` tag above: `required` / `redundant` / `informational` are expressed by quorum plus impact,
 with no fourth vocabulary
 ([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).

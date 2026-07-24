@@ -49,7 +49,7 @@ func TestBodyFieldsJSON(t *testing.T) {
 
 	// The rendered source parses the JSON fields and passes the scalar through.
 	cmd := buildCommand(doc, "/api/v1", "/things", "post", op)
-	out, err := render(group([]command{cmd}))
+	out, err := render(tree([]command{cmd}))
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -164,7 +164,7 @@ func TestRenderQueryFlags(t *testing.T) {
 		},
 	}
 	cmd := buildCommand(spec{}, "/api/v1", "/principals", "get", op)
-	out, err := render(group([]command{cmd}))
+	out, err := render(tree([]command{cmd}))
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -181,21 +181,27 @@ func TestRenderQueryFlags(t *testing.T) {
 	}
 }
 
-// TestTypeRegistryCommandNames asserts the type registries (/types/location,
-// /types/secret) resolve through nameOverride
-// to `type <kind> <verb>`, not the leaf-noun heuristic's `<kind> <verb>` which
-// would collide with the base entity commands. The standard catalog is not one
-// of them: it is a top-level collection (/standards), so the heuristic names it
-// `standard <verb>` with no override and no collision.
+// TestTypeRegistryCommandNames pins the naming rule on the registries: a resource
+// is ONE kebab-case noun, and a space beneath it means the thing it owns. So the
+// registry and its property contract share `location-type`, and neither needs an
+// override.
+//
+// It previously asserted `type <kind> <verb>`, from when the CRUD sat under a
+// `/types` umbrella while the contract sat on a flat `/location-types`. That gave
+// one entity two command groups; ADR-0060 retired the umbrella. The standard
+// catalog has always been the shape the others now have.
 func TestTypeRegistryCommandNames(t *testing.T) {
 	cases := []struct {
 		opID, path, method string
-		want                []string
+		want               []string
 	}{
-		{"create-location-type", "/types/location", "post", []string{"type", "location", "create"}},
-		{"delete-location-type", "/types/location/{id}", "delete", []string{"type", "location", "delete"}},
-		{"list-secret-types", "/types/secret", "get", []string{"type", "secret", "list"}},
+		{"create-location-type", "/location-types", "post", []string{"location-type", "create"}},
+		{"delete-location-type", "/location-types/{id}", "delete", []string{"location-type", "delete"}},
+		{"list-secret-types", "/secret-types", "get", []string{"secret-type", "list"}},
 		{"delete-standard", "/standards/{id}", "delete", []string{"standard", "delete"}},
+		// The contract is a genuine sub-collection, so it nests under the same noun.
+		{"list-location-type-properties", "/location-types/{id}/properties", "get",
+			[]string{"location-type", "property", "list"}},
 	}
 	for _, tc := range cases {
 		got := commandWords(tc.path, tc.method, tc.opID)

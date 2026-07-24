@@ -2,7 +2,7 @@ import { api } from "../api/client";
 
 // The variables data layer: thin typed wrappers over the generated client. A
 // variable is a typed, plaintext free value (a macro) owned on the exclusive arc
-// (global, or one of the location / system / component trees) and resolved down
+// (platform, or one of the location / system / component trees) and resolved down
 // the cascade. Unlike a secret, the value is shown in the clear.
 
 export type ValueType = "string" | "int" | "float" | "bool" | "json";
@@ -14,14 +14,14 @@ export type Variable = {
   name: string;
   value_type: string;
   owner_kind: string;
-  owner_id?: string;
+
   owner_name?: string;
   value: unknown;
 };
 
 export const VARIABLES_KEY = ["variables"] as const;
 
-export type OwnerKind = "global" | "location" | "system" | "component";
+export type OwnerKind = "platform" | "location" | "system" | "component";
 
 export type CreateVariable = {
   name: string;

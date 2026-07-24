@@ -21,7 +21,7 @@ func TestUpdateHumanProfile(t *testing.T) {
 	}
 	defer gw.Close()
 
-	if err := gw.UpsertRole(ctx, storage.Role{ID: "owner", Official: true, Permissions: []string{"*:*"}}); err != nil {
+	if err := gw.UpsertRole(ctx, storage.Role{Name: "owner", Official: true, Permissions: []string{"*:*"}}); err != nil {
 		t.Fatalf("seed owner role: %v", err)
 	}
 

@@ -16,8 +16,8 @@ describe("vendors data layer", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({
         vendors: [
-          { id: "crestron", display_name: "Crestron", official: true, icon: "crestron-logo" },
-          { id: "acme", display_name: "Acme", official: false },
+          { id: "u-crestron", name: "crestron", display_name: "Crestron", official: true, icon: "crestron-logo" },
+          { id: "u-acme", name: "acme", display_name: "Acme", official: false },
         ],
       }),
     );
@@ -27,7 +27,7 @@ describe("vendors data layer", () => {
     expect(req.method).toBe("GET");
     expect(req.url).toContain("/api/v1/vendors");
     expect(rows).toHaveLength(2);
-    expect(rows[0]).toMatchObject({ id: "crestron", display_name: "Crestron", official: true, icon: "crestron-logo" });
+    expect(rows[0]).toMatchObject({ id: "u-crestron", name: "crestron", display_name: "Crestron", official: true, icon: "crestron-logo" });
   });
 
   it("returns an empty list when the envelope has no vendors", async () => {
@@ -44,25 +44,26 @@ describe("vendors data layer", () => {
 
   it("creates a vendor via POST with the body", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ id: "acme", display_name: "Acme", official: false }, 201),
+      jsonResponse({ id: "u-acme", name: "acme", display_name: "Acme", official: false }, 201),
     );
-    await createVendor({ id: "acme", display_name: "Acme", kind: "manufacturer", website: "https://acme.example" });
+    await createVendor({ name: "acme", display_name: "Acme", kind: "manufacturer", website: "https://acme.example" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("POST");
     expect(req.url).toContain("/api/v1/vendors");
     const sent = await req.json();
-    expect(sent).toMatchObject({ id: "acme", display_name: "Acme", website: "https://acme.example" });
+    // The POST carries the HANDLE; the uuid is the database's to mint.
+    expect(sent).toMatchObject({ name: "acme", display_name: "Acme", website: "https://acme.example" });
   });
 
   it("throws when create errors", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ title: "id already exists" }, 409));
-    await expect(createVendor({ id: "acme", display_name: "Acme", kind: "manufacturer" })).rejects.toBeTruthy();
+    await expect(createVendor({ name: "acme", display_name: "Acme", kind: "manufacturer" })).rejects.toBeTruthy();
   });
 
   it("updates a vendor via PATCH to the id path with the body", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ id: "acme", display_name: "Acme Corp", official: false }),
+      jsonResponse({ id: "u-acme", name: "acme", display_name: "Acme Corp", official: false }),
     );
     await updateVendor("acme", { display_name: "Acme Corp" });
     expect(fetchMock).toHaveBeenCalledTimes(1);

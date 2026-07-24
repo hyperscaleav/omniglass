@@ -35,8 +35,14 @@ type Member struct {
 	SystemCount int
 }
 
-const memberCols = `id, system_id, component_id, is_primary,
-	(select count(*) from system_member peer where peer.component_id = system_member.component_id)`
+const memberCols = `m.id, s.name, c.name, m.is_primary,
+	(select count(*) from system_member peer where peer.component_id = m.component_id)`
+
+// memberFrom joins both ends back to their names, because a membership is
+// displayed as "this component, in this system" and the arc now stores ids.
+const memberFrom = ` from system_member m
+	join system s on s.id = m.system_id
+	join component c on c.id = m.component_id`
 
 func scanMember(row pgx.Row) (*Member, error) {
 	var m Member
@@ -91,7 +97,10 @@ func addMemberTx(ctx context.Context, q txQuerier, systemName, componentName str
 	// when this component has no membership yet.
 	if _, err := q.Exec(ctx, `
 		insert into system_member (system_id, component_id, is_primary)
-		select $1, $2, not exists (select 1 from system_member where component_id = $2)
+		select s.id, c.id,
+		       not exists (select 1 from system_member where component_id = c.id)
+		from system s, component c
+		where s.name = $1 and c.name = $2
 		on conflict (system_id, component_id) do nothing`,
 		systemName, componentName); err != nil {
 		return fmt.Errorf("storage: add member: %w", err)
@@ -117,14 +126,18 @@ func (p *PG) RemoveMember(ctx context.Context, actorID, systemName, componentNam
 	}
 	var staffing int
 	if err := tx.QueryRow(ctx, `
-		select count(*) from role_assignment where system_id = $1 and component_id = $2`,
+		select count(*) from system_role_assignment
+		where system_id = (select id from system where name = $1)
+		  and component_id = (select id from component where name = $2)`,
 		systemName, componentName).Scan(&staffing); err != nil {
 		return fmt.Errorf("storage: count member roles: %w", err)
 	}
 	if staffing > 0 {
 		return ErrMemberOccupied
 	}
-	tag, err := tx.Exec(ctx, `delete from system_member where system_id = $1 and component_id = $2`,
+	tag, err := tx.Exec(ctx, `delete from system_member
+		where system_id = (select id from system where name = $1)
+		  and component_id = (select id from component where name = $2)`,
 		systemName, componentName)
 	if err != nil {
 		return fmt.Errorf("storage: remove member: %w", err)
@@ -161,9 +174,11 @@ func lockMemberComponent(ctx context.Context, q txQuerier, componentName string)
 func promoteSolePrimary(ctx context.Context, q txQuerier, componentName string) error {
 	if _, err := q.Exec(ctx, `
 		update system_member set is_primary = true, updated_at = now()
-		where component_id = $1
-		  and not exists (select 1 from system_member p where p.component_id = $1 and p.is_primary)
-		  and (select count(*) from system_member c where c.component_id = $1) = 1`,
+		where component_id = (select id from component where name = $1)
+		  and not exists (select 1 from system_member p
+		                  where p.component_id = (select id from component where name = $1) and p.is_primary)
+		  and (select count(*) from system_member c
+		       where c.component_id = (select id from component where name = $1)) = 1`,
 		componentName); err != nil {
 		return fmt.Errorf("storage: promote sole primary: %w", err)
 	}
@@ -190,13 +205,15 @@ func (p *PG) SetPrimaryMember(ctx context.Context, actorID, systemName, componen
 	// one has to go before the new one lands.
 	if _, err := tx.Exec(ctx, `
 		update system_member set is_primary = false, updated_at = now()
-		where component_id = $1 and is_primary and system_id <> $2`,
+		where component_id = (select id from component where name = $1) and is_primary
+		  and system_id <> (select id from system where name = $2)`,
 		componentName, systemName); err != nil {
 		return fmt.Errorf("storage: clear primary member: %w", err)
 	}
 	tag, err := tx.Exec(ctx, `
 		update system_member set is_primary = true, updated_at = now()
-		where component_id = $1 and system_id = $2`,
+		where component_id = (select id from component where name = $1)
+		  and system_id = (select id from system where name = $2)`,
 		componentName, systemName)
 	if err != nil {
 		return fmt.Errorf("storage: set primary member: %w", err)
@@ -219,7 +236,7 @@ func (p *PG) ListMembers(ctx context.Context, systemName string, read scope.Set)
 	if _, err := scopedGet(ctx, p, systemConfig, systemName, read); err != nil {
 		return nil, err
 	}
-	return p.membersWhere(ctx, `system_id = $1 order by component_id`, systemName)
+	return p.membersWhere(ctx, `m.system_id = (select id from system where name = $1) order by c.name`, systemName)
 }
 
 // ComponentMemberships returns the systems a component is bound into, ordered by
@@ -229,11 +246,11 @@ func (p *PG) ComponentMemberships(ctx context.Context, componentName string, rea
 	if _, err := scopedGet(ctx, p, componentConfig, componentName, read); err != nil {
 		return nil, err
 	}
-	return p.membersWhere(ctx, `component_id = $1 order by system_id`, componentName)
+	return p.membersWhere(ctx, `m.component_id = (select id from component where name = $1) order by s.name`, componentName)
 }
 
 func (p *PG) membersWhere(ctx context.Context, where string, arg string) ([]Member, error) {
-	rows, err := p.pool.Query(ctx, `select `+memberCols+` from system_member where `+where, arg)
+	rows, err := p.pool.Query(ctx, `select `+memberCols+memberFrom+` where `+where, arg)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list members: %w", err)
 	}

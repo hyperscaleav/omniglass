@@ -16,10 +16,10 @@ const declared: DeclaredRole[] = [
 ];
 
 const catalog: Capability[] = [
-  { id: "microphone", display_name: "Microphone", official: true },
-  { id: "speaker", display_name: "Speaker", official: true },
-  { id: "display", display_name: "Display", official: true },
-  { id: "hdmi-in", display_name: "HDMI input", official: true },
+  { id: "microphone", name: "microphone", display_name: "Microphone", official: true },
+  { id: "speaker", name: "speaker", display_name: "Speaker", official: true },
+  { id: "display", name: "display", display_name: "Display", official: true },
+  { id: "hdmi-in", name: "hdmi-in", display_name: "HDMI input", official: true },
 ];
 
 const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };

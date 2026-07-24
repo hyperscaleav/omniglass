@@ -5,7 +5,7 @@ description: "The published Omniglass container image: what it contains, where i
 
 Omniglass ships as a single container image. The operator console is compiled
 into the binary (`-tags web` plus `go:embed`), so one image is the whole app:
-every run mode (`server`, `node`, `migrate`, `bootstrap`, `token`) is the same
+every run mode (`server`, `node run`, `migrate`, `bootstrap`, `token`) is the same
 binary with a different first argument. The final image is distroless and runs
 as an unprivileged user; the binary is statically linked (CGO disabled), so the
 image is a few tens of megabytes with no shell or libc.

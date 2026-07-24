@@ -21,7 +21,7 @@ describe("variables data layer", () => {
 
   it("lists variables and unwraps the envelope", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ variables: [{ id: "1", name: "poll", value_type: "int", owner_kind: "global", value: 30 }] }),
+      jsonResponse({ variables: [{ id: "1", name: "poll", value_type: "int", owner_kind: "platform", value: 30 }] }),
     );
     const vars = await listVariables();
     expect(vars).toHaveLength(1);
@@ -45,7 +45,7 @@ describe("variables data layer", () => {
 
   it("patches the value on update", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ id: "sec_123", name: "poll", value_type: "int", owner_kind: "global", value: 60 }),
+      jsonResponse({ id: "sec_123", name: "poll", value_type: "int", owner_kind: "platform", value: 60 }),
     );
     await updateVariable("v1", 60);
     const req = fetchMock.mock.calls[0][0] as Request;
@@ -57,7 +57,7 @@ describe("variables data layer", () => {
 
   it("throws on an error status", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ detail: "unknown value_type" }, 422));
-    await expect(createVariable({ name: "x", value_type: "int", owner_kind: "global", value: "no" })).rejects.toBeTruthy();
+    await expect(createVariable({ name: "x", value_type: "int", owner_kind: "platform", value: "no" })).rejects.toBeTruthy();
   });
 
   it("deletes by id", async () => {

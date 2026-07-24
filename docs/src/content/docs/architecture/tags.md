@@ -17,7 +17,7 @@ and the directory **Tags column** with per-key **tag filtering** (narrow a direc
 plus **is set** / **is absent**) are built too ([#189](https://github.com/hyperscaleav/omniglass/issues/189),
 [#226](https://github.com/hyperscaleav/omniglass/issues/226)). Deferred to later slices: the winner-plus-shadowed
 **cascade provenance** panel on an entity's detail (the rest of [#189](https://github.com/hyperscaleav/omniglass/issues/189)),
-binding through [groups](/architecture/groups/) and a `template`-scoped default (the shared-resolver work in
+binding through [groups](/architecture/groups/) and a `template`-scoped binding (the shared-resolver work in
 [#184](https://github.com/hyperscaleav/omniglass/issues/184)), binding onto a [file](/architecture/files/)
 ([#191](https://github.com/hyperscaleav/omniglass/issues/191)), and a stored per-key color override. Those divergences
 are logged in the [decision log](/architecture/decisions/).
@@ -34,7 +34,7 @@ rather than a single most-specific value.
 - **`tag`** is the **governed key vocabulary**: one row per key (`category`, `environment`), shared across the whole
   tenant (one registry per database, which is the tenant boundary). It owns no value.
 - **`tag_binding`** is the **value cell**: it sets a value for a key at one owner on the exclusive arc
-  (`global | location | system | component | node`), exactly the arc a [variable](/architecture/variables/) or a secret is
+  (`platform | location | system | component | node`), exactly the arc a [variable](/architecture/variables/) or a secret is
   owned at.
 
 Splitting them is what keeps the vocabulary **normalized**: the key `environment` is minted once and reused, so no one
@@ -51,8 +51,9 @@ Minting a key and setting a value are **two different permissions**, and that sp
 - **Setting a value is the ordinary entity write.** Binding `environment: prod` onto a component is a
   **`component:update`**, onto a system a `system:update`, onto a location a `location:update`, the same write an
   operator already holds on the entity. Binding needs **no new permission**: an operator who may edit a component may
-  tag it, using the keys the vocabulary already governs. A global binding (a tenant-wide default value) has no owning
-  entity to defer to, so it is gated by `tag:update`.
+  tag it, using the keys the vocabulary already governs. A **platform** binding (the install-wide value for a key) has no
+  owning entity to defer to, so it is gated by `tag:update` plus the install-wide
+  [`platform:update`](/architecture/identity-access/#install-wide-authority-is-not-estate-scope).
 
 So the vocabulary stays curated while tagging stays routine. Reading the vocabulary and an entity's tags rides the
 viewer floor (`tag:read`, `component:read`).
@@ -73,7 +74,7 @@ Two fields on the key shape how its bindings behave:
 
 ## Values resolve union-on-key, override-on-value
 
-The effective tags for a component resolve down the structural cascade (`global -> location tree -> system tree ->
+The effective tags for a component resolve down the structural cascade (`platform -> location tree -> system tree ->
 component tree`), the same walk the variable and secret resolvers use, but with a different combinator:
 
 - **Keys union.** An entity surfaces **every** key bound at or above it. Two different keys set at two different scopes
@@ -87,9 +88,9 @@ leak downward. The `GET /components/{name}/effective-tags` route returns the res
 candidates); `GET /components/{name}/tags` returns only the bindings set **directly** on the component.
 
 **Systems and locations resolve too.** A component walks the full arc, but every entity has an effective set. A
-**location** resolves `global` plus its own location tree. A **system** resolves `global`, its own system tree, and
+**location** resolves `platform` plus its own location tree. A **system** resolves `platform`, its own system tree, and
 **the location it is placed at** (its `location_id` tree): a system in a PCI building surfaces `compliance: pci`, the
-same way a component picks up its own location's tags. A **node** is estate-wide, not a scope tree, so it resolves `global` plus its own direct bindings only (no inheritance). This is the read behind the directory **Tags column**: the list
+same way a component picks up its own location's tags. A **node** is estate-wide, not a scope tree, so it resolves `platform` plus its own direct bindings only (no inheritance). This is the read behind the directory **Tags column**: the list
 routes (`GET /components`, `/systems`, `/locations`, `/nodes`) each carry an **`effective_tags`** map (key to winning value,
 winners only) per row, resolved for the whole page in **one batched query** (a `Gateway.EffectiveTags` per kind, no
 per-row fetch). Provenance (which scope a value came from) stays in the per-entity effective-tags detail view, not the
@@ -105,7 +106,7 @@ reaches for `prod` instead of retyping it, without the key having to declare the
 
 :::caution[Open question]
 The rest of value-domain governance. Beyond the string enum, whether a key may carry a typed **`value_type`**
-(int, bool, date, validated like a [`datapoint_type`](/architecture/datapoints/) domain) and whether it may
+(int, bool, date, validated like a [`property_type`](/architecture/datapoints/) domain) and whether it may
 **normalize** values on input (lowercase, trim, fold synonyms, so `Prod`, `prod `, and `PROD` resolve to one
 value) stay open. The enum is the first, most-asked-for slice; the rest is deferred.
 :::
@@ -118,4 +119,4 @@ The key vocabulary and the value cell; the physical layout (the owner arc, the c
 | Table | Key columns | Notes |
 |---|---|---|
 | `tag` | name, applies_to, propagates, allowed_values | **Built.** The tenant-wide governed key vocabulary; minting a key needs `tag:create`. `applies_to` narrows a key to entity kinds (empty = universal); `propagates` toggles cascade versus flat per-entity binding; `allowed_values` is the value enum (empty = free text), enforced on the binding write |
-| `tag_binding` | (tag_id, **owner arc**), value | **Built.** The `key: value` binding at one owner on the exclusive arc (`global / location / system / component`); resolves **union on key, override on value** down the [cascade](/architecture/cascade/). Setting a value is the owner's own `update` write |
+| `tag_binding` | (tag_id, **owner arc**), value | **Built.** The `key: value` binding at one owner on the exclusive arc (`platform / location / system / component / node`); resolves **union on key, override on value** down the [cascade](/architecture/cascade/). Setting a value is the owner's own `update` write, except at `platform`, which takes `tag:update` plus `platform:update` |

@@ -26,7 +26,7 @@ func TestPasswordAuth(t *testing.T) {
 	}
 	defer gw.Close()
 
-	if err := gw.UpsertRole(ctx, storage.Role{ID: "owner", Official: true, Permissions: []string{"*:*"}}); err != nil {
+	if err := gw.UpsertRole(ctx, storage.Role{Name: "owner", Official: true, Permissions: []string{"*:*"}}); err != nil {
 		t.Fatalf("seed owner role: %v", err)
 	}
 
@@ -98,7 +98,7 @@ func TestSetPrincipalPassword(t *testing.T) {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := gw.UpsertRole(ctx, storage.Role{ID: "owner", Official: true, Permissions: []string{"*:*", ">"}}); err != nil {
+	if err := gw.UpsertRole(ctx, storage.Role{Name: "owner", Official: true, Permissions: []string{"*:*", ">"}}); err != nil {
 		t.Fatalf("seed owner: %v", err)
 	}
 	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: make([]byte, 32), Prefix: "root0000"}); err != nil {

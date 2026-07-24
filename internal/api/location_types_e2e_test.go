@@ -35,10 +35,11 @@ func TestLocationTypesAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	out := c.do(ownerTok, http.MethodGet, "/types/location", nil, http.StatusOK)
+	out := c.do(ownerTok, http.MethodGet, "/location-types", nil, http.StatusOK)
 	var body struct {
 		LocationTypes []struct {
 			ID                 string   `json:"id"`
+			Name               string   `json:"name"`
 			DisplayName        string   `json:"display_name"`
 			Icon               string   `json:"icon"`
 			Official           bool     `json:"official"`
@@ -54,7 +55,7 @@ func TestLocationTypesAPI(t *testing.T) {
 	want := []string{"building", "campus", "floor", "room"}
 	gotIDs := make([]string, len(body.LocationTypes))
 	for i, lt := range body.LocationTypes {
-		gotIDs[i] = lt.ID
+		gotIDs[i] = lt.Name
 	}
 	if len(gotIDs) != len(want) {
 		t.Fatalf("location_types = %v, want %v", gotIDs, want)
@@ -68,15 +69,15 @@ func TestLocationTypesAPI(t *testing.T) {
 	// reference data, so it carries a label but is deliberately not official.
 	for _, lt := range body.LocationTypes {
 		if lt.DisplayName == "" || lt.Official {
-			t.Errorf("type %q: display_name=%q official=%v, want non-empty label + operator-owned", lt.ID, lt.DisplayName, lt.Official)
+			t.Errorf("type %q: display_name=%q official=%v, want non-empty label + operator-owned", lt.Name, lt.DisplayName, lt.Official)
 		}
 	}
 	// The icon travels the wire so the console can render each type's leading tree
 	// glyph without a second lookup.
 	wantIcons := map[string]string{"campus": "landmark", "building": "building", "floor": "layers", "room": "door-open"}
 	for _, lt := range body.LocationTypes {
-		if lt.Icon != wantIcons[lt.ID] {
-			t.Errorf("type %q: icon=%q, want %q", lt.ID, lt.Icon, wantIcons[lt.ID])
+		if lt.Icon != wantIcons[lt.Name] {
+			t.Errorf("type %q: icon=%q, want %q", lt.Name, lt.Icon, wantIcons[lt.Name])
 		}
 	}
 
@@ -86,14 +87,14 @@ func TestLocationTypesAPI(t *testing.T) {
 		"floor": {"building", "campus"}, "room": {"floor", "building", "campus"},
 	}
 	for _, lt := range body.LocationTypes {
-		want := wantParents[lt.ID]
+		want := wantParents[lt.Name]
 		if len(lt.AllowedParentTypes) != len(want) {
-			t.Errorf("type %q: allowed_parent_types = %v, want %v", lt.ID, lt.AllowedParentTypes, want)
+			t.Errorf("type %q: allowed_parent_types = %v, want %v", lt.Name, lt.AllowedParentTypes, want)
 			continue
 		}
 		for i := range want {
 			if lt.AllowedParentTypes[i] != want[i] {
-				t.Errorf("type %q: allowed_parent_types = %v, want %v", lt.ID, lt.AllowedParentTypes, want)
+				t.Errorf("type %q: allowed_parent_types = %v, want %v", lt.Name, lt.AllowedParentTypes, want)
 			}
 		}
 	}
@@ -117,28 +118,29 @@ func TestLocationTypeCRUDAPI(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	// Create a custom type (201), then it appears in the list.
-	c.do(ownerTok, http.MethodPost, "/types/location",
-		map[string]any{"id": "wing", "display_name": "Wing", "icon": "layers"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/location-types",
+		map[string]any{"name": "wing", "display_name": "Wing", "icon": "layers"}, http.StatusCreated)
 
 	// Update it (200).
-	c.do(ownerTok, http.MethodPatch, "/types/location/wing",
+	c.do(ownerTok, http.MethodPatch, "/location-types/wing",
 		map[string]any{"display_name": "West Wing"}, http.StatusOK)
 
 	// A shipped type is editable: the estate shapes its own place vocabulary.
-	c.do(ownerTok, http.MethodPatch, "/types/location/campus",
+	c.do(ownerTok, http.MethodPatch, "/location-types/campus",
 		map[string]any{"display_name": "Campus"}, http.StatusOK)
 
 	// "root" is reserved: creating a type with that id is refused (422).
-	c.do(ownerTok, http.MethodPost, "/types/location",
-		map[string]any{"id": "root", "display_name": "Root"}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPost, "/location-types",
+		map[string]any{"name": "root", "display_name": "Root"}, http.StatusUnprocessableEntity)
 
 	// allowed_parent_types round-trips through create and update.
-	c.do(ownerTok, http.MethodPost, "/types/location",
-		map[string]any{"id": "annex", "display_name": "Annex", "allowed_parent_types": []string{"wing", "root"}}, http.StatusCreated)
-	out := c.do(ownerTok, http.MethodGet, "/types/location", nil, http.StatusOK)
+	c.do(ownerTok, http.MethodPost, "/location-types",
+		map[string]any{"name": "annex", "display_name": "Annex", "allowed_parent_types": []string{"wing", "root"}}, http.StatusCreated)
+	out := c.do(ownerTok, http.MethodGet, "/location-types", nil, http.StatusOK)
 	var listBody struct {
 		LocationTypes []struct {
 			ID                 string   `json:"id"`
+			Name               string   `json:"name"`
 			AllowedParentTypes []string `json:"allowed_parent_types"`
 		} `json:"location_types"`
 	}
@@ -147,7 +149,7 @@ func TestLocationTypeCRUDAPI(t *testing.T) {
 	}
 	found := false
 	for _, lt := range listBody.LocationTypes {
-		if lt.ID == "annex" {
+		if lt.Name == "annex" {
 			found = true
 			if len(lt.AllowedParentTypes) != 2 || lt.AllowedParentTypes[0] != "wing" || lt.AllowedParentTypes[1] != "root" {
 				t.Errorf("annex allowed_parent_types = %v, want [wing root]", lt.AllowedParentTypes)
@@ -157,15 +159,15 @@ func TestLocationTypeCRUDAPI(t *testing.T) {
 	if !found {
 		t.Fatal("annex type not in list")
 	}
-	c.do(ownerTok, http.MethodPatch, "/types/location/annex",
+	c.do(ownerTok, http.MethodPatch, "/location-types/annex",
 		map[string]any{"allowed_parent_types": []string{}}, http.StatusOK)
 
 	// In use: place a location of type wing, delete is refused (409).
 	c.do(ownerTok, http.MethodPost, "/locations",
 		map[string]any{"name": "w1", "location_type": "wing"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodDelete, "/types/location/wing", nil, http.StatusConflict)
+	c.do(ownerTok, http.MethodDelete, "/location-types/wing", nil, http.StatusConflict)
 
 	// Remove the location, then the type deletes (204).
 	c.do(ownerTok, http.MethodDelete, "/locations/w1", nil, http.StatusNoContent)
-	c.do(ownerTok, http.MethodDelete, "/types/location/wing", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/location-types/wing", nil, http.StatusNoContent)
 }

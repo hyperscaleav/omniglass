@@ -41,7 +41,7 @@ template tables), [collection](/architecture/collection/#storage) (interfaces an
 ## Conventions
 
 - **No `tenant_id`.** Isolation is per-database (a database per tenant); there is no tenant column
-  anywhere. The key registries `datapoint_type` and `event_type` carry a **`scope`** (template / org /
+  anywhere. The key registries `property_type` and `event_type` carry a **`scope`** (template / org /
   official) deciding where the name is unique ([key scope](/architecture/datapoints/#key-scope-template-org-official)),
   and the non-template registries and catalogs (`interface_type`, `location_type`, `secret_type`,
   `vendor`, `driver`, `capability`, `product`, `standard`) carry an
@@ -62,7 +62,7 @@ template tables), [collection](/architecture/collection/#storage) (interfaces an
   `collection.failed` event or a dev raw-mode tap ([datapoints](/architecture/datapoints/)). A
   schedule fire is not a record here: it is an `event` with `origin=scheduled`.
   There is no separate rule-execution table: derived rows carry their lineage on the row.
-  **Datapoints** (`metric_datapoint` / `state_datapoint` / `log_datapoint`) are the typed
+  **Datapoints** (`metric` / `state` / `log_datapoint`) are the typed
   observation firehose. **Stateful entities and projections** (`alarm`, `action`, current-value)
   hold state directly or are rebuildable read models, **views by default**. The model is **not
   event-sourced**.
@@ -77,10 +77,12 @@ template tables), [collection](/architecture/collection/#storage) (interfaces an
   `node_id`, or none for the singleton `global`) plus a CHECK that exactly the matching column is set
   (or all null for `global`). System-, location-, node-, and global-level datapoints are first-class.
   The full pattern is on [core entities](/architecture/core-entities/#ownership-the-exclusive-arc).
-- **Keys**: datapoints and events use a surrogate id plus `ts`; the key registry `datapoint_type`
+- **Keys**: datapoints and events use a surrogate id plus `ts`; the key registry `property_type`
   carries a **`scope`** (template / org / official) deciding where the name is unique (`(template_id, name)`
   at template scope, `name` at org/official); structural entities are name-keyed; a `task` is **content-addressed**
-  (`hash(interface, kind, schedule, params)`); a `node` by name.
+  (`hash(interface, kind, schedule, params)`); a `node` by its `principal_id`, its enrollment
+  identity. Every foreign key stores the target's primary key, so a rename is free
+  ([ADR-0056](/architecture/decisions/#adr-0056-every-foreign-key-stores-a-primary-key)).
 
 ## How the records relate
 
@@ -89,8 +91,8 @@ The relationships, not the columns. The columns of each table live on its owning
 ```d2
 direction: right
 classes: { node: { style.border-radius: 8 } }
-metric: metric_datapoint { class: node }
-state: state_datapoint { class: node }
+metric: metric { class: node }
+state: state { class: node }
 event: event { class: node }
 alarm: alarm { class: node }
 action: action { class: node }
@@ -119,7 +121,7 @@ how the rest of the platform learns it changed.
 - **The data lane (a sink).** Observed and calculated datapoints live on the JetStream data lane.
   The rule engine consumes them directly off NATS; Postgres is the durable record, not the live
   signal. The **persistence consumer** is a durable JetStream consumer that batch-writes the
-  `metric_datapoint` / `state_datapoint` / `log_datapoint` tables as an async sink, idempotent on
+  `metric` / `state` / `log_datapoint` tables as an async sink, idempotent on
   `(series, ts)`, so a redelivery lands the same row and the firehose never blocks on the database.
   Datapoints do **not** flow through CDC: they are already on NATS.
 - **The record/state/intent lane (PG-first, CDC-out).** Events, alarms, actions, and operator
@@ -223,12 +225,12 @@ key, instance, provenance)?
 
 - **Append-only tables are range-partitioned by `ts`** (native declarative partitioning;
   `pg_partman` where the provider permits, else a documented manual roll). The firehose
-  (`metric_datapoint`) is the partitioning-critical one.
-- **Retention is per table**, set by policy, not one global TTL: `metric_datapoint` short,
-  `state_datapoint` / `log_datapoint` longer, `audit_log` longest (compliance), `internal_log`
+  (`metric`) is the partitioning-critical one.
+- **Retention is per table**, set by policy, not one blanket TTL: `metric` short,
+  `state` / `log_datapoint` longer, `audit_log` longest (compliance), `internal_log`
   short. On-row lineage ages out with its datapoint. The per-table defaults are **cascade-resolved**
-  ([cascade](/architecture/cascade/)) with global defaults, so a class or entity can hold longer or
-  shorter without a global change.
+  ([cascade](/architecture/cascade/)) with an install-wide `platform` binding, so a class or entity can
+  hold longer or shorter without changing the whole install.
 - **The `raw_sample` buffer** (the opt-in raw-retention policy, [collection](/architecture/collection/))
   is range-partitioned by `ts` and cold-tierable like the metric partitions, on a short retention. It
   is bounded, sampled, and short-lived; it is not a telemetry table.
@@ -266,7 +268,7 @@ application read and write goes through the Gateway, the physical backend is swa
   Postgres at scale); the data lane's persistence consumer and the record lane's CDC publisher both
   target this one backend.
 - **tiering**: the firehose does not stay in hot Postgres forever. Aged
-  `metric_datapoint` / `log_datapoint` partitions tier out to a **columnar or object
+  `metric` / `log_datapoint` partitions tier out to a **columnar or object
   store** (Parquet on S3-compatible, or an embedded columnar engine) behind the same gateway, so
   historical queries fan across hot and cold with no model change. The cold tier is partitioned by
   `ts`.

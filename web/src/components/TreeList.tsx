@@ -17,7 +17,7 @@ import {
 import BladeStack from "./BladeStack";
 import Button from "./Button";
 import KVStacked from "./KVStacked";
-import { type BladeDef, type BladeEdit, type BladeRef, createBladeController, createEditSlot, useBladeEdit } from "../lib/blades";
+import { type BladeDef, type BladeEdit, type BladeRef, BladesContext, createBladeController, createEditSlot, useBladeEdit } from "../lib/blades";
 
 // TreeList: the one config-driven tree-list body (composing ListShell), the inventory shell. Every entity page (Components,
 // Systems, Locations) is a config over this, never a fork. It owns the filter
@@ -456,9 +456,26 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
               <Show when={p.row.path && p.row.path.length}>
                 <span class="truncate text-[11px] text-base-content/40">{p.row.path!.map((x) => x.display).join(" › ")}</span>
               </Show>
-              <span class="truncate" style={{ "font-weight": cfg.nameWeight ? cfg.nameWeight(n) : 500 }}>
+              {/* The label, then the key beneath it. A row's id IS its key (the
+                  kebab name the API and CLI address it by), so an operator can
+                  read what to type without opening the row. It is always shown
+                  rather than revealed on hover: hover does not exist on touch,
+                  is not discoverable, and cannot be selected to copy, and
+                  copying it into a CLI invocation is the point.
+
+                  When the entity has no display name the label IS the key, so
+                  it is rendered once, in the data face, which marks it as an
+                  identifier rather than a name somebody chose. */}
+              <span
+                class="truncate"
+                classList={{ "font-data text-[13px]": n.display === n.id }}
+                style={{ "font-weight": cfg.nameWeight ? cfg.nameWeight(n) : 500 }}
+              >
                 {n.display}
               </span>
+              <Show when={n.display !== n.id}>
+                <span class="truncate font-data text-[11px] text-base-content/40">{n.id}</span>
+              </Show>
             </span>
           </span>
         </td>
@@ -636,7 +653,12 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   const isCreate = () => cfg.focus?.() === "create" && !!cfg.renderCreate;
 
   return (
-    <>
+    // The blade controller is shared through context, not just handed to BladeStack:
+    // a blade BODY (an interface blade drilling to its component) calls useBlades to
+    // push or pop, and without the provider it throws before it renders. FlatList has
+    // always done this; TreeList did not, which left both interface blades dead on
+    // every TreeList page (#336).
+    <BladesContext.Provider value={blades}>
       <Show when={cfg.error?.()}>
         <div role="alert" class="alert alert-error alert-soft mb-4 text-sm">
           <span>Could not load {cfg.entity.plural.toLowerCase()}: {describeError(cfg.error?.())}</span>
@@ -663,6 +685,6 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
           </Drawer>
         )}
       </Show>
-    </>
+    </BladesContext.Provider>
   );
 }

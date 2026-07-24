@@ -151,11 +151,16 @@ components:
         display_name:
           type: string
         id:
+          description: The capability's uuid, the stable handle that survives a rename
+          type: string
+        name:
+          description: The kebab handle an operator reads and types; renameable
           type: string
         official:
           type: boolean
       required:
         - id
+        - name
         - display_name
         - official
       type: object
@@ -290,20 +295,40 @@ components:
           type: object
         id:
           type: string
+        location:
+          description: The location's name, for display
+          type: string
         location_id:
+          description: The location's id, the canonical handle
           type: string
         name:
           type: string
+        parent:
+          description: The parent component's name, for display; absent for a root component
+          type: string
         parent_id:
+          description: The parent component's id, the canonical handle
+          type: string
+        product:
+          description: The product's name, for display; the form a body round-trips.
           type: string
         product_id:
-          description: The product (catalog SKU) this component is an instance of, if any.
+          description: The product (catalog SKU) this component is an instance of, if any; the stable handle that survives a rename.
           type: string
+        system:
+          description: Name of the component's primary system, its default when no system is named. A component may belong to several; read /components/{name}/memberships for all of them.
+          type: string
+        system_count:
+          description: How many systems this component belongs to; more than one means it is shared.
+          format: int64
+          type: integer
         system_id:
+          description: The primary system's id, the canonical handle
           type: string
       required:
         - id
         - name
+        - system_count
       type: object
     ComponentCapabilitiesOutputBody:
       additionalProperties: false
@@ -350,6 +375,35 @@ components:
         - component
         - properties
       type: object
+    ComponentPropertyBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ComponentPropertyBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component:
+          type: string
+        property_type_id:
+          description: The catalog property's uuid, the stable form of property_type_name
+          type: string
+        property_type_name:
+          type: string
+        value:
+          description: The stored value, shape given by the property's data_type
+        value_id:
+          description: The stored value's id
+          type: string
+      required:
+        - component
+        - property_type_name
+        - property_type_id
+        - value
+        - value_id
+      type: object
     CreateCapabilityInputBody:
       additionalProperties: false
       properties:
@@ -363,12 +417,12 @@ components:
         display_name:
           minLength: 1
           type: string
-        id:
-          description: Globally unique capability id
+        name:
+          description: The globally unique kebab handle; renameable
           minLength: 1
           type: string
       required:
-        - id
+        - name
         - display_name
       type: object
     CreateComponentInputBody:
@@ -417,14 +471,14 @@ components:
         display_name:
           minLength: 1
           type: string
-        id:
-          description: Globally unique driver id
+        name:
+          description: The globally unique kebab handle; renameable
           minLength: 1
           type: string
         version:
           type: string
       required:
-        - id
+        - name
         - display_name
       type: object
     CreateFileInputBody:
@@ -566,19 +620,19 @@ components:
           readOnly: true
           type: string
         component:
-          description: Owning component name; omit for a server-hosted interface (needs an all-scoped grant)
+          description: Owning component, by name or id; omit for a server-hosted interface (needs an all-scoped grant)
           type: string
-        node:
-          description: Node placement name
-          type: string
-        params:
-          description: Endpoint/target settings (jsonb)
-        type:
+        interface_type:
           description: An interface_type name (the protocol); the interface is named by it, unique within the component
           minLength: 1
           type: string
+        node:
+          description: Node placement, by name or id
+          type: string
+        params:
+          description: Endpoint/target settings (jsonb)
       required:
-        - type
+        - interface_type
       type: object
     CreateLocationInputBody:
       additionalProperties: false
@@ -632,12 +686,12 @@ components:
         icon:
           description: A glyph key; the console falls back to map-pin when empty
           type: string
-        id:
-          description: Globally unique type id (kebab, e.g. wing); "root" is reserved
+        name:
+          description: The globally unique kebab handle (e.g. wing); "root" is reserved
           minLength: 1
           type: string
       required:
-        - id
+        - name
         - display_name
       type: object
     CreateMeTokenInputBody:
@@ -708,7 +762,7 @@ components:
           description: Operator label; falls back to the name when empty
           type: string
         location:
-          description: Optional location the node sits in (descriptive placement, not scope)
+          description: Optional location the node sits in, by name or id (descriptive placement, not scope)
           type: string
         name:
           description: Globally unique node name (also its NATS subject token, so no dots or whitespace)
@@ -769,10 +823,6 @@ components:
           type: string
         driver_id:
           type: string
-        id:
-          description: Globally unique product id
-          minLength: 1
-          type: string
         kind:
           default: device
           enum:
@@ -781,12 +831,18 @@ components:
             - service
             - vm
           type: string
+        name:
+          description: The globally unique kebab handle; renameable
+          minLength: 1
+          type: string
         parent_product_id:
+          description: The parent product, by handle or uuid
           type: string
         vendor_id:
+          description: The vendor, by handle or uuid
           type: string
       required:
-        - id
+        - name
         - display_name
       type: object
     CreatePropertyInputBody:
@@ -857,12 +913,12 @@ components:
           minLength: 1
           type: string
         owner:
-          description: The owning entity's name; omit for a global secret
+          description: The owning entity's name; omit for a platform secret
           type: string
         owner_kind:
           description: Which tier owns this secret
           enum:
-            - global
+            - platform
             - location
             - system
             - component
@@ -890,15 +946,15 @@ components:
         display_name:
           minLength: 1
           type: string
-        id:
-          description: Globally unique standard id
+        name:
+          description: The globally unique kebab handle; renameable
           minLength: 1
           type: string
         parent_standard_id:
-          description: A standard this one is a variant of
+          description: A standard this one is a variant of, by handle or uuid
           type: string
       required:
-        - id
+        - name
         - display_name
       type: object
     CreateSystemInputBody:
@@ -980,12 +1036,12 @@ components:
           minLength: 1
           type: string
         owner:
-          description: The owning entity's name; omit for a global variable
+          description: The owning entity's name; omit for a platform variable
           type: string
         owner_kind:
           description: Which tier owns this variable
           enum:
-            - global
+            - platform
             - location
             - system
             - component
@@ -1022,10 +1078,6 @@ components:
           type: string
         icon:
           type: string
-        id:
-          description: Globally unique vendor id
-          minLength: 1
-          type: string
         kind:
           default: manufacturer
           enum:
@@ -1033,12 +1085,16 @@ components:
             - integrator
             - developer
           type: string
+        name:
+          description: The globally unique kebab handle; renameable
+          minLength: 1
+          type: string
         support_phone:
           type: string
         website:
           type: string
       required:
-        - id
+        - name
         - display_name
       type: object
     DownloadFileOutputBody:
@@ -1076,6 +1132,10 @@ components:
         display_name:
           type: string
         id:
+          description: The driver's uuid, the stable handle that survives a rename
+          type: string
+        name:
+          description: The kebab handle an operator reads and types; renameable
           type: string
         official:
           type: boolean
@@ -1083,6 +1143,7 @@ components:
           type: string
       required:
         - id
+        - name
         - display_name
         - official
       type: object
@@ -1103,7 +1164,10 @@ components:
         is_set:
           description: True when the component overrides the contract default
           type: boolean
-        property_name:
+        property_type_id:
+          description: The catalog property's uuid, the stable form of property_type_name
+          type: string
+        property_type_name:
           description: The catalog property name
           type: string
         required:
@@ -1117,36 +1181,12 @@ components:
           description: The stored value's id when set; omitted when the property is unset
           type: string
       required:
-        - property_name
+        - property_type_name
+        - property_type_id
         - data_type
         - required
         - is_set
         - from_contract
-      type: object
-    EffectivePropertyValueBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/EffectivePropertyValueBody.json
-          format: uri
-          readOnly: true
-          type: string
-        component:
-          type: string
-        property_name:
-          type: string
-        value:
-          description: The stored value, shape given by the property's data_type
-        value_id:
-          description: The stored value's id
-          type: string
-      required:
-        - component
-        - property_name
-        - value
-        - value_id
       type: object
     EffectiveRoleBody:
       additionalProperties: false
@@ -1197,6 +1237,25 @@ components:
         - assigned
         - understaffed
       type: object
+    EffectiveSecretsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EffectiveSecretsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        secrets:
+          items:
+            $ref: "#/components/schemas/ResolvedSecretBody"
+          type:
+            - array
+            - "null"
+      required:
+        - secrets
+      type: object
     EffectiveTagsOutputBody:
       additionalProperties: false
       properties:
@@ -1215,6 +1274,25 @@ components:
             - "null"
       required:
         - tags
+      type: object
+    EffectiveVariablesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EffectiveVariablesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        variables:
+          items:
+            $ref: "#/components/schemas/ResolvedVariableBody"
+          type:
+            - array
+            - "null"
+      required:
+        - variables
       type: object
     EnrollOutputBody:
       additionalProperties: false
@@ -1412,6 +1490,9 @@ components:
         message:
           description: The occurrence message
           type: string
+        property_type_id:
+          description: The property's uuid, the stable form of key
+          type: string
         provenance:
           description: The lineage of the occurrence (observed for direct collection)
           type: string
@@ -1425,6 +1506,7 @@ components:
       required:
         - ts
         - key
+        - property_type_id
         - message
         - provenance
       type: object
@@ -1485,23 +1567,6 @@ components:
         - sha256
         - sensitive
         - created_at
-      type: object
-    GlobalBindingInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/GlobalBindingInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        value:
-          description: The bound value
-          minLength: 1
-          type: string
-      required:
-        - value
       type: object
     GrantBody:
       additionalProperties: false
@@ -1788,8 +1853,17 @@ components:
         component:
           description: The owning component name; absent for a server-hosted interface
           type: string
+        component_id:
+          description: The owning component's id; the stable form of component
+          type: string
         id:
           description: The interface's surrogate id (the address)
+          type: string
+        interface_type:
+          description: The interface_type name (the protocol)
+          type: string
+        interface_type_id:
+          description: The interface_type's uuid, the stable form of interface_type
           type: string
         name:
           description: The friendly name, unique within the owning component
@@ -1797,14 +1871,16 @@ components:
         node:
           description: The node placement name, if assigned
           type: string
+        node_id:
+          description: The placed node's id; the stable form of node
+          type: string
         params:
           description: The endpoint/target settings (jsonb)
-        type:
-          type: string
       required:
         - id
         - name
-        - type
+        - interface_type
+        - interface_type_id
       type: object
     Keybindings:
       additionalProperties: false
@@ -2478,20 +2554,29 @@ components:
         effective_tags:
           additionalProperties:
             type: string
-          description: The resolved effective tags (key -> winning value) that cascade onto this location (global and its location tree); for the Tags column.
+          description: The resolved effective tags (key -> winning value) that cascade onto this location (platform and its location tree); for the Tags column.
           type: object
         id:
           type: string
         location_type:
+          description: The location_type name
+          type: string
+        location_type_id:
+          description: The location_type's uuid, the stable form of location_type
           type: string
         name:
           type: string
+        parent:
+          description: The parent location's name, for display; absent for a site root
+          type: string
         parent_id:
+          description: The parent location's id, the canonical handle
           type: string
       required:
         - id
         - name
         - location_type
+        - location_type_id
       type: object
     LocationPropertiesOutputBody:
       additionalProperties: false
@@ -2515,19 +2600,22 @@ components:
         - location
         - properties
       type: object
-    LocationPropertyValueBody:
+    LocationPropertyBody:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
           examples:
-            - /api/v1/schemas/LocationPropertyValueBody.json
+            - /api/v1/schemas/LocationPropertyBody.json
           format: uri
           readOnly: true
           type: string
         location:
           type: string
-        property_name:
+        property_type_id:
+          description: The catalog property's uuid, the stable form of property_type_name
+          type: string
+        property_type_name:
           type: string
         value:
           description: The stored value, shape given by the property's data_type
@@ -2536,7 +2624,8 @@ components:
           type: string
       required:
         - location
-        - property_name
+        - property_type_name
+        - property_type_id
         - value
         - value_id
       type: object
@@ -2561,11 +2650,16 @@ components:
         icon:
           type: string
         id:
+          description: The location type's uuid, the stable handle that survives a rename
+          type: string
+        name:
+          description: The kebab handle an operator reads and types; renameable
           type: string
         official:
           type: boolean
       required:
         - id
+        - name
         - display_name
         - icon
         - allowed_parent_types
@@ -2583,14 +2677,18 @@ components:
           type: string
         default_value:
           description: The contract default, shape given by the property's data_type; omitted when the contract sets none
-        property_name:
+        property_type_id:
+          description: The catalog property's uuid, the stable form of property_type_name
+          type: string
+        property_type_name:
           description: The catalog property this location type declares
           type: string
         required:
           description: Whether every location of this type must set the property
           type: boolean
       required:
-        - property_name
+        - property_type_name
+        - property_type_id
         - required
       type: object
     LoginInputBody:
@@ -2676,7 +2774,7 @@ components:
         effective_tags:
           additionalProperties:
             type: string
-          description: "The resolved effective tags (key -> winning value) on this node: its direct bindings plus propagating global tags. For the Tags column and the blade pills."
+          description: "The resolved effective tags (key -> winning value) on this node: its direct bindings plus propagating platform tags. For the Tags column and the blade pills."
           type: object
         enrolled:
           type: boolean
@@ -2689,11 +2787,31 @@ components:
         location:
           description: The location the node sits in (descriptive placement, not scope)
           type: string
+        location_id:
+          description: The location's id; the stable form of location
+          type: string
         name:
           type: string
       required:
         - name
         - enrolled
+      type: object
+    PlatformBindingInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/PlatformBindingInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        value:
+          description: The bound value
+          minLength: 1
+          type: string
+      required:
+        - value
       type: object
     PrincipalBody:
       additionalProperties: false
@@ -2778,9 +2896,14 @@ components:
             - "null"
         display_name:
           type: string
+        driver:
+          description: The driver's handle
+          type: string
         driver_id:
+          description: The driver's uuid; the stable form of driver
           type: string
         id:
+          description: The product's uuid, the stable handle that survives a rename
           type: string
         kind:
           enum:
@@ -2789,14 +2912,26 @@ components:
             - service
             - vm
           type: string
+        name:
+          description: The kebab handle an operator reads and types; renameable
+          type: string
         official:
           type: boolean
+        parent_product:
+          description: The parent product's handle
+          type: string
         parent_product_id:
+          description: The parent product's uuid; the stable form of parent_product
+          type: string
+        vendor:
+          description: The vendor's handle
           type: string
         vendor_id:
+          description: The vendor's uuid; the stable form of vendor
           type: string
       required:
         - id
+        - name
         - display_name
         - kind
         - capabilities
@@ -2814,14 +2949,18 @@ components:
           type: string
         default_value:
           description: The contract default, shape given by the property's data_type; omitted when the contract sets none
-        property_name:
+        property_type_id:
+          description: The catalog property's uuid, the stable form of property_type_name
+          type: string
+        property_type_name:
           description: The catalog property this product declares
           type: string
         required:
           description: Whether every instance of this product must set the property
           type: boolean
       required:
-        - property_name
+        - property_type_name
+        - property_type_id
         - required
       type: object
     PropertyBody:
@@ -2840,6 +2979,9 @@ components:
           type: string
         display_name:
           type: string
+        id:
+          description: The property's uuid, the stable form the contract and telemetry keys store
+          type: string
         kind:
           type: string
         name:
@@ -2851,6 +2993,7 @@ components:
         validation:
           description: A JSON Schema fragment constraining the value
       required:
+        - id
         - name
         - data_type
         - official
@@ -2913,6 +3056,9 @@ components:
         interface:
           description: The interface name
           type: string
+        interface_type:
+          description: The interface type (icmp, tcp, ...)
+          type: string
         layers:
           description: The per-layer probe signals that compose the verdict
           items:
@@ -2923,15 +3069,12 @@ components:
         node:
           description: The node that probes this interface
           type: string
-        type:
-          description: The interface type (icmp, tcp, ...)
-          type: string
         verdict:
           $ref: "#/components/schemas/ReachVerdictBody"
           description: The latest reachability verdict, or null if none yet
       required:
         - interface
-        - type
+        - interface_type
         - verdict
         - layers
         - history
@@ -3016,11 +3159,59 @@ components:
       required:
         - password
       type: object
+    ResolvedSecretBody:
+      additionalProperties: false
+      properties:
+        band:
+          description: "Cascade tier: 0 platform, 1 location, 3 component"
+          format: int64
+          type: integer
+        depth:
+          description: Distance up the tier's tree from the component (0 nearest)
+          format: int64
+          type: integer
+        fields:
+          items:
+            $ref: "#/components/schemas/SecretFieldBody"
+          type:
+            - array
+            - "null"
+        id:
+          type: string
+        name:
+          type: string
+        owner_id:
+          description: The owning entity's id, the canonical handle; absent for a platform owner
+          type: string
+        owner_kind:
+          type: string
+        owner_name:
+          type: string
+        secret_type:
+          description: The secret_type name
+          type: string
+        secret_type_id:
+          description: The secret_type's uuid
+          type: string
+        winner:
+          description: True for the resolved secret; false for a shadowed candidate
+          type: boolean
+      required:
+        - id
+        - name
+        - secret_type
+        - secret_type_id
+        - owner_kind
+        - band
+        - depth
+        - winner
+        - fields
+      type: object
     ResolvedTagBody:
       additionalProperties: false
       properties:
         band:
-          description: "Cascade tier: 0 global, 1 location, 2 system, 3 component"
+          description: "Cascade tier: 0 platform, 1 location, 2 system, 3 component"
           format: int64
           type: integer
         depth:
@@ -3030,6 +3221,7 @@ components:
         key:
           type: string
         owner_id:
+          description: The owning entity's id, the canonical handle; absent for a global owner
           type: string
         owner_kind:
           type: string
@@ -3047,6 +3239,45 @@ components:
         - band
         - depth
         - winner
+      type: object
+    ResolvedVariableBody:
+      additionalProperties: false
+      properties:
+        band:
+          description: "Cascade tier: 0 platform, 1 location, 2 system, 3 component"
+          format: int64
+          type: integer
+        depth:
+          description: Distance up the tier's tree from the component (0 nearest)
+          format: int64
+          type: integer
+        id:
+          type: string
+        name:
+          type: string
+        owner_id:
+          description: The owning entity's id, the canonical handle; absent for a platform owner
+          type: string
+        owner_kind:
+          type: string
+        owner_name:
+          type: string
+        value:
+          description: The value, shape given by value_type
+        value_type:
+          type: string
+        winner:
+          description: True for the resolved value; false for a shadowed candidate
+          type: boolean
+      required:
+        - id
+        - name
+        - value_type
+        - owner_kind
+        - band
+        - depth
+        - winner
+        - value
       type: object
     RevealSecretOutputBody:
       additionalProperties: false
@@ -3165,6 +3396,8 @@ components:
           type:
             - array
             - "null"
+        name:
+          type: string
         official:
           type: boolean
         permissions:
@@ -3175,6 +3408,7 @@ components:
             - "null"
       required:
         - id
+        - name
         - official
         - permissions
         - inherits
@@ -3264,17 +3498,23 @@ components:
         name:
           type: string
         owner_id:
+          description: The owning entity's id, the canonical handle; absent for a global owner
           type: string
         owner_kind:
           type: string
         owner_name:
           type: string
         secret_type:
+          description: The secret_type name
+          type: string
+        secret_type_id:
+          description: The secret_type's uuid, the stable form of secret_type
           type: string
       required:
         - id
         - name
         - secret_type
+        - secret_type_id
         - owner_kind
         - admin_sensitive
         - fields
@@ -3309,11 +3549,16 @@ components:
             - array
             - "null"
         id:
+          description: The secret type's uuid, the stable handle that survives a rename
+          type: string
+        name:
+          description: The kebab handle an operator reads and types; renameable
           type: string
         official:
           type: boolean
       required:
         - id
+        - name
         - display_name
         - official
         - default_admin_sensitive
@@ -3564,7 +3809,7 @@ components:
         sources:
           additionalProperties:
             type: string
-          description: key 'namespace.key' to the winning level (code|file|global)
+          description: key 'namespace.key' to the winning level (default|file|platform)
           type: object
         values:
           $ref: "#/components/schemas/Settings"
@@ -3586,13 +3831,22 @@ components:
         display_name:
           type: string
         id:
+          description: The standard's uuid, the stable handle that survives a rename
+          type: string
+        name:
+          description: The kebab handle an operator reads and types; renameable
           type: string
         official:
           type: boolean
+        parent_standard:
+          description: The parent standard's handle
+          type: string
         parent_standard_id:
+          description: The parent standard's uuid; the stable form of parent_standard
           type: string
       required:
         - id
+        - name
         - display_name
         - official
       type: object
@@ -3608,14 +3862,18 @@ components:
           type: string
         default_value:
           description: The contract default, shape given by the property's data_type; omitted when the contract sets none
-        property_name:
+        property_type_id:
+          description: The catalog property's uuid, the stable form of property_type_name
+          type: string
+        property_type_name:
           description: The catalog property this standard declares
           type: string
         required:
           description: Whether every system conforming to this standard must set the property
           type: boolean
       required:
-        - property_name
+        - property_type_name
+        - property_type_id
         - required
       type: object
     SvcBody:
@@ -3648,11 +3906,15 @@ components:
         effective_tags:
           additionalProperties:
             type: string
-          description: The resolved effective tags (key -> winning value) that cascade onto this system (global, its location, its system tree); for the Tags column.
+          description: The resolved effective tags (key -> winning value) that cascade onto this system (platform, its location, its system tree); for the Tags column.
           type: object
         id:
           type: string
+        location:
+          description: The location's name, for display
+          type: string
         location_id:
+          description: The location's id, the canonical handle
           type: string
         member_count:
           description: How many components are bound into this system
@@ -3660,10 +3922,17 @@ components:
           type: integer
         name:
           type: string
+        parent:
+          description: The parent system's name, for display; absent for a root system
+          type: string
         parent_id:
+          description: The parent system's id, the canonical handle
+          type: string
+        standard:
+          description: The standard's handle, for display; omitted for a one-off system
           type: string
         standard_id:
-          description: The standard this system conforms to; omitted for a one-off system
+          description: The standard's uuid; the stable form of standard
           type: string
       required:
         - id
@@ -3714,17 +3983,20 @@ components:
         - system
         - properties
       type: object
-    SystemPropertyValueBody:
+    SystemPropertyBody:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
           examples:
-            - /api/v1/schemas/SystemPropertyValueBody.json
+            - /api/v1/schemas/SystemPropertyBody.json
           format: uri
           readOnly: true
           type: string
-        property_name:
+        property_type_id:
+          description: The catalog property's uuid, the stable form of property_type_name
+          type: string
+        property_type_name:
           type: string
         system:
           type: string
@@ -3735,7 +4007,8 @@ components:
           type: string
       required:
         - system
-        - property_name
+        - property_type_name
+        - property_type_id
         - value
         - value_id
       type: object
@@ -3789,6 +4062,7 @@ components:
         key:
           type: string
         owner_id:
+          description: The owning entity's id, the canonical handle; absent for a global owner
           type: string
         owner_kind:
           type: string
@@ -3880,7 +4154,10 @@ components:
         mode:
           type: string
         node:
-          description: The node placement, projected from the interface
+          description: The node placement name, projected from the interface
+          type: string
+        node_id:
+          description: The placed node's id; the stable form of node
           type: string
         spec:
           description: The inline probe settings (jsonb)
@@ -3992,7 +4269,7 @@ components:
           readOnly: true
           type: string
         node:
-          description: Reassign the node placement
+          description: Reassign the node placement, by name or id
           type: string
         params:
           description: Replace the endpoint/target settings (jsonb)
@@ -4071,7 +4348,7 @@ components:
         display_name:
           type: string
         location:
-          description: Set the node's location, or "" to clear it
+          description: Set the node's location by name or id, or "" to clear it
           type: string
       type: object
     UpdatePrincipalInputBody:
@@ -4288,6 +4565,7 @@ components:
         name:
           type: string
         owner_id:
+          description: The owning entity's id, the canonical handle; absent for a global owner
           type: string
         owner_kind:
           type: string
@@ -4319,12 +4597,16 @@ components:
         icon:
           type: string
         id:
+          description: The vendor's uuid, the stable handle that survives a rename
           type: string
         kind:
           enum:
             - manufacturer
             - integrator
             - developer
+          type: string
+        name:
+          description: The kebab handle an operator reads and types; renameable
           type: string
         official:
           type: boolean
@@ -4334,6 +4616,7 @@ components:
           type: string
       required:
         - id
+        - name
         - display_name
         - kind
         - official
@@ -5140,9 +5423,36 @@ paths:
           description: Error
       summary: Declare a capability on a component
       x-omniglass-permission: component:update
+  /components/{name}/effective-secrets:
+    get:
+      description: "Resolves the secrets that cascade onto a component (platform -> location -> component), with the winner and the shadowed candidates it overrode. There is NO system band: a secret is device-facing, and the room a component happens to serve is the wrong owner for a credential the device itself answers with. Fields are masked, as in the directory; plaintext is only ever the audited reveal. Gated by secret:read, which the viewer floor does not carry, and admin-sensitive secrets appear only to the admin tier."
+      operationId: effective-secrets
+      parameters:
+        - description: The component's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EffectiveSecretsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Effective secrets for a component
+      x-omniglass-permission: secret:read
   /components/{name}/effective-tags:
     get:
-      description: "Resolves the tags that cascade onto a component (global -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. Gated by component:read; the component must be in the caller's component read scope."
+      description: "Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope."
       operationId: effective-tags
       parameters:
         - description: The component's name
@@ -5151,6 +5461,13 @@ paths:
           required: true
           schema:
             description: The component's name
+            type: string
+        - description: Resolve against this system, which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand.
+          explode: false
+          in: query
+          name: system
+          schema:
+            description: Resolve against this system, which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand.
             type: string
       responses:
         "200":
@@ -5167,6 +5484,33 @@ paths:
           description: Error
       summary: Effective tags for a component
       x-omniglass-permission: component:read
+  /components/{name}/effective-variables:
+    get:
+      description: "Resolves the variables that cascade onto a component (platform -> location -> system -> component): names union, values override most-specific-wins, with the winner and the shadowed candidates it overrode. The system band comes from the component's PRIMARY membership; resolving against a named system is not offered here yet, unlike effective-tags. Gated by variable:read; the component must be in the caller's component read scope."
+      operationId: effective-variables
+      parameters:
+        - description: The component's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EffectiveVariablesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Effective variables for a component
+      x-omniglass-permission: variable:read
   /components/{name}/events:
     get:
       description: Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
@@ -5307,7 +5651,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EffectivePropertyValueBody"
+                $ref: "#/components/schemas/ComponentPropertyBody"
           description: OK
         default:
           content:
@@ -5839,6 +6183,102 @@ paths:
           description: Error
       summary: Update an interface
       x-omniglass-permission: interface:update
+  /location-types:
+    get:
+      description: Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by type:read.
+      operationId: list-location-types
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListLocationTypesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List location types
+      x-omniglass-permission: type:read
+    post:
+      description: Creates a custom (non-official) location_type. Gated by type:create.
+      operationId: create-location-type
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLocationTypeInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationTypeBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a location type
+      x-omniglass-permission: type:create
+  /location-types/{id}:
+    delete:
+      description: Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.
+      operationId: delete-location-type
+      parameters:
+        - description: The location_type id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The location_type id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a location type
+      x-omniglass-permission: type:delete
+    patch:
+      description: Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by type:update.
+      operationId: update-location-type
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLocationTypeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationTypeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a location type
+      x-omniglass-permission: type:update
   /location-types/{id}/properties:
     get:
       description: Lists the location type's declared-property contract (what every location of the type exposes), ordered by property name, each with its optional default and required flag. Gated by type:read.
@@ -6170,7 +6610,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/LocationPropertyValueBody"
+                $ref: "#/components/schemas/LocationPropertyBody"
           description: OK
         default:
           content:
@@ -7685,10 +8125,10 @@ paths:
           description: Error
       summary: Declare a property on a product
       x-omniglass-permission: product:update
-  /properties:
+  /property-types:
     get:
-      description: Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property:read.
-      operationId: list-property
+      description: Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property_type:read.
+      operationId: list-property-type
       responses:
         "200":
           content:
@@ -7703,10 +8143,10 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List properties
-      x-omniglass-permission: property:read
+      x-omniglass-permission: property_type:read
     post:
-      description: Registers a custom property (official=false). The name must be a valid property key. Gated by property:create.
-      operationId: create-property
+      description: Registers a custom property (official=false). The name must be a valid property key. Gated by property_type:create.
+      operationId: create-property-type
       requestBody:
         content:
           application/json:
@@ -7727,11 +8167,11 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Create a property
-      x-omniglass-permission: property:create
-  /properties/{name}:
+      x-omniglass-permission: property_type:create
+  /property-types/{name}:
     delete:
-      description: Removes a custom property by name. Official properties are read-only. Gated by property:delete.
-      operationId: delete-property
+      description: Removes a custom property by name. Official properties are read-only. Gated by property_type:delete.
+      operationId: delete-property-type
       parameters:
         - description: The property's name
           in: path
@@ -7750,10 +8190,10 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Delete a property
-      x-omniglass-permission: property:delete
+      x-omniglass-permission: property_type:delete
     get:
-      description: Returns one property by name. Gated by property:read.
-      operationId: get-property
+      description: Returns one property by name. Gated by property_type:read.
+      operationId: get-property-type
       parameters:
         - description: The property's name
           in: path
@@ -7776,10 +8216,10 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get a property
-      x-omniglass-permission: property:read
+      x-omniglass-permission: property_type:read
     patch:
-      description: Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property:update.
-      operationId: update-property
+      description: Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property_type:update.
+      operationId: update-property-type
       parameters:
         - description: The property's name
           in: path
@@ -7808,7 +8248,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a property
-      x-omniglass-permission: property:update
+      x-omniglass-permission: property_type:update
   /roles:
     get:
       description: Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read:admin capability.
@@ -7828,6 +8268,25 @@ paths:
           description: Error
       summary: List roles
       x-omniglass-permission: role:read:admin
+  /secret-types:
+    get:
+      description: Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.
+      operationId: list-secret-types
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListSecretTypesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List secret types
+      x-omniglass-permission: secret:read
   /secrets:
     get:
       description: Lists the secrets the caller may see, with masked fields, filtered to the read scope; admin-sensitive secrets appear only to the admin tier. Gated by secret:read, which the viewer floor does not carry (secret is a sensitive resource).
@@ -7848,7 +8307,7 @@ paths:
       summary: List secrets
       x-omniglass-permission: secret:read
     post:
-      description: Seals a secret at an owner scope (a global secret needs an all-scoped grant). Fields are validated and encrypted against the type shape. Gated by secret:create.
+      description: Seals a secret at an owner scope. Fields are validated and encrypted against the type shape. Gated by secret:create, plus platform:create when owner_kind is platform (the install-wide tier).
       operationId: create-secret
       requestBody:
         content:
@@ -7871,9 +8330,10 @@ paths:
           description: Error
       summary: Create a secret
       x-omniglass-permission: secret:create
+      x-omniglass-platform-permission: platform:create
   /secrets/{id}:
     delete:
-      description: Removes a secret by id. Gated by secret:delete; read and delete scopes on the owner drive the 404 versus 403 split.
+      description: Removes a secret by id. Gated by secret:delete, plus platform:delete when the secret sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.
       operationId: delete-secret
       parameters:
         - description: The secret's id
@@ -7894,8 +8354,9 @@ paths:
           description: Error
       summary: Delete a secret
       x-omniglass-permission: secret:delete
+      x-omniglass-platform-permission: platform:delete
     patch:
-      description: Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update.
+      description: Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update, plus platform:update when the secret sits at the platform tier.
       operationId: update-secret
       parameters:
         - description: The secret's id
@@ -7926,6 +8387,7 @@ paths:
           description: Error
       summary: Update a secret's field values
       x-omniglass-permission: secret:update
+      x-omniglass-platform-permission: platform:update
   /secrets/{id}:copy:
     post:
       description: Decrypts and returns a secret's field values for a clipboard copy, audited under the copy verb (distinct from an on-screen reveal). Same exposure and the same secret:reveal gate as reveal.
@@ -8019,7 +8481,7 @@ paths:
       summary: Get the caller's effective settings
   /settings/{namespace}:
     delete:
-      description: Drops the namespace's global override, restoring file and code defaults. Gated by settings:update.
+      description: Drops the namespace's platform override, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.
       operationId: delete-settings-namespace
       parameters:
         - description: the settings namespace
@@ -8040,8 +8502,9 @@ paths:
           description: Error
       summary: Restore a settings namespace to defaults
       x-omniglass-permission: settings:update
+      x-omniglass-platform-permission: platform:update
     patch:
-      description: Applies an RFC 7386 JSON Merge Patch to the namespace's global override; null on a key restores it. Gated by settings:update.
+      description: Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it. Gated by settings:update and platform:update.
       operationId: patch-settings-namespace
       parameters:
         - description: the settings namespace, e.g. ui
@@ -8074,9 +8537,10 @@ paths:
           description: Error
       summary: Update a settings namespace
       x-omniglass-permission: settings:update
+      x-omniglass-platform-permission: platform:update
   /settings:restoreDefaults:
     post:
-      description: Removes every global override (a factory reset). Gated by settings:update.
+      description: Removes every platform override (a factory reset). Gated by settings:update and platform:update.
       operationId: restore-settings-defaults
       responses:
         "204":
@@ -8089,6 +8553,7 @@ paths:
           description: Error
       summary: Restore all settings to defaults
       x-omniglass-permission: settings:update
+      x-omniglass-platform-permission: platform:update
   /standards:
     get:
       description: Lists the standard catalog, ordered alphabetically by display name. A standard is the blueprint a system conforms to. Gated by standard:read.
@@ -8754,7 +9219,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SystemPropertyValueBody"
+                $ref: "#/components/schemas/SystemPropertyBody"
           description: OK
         default:
           content:
@@ -9145,10 +9610,10 @@ paths:
           description: Error
       summary: Update a tag key
       x-omniglass-permission: tag:update
-  /tags/{name}:clearGlobal:
+  /tags/{name}:clearPlatform:
     post:
-      description: Removes the global binding for a key. Gated by tag:update (all-scope).
-      operationId: clear-global-tag
+      description: Removes the platform-tier binding for a key. Gated by tag:update (all-scope) and platform:update.
+      operationId: clear-platform-tag
       parameters:
         - description: The tag key
           in: path
@@ -9166,12 +9631,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Clear a global tag value
+      summary: Clear a platform tag value
       x-omniglass-permission: tag:update
-  /tags/{name}:setGlobal:
+      x-omniglass-platform-permission: platform:update
+  /tags/{name}:setPlatform:
     post:
-      description: Binds a tenant-wide default value for a key at the global scope. Gated by tag:update (all-scope).
-      operationId: set-global-tag
+      description: Binds an install-wide default value for a key at the platform tier. Gated by tag:update (all-scope) and platform:update.
+      operationId: set-platform-tag
       parameters:
         - description: The tag key
           in: path
@@ -9184,7 +9650,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/GlobalBindingInputBody"
+              $ref: "#/components/schemas/PlatformBindingInputBody"
         required: true
       responses:
         "200":
@@ -9199,8 +9665,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Set a global tag value
+      summary: Set a platform tag value
       x-omniglass-permission: tag:update
+      x-omniglass-platform-permission: platform:update
   /tags/{name}:values:
     get:
       description: Returns the distinct values already bound for a key across the estate, for value autocomplete on a free-text key (an enum key carries its allowed set on the key itself). Rides the tag:read floor.
@@ -9274,121 +9741,6 @@ paths:
           description: Error
       summary: Get a task
       x-omniglass-permission: task:read
-  /types/location:
-    get:
-      description: Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by type:read.
-      operationId: list-location-types
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ListLocationTypesOutputBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: List location types
-      x-omniglass-permission: type:read
-    post:
-      description: Creates a custom (non-official) location_type. Gated by type:create.
-      operationId: create-location-type
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateLocationTypeInputBody"
-        required: true
-      responses:
-        "201":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LocationTypeBody"
-          description: Created
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Create a location type
-      x-omniglass-permission: type:create
-  /types/location/{id}:
-    delete:
-      description: Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.
-      operationId: delete-location-type
-      parameters:
-        - description: The location_type id
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The location_type id
-            type: string
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Delete a location type
-      x-omniglass-permission: type:delete
-    patch:
-      description: Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by type:update.
-      operationId: update-location-type
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateLocationTypeInputBody"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LocationTypeBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Update a location type
-      x-omniglass-permission: type:update
-  /types/secret:
-    get:
-      description: Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.
-      operationId: list-secret-types
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ListSecretTypesOutputBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: List secret types
-      x-omniglass-permission: secret:read
   /variables:
     get:
       description: Lists every variable. Requires an all-scope read. Gated by variable:read.
@@ -9409,7 +9761,7 @@ paths:
       summary: List variables (admin directory)
       x-omniglass-permission: variable:read
     post:
-      description: Sets a variable at an owner scope (a global variable needs an all-scoped grant). The value is validated against value_type. Gated by variable:create.
+      description: Sets a variable at an owner scope. The value is validated against value_type. Gated by variable:create, plus platform:create when owner_kind is platform (the install-wide tier).
       operationId: create-variable
       requestBody:
         content:
@@ -9432,9 +9784,10 @@ paths:
           description: Error
       summary: Create a variable
       x-omniglass-permission: variable:create
+      x-omniglass-platform-permission: platform:create
   /variables/{id}:
     delete:
-      description: Removes a variable by id. Gated by variable:delete; read and delete scopes on the owner drive the 404 versus 403 split.
+      description: Removes a variable by id. Gated by variable:delete, plus platform:delete when the variable sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.
       operationId: delete-variable
       parameters:
         - description: The variable's id
@@ -9455,8 +9808,9 @@ paths:
           description: Error
       summary: Delete a variable
       x-omniglass-permission: variable:delete
+      x-omniglass-platform-permission: platform:delete
     patch:
-      description: Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update.
+      description: Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.
       operationId: update-variable
       parameters:
         - description: The variable's id
@@ -9487,6 +9841,7 @@ paths:
           description: Error
       summary: Update a variable's value
       x-omniglass-permission: variable:update
+      x-omniglass-platform-permission: platform:update
   /vendors:
     get:
       description: Lists the vendor registry, ordered alphabetically by display name. Populates the vendor picker on the product form. Gated by vendor:read.

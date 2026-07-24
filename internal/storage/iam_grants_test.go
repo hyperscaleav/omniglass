@@ -23,11 +23,11 @@ func TestGrantsAndOwnerInvariant(t *testing.T) {
 	}
 	defer gw.Close()
 	for _, r := range []storage.Role{
-		{ID: "owner", Official: true, Permissions: []string{"*:*"}},
-		{ID: "viewer", Official: true, Permissions: []string{"*:read"}},
+		{Name: "owner", Official: true, Permissions: []string{"*:*"}},
+		{Name: "viewer", Official: true, Permissions: []string{"*:read"}},
 	} {
 		if err := gw.UpsertRole(ctx, r); err != nil {
-			t.Fatalf("seed role %s: %v", r.ID, err)
+			t.Fatalf("seed role %s: %v", r.Name, err)
 		}
 	}
 	zeros := make([]byte, 32)
@@ -66,7 +66,7 @@ func TestGrantsAndOwnerInvariant(t *testing.T) {
 	}
 	// A scoped grant targets a real entity by id: a name or unknown id is refused,
 	// a valid location id is fine.
-	if err := gw.UpsertLocationType(ctx, storage.LocationType{ID: "campus", DisplayName: "Campus", Official: true}); err != nil {
+	if err := gw.UpsertLocationType(ctx, storage.LocationType{Name: "campus", DisplayName: "Campus", Official: true}); err != nil {
 		t.Fatalf("seed location type: %v", err)
 	}
 	hq, err := gw.CreateLocation(ctx, owner.ID, storage.LocationSpec{Name: "hq", LocationType: "campus"}, all)

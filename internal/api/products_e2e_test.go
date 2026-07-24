@@ -17,7 +17,10 @@ import (
 // productBodyWire is the decoded product wire shape for the e2e assertions.
 type productBodyWire struct {
 	ID           string   `json:"id"`
+	Name         string   `json:"name"`
+	Vendor       string   `json:"vendor"`
 	VendorID     string   `json:"vendor_id"`
+	Driver       string   `json:"driver"`
 	DriverID     string   `json:"driver_id"`
 	Kind         string   `json:"kind"`
 	Official     bool     `json:"official"`
@@ -67,22 +70,27 @@ func TestProductsAPI(t *testing.T) {
 
 	// The viewer cannot create (403, capability fast-reject).
 	c.do(viewerTok, http.MethodPost, "/products",
-		map[string]any{"id": "nope", "display_name": "Nope"}, http.StatusForbidden)
+		map[string]any{"name": "nope", "display_name": "Nope"}, http.StatusForbidden)
 
 	// Admin (owner) creates a custom product with a vendor, driver, kind, and
 	// capabilities.
 	var created productBodyWire
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/products", map[string]any{
-		"id": "acme-bar", "display_name": "Acme Bar",
+		"name": "acme-bar", "display_name": "Acme Bar",
 		"vendor_id": "cisco", "driver_id": "cisco-xapi", "kind": "device",
 		"capabilities": []string{"speaker", "microphone"},
 	}, http.StatusCreated), &created); err != nil {
 		t.Fatalf("decode create: %v", err)
 	}
-	if created.ID != "acme-bar" || created.Official {
-		t.Fatalf("created = %+v, want id=acme-bar official=false", created)
+	// Both forms come back: the uuid that survives a rename and the handle typed.
+	if created.Name != "acme-bar" || created.Official {
+		t.Fatalf("created = %+v, want name=acme-bar official=false", created)
 	}
-	if created.VendorID != "cisco" || created.DriverID != "cisco-xapi" || created.Kind != "device" {
+	// A reference carries both too, and the vendor was named by its handle.
+	if created.Vendor != "cisco" {
+		t.Fatalf("created vendor = %q, want the handle cisco", created.Vendor)
+	}
+	if created.Vendor != "cisco" || created.Driver != "cisco-xapi" || created.Kind != "device" {
 		t.Fatalf("created refs = %+v, want cisco/cisco-xapi/device", created)
 	}
 	if strings.Join(created.Capabilities, ",") != "microphone,speaker" {
@@ -91,7 +99,7 @@ func TestProductsAPI(t *testing.T) {
 
 	// Duplicate id is a 409 (shared mapTypeErr ErrTypeExists branch).
 	c.do(ownerTok, http.MethodPost, "/products",
-		map[string]any{"id": "acme-bar", "display_name": "Dup"}, http.StatusConflict)
+		map[string]any{"name": "acme-bar", "display_name": "Dup"}, http.StatusConflict)
 
 	// An unknown reference is a 422.
 	c.do(ownerTok, http.MethodPost, "/products",
@@ -123,8 +131,10 @@ func TestProductsAPI(t *testing.T) {
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/products/acme-bar", nil, http.StatusOK), &reread); err != nil {
 		t.Fatalf("decode get after empty vendor patch: %v", err)
 	}
-	if reread.VendorID != "cisco" {
-		t.Fatalf("vendor after empty-string patch = %q, want cisco (kept)", reread.VendorID)
+	// Asserted on the handle: vendor_id is the uuid now, and the point of the
+	// assertion is that the vendor was KEPT, which the handle says legibly.
+	if reread.Vendor != "cisco" {
+		t.Fatalf("vendor after empty-string patch = %q, want cisco (kept)", reread.Vendor)
 	}
 
 	// The seeded official row (cisco-room-bar) is read-only: 422 on patch and delete.

@@ -15,7 +15,7 @@ import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 // the pencil. Data is seeded into the query cache so no server is needed; `>` grants
 // every permission.
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const comp: Component = { id: "c-1", name: "mic-2", display_name: "Ceiling Mic 2", product_id: "shure-mxa920", effective_tags: {} };
+const comp: Component = { id: "c-1", name: "mic-2", display_name: "Ceiling Mic 2", product_id: "shure-mxa920", system_count: 0, effective_tags: {} };
 
 function mount(path: string) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
@@ -76,5 +76,25 @@ describe("Components create-as-route", () => {
     await waitFor(() => expect(screen.getByText("Technical name")).toBeTruthy());
     // No check button until edit begins: the name is a read-only fact.
     expect(screen.queryByLabelText("Check name")).toBeNull();
+  });
+
+  // Regression for #336: TreeList created its blade controller but never provided it
+  // through context, so a blade BODY calling useBlades (both interface blades do)
+  // threw before rendering, and Add interface was dead on every TreeList page. Also
+  // pins #332 on this surface: the create form's action sits on the blade's footer
+  // rail, and the form itself renders no buttons.
+  it("opens the new-interface blade, with its action on the blade rail and none in the form", async () => {
+    mount("/components/mic-2");
+    await waitFor(() => expect(screen.getByText("Add interface")).toBeTruthy());
+    fireEvent.click(screen.getByText("Add interface"));
+
+    // The body rendered at all, which is the regression: no useBlades throw.
+    await waitFor(() => expect(screen.getByText(/An API on a component/)).toBeTruthy());
+
+    const blades = document.querySelectorAll("aside[data-blade]");
+    const top = blades[blades.length - 1] as HTMLElement;
+    const submit = screen.getByText("Create interface").closest("button")!;
+    expect(top.querySelector("footer")!.contains(submit)).toBe(true);
+    expect(top.querySelector("form")!.querySelectorAll("button").length).toBe(0);
   });
 });

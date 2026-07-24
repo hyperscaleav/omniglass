@@ -31,6 +31,19 @@ const systemRoleCols = `id, owner_kind, name, display_name, quorum, impact, crea
 // roleOwnerColumn maps a role owner kind to its exclusive-arc column. Every
 // identifier it returns is a compile-time constant, never caller input, so
 // interpolating one into a statement is safe.
+// roleOwnerExpr is the SQL for the value system_role's arc stores. A standard is
+// slug-keyed, so its id IS the reference; a system is uuid-keyed, so the name
+// resolves. Keeping this as an expression means the surrounding statements do not
+// branch on owner kind.
+func roleOwnerExpr(ownerKind string) string {
+	if ownerKind == "system" {
+		return `(select id from system where name = $2)`
+	}
+	// A standard is addressed by its handle or its uuid, and the column stores
+	// the uuid (ADR-0062).
+	return `(select id from standard where name = $2 or id::text = $2)`
+}
+
 func roleOwnerColumn(ownerKind string) (string, error) {
 	switch ownerKind {
 	case "standard":
@@ -64,13 +77,14 @@ func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]
 	// needs them qualified by the role alias.
 	q := fmt.Sprintf(`
 		select r.id, r.owner_kind, r.name, r.display_name, r.quorum, r.impact, r.created_at, r.updated_at,
-		       coalesce(array_agg(rc.capability_id order by rc.capability_id)
-		                filter (where rc.capability_id is not null), '{}') as caps
+		       coalesce(array_agg(cap.name order by cap.name)
+		                filter (where cap.name is not null), '{}') as caps
 		from system_role r
-		left join role_capability rc on rc.role_id = r.id
-		where r.owner_kind = $1 and r.%s = $2
+		left join system_role_capability rc on rc.role_id = r.id
+		left join capability cap on cap.id = rc.capability_id
+		where r.owner_kind = $1 and r.%s = %s
 		group by r.id
-		order by r.name`, col)
+		order by r.name`, col, roleOwnerExpr(ownerKind))
 
 	rows, err := p.pool.Query(ctx, q, ownerKind, ownerID)
 	if err != nil {
@@ -126,7 +140,7 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 	// The before-image decides create vs update and gives the audit its old side.
 	var before any
 	prior, err := scanSystemRole(tx.QueryRow(ctx, fmt.Sprintf(
-		`select `+systemRoleCols+` from system_role where owner_kind = $1 and %s = $2 and name = $3`, col),
+		`select `+systemRoleCols+` from system_role where owner_kind = $1 and %s = %s and name = $3`, col, roleOwnerExpr(ownerKind)),
 		ownerKind, ownerID, spec.Name))
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
@@ -139,13 +153,13 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 
 	r, err := scanSystemRole(tx.QueryRow(ctx, fmt.Sprintf(`
 		insert into system_role (owner_kind, %s, name, display_name, quorum, impact)
-		values ($1, $2, $3, $4, $5, $6)
+		values ($1, %s, $3, $4, $5, $6)
 		on conflict (owner_kind, standard_id, system_id, name) do update
 			set display_name = excluded.display_name,
 			    quorum       = excluded.quorum,
 			    impact       = excluded.impact,
 			    updated_at   = now()
-		returning `+systemRoleCols, col),
+		returning `+systemRoleCols, col, roleOwnerExpr(ownerKind)),
 		ownerKind, ownerID, spec.Name, spec.DisplayName, quorum, impact))
 	if err != nil {
 		return nil, mapRoleWriteErr(err)
@@ -154,13 +168,14 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 
 	// Wholesale replacement: clear what the role required, then install the set
 	// the caller sent, so the declaration is the whole truth after the write.
-	if _, err := tx.Exec(ctx, `delete from role_capability where role_id = $1`, r.ID); err != nil {
+	if _, err := tx.Exec(ctx, `delete from system_role_capability where role_id = $1`, r.ID); err != nil {
 		return nil, fmt.Errorf("storage: clear role capabilities %s: %w", r.ID, err)
 	}
 	if len(spec.Capabilities) > 0 {
 		if _, err := tx.Exec(ctx, `
-			insert into role_capability (role_id, capability_id)
-			select $1, c from unnest($2::text[]) c
+			insert into system_role_capability (role_id, capability_id)
+			select $1, (select id from capability where name = c or id::text = c)
+			from unnest($2::text[]) c
 			on conflict (role_id, capability_id) do nothing`, r.ID, spec.Capabilities); err != nil {
 			return nil, mapRoleWriteErr(err)
 		}
@@ -210,8 +225,8 @@ func (p *PG) DeleteSystemRole(ctx context.Context, actorID, ownerKind, ownerID, 
 	// the withdrawn declaration and a missing row is caught without a second read.
 	before, err := scanSystemRole(tx.QueryRow(ctx, fmt.Sprintf(`
 		delete from system_role
-		where owner_kind = $1 and %s = $2 and name = $3
-		returning `+systemRoleCols, col), ownerKind, ownerID, name))
+		where owner_kind = $1 and %s = %s and name = $3
+		returning `+systemRoleCols, col, roleOwnerExpr(ownerKind)), ownerKind, ownerID, name))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrRoleNotFound
 	}
@@ -254,7 +269,8 @@ func (p *PG) SetComponentCapability(ctx context.Context, actorID, componentName,
 	var id string
 	if err := tx.QueryRow(ctx, `
 		insert into component_capability (component_id, capability_id, present)
-		values ($1, $2, $3)
+		values ((select id from component where name = $1),
+		        (select id from capability where name = $2 or id::text = $2), $3)
 		on conflict (component_id, capability_id) do update
 			set present    = excluded.present,
 			    updated_at = now()
@@ -289,7 +305,8 @@ func (p *PG) ClearComponentCapability(ctx context.Context, actorID, componentNam
 	var id string
 	if err := tx.QueryRow(ctx, `
 		delete from component_capability
-		where component_id = $1 and capability_id = $2
+		where component_id = (select id from component where name = $1)
+		  and capability_id = (select id from capability where name = $2 or id::text = $2)
 		returning id`, componentName, capabilityID).Scan(&id); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrComponentCapabilityNotFound
@@ -328,9 +345,9 @@ func (p *PG) SeedSystemRole(ctx context.Context, ownerKind, ownerID string, spec
 	var id string
 	err = p.pool.QueryRow(ctx, fmt.Sprintf(`
 		insert into system_role (owner_kind, %s, name, display_name, quorum, impact)
-		values ($1, $2, $3, $4, $5, $6)
+		values ($1, %s, $3, $4, $5, $6)
 		on conflict (owner_kind, standard_id, system_id, name) do nothing
-		returning id`, col),
+		returning id`, col, roleOwnerExpr(ownerKind)),
 		ownerKind, ownerID, spec.Name, spec.DisplayName, max(spec.Quorum, 1), impact).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil // already there, and the operator owns it now
@@ -342,8 +359,9 @@ func (p *PG) SeedSystemRole(ctx context.Context, ownerKind, ownerID string, spec
 		return nil
 	}
 	if _, err := p.pool.Exec(ctx, `
-		insert into role_capability (role_id, capability_id)
-		select $1, c from unnest($2::text[]) c
+		insert into system_role_capability (role_id, capability_id)
+		select $1, (select id from capability where name = c or id::text = c)
+		from unnest($2::text[]) c
 		on conflict (role_id, capability_id) do nothing`, id, spec.Capabilities); err != nil {
 		return mapRoleWriteErr(err)
 	}

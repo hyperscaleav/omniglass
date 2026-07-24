@@ -291,12 +291,12 @@ type Gateway interface {
 
 	// The collection registries: estate-wide reference data (no scope.Set),
 	// seeded official and operator-extensible at org/template scope later.
-	UpsertProperty(ctx context.Context, prop Property) error
-	ListProperties(ctx context.Context) ([]Property, error)
-	GetProperty(ctx context.Context, name string) (*Property, error)
-	CreateProperty(ctx context.Context, actorID string, spec PropertySpec) (*Property, error)
-	UpdateProperty(ctx context.Context, actorID, name string, patch PropertyPatch) (*Property, error)
-	DeleteProperty(ctx context.Context, actorID, name string) error
+	UpsertPropertyType(ctx context.Context, prop PropertyType) error
+	ListPropertyTypes(ctx context.Context) ([]PropertyType, error)
+	GetPropertyType(ctx context.Context, name string) (*PropertyType, error)
+	CreatePropertyType(ctx context.Context, actorID string, spec PropertyTypeSpec) (*PropertyType, error)
+	UpdatePropertyType(ctx context.Context, actorID, name string, patch PropertyTypePatch) (*PropertyType, error)
+	DeletePropertyType(ctx context.Context, actorID, name string) error
 	UpsertInterfaceType(ctx context.Context, it InterfaceType) error
 	ListInterfaceTypes(ctx context.Context) ([]InterfaceType, error)
 
@@ -342,7 +342,7 @@ type Gateway interface {
 	ListNodes(ctx context.Context, read scope.Set) ([]Node, error)
 
 	// The secret tier: a shape registry, scoped CRUD, an audited reveal, and the
-	// cascade resolver. A secret is owned on the exclusive arc (global or one of
+	// cascade resolver. A secret is owned on the exclusive arc (platform or one of
 	// the three trees) and encrypted at rest; ResolveSecrets is the per-component
 	// effective-value view down the structural cascade.
 	UpsertSecretType(ctx context.Context, st SecretType) error
@@ -356,8 +356,8 @@ type Gateway interface {
 	// where; canAdmin fences the sensitivity tier.
 	ListSecrets(ctx context.Context, read scope.Set, canAdmin bool) ([]Secret, error)
 	CreateSecret(ctx context.Context, actorID string, spec SecretSpec, create scope.Set, canAdmin bool) (*Secret, error)
-	UpdateSecret(ctx context.Context, actorID, id string, fields map[string]string, read, action scope.Set, canAdmin bool) (*Secret, error)
-	DeleteSecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin bool) error
+	UpdateSecret(ctx context.Context, actorID, id string, fields map[string]string, read, action scope.Set, canAdmin, canPlatform bool) (*Secret, error)
+	DeleteSecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin, canPlatform bool) error
 	RevealSecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin bool) (map[string]string, error)
 	CopySecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin bool) (map[string]string, error)
 	ResolveSecrets(ctx context.Context, componentID string, read scope.Set, canAdmin bool) ([]ResolvedSecret, error)
@@ -368,8 +368,8 @@ type Gateway interface {
 	// effective-value view down the structural cascade.
 	ListVariables(ctx context.Context, read scope.Set) ([]Variable, error)
 	CreateVariable(ctx context.Context, actorID string, spec VariableSpec, create scope.Set) (*Variable, error)
-	UpdateVariable(ctx context.Context, actorID, id string, value json.RawMessage, read, action scope.Set) (*Variable, error)
-	DeleteVariable(ctx context.Context, actorID, id string, read, action scope.Set) error
+	UpdateVariable(ctx context.Context, actorID, id string, value json.RawMessage, read, action scope.Set, canPlatform bool) (*Variable, error)
+	DeleteVariable(ctx context.Context, actorID, id string, read, action scope.Set, canPlatform bool) error
 	ResolveVariables(ctx context.Context, componentID string, read scope.Set) ([]ResolvedVariable, error)
 
 	// The declared-property tier, the fold of the fields feature onto the estate
@@ -393,8 +393,8 @@ type Gateway interface {
 	UpsertProductProperty(ctx context.Context, productID string, spec ProductPropertySpec) error
 	SetProductProperty(ctx context.Context, actorID, productID string, spec ProductPropertySpec) (*ProductProperty, error)
 	DeleteProductProperty(ctx context.Context, actorID, productID, propertyName string) error
-	SetPropertyValue(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, value json.RawMessage, write scope.Set) (*PropertyValue, error)
-	ClearPropertyValue(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, write scope.Set) error
+	SetProperty(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, value json.RawMessage, write scope.Set) (*Property, error)
+	ClearProperty(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, write scope.Set) error
 	EffectiveProperties(ctx context.Context, ownerKind, ownerID string, read scope.Set) ([]EffectiveProperty, error)
 
 	// Membership: the binding a role attaches to. Many-valued on purpose, since a
@@ -450,7 +450,7 @@ type Gateway interface {
 	SetTagBinding(ctx context.Context, actorID, key, ownerKind string, ownerName *string, value string, read, action scope.Set) (*TagBinding, error)
 	DeleteTagBinding(ctx context.Context, actorID, key, ownerKind string, ownerName *string, read, action scope.Set) error
 	ListEntityTags(ctx context.Context, ownerKind string, ownerName *string, read scope.Set) ([]TagBinding, error)
-	ResolveTags(ctx context.Context, componentID string, read scope.Set) ([]ResolvedTag, error)
+	ResolveTags(ctx context.Context, componentID, forSystem string, read scope.Set) ([]ResolvedTag, error)
 	// EffectiveTags batch-resolves the winning effective tags (key -> value) for a
 	// set of owners of one kind, feeding the directory Tags column. Scopeless: the
 	// caller passes ids already in the read scope (the rowActions batch contract).
@@ -471,12 +471,13 @@ type Gateway interface {
 	// The settings engine (unscoped: platform config, not estate data, so no ABAC
 	// scope applies; the route gates on settings:<action> only). The single
 	// setting_override table holds only what an operator changed at a cascade level;
-	// the base layers (code defaults, operator file) live in memory. Slice-0 uses
-	// scope "global" (principal_id NULL). Every write is audited.
+	// the base layers (the type's declared defaults, the operator file) live in
+	// memory. Slice-0 uses scope "platform" (principal_id NULL). Every write is
+	// audited.
 	GetSettingOverrides(ctx context.Context, scope string) ([]SettingOverride, error)
 	UpsertSettingOverride(ctx context.Context, actorID, scope, namespace string, doc map[string]any, locks []string) (*SettingOverride, error)
 	// MergePatchSettingOverride applies an RFC 7386 merge patch to the (scope,
-	// namespace) global override as one atomic read-modify-write, serialized against
+	// namespace) platform override as one atomic read-modify-write, serialized against
 	// concurrent patches to the same namespace so no update is lost.
 	MergePatchSettingOverride(ctx context.Context, actorID, scope, namespace string, patch map[string]any) (*SettingOverride, error)
 	DeleteSettingOverride(ctx context.Context, actorID, scope, namespace string) error

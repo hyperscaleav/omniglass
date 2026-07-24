@@ -1,3 +1,4 @@
+import { createIdentity, entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
@@ -27,6 +28,7 @@ import ReachabilityPanel from "../components/ReachabilityPanel";
 import EventsPanel from "../components/EventsPanel";
 import { interfaceBlade, interfaceCreateBlade } from "../components/interfaceBlades";
 import PropertiesPanel, { propertyResolutionBlade, propertyBladeId } from "../components/PropertiesPanel";
+import ResolutionPanel from "../components/ResolutionPanel";
 import CapabilitiesPanel from "../components/CapabilitiesPanel";
 import AlarmsPanel from "../components/AlarmsPanel";
 
@@ -45,6 +47,7 @@ type CompNode = ListNode & {
   product: string;
   systemName: string;
   systemAddr: string;
+  systemCount: number;
   locationName: string;
   tags: Record<string, string>;
   raw: Comp;
@@ -76,8 +79,7 @@ export default function Components() {
   const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
 
-  const label = (x: { name: string; display_name?: string }) => x.display_name || x.name;
-  const sysById = createMemo(() => new Map((systems.data ?? []).map((s) => [s.id, s] as const)));
+  const sysByName = createMemo(() => new Map((systems.data ?? []).map((s) => [s.name, s] as const)));
   const locById = createMemo(() => new Map((locations.data ?? []).map((l) => [l.id, l] as const)));
 
   // One filter facet per tag key present across the components, derived from
@@ -93,26 +95,26 @@ export default function Components() {
   const nodes = createMemo<CompNode[]>(() => {
     const list = components.data ?? [];
     const byId = new Map<string, CompNode>();
-    const sm = sysById();
     const lm = locById();
     for (const c of list) {
-      byId.set(c.id, {
+      byId.set(c.name, {
         id: c.name,
-        display: c.display_name || c.name,
+        display: entityLabel(c),
         children: [],
         actions: c.actions,
-        product: c.product_id ?? "",
-        systemName: c.system_id ? label(sm.get(c.system_id) ?? { name: c.system_id }) : "",
-        systemAddr: c.system_id ? (sm.get(c.system_id)?.name ?? c.system_id) : "",
-        locationName: c.location_id ? label(lm.get(c.location_id) ?? { name: c.location_id }) : "",
+        product: c.product ?? "",
+        systemName: c.system ? entityLabel(sysByName().get(c.system) ?? { name: c.system }) : "",
+        systemAddr: c.system ?? "",
+        systemCount: c.system_count ?? 0,
+        locationName: c.location ? entityLabel(lm.get(c.location) ?? { name: c.location }) : "",
         tags: c.effective_tags ?? {},
         raw: c,
       });
     }
     const roots: CompNode[] = [];
     for (const c of list) {
-      const node = byId.get(c.id)!;
-      const parent = c.parent_id ? byId.get(c.parent_id) : undefined;
+      const node = byId.get(c.name)!;
+      const parent = c.parent ? byId.get(c.parent) : undefined;
       if (parent) parent.children.push(node);
       else roots.push(node);
     }
@@ -148,7 +150,7 @@ export default function Components() {
     const n = () => ctx.byId(props.node.id) ?? props.node;
     const parent = () => ctx.parentOf(n());
     const path = () => ctx.pathOf(n());
-    const sysName = () => { const sid = n().raw.system_id; return sid ? sysById().get(sid)?.name : undefined; };
+    const sysName = () => n().raw.system;
     const canUpdate = () => can(me.data, "component", "update");
 
     const [display, setDisplay] = createSignal(n().raw.display_name ?? "");
@@ -265,10 +267,19 @@ export default function Components() {
         <div class="flex flex-col gap-1.5">
           <span class="eyebrow">Placement</span>
           <div class="grid grid-cols-2 gap-5">
-            {ctx.fact("System", sysName() ? <button class="link text-sm" onClick={() => navigate(`/systems/${encodeURIComponent(sysName()!)}`)}>{n().systemName}</button> : <span class="text-base-content/50">—</span>)}
+            {ctx.fact("System", sysName() ? (
+              <span class="flex items-baseline gap-1.5">
+                <button class="link text-sm" onClick={() => navigate(`/systems/${encodeURIComponent(sysName()!)}`)}>{n().systemName}</button>
+                {/* Its primary is only part of the answer when it serves more than
+                    one, so the row says so rather than implying exclusivity. */}
+                <Show when={n().systemCount > 1}>
+                  <span class="text-[11px] text-warning">+{n().systemCount - 1} more</span>
+                </Show>
+              </span>
+            ) : <span class="text-base-content/50">—</span>)}
             {ctx.fact("Location", <span>{n().locationName || "—"}</span>)}
             {ctx.fact("Parent", parent() ? <button class="link text-sm" onClick={() => ctx.go(parent()!)}>{parent()!.display}</button> : <span class="text-base-content/50">Root</span>)}
-            {ctx.fact("Product", n().raw.product_id ? <span class="font-data text-sm">{n().raw.product_id}</span> : <span class="text-base-content/50">—</span>)}
+            {ctx.fact("Product", n().raw.product ? <span class="font-data text-sm">{n().raw.product}</span> : <span class="text-base-content/50">—</span>)}
           </div>
         </div>
 
@@ -300,6 +311,10 @@ export default function Components() {
             which keeps view read-only. */}
         <AlarmsPanel component={n().raw.name} canUpdate={editing() && canUpdate()} />
         <EventsPanel name={n().raw.name} />
+        {/* Why the tag values are what they are, and for a shared component,
+            which system it is being asked about. The list's pills answer what;
+            this answers why, which is the only question when one looks wrong. */}
+        <ResolutionPanel component={n().raw.name} />
         <PropertiesPanel
           component={n().raw.name}
           edit={edit}
@@ -348,8 +363,9 @@ export default function Components() {
   // component exists. Create commits the row and hands off to /components/<name> in
   // edit mode.
   function ComponentCreate(): JSX.Element {
-    const [name, setName] = createSignal("");
-    const [display, setDisplay] = createSignal("");
+    // Display name leads and the key follows it, stopping the moment the
+    // operator edits the key by hand (lib/entities).
+    const { display, setDisplay, name, setName, keyDerived } = createIdentity();
     const [system, setSystem] = createSignal("");
     const [location, setLocation] = createSignal("");
     const [parent, setParent] = createSignal("");
@@ -391,20 +407,20 @@ export default function Components() {
         <div class="flex flex-col gap-1.5">
           <span class="eyebrow">Identity</span>
           <div class="flex flex-col gap-3">
-            {field("Name", <input class="input input-bordered w-full font-data" value={name()} placeholder="mic-2" onInput={(e) => setName(e.currentTarget.value)} />, "Globally unique address.")}
-            {field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Ceiling Mic 2" onInput={(e) => setDisplay(e.currentTarget.value)} />)}
+            {field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Ceiling Mic 2" onInput={(e) => setDisplay(e.currentTarget.value)} />, "What an operator reads. Optional.")}
+            {field("Name", <input class="input input-bordered w-full font-data" value={name()} placeholder="mic-2" onInput={(e) => setName(e.currentTarget.value)} />, () => (keyDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."))}
           </div>
         </div>
 
         <div class="flex flex-col gap-1.5">
           <span class="eyebrow">Placement</span>
           <div class="grid grid-cols-2 gap-3">
-            {field("System", <TreeSelect items={(systems.data ?? []).map((s) => ({ id: s.id, value: s.name, label: label(s), parentId: s.parent_id }))} value={system()} onChange={setSystem} rootLabel="None" />)}
-            {field("Location", <TreeSelect items={(locations.data ?? []).map((l) => ({ id: l.id, value: l.name, label: label(l), parentId: l.parent_id }))} value={location()} onChange={setLocation} rootLabel="None" />)}
+            {field("System", <TreeSelect items={(systems.data ?? []).map((s) => ({ id: s.id, value: s.name, label: entityLabel(s), parentId: s.parent }))} value={system()} onChange={setSystem} rootLabel="None" />)}
+            {field("Location", <TreeSelect items={(locations.data ?? []).map((l) => ({ id: l.id, value: l.name, label: entityLabel(l), parentId: l.parent }))} value={location()} onChange={setLocation} rootLabel="None" />)}
           </div>
           {field(
             "Parent component",
-            <TreeSelect items={(components.data ?? []).map((c) => ({ id: c.id, value: c.name, label: label(c), parentId: c.parent_id }))} value={parent()} onChange={setParent} rootLabel="Root (no parent)" />,
+            <TreeSelect items={(components.data ?? []).map((c) => ({ id: c.id, value: c.name, label: entityLabel(c), parentId: c.parent }))} value={parent()} onChange={setParent} rootLabel="Root (no parent)" />,
             "Omit for a root component.",
           )}
         </div>
@@ -424,12 +440,12 @@ export default function Components() {
   }
 
   // A labelled field for the create surface (the detail accordion uses ctx.field).
-  function field(labelText: string, control: JSX.Element, hint?: string): JSX.Element {
+  function field(labelText: string, control: JSX.Element, hint?: string | (() => string)): JSX.Element {
     return (
       <label class="flex flex-col gap-1">
         <span class="text-[12px] font-medium text-base-content/70">{labelText}</span>
         {control}
-        <Show when={hint}><span class="text-[11px] text-base-content/40">{hint}</span></Show>
+        <Show when={hint}><span class="text-[11px] text-base-content/40">{typeof hint === "function" ? hint() : hint}</span></Show>
       </label>
     );
   }
@@ -449,7 +465,7 @@ export default function Components() {
     nameWeight: () => 500,
     cellFor: (key, n) => {
       if (key === "product") return n.product ? <span class="badge badge-ghost badge-sm font-data">{n.product}</span> : <span class="text-base-content/40">—</span>;
-      if (key === "system") return <span class="text-base-content/70">{n.systemName || "—"}</span>;
+      if (key === "system") return <span class="text-base-content/70">{n.systemName || "—"}{n.systemCount > 1 ? ` +${n.systemCount - 1}` : ""}</span>;
       if (key === "location") return <span class="text-base-content/70">{n.locationName || "—"}</span>;
       if (key === "tags") return <TagPills tags={n.tags} />;
       return null;

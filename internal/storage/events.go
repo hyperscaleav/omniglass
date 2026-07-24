@@ -23,15 +23,16 @@ type EventOccurrence struct {
 
 // Event is a stored occurrence row (read side).
 type Event struct {
-	ID         int64
-	TS         time.Time
-	OwnerKind  string
-	Key        string
-	Instance   string
-	Message    string
-	Attributes []byte
-	Provenance string
-	Source     string
+	ID             int64
+	TS             time.Time
+	OwnerKind      string
+	Key            string
+	PropertyTypeID string
+	Instance       string
+	Message        string
+	Attributes     []byte
+	Provenance     string
+	Source         string
 }
 
 // InsertEvents writes observed occurrence rows in one transaction. Each row sets
@@ -63,9 +64,16 @@ func (p *PG) InsertEvents(ctx context.Context, evs []EventOccurrence) error {
 		if len(ev.Attributes) > 0 {
 			attrs = string(ev.Attributes)
 		}
-		sql := fmt.Sprintf(`insert into event (ts, owner_kind, %s, key, instance, message, attributes, provenance, source)
-			values ($1, $2, $3, $4, $5, $6, $7, 'observed', $8)`, col)
-		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, ev.OwnerID, ev.Key, ev.Instance, ev.Message, attrs, ev.Source); err != nil {
+		sql := fmt.Sprintf(`insert into event (ts, owner_kind, %s, property_type_id, instance, message, attributes, provenance, source)
+			values ($1, $2, $3, (select id from property_type where name = $4), $5, $6, $7, 'observed', $8)`, col)
+		// The arc points at the primary key, so the owner reference resolves to a
+		// uuid before it is stored. A node still stores its name until the
+		// collection tier converts.
+		arc, err := p.ownerArcValue(ctx, tx, ev.OwnerKind, ev.OwnerID)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arc, ev.Key, ev.Instance, ev.Message, attrs, ev.Source); err != nil {
 			return fmt.Errorf("storage: insert event %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
 	}
@@ -79,9 +87,10 @@ func (p *PG) InsertEvents(ctx context.Context, evs []EventOccurrence) error {
 // bounded by since and limit. Read helper for the component event log panel.
 func (p *PG) ListComponentEvents(ctx context.Context, componentName string, since time.Time, limit int) ([]Event, error) {
 	rows, err := p.pool.Query(ctx, `
-		select id, ts, owner_kind, key, instance, message, attributes, provenance, source
+		select id, ts, owner_kind,
+			(select p.name from property_type p where p.id = event.property_type_id), event.property_type_id, instance, message, attributes, provenance, source
 		from event
-		where component_id = $1 and ts >= $2
+		where component_id = (select id from component where name = $1) and ts >= $2
 		order by ts desc
 		limit $3`, componentName, since, limit)
 	if err != nil {
@@ -92,7 +101,7 @@ func (p *PG) ListComponentEvents(ctx context.Context, componentName string, sinc
 	var out []Event
 	for rows.Next() {
 		var e Event
-		if err := rows.Scan(&e.ID, &e.TS, &e.OwnerKind, &e.Key, &e.Instance, &e.Message, &e.Attributes, &e.Provenance, &e.Source); err != nil {
+		if err := rows.Scan(&e.ID, &e.TS, &e.OwnerKind, &e.Key, &e.PropertyTypeID, &e.Instance, &e.Message, &e.Attributes, &e.Provenance, &e.Source); err != nil {
 			return nil, fmt.Errorf("storage: scan event %s: %w", componentName, err)
 		}
 		out = append(out, e)

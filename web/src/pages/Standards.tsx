@@ -2,8 +2,7 @@ import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from 
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import KVStacked from "../components/KVStacked";
-import Button from "../components/Button";
-import { DrawerFooter } from "../components/Drawer";
+import { useFormActions } from "../lib/formactions";
 import ContractEditor from "../components/ContractEditor";
 import RoleEditor from "../components/RoleEditor";
 import { Plus } from "../components/icons";
@@ -44,7 +43,7 @@ function refCell(id?: string): JSX.Element {
 const columns: FlatColumn<Standard>[] = [
   { key: "id", label: "Id", sortVal: (s) => s.id, cell: (s) => <span class="font-data font-semibold">{s.id}</span> },
   { key: "display_name", label: "Display name", sortVal: (s) => s.display_name, cell: (s) => <span>{s.display_name}</span> },
-  { key: "parent", label: "Variant of", width: "180px", sortVal: (s) => s.parent_standard_id ?? "", cell: (s) => refCell(s.parent_standard_id) },
+  { key: "parent", label: "Variant of", width: "180px", sortVal: (s) => s.parent_standard ?? "", cell: (s) => refCell(s.parent_standard) },
   { key: "official", label: "Origin", width: "100px", sortVal: (s) => String(s.official), cell: (s) => officialBadge(s.official) },
 ];
 
@@ -65,7 +64,7 @@ export default function Standards() {
         error: () => standards.error,
         filterKeys: [
           { key: "name", type: "string", hint: "substring", get: (s) => `${s.id} ${s.display_name}`, values: () => [] },
-          { key: "parent", type: "string", hint: "exact", get: (s) => s.parent_standard_id ?? "", values: () => [] },
+          { key: "parent", type: "string", hint: "exact", get: (s) => s.parent_standard ?? "", values: () => [] },
           { key: "official", type: "string", hint: "exact", get: (s) => (s.official ? "official" : "custom"), values: () => ["official", "custom"] },
         ],
         filterPlaceholder: "filter standards by id, name…",
@@ -114,7 +113,7 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
     if (!editing) return;
     const r = row();
     setDisplayName(r?.display_name ?? "");
-    setParentId(r?.parent_standard_id ?? "");
+    setParentId(r?.parent_standard ?? "");
     setErr(null);
   }));
 
@@ -178,13 +177,13 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
             <span class="eyebrow">Variant of</span>
             <Show
               when={edit.editing()}
-              fallback={<div class="input input-bordered flex items-center text-sm font-data">{r().parent_standard_id || "—"}</div>}
+              fallback={<div class="input input-bordered flex items-center text-sm font-data">{r().parent_standard || "—"}</div>}
             >
-              <ParentStandardSelect value={parentId()} exclude={r().id} onChange={setParentId} />
+              <ParentStandardSelect value={parentId()} exclude={r().name} onChange={setParentId} />
             </Show>
             <span class="text-[11px] text-base-content/40">A standard this one specializes. Leave empty for a standalone standard.</span>
           </div>
-          <ContractEditor classifier="standard" id={r().id} official={r().official} />
+          <ContractEditor classifier="standard" id={r().name} official={r().official} />
           <RoleEditor id={r().id} official={r().official} />
           <Show when={r().official}>
             <div role="alert" class="alert alert-soft text-sm"><span>Seed-owned, read-only.</span></div>
@@ -205,13 +204,20 @@ export function CreateStandardForm(p: { onCreated: (id: string) => void }): JSX.
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
 
-  async function submit(e: Event) {
-    e.preventDefault();
+  useFormActions().bind({
+    submitLabel: "Create standard",
+    submitIcon: Plus,
+    submit: () => void submit(),
+    busy,
+    disabled: () => !id().trim() || !displayName().trim(),
+  });
+
+  async function submit() {
     setBusy(true);
     setFormErr(null);
     try {
       await createStandard({
-        id: id().trim(),
+        name: id().trim(),
         display_name: displayName().trim(),
         parent_standard_id: parentId() || undefined,
       });
@@ -225,7 +231,7 @@ export function CreateStandardForm(p: { onCreated: (id: string) => void }): JSX.
   }
 
   return (
-    <form class="flex min-h-full flex-col gap-4" onSubmit={submit}>
+    <form class="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
@@ -238,9 +244,6 @@ export function CreateStandardForm(p: { onCreated: (id: string) => void }): JSX.
       <Field label="Variant of" hint="A standard this one specializes. Optional.">
         <ParentStandardSelect value={parentId()} onChange={setParentId} />
       </Field>
-      <DrawerFooter>
-        <Button type="submit" intent="action" icon={Plus} disabled={busy() || !id().trim() || !displayName().trim()}>Create standard</Button>
-      </DrawerFooter>
     </form>
   );
 }
@@ -252,13 +255,13 @@ function ParentStandardSelect(p: { value: string; exclude?: string; onChange: (v
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
   const options = createMemo(() =>
     [...(standards.data ?? [])]
-      .filter((s) => s.id !== p.exclude)
+      .filter((s) => s.name !== p.exclude)
       .sort((a, b) => a.display_name.localeCompare(b.display_name)),
   );
   return (
     <select class="select select-bordered w-full" aria-label="Variant of" value={p.value} onChange={(e) => p.onChange(e.currentTarget.value)}>
       <option value="">None</option>
-      <For each={options()}>{(s) => <option value={s.id}>{s.display_name}</option>}</For>
+      <For each={options()}>{(s) => <option value={s.name}>{s.display_name}</option>}</For>
     </select>
   );
 }

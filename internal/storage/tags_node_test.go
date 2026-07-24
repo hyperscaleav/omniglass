@@ -10,7 +10,7 @@ import (
 )
 
 // TestNodeTags covers node as a taggable owner kind (N2): the applies_to gate,
-// the all-scope requirement (a node is estate-wide), effective tags = global +
+// the all-scope requirement (a node is estate-wide), effective tags = platform +
 // node-direct (direct wins), the direct-only list, and unbind. The ON DELETE
 // CASCADE of a node's bindings is declared in the migration and exercised by
 // DeleteNode (N3).
@@ -42,8 +42,8 @@ func TestNodeTags(t *testing.T) {
 		t.Fatalf("bind unknown node: want ErrNodeNotFound, got %v", err)
 	}
 
-	// Bind: a global environment, a node-direct override, and a node-only key.
-	mustBind(t, gw, "environment", "global", nil, "prod")
+	// Bind: a platform environment, a node-direct override, and a node-only key.
+	mustBind(t, gw, "environment", "platform", nil, "prod")
 	mustBind(t, gw, "environment", "node", strptr("edge-1"), "edge-prod")
 	mustBind(t, gw, "rack", "node", strptr("edge-1"), "r7")
 
@@ -53,13 +53,13 @@ func TestNodeTags(t *testing.T) {
 	}
 	m := eff[node.PrincipalID]
 	if m["environment"] != "edge-prod" {
-		t.Errorf("environment = %q, want edge-prod (node-direct wins over global)", m["environment"])
+		t.Errorf("environment = %q, want edge-prod (node-direct wins over platform)", m["environment"])
 	}
 	if m["rack"] != "r7" {
 		t.Errorf("rack = %q, want r7 (node-direct)", m["rack"])
 	}
 
-	// ListEntityTags returns only the node's direct bindings, not the global cascade.
+	// ListEntityTags returns only the node's direct bindings, not the platform cascade.
 	binds, err := gw.ListEntityTags(ctx, "node", strptr("edge-1"), all)
 	if err != nil {
 		t.Fatalf("list node tags: %v", err)

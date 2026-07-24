@@ -129,7 +129,7 @@ Everything else follows from taking that literally. If the history has to be **a
 place to compute a verdict is the **write** that changed it. If the history has to be **edges**, the right
 carrier already exists.
 
-Health lands in **`state_datapoint`**, which is **already transition-only**: the ingest path writes a row
+Health lands in **`state`**, which is **already transition-only**: the ingest path writes a row
 only when the value differs from the last one stored for that owner, and `StateTransitions` reads the
 ordered flips that draw the reachability availability strip. Health reuses that primitive exactly as it
 is, on the **[owner arc](/architecture/core-entities/#ownership-the-exclusive-arc)** (a component, a

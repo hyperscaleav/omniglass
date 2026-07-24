@@ -16,16 +16,16 @@ import { ME_KEY, type Me } from "../lib/auth";
 // driver, and capability registries the pickers read are seeded too, so the
 // create form stays network-free.
 const seed: Product[] = [
-  { id: "crestron-tsw-1070", display_name: "Crestron TSW-1070", kind: "device", vendor_id: "crestron", driver_id: "crestron-ct", capabilities: ["touchscreen"], official: true },
-  { id: "acme-panel", display_name: "Acme Panel", kind: "device", vendor_id: "acme-av", capabilities: [], official: false },
+  { id: "u-crestron-tsw-1070", name: "crestron-tsw-1070", display_name: "Crestron TSW-1070", kind: "device", vendor_id: "crestron", driver_id: "crestron-ct", capabilities: ["touchscreen"], official: true },
+  { id: "u-acme-panel", name: "acme-panel", display_name: "Acme Panel", kind: "device", vendor_id: "acme-av", capabilities: [], official: false },
 ];
 
 const vendors: Vendor[] = [
-  { id: "crestron", display_name: "Crestron", kind: "manufacturer", official: true },
-  { id: "acme-av", display_name: "Acme AV", kind: "integrator", official: false },
+  { id: "u-crestron", name: "crestron", display_name: "Crestron", kind: "manufacturer", official: true },
+  { id: "u-acme-av", name: "acme-av", display_name: "Acme AV", kind: "integrator", official: false },
 ];
-const drivers: Driver[] = [{ id: "crestron-ct", display_name: "Crestron CT", official: true }];
-const capabilities: Capability[] = [{ id: "touchscreen", display_name: "Touchscreen", official: true }];
+const drivers: Driver[] = [{ id: "crestron-ct", name: "crestron-ct", display_name: "Crestron CT", official: true }];
+const capabilities: Capability[] = [{ id: "u-touchscreen", name: "touchscreen", display_name: "Touchscreen", official: true }];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], grants: [] };

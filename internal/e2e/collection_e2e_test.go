@@ -21,7 +21,7 @@ import (
 // binaries an operator runs: `omniglass server` (embedded NATS + the telemetry
 // ingest consumer) and `omniglass node` (a real tcp probe, a real protobuf Event
 // over JetStream). A node runs one probe against a live listener; the datapoint
-// must land in metric_datapoint owned by the target component. This is the
+// must land in metric owned by the target component. This is the
 // user-facing entry-point tier: the run-mode wiring, not an in-process call.
 func TestCollectionEndToEnd(t *testing.T) {
 	if testing.Short() {
@@ -102,7 +102,7 @@ func TestCollectionEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into interface (name, type, component, node_name, params) values ('disp-1-tcp', 'tcp', 'disp-1', 'site-a', $1::jsonb)`, `{"target":"`+target+`"}`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into interface (name, type, component, node_name, params) values ('disp-1-tcp', (select id from interface_type where name = 'tcp'), (select id from component where name = 'disp-1'), (select principal_id from node where name = 'site-a'), $1::jsonb)`, `{"target":"`+target+`"}`); err != nil {
 		t.Fatalf("insert interface: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, interface_id, enabled) values ('t-a', 'poll', (select id from interface where name = 'disp-1-tcp'), true)`); err != nil {
@@ -112,7 +112,7 @@ func TestCollectionEndToEnd(t *testing.T) {
 
 	// Run the real node binary once: claim, pull, probe the live listener, publish.
 	out, code := runCLI(t, root, binPath, os.Environ())(
-		"node", "--server", "http://"+addr, "--name", "site-a", "--token", token, "--once")
+		"node", "run", "--server", "http://"+addr, "--name", "site-a", "--token", token, "--once")
 	if code != 0 {
 		t.Fatalf("omniglass node exit %d:\n%s", code, out)
 	}

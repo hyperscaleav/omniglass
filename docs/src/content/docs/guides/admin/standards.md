@@ -74,9 +74,9 @@ defaults to. It is the same editor as a product's contract, on the system side.
 - **Withdraw** (with `standard:delete`, behind a confirm) removes a line. Conforming systems **keep**
   any value they set for it; it simply reads as **off contract** from then on.
 
-From the CLI the contract is `omniglass standard properties <id>`,
-`omniglass standard set-property <id> <property>`, and
-`omniglass standard delete-property <id> <property>`.
+From the CLI the contract is `omniglass standard property list <id>`,
+`omniglass standard property update <id> <property>`, and
+`omniglass standard property delete <id> <property>`.
 
 ## Roles: what a conforming system needs filled
 
@@ -132,9 +132,9 @@ Two shipped roles come with **Meeting Room**, and they are the worked example: *
 `flat-panel-display`). Like the standards themselves they are **seeded only if absent**, so retuning
 quorum to what your rooms actually run survives the next restart.
 
-From the CLI: `omniglass standard roles <id>`,
-`omniglass standard set-role <id> <role> --display-name <label> --quorum <n> --capabilities <ids>
---impact <outage|degraded|none>`, and `omniglass standard delete-role <id> <role>`.
+From the CLI: `omniglass standard role list <id>`,
+`omniglass standard role update <id> <role> --display-name <label> --quorum <n> --capabilities <ids>
+--impact <outage|degraded|none>`, and `omniglass standard role delete <id> <role>`.
 
 ## Staff a system against its standard
 
@@ -172,9 +172,9 @@ Roles declared **directly on a system** work identically and are edited from the
 what one room needs and the blueprint does not. A role inherited from the standard is withdrawn on the
 **standard**, not on the system that inherits it.
 
-From the CLI: `omniglass system roles <name>`, `omniglass system set-role <name> <role>`,
-`omniglass system delete-role <name> <role>`, `omniglass system assign-role <name> <role> <component>`,
-and `omniglass system unassign-role <name> <role> <component>`.
+From the CLI: `omniglass system role list <name>`, `omniglass system role update <name> <role>`,
+`omniglass system role delete <name> <role>`, `omniglass system role assignment update <name> <role> <component>`,
+and `omniglass system role assignment delete <name> <role> <component>`.
 
 Once the roles are declared and staffed, the whole loop (raise an alarm, watch the room go degraded, find
 the cause, clear it, read the history) is on

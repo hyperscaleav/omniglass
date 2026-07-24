@@ -4,7 +4,7 @@ description: "Download a prebuilt Omniglass binary for your OS and architecture,
 ---
 
 Omniglass ships as a single self-contained binary with the operator console compiled in, so
-one file is the whole app: every run mode (`server`, `node`, `migrate`, `bootstrap`, `token`)
+one file is the whole app: every run mode (`server`, `node run`, `migrate`, `bootstrap`, `token`)
 is the same binary with a different first argument. You can download that binary directly, or
 run the [container image](/guides/container-image/) instead.
 

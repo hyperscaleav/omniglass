@@ -37,7 +37,12 @@ func validVendorKind(s string) bool {
 // and no in-use delete guard in this slice (product will reference it). The
 // registry lists alphabetically by display_name; there is no ordering field.
 type Vendor struct {
+	// ID is the uuid primary key and Name the renameable kebab handle, the shape
+	// tag has and every estate entity has after ADR-0056. A vendor is addressable
+	// by either, so `crestron` keeps working and a rename does not break a caller
+	// holding the id.
 	ID           string
+	Name         string
 	Official     bool
 	DisplayName  string
 	Kind         string
@@ -58,23 +63,24 @@ type VendorPatch struct {
 	Website      *string
 }
 
-const vendorCols = `id, official, display_name, kind, icon, support_phone, website, created_at, updated_at`
+const vendorCols = `id, name, official, display_name, kind, icon, support_phone, website, created_at, updated_at`
 
 func scanVendor(row pgx.Row) (*Vendor, error) {
 	var m Vendor
-	if err := row.Scan(&m.ID, &m.Official, &m.DisplayName, &m.Kind, &m.Icon, &m.SupportPhone, &m.Website, &m.CreatedAt, &m.UpdatedAt); err != nil {
+	if err := row.Scan(&m.ID, &m.Name, &m.Official, &m.DisplayName, &m.Kind, &m.Icon, &m.SupportPhone, &m.Website, &m.CreatedAt, &m.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &m, nil
 }
 
-// UpsertVendor installs or updates a vendor by id, the boot-seed phase's write.
-// Idempotent: re-seeding the same id updates it in place.
+// UpsertVendor installs or updates a vendor by HANDLE, the boot-seed phase's
+// write. The seed ships kebab names, not uuids, so the conflict target is the
+// handle: re-seeding `crestron` updates that row in place and its id never moves.
 func (p *PG) UpsertVendor(ctx context.Context, m Vendor) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into vendor (id, official, display_name, kind, icon, support_phone, website)
+		insert into vendor (name, official, display_name, kind, icon, support_phone, website)
 		values ($1, $2, $3, $4, $5, $6, $7)
-		on conflict (id) do update
+		on conflict (name) do update
 			set official      = excluded.official,
 			    display_name  = excluded.display_name,
 			    kind          = excluded.kind,
@@ -82,9 +88,9 @@ func (p *PG) UpsertVendor(ctx context.Context, m Vendor) error {
 			    support_phone = excluded.support_phone,
 			    website       = excluded.website,
 			    updated_at    = now()`,
-		m.ID, m.Official, m.DisplayName, m.Kind, m.Icon, m.SupportPhone, m.Website)
+		m.Name, m.Official, m.DisplayName, m.Kind, m.Icon, m.SupportPhone, m.Website)
 	if err != nil {
-		return fmt.Errorf("storage: upsert vendor %q: %w", m.ID, err)
+		return fmt.Errorf("storage: upsert vendor %q: %w", m.Name, err)
 	}
 	return nil
 }
@@ -92,7 +98,7 @@ func (p *PG) UpsertVendor(ctx context.Context, m Vendor) error {
 // ListVendors returns every vendor, ordered alphabetically by display_name then
 // id.
 func (p *PG) ListVendors(ctx context.Context) ([]Vendor, error) {
-	rows, err := p.pool.Query(ctx, `select `+vendorCols+` from vendor order by display_name, id`)
+	rows, err := p.pool.Query(ctx, `select `+vendorCols+` from vendor order by display_name, name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list vendors: %w", err)
 	}
@@ -110,7 +116,7 @@ func (p *PG) ListVendors(ctx context.Context) ([]Vendor, error) {
 
 // GetVendor resolves one vendor by id. An unknown id is ErrTypeNotFound.
 func (p *PG) GetVendor(ctx context.Context, id string) (*Vendor, error) {
-	m, err := scanVendor(p.pool.QueryRow(ctx, `select `+vendorCols+` from vendor where id = $1`, id))
+	m, err := scanVendor(p.pool.QueryRow(ctx, `select `+vendorCols+` from vendor where `+registryRefCol(id)+` = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -131,17 +137,17 @@ func (p *PG) CreateVendor(ctx context.Context, actorID string, m Vendor) (*Vendo
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	if err := tx.QueryRow(ctx, `
-		insert into vendor (id, official, display_name, kind, icon, support_phone, website)
+		insert into vendor (name, official, display_name, kind, icon, support_phone, website)
 		values ($1, false, $2, $3, $4, $5, $6)
-		returning created_at, updated_at`,
-		m.ID, m.DisplayName, m.Kind, m.Icon, m.SupportPhone, m.Website).
-		Scan(&m.CreatedAt, &m.UpdatedAt); err != nil {
+		returning id, created_at, updated_at`,
+		m.Name, m.DisplayName, m.Kind, m.Icon, m.SupportPhone, m.Website).
+		Scan(&m.ID, &m.CreatedAt, &m.UpdatedAt); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrTypeExists
 		}
-		return nil, fmt.Errorf("storage: insert vendor %q: %w", m.ID, err)
+		return nil, fmt.Errorf("storage: insert vendor %q: %w", m.Name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "create", "vendor", m.ID, nil, m); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "create", "vendor", m.Name, nil, m); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -171,7 +177,7 @@ func (p *PG) UpdateVendor(ctx context.Context, actorID, id string, patch VendorP
 			support_phone = coalesce($5, support_phone),
 			website       = coalesce($6, website),
 			updated_at    = now()
-		where id = $1
+		where `+registryRefCol(id)+` = $1
 		returning `+vendorCols,
 		id, patch.DisplayName, patch.Kind, patch.Icon, patch.SupportPhone, patch.Website))
 	if err != nil {
@@ -199,7 +205,7 @@ func (p *PG) DeleteVendor(ctx context.Context, actorID, id string) error {
 	if err := guardTypeMutable(ctx, tx, "vendor", id); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `delete from vendor where id = $1`, id); err != nil {
+	if _, err := tx.Exec(ctx, `delete from vendor where `+registryRefCol(id)+` = $1`, id); err != nil {
 		return fmt.Errorf("storage: delete vendor %q: %w", id, err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "vendor", id, map[string]string{"id": id}, nil); err != nil {

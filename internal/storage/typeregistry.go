@@ -38,11 +38,22 @@ func isUniqueViolation(err error) bool {
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
+// registryRefCol picks the column that addresses a registry row. Every registry
+// now has a uuid primary key and a renameable `name` (epic #262), so a caller
+// passes whichever form it holds and this decides the column. The two can never
+// collide: a handle is kebab and a uuid is not.
+func registryRefCol(ref string) string {
+	if isUUID(ref) {
+		return "id"
+	}
+	return "name"
+}
+
 // guardTypeMutable loads a type row's official flag by id: ErrTypeNotFound if
 // absent, ErrTypeOfficial if seed-owned. Update and delete call it first.
 func guardTypeMutable(ctx context.Context, q querier, table, id string) error {
 	var official bool
-	err := q.QueryRow(ctx, `select official from `+table+` where id = $1`, id).Scan(&official)
+	err := q.QueryRow(ctx, `select official from `+table+` where `+registryRefCol(id)+` = $1`, id).Scan(&official)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrTypeNotFound
 	}
@@ -79,14 +90,20 @@ func deleteTypeRow(ctx context.Context, p *PG, table, resource string, ref typeR
 	if err := guardTypeMutable(ctx, tx, table, id); err != nil {
 		return err
 	}
-	n, err := countTypeRefs(ctx, tx, ref, id)
+	// A registry is addressed by either form; the refs count and the delete both
+	// key on the row's uuid, so resolve it once.
+	var uid string
+	if err := tx.QueryRow(ctx, `select id from `+table+` where `+registryRefCol(id)+` = $1`, id).Scan(&uid); err != nil {
+		return ErrTypeNotFound
+	}
+	n, err := countTypeRefs(ctx, tx, ref, uid)
 	if err != nil {
 		return err
 	}
 	if n > 0 {
 		return ErrTypeInUse
 	}
-	if _, err := tx.Exec(ctx, `delete from `+table+` where id = $1`, id); err != nil {
+	if _, err := tx.Exec(ctx, `delete from `+table+` where id = $1`, uid); err != nil {
 		return fmt.Errorf("storage: delete %s %q: %w", table, id, err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", resource, id, map[string]string{"id": id}, nil); err != nil {
@@ -115,4 +132,15 @@ func isReferencedViolation(err error) bool {
 		return pgErr.Code == "23503" || pgErr.Code == "23001"
 	}
 	return false
+}
+
+// requireProperty resolves a property reference (handle or uuid) and returns
+// ErrPropertyNotFound when it names nothing, so an unknown property on a contract
+// write is the named catalog error rather than a NULL that trips the arc opaquely.
+func requireProperty(ctx context.Context, q querier, ref string) error {
+	var known bool
+	if err := q.QueryRow(ctx, `select true from property_type where `+registryRefCol(ref)+` = $1`, ref).Scan(&known); err != nil {
+		return ErrPropertyTypeNotFound
+	}
+	return nil
 }

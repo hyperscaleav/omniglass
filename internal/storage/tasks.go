@@ -35,6 +35,7 @@ type Task struct {
 	Mode        string
 	InterfaceID string
 	Node        *string
+	NodeID      *string
 	Spec        []byte
 	Enabled     bool
 	CreatedAt   time.Time
@@ -56,14 +57,17 @@ func taskID(interfaceID, mode string, spec []byte) string {
 }
 
 // taskSelectJoin is the task columns aliased to `t`, with Node PROJECTED from the
-// joined interface (i.node_name): a task carries no node column, so every read
-// joins interface to resolve placement. Callers always join `interface i on i.id
-// = t.interface_id`.
-const taskSelectJoin = `t.id, t.display_name, t.mode, t.interface_id, i.node_name, t.spec, t.enabled, t.created_at, t.updated_at`
+// joined interface: a task carries no node column, so every read joins interface
+// to resolve placement. The interface arc stores node.principal_id, so the
+// projection resolves it to the node's name, which is what Task.Node carries.
+// Callers always join `interface i on i.id = t.interface_id`.
+const taskSelectJoin = `t.id, t.display_name, t.mode, t.interface_id,
+	(select n.name from node n where n.principal_id = i.node_name) as node_name, i.node_name,
+	t.spec, t.enabled, t.created_at, t.updated_at`
 
 func scanTask(row pgx.Row) (*Task, error) {
 	var t Task
-	if err := row.Scan(&t.ID, &t.DisplayName, &t.Mode, &t.InterfaceID, &t.Node, &t.Spec, &t.Enabled, &t.CreatedAt, &t.UpdatedAt); err != nil {
+	if err := row.Scan(&t.ID, &t.DisplayName, &t.Mode, &t.InterfaceID, &t.Node, &t.NodeID, &t.Spec, &t.Enabled, &t.CreatedAt, &t.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &t, nil
@@ -94,10 +98,10 @@ func loadTask(ctx context.Context, q querier, id string) (*Task, *string, error)
 		component *string
 	)
 	err := q.QueryRow(ctx, `
-		select `+taskSelectJoin+`, i.component
+		select `+taskSelectJoin+`, (select c.name from component c where c.id = i.component)
 		from task t join interface i on i.id = t.interface_id
 		where t.id = $1`, id).Scan(
-		&t.ID, &t.DisplayName, &t.Mode, &t.InterfaceID, &t.Node, &t.Spec, &t.Enabled, &t.CreatedAt, &t.UpdatedAt, &component)
+		&t.ID, &t.DisplayName, &t.Mode, &t.InterfaceID, &t.Node, &t.NodeID, &t.Spec, &t.Enabled, &t.CreatedAt, &t.UpdatedAt, &component)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, ErrTaskNotFound
 	} else if err != nil {
@@ -134,7 +138,7 @@ func (p *PG) ListTasks(ctx context.Context, read scope.Set) ([]Task, error) {
 			) cycle id set is_cycle using path
 			select `+taskSelectJoin+` from task t
 			join interface i on i.id = t.interface_id
-			join component c on c.name = i.component
+			join component c on c.id = i.component
 			where c.id in (select id from sub) or c.id = any($2::uuid[])
 			order by t.id`, roots, selfIDs)
 	}
@@ -198,7 +202,7 @@ func (p *PG) ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (Tas
 		ifaceNode *string
 	)
 	err := p.pool.QueryRow(ctx, `
-		select i.component, i.node_name, i.name, i.type
+		select (select c.name from component c where c.id = i.component), (select n.name from node n where n.principal_id = i.node_name), i.name, (select it.name from interface_type it where it.id = i.type)
 		from task t
 		join interface i on i.id = t.interface_id
 		where t.id = $1`, taskID).Scan(&component, &ifaceNode, &owner.InterfaceName, &owner.InterfaceType)

@@ -163,9 +163,9 @@ export default function PropertiesPanel(
   // satisfies the requirement; forcing it on would pin a redundant override and
   // silently stop the owner following the contract's default.
   const overridingOf = (p: EffectiveProperty) =>
-    p.required && !hasDefault(p) ? true : (p.property_name in overriding ? overriding[p.property_name] : p.is_set);
+    p.required && !hasDefault(p) ? true : (p.property_type_name in overriding ? overriding[p.property_type_name] : p.is_set);
   // The override input seeds from the resolved value (the set value or the default).
-  const draftOf = (p: EffectiveProperty) => (p.property_name in drafts ? drafts[p.property_name] : resolvedStr(p));
+  const draftOf = (p: EffectiveProperty) => (p.property_type_name in drafts ? drafts[p.property_type_name] : resolvedStr(p));
 
   // Leaving edit mode (Cancel, or the refetch after a committed Save) discards all
   // staged state so the rows re-seed from the effective values.
@@ -190,7 +190,7 @@ export default function PropertiesPanel(
     for (const p of rows()) {
       if (!p.required) continue;
       const empty = overridingOf(p) ? draftOf(p).trim() === "" : !hasDefault(p);
-      if (empty) { setInvalid(p.property_name, true); anyInvalid = true; }
+      if (empty) { setInvalid(p.property_type_name, true); anyInvalid = true; }
     }
     if (anyInvalid) throw new Error("A required property is missing a value.");
 
@@ -203,17 +203,17 @@ export default function PropertiesPanel(
       try {
         if (!on || draft.trim() === "") {
           // Inherit: clear a declared value. An unset property is a no-op.
-          if (p.is_set) await clearOwnerProperty(kind, name, p.property_name);
+          if (p.is_set) await clearOwnerProperty(kind, name, p.property_type_name);
         } else {
           // Override: set when new or the value changed (the set is idempotent).
           const current = p.is_set ? displayValue(p.set_value) : null;
           if (current === null || draft !== current) {
-            await setOwnerProperty(kind, name, p.property_name, parseInput(p.data_type as ValueType, draft));
+            await setOwnerProperty(kind, name, p.property_type_name, parseInput(p.data_type as ValueType, draft));
           }
         }
       } catch (e) {
         const msg = describeError(e);
-        setErrs(p.property_name, msg);
+        setErrs(p.property_type_name, msg);
         if (!firstErr) firstErr = msg;
       }
     }
@@ -228,7 +228,7 @@ export default function PropertiesPanel(
   const propRow = (p: EffectiveProperty, first: () => boolean) => (
     <>
       <FieldControl
-        label={p.display_name || p.property_name}
+        label={p.display_name || p.property_type_name}
         dataType={p.data_type as ValueType}
         resolved={resolvedStr(p)}
         isSet={p.is_set}
@@ -236,16 +236,16 @@ export default function PropertiesPanel(
         editing={editable()}
         overriding={overridingOf(p)}
         draft={draftOf(p)}
-        invalid={invalid[p.property_name]}
+        invalid={invalid[p.property_type_name]}
         canToggle={canWrite()}
         canRevert={canWrite()}
-        onToggle={(on) => setOverriding(p.property_name, on)}
-        onInput={(v) => setDrafts(p.property_name, v)}
-        onDrillIn={props.onOpen ? () => props.onOpen?.(p.property_name) : undefined}
+        onToggle={(on) => setOverriding(p.property_type_name, on)}
+        onInput={(v) => setDrafts(p.property_type_name, v)}
+        onDrillIn={props.onOpen ? () => props.onOpen?.(p.property_type_name) : undefined}
         first={first()}
       />
-      <Show when={errs[p.property_name]}>
-        <div class="px-3 pb-2 text-[11px] text-error">{errs[p.property_name]}</div>
+      <Show when={errs[p.property_type_name]}>
+        <div class="px-3 pb-2 text-[11px] text-error">{errs[p.property_type_name]}</div>
       </Show>
     </>
   );
@@ -321,7 +321,7 @@ function usePropertyOf(id: () => string) {
     refetchOnWindowFocus: false,
   }));
   const property = createMemo<EffectiveProperty | undefined>(() =>
-    (q.data ?? []).find((p) => p.property_name === parts().property),
+    (q.data ?? []).find((p) => p.property_type_name === parts().property),
   );
   return { key: () => parts().property, kind: () => parts().owner.kind, property };
 }
@@ -329,7 +329,7 @@ function usePropertyOf(id: () => string) {
 function PropertyBladeTitle(p: { id: string }): JSX.Element {
   const { key, property } = usePropertyOf(() => p.id);
   // Fall back to the raw key until the property resolves (or if it is gone).
-  return <span>{property()?.display_name || property()?.property_name || key()}</span>;
+  return <span>{property()?.display_name || property()?.property_type_name || key()}</span>;
 }
 
 function PropertyResolutionBody(p: { id: string }): JSX.Element {
@@ -358,7 +358,7 @@ function PropertyResolutionDetail(props: { kind: PropertyOwnerKind; property: Ef
   return (
     <div class="flex flex-col gap-5">
       <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-base-content/50">
-        <span>key <span class="font-data text-base-content/70">{p().property_name}</span></span>
+        <span>key <span class="font-data text-base-content/70">{p().property_type_name}</span></span>
         <span>type <span class="font-data text-base-content/70">{p().data_type}</span></span>
         <span class="badge badge-sm badge-ghost">{onContract() ? "on contract" : "off contract"}</span>
       </div>

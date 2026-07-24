@@ -16,7 +16,9 @@ import (
 // references a driver yet; product will). The registry lists alphabetically by
 // display_name; there is no ordering field.
 type Driver struct {
+	// ID is the uuid primary key, Name the renameable slug handle (ADR-0062).
 	ID          string
+	Name        string
 	DisplayName string
 	Version     string
 	Official    bool
@@ -31,11 +33,11 @@ type DriverPatch struct {
 	Version     *string
 }
 
-const driverCols = `id, display_name, version, official, created_at, updated_at`
+const driverCols = `id, name, display_name, version, official, created_at, updated_at`
 
 func scanDriver(row pgx.Row) (*Driver, error) {
 	var d Driver
-	if err := row.Scan(&d.ID, &d.DisplayName, &d.Version, &d.Official, &d.CreatedAt, &d.UpdatedAt); err != nil {
+	if err := row.Scan(&d.ID, &d.Name, &d.DisplayName, &d.Version, &d.Official, &d.CreatedAt, &d.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &d, nil
@@ -45,16 +47,16 @@ func scanDriver(row pgx.Row) (*Driver, error) {
 // Idempotent: re-seeding the same id updates it in place.
 func (p *PG) UpsertDriver(ctx context.Context, d Driver) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into driver (id, display_name, version, official)
+		insert into driver (name, display_name, version, official)
 		values ($1, $2, $3, $4)
-		on conflict (id) do update
+		on conflict (name) do update
 			set display_name = excluded.display_name,
 			    version      = excluded.version,
 			    official     = excluded.official,
 			    updated_at   = now()`,
-		d.ID, d.DisplayName, d.Version, d.Official)
+		d.Name, d.DisplayName, d.Version, d.Official)
 	if err != nil {
-		return fmt.Errorf("storage: upsert driver %q: %w", d.ID, err)
+		return fmt.Errorf("storage: upsert driver %q: %w", d.Name, err)
 	}
 	return nil
 }
@@ -62,7 +64,7 @@ func (p *PG) UpsertDriver(ctx context.Context, d Driver) error {
 // ListDrivers returns every driver, ordered alphabetically by display_name then
 // id.
 func (p *PG) ListDrivers(ctx context.Context) ([]Driver, error) {
-	rows, err := p.pool.Query(ctx, `select `+driverCols+` from driver order by display_name, id`)
+	rows, err := p.pool.Query(ctx, `select `+driverCols+` from driver order by display_name, name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list drivers: %w", err)
 	}
@@ -80,7 +82,7 @@ func (p *PG) ListDrivers(ctx context.Context) ([]Driver, error) {
 
 // GetDriver resolves one driver by id. An unknown id is ErrTypeNotFound.
 func (p *PG) GetDriver(ctx context.Context, id string) (*Driver, error) {
-	d, err := scanDriver(p.pool.QueryRow(ctx, `select `+driverCols+` from driver where id = $1`, id))
+	d, err := scanDriver(p.pool.QueryRow(ctx, `select `+driverCols+` from driver where `+registryRefCol(id)+` = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -101,15 +103,15 @@ func (p *PG) CreateDriver(ctx context.Context, actorID string, d Driver) (*Drive
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	if err := tx.QueryRow(ctx, `
-		insert into driver (id, display_name, version, official)
+		insert into driver (name, display_name, version, official)
 		values ($1, $2, $3, false)
-		returning created_at, updated_at`,
-		d.ID, d.DisplayName, d.Version).
-		Scan(&d.CreatedAt, &d.UpdatedAt); err != nil {
+		returning id, created_at, updated_at`,
+		d.Name, d.DisplayName, d.Version).
+		Scan(&d.ID, &d.CreatedAt, &d.UpdatedAt); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrTypeExists
 		}
-		return nil, fmt.Errorf("storage: insert driver %q: %w", d.ID, err)
+		return nil, fmt.Errorf("storage: insert driver %q: %w", d.Name, err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "create", "driver", d.ID, nil, d); err != nil {
 		return nil, err
@@ -138,7 +140,7 @@ func (p *PG) UpdateDriver(ctx context.Context, actorID, id string, patch DriverP
 			display_name = coalesce($2, display_name),
 			version      = coalesce($3, version),
 			updated_at   = now()
-		where id = $1
+		where `+registryRefCol(id)+` = $1
 		returning `+driverCols,
 		id, patch.DisplayName, patch.Version))
 	if err != nil {
@@ -166,7 +168,7 @@ func (p *PG) DeleteDriver(ctx context.Context, actorID, id string) error {
 	if err := guardTypeMutable(ctx, tx, "driver", id); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `delete from driver where id = $1`, id); err != nil {
+	if _, err := tx.Exec(ctx, `delete from driver where `+registryRefCol(id)+` = $1`, id); err != nil {
 		return fmt.Errorf("storage: delete driver %q: %w", id, err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "driver", id, map[string]string{"id": id}, nil); err != nil {

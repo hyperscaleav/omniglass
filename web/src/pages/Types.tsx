@@ -2,8 +2,7 @@ import { For, Show, createEffect, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import KVStacked from "../components/KVStacked";
-import Button from "../components/Button";
-import { DrawerFooter } from "../components/Drawer";
+import { useFormActions } from "../lib/formactions";
 import ContractEditor from "../components/ContractEditor";
 import { Plus } from "../components/icons";
 import {
@@ -321,13 +320,20 @@ export function CreateTypeForm(p: { kind: TypeKind; onCreated: (id: string) => v
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
 
-  async function submit(e: Event) {
-    e.preventDefault();
+  useFormActions().bind({
+    submitLabel: "Create type",
+    submitIcon: Plus,
+    submit: () => void submit(),
+    busy,
+    disabled: () => !id().trim() || !displayName().trim(),
+  });
+
+  async function submit() {
     setBusy(true);
     setFormErr(null);
     try {
       await createType(p.kind, {
-        id: id().trim(),
+        name: id().trim(),
         display_name: displayName().trim(),
         ...(p.kind === "location" ? { icon: icon().trim() || "map-pin", allowed_parent_types: allowedParents() } : {}),
       });
@@ -341,7 +347,7 @@ export function CreateTypeForm(p: { kind: TypeKind; onCreated: (id: string) => v
   }
 
   return (
-    <form class="flex min-h-full flex-col gap-4" onSubmit={submit}>
+    <form class="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
@@ -372,9 +378,6 @@ export function CreateTypeForm(p: { kind: TypeKind; onCreated: (id: string) => v
           <span class="text-[11px] text-base-content/40">Where a location of this type may be placed. Leave every box unchecked to allow any parent (unconstrained).</span>
         </div>
       </Show>
-      <DrawerFooter>
-        <Button type="submit" intent="action" icon={Plus} disabled={busy() || !id().trim() || !displayName().trim()}>Create type</Button>
-      </DrawerFooter>
     </form>
   );
 }

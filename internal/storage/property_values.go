@@ -12,21 +12,22 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// PropertyValue is the current value of a property on an estate owner, per
-// provenance. It carries the same owner exclusive-arc as metric_datapoint and
+// Property is the current value of a property on an estate owner, per
+// provenance. It carries the same owner exclusive-arc as metric and
 // event: OwnerKind picks the arc, OwnerID is the estate address (the owner's name).
 // A declared value is what used to be a field_value; intended (config), observed,
 // and calculated producers land in later slices.
-type PropertyValue struct {
-	ID           string
-	OwnerKind    string
-	OwnerID      string
-	PropertyName string
-	Instance     string
-	Provenance   string
-	Value        json.RawMessage
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+type Property struct {
+	ID               string
+	OwnerKind        string
+	OwnerID          string
+	PropertyTypeName string
+	PropertyTypeID   string
+	Instance         string
+	Provenance       string
+	Value            json.RawMessage
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // EffectiveProperty is one property resolved for a component: the set value when
@@ -36,54 +37,55 @@ type PropertyValue struct {
 // (including every property on a productless component), so the surface can show
 // the contract and the off-contract additions differently.
 type EffectiveProperty struct {
-	PropertyName string
-	DisplayName  string // optional human label; empty when unset
-	DataType     string
-	Required     bool // from the product contract; always false for an ad-hoc property
-	DefaultValue json.RawMessage
-	SetValue     json.RawMessage // nil when the component has not set it
-	Value        json.RawMessage // coalesce(SetValue, DefaultValue)
-	IsSet        bool
-	FromContract bool
-	ValueID      string // the property_value id when set; empty when unset (what the surface clears)
+	PropertyTypeName string
+	PropertyTypeID   string
+	DisplayName      string // optional human label; empty when unset
+	DataType         string
+	Required         bool // from the product contract; always false for an ad-hoc property
+	DefaultValue     json.RawMessage
+	SetValue         json.RawMessage // nil when the component has not set it
+	Value            json.RawMessage // coalesce(SetValue, DefaultValue)
+	IsSet            bool
+	FromContract     bool
+	ValueID          string // the property id when set; empty when unset (what the surface clears)
 }
 
 // Property-value sentinels. Clearing a value the owner never set is the explicit
-// ErrPropertyValueNotFound; a write naming an owner or property that does not exist
+// ErrPropertyNotFound; a write naming an owner or property that does not exist
 // trips the arc or property FK and surfaces as ErrPropertyRefNotFound (a request
 // fault the API reports as 422, not a server error).
 var (
-	ErrPropertyValueNotFound = errors.New("storage: property value not found")
-	ErrPropertyRefNotFound   = errors.New("storage: property value references a missing owner or property")
+	ErrPropertyNotFound    = errors.New("storage: property value not found")
+	ErrPropertyRefNotFound = errors.New("storage: property value references a missing owner or property")
 )
 
 // declaredProvenance is the only provenance this slice writes: a value an operator
 // declares. The column carries the other three for the producers that land later.
 const declaredProvenance = "declared"
 
-const propertyValueCols = `id, owner_kind, property_name, instance, provenance, value, created_at, updated_at`
+const propertyValueCols = `id, owner_kind, (select pr.name from property_type pr where pr.id = property.property_type_id) as property_type_name, property.property_type_id as property_type_id, instance, provenance, value, created_at, updated_at`
 
-// scanPropertyValue reads a row into a PropertyValue. OwnerID is not in the column
+// scanProperty reads a row into a Property. OwnerID is not in the column
 // list (it lives in whichever arc column the owner kind selects), so the caller
 // stamps it from the address it queried by.
-func scanPropertyValue(row pgx.Row) (*PropertyValue, error) {
+func scanProperty(row pgx.Row) (*Property, error) {
 	var (
-		pv    PropertyValue
+		pv    Property
 		value []byte
 	)
-	if err := row.Scan(&pv.ID, &pv.OwnerKind, &pv.PropertyName, &pv.Instance, &pv.Provenance, &value, &pv.CreatedAt, &pv.UpdatedAt); err != nil {
+	if err := row.Scan(&pv.ID, &pv.OwnerKind, &pv.PropertyTypeName, &pv.PropertyTypeID, &pv.Instance, &pv.Provenance, &value, &pv.CreatedAt, &pv.UpdatedAt); err != nil {
 		return nil, err
 	}
 	pv.Value = copyRaw(value)
 	return &pv, nil
 }
 
-// SetPropertyValue sets a declared value for (owner, property, instance),
+// SetProperty sets a declared value for (owner, property, instance),
 // idempotently: the first set inserts, a later set updates in place (the series key
 // is unique per owner, property, instance, and provenance). The component owner is
 // resolved within the write scope, so a caller cannot set a value on a component it
 // cannot reach; the write and its audit are one transaction.
-func (p *PG) SetPropertyValue(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, value json.RawMessage, write scope.Set) (*PropertyValue, error) {
+func (p *PG) SetProperty(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, value json.RawMessage, write scope.Set) (*Property, error) {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {
 		return nil, err
@@ -102,17 +104,21 @@ func (p *PG) SetPropertyValue(ctx context.Context, actorID, ownerKind, ownerID, 
 	// the same series updates rather than conflicting, so the surface's save is
 	// idempotent.
 	sql := fmt.Sprintf(`
-		insert into property_value (owner_kind, %s, property_name, instance, provenance, value)
-		values ($1, $2, $3, $4, '`+declaredProvenance+`', $5)
-		on conflict (owner_kind, component_id, system_id, location_id, node_id, property_name, instance, provenance)
+		insert into property (owner_kind, %s, property_type_id, instance, provenance, value)
+		values ($1, $2, (select id from property_type where name = $3), $4, '`+declaredProvenance+`', $5)
+		on conflict (owner_kind, component_id, system_id, location_id, node_id, property_type_id, instance, provenance)
 		do update set value = excluded.value, updated_at = now()
 		returning `+propertyValueCols, col)
-	pv, err := scanPropertyValue(tx.QueryRow(ctx, sql, ownerKind, ownerID, propertyName, instance, []byte(value)))
+	arc, err := p.ownerArcValue(ctx, tx, ownerKind, ownerID)
 	if err != nil {
-		return nil, mapPropertyValueWriteErr(err)
+		return nil, err
+	}
+	pv, err := scanProperty(tx.QueryRow(ctx, sql, ownerKind, arc, propertyName, instance, []byte(value)))
+	if err != nil {
+		return nil, mapPropertyWriteErr(err)
 	}
 	pv.OwnerID = ownerID
-	if err := writeAuditRes(ctx, tx, actorID, "update", "property_value", pv.ID, nil, pv); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "property", pv.ID, nil, pv); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -121,10 +127,10 @@ func (p *PG) SetPropertyValue(ctx context.Context, actorID, ownerKind, ownerID, 
 	return pv, nil
 }
 
-// ClearPropertyValue removes a declared value, returning ErrPropertyValueNotFound
+// ClearProperty removes a declared value, returning ErrPropertyNotFound
 // when the owner has not set that property (so clearing an unset property is an
 // explicit miss, not a silent no-op). Scope-guarded and audited like the set.
-func (p *PG) ClearPropertyValue(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, write scope.Set) error {
+func (p *PG) ClearProperty(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, write scope.Set) error {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {
 		return err
@@ -139,17 +145,21 @@ func (p *PG) ClearPropertyValue(ctx context.Context, actorID, ownerKind, ownerID
 		return err
 	}
 
-	sql := fmt.Sprintf(`delete from property_value
-		where owner_kind = $1 and %s = $2 and property_name = $3 and instance = $4 and provenance = '`+declaredProvenance+`'
+	sql := fmt.Sprintf(`delete from property
+		where owner_kind = $1 and %s = $2 and property_type_id = (select id from property_type where name = $3) and instance = $4 and provenance = '`+declaredProvenance+`'
 		returning id`, col)
 	var id string
-	if err := tx.QueryRow(ctx, sql, ownerKind, ownerID, propertyName, instance).Scan(&id); err != nil {
+	arc, err := p.ownerArcValue(ctx, tx, ownerKind, ownerID)
+	if err != nil {
+		return err
+	}
+	if err := tx.QueryRow(ctx, sql, ownerKind, arc, propertyName, instance).Scan(&id); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrPropertyValueNotFound
+			return ErrPropertyNotFound
 		}
 		return fmt.Errorf("storage: clear property value %s/%s: %w", ownerID, propertyName, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "property_value", id, nil, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "property", id, nil, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -172,16 +182,21 @@ type ownerContract struct {
 	classifierCol  string // the instance column naming its classifier ("" = no classifier)
 	contractTable  string // where the classifier declares its properties ("" = no contract)
 	contractKeyCol string // the contract column matching the classifier
-	arcCol         string // the property_value arc column for this owner kind
-	notFound       error
+	arcCol         string // the property arc column for this owner kind
+	// arcMatch is the instance column the arc points AT: the primary key for the
+	// three estate kinds, and still the name for a node until the collection tier
+	// converts. Naming it here keeps the query shape identical across kinds.
+	arcMatch string
+	notFound error
 }
 
 var ownerContracts = map[string]ownerContract{
-	"component": {"component", "product_id", "product_property", "product_id", "component_id", ErrComponentNotFound},
-	"system":    {"system", "standard_id", "standard_property", "standard_id", "system_id", ErrSystemNotFound},
-	"location":  {"location", "location_type", "location_type_property", "location_type_id", "location_id", ErrLocationNotFound},
-	// A node has the arc but no classifier, so it resolves ad-hoc values only.
-	"node": {"node", "", "", "", "node_id", ErrNodeNotFound},
+	"component": {"component", "product_id", "product_property", "product_id", "component_id", "id", ErrComponentNotFound},
+	"system":    {"system", "standard_id", "standard_property", "standard_id", "system_id", "id", ErrSystemNotFound},
+	"location":  {"location", "location_type", "location_type_property", "location_type_id", "location_id", "id", ErrLocationNotFound},
+	// A node has the arc but no classifier, so it resolves ad-hoc values only. Its
+	// arc points at principal_id, the node's primary key.
+	"node": {"node", "", "", "", "node_id", "principal_id", ErrNodeNotFound},
 }
 
 // EffectiveProperties resolves an instance's declared properties: every property
@@ -209,7 +224,7 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 
 	// The ad-hoc arm alone when the owner kind has no classifier to inherit from.
 	adHoc := fmt.Sprintf(`
-		select pv.property_name, pr.display_name, pr.data_type, false as required,
+		select pr.name as property_type_name, pr.id as property_type_id, pr.display_name, pr.data_type, false as required,
 		       null::jsonb as default_value,
 		       pv.value as set_value,
 		       pv.value as effective_value,
@@ -217,22 +232,22 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 		       false as from_contract,
 		       pv.id as value_id
 		from inst
-		join property_value pv on pv.%[1]s = inst.name
+		join property pv on pv.%[1]s = inst.arc
 		     and pv.instance = '' and pv.provenance = 'declared'
-		join property pr on pr.name = pv.property_name`, oc.arcCol)
+		join property_type pr on pr.id = pv.property_type_id`, oc.arcCol)
 
 	var q string
 	if oc.contractTable == "" {
-		q = fmt.Sprintf(`with inst as (select name from %s where name = $1) %s order by 1`,
-			oc.instanceTable, adHoc)
+		q = fmt.Sprintf(`with inst as (select %[3]s as arc from %[1]s where name = $1) %[2]s order by 1`,
+			oc.instanceTable, adHoc, oc.arcMatch)
 	} else {
 		q = fmt.Sprintf(`
 		with inst as (
-			select name, %[2]s as classifier from %[1]s where name = $1
+			select %[7]s as arc, %[2]s as classifier from %[1]s where name = $1
 		)
 		-- The contract arm: what the instance's classifier declares, resolved
 		-- against the instance's own value.
-		select c.property_name, pr.display_name, pr.data_type, c.required,
+		select pr.name as property_type_name, pr.id as property_type_id, pr.display_name, pr.data_type, c.required,
 		       c.default_value,
 		       pv.value as set_value,
 		       coalesce(pv.value, c.default_value) as effective_value,
@@ -241,10 +256,10 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 		       pv.id as value_id
 		from inst
 		join %[3]s c on c.%[4]s = inst.classifier
-		join property pr on pr.name = c.property_name
-		left join property_value pv
-		       on pv.%[5]s = inst.name
-		      and pv.property_name = c.property_name
+		join property_type pr on pr.id = c.property_type_id
+		left join property pv
+		       on pv.%[5]s = inst.arc
+		      and pv.property_type_id = c.property_type_id
 		      and pv.instance = ''
 		      and pv.provenance = 'declared'
 		union all
@@ -253,10 +268,10 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 		%[6]s
 		where not exists (
 			select 1 from %[3]s c
-			where c.%[4]s = inst.classifier and c.property_name = pv.property_name
+			where c.%[4]s = inst.classifier and c.property_type_id = pv.property_type_id
 		)
 		order by 1`,
-			oc.instanceTable, oc.classifierCol, oc.contractTable, oc.contractKeyCol, oc.arcCol, adHoc)
+			oc.instanceTable, oc.classifierCol, oc.contractTable, oc.contractKeyCol, oc.arcCol, adHoc, oc.arcMatch)
 	}
 
 	rows, err := p.pool.Query(ctx, q, ownerID)
@@ -273,7 +288,7 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 			displayName   *string // NULL when unset
 			valueID       *string // NULL when the property is unset
 		)
-		if err := rows.Scan(&e.PropertyName, &displayName, &e.DataType, &e.Required,
+		if err := rows.Scan(&e.PropertyTypeName, &e.PropertyTypeID, &displayName, &e.DataType, &e.Required,
 			&def, &set, &val, &e.IsSet, &e.FromContract, &valueID); err != nil {
 			return nil, fmt.Errorf("storage: scan effective property: %w", err)
 		}
@@ -296,6 +311,46 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 // sentinel (nothing to disclose); an existing but out-of-scope owner returns
 // inScope=false so each caller picks its own sentinel. A node is estate-wide (not
 // scope-tree scoped, like a principal), so it is in scope once it exists.
+// ownerArcValue resolves an owner reference to the value its arc column stores.
+// For every kind that is the entity's primary key: a uuid for the three estate
+// kinds, principal_id for a node, so a rename never touches the arc.
+//
+// The reference itself may be either form, since scopedByName resolves a uuid or
+// a name; this is only about what gets written.
+func (p *PG) ownerArcValue(ctx context.Context, q querier, ownerKind, ownerRef string) (string, error) {
+	switch ownerKind {
+	case "component":
+		c, err := scopedByName(ctx, q, componentConfig, ownerRef)
+		if err != nil {
+			return "", err
+		}
+		return c.ID, nil
+	case "system":
+		sys, err := scopedByName(ctx, q, systemConfig, ownerRef)
+		if err != nil {
+			return "", err
+		}
+		return sys.ID, nil
+	case "location":
+		l, err := scopedByName(ctx, q, locationConfig, ownerRef)
+		if err != nil {
+			return "", err
+		}
+		return l.ID, nil
+	case "node":
+		col := "name"
+		if isUUID(ownerRef) {
+			col = "principal_id"
+		}
+		var pid string
+		if err := q.QueryRow(ctx, `select principal_id from node where `+col+` = $1`, ownerRef).Scan(&pid); err != nil {
+			return "", ErrNodeNotFound
+		}
+		return pid, nil
+	}
+	return ownerRef, nil
+}
+
 func (p *PG) ownerInScope(ctx context.Context, q querier, ownerKind, ownerID string, s scope.Set) (bool, error) {
 	switch ownerKind {
 	case "component":
@@ -348,11 +403,13 @@ func (p *PG) guardOwnerScope(ctx context.Context, q querier, ownerKind, ownerID 
 	return nil
 }
 
-// mapPropertyValueWriteErr turns a foreign-key violation on the value write into a
+// mapPropertyWriteErr turns a foreign-key violation on the value write into a
 // caller-meaningful sentinel: the owner or the property does not exist.
-func mapPropertyValueWriteErr(err error) error {
+func mapPropertyWriteErr(err error) error {
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23503" { // foreign_key_violation
+	if errors.As(err, &pgErr) && (pgErr.Code == "23503" || // foreign_key_violation
+		// an unknown property name resolved to null on the not-null arc
+		(pgErr.Code == "23502" && pgErr.ColumnName == "property_type_id")) {
 		return ErrPropertyRefNotFound
 	}
 	return fmt.Errorf("storage: set property value: %w", err)

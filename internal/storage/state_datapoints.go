@@ -58,8 +58,8 @@ func (p *PG) InsertStateDatapoints(ctx context.Context, evs []StateDatapointEven
 		if ts.IsZero() {
 			ts = time.Now().UTC()
 		}
-		sql := fmt.Sprintf(`insert into state_datapoint (ts, owner_kind, %s, key, instance, value, provenance, source)
-			values ($1, $2, $3, $4, $5, $6, 'observed', $7)`, col)
+		sql := fmt.Sprintf(`insert into state (ts, owner_kind, %s, property_type_id, instance, value, provenance, source)
+			values ($1, $2, %s, (select id from property_type where name = $4), $5, $6, 'observed', $7)`, col, ownerArcExprN(ev.OwnerKind, 3))
 		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, ev.OwnerID, ev.Key, ev.Instance, ev.Value, ev.Source); err != nil {
 			return fmt.Errorf("storage: insert state datapoint %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
@@ -73,13 +73,21 @@ func (p *PG) InsertStateDatapoints(ctx context.Context, evs []StateDatapointEven
 // LatestState returns the most recent state row for a component series (key +
 // instance), or nil if none. It backs the ingest-side transition guard (skip a
 // write whose value equals the latest stored value) and the reachability panel.
+//
+// ts orders it, because an observed series carries the OBSERVATION time and a
+// late arrival must not displace a newer reading. id breaks the tie: a poll cycle
+// stamping several rows in the same instant would otherwise resolve to an
+// arbitrary one, and the transition guard would compare against a row that is not
+// the current value.
 func (p *PG) LatestState(ctx context.Context, componentName, key, instance string) (*StateDatapoint, error) {
 	var dp StateDatapoint
 	err := p.pool.QueryRow(ctx, `
-		select ts, owner_kind, key, instance, value, provenance, source
-		from state_datapoint
-		where component_id = $1 and key = $2 and instance = $3
-		order by ts desc
+		select ts, owner_kind,
+			(select p.name from property_type p where p.id = state.property_type_id), instance, value, provenance, source
+		from state
+		where component_id = (select id from component where name = $1)
+		  and property_type_id = (select id from property_type where name = $2) and instance = $3
+		order by ts desc, id desc
 		limit 1`, componentName, key, instance).Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -95,9 +103,11 @@ func (p *PG) LatestState(ctx context.Context, componentName, key, instance strin
 // since returns the whole series.
 func (p *PG) StateTransitions(ctx context.Context, componentName, key, instance string, since time.Time) ([]StateDatapoint, error) {
 	rows, err := p.pool.Query(ctx, `
-		select ts, owner_kind, key, instance, value, provenance, source
-		from state_datapoint
-		where component_id = $1 and key = $2 and instance = $3 and ts >= $4
+		select ts, owner_kind,
+			(select p.name from property_type p where p.id = state.property_type_id), instance, value, provenance, source
+		from state
+		where component_id = (select id from component where name = $1)
+		  and property_type_id = (select id from property_type where name = $2) and instance = $3 and ts >= $4
 		order by ts asc`, componentName, key, instance, since)
 	if err != nil {
 		return nil, fmt.Errorf("storage: state transitions %s/%s[%s]: %w", componentName, key, instance, err)

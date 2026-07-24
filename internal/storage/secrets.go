@@ -31,17 +31,19 @@ var (
 // origin that drive encryption, masking, and the create gate. official marks the
 // ship-with set, mirroring the other type registries.
 type SecretType struct {
-	ID                     string
-	Official               bool
-	DisplayName            string
-	DefaultAdminSensitive  bool // seeds the create form's admin_sensitive default
-	Fields                 []secret.Field
+	// ID is the uuid primary key, Name the renameable slug handle (ADR-0062).
+	ID                    string
+	Name                  string
+	Official              bool
+	DisplayName           string
+	DefaultAdminSensitive bool // seeds the create form's admin_sensitive default
+	Fields                []secret.Field
 }
 
 // Shape adapts the registry row to the pure secret.Shape the primitive validates
 // and masks against, so the crypto core never imports storage.
 func (st SecretType) Shape() secret.Shape {
-	return secret.Shape{Name: st.ID, Official: st.Official, Fields: st.Fields}
+	return secret.Shape{Name: st.Name, Official: st.Official, Fields: st.Fields}
 }
 
 // Secret is one cascaded, encrypted value: its name (the cascade key), its type,
@@ -50,13 +52,14 @@ func (st SecretType) Shape() secret.Shape {
 // holds its plaintext scalar. The plaintext of a secret field never leaves the
 // envelope in this struct.
 type Secret struct {
-	ID         string
-	Name       string
-	SecretType string
-	OwnerKind  string  // global | component | system | location
-	OwnerID    *string // the owning entity id; nil for the global singleton
-	OwnerName  string  // the owning entity's name (empty for global), for display
-	Fields     []ResolvedField
+	ID           string
+	Name         string
+	SecretType   string
+	SecretTypeID string
+	OwnerKind    string  // platform | component | system | location
+	OwnerID      *string // the owning entity id; nil for the platform singleton
+	OwnerName    string  // the owning entity's name (empty for platform), for display
+	Fields       []ResolvedField
 	// AdminSensitive flips this secret's actions to the :admin tier: it is hidden
 	// from the directory and un-revealable for a caller without the admin tier,
 	// regardless of placement. A platform credential is admin-sensitive; a routine
@@ -67,7 +70,7 @@ type Secret struct {
 }
 
 // SecretSpec is the create input. OwnerName is the owning entity's name
-// (resolved to its id), nil for a global secret. Fields is the operator's
+// (resolved to its id), nil for a platform secret. Fields is the operator's
 // plaintext field map, validated and sealed against the type's shape.
 type SecretSpec struct {
 	Name           string
@@ -90,22 +93,23 @@ type ResolvedField struct {
 
 // ResolvedSecret is one entry in a component's effective-secrets cascade: the
 // winning-or-shadowed secret, the owner it comes from, and where that owner sits
-// in the chain. Band orders the tiers (0 global, 1 location, 2 system, 3
+// in the chain. Band orders the tiers (0 platform, 1 location, 2 system, 3
 // component) and Depth is the distance up that tier's tree (0 at the nearest
 // node); the highest band then lowest depth wins. Winner marks the resolved
 // value; the shadowed entries are returned too so the surface can teach the
 // override.
 type ResolvedSecret struct {
-	ID         string
-	Name       string
-	SecretType string
-	OwnerKind  string
-	OwnerID    *string
-	OwnerName  string
-	Band       int
-	Depth      int
-	Winner     bool
-	Fields     []ResolvedField
+	ID           string
+	Name         string
+	SecretType   string
+	SecretTypeID string
+	OwnerKind    string
+	OwnerID      *string
+	OwnerName    string
+	Band         int
+	Depth        int
+	Winner       bool
+	Fields       []ResolvedField
 }
 
 // --- secret_type registry ----------------------------------------------------
@@ -116,19 +120,19 @@ func (p *PG) UpsertSecretType(ctx context.Context, st SecretType) error {
 		return fmt.Errorf("storage: marshal secret_type %q schema: %w", st.ID, err)
 	}
 	if _, err := p.pool.Exec(ctx, `
-		insert into secret_type (id, official, display_name, schema, default_admin_sensitive)
+		insert into secret_type (name, official, display_name, schema, default_admin_sensitive)
 		values ($1, $2, $3, $4, $5)
-		on conflict (id) do update
+		on conflict (name) do update
 			set official = excluded.official, display_name = excluded.display_name,
 			    schema = excluded.schema, default_admin_sensitive = excluded.default_admin_sensitive`,
-		st.ID, st.Official, st.DisplayName, schema, st.DefaultAdminSensitive); err != nil {
-		return fmt.Errorf("storage: upsert secret_type %q: %w", st.ID, err)
+		st.Name, st.Official, st.DisplayName, schema, st.DefaultAdminSensitive); err != nil {
+		return fmt.Errorf("storage: upsert secret_type %q: %w", st.Name, err)
 	}
 	return nil
 }
 
 func (p *PG) ListSecretTypes(ctx context.Context) ([]SecretType, error) {
-	rows, err := p.pool.Query(ctx, `select id, official, display_name, default_admin_sensitive, schema from secret_type order by id`)
+	rows, err := p.pool.Query(ctx, `select id, name, official, display_name, default_admin_sensitive, schema from secret_type order by name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list secret_types: %w", err)
 	}
@@ -146,7 +150,7 @@ func (p *PG) ListSecretTypes(ctx context.Context) ([]SecretType, error) {
 
 func (p *PG) GetSecretType(ctx context.Context, id string) (*SecretType, error) {
 	st, err := scanSecretType(p.pool.QueryRow(ctx,
-		`select id, official, display_name, default_admin_sensitive, schema from secret_type where id = $1`, id))
+		`select id, name, official, display_name, default_admin_sensitive, schema from secret_type where `+registryRefCol(id)+` = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUnknownSecretType
 	}
@@ -156,7 +160,7 @@ func (p *PG) GetSecretType(ctx context.Context, id string) (*SecretType, error) 
 func scanSecretType(row pgx.Row) (*SecretType, error) {
 	var st SecretType
 	var schema []byte
-	if err := row.Scan(&st.ID, &st.Official, &st.DisplayName, &st.DefaultAdminSensitive, &schema); err != nil {
+	if err := row.Scan(&st.ID, &st.Name, &st.Official, &st.DisplayName, &st.DefaultAdminSensitive, &schema); err != nil {
 		return nil, err
 	}
 	if err := json.Unmarshal(schema, &st.Fields); err != nil {
@@ -167,10 +171,10 @@ func scanSecretType(row pgx.Row) (*SecretType, error) {
 
 // --- secret CRUD -------------------------------------------------------------
 
-const secretCols = `id, name, secret_type, owner_kind, component_id, system_id, location_id, value, created_at, updated_at, admin_sensitive`
+const secretCols = `id, name, (select st.name from secret_type st where st.id = secret.secret_type) as secret_type, secret.secret_type as secret_type_id, owner_kind, component_id, system_id, location_id, value, created_at, updated_at, admin_sensitive`
 
 // CreateSecret seals a new secret at its owner scope. The owner is resolved and
-// scope-checked (a global secret needs an all create scope; a scoped one needs
+// scope-checked (a platform secret needs an all create scope; a scoped one needs
 // its owner within the create scope), the fields are validated and sealed
 // against the type shape, and the row plus its audit are written in one
 // transaction. Secret fields are AES-256-GCM sealed with their (owner, name,
@@ -227,7 +231,7 @@ func (p *PG) CreateSecret(ctx context.Context, actorID string, spec SecretSpec, 
 	compID, sysID, locID := arcColumns(spec.OwnerKind, ownerID)
 	s, err := scanSecretRow(tx.QueryRow(ctx, `
 		insert into secret (name, secret_type, owner_kind, component_id, system_id, location_id, value, admin_sensitive)
-		values ($1, $2, $3, $4, $5, $6, $7, $8)
+		values ($1, (select id from secret_type where name = $2), $3, $4, $5, $6, $7, $8)
 		returning `+secretCols,
 		spec.Name, spec.SecretType, spec.OwnerKind, compID, sysID, locID, valueJSON, adminSensitive), shape)
 	if err != nil {
@@ -299,16 +303,17 @@ func (p *PG) ListSecrets(ctx context.Context, read scope.Set, canAdmin bool) ([]
 }
 
 // DeleteSecret removes a secret by id, audited. The owner must be within the
-// action scope (all for a global secret); an unknown id or one out of read scope
-// is the non-disclosing ErrSecretNotFound.
-func (p *PG) DeleteSecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin bool) error {
+// action scope (all for a platform secret); an unknown id or one out of read scope
+// is the non-disclosing ErrSecretNotFound. canPlatform is the caller's
+// platform:delete permission, required to remove a secret at the platform tier.
+func (p *PG) DeleteSecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin, canPlatform bool) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin delete secret: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	before, err := p.secretForAction(ctx, tx, id, read, action, canAdmin)
+	before, err := p.secretForAction(ctx, tx, id, read, action, canAdmin, canPlatform)
 	if err != nil {
 		return err
 	}
@@ -332,8 +337,9 @@ func (p *PG) DeleteSecret(ctx context.Context, actorID, id string, read, action 
 // call, so leaving a secret field blank there omits it (keeps the current
 // value); a direct API client that means "keep" must omit the field, not send
 // it empty. Requires the owner within the action scope; an unknown or
-// out-of-scope id is ErrSecretNotFound.
-func (p *PG) UpdateSecret(ctx context.Context, actorID, id string, fields map[string]string, read, action scope.Set, canAdmin bool) (*Secret, error) {
+// out-of-scope id is ErrSecretNotFound. canPlatform is the caller's
+// platform:update permission, required to edit a secret at the platform tier.
+func (p *PG) UpdateSecret(ctx context.Context, actorID, id string, fields map[string]string, read, action scope.Set, canAdmin, canPlatform bool) (*Secret, error) {
 	if p.secret == nil {
 		return nil, ErrNoSecretProvider
 	}
@@ -343,7 +349,7 @@ func (p *PG) UpdateSecret(ctx context.Context, actorID, id string, fields map[st
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	row, shape, err := p.secretRowForAction(ctx, tx, id, read, action, canAdmin)
+	row, shape, err := p.secretRowForAction(ctx, tx, id, read, action, canAdmin, canPlatform)
 	if err != nil {
 		return nil, err
 	}
@@ -409,7 +415,10 @@ func (p *PG) decryptSecret(ctx context.Context, actorID, id, verb string, read, 
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	row, shape, err := p.secretRowForAction(ctx, tx, id, read, action, canAdmin)
+	// Revealing reads a secret, it never writes at the platform tier, so the tier
+	// permission does not apply here: the read/action scopes and the admin tier are
+	// the whole gate. Passing true keeps the shared fetch from re-gating a read.
+	row, shape, err := p.secretRowForAction(ctx, tx, id, read, action, canAdmin, true)
 	if err != nil {
 		return nil, err
 	}
@@ -449,7 +458,7 @@ func (p *PG) decryptSecret(ctx context.Context, actorID, id, verb string, read, 
 // --- cascade resolver --------------------------------------------------------
 
 // ResolveSecrets returns the effective secrets for a component: every secret
-// that resolves onto it down the structural cascade (global -> location tree ->
+// that resolves onto it down the structural cascade (platform -> location tree ->
 // system tree -> component tree, deepest and most-specific winning), each masked,
 // with the shadowed candidates included so the surface can teach the override.
 // The component must be within the read scope (a secret that cascades from a
@@ -484,7 +493,7 @@ func (p *PG) ResolveSecrets(ctx context.Context, componentID string, read scope.
 			rnk       int
 			value     []byte
 		)
-		if err := rows.Scan(&r.ID, &r.Name, &r.SecretType, &r.OwnerKind, &ownerID,
+		if err := rows.Scan(&r.ID, &r.Name, &r.SecretType, &r.SecretTypeID, &r.OwnerKind, &ownerID,
 			&r.Band, &r.Depth, &rnk, &ownerName, &value); err != nil {
 			return nil, fmt.Errorf("storage: scan resolved secret: %w", err)
 		}
@@ -505,7 +514,7 @@ func (p *PG) ResolveSecrets(ctx context.Context, componentID string, read scope.
 const resolveSecretsSQL = `
 with recursive
 target as (
-    select id, system_id, location_id from component where id = $1
+    select id, location_id from component where id = $1
 ),
 comp_chain(id, depth) as (
     select id, 0 from component where id = $1
@@ -514,13 +523,6 @@ comp_chain(id, depth) as (
     from component c join comp_chain cc on c.id = cc.id
     where c.parent_id is not null
 ) cycle id set comp_cyc using comp_path,
-sys_chain(id, depth) as (
-    select system_id, 0 from target where system_id is not null
-    union all
-    select s.parent_id, sc.depth + 1
-    from system s join sys_chain sc on s.id = sc.id
-    where s.parent_id is not null
-) cycle id set sys_cyc using sys_path,
 loc_chain(id, depth) as (
     select location_id, 0 from target where location_id is not null
     union all
@@ -529,13 +531,12 @@ loc_chain(id, depth) as (
     where l.parent_id is not null
 ) cycle id set loc_cyc using loc_path,
 owners(owner_kind, owner_id, band, depth) as (
-                select 'global',    null::uuid, 0, 0
+                select 'platform',  null::uuid, 0, 0
     union all   select 'location',  id,         1, depth from loc_chain
-    union all   select 'system',    id,         2, depth from sys_chain
     union all   select 'component', id,         3, depth from comp_chain
 ),
 ranked as (
-    select s.id, s.name, s.secret_type, s.owner_kind, o.owner_id, o.band, o.depth, s.value,
+    select s.id, s.name, (select st.name from secret_type st where st.id = s.secret_type) as secret_type, s.secret_type as secret_type_id, s.owner_kind, o.owner_id, o.band, o.depth, s.value,
            row_number() over (partition by s.name order by o.band desc, o.depth asc) as rnk
     from secret s
     join owners o
@@ -543,7 +544,7 @@ ranked as (
      and o.owner_id is not distinct from coalesce(s.component_id, s.system_id, s.location_id)
     where (not s.admin_sensitive or $2::boolean)
 )
-select r.id, r.name, r.secret_type, r.owner_kind, r.owner_id, r.band, r.depth, r.rnk,
+select r.id, r.name, r.secret_type, r.secret_type_id, r.owner_kind, r.owner_id, r.band, r.depth, r.rnk,
        coalesce(c.name, sy.name, l.name, '') as owner_name,
        r.value
 from ranked r
@@ -555,11 +556,11 @@ order by r.name, r.band desc, r.depth asc`
 // --- helpers -----------------------------------------------------------------
 
 // resolveSecretOwner turns an owner kind + optional name into the owning id,
-// enforcing the create scope: a global secret needs an all create scope; a
+// enforcing the create scope: a platform secret needs an all create scope; a
 // scoped one resolves its owner in the matching tree and requires it within the
-// create scope. Returns a nil id for a global owner.
+// create scope. Returns a nil id for a platform owner.
 func (p *PG) resolveSecretOwner(ctx context.Context, q querier, kind string, name *string, create scope.Set) (*string, error) {
-	if kind == "global" {
+	if kind == "platform" {
 		if !create.All {
 			return nil, ErrSecretForbidden
 		}
@@ -645,7 +646,7 @@ func (p *PG) sealFields(ctx context.Context, shape secret.Shape, ownerKind strin
 // secretAAD binds a sealed field to its owner arc, name, and field, so a
 // ciphertext authenticates only in the exact row it was sealed for.
 func secretAAD(ownerKind string, ownerID *string, name, field string) []byte {
-	oid := "global"
+	oid := "platform"
 	if ownerID != nil {
 		oid = *ownerID
 	}
@@ -653,7 +654,7 @@ func secretAAD(ownerKind string, ownerID *string, name, field string) []byte {
 }
 
 // arcColumns maps an owner kind + id to the three nullable arc columns, exactly
-// one set for a scoped owner, all null for the global singleton.
+// one set for a scoped owner, all null for the platform singleton.
 func arcColumns(kind string, id *string) (comp, sys, loc *string) {
 	switch kind {
 	case "component":
@@ -686,8 +687,8 @@ type secretRow struct {
 
 // secretForAction fetches a secret by id and enforces the read-then-action scope
 // split on its owner, returning the masked Secret for the audit before-image.
-func (p *PG) secretForAction(ctx context.Context, q querier, id string, read, action scope.Set, canAdmin bool) (*Secret, error) {
-	row, shape, err := p.secretRowForAction(ctx, q, id, read, action, canAdmin)
+func (p *PG) secretForAction(ctx context.Context, q querier, id string, read, action scope.Set, canAdmin, canPlatform bool) (*Secret, error) {
+	row, shape, err := p.secretRowForAction(ctx, q, id, read, action, canAdmin, canPlatform)
 	if err != nil {
 		return nil, err
 	}
@@ -701,17 +702,20 @@ func (p *PG) secretForAction(ctx context.Context, q querier, id string, read, ac
 
 // secretRowForAction is the shared fetch-and-scope-check: the secret is read
 // (owner in read scope, else the non-disclosing not-found) then gated for the
-// action (owner in action scope, else forbidden). A global secret needs the
-// all scope on each leg.
-func (p *PG) secretRowForAction(ctx context.Context, q querier, id string, read, action scope.Set, canAdmin bool) (secretRow, secret.Shape, error) {
+// action (owner in action scope, else forbidden). A platform secret needs the
+// all scope on each leg, plus the caller's platform permission for the action
+// (canPlatform): the tier is install-wide, so scope alone does not carry it. Only
+// the stored row knows its tier, which is why the permission is resolved by the
+// API and passed in here rather than checked on the request body.
+func (p *PG) secretRowForAction(ctx context.Context, q querier, id string, read, action scope.Set, canAdmin, canPlatform bool) (secretRow, secret.Shape, error) {
 	var (
-		row       secretRow
-		secType   string
+		row            secretRow
+		secType        string
 		comp, sys, loc *string
-		value     []byte
+		value          []byte
 	)
 	err := q.QueryRow(ctx, `
-		select id, name, secret_type, owner_kind, component_id, system_id, location_id, admin_sensitive, value
+		select id, name, (select st.name from secret_type st where st.id = secret.secret_type) as secret_type, owner_kind, component_id, system_id, location_id, admin_sensitive, value
 		from secret where id = $1`, id).
 		Scan(&row.id, &row.name, &secType, &row.ownerKind, &comp, &sys, &loc, &row.adminSensitive, &value)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -740,6 +744,9 @@ func (p *PG) secretRowForAction(ctx context.Context, q querier, id string, read,
 	} else if !ok {
 		return secretRow{}, secret.Shape{}, ErrSecretForbidden
 	}
+	if row.ownerKind == "platform" && !canPlatform {
+		return secretRow{}, secret.Shape{}, ErrSecretForbidden
+	}
 	st, err := p.GetSecretType(ctx, secType)
 	if err != nil {
 		return secretRow{}, secret.Shape{}, err
@@ -748,9 +755,9 @@ func (p *PG) secretRowForAction(ctx context.Context, q querier, id string, read,
 }
 
 // secretOwnerInScope reports whether a secret's owner falls within a scope set:
-// a global secret needs the all scope; a scoped one defers to the owner tree.
+// a platform secret needs the all scope; a scoped one defers to the owner tree.
 func (p *PG) secretOwnerInScope(ctx context.Context, q querier, kind string, id *string, set scope.Set) (bool, error) {
-	if kind == "global" {
+	if kind == "platform" {
 		return set.All, nil
 	}
 	if id == nil {
@@ -763,7 +770,7 @@ func (p *PG) secretOwnerInScope(ctx context.Context, q querier, kind string, id 
 	return inScopeTree(ctx, q, tbl, *id, set)
 }
 
-// shapeIndex loads every secret_type shape keyed by id, for masking a batch of
+// shapeIndex loads every secret_type shape keyed by name, for masking a batch of
 // resolved or listed secrets without a query per row.
 func (p *PG) shapeIndex(ctx context.Context) (map[string]secret.Shape, error) {
 	types, err := p.ListSecretTypes(ctx)
@@ -772,7 +779,7 @@ func (p *PG) shapeIndex(ctx context.Context) (map[string]secret.Shape, error) {
 	}
 	out := make(map[string]secret.Shape, len(types))
 	for _, st := range types {
-		out[st.ID] = st.Shape()
+		out[st.Name] = st.Shape()
 	}
 	return out, nil
 }
@@ -821,7 +828,7 @@ func scanSecretRow(row pgx.Row, shape secret.Shape) (*Secret, error) {
 		comp, sys, loc *string
 		value          []byte
 	)
-	if err := row.Scan(&s.ID, &s.Name, &s.SecretType, &s.OwnerKind, &comp, &sys, &loc, &value, &s.CreatedAt, &s.UpdatedAt, &s.AdminSensitive); err != nil {
+	if err := row.Scan(&s.ID, &s.Name, &s.SecretType, &s.SecretTypeID, &s.OwnerKind, &comp, &sys, &loc, &value, &s.CreatedAt, &s.UpdatedAt, &s.AdminSensitive); err != nil {
 		return nil, err
 	}
 	s.OwnerID = firstNonNil(comp, sys, loc)
@@ -836,7 +843,7 @@ func scanSecretListRow(row pgx.Row, shapes map[string]secret.Shape) (*Secret, st
 		value          []byte
 		ownerName      string
 	)
-	if err := row.Scan(&s.ID, &s.Name, &s.SecretType, &s.OwnerKind, &comp, &sys, &loc, &value, &s.CreatedAt, &s.UpdatedAt, &s.AdminSensitive, &ownerName); err != nil {
+	if err := row.Scan(&s.ID, &s.Name, &s.SecretType, &s.SecretTypeID, &s.OwnerKind, &comp, &sys, &loc, &value, &s.CreatedAt, &s.UpdatedAt, &s.AdminSensitive, &ownerName); err != nil {
 		return nil, "", err
 	}
 	s.OwnerID = firstNonNil(comp, sys, loc)
@@ -845,7 +852,7 @@ func scanSecretListRow(row pgx.Row, shapes map[string]secret.Shape) (*Secret, st
 }
 
 func secretColsQualified(alias string) string {
-	return alias + ".id, " + alias + ".name, " + alias + ".secret_type, " + alias + ".owner_kind, " +
+	return alias + ".id, " + alias + ".name, (select st.name from secret_type st where st.id = " + alias + ".secret_type) as secret_type, " + alias + ".secret_type as secret_type_id, " + alias + ".owner_kind, " +
 		alias + ".component_id, " + alias + ".system_id, " + alias + ".location_id, " +
 		alias + ".value, " + alias + ".created_at, " + alias + ".updated_at, " + alias + ".admin_sensitive"
 }

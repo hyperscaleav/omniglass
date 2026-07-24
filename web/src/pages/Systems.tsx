@@ -1,3 +1,4 @@
+import { createIdentity, entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams } from "@solidjs/router";
@@ -65,7 +66,6 @@ export default function Systems() {
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
 
-  const label = (x: { name: string; display_name?: string }) => x.display_name || x.name;
   const locById = createMemo(() => new Map((locations.data ?? []).map((l) => [l.id, l] as const)));
   // The standard picker's options, and the id -> display-name lookup the tree and
   // detail read a conforming system's standard through.
@@ -74,8 +74,8 @@ export default function Systems() {
   );
   const standardLabel = (id?: string) =>
     id ? (standards.data ?? []).find((s) => s.id === id)?.display_name ?? id : "";
-  const locationItems = createMemo(() => (locations.data ?? []).map((l) => ({ id: l.id, value: l.name, label: l.display_name || l.name, parentId: l.parent_id })));
-  const systemItems = createMemo(() => (systems.data ?? []).map((s) => ({ id: s.id, value: s.name, label: s.display_name || s.name, parentId: s.parent_id })));
+  const locationItems = createMemo(() => (locations.data ?? []).map((l) => ({ id: l.name, value: l.name, label: entityLabel(l), parentId: l.parent })));
+  const systemItems = createMemo(() => (systems.data ?? []).map((s) => ({ id: s.name, value: s.name, label: entityLabel(s), parentId: s.parent })));
 
   // One filter facet per tag key present across the systems, derived from their
   // effective tags, so the bar can filter by any tag like any other field.
@@ -90,21 +90,21 @@ export default function Systems() {
     const lm = locById();
     const byId = new Map<string, SysNode>();
     for (const s of list) {
-      byId.set(s.id, {
+      byId.set(s.name, {
         id: s.name,
-        display: s.display_name || s.name,
+        display: entityLabel(s),
         children: [],
         actions: s.actions,
         standard: standardLabel(s.standard_id),
-        locationName: s.location_id ? label(lm.get(s.location_id) ?? { name: s.location_id }) : "",
+        locationName: s.location ? entityLabel(lm.get(s.location) ?? { name: s.location }) : "",
         tags: s.effective_tags ?? {},
         raw: s,
       });
     }
     const roots: SysNode[] = [];
     for (const s of list) {
-      const node = byId.get(s.id)!;
-      const parent = s.parent_id ? byId.get(s.parent_id) : undefined;
+      const node = byId.get(s.name)!;
+      const parent = s.parent ? byId.get(s.parent) : undefined;
       if (parent) parent.children.push(node);
       else roots.push(node);
     }
@@ -362,8 +362,9 @@ export default function Systems() {
   // are writable; the binding sections (Tags) are shown locked until the system
   // exists. Create commits the row and hands off to /systems/<id> in edit mode.
   function SystemCreate(): JSX.Element {
-    const [name, setName] = createSignal("");
-    const [display, setDisplay] = createSignal("");
+    // Display name leads and the key follows it, stopping the moment the
+    // operator edits the key by hand (lib/entities).
+    const { display, setDisplay, name, setName, keyDerived } = createIdentity();
     const [standard, setStandard] = createSignal("");
     const [location, setLocation] = createSignal("");
     const [parent, setParent] = createSignal("");
@@ -399,8 +400,8 @@ export default function Systems() {
         <div class="flex flex-col gap-1.5">
           <span class="eyebrow">Identity</span>
           <div class="flex flex-col gap-3">
-            {field("Name", <input class="input input-bordered w-full font-data" value={name()} placeholder="exec-boardroom" onInput={(e) => setName(e.currentTarget.value)} />, "Globally unique address.")}
-            {field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Executive Boardroom" onInput={(e) => setDisplay(e.currentTarget.value)} />)}
+            {field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Executive Boardroom" onInput={(e) => setDisplay(e.currentTarget.value)} />, "What an operator reads. Optional.")}
+            {field("Name", <input class="input input-bordered w-full font-data" value={name()} placeholder="exec-boardroom" onInput={(e) => setName(e.currentTarget.value)} />, () => (keyDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."))}
             {field(
               "Standard",
               <select class="select select-bordered w-full" value={standard()} onChange={(e) => setStandard(e.currentTarget.value)}>
@@ -435,12 +436,12 @@ export default function Systems() {
   }
 
   // A labelled field for the create surface (the detail accordion uses ctx.field).
-  function field(labelText: string, control: JSX.Element, hint?: string): JSX.Element {
+  function field(labelText: string, control: JSX.Element, hint?: string | (() => string)): JSX.Element {
     return (
       <label class="flex flex-col gap-1">
         <span class="text-[12px] font-medium text-base-content/70">{labelText}</span>
         {control}
-        <Show when={hint}><span class="text-[11px] text-base-content/40">{hint}</span></Show>
+        <Show when={hint}><span class="text-[11px] text-base-content/40">{typeof hint === "function" ? hint() : hint}</span></Show>
       </label>
     );
   }

@@ -23,20 +23,20 @@ func TestCapabilityCRUD(t *testing.T) {
 
 	// Create a custom capability; it is official=false.
 	c, err := gw.CreateCapability(ctx, "", storage.Capability{
-		ID: "projector", DisplayName: "Projector",
+		Name: "projector", DisplayName: "Projector",
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if c.ID != "projector" {
-		t.Fatalf("create id = %q, want projector", c.ID)
+	if c.Name != "projector" {
+		t.Fatalf("create name = %q, want projector", c.Name)
 	}
 	if c.Official {
 		t.Fatalf("new capability official=true, want false")
 	}
 
 	// Duplicate id is ErrTypeExists.
-	if _, err := gw.CreateCapability(ctx, "", storage.Capability{ID: "projector", DisplayName: "Dup"}); !errors.Is(err, storage.ErrTypeExists) {
+	if _, err := gw.CreateCapability(ctx, "", storage.Capability{Name: "projector", DisplayName: "Dup"}); !errors.Is(err, storage.ErrTypeExists) {
 		t.Fatalf("dup create err = %v, want ErrTypeExists", err)
 	}
 
@@ -54,7 +54,7 @@ func TestCapabilityCRUD(t *testing.T) {
 	}
 	var found *storage.Capability
 	for i := range all {
-		if all[i].ID == "projector" {
+		if all[i].Name == "projector" {
 			found = &all[i]
 			break
 		}
@@ -80,7 +80,7 @@ func TestCapabilityCRUD(t *testing.T) {
 	}
 
 	// Official rows are read-only.
-	if err := gw.UpsertCapability(ctx, storage.Capability{ID: "official-cap", DisplayName: "Official Cap", Official: true}); err != nil {
+	if err := gw.UpsertCapability(ctx, storage.Capability{Name: "official-cap", DisplayName: "Official Cap", Official: true}); err != nil {
 		t.Fatalf("upsert official: %v", err)
 	}
 	if _, err := gw.UpdateCapability(ctx, "", "official-cap", storage.CapabilityPatch{DisplayName: &dn}); !errors.Is(err, storage.ErrTypeOfficial) {

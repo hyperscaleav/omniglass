@@ -22,7 +22,7 @@ func TestLocationTypeCRUD(t *testing.T) {
 	}
 
 	// Create a custom type; it is official=false.
-	lt, err := gw.CreateLocationType(ctx, "", storage.LocationType{ID: "wing", DisplayName: "Wing", Icon: "layers"})
+	lt, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "wing", DisplayName: "Wing", Icon: "layers"})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -31,13 +31,13 @@ func TestLocationTypeCRUD(t *testing.T) {
 	}
 
 	// Duplicate id is ErrTypeExists.
-	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{ID: "wing", DisplayName: "Dup"}); !errors.Is(err, storage.ErrTypeExists) {
+	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "wing", DisplayName: "Dup"}); !errors.Is(err, storage.ErrTypeExists) {
 		t.Fatalf("dup create err = %v, want ErrTypeExists", err)
 	}
 
 	// "root" is reserved for the allowed_parent_types sentinel: creating a type
 	// with that id is refused, so a real type can never collide with it.
-	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{ID: "root", DisplayName: "Root"}); !errors.Is(err, storage.ErrReservedTypeID) {
+	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "root", DisplayName: "Root"}); !errors.Is(err, storage.ErrReservedTypeID) {
 		t.Fatalf("create root-id type err = %v, want ErrReservedTypeID", err)
 	}
 
@@ -55,7 +55,7 @@ func TestLocationTypeCRUD(t *testing.T) {
 
 	// The official read-only guard still stands for a row that IS official, so
 	// prove the mechanism on one.
-	if err := gw.UpsertLocationType(ctx, storage.LocationType{ID: "canon", Official: true, DisplayName: "Canonical"}); err != nil {
+	if err := gw.UpsertLocationType(ctx, storage.LocationType{Name: "canon", Official: true, DisplayName: "Canonical"}); err != nil {
 		t.Fatalf("seed an official location type: %v", err)
 	}
 	if _, err := gw.UpdateLocationType(ctx, "", "canon", storage.LocationTypePatch{DisplayName: &name}); !errors.Is(err, storage.ErrTypeOfficial) {

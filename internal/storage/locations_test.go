@@ -17,19 +17,19 @@ func TestLocationTypeRegistry(t *testing.T) {
 	ctx := context.Background()
 
 	if err := gw.UpsertLocationType(ctx, storage.LocationType{
-		ID: "building", Official: true, DisplayName: "Building", Icon: "building",
+		Name: "building", Official: true, DisplayName: "Building", Icon: "building",
 	}); err != nil {
 		t.Fatalf("upsert building: %v", err)
 	}
 	if err := gw.UpsertLocationType(ctx, storage.LocationType{
-		ID: "campus", Official: true, DisplayName: "Campus", Icon: "landmark",
+		Name: "campus", Official: true, DisplayName: "Campus", Icon: "landmark",
 	}); err != nil {
 		t.Fatalf("upsert campus: %v", err)
 	}
 	// Re-upsert building with a new display_name and icon: idempotent update, not
 	// a dup, and the icon is part of what the update carries.
 	if err := gw.UpsertLocationType(ctx, storage.LocationType{
-		ID: "building", Official: true, DisplayName: "Bldg", Icon: "building-2",
+		Name: "building", Official: true, DisplayName: "Bldg", Icon: "building-2",
 	}); err != nil {
 		t.Fatalf("re-upsert building: %v", err)
 	}
@@ -43,8 +43,8 @@ func TestLocationTypeRegistry(t *testing.T) {
 	}
 	// Ordered alphabetically by display_name: "Bldg" (building) before "Campus"
 	// (campus), not insertion order and not id order.
-	if types[0].ID != "building" || types[1].ID != "campus" {
-		t.Errorf("type order = %s,%s, want building,campus", types[0].ID, types[1].ID)
+	if types[0].Name != "building" || types[1].Name != "campus" {
+		t.Errorf("type order = %s,%s, want building,campus", types[0].Name, types[1].Name)
 	}
 	if types[0].DisplayName != "Bldg" {
 		t.Errorf("building display_name = %q, want Bldg (the update took)", types[0].DisplayName)
@@ -60,12 +60,12 @@ func TestLocationTypeRegistry(t *testing.T) {
 	// allowed_parent_types round-trips: a bare upsert (no set given) defaults to
 	// an empty (non-nil) slice, not SQL null, and a populated set persists.
 	if err := gw.UpsertLocationType(ctx, storage.LocationType{
-		ID: "wing", Official: true, DisplayName: "Wing", Icon: "layers",
+		Name: "wing", Official: true, DisplayName: "Wing", Icon: "layers",
 	}); err != nil {
 		t.Fatalf("upsert wing (no allowed_parent_types): %v", err)
 	}
 	if err := gw.UpsertLocationType(ctx, storage.LocationType{
-		ID: "room", Official: true, DisplayName: "Room", Icon: "door-open",
+		Name: "room", Official: true, DisplayName: "Room", Icon: "door-open",
 		AllowedParentTypes: []string{"wing", storage.RootPlacement},
 	}); err != nil {
 		t.Fatalf("upsert room (with allowed_parent_types): %v", err)
@@ -76,7 +76,7 @@ func TestLocationTypeRegistry(t *testing.T) {
 	}
 	byID := make(map[string]storage.LocationType, len(types))
 	for _, lt := range types {
-		byID[lt.ID] = lt
+		byID[lt.Name] = lt
 	}
 	if got := byID["wing"].AllowedParentTypes; got == nil || len(got) != 0 {
 		t.Errorf("wing allowed_parent_types = %#v, want empty (non-nil) slice", got)

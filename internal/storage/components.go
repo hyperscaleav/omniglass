@@ -29,11 +29,25 @@ type Component struct {
 	Name        string
 	DisplayName string
 	ParentID    *string
-	SystemID    *string
-	LocationID  *string
-	ProductID   *string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	// PrimarySystem is the name of the component's default system, and SystemCount
+	// how many it belongs to in total. Both are derived from system_member rather
+	// than stored: a component can be in several systems, so there is no single
+	// pointer to keep. The name rather than an id, because a name is the address
+	// the API speaks.
+	PrimarySystem   *string
+	PrimarySystemID *string
+	SystemCount     int
+	// ParentName and LocationName are how the API addresses this component's
+	// placement. The *ID fields beside them are internal: a uuid is identity, never
+	// a reference that leaves the process.
+	ParentName   *string
+	LocationName *string
+	LocationID   *string
+	ProductID    *string
+	// ProductHandle is the product's kebab name, projected for display beside the id.
+	ProductHandle *string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // ComponentSpec is the create input. ParentName nil makes a root component;
@@ -60,11 +74,25 @@ type ComponentPatch struct {
 
 // --- component CRUD (read/delete via the generic helpers) --------------------
 
-const componentCols = `id, name, coalesce(display_name, ''), parent_id, system_id, location_id, product_id, created_at, updated_at`
+const componentCols = `id, name, coalesce(display_name, ''), parent_id,
+	-- The primary membership, both forms: the name for display and the id as the
+	-- canonical handle. The arc points at the primary key, so the join is by id.
+	(select s.name from system s join system_member m on m.system_id = s.id
+	  where m.component_id = component.id and m.is_primary) as primary_system,
+	(select m.system_id from system_member m where m.component_id = component.id and m.is_primary) as primary_system_id,
+	(select count(*) from system_member m where m.component_id = component.id) as system_count,
+	location_id, product_id,
+	-- The names the API addresses these by. The ids stay for the scope walks and
+	-- tree joins, which are internal; a name is what leaves the process.
+	(select p.name from component p where p.id = component.parent_id) as parent_name,
+	(select l.name from location l where l.id = component.location_id) as location_name,
+	(select pr.name from product pr where pr.id = component.product_id) as product_handle,
+	created_at, updated_at`
 
 func scanComponent(row pgx.Row) (*Component, error) {
 	var c Component
-	if err := row.Scan(&c.ID, &c.Name, &c.DisplayName, &c.ParentID, &c.SystemID, &c.LocationID, &c.ProductID, &c.CreatedAt, &c.UpdatedAt); err != nil {
+	if err := row.Scan(&c.ID, &c.Name, &c.DisplayName, &c.ParentID, &c.PrimarySystem, &c.PrimarySystemID, &c.SystemCount,
+		&c.LocationID, &c.ProductID, &c.ParentName, &c.LocationName, &c.ProductHandle, &c.CreatedAt, &c.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &c, nil
@@ -138,13 +166,13 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 		parentID = &parent.ID
 	}
 
-	var systemID *string
+	// A system named at create becomes a MEMBERSHIP rather than a column on the
+	// component: the relation lives in system_member, and this is simply the first
+	// one. Resolved here so an unknown name is a 422 before anything is written.
 	if spec.SystemName != nil {
-		s, err := scopedByName(ctx, tx, systemConfig, *spec.SystemName)
-		if err != nil {
+		if _, err := scopedByName(ctx, tx, systemConfig, *spec.SystemName); err != nil {
 			return nil, err // ErrSystemNotFound -> 422
 		}
-		systemID = &s.ID
 	}
 	var locationID *string
 	if spec.LocationName != nil {
@@ -161,7 +189,7 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 	var productID *string
 	if spec.ProductName != nil {
 		var pid string
-		err := tx.QueryRow(ctx, `select id from product where id = $1`, *spec.ProductName).Scan(&pid)
+		err := tx.QueryRow(ctx, `select id from product where `+registryRefCol(*spec.ProductName)+` = $1`, *spec.ProductName).Scan(&pid)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrProductNotFound
 		} else if err != nil {
@@ -171,12 +199,23 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 	}
 
 	c, err := scanComponent(tx.QueryRow(ctx, `
-		insert into component (name, display_name, parent_id, system_id, location_id, product_id)
-		values ($1, $2, $3, $4, $5, $6)
+		insert into component (name, display_name, parent_id, location_id, product_id)
+		values ($1, $2, $3, $4, $5)
 		returning `+componentCols,
-		spec.Name, nullize(spec.DisplayName), parentID, systemID, locationID, productID))
+		spec.Name, nullize(spec.DisplayName), parentID, locationID, productID))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
+	}
+	// The membership after the row exists, since it references the component by
+	// name. Re-read so the returned component carries the primary it just gained.
+	if spec.SystemName != nil {
+		if err := addMemberTx(ctx, tx, *spec.SystemName, spec.Name); err != nil {
+			return nil, err
+		}
+		if c, err = scanComponent(tx.QueryRow(ctx,
+			`select `+componentCols+` from component where id = $1`, c.ID)); err != nil {
+			return nil, fmt.Errorf("storage: re-read component after membership: %w", err)
+		}
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "create", "component", c.ID, nil, c); err != nil {
 		return nil, err
@@ -206,23 +245,36 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 			return nil, err
 		}
 	}
+	// A product reference arrives as a handle or a uuid; the column stores the
+	// uuid. An unknown one resolves to nothing and is reported by name.
+	var patchProductID *string
+	if patch.ProductName != nil && *patch.ProductName != "" {
+		var pid string
+		err := tx.QueryRow(ctx, `select id from product where `+registryRefCol(*patch.ProductName)+` = $1`, *patch.ProductName).Scan(&pid)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrProductNotFound
+		} else if err != nil {
+			return nil, fmt.Errorf("storage: resolve product %q: %w", *patch.ProductName, err)
+		}
+		patchProductID = &pid
+	}
 	after, err := scanComponent(tx.QueryRow(ctx, `
 		update component set
 			name         = coalesce($2, name),
 			display_name = coalesce($3, display_name),
 			-- product_id takes the house three states: a nil field is unchanged, an
-			-- explicit empty string clears it, anything else is the new product (whose
-			-- id is its name, so it goes in as given; an unknown one comes back from
-			-- the FK as the named ErrProductNotFound).
+			-- explicit empty string clears it, anything else names a product by
+			-- handle or uuid and is resolved to its id (an unknown one lands as NULL
+			-- and is caught below).
 			product_id   = case
 				when $4::text is null then product_id
 				when $4 = '' then null
-				else $4
+				else $5::uuid
 			end,
 			updated_at   = now()
 		where id = $1
 		returning `+componentCols,
-		before.ID, patch.Name, patch.DisplayName, patch.ProductName))
+		before.ID, patch.Name, patch.DisplayName, patch.ProductName, patchProductID))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
 	}
@@ -261,10 +313,10 @@ type ComponentInterface struct {
 // interfaces by the verified name.
 func (p *PG) ListComponentInterfaces(ctx context.Context, componentName string) ([]ComponentInterface, error) {
 	rows, err := p.pool.Query(ctx, `
-		select name, type, coalesce(node_name, ''), params
-		from interface
-		where component = $1
-		order by name asc`, componentName)
+		select i.name, (select it.name from interface_type it where it.id = i.type), coalesce((select n.name from node n where n.principal_id = i.node_name), ''), i.params
+		from interface i
+		where i.component = (select id from component where name = $1)
+		order by i.name asc`, componentName)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list interfaces for %s: %w", componentName, err)
 	}
@@ -291,8 +343,6 @@ func mapComponentWriteErr(err error) error {
 			return ErrComponentExists
 		case "23503":
 			switch pgErr.ConstraintName {
-			case "component_system_id_fkey":
-				return ErrSystemNotFound
 			case "component_location_id_fkey":
 				return ErrLocationNotFound
 			case "component_product_id_fkey":

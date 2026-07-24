@@ -39,22 +39,22 @@ func tagEstate(t *testing.T, gw storage.Gateway) (campus, room, sysID, compID st
 }
 
 // TestEffectiveTagsComponent covers the full four-band cascade for a component:
-// union on key, override on value (system beats location beats global), and the
+// union on key, override on value (system beats location beats platform), and the
 // non-propagating key resolving only from the component itself.
 func TestEffectiveTagsComponent(t *testing.T) {
 	gw := tagGateway(t)
 	ctx := context.Background()
 	_, _, _, compID := tagEstate(t, gw)
 
-	mustTag(t, gw, "environment", nil, true)  // cascades
-	mustTag(t, gw, "compliance", nil, true)   // cascades
-	mustTag(t, gw, "asset_id", nil, false)    // non-propagating (flat)
+	mustTag(t, gw, "environment", nil, true) // cascades
+	mustTag(t, gw, "compliance", nil, true)  // cascades
+	mustTag(t, gw, "asset_id", nil, false)   // non-propagating (flat)
 
-	mustBind(t, gw, "environment", "global", nil, "prod")
+	mustBind(t, gw, "environment", "platform", nil, "prod")
 	mustBind(t, gw, "environment", "location", strptr("campus"), "staging")
 	mustBind(t, gw, "environment", "system", strptr("av"), "dev") // most specific band for this key
 	mustBind(t, gw, "compliance", "location", strptr("campus"), "pci")
-	mustBind(t, gw, "asset_id", "system", strptr("av"), "SYS-1")   // must NOT reach the component
+	mustBind(t, gw, "asset_id", "system", strptr("av"), "SYS-1") // must NOT reach the component
 	mustBind(t, gw, "asset_id", "component", strptr("codec"), "C-42")
 
 	got, err := gw.EffectiveTags(ctx, "component", []string{compID})
@@ -74,7 +74,7 @@ func TestEffectiveTagsComponent(t *testing.T) {
 }
 
 // TestEffectiveTagsSystem covers the design decision that a system inherits its
-// own location's tags: global + its location tree + its system tree.
+// own location's tags: platform + its location tree + its system tree.
 func TestEffectiveTagsSystem(t *testing.T) {
 	gw := tagGateway(t)
 	ctx := context.Background()
@@ -84,7 +84,7 @@ func TestEffectiveTagsSystem(t *testing.T) {
 	mustTag(t, gw, "compliance", nil, true)
 	mustTag(t, gw, "asset_id", nil, false)
 
-	mustBind(t, gw, "environment", "global", nil, "prod")
+	mustBind(t, gw, "environment", "platform", nil, "prod")
 	mustBind(t, gw, "compliance", "location", strptr("campus"), "pci") // only at the location
 	mustBind(t, gw, "asset_id", "location", strptr("campus"), "LOC-1") // non-propagating: must NOT reach the system
 	mustBind(t, gw, "asset_id", "system", strptr("av"), "SYS-1")       // own binding: resolves
@@ -95,7 +95,7 @@ func TestEffectiveTagsSystem(t *testing.T) {
 	}
 	m := got[sysID]
 	if m["environment"] != "prod" {
-		t.Errorf("environment = %q, want prod (global)", m["environment"])
+		t.Errorf("environment = %q, want prod (platform)", m["environment"])
 	}
 	if m["compliance"] != "pci" {
 		t.Errorf("compliance = %q, want pci: a placed system inherits its location's tags", m["compliance"])
@@ -105,7 +105,7 @@ func TestEffectiveTagsSystem(t *testing.T) {
 	}
 }
 
-// TestEffectiveTagsLocation covers a location resolving global + its own location
+// TestEffectiveTagsLocation covers a location resolving platform + its own location
 // tree, most-specific-wins.
 func TestEffectiveTagsLocation(t *testing.T) {
 	gw := tagGateway(t)
@@ -114,7 +114,7 @@ func TestEffectiveTagsLocation(t *testing.T) {
 
 	mustTag(t, gw, "environment", nil, true)
 
-	mustBind(t, gw, "environment", "global", nil, "prod")
+	mustBind(t, gw, "environment", "platform", nil, "prod")
 	mustBind(t, gw, "environment", "location", strptr("campus"), "staging")
 	mustBind(t, gw, "environment", "location", strptr("room"), "lab")
 
@@ -123,7 +123,7 @@ func TestEffectiveTagsLocation(t *testing.T) {
 		t.Fatalf("effective: %v", err)
 	}
 	if got[campusID]["environment"] != "staging" {
-		t.Errorf("campus environment = %q, want staging (own binding over global)", got[campusID]["environment"])
+		t.Errorf("campus environment = %q, want staging (own binding over platform)", got[campusID]["environment"])
 	}
 	if got[roomID]["environment"] != "lab" {
 		t.Errorf("room environment = %q, want lab (nearest location wins)", got[roomID]["environment"])

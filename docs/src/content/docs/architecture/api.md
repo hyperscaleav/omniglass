@@ -50,7 +50,7 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   bounded to that target and behind the owner takeover guard. `POST /principals/{id}/sessions:revokeAll` (a
   `{ purpose }` body, same gate and guard) bulk-ends all of one kind at once, returning the count.
 - **Singular kind sub-segments** for the typed families: `/rules/calc`, `/datapoints/metric`,
-  `/types/location`.
+  `/location-types`.
 - **Collection-level custom methods** carry the colon on the collection, not a member:
   `POST /systems:checkName` (also `/components:checkName`, `/locations:checkName`) is an advisory
   precheck for a technical-name rename, returning `{ valid, available, reason }`. It is gated by
@@ -250,19 +250,21 @@ gates on **`secret:reveal`**, a permission the `*:read` floor does **not** carry
 everything" grant sees only masks and **only admin (`secret:*`) and owner (`>`) reveal**. Every
 `:reveal` writes an [audit](/architecture/audit/) row (verb `reveal`) in the same call.
 
-- `GET /types/secret` lists the shape registry, each `{id, display_name, official, fields:[{name, type,
+- `GET /secret-types` lists the shape registry, each `{id, name, display_name, official, fields:[{name, type,
   secret, origin}]}` (`secret:read`).
 - `GET /secrets` is the **all-scope admin directory** (`{secrets: [secret]}`); like the principal
   directory it needs an all-scope grant, and a non-all scope is a 403 (`secret:read`).
-- `POST /secrets` creates one from `{name, secret_type, owner_kind: global|location|system|component,
-  owner?, fields}` (201, `secret:create`); a `global` secret needs an all-scope grant.
+- `POST /secrets` creates one from `{name, secret_type, owner_kind: platform|location|system|component,
+  owner?, fields}` (201, `secret:create`); a `platform` secret needs an all-scope grant **and**
+  `platform:create` (the install-wide tier permission below). `PATCH` and `DELETE` on a secret that sits at
+  the tier likewise take `platform:update` / `platform:delete`.
 - `PATCH /secrets/{id}` re-seals the given `fields`, merged over the stored value so an omitted field
   keeps its value (`secret:update`).
 - `DELETE /secrets/{id}` removes it (204, `secret:delete`).
 - `POST /secrets/{id}:reveal` returns the decrypted `{fields: {name: plaintext}}` (`secret:reveal`,
   audited).
 
-A secret's fields are masked in every read: the `secret` body (`{id, name, secret_type, owner_kind,
+A secret's fields are masked in every read: the `secret` body (`{id, name, secret_type, secret_type_id, owner_kind,
 owner_id?, owner_name?, fields:[{name, value, secret}]}`) returns `••••••` for a secret field, and only
 `:reveal` returns plaintext.
 
@@ -276,8 +278,9 @@ operators); `DELETE` gates on `variable:delete` (admin, owner). The value is pol
 - `GET /variables` is the **all-scope admin directory** (`{variables: [variable]}`); like the secret
   directory it needs an all-scope grant, and a non-all scope is a 403 (`variable:read`).
 - `POST /variables` creates one from `{name, value_type: string|int|float|bool|json, owner_kind:
-  global|location|system|component, owner?, value}` (201, `variable:create`); a `global` variable needs
-  an all-scope grant, and the `value` is validated against `value_type`.
+  platform|location|system|component, owner?, value}` (201, `variable:create`); a `platform` variable needs
+  an all-scope grant **and** `platform:create`, and the `value` is validated against `value_type`. `PATCH`
+  and `DELETE` on a variable at the tier likewise take `platform:update` / `platform:delete`.
 - `PATCH /variables/{id}` replaces the `value` (validated against the fixed `value_type`;
   `variable:update`).
 - `DELETE /variables/{id}` removes it (204, `variable:delete`).
@@ -298,9 +301,9 @@ owning entity's own write. The key vocabulary and an entity's tags read on the v
 - `PATCH /tags/{name}` replaces a key's `{applies_to?, propagates?}` (`tag:update`, all-scope); the name
   is fixed.
 - `DELETE /tags/{name}` removes a key, cascading its bindings (204, `tag:delete`, all-scope).
-- `POST /tags/{name}:setGlobal` sets the **global** value for a key from `{value}` (`tag:update`);
-  `POST /tags/{name}:clearGlobal` removes it (204). A global binding has no owning entity, so it gates on
-  `tag:update`.
+- `POST /tags/{name}:setPlatform` sets the **platform-tier** value for a key from `{value}`;
+  `POST /tags/{name}:clearPlatform` removes it (204). A platform binding has no owning entity, so it gates on
+  `tag:update` plus `platform:update` (the install-wide tier permission below).
 - `GET /{components,systems,locations,nodes}/{name}:listTags` lists the bindings set **directly** on one entity
   (`{tags: [tagBinding]}`, the entity's `:read`).
 - `POST /{components,systems,locations,nodes}/{name}:setTag` binds a value from `{key, value}` on the entity;
@@ -316,8 +319,8 @@ owning entity's own write. The key vocabulary and an entity's tags read on the v
   component read-scope).
 - The directory list routes (`GET /components`, `/systems`, `/locations`) each carry an **`effective_tags`**
   map (`{key: winning_value}`, winners only) on every row, resolved for the whole page in one batched query.
-  It feeds the Tags column. A component resolves the full arc; a location resolves global plus its location
-  tree; a system resolves global, its system tree, and the location it is placed at. Provenance lives in the
+  It feeds the Tags column. A component resolves the full arc; a location resolves `platform` plus its location
+  tree; a system resolves `platform`, its system tree, and the location it is placed at. Provenance lives in the
   per-entity effective-tags detail, not the row.
 
 A `tagBinding` body is `{key, value, owner_kind, owner_id?, owner_name?}`.
@@ -330,20 +333,26 @@ list and read routes sit on the viewer floor (`vendor:read` / `driver:read` / `c
 `<resource>:delete`, all at the admin tier, exactly like `type:*`. An **official** (seed-owned) row is
 read-only (`PATCH` and `DELETE` both 422).
 
+**Every registry body carries both handles** ([ADR-0062](/architecture/decisions/#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle)):
+a uuid **`id`** (stable identity, the target every foreign key stores) and a unique, renameable **`name`**
+(the kebab handle an operator reads and types). A create takes `name`; the uuid is the database's to mint.
+A path or a reference (`vendor`, `driver`, a parent) resolves whichever form it is given, since a kebab
+handle can never look like a uuid.
+
 A **vendor** (Crestron, Biamp, ...) names an organization, generalizing the former manufacturer-only
 `component_make` with a **`kind`** of `manufacturer` / `integrator` / `developer` (default
 `manufacturer`, a 422 for any other value).
 
 - `GET /vendors` lists the registry, ordered alphabetically by display name (`{vendors: [vendor]}`,
   `vendor:read`).
-- `POST /vendors` mints a custom vendor from `{id, display_name, kind?, icon?, support_phone?, website?}`
+- `POST /vendors` mints a custom vendor from `{name, display_name, kind?, icon?, support_phone?, website?}`
   (201, `vendor:create`, admin).
 - `GET /vendors/{id}` reads one (`vendor:read`).
 - `PATCH /vendors/{id}` updates `{display_name?, kind?, icon?, support_phone?, website?}` (`vendor:update`,
   admin).
 - `DELETE /vendors/{id}` removes a custom vendor (204, `vendor:delete`, admin).
 
-A `vendor` body is `{id, display_name, kind, icon, support_phone, website, official}`. `website` is
+A `vendor` body is `{id, name, display_name, kind, icon, support_phone, website, official}`. `website` is
 validated to an `http`/`https` scheme on write (a 422 for any other scheme, for example `javascript:`).
 
 A **driver** (Generic SNMP, Cisco xAPI, ...) names the implementation that gets, emits, or sets a
@@ -351,12 +360,12 @@ product's signals, with an optional **`version`**.
 
 - `GET /drivers` lists the registry, ordered alphabetically by display name (`{drivers: [driver]}`,
   `driver:read`).
-- `POST /drivers` mints a custom driver from `{id, display_name, version?}` (201, `driver:create`, admin).
+- `POST /drivers` mints a custom driver from `{name, display_name, version?}` (201, `driver:create`, admin).
 - `GET /drivers/{id}` reads one (`driver:read`).
 - `PATCH /drivers/{id}` updates `{display_name?, version?}` (`driver:update`, admin).
 - `DELETE /drivers/{id}` removes a custom driver (204, `driver:delete`, admin).
 
-A `driver` body is `{id, display_name, version, official}`.
+A `driver` body is `{id, name, display_name, version, official}`.
 
 A **capability** (Microphone, Display, ...) names what a component can do. It is the vocabulary two other
 surfaces consume: a **product** declares the set its instances provide, a **component** adds to or
@@ -365,13 +374,13 @@ suppresses that set with [its own facts](#roles-a-system-declares-a-slot-a-compo
 
 - `GET /capabilities` lists the registry, ordered alphabetically by display name
   (`{capabilities: [capability]}`, `capability:read`).
-- `POST /capabilities` mints a custom capability from `{id, display_name}` (201, `capability:create`,
+- `POST /capabilities` mints a custom capability from `{name, display_name}` (201, `capability:create`,
   admin).
 - `GET /capabilities/{id}` reads one (`capability:read`).
 - `PATCH /capabilities/{id}` updates `{display_name?}` (`capability:update`, admin).
 - `DELETE /capabilities/{id}` removes a custom capability (204, `capability:delete`, admin).
 
-A `capability` body is `{id, display_name, official}`.
+A `capability` body is `{id, name, display_name, official}`.
 
 A **product** ([core entities](/architecture/core-entities/#catalog-reference-data-product)) is the
 concrete **SKU** that ties the leaf catalogs together: a **vendor** (who makes it), a **driver** (what
@@ -395,7 +404,8 @@ read-only (`PATCH` and `DELETE` both 422).
   refused (422), and a product still referenced by a component is refused (409).
 
 A `product` body is
-`{id, display_name, kind, vendor_id, driver_id, parent_product_id, capabilities, official}`. An unknown
+`{id, name, display_name, kind, vendor, vendor_id, driver, driver_id, parent_product_id, capabilities, official}`.
+The `vendor` and `driver` handles read the referenced registry's current name beside its uuid. An unknown
 vendor / driver / parent / capability reference is a 422.
 
 A **standard** ([core entities](/architecture/core-entities/#catalog-reference-data-standard)) is the
@@ -407,16 +417,33 @@ gate on `standard:create` / `:update` / `:delete` at the admin tier.
 
 - `GET /standards` lists the catalog, ordered alphabetically by display name (`{standards: [standard]}`,
   `standard:read`).
-- `POST /standards` mints a standard from `{id, display_name, parent_standard_id?}` (201,
+- `POST /standards` mints a standard from `{name, display_name, parent_standard_id?}` (201,
   `standard:create`, admin).
 - `GET /standards/{id}` reads one (`standard:read`).
 - `PATCH /standards/{id}` updates `{display_name?, parent_standard_id?}` (`standard:update`, admin).
 - `DELETE /standards/{id}` removes one (204, `standard:delete`, admin); a standard still referenced by a
   system is refused (409).
 
-A `standard` body is `{id, display_name, parent_standard_id, official}`. An unknown parent is a 422. The
+A `standard` body is `{id, name, display_name, parent_standard_id, official}`. An unknown parent is a 422. The
 **shipped** standards are `official: false`, so unlike a seeded product they are fully editable
 ([the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs)).
+
+### The install-wide tier permission
+
+The cascade's least-specific tier is **`platform`** ([cascade](/architecture/cascade/)), and a write that lands
+there needs **two** permissions: the resource's own (`secret:create`, `variable:update`, `tag:update`,
+`settings:update`) **and** `platform:<action>`. Estate **scope** and install-wide **authority** are different
+questions, and an all-scope grant answers only the first: a senior operator can run every site without being
+able to move the value that applies to the whole install under them
+([identity and access](/architecture/identity-access/#install-wide-authority-is-not-estate-scope)). `platform:*`
+is seeded to `admin` (and to `owner` through `>`); `operator` and `deploy` deliberately do not hold it.
+
+The tier gate is **published in the spec** like every primary gate: a route that can write at the tier carries an
+`x-omniglass-platform-permission` extension beside its `x-omniglass-permission` stamp, and both land in the
+route-derived permission universe the Roles view reports. Where the request body names the tier
+(`owner_kind: platform`, and every settings write) the handler checks it up front; where only the stored row
+knows its tier (an update or delete by id) the resolved capability rides into the Gateway alongside the ABAC
+scope, so the 404-versus-403 split stays non-disclosing.
 
 ## Properties: a classifier declares, an instance sets
 
@@ -433,12 +460,12 @@ contract, on identical route shapes:
   `standard:read` / `:update` / `:delete`.
 - `GET /location-types/{id}/properties`, `PUT` / `DELETE /location-types/{id}/properties/{property}`,
   gated `type:read` / `:update` / `:delete` (the location type registry is still a `type` registry, so
-  its contract keeps that permission story). Note the path: the registry CRUD stays at `/types/location`,
+  its contract keeps that permission story). Note the path: the registry CRUD stays at `/location-types`,
   while its contract hangs off the plural `/location-types` collection.
 
 The list returns `{properties: [contractProperty]}` ordered by property name, each
-`{property_name, default_value, required}`: the label and type are the catalog's to serve, so a surface
-that wants them reads `/properties` alongside. `PUT` takes `{default_value?, required?}`. `DELETE`
+`{property_type_name, property_type_id, default_value, required}`: the label and type are the catalog's to serve, so a surface
+that wants them reads `/property-types` alongside. `PUT` takes `{default_value?, required?}`. `DELETE`
 withdraws the line (204); instances **keep** any value they set for it, now off contract. An **official**
 (seed-owned) classifier is read-only (422), an unknown classifier is a 404, and a property the catalog
 does not know is a 422.

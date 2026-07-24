@@ -9,7 +9,7 @@ import { ChevronRight } from "./icons";
 //
 //  - Origin treatment. An override reads with WEIGHT (emphasize); the noisy
 //    default origin (empty or "default") shows NO badge; a real origin
-//    ("Global", a location, "override") keeps a neutral text badge. The signal
+//    ("Platform", a location, "override") keeps a neutral text badge. The signal
 //    is weight plus text, never colour alone (accessible), and there is no
 //    edge/selection bar (an edge bar reads as "this row is selected").
 //  - No editable control outside edit mode. With editing false the row renders
@@ -34,7 +34,7 @@ export default function KVRow(props: {
   input?: JSX.Element;
   // Inline action buttons (set / revert / copy / reveal / generate), in the join.
   actions?: JSX.Element;
-  // Origin badge text ("override", "Global", a location). Empty or "default"
+  // Origin badge text ("override", "Platform", a location). Empty or "default"
   // suppresses the badge (origin treatment).
   origin?: string;
   // Weight the label to mark an override (the scan signal, not colour).

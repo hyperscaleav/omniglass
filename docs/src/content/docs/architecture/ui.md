@@ -91,7 +91,7 @@ earns it, the same earn-it-with-a-profile discipline. Presentation that depends 
 level's id to its label and color) resolves client-side from the config view. A datapoint
 value resolves the same way: on read the UI converts canonical to the operator's preferred
 display unit, looked up from the unit registry by the [datapoints](/architecture/datapoints/)
-datapoint_type's canonical unit, so storage stays single-unit while one operator sees
+property_type's canonical unit, so storage stays single-unit while one operator sees
 Celsius and another Fahrenheit.
 
 :::caution[Open question]
@@ -209,7 +209,7 @@ fires on expiry) rather than a modal confirm. This retires the copy-pasted `wind
 gives every delete an escape hatch, while the genuinely irreversible admin actions keep an explicit
 typed confirm. The rejected alternatives (a `ctrl+d` that collides with the browser bookmark shortcut, a
 hidden shift-click that skips the confirm) and the client-deferred-versus-server-soft-delete call are
-recorded in [ADR-0052](/architecture/decisions/#adr-0052-operator-deletes-become-undoable-not-modifier-chorded).
+recorded in [ADR-0064](/architecture/decisions/#adr-0064-operator-deletes-become-undoable-not-modifier-chorded).
 
 The theme is **dark-first** (the NOC aesthetic) on the brand palette (teal `#21CAB9`, navy
 `#080c16`), semantic tokens only, no hardcoded colors in components.

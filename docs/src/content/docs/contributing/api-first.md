@@ -30,6 +30,41 @@ One command runs them all (`make gen`); each has a focused target (`make gen-api
 `gen-cli`, `gen-schema`, `gen-proto`). The committed `*.pb.go` and JSONSchema let a
 contributor build without protoc or a running server.
 
+## A name is the address, a uuid is identity
+
+**Every response carries both forms of a reference: the name an operator reads and the id it
+resolves to.** `{"parent": "rack", "parent_id": "0198f..."}`. The name is what a human types
+and what a body round-trips; the id is the stable handle that survives a rename. A response
+that carries only the uuid is the failure this rule names.
+
+The test is a **round trip**: a response body can be fed back to the write that produced it.
+Create a component with `{"parent": "rack"}` and read it back as `{"parent": "rack"}`, not as
+`{"parent_id": "0198f2c4-..."}`. When that fails, every client has to fetch a second
+collection and join by uuid to render one label, and they each do it slightly differently.
+
+One exception, narrow: **an entity with no name** is legitimately addressed by id, an interface
+(its name is unique only within its component), a stored property value, an audit row, a grant, a
+principal. A **registry** used to be a second exception, a slug-keyed catalog whose id *was* its
+name (`product_id: "cisco-room-bar"`); that is gone. Every registry now has a uuid primary key and
+a renameable `name` ([ADR-0062](/architecture/decisions/#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle)),
+so it obeys the rule like any estate entity.
+
+**Every foreign key stores the target's primary key**, a uuid, with no exception. A rename then
+has nothing to rewrite: the friendly name is free to change precisely because nothing points at
+it. A `_id` column holding a name, kept alive by `on update cascade`, is the shape this rule
+exists to prevent; the cascade is machinery that only exists to fund the wrong choice. That
+machinery is now retired everywhere, including the last place it lived, the registries.
+
+**A path or a join field accepts either form.** `GET /components/{ref}` and a body's
+`{"parent": "..."}` both take a uuid or a name; the uuid is tried first, so an id never
+collides with a name. Operators type names, scripts hold ids, and neither has to convert.
+
+`TestReferencesCarryBothForms` enforces this over the generated OpenAPI in both directions, so a body
+cannot silently reintroduce a uuid-only reference (a `*_id` with no name) nor a name-only registry
+reference (a registry handle with no id). Its exempt list is the whole of the remaining
+exception (the nameless entities and a still-slug-keyed taxonomy), and adding to it is a decision:
+if the target has a name, carry the name.
+
 ## Conventions (AIP-style)
 
 These are the conventions a route follows while you write it; the complete [API
@@ -45,7 +80,7 @@ Every operation lives under `/api/v1/*`. The path shape is derivable, not specia
   `/nodes/{name}:heartbeat`, `/rules/calc:validate`, `/components/{name}:apply`,
   `/views/{id}:run`.
 - **Singular kind sub-segments**: `/rules/calc`, `/datapoints/metric`,
-  `/types/location`, `/types/event`.
+  `/location-types`, `/types/event`.
 - **official / private namespace** on every registry and rule family (below).
 - **List conventions** (AIP-132 target): `filter` / `orderBy` / `pageSize`+
   `pageToken` (cursor, never offset) / `fields`. The `filter` runs through the one pluggable

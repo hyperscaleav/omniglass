@@ -538,7 +538,7 @@ function GrantEditor(props: { principal: Principal; editing: boolean; canGrant: 
 
   const entities = (kind: "location" | "system" | "component"): TreeNode[] => {
     const list = kind === "location" ? locations.data ?? [] : kind === "system" ? systems.data ?? [] : components.data ?? [];
-    return list.map((e) => ({ id: e.id, value: e.id, label: e.name, parentId: e.parent_id, rank: 0 }));
+    return list.map((e) => ({ id: e.id, value: e.id, label: e.name, parentId: e.parent, rank: 0 }));
   };
 
   async function onSave(diff: { adds: GrantRef[]; removes: ExistingGrant[] }) {

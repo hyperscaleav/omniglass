@@ -34,7 +34,7 @@ func TestEffectivePropertiesByOwnerKind(t *testing.T) {
 	// --- system: resolves against its standard's contract ---------------------
 
 	if _, err := gw.SetStandardProperty(ctx, "", "huddle-room", storage.StandardPropertySpec{
-		PropertyName: "model_number", DefaultValue: json.RawMessage(`"HR-1"`),
+		PropertyTypeName: "model_number", DefaultValue: json.RawMessage(`"HR-1"`),
 	}); err != nil {
 		t.Fatalf("declare on standard: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestEffectivePropertiesByOwnerKind(t *testing.T) {
 	}
 
 	// The system's own value overrides the standard's default.
-	if _, err := gw.SetPropertyValue(ctx, "", "system", "hq-huddle", "model_number", "", json.RawMessage(`"HR-2"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "system", "hq-huddle", "model_number", "", json.RawMessage(`"HR-2"`), all); err != nil {
 		t.Fatalf("override on system: %v", err)
 	}
 	sys = byName(mustResolveOwner(t, gw, "system", "hq-huddle", all))
@@ -58,7 +58,7 @@ func TestEffectivePropertiesByOwnerKind(t *testing.T) {
 	}
 
 	// A property the standard does not declare still resolves, flagged off-contract.
-	if _, err := gw.SetPropertyValue(ctx, "", "system", "hq-huddle", "serial_number", "", json.RawMessage(`"S-1"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "system", "hq-huddle", "serial_number", "", json.RawMessage(`"S-1"`), all); err != nil {
 		t.Fatalf("ad-hoc on system: %v", err)
 	}
 	sys = byName(mustResolveOwner(t, gw, "system", "hq-huddle", all))
@@ -71,18 +71,18 @@ func TestEffectivePropertiesByOwnerKind(t *testing.T) {
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "one-off"}, all); err != nil {
 		t.Fatalf("create one-off system: %v", err)
 	}
-	if _, err := gw.SetPropertyValue(ctx, "", "system", "one-off", "serial_number", "", json.RawMessage(`"S-9"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "system", "one-off", "serial_number", "", json.RawMessage(`"S-9"`), all); err != nil {
 		t.Fatalf("set on one-off: %v", err)
 	}
 	oneOff := mustResolveOwner(t, gw, "system", "one-off", all)
-	if len(oneOff) != 1 || oneOff[0].PropertyName != "serial_number" || oneOff[0].FromContract {
+	if len(oneOff) != 1 || oneOff[0].PropertyTypeName != "serial_number" || oneOff[0].FromContract {
 		t.Fatalf("one-off system: want a single ad-hoc serial_number, got %+v", oneOff)
 	}
 
 	// --- location: resolves against its location_type's contract --------------
 
 	if _, err := gw.SetLocationTypeProperty(ctx, "", "room", storage.LocationTypePropertySpec{
-		PropertyName: "model_number", DefaultValue: json.RawMessage(`"ROOM"`), Required: true,
+		PropertyTypeName: "model_number", DefaultValue: json.RawMessage(`"ROOM"`), Required: true,
 	}); err != nil {
 		t.Fatalf("declare on location_type: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestEffectivePropertiesByOwnerKind(t *testing.T) {
 
 	// --- the component path is unchanged (the PR5 shape still holds) ----------
 
-	if _, err := gw.SetPropertyValue(ctx, "", "component", "ghost-x", "serial_number", "", json.RawMessage(`"x"`), all); err == nil {
+	if _, err := gw.SetProperty(ctx, "", "component", "ghost-x", "serial_number", "", json.RawMessage(`"x"`), all); err == nil {
 		t.Fatal("unknown component owner: want a not-found error, got nil")
 	}
 }

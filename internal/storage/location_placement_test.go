@@ -31,7 +31,7 @@ func TestLocationPlacementEnforcement(t *testing.T) {
 
 	// A custom type with no allowed_parent_types (unconstrained): a root
 	// placement succeeds with no restriction.
-	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{ID: "pod", DisplayName: "Pod"}); err != nil {
+	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "pod", DisplayName: "Pod"}); err != nil {
 		t.Fatalf("create pod type: %v", err)
 	}
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "pod-root", LocationType: "pod"}, all); err != nil {
@@ -40,16 +40,16 @@ func TestLocationPlacementEnforcement(t *testing.T) {
 
 	// The fixture hierarchy: t-campus={root}, t-building={root,t-campus},
 	// t-floor={t-building,t-campus}, t-room={t-floor,t-building,t-campus}.
-	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{ID: "t-campus", DisplayName: "T-Campus", AllowedParentTypes: []string{storage.RootPlacement}}); err != nil {
+	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "t-campus", DisplayName: "T-Campus", AllowedParentTypes: []string{storage.RootPlacement}}); err != nil {
 		t.Fatalf("create t-campus type: %v", err)
 	}
-	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{ID: "t-building", DisplayName: "T-Building", AllowedParentTypes: []string{storage.RootPlacement, "t-campus"}}); err != nil {
+	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "t-building", DisplayName: "T-Building", AllowedParentTypes: []string{storage.RootPlacement, "t-campus"}}); err != nil {
 		t.Fatalf("create t-building type: %v", err)
 	}
-	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{ID: "t-floor", DisplayName: "T-Floor", AllowedParentTypes: []string{"t-building", "t-campus"}}); err != nil {
+	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "t-floor", DisplayName: "T-Floor", AllowedParentTypes: []string{"t-building", "t-campus"}}); err != nil {
 		t.Fatalf("create t-floor type: %v", err)
 	}
-	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{ID: "t-room", DisplayName: "T-Room", AllowedParentTypes: []string{"t-floor", "t-building", "t-campus"}}); err != nil {
+	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "t-room", DisplayName: "T-Room", AllowedParentTypes: []string{"t-floor", "t-building", "t-campus"}}); err != nil {
 		t.Fatalf("create t-room type: %v", err)
 	}
 
@@ -100,7 +100,7 @@ func TestLocationRootPlacementRejected(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{ID: "t-noroot", DisplayName: "T-Noroot", AllowedParentTypes: []string{"t-noroot"}}); err != nil {
+	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "t-noroot", DisplayName: "T-Noroot", AllowedParentTypes: []string{"t-noroot"}}); err != nil {
 		t.Fatalf("create t-noroot type: %v", err)
 	}
 
@@ -139,13 +139,13 @@ func TestLocationReparentEnforcement(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{ID: "t-campus", DisplayName: "T-Campus", AllowedParentTypes: []string{storage.RootPlacement}}); err != nil {
+	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "t-campus", DisplayName: "T-Campus", AllowedParentTypes: []string{storage.RootPlacement}}); err != nil {
 		t.Fatalf("create t-campus type: %v", err)
 	}
-	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{ID: "t-building", DisplayName: "T-Building", AllowedParentTypes: []string{storage.RootPlacement, "t-campus"}}); err != nil {
+	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "t-building", DisplayName: "T-Building", AllowedParentTypes: []string{storage.RootPlacement, "t-campus"}}); err != nil {
 		t.Fatalf("create t-building type: %v", err)
 	}
-	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{ID: "t-room", DisplayName: "T-Room", AllowedParentTypes: []string{"t-building", "t-campus"}}); err != nil {
+	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "t-room", DisplayName: "T-Room", AllowedParentTypes: []string{"t-building", "t-campus"}}); err != nil {
 		t.Fatalf("create t-room type: %v", err)
 	}
 
@@ -181,7 +181,7 @@ func TestLocationReparentEnforcement(t *testing.T) {
 
 	// Cycle guard, isolated from placement (an unconstrained custom type): a
 	// location cannot move under itself or its own descendant.
-	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{ID: "pod", DisplayName: "Pod"}); err != nil {
+	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "pod", DisplayName: "Pod"}); err != nil {
 		t.Fatalf("create pod type: %v", err)
 	}
 	mustCreate(t, gw, storage.LocationSpec{Name: "pod-a", LocationType: "pod"}, all)

@@ -101,7 +101,7 @@ func runAuthzMatrix(t *testing.T, e scopedEntity) {
 		t.Fatalf("connect: %v", err)
 	}
 	if _, err := conn.Exec(ctx,
-		`insert into role (id, official, permissions, inherits) values ($1, false, $2, '{}')`,
+		`insert into role (name, official, permissions, inherits) values ($1, false, $2, '{}')`,
 		writerRole, []string{writePerm}); err != nil {
 		t.Fatalf("insert %s role: %v", writerRole, err)
 	}
@@ -249,7 +249,7 @@ func principalWithGrants(t *testing.T, ctx context.Context, dsn, label string, g
 			op = "subtree"
 		}
 		if _, err := conn.Exec(ctx,
-			`insert into principal_grant (principal_id, role_id, scope_kind, scope_id, scope_op) values ($1, $2, $3, $4, $5)`,
+			`insert into principal_grant (principal_id, role_id, scope_kind, scope_id, scope_op) values ($1, (select id from role where name = $2), $3, $4, $5)`,
 			pid, g.role, g.scopeKind, scopeID, op); err != nil {
 			t.Fatalf("insert grant %+v: %v", g, err)
 		}

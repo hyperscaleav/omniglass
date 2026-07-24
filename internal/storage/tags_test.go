@@ -152,7 +152,7 @@ func TestTagBindingLifecycle(t *testing.T) {
 
 // TestTagBindingScope covers the owner-update gate: binding on an entity outside
 // the action scope is forbidden (readable) or not-found (unreadable), and a
-// global binding needs an all-scope action.
+// platform binding needs an all-scope action.
 func TestTagBindingScope(t *testing.T) {
 	gw := tagGateway(t)
 	ctx := context.Background()
@@ -172,12 +172,12 @@ func TestTagBindingScope(t *testing.T) {
 	if _, err := gw.SetTagBinding(ctx, "", "environment", "component", strptr("codec-1"), "prod", scope.Set{}, scope.Set{}); !errors.Is(err, storage.ErrComponentNotFound) {
 		t.Errorf("bind out of read scope = %v, want ErrComponentNotFound", err)
 	}
-	// A global binding needs an all-scope action.
-	if _, err := gw.SetTagBinding(ctx, "", "environment", "global", nil, "prod", scope.Set{}, scope.Set{}); !errors.Is(err, storage.ErrTagForbidden) {
-		t.Errorf("global bind without all = %v, want ErrTagForbidden", err)
+	// A platform binding needs an all-scope action.
+	if _, err := gw.SetTagBinding(ctx, "", "environment", "platform", nil, "prod", scope.Set{}, scope.Set{}); !errors.Is(err, storage.ErrTagForbidden) {
+		t.Errorf("platform bind without all = %v, want ErrTagForbidden", err)
 	}
-	if _, err := gw.SetTagBinding(ctx, "", "environment", "global", nil, "prod", all, all); err != nil {
-		t.Fatalf("global bind with all: %v", err)
+	if _, err := gw.SetTagBinding(ctx, "", "environment", "platform", nil, "prod", all, all); err != nil {
+		t.Fatalf("platform bind with all: %v", err)
 	}
 }
 
@@ -193,7 +193,7 @@ func TestTagCascadeResolve(t *testing.T) {
 	mustTag(t, gw, "asset_id", nil, false)   // flat, per-entity only
 
 	// environment overridden most-specific-wins down the cascade.
-	mustBind(t, gw, "environment", "global", nil, "prod")
+	mustBind(t, gw, "environment", "platform", nil, "prod")
 	mustBind(t, gw, "environment", "location", strptr("campus"), "staging")
 	mustBind(t, gw, "environment", "component", strptr("codec-1"), "dev")
 	// asset_id bound above the component (should NOT resolve, it is non-propagating)
@@ -201,7 +201,7 @@ func TestTagCascadeResolve(t *testing.T) {
 	mustBind(t, gw, "asset_id", "location", strptr("campus"), "LOC-1")
 	mustBind(t, gw, "asset_id", "component", strptr("codec-1"), "A-42")
 
-	resolved, err := gw.ResolveTags(ctx, comp.ID, all)
+	resolved, err := gw.ResolveTags(ctx, comp.ID, "", all)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
@@ -212,7 +212,7 @@ func TestTagCascadeResolve(t *testing.T) {
 		}
 	}
 	// environment: union produced one key, the component value wins over the
-	// location and global candidates.
+	// location and platform candidates.
 	if w := winners["environment"]; w.Value != "dev" || w.OwnerKind != "component" {
 		t.Errorf("environment winner = %+v, want dev on component", w)
 	}
@@ -232,7 +232,7 @@ func TestTagCascadeResolve(t *testing.T) {
 	if err := gw.DeleteTagBinding(ctx, "", "environment", "component", strptr("codec-1"), all, all); err != nil {
 		t.Fatalf("delete env component binding: %v", err)
 	}
-	resolved, _ = gw.ResolveTags(ctx, comp.ID, all)
+	resolved, _ = gw.ResolveTags(ctx, comp.ID, "", all)
 	for _, r := range resolved {
 		if r.Key == "environment" && r.Winner && (r.OwnerKind != "location" || r.Value != "staging") {
 			t.Errorf("environment winner after drop = %+v, want staging on location", r)
@@ -240,7 +240,7 @@ func TestTagCascadeResolve(t *testing.T) {
 	}
 
 	// A component outside the read scope does not disclose its cascade.
-	if _, err := gw.ResolveTags(ctx, comp.ID, scope.Set{IDs: []string{"00000000-0000-0000-0000-000000000000"}}); !errors.Is(err, storage.ErrComponentNotFound) {
+	if _, err := gw.ResolveTags(ctx, comp.ID, "", scope.Set{IDs: []string{"00000000-0000-0000-0000-000000000000"}}); !errors.Is(err, storage.ErrComponentNotFound) {
 		t.Errorf("out-of-scope resolve = %v, want ErrComponentNotFound", err)
 	}
 }

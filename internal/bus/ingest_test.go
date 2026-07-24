@@ -23,7 +23,7 @@ import (
 
 // TestTelemetryRoundTrip is the checkpoint-3 closing gate: a node runs a REAL tcp
 // probe against a live listener, ships the result as a protobuf Event over
-// JetStream, and the datapoint lands in metric_datapoint owned (server-side) by
+// JetStream, and the datapoint lands in metric owned (server-side) by
 // the target component. It then proves the two invariants are real, not faked:
 // (a) reject-not-project drops an unregistered datapoint name, and (b) the
 // confinement fence drops an Event whose task belongs to ANOTHER node. Both are
@@ -88,8 +88,8 @@ func TestTelemetryRoundTrip(t *testing.T) {
 		t.Fatalf("connect: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into interface (name, type, component, node_name, params) values
-		('disp-1-tcp', 'tcp', 'disp-1', 'node-a', $1::jsonb),
-		('disp-2-tcp', 'tcp', 'disp-2', 'node-b', '{"target":"127.0.0.1:1"}'::jsonb)`,
+		('disp-1-tcp', (select id from interface_type where name = 'tcp'), (select id from component where name = 'disp-1'), (select principal_id from node where name = 'node-a'), $1::jsonb),
+		('disp-2-tcp', (select id from interface_type where name = 'tcp'), (select id from component where name = 'disp-2'), (select principal_id from node where name = 'node-b'), '{"target":"127.0.0.1:1"}'::jsonb)`,
 		`{"target":"`+target+`"}`); err != nil {
 		t.Fatalf("insert interfaces: %v", err)
 	}
@@ -176,11 +176,11 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	}
 
 	// --- STATE PATH (cp5a): interface.reachable is a STATE datapoint, routed by
-	// the datapoint_type kind to state_datapoint, under the SAME confinement and
+	// the datapoint_type kind to state, under the SAME confinement and
 	// reject-not-project as a metric, plus the ingest-side transition-only guard.
 
 	// node-a publishes interface.reachable=up for its own t-a. The registry kind is
-	// state, so it lands in state_datapoint (not metric_datapoint), owned disp-1 and
+	// state, so it lands in state (not metric), owned disp-1 and
 	// instanced by the interface (disp-1-tcp).
 	publishEvent(t, ncA, "node-a", &ogv1.Event{
 		TaskId:     "t-a",

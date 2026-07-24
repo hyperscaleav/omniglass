@@ -14,12 +14,16 @@ import (
 // talks to it), a kind, an optional parent product, and the capabilities it
 // provides. The registry lists alphabetically by display_name.
 type productBody struct {
-	ID              string   `json:"id"`
+	ID              string   `json:"id" doc:"The product's uuid, the stable handle that survives a rename"`
+	Name            string   `json:"name" doc:"The kebab handle an operator reads and types; renameable"`
 	DisplayName     string   `json:"display_name"`
-	VendorID        string   `json:"vendor_id,omitempty"`
-	DriverID        string   `json:"driver_id,omitempty"`
+	Vendor          string   `json:"vendor,omitempty" doc:"The vendor's handle"`
+	VendorID        string   `json:"vendor_id,omitempty" doc:"The vendor's uuid; the stable form of vendor"`
+	Driver          string   `json:"driver,omitempty" doc:"The driver's handle"`
+	DriverID        string   `json:"driver_id,omitempty" doc:"The driver's uuid; the stable form of driver"`
 	Kind            string   `json:"kind" enum:"device,app,service,vm"`
-	ParentProductID string   `json:"parent_product_id,omitempty"`
+	ParentProduct   string   `json:"parent_product,omitempty" doc:"The parent product's handle"`
+	ParentProductID string   `json:"parent_product_id,omitempty" doc:"The parent product's uuid; the stable form of parent_product"`
 	Capabilities    []string `json:"capabilities"`
 	Official        bool     `json:"official"`
 }
@@ -60,9 +64,11 @@ func toProductBody(m *storage.Product) productBody {
 		caps = []string{}
 	}
 	return productBody{
-		ID: m.ID, DisplayName: m.DisplayName,
-		VendorID: derefStr(m.VendorID), DriverID: derefStr(m.DriverID),
-		Kind: m.Kind, ParentProductID: derefStr(m.ParentProductID),
+		ID: m.ID, Name: m.Name, DisplayName: m.DisplayName,
+		Vendor: derefStr(m.VendorName), VendorID: derefStr(m.VendorID),
+		Driver: derefStr(m.DriverName), DriverID: derefStr(m.DriverID),
+		Kind:          m.Kind,
+		ParentProduct: derefStr(m.ParentProductName), ParentProductID: derefStr(m.ParentProductID),
 		Capabilities: caps, Official: m.Official,
 	}
 }
@@ -79,12 +85,12 @@ type productPathInput struct {
 
 type createProductInput struct {
 	Body struct {
-		ID              string   `json:"id" minLength:"1" doc:"Globally unique product id"`
+		Name            string   `json:"name" minLength:"1" doc:"The globally unique kebab handle; renameable"`
 		DisplayName     string   `json:"display_name" minLength:"1"`
-		VendorID        string   `json:"vendor_id,omitempty"`
+		VendorID        string   `json:"vendor_id,omitempty" doc:"The vendor, by handle or uuid"`
 		DriverID        string   `json:"driver_id,omitempty"`
 		Kind            string   `json:"kind,omitempty" enum:"device,app,service,vm" default:"device"`
-		ParentProductID string   `json:"parent_product_id,omitempty"`
+		ParentProductID string   `json:"parent_product_id,omitempty" doc:"The parent product, by handle or uuid"`
 		Capabilities    []string `json:"capabilities,omitempty"`
 	}
 }
@@ -170,7 +176,7 @@ func registerProductRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			return nil, huma.Error422UnprocessableEntity("kind must be one of device, app, service, vm")
 		}
 		m, err := gw.CreateProduct(ctx, actorID(ctx), storage.Product{
-			ID: in.Body.ID, DisplayName: in.Body.DisplayName,
+			Name: in.Body.Name, DisplayName: in.Body.DisplayName,
 			VendorID: ptrOrNil(in.Body.VendorID), DriverID: ptrOrNil(in.Body.DriverID),
 			Kind: in.Body.Kind, ParentProductID: ptrOrNil(in.Body.ParentProductID),
 			Capabilities: in.Body.Capabilities,

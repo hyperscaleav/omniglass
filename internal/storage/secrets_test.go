@@ -64,7 +64,7 @@ func TestSecretSealRoundTrip(t *testing.T) {
 	ctx := context.Background()
 
 	created, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
-		Name: "snmp", SecretType: "snmp-community", OwnerKind: "global",
+		Name: "snmp", SecretType: "snmp-community", OwnerKind: "platform",
 		Fields: map[string]string{"community": "s3cr3t-ro"},
 	}, all, true)
 	if err != nil {
@@ -107,14 +107,14 @@ func TestSecretFieldValidation(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
-		Name: "bad", SecretType: "snmp-community", OwnerKind: "global",
+		Name: "bad", SecretType: "snmp-community", OwnerKind: "platform",
 		Fields: map[string]string{"nope": "x"},
 	}, all, true)
 	if !errors.Is(err, storage.ErrSecretFieldInvalid) {
 		t.Errorf("unknown field = %v, want ErrSecretFieldInvalid", err)
 	}
 	_, err = gw.CreateSecret(ctx, "", storage.SecretSpec{
-		Name: "empty", SecretType: "snmp-community", OwnerKind: "global",
+		Name: "empty", SecretType: "snmp-community", OwnerKind: "platform",
 		Fields: map[string]string{},
 	}, all, true)
 	if !errors.Is(err, storage.ErrSecretFieldInvalid) {
@@ -122,7 +122,7 @@ func TestSecretFieldValidation(t *testing.T) {
 	}
 	// A multi-field type stores the non-secret field in the clear, masks the secret one.
 	s, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
-		Name: "web", SecretType: "basic-auth", OwnerKind: "global",
+		Name: "web", SecretType: "basic-auth", OwnerKind: "platform",
 		Fields: map[string]string{"username": "admin", "password": "hunter2"},
 	}, all, true)
 	if err != nil {
@@ -151,12 +151,12 @@ func TestSecretOwnerScope(t *testing.T) {
 		t.Fatalf("seed location: %v", err)
 	}
 
-	// A global secret needs an all create scope.
+	// A platform secret needs an all create scope.
 	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
-		Name: "g", SecretType: "snmp-community", OwnerKind: "global",
+		Name: "g", SecretType: "snmp-community", OwnerKind: "platform",
 		Fields: map[string]string{"community": "x"},
 	}, scope.Set{}, true); !errors.Is(err, storage.ErrSecretForbidden) {
-		t.Errorf("global create without all = %v, want ErrSecretForbidden", err)
+		t.Errorf("platform create without all = %v, want ErrSecretForbidden", err)
 	}
 	// An unknown owner name is a 422, not a 500.
 	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
@@ -217,9 +217,12 @@ func TestSecretCascadeResolve(t *testing.T) {
 
 	// Same secret name "poll" placed at four tiers; distinct communities so we
 	// can tell the winner apart on reveal later.
-	mustSecret(t, gw, "poll", "global", nil, "global-val")
+	mustSecret(t, gw, "poll", "platform", nil, "platform-val")
 	mustSecret(t, gw, "poll", "location", strptr("campus"), "campus-val")
 	mustSecret(t, gw, "poll", "location", strptr("room"), "room-val")
+	// Bound on the system and deliberately NOT expected below: a secret is
+	// device-facing, so the cascade carries no system band. The room a component
+	// serves is the wrong owner for a credential the device itself answers with.
 	mustSecret(t, gw, "poll", "system", strptr("sys"), "sys-val")
 	mustSecret(t, gw, "poll", "component", strptr("codec-1"), "comp-val")
 
@@ -227,8 +230,14 @@ func TestSecretCascadeResolve(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
-	if len(resolved) != 5 {
-		t.Fatalf("resolved candidates = %d, want 5 (global, 2 loc, sys, comp)", len(resolved))
+	if len(resolved) != 4 {
+		t.Fatalf("resolved candidates = %d, want 4 (platform, 2 loc, comp): the system-owned "+
+			"secret must not reach a component", len(resolved))
+	}
+	for _, r := range resolved {
+		if r.OwnerKind == "system" {
+			t.Errorf("a system-owned secret reached the component: %+v", r)
+		}
 	}
 	var winner *storage.ResolvedSecret
 	winners := 0
@@ -245,7 +254,9 @@ func TestSecretCascadeResolve(t *testing.T) {
 		t.Errorf("winner = %s/%s, want component/codec-1", winner.OwnerKind, winner.OwnerName)
 	}
 
-	// Remove the component-tier secret: the system tier now wins.
+	// Remove the component-tier secret: the DEEPER LOCATION wins, not the system.
+	// The system-owned secret is still sitting there and still does not count,
+	// because a credential belongs to the device rather than to the room it serves.
 	list, _ := gw.ListSecrets(ctx, all, true)
 	deleteByOwner(t, gw, list, "component")
 	resolved, err = gw.ResolveSecrets(ctx, comp.ID, all, true)
@@ -253,11 +264,11 @@ func TestSecretCascadeResolve(t *testing.T) {
 		t.Fatalf("resolve 2: %v", err)
 	}
 	winner = pickWinner(t, resolved)
-	if winner.OwnerKind != "system" {
-		t.Errorf("winner after comp removed = %s, want system", winner.OwnerKind)
+	if winner.OwnerKind != "location" {
+		t.Errorf("winner after comp removed = %s, want location (the system band is gone)", winner.OwnerKind)
 	}
 
-	// Remove the system tier: the deeper location (room) beats campus.
+	// Removing the system-owned secret changes nothing, since it never competed.
 	list, _ = gw.ListSecrets(ctx, all, true)
 	deleteByOwner(t, gw, list, "system")
 	resolved, err = gw.ResolveSecrets(ctx, comp.ID, all, true)
@@ -296,7 +307,7 @@ func deleteByOwner(t *testing.T, gw storage.Gateway, list []storage.Secret, owne
 	t.Helper()
 	for _, s := range list {
 		if s.OwnerKind == ownerKind {
-			if err := gw.DeleteSecret(context.Background(), "", s.ID, all, all, true); err != nil {
+			if err := gw.DeleteSecret(context.Background(), "", s.ID, all, all, true, true); err != nil {
 				t.Fatalf("delete %s: %v", s.ID, err)
 			}
 		}

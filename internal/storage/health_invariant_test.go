@@ -19,8 +19,9 @@ func (f *healthFixture) healthSeries(t *testing.T, ctx context.Context, ownerKin
 	if col == "" {
 		t.Fatalf("unknown owner kind %q", ownerKind)
 	}
-	rows, err := f.conn.Query(ctx, `select value from state_datapoint
-		where `+col+` = $1 and key = 'health' order by ts asc, id asc`, ownerID)
+	rows, err := f.conn.Query(ctx, `select value from state
+		where `+col+` = (select id from `+ownerKind+` where name = $1)
+		  and property_type_id = (select id from property_type where name = 'health') order by ts asc, id asc`, ownerID)
 	if err != nil {
 		t.Fatalf("read health series %s/%s: %v", ownerKind, ownerID, err)
 	}
@@ -48,11 +49,18 @@ func (f *healthFixture) healthSeries(t *testing.T, ctx context.Context, ownerKin
 func (f *healthFixture) assertTransitionOnly(t *testing.T, ctx context.Context) {
 	t.Helper()
 	type row struct{ owner, kind, value string }
+	// The three estate arcs store ids and the node arc still stores a name, so the
+	// owner resolves back to a NAME here: the invariant groups by owner, and a
+	// failure message naming the entity is worth more than one printing a uuid.
 	rows, err := f.conn.Query(ctx, `
-		select coalesce(component_id, system_id, location_id, node_id) as owner, owner_kind, value
-		from state_datapoint
-		where key = 'health'
-		order by owner, id asc`)
+		select coalesce(c.name, s.name, l.name, n.name) as owner, sd.owner_kind, sd.value
+		from state sd
+		left join component c on c.id = sd.component_id
+		left join system    s on s.id = sd.system_id
+		left join location  l on l.id = sd.location_id
+		left join node      n on n.principal_id = sd.node_id
+		where sd.property_type_id = (select id from property_type where name = 'health')
+		order by owner, sd.id asc`)
 	if err != nil {
 		t.Fatalf("read all health rows: %v", err)
 	}
@@ -234,7 +242,7 @@ func (f *healthFixture) staffPair(t *testing.T, ctx context.Context, standard, s
 // pairStandard declares the shared quorum-2 standard the race rooms conform to.
 func (f *healthFixture) pairStandard(t *testing.T, ctx context.Context, id string) string {
 	t.Helper()
-	if err := f.gw.UpsertStandard(ctx, storage.Standard{ID: id, DisplayName: "Pair"}); err != nil {
+	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: id, DisplayName: "Pair"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
 	if _, err := f.gw.SetSystemRole(ctx, "", "standard", id, storage.SystemRoleSpec{
@@ -525,7 +533,7 @@ func TestHealthRecordsProductCapabilityRipple(t *testing.T) {
 	// The test owns its product: the seeded catalog is official and an official row
 	// refuses edits, which is the whole mechanism under test here.
 	if _, err := f.gw.CreateProduct(ctx, "", storage.Product{
-		ID: "ripple-bar", DisplayName: "Ripple Bar", VendorID: ptrStr("cisco"),
+		Name: "ripple-bar", DisplayName: "Ripple Bar", VendorID: ptrStr("cisco"),
 		Capabilities: []string{"microphone", "speaker"},
 	}); err != nil {
 		t.Fatalf("create product: %v", err)

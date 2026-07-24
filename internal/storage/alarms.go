@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // The alarm write side. An alarm is component-local and names the capabilities it
@@ -58,8 +59,8 @@ var (
 var alarmSeverities = map[string]bool{"info": true, "warning": true, "critical": true}
 
 const alarmCols = `a.id, a.component_id, a.severity, a.message, a.raised_at, a.cleared_at,
-	coalesce(array_agg(ac.capability_id order by ac.capability_id)
-	         filter (where ac.capability_id is not null), '{}')`
+	coalesce(array_agg(cap.name order by cap.name)
+	         filter (where cap.name is not null), '{}')`
 
 func scanAlarm(row pgx.Row) (*Alarm, error) {
 	var a Alarm
@@ -92,7 +93,7 @@ func (p *PG) RaiseAlarm(ctx context.Context, actorID, componentName string, spec
 	a := Alarm{ComponentID: componentName, Severity: spec.Severity, Message: spec.Message}
 	if err := tx.QueryRow(ctx, `
 		insert into alarm (component_id, severity, message)
-		values ($1, $2, $3)
+		values ((select id from component where name = $1), $2, $3)
 		returning id, raised_at`,
 		componentName, spec.Severity, spec.Message).Scan(&a.ID, &a.RaisedAt); err != nil {
 		return nil, fmt.Errorf("storage: insert alarm on %q: %w", componentName, err)
@@ -100,7 +101,8 @@ func (p *PG) RaiseAlarm(ctx context.Context, actorID, componentName string, spec
 	if len(spec.Capabilities) > 0 {
 		if _, err := tx.Exec(ctx, `
 			insert into alarm_capability (alarm_id, capability_id)
-			select $1, c from unnest($2::text[]) c
+			select $1, (select id from capability where name = c or id::text = c)
+			from unnest($2::text[]) c
 			on conflict (alarm_id, capability_id) do nothing`, a.ID, spec.Capabilities); err != nil {
 			return nil, mapAlarmWriteErr(err)
 		}
@@ -138,7 +140,7 @@ func (p *PG) ClearAlarm(ctx context.Context, actorID, componentName, alarmID str
 	var cleared time.Time
 	if err := tx.QueryRow(ctx, `
 		update alarm set cleared_at = now(), updated_at = now()
-		where id = $1 and component_id = $2 and cleared_at is null
+		where id = $1 and component_id = (select id from component where name = $2) and cleared_at is null
 		returning cleared_at`, alarmID, componentName).Scan(&cleared); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrAlarmNotFound
@@ -169,7 +171,8 @@ func (p *PG) ListAlarms(ctx context.Context, componentName string, includeCleare
 		select `+alarmCols+`
 		from alarm a
 		left join alarm_capability ac on ac.alarm_id = a.id
-		where a.component_id = $1 and ($2 or a.cleared_at is null)
+		left join capability cap on cap.id = ac.capability_id
+		where a.component_id = (select id from component where name = $1) and ($2 or a.cleared_at is null)
 		group by a.id
 		order by a.raised_at desc, a.id desc`, componentName, includeCleared)
 	if err != nil {
@@ -196,7 +199,8 @@ func (p *PG) activeAlarms(ctx context.Context, q txQuerier, componentName string
 		select `+alarmCols+`
 		from alarm a
 		left join alarm_capability ac on ac.alarm_id = a.id
-		where a.component_id = $1 and a.cleared_at is null
+		left join capability cap on cap.id = ac.capability_id
+		where a.component_id = (select id from component where name = $1) and a.cleared_at is null
 		group by a.id
 		order by a.raised_at desc, a.id desc`, componentName)
 	if err != nil {
@@ -218,8 +222,9 @@ func (p *PG) activeAlarms(ctx context.Context, q txQuerier, componentName string
 // mapAlarmWriteErr turns a capability foreign-key violation into the request
 // fault it is. Anything else is a real failure.
 func mapAlarmWriteErr(err error) error {
-	var pgErr interface{ SQLState() string }
-	if errors.As(err, &pgErr) && pgErr.SQLState() == "23503" {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && (pgErr.Code == "23503" ||
+		(pgErr.Code == "23502" && pgErr.ColumnName == "capability_id")) {
 		return ErrAlarmRefNotFound
 	}
 	return fmt.Errorf("storage: alarm write: %w", err)

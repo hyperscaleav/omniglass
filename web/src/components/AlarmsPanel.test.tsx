@@ -42,8 +42,8 @@ const alarms: Alarm[] = [
 ];
 
 const catalog: Capability[] = [
-  { id: "display", display_name: "Display", official: true },
-  { id: "hdmi-input", display_name: "HDMI input", official: true },
+  { id: "display", name: "display", display_name: "Display", official: true },
+  { id: "hdmi-input", name: "hdmi-input", display_name: "HDMI input", official: true },
 ];
 
 function json(body: unknown, status = 200, type = "application/json") {

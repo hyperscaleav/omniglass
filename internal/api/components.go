@@ -13,10 +13,15 @@ type componentBody struct {
 	ID            string            `json:"id"`
 	Name          string            `json:"name"`
 	DisplayName   string            `json:"display_name,omitempty"`
-	ParentID      *string           `json:"parent_id,omitempty"`
-	SystemID      *string           `json:"system_id,omitempty"`
-	LocationID    *string           `json:"location_id,omitempty"`
-	ProductID     *string           `json:"product_id,omitempty" doc:"The product (catalog SKU) this component is an instance of, if any."`
+	ParentID      *string           `json:"parent_id,omitempty" doc:"The parent component's id, the canonical handle"`
+	Parent        *string           `json:"parent,omitempty" doc:"The parent component's name, for display; absent for a root component"`
+	SystemID      *string           `json:"system_id,omitempty" doc:"The primary system's id, the canonical handle"`
+	System        *string           `json:"system,omitempty" doc:"Name of the component's primary system, its default when no system is named. A component may belong to several; read /components/{name}/memberships for all of them."`
+	SystemCount   int               `json:"system_count" doc:"How many systems this component belongs to; more than one means it is shared."`
+	LocationID    *string           `json:"location_id,omitempty" doc:"The location's id, the canonical handle"`
+	Location      *string           `json:"location,omitempty" doc:"The location's name, for display"`
+	ProductID     *string           `json:"product_id,omitempty" doc:"The product (catalog SKU) this component is an instance of, if any; the stable handle that survives a rename."`
+	Product       *string           `json:"product,omitempty" doc:"The product's name, for display; the form a body round-trips."`
 	Actions       []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
 	EffectiveTags map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this component; for the Tags column. Provenance is in the effective-tags detail view."`
 }
@@ -24,7 +29,7 @@ type componentBody struct {
 func toComponentBody(c *storage.Component) componentBody {
 	return componentBody{
 		ID: c.ID, Name: c.Name, DisplayName: c.DisplayName,
-		ParentID: c.ParentID, SystemID: c.SystemID, LocationID: c.LocationID, ProductID: c.ProductID,
+		ParentID: c.ParentID, Parent: c.ParentName, SystemID: c.PrimarySystemID, System: c.PrimarySystem, SystemCount: c.SystemCount, LocationID: c.LocationID, Location: c.LocationName, ProductID: c.ProductID, Product: c.ProductHandle,
 	}
 }
 
@@ -161,7 +166,13 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		out := &checkNameOutput{}
 		if err := storage.ValidateEntityName(in.Body.Name); err != nil {
 			out.Body.Valid = false
-			out.Body.Reason = "Use lowercase letters, digits, and hyphens."
+			// A uuid passes the slug rule, so the generic reason would describe
+			// exactly what the operator typed and explain nothing.
+			if errors.Is(err, storage.ErrNameIsUUID) {
+				out.Body.Reason = "A name cannot be a uuid: that form is reserved for an entity's id."
+			} else {
+				out.Body.Reason = "Use lowercase letters, digits, and hyphens."
+			}
 			return out, nil
 		}
 		out.Body.Valid = true

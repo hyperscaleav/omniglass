@@ -23,30 +23,32 @@ import (
 const componentPropertyInstance = ""
 
 type effectivePropertyBody struct {
-	PropertyName string          `json:"property_name" doc:"The catalog property name"`
-	DisplayName  string          `json:"display_name,omitempty" doc:"The property's human label; omitted when unset"`
-	DataType     string          `json:"data_type" doc:"The declared value type, from the property catalog"`
-	Required     bool            `json:"required" doc:"Whether the product contract requires a value; always false off-contract"`
-	IsSet        bool            `json:"is_set" doc:"True when the component overrides the contract default"`
-	FromContract bool            `json:"from_contract" doc:"True when the component's product declares the property; false for one set directly on the component"`
-	DefaultValue json.RawMessage `json:"default_value,omitempty" doc:"The contract default; omitted when the contract sets none"`
-	SetValue     json.RawMessage `json:"set_value,omitempty" doc:"The component's override; omitted when the property is unset"`
-	Value        json.RawMessage `json:"value,omitempty" doc:"The effective value: the override, or the contract default when unset"`
-	ValueID      string          `json:"value_id,omitempty" doc:"The stored value's id when set; omitted when the property is unset"`
+	PropertyTypeName string          `json:"property_type_name" doc:"The catalog property name"`
+	PropertyTypeID   string          `json:"property_type_id" doc:"The catalog property's uuid, the stable form of property_type_name"`
+	DisplayName      string          `json:"display_name,omitempty" doc:"The property's human label; omitted when unset"`
+	DataType         string          `json:"data_type" doc:"The declared value type, from the property catalog"`
+	Required         bool            `json:"required" doc:"Whether the product contract requires a value; always false off-contract"`
+	IsSet            bool            `json:"is_set" doc:"True when the component overrides the contract default"`
+	FromContract     bool            `json:"from_contract" doc:"True when the component's product declares the property; false for one set directly on the component"`
+	DefaultValue     json.RawMessage `json:"default_value,omitempty" doc:"The contract default; omitted when the contract sets none"`
+	SetValue         json.RawMessage `json:"set_value,omitempty" doc:"The component's override; omitted when the property is unset"`
+	Value            json.RawMessage `json:"value,omitempty" doc:"The effective value: the override, or the contract default when unset"`
+	ValueID          string          `json:"value_id,omitempty" doc:"The stored value's id when set; omitted when the property is unset"`
 }
 
 func toEffectivePropertyBody(e *storage.EffectiveProperty) effectivePropertyBody {
 	return effectivePropertyBody{
-		PropertyName: e.PropertyName,
-		DisplayName:  e.DisplayName,
-		DataType:     e.DataType,
-		Required:     e.Required,
-		IsSet:        e.IsSet,
-		FromContract: e.FromContract,
-		DefaultValue: json.RawMessage(e.DefaultValue),
-		SetValue:     json.RawMessage(e.SetValue),
-		Value:        json.RawMessage(e.Value),
-		ValueID:      e.ValueID,
+		PropertyTypeName: e.PropertyTypeName,
+		PropertyTypeID:   e.PropertyTypeID,
+		DisplayName:      e.DisplayName,
+		DataType:         e.DataType,
+		Required:         e.Required,
+		IsSet:            e.IsSet,
+		FromContract:     e.FromContract,
+		DefaultValue:     json.RawMessage(e.DefaultValue),
+		SetValue:         json.RawMessage(e.SetValue),
+		Value:            json.RawMessage(e.Value),
+		ValueID:          e.ValueID,
 	}
 }
 
@@ -58,16 +60,17 @@ type componentPropertiesOutput struct {
 }
 
 type componentPropertyOutput struct {
-	Body effectivePropertyValueBody
+	Body componentPropertyBody
 }
 
-// effectivePropertyValueBody is the write reply: the stored override, echoed back
+// componentPropertyBody is the write reply: the stored override, echoed back
 // so a client that just set a value holds its id without re-reading the list.
-type effectivePropertyValueBody struct {
-	Component    string          `json:"component"`
-	PropertyName string          `json:"property_name"`
-	Value        json.RawMessage `json:"value" doc:"The stored value, shape given by the property's data_type"`
-	ValueID      string          `json:"value_id" doc:"The stored value's id"`
+type componentPropertyBody struct {
+	Component        string          `json:"component"`
+	PropertyTypeName string          `json:"property_type_name"`
+	PropertyTypeID   string          `json:"property_type_id" doc:"The catalog property's uuid, the stable form of property_type_name"`
+	Value            json.RawMessage `json:"value" doc:"The stored value, shape given by the property's data_type"`
+	ValueID          string          `json:"value_id" doc:"The stored value's id"`
 }
 
 // componentPropertyPathInput addresses one property on one component.
@@ -120,16 +123,17 @@ func registerComponentPropertyRoutes(api huma.API, a *authenticator, gw storage.
 		if err != nil {
 			return nil, err
 		}
-		pv, err := gw.SetPropertyValue(ctx, actorID(ctx), "component", in.Name, in.Property,
+		pv, err := gw.SetProperty(ctx, actorID(ctx), "component", in.Name, in.Property,
 			componentPropertyInstance, raw, a.scopeFor(ctx, "component", "update"))
 		if err != nil {
 			return nil, mapComponentPropertyErr(err)
 		}
-		return &componentPropertyOutput{Body: effectivePropertyValueBody{
-			Component:    in.Name,
-			PropertyName: pv.PropertyName,
-			Value:        json.RawMessage(pv.Value),
-			ValueID:      pv.ID,
+		return &componentPropertyOutput{Body: componentPropertyBody{
+			Component:        in.Name,
+			PropertyTypeName: pv.PropertyTypeName,
+			PropertyTypeID:   pv.PropertyTypeID,
+			Value:            json.RawMessage(pv.Value),
+			ValueID:          pv.ID,
 		}}, nil
 	})
 
@@ -141,7 +145,7 @@ func registerComponentPropertyRoutes(api huma.API, a *authenticator, gw storage.
 		Summary:       "Clear a property on a component",
 		Description:   "Removes the component's declared value, so the property falls back to the product contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the component never set is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.",
 	}, "component", "update"), func(ctx context.Context, in *componentPropertyPathInput) (*struct{}, error) {
-		if err := gw.ClearPropertyValue(ctx, actorID(ctx), "component", in.Name, in.Property,
+		if err := gw.ClearProperty(ctx, actorID(ctx), "component", in.Name, in.Property,
 			componentPropertyInstance, a.scopeFor(ctx, "component", "update")); err != nil {
 			return nil, mapComponentPropertyErr(err)
 		}
@@ -155,7 +159,7 @@ func registerComponentPropertyRoutes(api huma.API, a *authenticator, gw storage.
 // and the component sentinels keep the component routes' non-disclosing mapping.
 func mapComponentPropertyErr(err error) error {
 	switch {
-	case errors.Is(err, storage.ErrPropertyValueNotFound):
+	case errors.Is(err, storage.ErrPropertyNotFound):
 		return huma.Error404NotFound("property not set on this component")
 	case errors.Is(err, storage.ErrPropertyRefNotFound):
 		return huma.Error422UnprocessableEntity("unknown property")

@@ -89,9 +89,9 @@ generated self-scoped commands (each edits only the caller's own profile):
 omniglass auth me                                    # your principal, permissions, and grants
 omniglass auth update-profile --display-name "Ops Lead"
 omniglass auth change-password --current-password 'orange-boat-42x' --new-password 'purple-canyon-7'
-omniglass me setAvatar --image-base64 "$(base64 -w0 me.jpg)"   # set your profile picture
-omniglass me removeAvatar                            # clear it, falling back to initials
-omniglass avatar list                                # read your picture back as { image_base64 }
+omniglass auth set-avatar --image-base64 "$(base64 -w0 me.jpg)"   # set your profile picture
+omniglass auth remove-avatar                            # clear it, falling back to initials
+omniglass principal principal avatar list                                # read your picture back as { image_base64 }
 ```
 
 ## Collection commands
@@ -110,6 +110,15 @@ omniglass node create --name edge-hq --display-name "HQ Edge Node" --location hq
 omniglass node get edge-hq
 omniglass node update edge-hq --display-name "HQ Edge" --location hq-west   # needs node:update; the name is immutable
 omniglass node delete edge-hq   # needs node:delete; decommissions the node (cascades its interfaces, tasks, and enrollment)
+```
+
+Every command above is new in practice, not only in the docs: a hand-written `node` run
+mode occupied the same name as the generated `node` group, so cobra resolved `omniglass
+node list` to the daemon and it failed asking for `--token`. The run mode is now
+`omniglass node run`, a verb beside the others:
+
+```sh
+omniglass node run --name edge-hq --token ogp_...   # the edge daemon: claim, pull the worklist, heartbeat
 ```
 
 The node-facing `claim` exchange is public (the enrollment token is the authentication), so
@@ -132,9 +141,9 @@ automatically):
 
 ```sh
 # An interface owned by a component, placed on a node, with its probe target in params.
-# It is named by its protocol: --type is the interface_type, there is no --name flag.
+# It is named by its protocol: --interface-type is the interface_type, there is no --name flag.
 omniglass interface create \
-  --type tcp --component disp-1 --node edge-hq \
+  --interface-type tcp --component disp-1 --node edge-hq \
   --params '{"target":"10.0.0.1:22"}'                          # needs interface:create
 
 omniglass interface list
@@ -148,7 +157,7 @@ omniglass task get <id>
 ```
 
 The four built interface types are `icmp`, `tcp`, `ssh`, and `http`, and an interface is
-**named by its protocol** (the `--type`), unique within its component. An interface `update`
+**named by its protocol** (the `--interface-type`), unique within its component. An interface `update`
 changes only its node placement and params. A **task** is **derived** when its interface is
 created, so there is no `task create`, `update`, or `delete`; its placement follows the
 interface's. A node purge cascades its interfaces and their derived tasks.
@@ -157,24 +166,24 @@ Read a component's composed reachability (the verdict, the probe-layer signals, 
 recent transitions the availability strip draws):
 
 ```sh
-omniglass reachability list disp-1                              # needs component:read
+omniglass component component reachability list disp-1                              # needs component:read
 ```
 `--image-base64` takes a plain base64 string, not a file path (base64-encode the image
 yourself, as the `$(base64 …)` above does); the server accepts JPEG, PNG, or WebP and
 normalizes it to a 256x256 JPEG. An administrator manages **any** principal's picture with
 `omniglass principal setAvatar <id> --image-base64 …` and `omniglass principal removeAvatar <id>`
-(gated by `principal:set-avatar`), reading one back with `omniglass avatar list <id>` (gated by
+(gated by `principal:set-avatar`), reading one back with `omniglass principal principal avatar list <id>` (gated by
 `principal:read`). A principal with no picture is a 404.
 
 ## Secrets
 
 The [secret](/architecture/variables/) commands are generated like every other resource. `secret`
-covers the encrypted values, `secret-type` lists the shape registry, and `effective-secret` reads the
-masked cascade onto one component. Output is masked JSON, the same as the console; plaintext lives
+covers the encrypted values, `secret-type` lists the shape registry, and `component
+effective-secret` reads the masked cascade onto one component. Output is masked JSON, the same as the console; plaintext lives
 behind `reveal`, which the server audits and which only admin and owner may call.
 
 ```sh
-omniglass secret-type list                          # the shape registry (snmp-community, basic-auth)
+omniglass secret-type list                           # the shape registry (snmp-community, basic-auth)
 omniglass secret list                               # the all-scope admin directory (masked fields)
 omniglass secret create --name core-snmp --secret-type snmp-community \
   --owner-kind location --owner hq --fields '{"community":"public"}'
@@ -182,30 +191,39 @@ omniglass secret update <id> --fields '{"community":"s3cret"}'   # an omitted fi
 omniglass secret reveal <id>                        # audited plaintext decrypt (secret:reveal)
 omniglass secret delete <id>
 
-omniglass effective-secret list <component>         # the masked cascade resolved onto a component
+omniglass component effective-secret list codec-1   # the masked cascade resolved onto a component
 ```
 
-`--owner-kind` is one of `global | location | system | component`; `--owner` names the owning entity
-and is omitted for a `global` secret (which needs an all-scope grant). Field maps pass as a JSON object
-to `--fields`, validated against the type's shape.
+The effective read answers **which** secret applies to a device and where it comes from, never
+what it contains: fields are masked exactly as the directory masks them, and plaintext is only
+ever `secret reveal`. It rides `secret:read`, which the viewer floor does not carry.
+
+`--owner-kind` is one of `platform | location | system | component`; `--owner` names the owning entity
+and is omitted for a `platform` secret (the install-wide tier, which needs an all-scope grant plus
+`platform:create`). Field maps pass as a JSON object to `--fields`, validated against the type's shape.
 
 ## Variables
 
 The [variable](/architecture/variables/) commands are generated the same way. `variable` covers the
-plaintext values and `effective-variable` reads the cascade onto one component. There is no reveal:
-the value is shown in the clear.
+plaintext values and `component effective-variable` reads the cascade onto one component. There is
+no reveal: the value is shown in the clear.
 
 ```sh
 omniglass variable list                             # the all-scope admin directory
 omniglass variable create --name poll_interval --value-type int \
   --owner-kind system --owner east-auditorium-av --value 30
-omniglass variable create --name retry --value-type json --owner-kind global \
+omniglass variable create --name retry --value-type json --owner-kind platform \
   --value '{"retries":3,"backoff":"1s"}'
 omniglass variable update <id> --value 60           # validated against the fixed value_type
 omniglass variable delete <id>
 
-omniglass effective-variable list <component>       # the cascade resolved onto a component
+omniglass component effective-variable list codec-1   # the cascade resolved onto a component
 ```
+
+Both effective reads return the **winner and the candidates it beat**, with the tier each came
+from, so the answer explains itself rather than just asserting a value. The variable cascade
+resolves the system band from the component's **primary** membership; resolving against a named
+system is offered only by `component effective-tag list` today.
 
 `--value-type` is one of `string | int | float | bool | json`. `--value` is **parsed as JSON**, so a
 bare `30`, `true`, or `{"k":"v"}` sends the number, the boolean, or the object; a bare word like `HDMI1`
@@ -213,14 +231,14 @@ falls back to a string, so the common case needs no quoting. A string value that
 as JSON (`30`, `true`) is quoted to force a string: `--value '"30"'`. (`secret create --fields` parses
 the same way.)
 generated self-scoped commands (`omniglass auth me`, `auth update-profile`,
-`auth change-password`, `me setAvatar` / `removeAvatar`); an administrator manages other
+`auth change-password`, `auth set-avatar` / `removeAvatar`); an administrator manages other
 principals, roles, groups, secrets, and variables through the resource commands, all covered
 in the [admin guide](/guides/admin/) and listed in full in the [CLI reference](/reference/cli/).
 
 ## Tags
 
 The [tag](/architecture/tags/) commands split along the governance line. The `tag` resource covers the
-**key vocabulary** (minting, editing, and deleting keys, plus the global default binding), while binding a
+**key vocabulary** (minting, editing, and deleting keys, plus the install-wide `platform` binding), while binding a
 value onto an entity is a **custom method on the entity** (`component set-tag` and friends), so it needs
 only the write the operator already holds on that entity. `effective-tag` reads the resolved cascade onto
 one component.
@@ -230,8 +248,8 @@ omniglass tag list                                  # the governed key vocabular
 omniglass tag create --name environment             # mint a key (tag:create, admin)
 omniglass tag create --name rack_position --applies-to '["location"]' --propagates=false
 omniglass tag update environment --applies-to '["component","system"]'
-omniglass tag setGlobal environment --value prod    # a tenant-wide default (tag:update)
-omniglass tag clearGlobal environment
+omniglass tag setPlatform environment --value prod  # an install-wide default (tag:update + platform:update)
+omniglass tag clearPlatform environment
 omniglass tag delete environment                    # cascades its bindings
 
 omniglass component setTag codec-1 --key environment --value dev    # component:update
@@ -240,7 +258,7 @@ omniglass component removeTag codec-1 --key environment
 omniglass system setTag east-auditorium-av --key environment --value prod
 omniglass location setTag hq --key environment --value staging
 
-omniglass effective-tag list codec-1                # the cascade resolved onto a component
+omniglass component component effective-tag list codec-1                # the cascade resolved onto a component
 ```
 
 Binding is a custom method on the entity (`component setTag`), like the principal lifecycle verbs, so it
@@ -337,24 +355,24 @@ A classifier **declares** which properties its instances carry; an instance **se
 are the same three verbs, and the contract commands hang off the classifier that owns them:
 
 ```sh
-omniglass product properties cisco-room-bar                         # a product's contract
-omniglass standard properties huddle-room                           # a standard's contract
-omniglass location-type properties room                             # a location type's contract
-omniglass standard set-property huddle-room room_capacity --default-value 6 --required true
-omniglass standard delete-property huddle-room room_capacity        # systems keep any value they set
+omniglass product property list cisco-room-bar                         # a product's contract
+omniglass standard property list huddle-room                           # a standard's contract
+omniglass location-type property list room                             # a location type's contract
+omniglass standard property update huddle-room room_capacity --default-value 6 --required true
+omniglass standard property delete huddle-room room_capacity        # systems keep any value they set
 
-omniglass component properties dsp-boardroom-3                      # the effective read
-omniglass system properties boardroom                               # same shape, system side
-omniglass location properties east-campus                           # same shape, location side
-omniglass system set-property boardroom room_capacity --value 12    # idempotent
-omniglass system clear-property boardroom room_capacity             # falls back to the contract default
+omniglass component property list dsp-boardroom-3                      # the effective read
+omniglass system property list boardroom                               # same shape, system side
+omniglass location property list east-campus                           # same shape, location side
+omniglass system property update boardroom room_capacity --value 12    # idempotent
+omniglass system property delete boardroom room_capacity             # falls back to the contract default
 ```
 
 The read resolves the classifier's contract against the instance's own values, so a **one-off system**
 (one conforming to no standard) and a **productless component** still resolve, to their off-contract
 values alone. The value commands are **scope-injected**: an instance outside your read scope is a
-non-disclosing 404 on the read and on the write. Note the two different names on the location-type side:
-the registry CRUD is `omniglass type location ...`, its contract is `omniglass location-type ...`.
+non-disclosing 404 on the read and on the write. The registry and its contract share one noun:
+`omniglass location-type list` is the registry, `omniglass location-type property list <id>` its contract.
 
 ## Generated versus hand-written
 

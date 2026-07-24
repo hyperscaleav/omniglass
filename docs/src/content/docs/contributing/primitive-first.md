@@ -30,7 +30,7 @@ already exists.
 | **Admission consumer and the two lanes** | the one owner fence and the one data / record split on the bus | [messaging](/architecture/messaging/) |
 | **Timer and clock** | schedule, watchdog, for-duration, and runbook-wait, all one durable model | [time](/architecture/time/) |
 | **The `action` row** | every long-running operation's handle, rule-fired or API-called | [API](/architecture/api/), [alarms and actions](/architecture/alarms-actions/) |
-| **`datapoint_type` registry** | one registry across metric, state, and log | [datapoints](/architecture/datapoints/) |
+| **`property_type` registry** | one registry across metric, state, and log | [datapoints](/architecture/datapoints/) |
 
 ## How to apply
 

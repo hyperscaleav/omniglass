@@ -18,7 +18,7 @@ type variableBody struct {
 	Name      string  `json:"name"`
 	ValueType string  `json:"value_type"`
 	OwnerKind string  `json:"owner_kind"`
-	OwnerID   *string `json:"owner_id,omitempty"`
+	OwnerID   *string `json:"owner_id,omitempty" doc:"The owning entity's id, the canonical handle; absent for a global owner"`
 	OwnerName string  `json:"owner_name,omitempty"`
 	Value     any     `json:"value" doc:"The value, shape given by value_type"`
 }
@@ -54,8 +54,8 @@ type createVariableInput struct {
 	Body struct {
 		Name      string  `json:"name" minLength:"1" doc:"The cascade key; unique per owner"`
 		ValueType string  `json:"value_type" enum:"string,int,float,bool,json" doc:"The declared value type"`
-		OwnerKind string  `json:"owner_kind" enum:"global,location,system,component" doc:"Which tier owns this variable"`
-		Owner     *string `json:"owner,omitempty" doc:"The owning entity's name; omit for a global variable"`
+		OwnerKind string  `json:"owner_kind" enum:"platform,location,system,component" doc:"Which tier owns this variable"`
+		Owner     *string `json:"owner,omitempty" doc:"The owning entity's name; omit for a platform variable"`
 		Value     any     `json:"value" doc:"The value, validated against value_type"`
 	}
 }
@@ -74,8 +74,65 @@ type updateVariableInput struct {
 // registerVariableRoutes wires the variable surface: the all-scope admin
 // directory and scoped create/update/delete. Read rides the viewer floor; create
 // and update are gated by variable:create / variable:update (granted to
-// operators), delete by variable:delete (admin, owner).
+// operators), delete by variable:delete (admin, owner). A write at the platform
+// tier needs platform:<action> on top: an all-scoped operator reaches every
+// entity's variable without reaching the install-wide one.
+// resolvedVariableBody is one entry in a component's effective-variables cascade:
+// the variable, where in the chain its owner sits, and whether it is the winner or
+// a shadowed candidate. It mirrors resolvedTagBody, because it is the same cascade.
+type resolvedVariableBody struct {
+	ID        string  `json:"id"`
+	Name      string  `json:"name"`
+	ValueType string  `json:"value_type"`
+	OwnerKind string  `json:"owner_kind"`
+	OwnerID   *string `json:"owner_id,omitempty" doc:"The owning entity's id, the canonical handle; absent for a platform owner"`
+	OwnerName string  `json:"owner_name,omitempty"`
+	Band      int     `json:"band" doc:"Cascade tier: 0 platform, 1 location, 2 system, 3 component"`
+	Depth     int     `json:"depth" doc:"Distance up the tier's tree from the component (0 nearest)"`
+	Winner    bool    `json:"winner" doc:"True for the resolved value; false for a shadowed candidate"`
+	Value     any     `json:"value" doc:"The value, shape given by value_type"`
+}
+
+type effectiveVariablesInput struct {
+	Name string `path:"name" doc:"The component's name"`
+}
+
+type effectiveVariablesOutput struct {
+	Body struct {
+		Variables []resolvedVariableBody `json:"variables"`
+	}
+}
+
 func registerVariableRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "effective-variables",
+		Method:      http.MethodGet,
+		Path:        "/components/{name}/effective-variables",
+		Summary:     "Effective variables for a component",
+		Description: "Resolves the variables that cascade onto a component (platform -> location -> system -> component): names union, values override most-specific-wins, with the winner and the shadowed candidates it overrode. The system band comes from the component's PRIMARY membership; resolving against a named system is not offered here yet, unlike effective-tags. Gated by variable:read; the component must be in the caller's component read scope.",
+	}, "variable", "read"), func(ctx context.Context, in *effectiveVariablesInput) (*effectiveVariablesOutput, error) {
+		comp, err := gw.GetComponent(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
+		if err != nil {
+			return nil, mapComponentErr(err)
+		}
+		resolved, err := gw.ResolveVariables(ctx, comp.ID, a.scopeFor(ctx, "variable", "read"))
+		if err != nil {
+			return nil, mapVariableErr(err)
+		}
+		out := &effectiveVariablesOutput{}
+		out.Body.Variables = make([]resolvedVariableBody, 0, len(resolved))
+		for i := range resolved {
+			r := &resolved[i]
+			out.Body.Variables = append(out.Body.Variables, resolvedVariableBody{
+				ID: r.ID, Name: r.Name, ValueType: r.ValueType,
+				OwnerKind: r.OwnerKind, OwnerID: r.OwnerID, OwnerName: r.OwnerName,
+				Band: r.Band, Depth: r.Depth, Winner: r.Winner,
+				Value: decodeVariableValue(r.Value),
+			})
+		}
+		return out, nil
+	})
+
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-variables",
 		Method:      http.MethodGet,
@@ -95,14 +152,20 @@ func registerVariableRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		return out, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.platformGated(a.gated(huma.Operation{
 		OperationID:   "create-variable",
 		Method:        http.MethodPost,
 		Path:          "/variables",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a variable",
-		Description:   "Sets a variable at an owner scope (a global variable needs an all-scoped grant). The value is validated against value_type. Gated by variable:create.",
-	}, "variable", "create"), func(ctx context.Context, in *createVariableInput) (*variableOutput, error) {
+		Description:   "Sets a variable at an owner scope. The value is validated against value_type. Gated by variable:create, plus platform:create when owner_kind is platform (the install-wide tier).",
+	}, "variable", "create"), "create"), func(ctx context.Context, in *createVariableInput) (*variableOutput, error) {
+		// The body says which tier the write lands at, so the tier gate runs here.
+		if in.Body.OwnerKind == platformTier {
+			if err := a.requirePlatform(ctx, "create"); err != nil {
+				return nil, err
+			}
+		}
 		raw, err := json.Marshal(in.Body.Value)
 		if err != nil {
 			return nil, huma.Error422UnprocessableEntity("value is not encodable")
@@ -120,35 +183,39 @@ func registerVariableRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		return &variableOutput{Body: toVariableBody(v)}, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.platformGated(a.gated(huma.Operation{
 		OperationID: "update-variable",
 		Method:      http.MethodPatch,
 		Path:        "/variables/{id}",
 		Summary:     "Update a variable's value",
-		Description: "Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update.",
-	}, "variable", "update"), func(ctx context.Context, in *updateVariableInput) (*variableOutput, error) {
+		Description: "Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.",
+	}, "variable", "update"), "update"), func(ctx context.Context, in *updateVariableInput) (*variableOutput, error) {
 		raw, err := json.Marshal(in.Body.Value)
 		if err != nil {
 			return nil, huma.Error422UnprocessableEntity("value is not encodable")
 		}
+		// Only the stored row knows its tier, so the resolved permission rides with
+		// the call and the Gateway applies it beside the scope split.
 		v, err := gw.UpdateVariable(ctx, actorID(ctx), in.ID, raw,
-			a.scopeFor(ctx, "variable", "read"), a.scopeFor(ctx, "variable", "update"))
+			a.scopeFor(ctx, "variable", "read"), a.scopeFor(ctx, "variable", "update"),
+			a.canPlatform(ctx, "update"))
 		if err != nil {
 			return nil, mapVariableErr(err)
 		}
 		return &variableOutput{Body: toVariableBody(v)}, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.platformGated(a.gated(huma.Operation{
 		OperationID:   "delete-variable",
 		Method:        http.MethodDelete,
 		Path:          "/variables/{id}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a variable",
-		Description:   "Removes a variable by id. Gated by variable:delete; read and delete scopes on the owner drive the 404 versus 403 split.",
-	}, "variable", "delete"), func(ctx context.Context, in *variableIDInput) (*struct{}, error) {
+		Description:   "Removes a variable by id. Gated by variable:delete, plus platform:delete when the variable sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.",
+	}, "variable", "delete"), "delete"), func(ctx context.Context, in *variableIDInput) (*struct{}, error) {
 		if err := gw.DeleteVariable(ctx, actorID(ctx), in.ID,
-			a.scopeFor(ctx, "variable", "read"), a.scopeFor(ctx, "variable", "delete")); err != nil {
+			a.scopeFor(ctx, "variable", "read"), a.scopeFor(ctx, "variable", "delete"),
+			a.canPlatform(ctx, "delete")); err != nil {
 			return nil, mapVariableErr(err)
 		}
 		return nil, nil

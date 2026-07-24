@@ -45,7 +45,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	}
 
 	var ownerPerms []string
-	if err := conn.QueryRow(ctx, `select permissions from role where id = 'owner'`).Scan(&ownerPerms); err != nil {
+	if err := conn.QueryRow(ctx, `select permissions from role where name = 'owner'`).Scan(&ownerPerms); err != nil {
 		t.Fatalf("read owner role: %v", err)
 	}
 	if len(ownerPerms) != 1 || ownerPerms[0] != ">" {
@@ -70,7 +70,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 		t.Errorf("official location_types = %d, want 0 (a shipped location type is operator-owned)", officialTypes)
 	}
 	var topType string
-	if err := conn.QueryRow(ctx, `select id from location_type order by display_name, id limit 1`).Scan(&topType); err != nil {
+	if err := conn.QueryRow(ctx, `select name from location_type order by display_name, name limit 1`).Scan(&topType); err != nil {
 		t.Fatalf("read top location_type: %v", err)
 	}
 	if topType != "building" {
@@ -78,15 +78,15 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	}
 	// Each shipped type seeds its glyph key, and re-running Run keeps it (the icon
 	// is part of the idempotent upsert, not just the initial insert).
-	for id, wantIcon := range map[string]string{
+	for name, wantIcon := range map[string]string{
 		"campus": "landmark", "building": "building", "floor": "layers", "room": "door-open",
 	} {
 		var icon string
-		if err := conn.QueryRow(ctx, `select icon from location_type where id = $1`, id).Scan(&icon); err != nil {
-			t.Fatalf("read %s icon: %v", id, err)
+		if err := conn.QueryRow(ctx, `select icon from location_type where name = $1`, name).Scan(&icon); err != nil {
+			t.Fatalf("read %s icon: %v", name, err)
 		}
 		if icon != wantIcon {
-			t.Errorf("%s icon = %q, want %q", id, icon, wantIcon)
+			t.Errorf("%s icon = %q, want %q", name, icon, wantIcon)
 		}
 	}
 
@@ -110,14 +110,14 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	// The property that makes them operator-owned: re-seeding must not reassert
 	// over an operator's edit. An authoritative upsert would silently revert this
 	// on the next boot.
-	if _, err := conn.Exec(ctx, `update standard set display_name = 'Our Huddle Room' where id = 'huddle-room'`); err != nil {
+	if _, err := conn.Exec(ctx, `update standard set display_name = 'Our Huddle Room' where name = 'huddle-room'`); err != nil {
 		t.Fatalf("edit seeded standard: %v", err)
 	}
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed re-run: %v", err)
 	}
 	var huddleName string
-	if err := conn.QueryRow(ctx, `select display_name from standard where id = 'huddle-room'`).Scan(&huddleName); err != nil {
+	if err := conn.QueryRow(ctx, `select display_name from standard where name = 'huddle-room'`).Scan(&huddleName); err != nil {
 		t.Fatalf("read huddle-room: %v", err)
 	}
 	if huddleName != "Our Huddle Room" {
@@ -130,23 +130,24 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	// survive the next boot.
 	var roleCount int
 	if err := conn.QueryRow(ctx, `select count(*) from system_role
-		where owner_kind = 'standard' and standard_id = 'meeting-room'`).Scan(&roleCount); err != nil {
+		where owner_kind = 'standard' and standard_id = (select id from standard where name = 'meeting-room')`).Scan(&roleCount); err != nil {
 		t.Fatalf("count meeting-room roles: %v", err)
 	}
 	if roleCount != 2 {
 		t.Errorf("meeting-room roles = %d, want 2 (seed not idempotent or incomplete)", roleCount)
 	}
 	var micCaps []string
-	if err := conn.QueryRow(ctx, `select array_agg(rc.capability_id order by rc.capability_id)
-		from system_role r join role_capability rc on rc.role_id = r.id
-		where r.standard_id = 'meeting-room' and r.name = 'room-mic'`).Scan(&micCaps); err != nil {
+	if err := conn.QueryRow(ctx, `select array_agg(cap.name order by cap.name)
+		from system_role r join system_role_capability rc on rc.role_id = r.id
+		join capability cap on cap.id = rc.capability_id
+		where r.standard_id = (select id from standard where name = 'meeting-room') and r.name = 'room-mic'`).Scan(&micCaps); err != nil {
 		t.Fatalf("read room-mic capabilities: %v", err)
 	}
 	if len(micCaps) != 2 || micCaps[0] != "microphone" || micCaps[1] != "speaker" {
 		t.Errorf("room-mic capabilities = %v, want [microphone speaker]", micCaps)
 	}
 	if _, err := conn.Exec(ctx, `update system_role set quorum = 4
-		where standard_id = 'meeting-room' and name = 'room-mic'`); err != nil {
+		where standard_id = (select id from standard where name = 'meeting-room') and name = 'room-mic'`); err != nil {
 		t.Fatalf("retune seeded role: %v", err)
 	}
 	if err := seed.Run(ctx, gw); err != nil {
@@ -154,7 +155,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	}
 	var quorum int
 	if err := conn.QueryRow(ctx, `select quorum from system_role
-		where standard_id = 'meeting-room' and name = 'room-mic'`).Scan(&quorum); err != nil {
+		where standard_id = (select id from standard where name = 'meeting-room') and name = 'room-mic'`).Scan(&quorum); err != nil {
 		t.Fatalf("read room-mic quorum: %v", err)
 	}
 	if quorum != 4 {
@@ -182,7 +183,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	// upserts it rather than duplicating (the contract is keyed by product +
 	// property).
 	var barContract int
-	if err := conn.QueryRow(ctx, `select count(*) from product_property where product_id = 'cisco-room-bar'`).Scan(&barContract); err != nil {
+	if err := conn.QueryRow(ctx, `select count(*) from product_property where product_id = (select id from product where name = 'cisco-room-bar')`).Scan(&barContract); err != nil {
 		t.Fatalf("count cisco-room-bar contract: %v", err)
 	}
 	if barContract != 3 {
@@ -190,7 +191,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	}
 	var barModelDefault string
 	if err := conn.QueryRow(ctx, `select default_value #>> '{}' from product_property
-		where product_id = 'cisco-room-bar' and property_name = 'model_number'`).Scan(&barModelDefault); err != nil {
+		where product_id = (select id from product where name = 'cisco-room-bar') and property_type_id = (select id from property_type where name = 'model_number')`).Scan(&barModelDefault); err != nil {
 		t.Fatalf("read cisco-room-bar model_number default: %v", err)
 	}
 	if barModelDefault != "Room Bar" {
@@ -199,7 +200,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 
 	// Re-running Run keeps the metadata fields, not just the initial insert.
 	var crestronWebsite string
-	if err := conn.QueryRow(ctx, `select website from vendor where id = 'crestron'`).Scan(&crestronWebsite); err != nil {
+	if err := conn.QueryRow(ctx, `select website from vendor where name = 'crestron'`).Scan(&crestronWebsite); err != nil {
 		t.Fatalf("read crestron website: %v", err)
 	}
 	if crestronWebsite != "https://www.crestron.com" {
@@ -217,10 +218,10 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	// The type default seeds the create form: a device type is operational, the
 	// OAuth2 integration type is admin-sensitive.
 	var snmpDefault, oauthDefault bool
-	if err := conn.QueryRow(ctx, `select default_admin_sensitive from secret_type where id = 'snmp-community'`).Scan(&snmpDefault); err != nil {
+	if err := conn.QueryRow(ctx, `select default_admin_sensitive from secret_type where name = 'snmp-community'`).Scan(&snmpDefault); err != nil {
 		t.Fatalf("read snmp-community default_admin_sensitive: %v", err)
 	}
-	if err := conn.QueryRow(ctx, `select default_admin_sensitive from secret_type where id = 'oauth2-client'`).Scan(&oauthDefault); err != nil {
+	if err := conn.QueryRow(ctx, `select default_admin_sensitive from secret_type where name = 'oauth2-client'`).Scan(&oauthDefault); err != nil {
 		t.Fatalf("read oauth2-client default_admin_sensitive: %v", err)
 	}
 	if snmpDefault {
@@ -230,7 +231,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 		t.Error("oauth2-client default_admin_sensitive = false, want true (platform credential)")
 	}
 	var community string
-	if err := conn.QueryRow(ctx, `select schema->0->>'name' from secret_type where id = 'snmp-community'`).Scan(&community); err != nil {
+	if err := conn.QueryRow(ctx, `select schema->0->>'name' from secret_type where name = 'snmp-community'`).Scan(&community); err != nil {
 		t.Fatalf("read snmp-community schema: %v", err)
 	}
 	if community != "community" {
@@ -246,7 +247,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	}
 	for id, want := range wantParents {
 		var got []string
-		if err := conn.QueryRow(ctx, `select allowed_parent_types from location_type where id = $1`, id).Scan(&got); err != nil {
+		if err := conn.QueryRow(ctx, `select allowed_parent_types from location_type where name = $1`, id).Scan(&got); err != nil {
 			t.Fatalf("read %s allowed_parent_types: %v", id, err)
 		}
 		if len(got) != len(want) {

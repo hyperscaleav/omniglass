@@ -14,7 +14,7 @@ describe("secrets data layer", () => {
 
   it("lists secrets and unwraps the envelope", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ secrets: [{ id: "1", name: "poll", secret_type: "snmp-community", owner_kind: "global", fields: [{ name: "community", value: "••••••", secret: true }] }] }),
+      jsonResponse({ secrets: [{ id: "1", name: "poll", secret_type: "snmp-community", owner_kind: "platform", fields: [{ name: "community", value: "••••••", secret: true }] }] }),
     );
     const secrets = await listSecrets();
     expect(secrets).toHaveLength(1);
@@ -32,7 +32,7 @@ describe("secrets data layer", () => {
     expect(types).toHaveLength(1);
     expect(types[0]).toMatchObject({ id: "snmp-community", official: true });
     const req = fetchMock.mock.calls[0][0] as Request;
-    expect(req.url).toContain("/api/v1/types/secret");
+    expect(req.url).toContain("/api/v1/secret-types");
   });
 
   it("posts the create body with the field map", async () => {
@@ -49,12 +49,12 @@ describe("secrets data layer", () => {
 
   it("throws on an error status", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ detail: "unknown secret_type" }, 422));
-    await expect(createSecret({ name: "x", secret_type: "nope", owner_kind: "global", fields: {} })).rejects.toBeTruthy();
+    await expect(createSecret({ name: "x", secret_type: "nope", owner_kind: "platform", fields: {} })).rejects.toBeTruthy();
   });
 
   it("patches the field values on update", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ id: "sec_123", name: "poll", secret_type: "snmp-community", owner_kind: "global", fields: [] }),
+      jsonResponse({ id: "sec_123", name: "poll", secret_type: "snmp-community", owner_kind: "platform", fields: [] }),
     );
     await updateSecret("sec_123", { community: "rotated" });
     const req = fetchMock.mock.calls[0][0] as Request;

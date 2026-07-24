@@ -24,7 +24,8 @@ type taskBody struct {
 	DisplayName string          `json:"display_name,omitempty"`
 	Mode        string          `json:"mode"`
 	InterfaceID string          `json:"interface_id" doc:"The interface's surrogate id this task runs over"`
-	Node        *string         `json:"node,omitempty" doc:"The node placement, projected from the interface"`
+	Node        *string         `json:"node,omitempty" doc:"The node placement name, projected from the interface"`
+	NodeID      *string         `json:"node_id,omitempty" doc:"The placed node's id; the stable form of node"`
 	Spec        json.RawMessage `json:"spec,omitempty" doc:"The inline probe settings (jsonb)"`
 	Enabled     bool            `json:"enabled"`
 }
@@ -32,7 +33,7 @@ type taskBody struct {
 func toTaskBody(t *storage.Task) taskBody {
 	b := taskBody{
 		ID: t.ID, DisplayName: t.DisplayName, Mode: t.Mode,
-		InterfaceID: t.InterfaceID, Node: t.Node, Enabled: t.Enabled,
+		InterfaceID: t.InterfaceID, Node: t.Node, NodeID: t.NodeID, Enabled: t.Enabled,
 	}
 	if len(t.Spec) > 0 {
 		b.Spec = json.RawMessage(t.Spec)

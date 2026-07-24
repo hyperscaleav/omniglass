@@ -33,7 +33,7 @@ straightforward native path over reaching for the engine at all.
 
 ## Unit conversion: `convert(value, "<unit>")`
 
-Stored values are always in their `datapoint_type`'s **canonical unit**, so an operator who
+Stored values are always in their `property_type`'s **canonical unit**, so an operator who
 wants to author against a non-canonical unit converts at the expression. **`convert(value,
 "<unit>")`** is the stdlib function for this: the **source unit is inferred** from the bound
 datapoint's canonical unit, and the **target** is a registered unit that must be in the

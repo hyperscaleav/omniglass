@@ -118,7 +118,7 @@ Absence of data is two conditions, and the why matters:
   died). The watchdog emits a derived staleness datapoint (`X stale at T`, and `fresh again` on
   resume).
 - **`unknown`**: **never** observed. No baseline, no last value. A static "not monitored yet"
-  condition (a fresh device, a datapoint_type never reported), detected by "no observations
+  condition (a fresh device, a property_type never reported), detected by "no observations
   exist," not by a watchdog. Gray, not actionable.
 
 `current_value` carries `value, as_of_ts, freshness (fresh | stale)`; staleness is a quality of
@@ -126,7 +126,7 @@ the datapoint with the last value preserved. **[Health](/architecture/health/) t
 differently**: a *stale required member* defaults to `unknown` (lost visibility, so the system
 rolls to `unknown`, [health](/architecture/health/)), an *unknown member* is gray and does not down the system. Whether stale means "last value still valid" (a
 slow config signal) or "lost visibility, alarm" (a liveness signal) is **per-datapoint-type
-policy**: the datapoint_type declares its staleness tolerance.
+policy**: the property_type declares its staleness tolerance.
 
 These two absences surface on the [health](/architecture/health/) side as `unknown` reasons:
 a went-stale datapoint is the `stale` reason, and a covered-but-never-reported datapoint is the

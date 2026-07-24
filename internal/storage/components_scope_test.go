@@ -42,8 +42,13 @@ func TestComponentScopeCRUD(t *testing.T) {
 	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "sub", ParentName: strptr("disp")}, all)
 	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "cam"}, all)
 
-	if disp.SystemID == nil || disp.LocationID == nil {
-		t.Errorf("disp belongs-to/located-at not set: %+v", disp)
+	// Naming a system at create makes a membership, and that membership is the
+	// component's primary because it is its first.
+	if disp.PrimarySystem == nil || *disp.PrimarySystem != "sys-1" || disp.SystemCount != 1 {
+		t.Errorf("disp primary system = %v, count %d; want sys-1 and 1", disp.PrimarySystem, disp.SystemCount)
+	}
+	if disp.LocationID == nil {
+		t.Errorf("disp located-at not set: %+v", disp)
 	}
 
 	readDisp := scope.Set{IDs: []string{disp.ID}}

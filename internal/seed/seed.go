@@ -236,7 +236,7 @@ func seedProperties(ctx context.Context, gw storage.Gateway) error {
 			}
 			validation = b
 		}
-		if err := gw.UpsertProperty(ctx, storage.Property{
+		if err := gw.UpsertPropertyType(ctx, storage.PropertyType{
 			Name: p.Name, DisplayName: p.DisplayName, Kind: kind, DataType: p.DataType,
 			Unit: unit, Validation: validation, Description: p.Description, Official: true,
 		}); err != nil {
@@ -257,7 +257,7 @@ func seedSecretTypes(ctx context.Context, gw storage.Gateway) error {
 			fields[i] = secret.Field{Name: f.Name, Type: f.Type, Secret: f.Secret, Origin: secret.Origin(f.Origin)}
 		}
 		if err := gw.UpsertSecretType(ctx, storage.SecretType{
-			ID:                    st.ID,
+			Name:                  st.ID,
 			Official:              true,
 			DisplayName:           st.DisplayName,
 			DefaultAdminSensitive: st.DefaultAdminSensitive,
@@ -276,7 +276,9 @@ func seedVendors(ctx context.Context, gw storage.Gateway) error {
 	}
 	for _, v := range doc.Vendors {
 		if err := gw.UpsertVendor(ctx, storage.Vendor{
-			ID:          v.ID,
+			// The seed ships kebab handles, never uuids: the row's id is the
+			// database's to mint and must survive a re-seed.
+			Name:        v.ID,
 			Official:    true,
 			DisplayName: v.DisplayName,
 			Kind:        v.Kind,
@@ -296,7 +298,7 @@ func seedDrivers(ctx context.Context, gw storage.Gateway) error {
 	}
 	for _, d := range doc.Drivers {
 		if err := gw.UpsertDriver(ctx, storage.Driver{
-			ID: d.ID, Official: true, DisplayName: d.DisplayName, Version: d.Version,
+			Name: d.ID, Official: true, DisplayName: d.DisplayName, Version: d.Version,
 		}); err != nil {
 			return err
 		}
@@ -311,7 +313,7 @@ func seedCapabilities(ctx context.Context, gw storage.Gateway) error {
 	}
 	for _, c := range doc.Capabilities {
 		if err := gw.UpsertCapability(ctx, storage.Capability{
-			ID: c.ID, Official: true, DisplayName: c.DisplayName,
+			Name: c.ID, Official: true, DisplayName: c.DisplayName,
 		}); err != nil {
 			return err
 		}
@@ -336,7 +338,7 @@ func seedProducts(ctx context.Context, gw storage.Gateway) error {
 			kind = "device"
 		}
 		if err := gw.UpsertProduct(ctx, storage.Product{
-			ID: p.ID, Official: true, DisplayName: p.DisplayName,
+			Name: p.ID, Official: true, DisplayName: p.DisplayName,
 			VendorID: nz(p.VendorID), DriverID: nz(p.DriverID),
 			ParentProductID: nz(p.ParentProductID), Kind: kind, Capabilities: p.Capabilities,
 		}); err != nil {
@@ -350,7 +352,7 @@ func seedProducts(ctx context.Context, gw storage.Gateway) error {
 				def = json.RawMessage(prop.Default)
 			}
 			if err := gw.UpsertProductProperty(ctx, p.ID, storage.ProductPropertySpec{
-				PropertyName: prop.Name, DefaultValue: def, Required: prop.Required,
+				PropertyTypeName: prop.Name, DefaultValue: def, Required: prop.Required,
 			}); err != nil {
 				return fmt.Errorf("seed: product %s property %s: %w", p.ID, prop.Name, err)
 			}
@@ -372,7 +374,7 @@ func seedStandards(ctx context.Context, gw storage.Gateway) error {
 		// Shipped standards are example content the operator owns once it lands,
 		// not authoritative reference data: seeded if absent, never reasserted.
 		if err := gw.SeedStandard(ctx, storage.Standard{
-			ID:               st.ID,
+			Name:             st.ID,
 			Official:         false,
 			DisplayName:      st.DisplayName,
 			ParentStandardID: parent,
@@ -439,7 +441,7 @@ func seedRoles(ctx context.Context, gw storage.Gateway) error {
 	}
 	for _, r := range doc.Roles {
 		if err := gw.UpsertRole(ctx, storage.Role{
-			ID:          r.ID,
+			Name:        r.ID,
 			Official:    true,
 			Permissions: r.Permissions,
 			Inherits:    r.Inherits,
@@ -459,7 +461,7 @@ func seedLocationTypes(ctx context.Context, gw storage.Gateway) error {
 	}
 	for _, lt := range doc.LocationTypes {
 		if err := gw.SeedLocationType(ctx, storage.LocationType{
-			ID:                 lt.ID,
+			Name:               lt.ID,
 			Official:           false,
 			DisplayName:        lt.DisplayName,
 			Icon:               lt.Icon,

@@ -65,9 +65,10 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0028](#adr-0028-rank-retired-from-the-type-registries-sort-is-alphabetical) | 2026-07-14 | Accepted | `rank` is dropped from `location_type`, `system_type`, and `component_type`; the three list operations sort by `display_name, id` instead |
 | [ADR-0029](#adr-0029-files-slice-1-a-content-addressed-blob-store-and-a-tenant-wide-file-handle) | 2026-07-14 | Accepted | Files slice 1: a content-addressed `blob` store primitive (pgblobs) and a tenant-wide `file` handle; no placement arc (a file is 1:many, its locality is a future attachment), a binary `sensitive` flag reusing the secret `:admin` tier (defaults off), a delete frees its unreferenced blob synchronously (async mark-sweep GC deferred), base64-in-JSON on the wire |
 | [ADR-0031](#adr-0031-component_make-registry-slice-1-an-official-boolean-a-deferred-referential-guard-and-website-scheme-validation) | 2026-07-14 | Accepted | `component_make` slice 1: an `official` boolean (not an `origin` enum) for consistency with the type registries; the in-use referential delete guard deferred to the `component_model` slice (nothing references a make yet); `website` scheme-validated to `http`/`https`, client and server, against stored XSS |
-| [ADR-0032](#adr-0032-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory) | 2026-07-17 | Accepted | The settings engine persists only the override level; the `code` and `file` base layers are recomputed in memory each boot, so restore is a delete (diverges from scaling.md's "materialized in Postgres") |
-| [ADR-0033](#adr-0033-the-settings-gateway-is-unscoped-only-the-permission-gates-it) | 2026-07-17 | Accepted | Settings Gateway methods are unscoped: ABAC storage-scope is not applicable to platform / principal config; only the `settings:<action>` permission gates them |
-| [ADR-0034](#adr-0034-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock) | 2026-07-17 | Accepted | Settings resolve down the principal hierarchy reusing the cascade primitive, with per-key provenance and a top-down broader-wins lock |
+| [ADR-0032](#adr-0032-the-required-permission-is-published-per-route-and-the-permission-universe-is-route-derived) | 2026-07-17 | Accepted | Every gated route stamps its required permission into the OpenAPI (`x-omniglass-permission`), so the permission universe is derived from the routes rather than a hand-kept catalog |
+| [ADR-0033](#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory) | 2026-07-17 | Accepted | The settings engine persists only the override level; the `code` and `file` base layers are recomputed in memory each boot, so restore is a delete (diverges from scaling.md's "materialized in Postgres") |
+| [ADR-0034](#adr-0034-the-settings-gateway-is-unscoped-only-the-permission-gates-it) | 2026-07-17 | Accepted | Settings Gateway methods are unscoped: ABAC storage-scope is not applicable to platform / principal config; only the `settings:<action>` permission gates them |
+| [ADR-0035](#adr-0035-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock) | 2026-07-17 | Accepted | Settings resolve down the principal hierarchy reusing the cascade primitive, with per-key provenance and a top-down broader-wins lock |
 | [ADR-0036](#adr-0036-a-node-is-a-kindnode-principal-with-an-interim-bearer-credential-and-static-per-connection-nats-subject-permissions) | 2026-07-07 | Accepted | A node is a `principal` of `kind=node` with a 1:1 detail table and a bearer `credential` row (interim shared secret), and per-node NATS isolation is static per-connection subject permissions via an in-process auth callback; nkey/JWT deferred |
 | [ADR-0037](#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer) | 2026-07-07 | Accepted | Telemetry is a protobuf `Event` over a JetStream durable consumer; the consumer binds the owner from the task's interface and confines a node to its own tasks inline (no separate raw-telemetry table or Postgres queue); raw persistence + replay and label-based multi-owner routing deferred |
 | [ADR-0038](#adr-0038-the-reachability-verdict-is-a-built-in-state) | 2026-07-07 | Accepted | The per-interface reachability verdict `interface.reachable` is a built-in **state** (not a metric); availability is `time_in_state` over it; readiness is interface-type-defaulted and interface-overridable, node-executed, not a `calc_rule` |
@@ -83,6 +84,8 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0048](#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model) | 2026-07-21 | Accepted | `system_type` is promoted to **`standard`**, the blueprint a system conforms to and the system-side counterpart of `product`: it gains `parent_standard_id` (variants), a declared-property contract, and its own `standard:*` Catalog resource, and `system.standard_id` becomes **optional**. `standard_property` and `location_type_property` join `product_property`, and one **owner-generic** `EffectiveProperties(ownerKind, ownerID)` resolves component, system, location, and node off a single parameterized template. A standard and a location type are created by **forking an in-code template** (one-time, no inheritance), so a shipped row is **operator-owned** (`official: false`, seeded **if absent**), while a system **conforms** to its standard with **live** inheritance; only the canonical catalogs keep the authoritative upsert. PR6 of the estate-model shift |
 | [ADR-0049](#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set) | 2026-07-21 | Accepted | A **`system_role`** is a slot a system needs filled (a table microphone, a main display), declared on a **standard** (inherited live by every conforming system) or on one **system** (ad-hoc) over the same exclusive arc `property_value` uses, requiring a **conjunctive** `role_capability` set and carrying a **`quorum`**. A component's capabilities become a **resolved set** (`EffectiveCapabilities` = its product's, plus its own `component_capability` `present=true` rows, minus its `present=false` ones), because `product` is optional and a strict guard over a product-only fact would lock a productless component out of every role. `AssignRole` **refuses (422) and names the missing capabilities**, joining the location placement constraint as a refusal on modeled grounds that names the parties. **Quorum** ships here (staffing is visible without health); **impact** and the SLI rollup land in PR8. Supersedes the `system_template_member` role-requirement design. PR7 of the estate-model shift |
 | [ADR-0050](#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain) | 2026-07-21 | Accepted | Health is **recorded as a transition** and **recomputed at the write**, never on read. An **`alarm`** is component-local and names the **capabilities** it degrades; a component satisfies a role only when it provides every required capability and none of them is degraded; a role below its **quorum** is impaired and contributes its **`impact`** (`outage` / `degraded` / `none`); a system takes the worst of its roles, a location the worst of its systems. The verdict domain is **`healthy` / `degraded` / `outage`** and the judgement is a **pure package** (`internal/health`), unit-tested with no database. The recorded carrier is **`state_datapoint`**, already transition-only, so the history is edges and only edges; **compute-on-read** (no history) and **write-through-on-read** (the edge timestamped when somebody looked) are both rejected. A **read never writes**, and it computes the verdict it serves from the same rows it shows, so a report cannot contradict its own evidence. PR8 of the estate-model shift, closing epic [#266](https://github.com/hyperscaleav/omniglass/issues/266) |
+| [ADR-0054](#adr-0054-the-shell-owns-a-panels-action-rail-the-body-registers-and-never-draws) | 2026-07-21 | Accepted | A panel's action bar is **declared, not laid out**: a blade body binds through `lib/blades`, a Drawer form body through `lib/formactions`, and `BladeStack` / `Drawer` draw the result through the one `PanelFooter` rail. The opt-in `DrawerFooter` helper is deleted. A convention a body must remember can be forgotten, and was, by two forms for months while it was copied into six new pages around them |
+| [ADR-0057](#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier) | 2026-07-21 | Accepted | The cascade's least-specific **binding** tier is renamed `global` to **`platform`** on both axes (same rung, no precedence change); a **`default`** is off the axis entirely, a column on a type declaration rather than a tier; there is **no root location**; a write at the tier needs its own **`platform:<action>`** permission. **Breaking:** a secret sealed at the old tier can no longer be decrypted (the AEAD binds the owner kind) |
 
 ## Entries
 
@@ -1068,6 +1071,7 @@ below from the project's history. From here it grows one slice at a time.
 - **Closes:** issue [#271](https://github.com/hyperscaleav/omniglass/issues/271) (settings engine slice-0), under
   epic [#270](https://github.com/hyperscaleav/omniglass/issues/270). Design:
   `docs/superpowers/specs/2026-07-17-settings-engine-design.md`.
+- **Amended by [ADR-0057](#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier):** the model is unchanged, the level names are not: `code` is now `default` (off the axis, the setting's own declaration) and `global` is now `platform` (the install-wide rung).
 
 ### ADR-0034: the settings Gateway is unscoped; only the permission gates it
 
@@ -1088,6 +1092,7 @@ below from the project's history. From here it grows one slice at a time.
   **will** be constrained by the acting principal (a user edits only their own `user` row), but that is a
   per-principal ownership check, a different mechanism than estate ABAC, not a return of tree scope.
 - **Closes:** issue [#271](https://github.com/hyperscaleav/omniglass/issues/271) (settings engine slice-0).
+- **Amended by [ADR-0057](#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier):** the model is unchanged, the level names are not: `code` is now `default` (off the axis, the setting's own declaration) and `global` is now `platform` (the install-wide rung).
 
 ### ADR-0035: settings resolve as a cascade over principals with a broader-wins lock
 
@@ -1111,6 +1116,7 @@ below from the project's history. From here it grows one slice at a time.
   override is supplied through a narrow function seam so the package never imports storage.
 - **Closes:** issue [#271](https://github.com/hyperscaleav/omniglass/issues/271) (settings engine slice-0), under
   epic [#270](https://github.com/hyperscaleav/omniglass/issues/270).
+- **Amended by [ADR-0057](#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier):** the model is unchanged, the level names are not: `code` is now `default` (off the axis, the setting's own declaration) and `global` is now `platform` (the install-wide rung).
 
 ### ADR-0036: retire the standalone effective-secrets and effective-variables per-component panels; fields become the component value surface
 
@@ -1192,6 +1198,11 @@ below from the project's history. From here it grows one slice at a time.
 - **Closes the gap:** the multi-scope cascade is tracked by
   [#291](https://github.com/hyperscaleav/omniglass/issues/291); this ADR settles only the resolution rule
   and the type-default floor.
+- **Amended by [ADR-0057](#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier):**
+  the resolution outcome is unchanged (any value set at any scope beats the default, and the default is what
+  remains when the arc is empty), but the default is **off the axis**, a column on the definition row, rather
+  than the cascade's bottom rung. The vocabulary moved; the rule did not.
+
 
 ### ADR-0043: The property catalog
 
@@ -1410,6 +1421,11 @@ below from the project's history. From here it grows one slice at a time.
 - **Tracked under** epic [#266](https://github.com/hyperscaleav/omniglass/issues/266). This is **PR5** of the
   estate-model shift toward property / event / command plus vendor / product / driver / capability / standard /
   role / health.
+- **Amended by [ADR-0057](#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier):**
+  the contract default is unchanged, its vocabulary is. `coalesce(the instance's set value, the contract
+  default)` is the fall-through to a **declaration**, not the bottom rung of a cascade, so
+  `product_property.default_value` (and its two siblings) is the shipped instance of the off-axis default
+  rather than a tier under `platform`.
 
 ### ADR-0048: The `standard` blueprint and the template-fork seed model
 
@@ -1749,7 +1765,470 @@ below from the project's history. From here it grows one slice at a time.
 - **Tracked under** epic [#324](https://github.com/hyperscaleav/omniglass/issues/324), slice
   [#325](https://github.com/hyperscaleav/omniglass/issues/325).
 
-### ADR-0052: operator deletes become undoable, not modifier-chorded
+### ADR-0052: The cascade resolves through membership, and secrets carry no system band
+
+- **Status:** accepted, built.
+- **Context:** [ADR-0051](#adr-0051-membership-is-the-attachment-and-a-role-is-what-it-does) made
+  membership explicit but deliberately left resolution alone: the tag, variable, and secret cascades
+  still seeded their system band from `component.system_id`, the write-once pointer. That left the
+  pointer alive for one reason only, and left the "config differs per system" case unanswerable.
+- **Decision:** the system band is seeded from **`system_member`**. Tag resolution **takes the system
+  to resolve against**, and resolves against it only if the component is a member: naming a system it
+  has no binding to must not lend it configuration. With **no system given** it falls back to the
+  **primary** membership, which is the entirety of what `is_primary` is for. `GET
+  /components/{name}/effective-tags?system=` exposes the first case.
+- **The seed stays single-valued, as a correctness requirement.** The rank orders by band then depth
+  with no tiebreaker after that, so two seeds in one band resolve nondeterministically. Membership is
+  many-valued; the chain it feeds is not. This is the same fact that made the pointer worth keeping
+  under ADR-0051 and is now satisfied without it.
+- **Secrets lose the system band entirely**, on ownership rather than determinism: an interface
+  belongs to a component, a shared device has one password, and the room it serves is the wrong owner
+  for a credential. It also removes the one case where an ambiguous inheritance would have been
+  dangerous rather than merely wrong.
+- **`component.system_id` is dropped.** With nothing reading it, the column, its API field, and its
+  console consumers go. The component body now reports `system` (the primary, by **name**) and
+  `system_count`, which also retires one of the three places the API emitted a raw uuid for a field it
+  accepts by name ([#328](https://github.com/hyperscaleav/omniglass/issues/328)).
+- **Written test-first because the failure mode is silent.** A mis-seeded `sys_chain` is still valid
+  SQL that returns fewer rows: a system-owned tag would simply stop reaching its components, with no
+  error and no 500, and the resolution blade would show the location winner as though the system band
+  never had a candidate.
+- **Supersedes** [cascade](/architecture/cascade/)'s "the primary-system pointer is the single system
+  chain that feeds the cascade", which described the mechanism when a pointer was the only binding
+  available.
+- **Tracked under** epic [#324](https://github.com/hyperscaleav/omniglass/issues/324), slice
+  [#327](https://github.com/hyperscaleav/omniglass/issues/327).
+
+### ADR-0053: A name is the address, a uuid is identity
+
+- **Status:** superseded in part by
+  [ADR-0056](#adr-0056-every-foreign-key-stores-a-primary-key). Its API half stands: a reference is
+  addressed by name. Its schema half ("a new table references an estate entity by `name` with `on
+  update cascade`") is reversed, and responses now carry the id **beside** the name rather than
+  instead of it.
+- **Context:** the pattern was real and dominant but never applied to the original entities.
+  Eleven tables keyed their estate references by `name`, six by `id`, split by age. Worse, the API
+  **accepted names on write and returned uuids on read**: a component created with
+  `{"parent": "rack", "location": "hq-b1"}` read back as `{"parent_id": "0198f...", "location_id":
+  "0198f..."}`. The body did not round-trip, so every client fetched a second collection and joined by
+  uuid to render one label. The console carried exactly that map until it was deleted in
+  [#329](https://github.com/hyperscaleav/omniglass/issues/329).
+- **Decision:** every request **and response** addresses another entity by its **name**. A uuid appears
+  only as an entity's own `id`. Two exceptions: an entity with **no name** (an interface, a stored
+  value, an audit row, a grant, a principal) and a **slug-keyed catalog**, whose id already is a name.
+  A new table references an estate entity by `name` with `on update cascade`.
+- **Normalized:** `parent_id` and `location_id` on component and system, `parent_id` on location, and
+  the redundant `owner_id` on tag bindings, variables, and secrets, which already carried `owner_name`
+  beside it. Nine fields, seven of them found by survey and **two by the guard test**, which caught a
+  `SecretBody.owner_id` the survey missed.
+- **Enforced by contract, not prose.** `TestResponsesAddressEntitiesByName` walks the generated
+  OpenAPI and fails on any field naming another entity by uuid. The failure it prevents is invisible
+  otherwise: a body emitting `parent_id` still serves 200s, and the cost only appears in the clients.
+- **Deliberately not in scope:** `secret`, `variable`, and `tag_binding` still key their owner arcs by
+  uuid in the schema, and the cascade resolvers compare those uuids directly. Converting them is a data
+  migration plus a rewrite of resolution SQL reworked in
+  [ADR-0052](#adr-0052-the-cascade-resolves-through-membership-and-secrets-carry-no-system-band).
+  The API contradiction is what operators saw and is fixable without touching resolution. The rule binds
+  new tables; the stragglers convert when something else needs to touch them.
+- **Breaking.** Response shapes change. At v0.0.0 this is the right moment, since the cost only grows.
+- **Tracked as** [#334](https://github.com/hyperscaleav/omniglass/issues/334), following
+  [#328](https://github.com/hyperscaleav/omniglass/issues/328).
+### ADR-0054: The shell owns a panel's action rail; the body registers and never draws
+
+- **Date:** 2026-07-21 | **Status:** Accepted | **Pages:** [design system](/contributing/design-system/)
+- **Decision:** A panel's action buttons are **declared as data, not laid out as markup**. A blade body
+  binds `destructive` / `secondary` / `primary` (plus the Edit -> Save cycle) through `lib/blades`; a
+  Drawer form body binds `submitLabel` / `submitIcon` / `submit` / `busy` / `disabled` / `cancel`
+  through `lib/formactions`. `BladeStack` and `Drawer` each compose their own button vocabulary but
+  draw it through the single `PanelFooter` rail. A form body renders **no footer markup at all**.
+- **Context:** The blade already worked this way. The Drawer did not: its rail was an opt-in
+  `DrawerFooter` helper that every form body had to remember to import and wrap its buttons in.
+  Fourteen forms remembered. Two did not, and hand-rolled their own right-aligned row instead, where
+  they survived nine merged PRs unchanged while the helper was copied into six newly added pages
+  around them. The cost was not only the two misses: among the forms that did use it, some rendered a
+  Cancel and some did not, some spun a spinner and some swapped the label to "Creating...". A rail
+  reached by convention drifts in both directions at once.
+- **Why a slot rather than a lint rule:** A lint rule finds the miss after it is written. A slot makes
+  it unwriteable: there is no exported helper to forget, and a body that wants a button has exactly
+  one way to ask for one. The enforcement is the deleted export, and `rail-ownership.test.ts` is the
+  belt to that braces.
+- **Scope, honestly:** This converges **two** of the three rails. Full-page create forms
+  (Locations, Systems, Components) still draw an inline `border-t ... pt-4` row of their own. That
+  rail is inline in a scrolling page rather than pinned to the viewport, so it is a different layout
+  problem, and it converges when the CRUD form primitive lands and owns both form factors.
+- **Deliberate convergences:** submit labels no longer change while in flight (the shell's spinner
+  says it), and the new-interface blade lost its Cancel button, since a blade already dismisses two
+  ways and no other blade in the stack carries one.
+- **Tracked under** [#332](https://github.com/hyperscaleav/omniglass/issues/332).
+### ADR-0055: The tag, variable, and secret owner arcs key by name
+
+- **Status:** superseded by [ADR-0056](#adr-0056-every-foreign-key-stores-a-primary-key), which
+  converts these nine columns back to uuids along with every other name-keyed foreign key. Kept in
+  full because the reasoning below is a worked example of the mistake: it is internally consistent,
+  it shipped green, and it is wrong at the premise.
+- **Context:** [ADR-0053](#adr-0053-a-name-is-the-address-a-uuid-is-identity) fixed what operators saw
+  and deliberately left the schema alone. Three tables still keyed their owner arcs by uuid while every
+  table from the collection era onward keyed by name, so the two conventions met inside single queries:
+  the cascade resolvers walked chains of **uuids** purely to match these three, and a component's name
+  had to be carried alongside its id to bridge them.
+- **Decision:** the nine arc columns on `tag_binding`, `variable`, and `secret` become `text references
+  <entity> (name) on update cascade on delete cascade`. The columns keep their `_id` suffix, matching
+  `role_assignment.component_id` and `state_datapoint.component_id`, which are likewise text referencing
+  a name.
+- **`on update cascade` is the load-bearing clause.** A name is only safe as a key if a rename carries.
+  `TestOwnerArcsSurviveARename` is the proof and is **mutation-checked**: with the clause removed the
+  rename is refused outright with a foreign-key violation, so the test cannot pass vacuously. It also
+  could not have failed before this change, since the arcs held uuids that a rename never touches.
+- **The resolvers now project names.** Each chain still **recurses on `parent_id`**, which stays a uuid,
+  and only what it projects changed. `owner_id` in the `owners` CTE is a name, so the final joins that
+  resolve a display name match on `name` rather than `id`.
+- **The scope walk still uses ids**, resolved from the name at the point of the check. Identity stays
+  internal, and the walk is the only place that needs it, which is the rule working as intended rather
+  than an exception to it.
+- **Not converted, deliberately:** `tag_binding.node_id` references `node.principal_id`, a node's
+  enrollment identity and the only handle it has. `tag_binding.tag_id` is a genuine instance of the same
+  rule (`tag` is uuid-keyed with a unique name) but is the binding's **subject** rather than its owner,
+  and it touches the tag CRUD surface rather than resolution; tracked as
+  [#340](https://github.com/hyperscaleav/omniglass/issues/340). Removing it from the guard test's
+  slug-keyed allow-list, where it had been listed on a **false claim** that the tag catalog is
+  slug-keyed, is part of this change.
+- **No `migrate:down`.** Reversing would have to resolve names back to uuids the forward migration no
+  longer records, and any rename since would make that resolution wrong rather than merely absent.
+- **Tracked as** [#339](https://github.com/hyperscaleav/omniglass/issues/339).
+
+### ADR-0056: Every foreign key stores a primary key
+
+- **Date:** 2026-07-22 | **Status:** Accepted; the slug-keyed carve-out below is retired by
+  [ADR-0062](#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle) | **Pages:** [storage](/architecture/storage/),
+  [api-first](/contributing/api-first/)
+- **Decision:** every foreign key stores the target's **primary key**: a uuid for an estate entity,
+  `principal_id` for a node, and the slug itself for a slug-keyed catalog (`product`, `standard`,
+  `property`, `interface_type`) where the name already *is* the key. No column references a `name`.
+  In exchange, the API accepts **either form** wherever a reference is written (a path segment or a
+  join field in a body), trying the uuid first, and every response carries **both**: the name an
+  operator reads and the id it resolves to.
+- **Context: this reverses a direction set two ADRs ago.** [ADR-0053](#adr-0053-a-name-is-the-address-a-uuid-is-identity)
+  found eleven tables keyed by name and six by id, and resolved the split by declaring the majority
+  correct. [ADR-0055](#adr-0055-the-tag-variable-and-secret-owner-arcs-key-by-name) then converted the
+  six to match, and the follow-on work was converting the rest. The premise was never examined: a
+  friendly, renameable key is valuable *because* it can change, which is the one thing a foreign key
+  must not do.
+- **The tell was `on update cascade`.** ADR-0055 called it "the load-bearing clause" and was pleased
+  that removing it made the test fail. That machinery exists only to fund the wrong choice: it is
+  write amplification across every referencing row, on a rename, to protect a key that did not need
+  to be a name. A uuid arc needs no clause, and the equivalent test passes because there is nothing
+  to rewrite.
+- **A rename was not merely inefficient, it was refused.** With `interface.component` referencing
+  `component (name)` and no `on update` clause, renaming a component that owned any interface failed
+  outright with a foreign-key violation. The name-keyed convention had spread past the point where
+  its own cascade covered it, and the operator-facing symptom was a rename that returned an error.
+- **Scope:** all 30 name-keyed foreign keys, converted across five slices grouped by subsystem rather
+  than by table, so each file changed once: the estate arcs, then health and roles, then the
+  collection tier (`metric_datapoint`, `interface`, `node`) and every node reference.
+- **What stays a name.** The columns whose target is slug-keyed are already conformant and were not
+  touched. Health passes names internally on purpose: its advisory lock hashes `health/<kind>/<name>`,
+  and a mixed currency would hash two keys for one owner and silently stop serializing. (The
+  slug-keyed targets themselves later took uuid keys too, so those columns moved to the uuid; see
+  [ADR-0062](#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle).)
+- **Guarded both ways.** `TestResponsesAddressEntitiesByName` fails on a response that names an entity
+  by uuid alone; the per-tier rename tests fail if an arc stops following a rename. Each conversion was
+  **mutation-checked** rather than trusted: breaking the projection had to turn the suite red.
+- **Tracked as** [#343](https://github.com/hyperscaleav/omniglass/issues/343).
+
+### ADR-0057: The cascade's least-specific tier is `platform`, and a `default` is not a tier
+
+- **Date:** 2026-07-21 | **Status:** Accepted | **Pages:** [cascade](/architecture/cascade/), [settings](/architecture/settings/), [config, secrets, and variables](/architecture/variables/), [tags](/architecture/tags/), [identity and access](/architecture/identity-access/), [scaling and deployment](/architecture/scaling/)
+- **Decision:** Six calls, one vocabulary.
+  1. **`global` becomes `platform`** as the cascade's least-specific **binding** tier, on **both** axes: the
+     estate arc (`owner_kind` on `variable`, `secret`, and `tag_binding`) and the settings level
+     (`setting_override.scope`). It occupies exactly the rung it occupied before (`segment_rank 0`). It is a
+     decision like every other rung, what an admin set for the **whole install**, not a floor beneath the chain.
+  2. **`code` becomes `default`, and a `default` is off the axis on both engines.** A default is what a value
+     **is** absent any decision: a column on a definition row, beside the unit, the kind, and the validation
+     rule. It is not a rung, it shadows nothing, and nothing shadows it; the fold **falls through** to it when
+     no rung bound anything, and the resolve view reports it as a declaration rather than as a winning source.
+     A default is a column on a declaration row, so **a kind with no declaration row has no default**: a
+     setting has one (its struct tag) and a property has one on its classifier's contract
+     (`product_property.default_value` and its `standard_property` / `location_type_property` siblings, read as
+     `coalesce(the instance's set value, the contract default)` by `EffectiveProperties`,
+     [ADR-0047](#adr-0047-the-fields-fold-product_property-and-property_value)), while a variable, a secret,
+     and a tag have none. Absent means absent. Note the property default sits on the **contract**, not on the
+     `property` catalog entry: the catalog declares what a name means, a classifier declares what it is for
+     the things that conform to it. That is a narrower claim than the one this ADR was drafted against, when
+     the precedent was the retired `field_definition.default_value` hanging off a `component_type`, and it is
+     the stronger one for the rule here, since the coalesce is the fall-through in the code path itself.
+  3. **There is no root location.** The location tree keeps N unparented tops. A tier above today's tops is a
+     new `location_type` and a real node, never a magic one, and a top-level location is not a substitute for
+     `platform`: binding at one top misses every sibling, and a top added later is silently uncovered.
+  4. **The install-wide tier survives on the estate axis**, uniform across kinds:
+     `platform | location | system | component`.
+  5. **A write at the tier needs `platform:<action>`**, checked in addition to the resource permission and
+     published per route as an `x-omniglass-platform-permission` stamp. This separates full-estate **scope**
+     from install-wide **authority**: a senior operator may hold an all-scope grant without being able to
+     change the value that applies to the whole install. `platform:*` is seeded to `admin` (and reaches
+     `owner` through `>`); `operator` and `deploy` hold no `platform` write, and nothing implies one.
+     "Nothing implies one" is enforced by putting `platform` in the **sensitive-resource set** beside
+     `secret` and `settings` ([ADR-0025](#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)),
+     so a bare single-token `*` never names it: a custom role carrying `*:update` holds every estate write
+     and still no install-wide authority. Only a literal, a `platform:*`, or a `>` names the tier.
+  6. **`root` is not used as a tier name**, so `location_type.allowed_parent_types` keeps its reserved `"root"`
+     sentinel meaning "top, no parent", unchanged.
+- **Context:** One word named two unrelated things, in two engines, with three spellings. On the estate axis
+  `global` was both a **tier** an operator writes at and, in the prose, a **floor** where ship-with policy
+  supposedly lived: [cascade](/architecture/cascade/) read "Ship-with default policy lives at `global`, the
+  floor of the chain", three lines under a heading that says the registry is **outside** the cascade. That was
+  drift, not design: `internal/seed/` writes eight YAML files and every one defines a **type**; none writes a
+  **binding**, and there has never been a ship-with row at the tier. Meanwhile the settings engine had already
+  split the two ideas and picked different words for them (`code` for the declaration, `global` for the
+  install-wide override), so the same distinction existed twice under three names. Separately, `global` also
+  names the singleton estate **owner** where health and KPIs roll up (a different concept that keeps the name),
+  which made "global" ambiguous in the one place ambiguity is most expensive. Naming the binding tier
+  `platform` and the declaration `default` gives each idea one word, and it drops an assumption the estate
+  never had: that "everything" and "the planet the sites are on" are the same thing.
+- **What does not change:** no precedence change (every row keeps its rung under a new name, so no deployment
+  resolves differently), no new rows (the migration renames a value, inserting nothing and adding no column),
+  no reordering of the segment ranks or the comparison key, and no capability removed.
+- **Breaking change, accepted deliberately:** `secretAAD` binds a sealed field to its owner arc,
+  `ownerKind|ownerID|name|field`. A secret sealed at the tier **before** this rename authenticates against
+  `global|global|...`; after it, the derivation yields `platform|platform|...`, the AEAD check fails, and
+  **that ciphertext never opens again**. Only the renamed tier is affected: a scoped secret carries a real
+  owner id and is untouched. Accepted because no deployment holds tier secrets yet, and each alternative
+  (freezing the AAD at the legacy string, a Go-side re-seal backfill, or a reveal-time fallback) buys
+  compatibility nothing currently needs at the price of a permanent legacy branch. Recorded here rather than
+  discovered later by a reader.
+- **Amends:** [ADR-0033](#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory),
+  [ADR-0034](#adr-0034-the-settings-gateway-is-unscoped-only-the-permission-gates-it),
+  [ADR-0035](#adr-0035-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock), and
+  [ADR-0042](#adr-0042-field-cascade-and-the-type-default-floor), and
+  [ADR-0047](#adr-0047-the-fields-fold-product_property-and-property_value). Each keeps its model; only the
+  level names and the default's place in the vocabulary move.
+- **Closes:** issue [#316](https://github.com/hyperscaleav/omniglass/issues/316).
+### ADR-0058: A run mode is a verb under its noun, and no command may be shadowed
+
+- **Date:** 2026-07-22 | **Status:** Accepted | **Pages:** [CLI guide](/guides/cli/)
+- **Decision:** the edge run mode becomes **`omniglass node run`**, a leaf under the generated
+  `node` group, rather than a top-level `node`. A **guard test walks the assembled command tree
+  and fails on any duplicate name**, so the hand-written and generated command sets can no longer
+  collide silently.
+- **Context:** the hand-written run mode and the generated API group both registered as `node`.
+  Cobra does not treat that as an error: both are added and lookup returns the first, so **every
+  generated node command was unreachable**. `omniglass node list` resolved to the daemon and
+  failed asking for `--token`, while the CLI guide documented it as working.
+- **Why a guard rather than a rename alone.** This is the third instance: `members` under the
+  principal groups (#326), `type list` (#319), and now `node`. Each was found by a person typing
+  it. The two command sets compose on one root, so no single file owns the namespace and no review
+  of either set can catch it. The tree is the only place they meet, so it is the only place the
+  check can live. The guard was written first and **found two more nobody had reported**: `grant
+  create` and `grant delete`, where the principal-group variants shadow the principal ones, so
+  granting a role to a principal has no CLI path at all (#357).
+- **The known collisions are an explicit list that may only shrink.** The guard fails on any name
+  **not** on it, so a new collision cannot land, and it also fails on an entry that has **stopped**
+  colliding, so a fix must delete its entry rather than leave that name unwatched. It is a ratchet,
+  not an allow-list.
+- **Root cause, left for #357:** `commandWords` derives the group from a single path segment, so
+  `/principals/{id}/grants` and `/principal-groups/{id}/grants` both become `grant`. Fixing that
+  renames documented commands and is a naming decision, not a mechanical one.
+- **Cost accepted:** `omniglass node` is a documented invocation and it changes. At v0.0.0 that is
+  a docs edit, and a mode reads as a verb anyway, beside `node list` and `node enroll`.
+- **Tracked as** [#354](https://github.com/hyperscaleav/omniglass/issues/354).
+
+### ADR-0059: Every collection segment is a command level
+
+- **Date:** 2026-07-22 | **Status:** Accepted | **Pages:** [api-first](/contributing/api-first/), [CLI guide](/guides/cli/)
+- **Decision:** the CLI command path is derived from the **whole route**: every collection segment
+  contributes a level and the verb is last, so a subresource is always addressed under the resource
+  that owns it. `/components/{name}/properties` is `component property list`;
+  `/principals/{id}/grants` and `/principal-groups/{id}/grants` are `principal grant create` and
+  `principal-group grant create`.
+- **Context:** the old rule used only the collection **nearest the leaf**, so it could not tell two
+  parents apart. Across 195 operations it produced **24 collisions**, `property list` seven ways.
+  Cobra does not treat a duplicate name as an error: it registers both and returns the first, so the
+  second was unreachable and the only symptom was a command that ran the wrong thing. Granting a role
+  to a principal had no CLI path at all ([#357](https://github.com/hyperscaleav/omniglass/issues/357)).
+- **`nameOverride` was the rule, written out by hand fifty times.** It had grown to 53 entries, and
+  the comment on nearly every one said the same thing: "the leaf-noun heuristic would collapse both
+  into one group." Each was added after somebody typed a broken command. It is now **14 entries**,
+  all of them the genuinely non-AIP `/auth` family, and none of them about a collision.
+- **A name depends only on its own route.** This is the property worth having: under a
+  disambiguate-only-when-ambiguous rule, adding a route could rename an existing command. Here it
+  cannot, so the naming is stable as the API grows.
+- **The grouping had to become a tree.** Fixing the derivation alone was not enough: the generator
+  bucketed commands by their first word and used only the **last** word as the leaf name, so a
+  three-word path rendered as two and collided again. It now builds an N-level tree, which is also
+  what makes `node run` and `type secret list` render as written.
+- **`omniglass statu` shipped.** The depluralizer took `-s` off `status`. A small irregular set is
+  declared instead; the route vocabulary is ours, so this is a known list, not an English problem.
+- **Cost accepted:** 67 of 202 commands are renamed, 135 unchanged. At v0.0.0 that is a docs edit,
+  and the guides are corrected mechanically from the route map in the same change.
+- **Two guards, because regeneration does not fix prose.** `TestNoCommandNameCollisions` fails on any
+  duplicate name (its known-collision list is now **empty**, and its second half forced those entries
+  out once fixed). `TestDocsOnlyNameRealCommands` walks the guides and fails on a documented command
+  that does not resolve; it immediately found `omniglass secret-type list`, which had never existed in
+  any build, and two commands with no API route behind them
+  ([#359](https://github.com/hyperscaleav/omniglass/issues/359)).
+- **Supersedes** the naming half of [ADR-0058](#adr-0058-a-run-mode-is-a-verb-under-its-noun-and-no-command-may-be-shadowed),
+  whose guard this keeps and whose exception list this empties.
+- **Tracked as** [#357](https://github.com/hyperscaleav/omniglass/issues/357).
+
+### ADR-0060: A resource is one kebab-case noun; nesting means ownership
+
+- **Date:** 2026-07-22 | **Status:** Accepted | **Pages:** [api-first](/contributing/api-first/), [API](/architecture/api/), [types](/guides/admin/types/)
+- **Decision:** a resource is addressed by **one kebab-case noun**, and a nested path segment means the
+  nested thing is **owned** by it. The `/types` umbrella is retired: `GET/POST /location-types`,
+  `PATCH/DELETE /location-types/{id}`, `GET /secret-types`.
+- **Context:** the location type registry was addressed **two ways**. Its CRUD lived under
+  `/types/location` while its property contract lived on a flat `/location-types/{id}/properties`, so
+  one entity had two command groups (`type location update` and `location-type property list`) and an
+  operator had to know both. `/types/secret` had no flat form at all.
+- **The umbrella misused nesting.** A nested segment says the child belongs to the parent
+  (`/principal-groups/{id}/members`). `location` is not owned by `types`; it **is** a registry that
+  happens to be one of several. Grouping by category is a documentation concern, not an addressing one.
+- **Two mechanisms, now unambiguous.** A hyphen joins a noun that happens to be two words
+  (`principal-group`, `location-type`, `audit-log`, `effective-tag`); a space means the thing beneath it
+  (`location-type property`, `principal-group member`). Before this, the same registry used both, which
+  is what made the rule unstateable.
+- **Found by asking what the rule was**, not by a failure. The CLI naming fix
+  ([ADR-0059](#adr-0059-every-collection-segment-is-a-command-level)) made the two spellings sit next to
+  each other in one command tree, where the contradiction was obvious. The generator was correct
+  throughout; the routes disagreed with themselves.
+- **Addressing only.** Same handlers, same `<resource>:<action>` gates, same scope injection, no storage
+  change. The `type` command group disappears and `nameOverride` needs no entry for any of it.
+- **Breaking:** three route shapes change. At v0.0.0 that is a regeneration plus a docs pass, and
+  `TestDocsOnlyNameRealCommands` fails on any guide left teaching the old names.
+- **Tracked as** [#361](https://github.com/hyperscaleav/omniglass/issues/361).
+
+### ADR-0061: A calculated series is current at its highest id, not its newest timestamp
+
+- **Date:** 2026-07-22 | **Status:** Accepted | **Pages:** [datapoints](/architecture/datapoints/)
+- **Decision:** for a **calculated** series (health, and anything else the engine derives), the current
+  value is the row with the **highest id**. `ts` records when the value was computed and is for display
+  and history; it does not decide which row is current. For an **observed** series, `ts` still orders,
+  because it is the observation time and a late arrival must not displace a newer reading, but `id`
+  breaks a tie.
+- **Context:** `recordHealth` writes `select clock_timestamp(), ...`, so the timestamp is evaluated in
+  the SELECT list while the id comes from the identity sequence applied when the row is inserted: the
+  clock is read **before** the id is assigned. Two concurrent inserts can therefore commit with `ts`
+  inverted relative to `id`, and a reader ordering by `ts` then disagrees with the writer about which
+  row is current.
+- **Production was already right, the test was not.** Every production reader of a recorded verdict
+  (`recordHealth`'s own transition check, `subtreeSystemHealth`) orders by `id`, so the writer and the
+  readers agreed. The health test helper ordered by `ts`, which is why it reported verdicts the engine
+  never produced. The intermittent failure was in the harness, not the product.
+- **`LatestState` is a real exposure and is fixed here too.** It backs the ingest transition guard and
+  ordered by `ts` alone, so a poll cycle stamping several rows in one instant resolved to an arbitrary
+  one and the guard could compare against a row that is not current. It now tie-breaks on `id`.
+- **Reproduced deliberately rather than waited for.** The failure needs contention: it never appeared in
+  nine consecutive full-suite runs on an idle machine, and appeared within one or two attempts when six
+  copies of the storage package ran at once. Under that same load the fix held for 24 runs.
+- **The regression test writes the inversion directly** rather than racing it into existence, and asserts
+  the two orderings genuinely disagree before asserting the outcome, so it cannot pass vacuously. It
+  reads through `LocationHealth`, which reports the **recorded** verdict; `SystemHealth` recomputes live
+  and cannot witness the defect.
+- **Tracked as** [#356](https://github.com/hyperscaleav/omniglass/issues/356).
+
+### ADR-0062: A registry takes a uuid primary key and a renameable handle
+
+- **Date:** 2026-07-22 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/), [api-first](/contributing/api-first/)
+- **Decision:** a registry has a **uuid `id`** and a **unique, renameable `name`**, the shape `tag` and every
+  estate entity already have. `product` and `vendor` convert first; the remaining seven follow, slice by
+  slice, tracked as [#262](https://github.com/hyperscaleav/omniglass/issues/262).
+- **Context:** [ADR-0056](#adr-0056-every-foreign-key-stores-a-primary-key) says every foreign key stores
+  its target's primary key, and epic #343 made that true everywhere **except** the slug-keyed registries,
+  where the name *is* the key. That exception was the last place a foreign key referenced a mutable,
+  human-authored string. A product id was a typo or a rebrand away from being wrong forever, and two
+  device packs both defining `cisco-room-kit-pro` collide on the primary key itself.
+- **`name`, not `slug` or `key`.** Six tables and every estate entity already call the human handle `name`,
+  and the API bodies already say `name`. A third word for the same concept would be worse than the
+  inconsistency it fixed. Renaming the family to `slug` later is a separate, mechanical decision.
+- **The registries already disagreed with each other**, which is worth recording: `property` and
+  `interface_type` call their slug `name`, while `capability`, `driver`, `location_type`, `secret_type`,
+  and `standard` call theirs `id`. So the later slices are a **rename** for five of them and an addition
+  for two, not one uniform change.
+- **`node` stays the exception.** Its primary key is `principal_id`, because a node is the detail row of a
+  principal and its key IS that foreign key. It is deliberate and it is not changing.
+- **The API carries both and accepts either**, as the estate entities do: `id` (uuid) and `name` (handle)
+  on every body, and a path or reference resolves whichever form it is given. A kebab handle can never
+  look like a uuid, so the two cannot collide.
+- **The rename test is written first, each slice.** It renames a handle and asserts every reference still
+  resolves and now reads the new one. That is the capability the epic buys, so it is what the slice proves.
+- **The exception is retired, not just the tables.** With all nine registries converted, a closing slice
+  removes the slug-keyed carve-out from the doctrine: the [api-first](/contributing/api-first/) rule now
+  states every foreign key stores a uuid with no exception, [ADR-0056](#adr-0056-every-foreign-key-stores-a-primary-key)'s
+  carve-out is marked retired, and the `TestReferencesCarryBothForms` guard drops its slug-keyed
+  allow-list (the registry references move into the both-forms rule, and the one that surfaced a real
+  gap, a component response that carried `product_id` without the product's name, is fixed). The
+  storage helper collapses too: the per-registry `productRefCol` / `vendorRefCol` and the
+  `registryHandles` set fold into one `registryRefCol(ref)`, since every registry now behaves the same.
+
+### ADR-0063: The telemetry model is typed registries over bare-noun data tables
+
+- **Date:** 2026-07-23 | **Status:** Accepted | **Pages:** [datapoints](/architecture/datapoints/), [events](/architecture/events/), [variables](/architecture/variables/), [storage](/architecture/storage/), [glossary](/architecture/glossary/)
+- **Decision:** every component interaction normalizes to one of three **registries**, each suffixed
+  `_type` (`property_type`, `event_type`, `command_type`), over bare-noun **data tables**
+  (`metric`, `state`, `property`, `event`, `command`). A registry is a classification, so it takes the
+  `_type` suffix; the bare noun holds the instances. This retires the last confusion left by the
+  [datapoint_type to property rename](#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle):
+  today's `property` registry becomes `property_type` (`kind` in `{metric, state}`), and today's
+  `property_value` becomes `property`, the latest-value cache. `event` and `command` gain their own
+  registries and are no longer modeled as a `property` kind.
+- **Context:** using bare nouns for registries was the root inconsistency. `property` named the
+  registry while `property_value` named the data; `event` had been folded into the property registry as
+  `kind=log`, the "false unification" [datapoints](/architecture/datapoints/) and
+  [events](/architecture/events/) explicitly warn against; and the code said `property` while the pages
+  still said `datapoint_type`. Suffixing the registry `_type` and freeing the bare noun for the data
+  fixes all three at once, and it **vindicates the two-registry separation the pages always wanted**:
+  `property_type` and `event_type` stay distinct catalogs, they were never one universal registry.
+- **The reusable pattern.** A **registry** (`<noun>_type`) defines canonical entries. A **realization**
+  (the bare `<noun>`) records data referencing one registry entry by FK, over the same exclusive **owner
+  arc** (component / system / location / node) the estate already uses, tagged with a **provenance** or
+  **origin**. `metric`/`state`/`property` reference `property_type`; `event` references `event_type`;
+  `command` references `command_type`. One rule, four tables, no bare-noun registries.
+- **A log is a collection of events, so there is no `log` table.** The row is an `event` (one
+  occurrence); a log is the *stream* of them, the way a registry is a collection of keys. So the earlier
+  plan to rename the occurrence table `event` to `log` is **reversed**: the table stays `event`, and "a
+  component's log" is a **query** over its events (observed origin). Component-observed versus
+  platform-derived is an `origin` on the row, not a separate table; promoting a raw line into a typed
+  event is enrichment of the row, not a move between tables.
+- **The owner arc stays; owner-prefixed tables (`component_metric`, `system_metric`, ...) are
+  rejected.** The exclusive arc already carries a component's and a system's metrics in one table, and it
+  is the estate's established primitive (`property`, `tag_binding`, `secret`, `variable` all use it).
+  Splitting by owner would multiply the firehose tables fourfold, fragment the hot path, and force a
+  UNION for the query that matters most: a system's health rolling up its components' metrics wants one
+  table. The only gain is a non-null single FK, which the arc's check already enforces logically.
+- **`property` is a latest-value cache; the firehose stays `metric`/`state`.** `property` holds the
+  newest value per **series**, `(owner, property_type, instance, provenance)`, the same series identity
+  the firehose uses, **upserted on intake**. `metric` and `state` remain the append-only samples. The
+  cache exists to answer "what is it now" and "what did we last tell it" without scanning the firehose.
+- **Provenance in the cache is rows, not columns.** Each provenance is its own series row (`observed`,
+  `calculated`, `intended`), so `observed=45` and `intended=50` are two rows, not two columns. Columns
+  would put device-intake, command, and config all updating the same row (lock contention, lost updates
+  on the hot path) and bake the provenance set into the schema. The "want / told / is" one-liner is the
+  right **read** shape, delivered as a **pivot view** over the rows: read-shape is not write-shape.
+- **`declared` resolves on demand; `intended` is stored.** The config setpoint (`declared`) is resolved
+  live from the cascade and never rows into the cache, because it is always current and needs no history.
+  The last commanded value (`intended`) **is** stored, because settlement needs the fact plus its `ts`.
+  So the cache's provenance set is `{observed, calculated, intended}`.
+- **Two different drifts fall out of that split.** **Command settlement** compares `observed` to
+  `intended`, is **windowed**, and is short-lived ("did my last command take?"). **Config drift**
+  compares `observed` to `declared` (resolved live), is **ongoing** ("is it where config wants it?").
+  This is exactly why `intended` is stored and `declared` is not.
+- **The settle window is a driver fact, carried on `command_type`.** How long a command takes to
+  actuate (an input switch is near-instant, a lamp warmup is tens of seconds) is device-physical, so it
+  lives on the **driver**, on the `command_type` the driver populates (the driver as a declarative menu
+  of canonical properties, events, and commands), not on the abstract `property_type`. Settlement is
+  **computed**, never a stored flag: within `now - intended.ts < settle_window` the value is pending and
+  drift is suppressed; past the window, `observed` matching `intended` is settled and a mismatch is a
+  failed command.
+- **Staging.** The **name foundation** is cheap and lands first: `property` to `property_type`,
+  `property_value` to `property`, and the `metric`/`state` FK repoint, a wide but mechanical sweep with
+  no behavior change. The **event family** (`event_type`, the `origin` and causation columns, pulling
+  `kind=log` out of `property_type`) rides the calculation and promotion layer, still `Design`. The
+  **command pillar** (`command_type`, `command`, the settle window, command settlement) is greenfield.
+  Each architecture page is rewritten to this model in the slice that builds its part, per
+  [docs with everything](/contributing/docs-with-everything/); until then the pages carry an inline
+  note pointing here.
+
+### ADR-0064: operator deletes become undoable, not modifier-chorded
 
 - **Date:** 2026-07-20 | **Status:** Accepted | **Pages:** [UI](/architecture/ui/)
 - **Decision:** The keyboard epic's delete affordance is an **undoable delete**, not a modifier chord. The

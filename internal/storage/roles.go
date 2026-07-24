@@ -9,6 +9,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // SystemRole is a slot a system needs filled, declared either on a standard (and
@@ -101,24 +102,24 @@ func (e *CapabilityShortfall) Error() string {
 // transaction.
 func (p *PG) EffectiveCapabilities(ctx context.Context, q querier, componentName string) ([]string, error) {
 	var caps []string
+	// The set is resolved by capability id and projected as name at the end (a
+	// capability id is a uuid; its handle is what the API and health rules speak).
 	err := q.QueryRow(ctx, `
-		select coalesce(array_agg(cap order by cap), '{}')
-		from (
-			-- what the product declares
-			select pc.capability_id as cap
+		select coalesce(array_agg(cap.name order by cap.name), '{}')
+		from capability cap
+		where cap.id in (
+			select pc.capability_id
 			from component c
 			join product_capability pc on pc.product_id = c.product_id
 			where c.name = $1
 			union
-			-- what the component adds on its own
 			select cc.capability_id
 			from component_capability cc
-			where cc.component_id = $1 and cc.present
-		) provided
-		where cap not in (
-			-- minus what the component suppresses
+			where cc.component_id = (select id from component where name = $1) and cc.present
+		)
+		and cap.id not in (
 			select capability_id from component_capability
-			where component_id = $1 and not present
+			where component_id = (select id from component where name = $1) and not present
 		)`, componentName).Scan(&caps)
 	if err != nil {
 		return nil, fmt.Errorf("storage: effective capabilities %s: %w", componentName, err)
@@ -141,7 +142,7 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 	}
 	rows, err := p.pool.Query(ctx, `
 		with sys as (
-			select name, standard_id from system where name = $1
+			select id, name, standard_id from system where name = $1
 		),
 		roles as (
 			-- inherited: declared on the standard this system conforms to
@@ -150,15 +151,18 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 			union all
 			-- ad-hoc: declared directly on this system
 			select r.*, false as from_standard
-			from sys join system_role r on r.owner_kind = 'system' and r.system_id = sys.name
+			from sys join system_role r on r.owner_kind = 'system' and r.system_id = sys.id
 		)
 		select roles.id, roles.name, roles.display_name, roles.quorum, roles.impact, roles.from_standard,
 		       roles.created_at, roles.updated_at,
-		       coalesce(array_agg(distinct rc.capability_id) filter (where rc.capability_id is not null), '{}') as caps,
-		       coalesce(array_agg(distinct ra.component_id) filter (where ra.component_id is not null), '{}') as assigned
+		       coalesce(array_agg(distinct cap.name) filter (where cap.name is not null), '{}') as caps,
+		       coalesce(array_agg(distinct ac.name) filter (where ac.name is not null), '{}') as assigned
 		from roles
-		left join role_capability rc on rc.role_id = roles.id
-		left join role_assignment ra on ra.role_id = roles.id and ra.system_id = $1
+		left join system_role_capability rc on rc.role_id = roles.id
+		left join capability cap on cap.id = rc.capability_id
+		left join system_role_assignment ra on ra.role_id = roles.id
+		     and ra.system_id = (select id from system where name = $1)
+		left join component ac on ac.id = ra.component_id
 		group by roles.id, roles.name, roles.display_name, roles.quorum, roles.impact, roles.from_standard,
 		         roles.created_at, roles.updated_at
 		order by roles.name`, systemName)
@@ -227,13 +231,14 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 		return err
 	}
 	if _, err := tx.Exec(ctx, `
-		insert into role_assignment (system_id, role_id, component_id)
-		values ($1, $2, $3)
+		insert into system_role_assignment (system_id, role_id, component_id)
+		values ((select id from system where name = $1), $2,
+		        (select id from component where name = $3))
 		on conflict (system_id, role_id, component_id) do nothing`,
 		systemName, roleID, componentName); err != nil {
 		return mapRoleWriteErr(err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "role_assignment", roleID, nil,
+	if err := writeAuditRes(ctx, tx, actorID, "update", "system_role_assignment", roleID, nil,
 		map[string]string{"system": systemName, "role": roleName, "component": componentName}); err != nil {
 		return err
 	}
@@ -271,15 +276,16 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 	}
 	var id string
 	if err := tx.QueryRow(ctx, `
-		delete from role_assignment
-		where system_id = $1 and role_id = $2 and component_id = $3
+		delete from system_role_assignment
+		where system_id = (select id from system where name = $1) and role_id = $2
+		  and component_id = (select id from component where name = $3)
 		returning id`, systemName, roleID, componentName).Scan(&id); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrAssignmentMissing
 		}
 		return fmt.Errorf("storage: unassign role: %w", err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "role_assignment", id, nil, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "system_role_assignment", id, nil, nil); err != nil {
 		return err
 	}
 	// The assignment row is already gone, so walking the component's assignments
@@ -302,14 +308,15 @@ func (p *PG) resolveRole(ctx context.Context, q querier, systemName, roleName st
 		caps []string
 	)
 	err := q.QueryRow(ctx, `
-		with sys as (select name, standard_id from system where name = $1)
+		with sys as (select id, name, standard_id from system where name = $1)
 		select r.id,
-		       coalesce(array_agg(rc.capability_id) filter (where rc.capability_id is not null), '{}')
+		       coalesce(array_agg(cap.name) filter (where cap.name is not null), '{}')
 		from sys
 		join system_role r
-		     on (r.owner_kind = 'system' and r.system_id = sys.name)
+		     on (r.owner_kind = 'system' and r.system_id = sys.id)
 		     or (r.owner_kind = 'standard' and r.standard_id = sys.standard_id)
-		left join role_capability rc on rc.role_id = r.id
+		left join system_role_capability rc on rc.role_id = r.id
+		left join capability cap on cap.id = rc.capability_id
 		where r.name = $2
 		group by r.id`, systemName, roleName).Scan(&id, &caps)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -340,8 +347,10 @@ func mapRoleWriteErr(err error) error {
 	if isUniqueViolation(err) {
 		return ErrRoleExists
 	}
-	var pgErr interface{ SQLState() string }
-	if errors.As(err, &pgErr) && pgErr.SQLState() == "23503" {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && (pgErr.Code == "23503" ||
+		// an unknown capability name resolves to null on a not-null arc
+		(pgErr.Code == "23502" && pgErr.ColumnName == "capability_id")) {
 		return ErrRoleRefNotFound
 	}
 	return fmt.Errorf("storage: role write: %w", err)
