@@ -63,6 +63,13 @@ type updateComponentInput struct {
 	Body struct {
 		Name        *string `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"A new globally unique technical name (rename)"`
 		DisplayName *string `json:"display_name,omitempty"`
+		// The placement and classification fields take the house three-state
+		// convention: an omitted field is unchanged, an explicit empty string
+		// clears, and a name sets. So they are pointers passed straight through
+		// (never emptyPtrToNil, which would collapse an intended clear).
+		Parent   *string `json:"parent,omitempty" doc:"Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component."`
+		Location *string `json:"location,omitempty" doc:"Relocates the component to this location name. An empty string clears its placement."`
+		Product  *string `json:"product,omitempty" doc:"Re-classifies the component to this product (catalog SKU). An empty string clears it. Explicitly-set property values persist; the new product's contract defaults follow."`
 	}
 }
 
@@ -144,11 +151,17 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Method:      http.MethodPatch,
 		Path:        "/components/{name}",
 		Summary:     "Update a component",
-		Description: "Patches a component's technical name or display_name. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
+		Description: "Patches a component's technical name, display_name, product, location, or parent. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
 	}, "component", "update"), func(ctx context.Context, in *updateComponentInput) (*componentOutput, error) {
 		c, err := gw.UpdateComponent(ctx, actorID(ctx), in.Name, storage.ComponentPatch{
 			Name:        in.Body.Name,
 			DisplayName: in.Body.DisplayName,
+			// Passed straight through, never emptyPtrToNil: the storage layer reads
+			// "" as clear, and collapsing it here would make a relocate-to-none,
+			// declassify, or lift-to-root impossible.
+			ParentName:   in.Body.Parent,
+			LocationName: in.Body.Location,
+			ProductName:  in.Body.Product,
 		}, a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "update"))
 		if err != nil {
 			return nil, mapComponentErr(err)
@@ -219,6 +232,8 @@ func mapComponentErr(err error) error {
 		return huma.Error422UnprocessableEntity("invalid name")
 	case errors.Is(err, storage.ErrParentComponentNotFound):
 		return huma.Error422UnprocessableEntity("parent component not found")
+	case errors.Is(err, storage.ErrComponentCycle):
+		return huma.Error422UnprocessableEntity("cannot move a component under itself or a descendant")
 	case errors.Is(err, storage.ErrSystemNotFound):
 		return huma.Error422UnprocessableEntity("system not found")
 	case errors.Is(err, storage.ErrLocationNotFound):
