@@ -3,6 +3,7 @@ import { createSignal } from "solid-js";
 import { render, fireEvent, screen, waitFor } from "@solidjs/testing-library";
 import { createBladeController, useBladeEdit, type BladeDef } from "../lib/blades";
 import BladeStack from "./BladeStack";
+import { KeymapProvider } from "./KeymapProvider";
 
 // A fake two-kind registry: enough to prove the stack renders, drills, offsets,
 // and dismisses. The bodies are inert; the controller drives everything.
@@ -34,7 +35,12 @@ describe("BladeStack", () => {
 
   it("Escape pops the top blade; the back button pops; close clears the stack", () => {
     const ctl = createBladeController();
-    const { container, getAllByLabelText } = render(() => <BladeStack controller={ctl} registry={registry} />);
+    // Escape flows through the keymap registry's `blade` scope, so mount the provider.
+    const { container, getAllByLabelText } = render(() => (
+      <KeymapProvider keys={() => ({ close_blade: "Escape" })} platform="Win32">
+        <BladeStack controller={ctl} registry={registry} />
+      </KeymapProvider>
+    ));
     ctl.push({ kind: "user", id: "a" });
     ctl.push({ kind: "group", id: "x" });
     expect(asides(container).length).toBe(2);

@@ -3967,6 +3967,11 @@ export interface components {
              */
             command_palette: string;
             /**
+             * @description Show keyboard shortcuts
+             * @default ?
+             */
+            help: string;
+            /**
              * @description Open the detail blade
              * @default d
              */

@@ -37,6 +37,10 @@ There are two ways to operate, and they are the same API with the same checks be
 - Press **⌘K** (or Ctrl-K) to open the command palette and jump to any section by name. Arrow
   keys move the selection, Enter navigates, Esc closes. This is a global jump, distinct from a
   page's own [filter](/guides/operator/inventory/#filter).
+- Press **?** for the **keyboard shortcuts** overlay: it lists the keys active right now, grouped
+  by context and labelled for your platform (⌘ on a Mac, Ctrl elsewhere). The shortcuts are yours
+  to change, set in [settings](/architecture/settings/), so the overlay always shows your keymap,
+  not a fixed list.
 - You only see what you can use: a tab you have no read grant for is **hidden**, and an
   action you cannot perform does not render. The same permission map also **guards the route**,
   so a hidden tab is an unreachable URL: typing or bookmarking a page you cannot read redirects

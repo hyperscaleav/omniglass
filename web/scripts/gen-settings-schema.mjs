@@ -36,3 +36,19 @@ writeFileSync(
   banner + "export const settingsSchema = " + JSON.stringify(out, null, 2) + " as const;\n"
 );
 console.log("wrote web/src/api/settings.schema.gen.ts");
+
+// The keybindings catalog: the default combo and description for every shortcut,
+// sliced from the same reflected Keybindings schema. This is the single source the
+// console keymap registry reads (each shortcut is declared once, on the Go struct),
+// so no default or label is hand-kept on the client.
+const kbSchema = deref(settingsSchema.properties.keybindings);
+const catalog = {};
+for (const [action, propSchema] of Object.entries(kbSchema.properties || {})) {
+  const s = deref(propSchema);
+  catalog[action] = { default: s.default ?? "", doc: s.description ?? "" };
+}
+writeFileSync(
+  new URL("../src/api/keybindings.catalog.gen.ts", import.meta.url),
+  banner + "export const keybindingsCatalog = " + JSON.stringify(catalog, null, 2) + " as const;\n"
+);
+console.log("wrote web/src/api/keybindings.catalog.gen.ts");

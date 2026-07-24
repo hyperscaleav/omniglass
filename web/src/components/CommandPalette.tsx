@@ -6,27 +6,35 @@ import { Search, ArrowRight } from "./icons";
 
 // The ⌘K command palette: a global jump across the whole app (distinct from a
 // page's own filter). Built on Kobalte Dialog (focus-trap, Esc, scroll-lock for
-// free); the command source is the nav IA flattened to destinations. Arrow keys
-// move the active row, Enter navigates.
-type Command = { label: string; path: string; group?: string };
+// free); the command source is the nav IA flattened to destinations, plus action
+// commands (a command may `run` instead of navigating, and may carry a `hint` shown
+// in the right-hand shortcut column). Arrow keys move the active row, Enter runs it.
+type Command = { label: string; group?: string; path?: string; run?: () => void; hint?: string };
 
-const commands: Command[] = navItems.flatMap((item) =>
+const navCommands: Command[] = navItems.flatMap((item) =>
   item.path
     ? [{ label: item.label, path: item.path }]
     : (item.children ?? []).map((c) => ({ label: c.label, path: c.path, group: item.label })),
 );
 
-export default function CommandPalette(props: { open: boolean; onClose: () => void }) {
+export default function CommandPalette(props: { open: boolean; onClose: () => void; onShowHelp?: () => void }) {
   const navigate = useNavigate();
   const [query, setQuery] = createSignal("");
   const [active, setActive] = createSignal(0);
   const listId = createUniqueId();
   const optId = (i: number) => `${listId}-opt-${i}`;
 
+  // The palette's action commands sit alongside the nav destinations. Today the only
+  // one is the keyboard help overlay, carrying its `?` hint so the palette teaches the
+  // shortcut (doctrine 4).
+  const allCommands = createMemo<Command[]>(() =>
+    props.onShowHelp ? [...navCommands, { label: "Keyboard shortcuts", hint: "?", run: props.onShowHelp }] : navCommands,
+  );
+
   const results = createMemo(() => {
     const q = query().trim().toLowerCase();
-    if (!q) return commands;
-    return commands.filter((c) => c.label.toLowerCase().includes(q) || (c.group ?? "").toLowerCase().includes(q));
+    if (!q) return allCommands();
+    return allCommands().filter((c) => c.label.toLowerCase().includes(q) || (c.group ?? "").toLowerCase().includes(q));
   });
 
   // Reset query + selection each time it opens; keep active in range as results change.
@@ -43,7 +51,8 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
   const go = (c: Command | undefined) => {
     if (!c) return;
     props.onClose();
-    navigate(c.path);
+    if (c.run) c.run();
+    else if (c.path) navigate(c.path);
   };
 
   const onKey = (e: KeyboardEvent) => {
@@ -102,6 +111,9 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
                           <span class="text-base-content/30">/</span>
                         </Show>
                         <span class="flex-1">{c.label}</span>
+                        <Show when={c.hint}>
+                          <kbd class="kbd kbd-sm">{c.hint}</kbd>
+                        </Show>
                         <Show when={i() === active()}>
                           <ArrowRight size={14} />
                         </Show>

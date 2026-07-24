@@ -2227,3 +2227,26 @@ below from the project's history. From here it grows one slice at a time.
   Each architecture page is rewritten to this model in the slice that builds its part, per
   [docs with everything](/contributing/docs-with-everything/); until then the pages carry an inline
   note pointing here.
+
+### ADR-0064: operator deletes become undoable, not modifier-chorded
+
+- **Date:** 2026-07-20 | **Status:** Accepted | **Pages:** [UI](/architecture/ui/)
+- **Decision:** The keyboard epic's delete affordance is an **undoable delete**, not a modifier chord. The
+  first sketch (`ctrl+d` to delete, shift-click a delete to skip its confirm) is **dropped**: `ctrl+d` is the
+  browser's bookmark shortcut in Chrome and Firefox, hostile to steal, and shift-click is a hidden, unlabelled,
+  irreversible path that also collides with range-select, so one stray click destroys a row. Instead a delete
+  is **optimistic with a short Undo window**: the row disappears at once, a toast offers **Undo** for a few
+  seconds, the real `DELETE` fires only when the toast expires, and Undo cancels the pending request. This
+  retires the ~19 copy-pasted `window.confirm()` calls (a primitive-first cleanup) and gives every delete a
+  real escape hatch. The keyboard delete uses a **Gmail-style `#`** (Shift+3, no browser collision) rather than
+  a `ctrl+` combo.
+- **Context:** The window this slice opens is **client-deferred**, not a durable server-side soft-delete: the
+  pending `DELETE` is held in the client and flushed on toast expiry (and on route change or unload), so it
+  needs no schema change and solves the accidental-destroy case the sketch created. Durable server-side
+  soft-delete across the estate entities (a `deleted_at` column, a reaper, view filtering) is a **separate
+  storage/lifecycle epic**, out of scope here. The genuinely irreversible, security-sensitive actions (purge a
+  principal, revoke all sessions, restore all settings defaults) keep an **explicit typed confirm dialog**
+  rather than an undo, because undo-on-expiry is the wrong model for them.
+- **Closes the gap:** the delete UX and the `#` binding land in slice 2 of the keyboard epic
+  ([#303](https://github.com/hyperscaleav/omniglass/issues/303)); this ADR records the direction now, as the
+  registry primitive (slice 0) ships.

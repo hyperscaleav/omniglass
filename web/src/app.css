@@ -211,6 +211,11 @@ html[data-density="compact"] { --og-row-h: 2.1rem; --og-pad-card: 0.9rem; --og-g
 .og-pad { padding: var(--og-pad-card); }
 .og-stack { gap: var(--og-gap); }
 
+/* kbd sits a hair high: daisyUI's keycap has a 1px-thicker bottom border (the 3D
+   lip), so the flex-centered glyph is pushed above the optical center. A 1px top
+   padding counters the lip and re-centers the character in the key. */
+.kbd { padding-top: 1px; }
+
 /* column-resize handle for DataTable (daisyUI has no table-resize primitive). */
 .col-resizer { position: absolute; top: 0; right: -3px; width: 6px; height: 100%; cursor: col-resize; z-index: 2; touch-action: none; }
 .col-resizer::after { content: ""; position: absolute; top: 25%; right: 3px; width: 1px; height: 50%; background: var(--color-base-300); opacity: 0; transition: opacity .15s; }

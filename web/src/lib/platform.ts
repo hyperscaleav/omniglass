@@ -19,6 +19,55 @@ export function shortcutHint(platform: string, key: string): string {
   return isMac(platform) ? `⌘${key}` : `Ctrl+${key}`;
 }
 
+// Named-key display labels; anything else single-char is upper-cased and any other
+// multi-char token is shown verbatim.
+const KEY_LABELS: Record<string, string> = {
+  escape: "Esc",
+  arrowup: "↑",
+  arrowdown: "↓",
+  arrowleft: "←",
+  arrowright: "→",
+  " ": "Space",
+  space: "Space",
+  enter: "Enter",
+  tab: "Tab",
+  backspace: "⌫",
+};
+
+function keyLabel(key: string): string {
+  const lower = key.toLowerCase();
+  if (KEY_LABELS[lower]) return KEY_LABELS[lower];
+  return key.length === 1 ? key.toUpperCase() : key;
+}
+
+// formatCombo renders a binding spec ("mod+k", "shift+3", "Escape", "?") as a
+// platform-native label for a <kbd> hint: glyphs joined tight on mac (⇧⌘K), words
+// joined with "+" elsewhere (Ctrl+Shift+K). It is the display sibling of the keymap
+// core's parseCombo, kept here beside the other platform labelling.
+export function formatCombo(platform: string, spec: string): string {
+  const mac = isMac(platform);
+  const mods = { ctrl: false, alt: false, shift: false, mod: false, meta: false };
+  let key = "";
+  for (const raw of spec.split("+").map((t) => t.trim()).filter((t) => t.length > 0)) {
+    switch (raw.toLowerCase()) {
+      case "mod": mods.mod = true; break;
+      case "ctrl": case "control": mods.ctrl = true; break;
+      case "alt": case "option": case "opt": mods.alt = true; break;
+      case "shift": mods.shift = true; break;
+      case "cmd": case "command": case "meta": case "super": mods.meta = true; break;
+      default: key = raw;
+    }
+  }
+  const parts: string[] = [];
+  if (mods.ctrl) parts.push(mac ? "⌃" : "Ctrl");
+  if (mods.alt) parts.push(mac ? "⌥" : "Alt");
+  if (mods.shift) parts.push(mac ? "⇧" : "Shift");
+  if (mods.mod) parts.push(mac ? "⌘" : "Ctrl");
+  if (mods.meta) parts.push(mac ? "⌘" : "Meta");
+  parts.push(keyLabel(key));
+  return parts.join(mac ? "" : "+");
+}
+
 // Read the host platform, preferring the modern userAgentData over the deprecated
 // (but universally present) navigator.platform.
 export function hostPlatform(): string {
