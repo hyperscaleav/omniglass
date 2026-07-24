@@ -19,6 +19,7 @@ var (
 	ErrComponentExists         = errors.New("storage: component name already exists")
 	ErrParentComponentNotFound = errors.New("storage: parent component not found")
 	ErrProductNotFound         = errors.New("storage: product not found")
+	ErrComponentCycle          = errors.New("storage: cannot move a component under itself or a descendant")
 )
 
 // Component is a leaf of the estate: name-addressable, nestable via parent_id,
@@ -62,14 +63,19 @@ type ComponentSpec struct {
 	ProductName  *string
 }
 
-// ComponentPatch is the update input: nil fields unchanged. ProductName follows
-// the house three-state convention, nil unchanged and an explicit empty string
-// CLEARS it (leaving a component that carries only its own capability facts).
-// Reparent and relocate are deferred.
+// ComponentPatch is the update input: nil fields unchanged. ProductName,
+// LocationName, and ParentName all follow the house three-state convention: nil
+// unchanged, an explicit empty string CLEARS (a productless component that carries
+// only its own capability facts, an unplaced component, a root component), and a
+// name resolves to its id. ParentName is cycle-guarded and scope-injected like a
+// location reparent: the new parent must be inside the caller's update scope and
+// must not be the component itself or one of its own descendants.
 type ComponentPatch struct {
-	Name        *string
-	DisplayName *string
-	ProductName *string
+	Name         *string
+	DisplayName  *string
+	ProductName  *string
+	LocationName *string
+	ParentName   *string
 }
 
 // --- component CRUD (read/delete via the generic helpers) --------------------
@@ -226,9 +232,32 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 	return c, nil
 }
 
+// componentIsDescendant reports whether candidateID is targetID or a descendant
+// of it: the cycle guard for a reparent, which must not move a component under
+// itself or one of its own children. The recursive walk down parent_id mirrors
+// locationIsDescendant on the component tree.
+func (p *PG) componentIsDescendant(ctx context.Context, q querier, targetID, candidateID string) (bool, error) {
+	var ok bool
+	err := q.QueryRow(ctx, `
+		with recursive sub(id) as (
+			select id from component where id = $1
+			union all
+			select c.id from component c join sub on c.parent_id = sub.id
+		) cycle id set is_cycle using path
+		select exists(select 1 from sub where id = $2)`,
+		targetID, candidateID).Scan(&ok)
+	if err != nil {
+		return false, fmt.Errorf("storage: component descendant check: %w", err)
+	}
+	return ok, nil
+}
+
 // UpdateComponent patches a component by name with the three-way scope split and
-// in-transaction audit, recomputing health when the product moved. Reparent and
-// relocate are deferred.
+// in-transaction audit. Product, location, and parent are all patchable: a product
+// swap recomputes health (it supplies the component's default capabilities), a
+// relocate and a reparent are structural placement moves that do not, because the
+// health chain runs component -> systems-it-staffs -> locations-over-those-systems
+// and a component's own location and parent sit outside it.
 func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch ComponentPatch, read, action scope.Set) (*Component, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -258,6 +287,45 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 		}
 		patchProductID = &pid
 	}
+	// The location arrives as a name, the column holds an id: resolve the set
+	// branch to its id while leaving nil (unchanged) and "" (clear) intact, the
+	// same three-state the system relocate uses.
+	locationPatch := patch.LocationName
+	if patch.LocationName != nil && *patch.LocationName != "" {
+		loc, err := scopedByName(ctx, tx, locationConfig, *patch.LocationName)
+		if err != nil {
+			return nil, err // ErrLocationNotFound -> mapped to 422 by the API
+		}
+		locationPatch = &loc.ID
+	}
+	// The parent is a reparent within the component tree: resolve by name, require
+	// the new parent inside the caller's action scope, and cycle-guard against
+	// moving the component under itself or a descendant. "" clears to a root
+	// component; nil leaves the parent untouched.
+	parentPatch := patch.ParentName
+	if patch.ParentName != nil && *patch.ParentName != "" {
+		parent, err := scopedByName(ctx, tx, componentConfig, *patch.ParentName)
+		if errors.Is(err, ErrComponentNotFound) {
+			return nil, ErrParentComponentNotFound
+		} else if err != nil {
+			return nil, err
+		}
+		in, err := inScopeTree(ctx, tx, componentTable, parent.ID, action)
+		if err != nil {
+			return nil, err
+		}
+		if !in {
+			return nil, ErrComponentForbidden
+		}
+		descendant, err := p.componentIsDescendant(ctx, tx, before.ID, parent.ID)
+		if err != nil {
+			return nil, err
+		}
+		if descendant {
+			return nil, ErrComponentCycle
+		}
+		parentPatch = &parent.ID
+	}
 	after, err := scanComponent(tx.QueryRow(ctx, `
 		update component set
 			name         = coalesce($2, name),
@@ -271,10 +339,22 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 				when $4 = '' then null
 				else $5::uuid
 			end,
+			-- location_id and parent_id take the same three states, already resolved
+			-- to ids. Each set branch casts because a CASE cannot mix uuid and text.
+			location_id  = case
+				when $6::text is null then location_id
+				when $6 = '' then null
+				else $6::uuid
+			end,
+			parent_id    = case
+				when $7::text is null then parent_id
+				when $7 = '' then null
+				else $7::uuid
+			end,
 			updated_at   = now()
 		where id = $1
 		returning `+componentCols,
-		before.ID, patch.Name, patch.DisplayName, patch.ProductName, patchProductID))
+		before.ID, patch.Name, patch.DisplayName, patch.ProductName, patchProductID, locationPatch, parentPatch))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
 	}
@@ -284,7 +364,8 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 	// The product supplies the component's default capabilities, so swapping it can
 	// make an assignee stop satisfying the role it fills (or start). Detected against
 	// the before-image, and recomputed under the name the row carries after the
-	// patch, which is what every capability and assignment lookup keys on.
+	// patch, which is what every capability and assignment lookup keys on. A
+	// relocate or reparent does not move health (see the doc comment above).
 	if !sameOptional(before.ProductID, after.ProductID) {
 		if err := p.RecomputeHealth(ctx, tx, after.Name); err != nil {
 			return nil, err

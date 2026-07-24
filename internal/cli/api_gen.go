@@ -995,11 +995,14 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fDisplayName string
+				var fLocation string
 				var fName string
+				var fParent string
+				var fProduct string
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a component",
-					Long:    "Patches a component's technical name or display_name. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
+					Long:    "Patches a component's technical name, display_name, product, location, or parent. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
 					Example: "  omniglass component update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1008,14 +1011,26 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("display-name") {
 							body["display_name"] = fDisplayName
 						}
+						if cmd.Flags().Changed("location") {
+							body["location"] = fLocation
+						}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
+						}
+						if cmd.Flags().Changed("parent") {
+							body["parent"] = fParent
+						}
+						if cmd.Flags().Changed("product") {
+							body["product"] = fProduct
 						}
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+				cmd.Flags().StringVar(&fLocation, "location", "", "Relocates the component to this location name. An empty string clears its placement.")
 				cmd.Flags().StringVar(&fName, "name", "", "A new globally unique technical name (rename)")
+				cmd.Flags().StringVar(&fParent, "parent", "", "Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component.")
+				cmd.Flags().StringVar(&fProduct, "product", "", "Re-classifies the component to this product (catalog SKU). An empty string clears it. Explicitly-set property values persist; the new product's contract defaults follow.")
 				return cmd
 			}()
 			return cmd
@@ -4377,12 +4392,14 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fDisplayName string
+				var fLocation string
 				var fName string
+				var fParent string
 				var fStandardId string
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a system",
-					Long:    "Patches a system's display_name or standard. An omitted standard_id leaves it unchanged; an explicit empty string clears it, converting the system to a one-off. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+					Long:    "Patches a system's display_name, standard, location, or parent. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 					Example: "  omniglass system update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4391,8 +4408,14 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("display-name") {
 							body["display_name"] = fDisplayName
 						}
+						if cmd.Flags().Changed("location") {
+							body["location"] = fLocation
+						}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
+						}
+						if cmd.Flags().Changed("parent") {
+							body["parent"] = fParent
 						}
 						if cmd.Flags().Changed("standard-id") {
 							body["standard_id"] = fStandardId
@@ -4401,7 +4424,9 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+				cmd.Flags().StringVar(&fLocation, "location", "", "Relocates the system to this location name. An empty string clears its placement.")
 				cmd.Flags().StringVar(&fName, "name", "", "A new globally unique technical name (rename)")
+				cmd.Flags().StringVar(&fParent, "parent", "", "Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system.")
 				cmd.Flags().StringVar(&fStandardId, "standard-id", "", "")
 				return cmd
 			}()

@@ -387,7 +387,7 @@ export interface paths {
         head?: never;
         /**
          * Update a component
-         * @description Patches a component's technical name or display_name. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+         * @description Patches a component's technical name, display_name, product, location, or parent. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-component"];
         trace?: never;
@@ -2391,7 +2391,7 @@ export interface paths {
         head?: never;
         /**
          * Update a system
-         * @description Patches a system's display_name or standard. An omitted standard_id leaves it unchanged; an explicit empty string clears it, converting the system to a one-off. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+         * @description Patches a system's display_name, standard, location, or parent. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-system"];
         trace?: never;
@@ -5182,8 +5182,14 @@ export interface components {
              */
             readonly $schema?: string;
             display_name?: string;
+            /** @description Relocates the component to this location name. An empty string clears its placement. */
+            location?: string;
             /** @description A new globally unique technical name (rename) */
             name?: string;
+            /** @description Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component. */
+            parent?: string;
+            /** @description Re-classifies the component to this product (catalog SKU). An empty string clears it. Explicitly-set property values persist; the new product's contract defaults follow. */
+            product?: string;
         };
         UpdateDriverInputBody: {
             /**
@@ -5344,8 +5350,12 @@ export interface components {
              */
             readonly $schema?: string;
             display_name?: string;
+            /** @description Relocates the system to this location name. An empty string clears its placement. */
+            location?: string;
             /** @description A new globally unique technical name (rename) */
             name?: string;
+            /** @description Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system. */
+            parent?: string;
             standard_id?: string;
         };
         UpdateTagInputBody: {
