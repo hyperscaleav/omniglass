@@ -107,7 +107,12 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 		s.nakOrTerm(msg) // transient registry read failure: redeliver (bounded)
 		return
 	}
-	reg := collection.NewRegistry(properties)
+	eventTypes, err := s.store.ListEventTypes(ctx)
+	if err != nil {
+		s.nakOrTerm(msg) // transient registry read failure: redeliver (bounded)
+		return
+	}
+	reg := collection.NewRegistry(properties, eventTypes)
 
 	// Route by the registry kind (the cp3-deferred "route by kind" note): a metric
 	// name lands in metric, a state name in state, a log name in
@@ -290,16 +295,20 @@ func deriveDatapoints(ev *ogv1.Event, owner storage.TaskOwner, reg collection.Re
 				Source:    owner.InterfaceType,
 				TS:        datapointTime(ev, dp),
 			})
-		case "log":
+		case "event":
 			msg, attrs, ok := logValue(dp)
 			if !ok {
 				continue
 			}
+			// A component-observed occurrence is caught: the node reported it, the
+			// platform did not derive it. This is the log-to-event promotion path
+			// (a raw log line lands as a typed event).
 			events = append(events, storage.EventOccurrence{
 				OwnerKind:  "component",
 				OwnerID:    owner.Component,
 				Key:        dp.GetName(),
 				Instance:   owner.InterfaceName,
+				Origin:     "caught",
 				Message:    msg,
 				Attributes: attrs,
 				Source:     owner.InterfaceType,

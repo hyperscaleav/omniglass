@@ -1,0 +1,16 @@
+# The ship-with event_type registry (ADR-0063): the occurrence keyspace, the twin
+# of the property_type registry. An event is a discrete happening, not a sampled
+# value. A registered name lets an occurrence be promoted from a raw log line into a
+# typed event, and gives it a known, inspectable identity.
+event_types:
+  - name: syslog.line
+    display_name: Syslog Line
+    description: >-
+      A device log line, the log-to-event sink's canonical starter type: a caught
+      occurrence carrying a message (and optional structured attributes), promoted
+      from a raw log rather than sampled as a value.
+  - name: call.started
+    display_name: Call Started
+    description: >-
+      A conferencing endpoint entered an active call. A caught occurrence when the
+      device reports it (an xAPI event), or a derived one when a rule infers it.

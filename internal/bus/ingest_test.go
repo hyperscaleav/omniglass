@@ -239,6 +239,18 @@ func TestTelemetryRoundTrip(t *testing.T) {
 		t.Fatalf("state confinement breached: node-a landed a verdict on disp-2: %+v", got)
 	}
 
+	// LOG-TO-EVENT PROMOTION (ADR-0063 #395): a syslog.line (a seeded event_type,
+	// no longer a log-kind property_type) published by node-a lands as a caught
+	// event on its component, routed by the event registry under the same owner
+	// confinement and reject-not-project as a metric or state.
+	publishEvent(t, ncA, "node-a", &ogv1.Event{
+		TaskId: "t-a", NodeId: "node-a",
+		Datapoints: []*ogv1.Datapoint{{Name: "syslog.line", Value: &ogv1.Datapoint_StringValue{StringValue: "port flap"}}},
+	})
+	waitEvent(t, ctx, gw, "disp-1", func(e storage.Event) bool {
+		return e.Message == "port flap" && e.Origin == "caught" && e.Key == "syslog.line"
+	})
+
 	// Telemetry publish isolation: node-a cannot publish to node-b's telemetry
 	// subject (a permissions violation), the same fence as worklist/heartbeat.
 	if err := ncA.Publish(collection.TelemetrySubject("node-b"), []byte("x")); err != nil {
@@ -247,6 +259,28 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	_ = ncA.Flush()
 	if !awaitPermissionViolation(permErrs, 3*time.Second) {
 		t.Fatalf("expected a permissions violation publishing to node-b's telemetry subject")
+	}
+}
+
+// waitEvent polls a component's recent events until one matches pred, or a
+// deadline passes. The log-to-event promotion writes an event; this reads it back.
+func waitEvent(t *testing.T, ctx context.Context, gw storage.Gateway, comp string, pred func(storage.Event) bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		evs, err := gw.ListComponentEvents(ctx, comp, time.Now().Add(-time.Hour), 50)
+		if err != nil {
+			t.Fatalf("list events %s: %v", comp, err)
+		}
+		for _, e := range evs {
+			if pred(e) {
+				return
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no event on %s matched the predicate (got %d)", comp, len(evs))
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 }
 

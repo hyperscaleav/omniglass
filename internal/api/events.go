@@ -23,14 +23,15 @@ const (
 )
 
 type eventBody struct {
-	TS             time.Time       `json:"ts" doc:"When the occurrence was observed"`
-	Key            string          `json:"key" doc:"The property name of the log (e.g. syslog.line)"`
-	PropertyTypeID string          `json:"property_type_id" doc:"The property's uuid, the stable form of key"`
-	Instance       string          `json:"instance,omitempty" doc:"The series discriminator (e.g. the interface), when set"`
-	Message        string          `json:"message" doc:"The occurrence message"`
-	Attributes     json.RawMessage `json:"attributes,omitempty" doc:"Structured attributes, when the occurrence carried a JSON payload"`
-	Provenance     string          `json:"provenance" doc:"The lineage of the occurrence (observed for direct collection)"`
-	Source         string          `json:"source,omitempty" doc:"The interface type that produced the occurrence"`
+	TS          time.Time       `json:"ts" doc:"When the occurrence happened"`
+	Key         string          `json:"key" doc:"The event_type name of the occurrence (e.g. syslog.line)"`
+	EventTypeID string          `json:"event_type_id" doc:"The event_type's uuid, the stable form of key"`
+	Origin      string          `json:"origin" doc:"How the occurrence arrived (caught/caused/derived/scheduled)"`
+	Instance    string          `json:"instance,omitempty" doc:"The series discriminator (e.g. the interface), when set"`
+	Message     string          `json:"message" doc:"The occurrence message"`
+	Attributes  json.RawMessage `json:"attributes,omitempty" doc:"Structured attributes, when the occurrence carried a JSON payload"`
+	Provenance  string          `json:"provenance" doc:"The lineage of the occurrence (observed for direct collection)"`
+	Source      string          `json:"source,omitempty" doc:"The interface type that produced the occurrence"`
 }
 
 type eventsOutput struct {
@@ -65,7 +66,8 @@ func registerEventRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		for _, e := range rows {
 			out.Body.Events = append(out.Body.Events, eventBody{
 				TS:  e.TS,
-				Key: e.Key, PropertyTypeID: e.PropertyTypeID,
+				Key: e.Key, EventTypeID: e.EventTypeID,
+				Origin:     e.Origin,
 				Instance:   e.Instance,
 				Message:    e.Message,
 				Attributes: json.RawMessage(e.Attributes),
