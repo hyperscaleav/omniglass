@@ -8,7 +8,7 @@ sidebar:
 ---
 
 :::caution[Direction: ADR-0063 makes the value store a provenance-keyed cache]
-The store is now named `property` per [ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables) (was `property_value`, built). Still directional, not yet built: making it a latest-value cache keyed by `(owner, property_type, instance, provenance)`, with `declared` config resolved on demand from the cascade rather than stored, while `intended` is stored for command settlement.
+The store is now named `property` per [ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables) (was `property_value`, built). The **observed** latest-value cache and the **reconciliation** read are now built: the ingest sink upserts the newest observed value per `(owner, property_type, instance, provenance)` series, and a per-component reconciliation read pivots want/told/is with **drift computed on read**, `declared` resolved live from the cascade (never a cache row). Still directional: `intended` is stored for command settlement, whose writer is the command pillar.
 :::
 
 :::note[Partial: the secret and variable members are built; config is Design]
