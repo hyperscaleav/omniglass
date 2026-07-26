@@ -754,6 +754,52 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "command",
+				Short: "Commands for the command resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fCommandType string
+					var fInstance string
+					var fParams string
+					var fValue string
+					cmd := &cobra.Command{
+						Use:     "issue <name>",
+						Short:   "Issue a command to a component",
+						Long:    "Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Returns the computed settlement verdict. Gated by command:issue; an out-of-scope component is a non-disclosing 404.",
+						Example: "  omniglass component command issue <name> --command-type command_type",
+						Args:    cobra.ExactArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/commands:issue", url.PathEscape(args[0]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("command-type") {
+								body["command_type"] = fCommandType
+							}
+							if cmd.Flags().Changed("instance") {
+								body["instance"] = fInstance
+							}
+							if cmd.Flags().Changed("params") {
+								body["params"] = jsonOrString(fParams)
+							}
+							if cmd.Flags().Changed("value") {
+								body["value"] = jsonOrString(fValue)
+							}
+							return runAPICommand(cmd, "POST", path, body)
+						},
+					}
+					cmd.Flags().StringVar(&fCommandType, "command-type", "", "The command_type to invoke")
+					_ = cmd.MarkFlagRequired("command-type")
+					cmd.Flags().StringVar(&fInstance, "instance", "", "The series discriminator (e.g. an interface), when the target is instanced")
+					cmd.Flags().StringVar(&fParams, "params", "", "The invocation params, stored on the command and the caused event")
+					cmd.Flags().StringVar(&fValue, "value", "", "The intended value for the target property (a settleable command)")
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fDisplayName string
 				var fLocation string

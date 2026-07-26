@@ -292,6 +292,12 @@ func (UnimplementedGateway) UpdateCommandType(context.Context, string, string, C
 func (UnimplementedGateway) DeleteCommandType(context.Context, string, string) error {
 	return nil
 }
+func (UnimplementedGateway) IssueCommand(context.Context, string, string, string, string, string, json.RawMessage, json.RawMessage, scope.Set) (*Command, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CommandSettlement(context.Context, string, string, string, string, scope.Set) (SettlementVerdict, error) {
+	return "", nil
+}
 func (UnimplementedGateway) GetPropertyType(context.Context, string) (*PropertyType, error) {
 	return nil, nil
 }

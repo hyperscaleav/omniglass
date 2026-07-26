@@ -532,6 +532,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components/{name}/commands:issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue a command to a component
+         * @description Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Returns the computed settlement verdict. Gated by command:issue; an out-of-scope component is a non-disclosing 404.
+         */
+        post: operations["issue-component-command"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/components/{name}/effective-secrets": {
         parameters: {
             query?: never;
@@ -3194,6 +3214,25 @@ export interface components {
             /** @description The node's NATS username (its node name) */
             username: string;
         };
+        CommandOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CommandOutputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description The caused event this command recorded
+             */
+            caused_event_id: number;
+            command_type: string;
+            /** Format: int64 */
+            id: number;
+            instance?: string;
+            /** @description The computed settlement verdict (none/pending/settled/failed) */
+            settlement: string;
+        };
         CommandTypeBody: {
             /**
              * Format: uri
@@ -4158,6 +4197,22 @@ export interface components {
             node_id?: string;
             /** @description The endpoint/target settings (jsonb) */
             params?: unknown;
+        };
+        IssueCommandInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/IssueCommandInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The command_type to invoke */
+            command_type: string;
+            /** @description The series discriminator (e.g. an interface), when the target is instanced */
+            instance?: string;
+            /** @description The invocation params, stored on the command and the caused event */
+            params?: unknown;
+            /** @description The intended value for the target property (a settleable command) */
+            value?: unknown;
         };
         Keybindings: {
             /**
@@ -6904,6 +6959,42 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "issue-component-command": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueCommandInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandOutputBody"];
+                };
             };
             /** @description Error */
             default: {
