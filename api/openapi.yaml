@@ -269,6 +269,42 @@ components:
         - username
         - password
       type: object
+    CommandTypeBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CommandTypeBody.json
+          format: uri
+          readOnly: true
+          type: string
+        description:
+          type: string
+        display_name:
+          type: string
+        id:
+          description: The command type's uuid, the stable form of name
+          type: string
+        name:
+          type: string
+        official:
+          type: boolean
+        params_schema:
+          description: A JSON Schema fragment for the invocation params
+        settle_window_seconds:
+          description: How long the device is given to actuate before a mismatch is a failed command
+          format: int64
+          type: integer
+        target_property_type:
+          description: The property this command sets (empty for a fire-and-forget command)
+          type: string
+      required:
+        - id
+        - name
+        - settle_window_seconds
+        - official
+      type: object
     ComponentBody:
       additionalProperties: false
       properties:
@@ -424,6 +460,38 @@ components:
       required:
         - name
         - display_name
+      type: object
+    CreateCommandTypeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateCommandTypeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        description:
+          description: What the command does
+          type: string
+        display_name:
+          description: A human label
+          type: string
+        name:
+          description: The command type name (lowercase, dot-hierarchied)
+          minLength: 1
+          type: string
+        params_schema:
+          description: A JSON Schema fragment for the params
+        settle_window_seconds:
+          description: The actuation window in seconds (0 = fire-and-forget)
+          format: int64
+          type: integer
+        target_property_type:
+          description: The property this command sets, for settlement
+          type: string
+      required:
+        - name
       type: object
     CreateComponentInputBody:
       additionalProperties: false
@@ -2004,6 +2072,25 @@ components:
             - "null"
       required:
         - capabilities
+      type: object
+    ListCommandTypesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListCommandTypesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        command_types:
+          items:
+            $ref: "#/components/schemas/CommandTypeBody"
+          type:
+            - array
+            - "null"
+      required:
+        - command_types
       type: object
     ListComponentMembershipsOutputBody:
       additionalProperties: false
@@ -4314,6 +4401,32 @@ components:
         display_name:
           type: string
       type: object
+    UpdateCommandTypeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateCommandTypeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        description:
+          description: What the command does
+          type: string
+        display_name:
+          description: A human label
+          type: string
+        params_schema:
+          description: A JSON Schema fragment (replaces wholesale)
+        settle_window_seconds:
+          description: The actuation window in seconds
+          format: int64
+          type: integer
+        target_property_type:
+          description: The property this command sets (empty clears it)
+          type: string
+      type: object
     UpdateComponentInputBody:
       additionalProperties: false
       properties:
@@ -5262,6 +5375,130 @@ paths:
           description: Error
       summary: Update a capability
       x-omniglass-permission: capability:update
+  /command-types:
+    get:
+      description: Lists every registered command type (official and custom). Estate-wide reference data. Gated by command_type:read.
+      operationId: list-command-type
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListCommandTypesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List command types
+      x-omniglass-permission: command_type:read
+    post:
+      description: Registers a custom command type (official=false). The name must be a valid key; a target property, when set, must be registered. Gated by command_type:create.
+      operationId: create-command-type
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCommandTypeInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandTypeBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a command type
+      x-omniglass-permission: command_type:create
+  /command-types/{name}:
+    delete:
+      description: Removes a custom command type by name. Official types are read-only. Gated by command_type:delete.
+      operationId: delete-command-type
+      parameters:
+        - description: The command type's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The command type's name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a command type
+      x-omniglass-permission: command_type:delete
+    get:
+      description: Returns one command type by name. Gated by command_type:read.
+      operationId: get-command-type
+      parameters:
+        - description: The command type's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The command type's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandTypeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a command type
+      x-omniglass-permission: command_type:read
+    patch:
+      description: Patches a custom command type's label, description, params schema, settle window, or target (a nil field is unchanged; an empty target clears it). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
+      operationId: update-command-type
+      parameters:
+        - description: The command type's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The command type's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCommandTypeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandTypeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a command type
+      x-omniglass-permission: command_type:update
   /components:
     get:
       description: Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.

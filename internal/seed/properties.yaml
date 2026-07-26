@@ -50,6 +50,15 @@ properties:
       over its inputs (a component's active alarms, a system's roles, the systems
       under a location). Recorded transition-only, so the series is the edges: when
       it broke and when it came back, not a sample per check.
+  - name: video.input
+    kind: state
+    data_type: string
+    validation: { enum: [hdmi1, hdmi2, hdmi3, dp1, usbc] }
+    display_name: Video Input
+    description: >-
+      The selected video input on a display or switcher. A settable state: the
+      set_input command tells the device which input to select (opening an intended
+      value), and the device reports the observed input, so the two reconcile.
   # Declared attribute properties: no kind (not observed), the starter set a field draws from.
   - name: serial_number
     data_type: string

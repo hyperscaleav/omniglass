@@ -427,6 +427,156 @@ func generatedCommands() []*cobra.Command {
 	}())
 	roots = append(roots, func() *cobra.Command {
 		parent := &cobra.Command{
+			Use:   "command-type",
+			Short: "Commands for the command-type resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fDescription string
+				var fDisplayName string
+				var fName string
+				var fParamsSchema string
+				var fSettleWindowSeconds string
+				var fTargetPropertyType string
+				cmd := &cobra.Command{
+					Use:     "create",
+					Short:   "Create a command type",
+					Long:    "Registers a custom command type (official=false). The name must be a valid key; a target property, when set, must be registered. Gated by command_type:create.",
+					Example: "  omniglass command-type create --name name",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/command-types")
+						body := map[string]any{}
+						if cmd.Flags().Changed("description") {
+							body["description"] = fDescription
+						}
+						if cmd.Flags().Changed("display-name") {
+							body["display_name"] = fDisplayName
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						if cmd.Flags().Changed("params-schema") {
+							body["params_schema"] = jsonOrString(fParamsSchema)
+						}
+						if cmd.Flags().Changed("settle-window-seconds") {
+							body["settle_window_seconds"] = jsonOrString(fSettleWindowSeconds)
+						}
+						if cmd.Flags().Changed("target-property-type") {
+							body["target_property_type"] = fTargetPropertyType
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fDescription, "description", "", "What the command does")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A human label")
+				cmd.Flags().StringVar(&fName, "name", "", "The command type name (lowercase, dot-hierarchied)")
+				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fParamsSchema, "params-schema", "", "A JSON Schema fragment for the params")
+				cmd.Flags().StringVar(&fSettleWindowSeconds, "settle-window-seconds", "", "The actuation window in seconds (0 = fire-and-forget)")
+				cmd.Flags().StringVar(&fTargetPropertyType, "target-property-type", "", "The property this command sets, for settlement")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "delete <name>",
+					Short:   "Delete a command type",
+					Long:    "Removes a custom command type by name. Official types are read-only. Gated by command_type:delete.",
+					Example: "  omniglass command-type delete <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/command-types/%s", url.PathEscape(args[0]))
+						return runAPICommand(cmd, "DELETE", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "get <name>",
+					Short:   "Get a command type",
+					Long:    "Returns one command type by name. Gated by command_type:read.",
+					Example: "  omniglass command-type get <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/command-types/%s", url.PathEscape(args[0]))
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "List command types",
+					Long:    "Lists every registered command type (official and custom). Estate-wide reference data. Gated by command_type:read.",
+					Example: "  omniglass command-type list",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/command-types")
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fDescription string
+				var fDisplayName string
+				var fParamsSchema string
+				var fSettleWindowSeconds string
+				var fTargetPropertyType string
+				cmd := &cobra.Command{
+					Use:     "update <name>",
+					Short:   "Update a command type",
+					Long:    "Patches a custom command type's label, description, params schema, settle window, or target (a nil field is unchanged; an empty target clears it). The name is fixed at creation. Official types are read-only. Gated by command_type:update.",
+					Example: "  omniglass command-type update <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/command-types/%s", url.PathEscape(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("description") {
+							body["description"] = fDescription
+						}
+						if cmd.Flags().Changed("display-name") {
+							body["display_name"] = fDisplayName
+						}
+						if cmd.Flags().Changed("params-schema") {
+							body["params_schema"] = jsonOrString(fParamsSchema)
+						}
+						if cmd.Flags().Changed("settle-window-seconds") {
+							body["settle_window_seconds"] = jsonOrString(fSettleWindowSeconds)
+						}
+						if cmd.Flags().Changed("target-property-type") {
+							body["target_property_type"] = fTargetPropertyType
+						}
+						return runAPICommand(cmd, "PATCH", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fDescription, "description", "", "What the command does")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A human label")
+				cmd.Flags().StringVar(&fParamsSchema, "params-schema", "", "A JSON Schema fragment (replaces wholesale)")
+				cmd.Flags().StringVar(&fSettleWindowSeconds, "settle-window-seconds", "", "The actuation window in seconds")
+				cmd.Flags().StringVar(&fTargetPropertyType, "target-property-type", "", "The property this command sets (empty clears it)")
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
 			Use:   "component",
 			Short: "Commands for the component resource",
 		}

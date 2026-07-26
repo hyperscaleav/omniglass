@@ -361,6 +361,107 @@ Example:
 omniglass capability update <id>
 ```
 
+## `omniglass command-type`
+
+Commands for the command-type resource
+
+### `omniglass command-type create`
+
+Create a command type
+
+```
+omniglass command-type create [flags]
+```
+
+Registers a custom command type (official=false). The name must be a valid key; a target property, when set, must be registered. Gated by command_type:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--description` | string | (none) | What the command does |
+| `--display-name` | string | (none) | A human label |
+| `--name` | string | (none) | The command type name (lowercase, dot-hierarchied) |
+| `--params-schema` | string | (none) | A JSON Schema fragment for the params |
+| `--settle-window-seconds` | string | (none) | The actuation window in seconds (0 = fire-and-forget) |
+| `--target-property-type` | string | (none) | The property this command sets, for settlement |
+
+Example:
+
+```sh
+omniglass command-type create --name name
+```
+
+### `omniglass command-type delete`
+
+Delete a command type
+
+```
+omniglass command-type delete <name>
+```
+
+Removes a custom command type by name. Official types are read-only. Gated by command_type:delete.
+
+Example:
+
+```sh
+omniglass command-type delete <name>
+```
+
+### `omniglass command-type get`
+
+Get a command type
+
+```
+omniglass command-type get <name>
+```
+
+Returns one command type by name. Gated by command_type:read.
+
+Example:
+
+```sh
+omniglass command-type get <name>
+```
+
+### `omniglass command-type list`
+
+List command types
+
+```
+omniglass command-type list
+```
+
+Lists every registered command type (official and custom). Estate-wide reference data. Gated by command_type:read.
+
+Example:
+
+```sh
+omniglass command-type list
+```
+
+### `omniglass command-type update`
+
+Update a command type
+
+```
+omniglass command-type update <name> [flags]
+```
+
+Patches a custom command type's label, description, params schema, settle window, or target (a nil field is unchanged; an empty target clears it). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--description` | string | (none) | What the command does |
+| `--display-name` | string | (none) | A human label |
+| `--params-schema` | string | (none) | A JSON Schema fragment (replaces wholesale) |
+| `--settle-window-seconds` | string | (none) | The actuation window in seconds |
+| `--target-property-type` | string | (none) | The property this command sets (empty clears it) |
+
+Example:
+
+```sh
+omniglass command-type update <name>
+```
+
 ## `omniglass component`
 
 Commands for the component resource

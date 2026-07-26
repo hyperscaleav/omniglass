@@ -310,6 +310,15 @@ type Gateway interface {
 	UpdateEventType(ctx context.Context, actorID, name string, patch EventTypePatch) (*EventType, error)
 	DeleteEventType(ctx context.Context, actorID, name string) error
 
+	// The command_type registry (ADR-0063 #396): the driver-owned catalog of what a
+	// component can be told, the "do" half. Seeded official and operator-extensible.
+	UpsertCommandType(ctx context.Context, ct CommandType) error
+	ListCommandTypes(ctx context.Context) ([]CommandType, error)
+	GetCommandType(ctx context.Context, name string) (*CommandType, error)
+	CreateCommandType(ctx context.Context, actorID string, spec CommandTypeSpec) (*CommandType, error)
+	UpdateCommandType(ctx context.Context, actorID, name string, patch CommandTypePatch) (*CommandType, error)
+	DeleteCommandType(ctx context.Context, actorID, name string) error
+
 	// The observed-metric sink. reject-not-project is applied by the caller
 	// (collection.Registry) before the write.
 	InsertMetricDatapoints(ctx context.Context, evs []MetricDatapointEvent) error

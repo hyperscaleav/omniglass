@@ -14,3 +14,9 @@ event_types:
     description: >-
       A conferencing endpoint entered an active call. A caught occurrence when the
       device reports it (an xAPI event), or a derived one when a rule infers it.
+  - name: command.issued
+    display_name: Command Issued
+    description: >-
+      A command was issued to a component (the caused event a command records). It
+      opens the intended value the command sets and is the lineage cause of that
+      intended datapoint.

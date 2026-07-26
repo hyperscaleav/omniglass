@@ -31,6 +31,9 @@ var propertiesYAML []byte
 //go:embed event_types.yaml
 var eventTypesYAML []byte
 
+//go:embed command_types.yaml
+var commandTypesYAML []byte
+
 //go:embed interface_types.yaml
 var interfaceTypesYAML []byte
 
@@ -184,6 +187,9 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedEventTypes(ctx, gw); err != nil {
 		return err
 	}
+	if err := seedCommandTypes(ctx, gw); err != nil {
+		return err
+	}
 	if err := seedVendors(ctx, gw); err != nil {
 		return err
 	}
@@ -268,6 +274,33 @@ func seedEventTypes(ctx context.Context, gw storage.Gateway) error {
 	for _, e := range doc.EventTypes {
 		if err := gw.UpsertEventType(ctx, storage.EventType{
 			Name: e.Name, DisplayName: e.DisplayName, Description: e.Description, Official: true,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// seedCommandTypes installs the ship-with command_type registry (the "do" catalog),
+// authoritative on conflict like the other registries. A settleable command carries
+// a target property and a settle window; a fire-and-forget one carries neither.
+func seedCommandTypes(ctx context.Context, gw storage.Gateway) error {
+	var doc struct {
+		CommandTypes []struct {
+			Name                string `yaml:"name"`
+			DisplayName         string `yaml:"display_name"`
+			Description         string `yaml:"description"`
+			TargetPropertyType  string `yaml:"target_property_type"`
+			SettleWindowSeconds int    `yaml:"settle_window_seconds"`
+		} `yaml:"command_types"`
+	}
+	if err := yaml.Unmarshal(commandTypesYAML, &doc); err != nil {
+		return fmt.Errorf("seed: parse command_types: %w", err)
+	}
+	for _, c := range doc.CommandTypes {
+		if err := gw.UpsertCommandType(ctx, storage.CommandType{
+			Name: c.Name, DisplayName: c.DisplayName, Description: c.Description,
+			TargetPropertyType: c.TargetPropertyType, SettleWindowSeconds: c.SettleWindowSeconds, Official: true,
 		}); err != nil {
 			return err
 		}
