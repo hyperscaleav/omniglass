@@ -189,6 +189,7 @@ shape the [Shape](#shape-resources-and-verb-methods) section describes.
 | GET | `/tasks` | `task:read` |
 | GET | `/tasks/{id}` | `task:read` |
 | GET | `/components/{name}/reachability` | `component:read` |
+| GET | `/components/{name}/reconciliation` | `component:read` |
 | GET | `/components/{name}/events` | `component:read` |
 
 **The node custom methods are the day-one enrollment handshake.** `POST /nodes/{name}:enroll` mints (or
@@ -228,6 +229,15 @@ its `provenance` (`observed` for direct collection), and the `source` interface 
 out-of-scope component is the same non-disclosing 404 and the event read only ever runs on a verified,
 in-scope component. Like reachability, it is a hand-written typed `GET` standing in until the `ViewResult`
 framework lands.
+
+**The reconciliation read pivots want/told/is over the property cache.** `GET /components/{name}/reconciliation`
+returns, per declared property, the **want** (the declared value, resolved live from the
+[cascade](/architecture/variables/), never a cache row), the **told** (the `intended` value a command set),
+and the **is** (the `observed` value from the [latest-value cache](/architecture/datapoints/)), with **drift**
+(the observed value present and disagreeing with the declared one) computed on read. It is gated by
+`component:read` and scope-injected through the same `GetComponent` gate as the reachability read, so an
+out-of-scope component is the same non-disclosing 404. Like reachability and events, it is a hand-written typed
+`GET` standing in until the `ViewResult` framework lands.
 
 :::note[Thin cuts today]
 These routes ship the operationally useful slice, not the full CRUD matrix. A **node** has create, list, get,

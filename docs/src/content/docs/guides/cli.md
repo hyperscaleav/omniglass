@@ -168,6 +168,14 @@ recent transitions the availability strip draws):
 ```sh
 omniglass component component reachability list disp-1                              # needs component:read
 ```
+
+Read a component's property reconciliation, the want/told/is pivot (the declared value
+resolved live from the cascade, the intended value a command set, and the observed value
+from the latest-value cache) with drift computed on read:
+
+```sh
+omniglass component reconciliation list disp-1                                       # needs component:read
+```
 `--image-base64` takes a plain base64 string, not a file path (base64-encode the image
 yourself, as the `$(base64 …)` above does); the server accepts JPEG, PNG, or WebP and
 normalizes it to a 256x256 JPEG. An administrator manages **any** principal's picture with
