@@ -22,11 +22,11 @@ func TestSettle(t *testing.T) {
 		want               storage.SettlementVerdict
 	}{
 		{"no intended is none", nil, cv(`"HDMI1"`, now), 30, storage.SettlementNone},
-		{"within window is pending", cv(`"HDMI1"`, now.Add(-10 * time.Second)), cv(`"HDMI2"`, now), 30, storage.SettlementPending},
-		{"within window pending even if matched", cv(`"HDMI1"`, now.Add(-10 * time.Second)), cv(`"HDMI1"`, now), 30, storage.SettlementPending},
-		{"past window matched is settled", cv(`"HDMI1"`, now.Add(-60 * time.Second)), cv(`"HDMI1"`, now), 30, storage.SettlementSettled},
-		{"past window mismatched is failed", cv(`"HDMI1"`, now.Add(-60 * time.Second)), cv(`"HDMI2"`, now), 30, storage.SettlementFailed},
-		{"past window absent observed is failed", cv(`"HDMI1"`, now.Add(-60 * time.Second)), nil, 30, storage.SettlementFailed},
+		{"within window is pending", cv(`"HDMI1"`, now.Add(-10*time.Second)), cv(`"HDMI2"`, now), 30, storage.SettlementPending},
+		{"within window pending even if matched", cv(`"HDMI1"`, now.Add(-10*time.Second)), cv(`"HDMI1"`, now), 30, storage.SettlementPending},
+		{"past window matched is settled", cv(`"HDMI1"`, now.Add(-60*time.Second)), cv(`"HDMI1"`, now), 30, storage.SettlementSettled},
+		{"past window mismatched is failed", cv(`"HDMI1"`, now.Add(-60*time.Second)), cv(`"HDMI2"`, now), 30, storage.SettlementFailed},
+		{"past window absent observed is failed", cv(`"HDMI1"`, now.Add(-60*time.Second)), nil, 30, storage.SettlementFailed},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
