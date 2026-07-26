@@ -2064,3 +2064,20 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   pages stay `Partial` (the cache and reconciliation are built; the intended/calculated producers,
   log-to-event, calc, and fusion remain). Part of
   [#394](https://github.com/hyperscaleav/omniglass/issues/394).
+- **The event_type family lands: events get their own registry ([ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables), second feature slice).**
+  Events move out of `property_type` into their own **`event_type`** registry, the occurrence keyspace and
+  the twin of `property_type`. A guarded migration creates `event_type`, repoints `event` off
+  `property_type` (kind=log) onto `event_type`, adds the **`origin`** column (caught/caused/derived/
+  scheduled) plus the `caused_by_event_id` and `correlation_id` causation columns, and drops the `log` kind
+  from `property_type` (now `{metric, state}`). Event rows are ephemeral telemetry logs, so the repoint
+  clears the occurrence log rather than backfilling a type. The registry ships full CRUD (`/event-types`,
+  gated `event_type:*`, seeded official `syslog.line` and `call.started`, official rows read-only), a
+  generated CLI and typed client, and a console **Event Types** catalog page mirroring Properties.
+  **Log-to-event promotion** is built for the caught path: with `log` gone from `property_type`, a
+  registered `event_type` name routes an ingested occurrence to the `event` sink with `origin=caught`, under
+  the same owner-confinement and reject-not-project as a metric or state, and the events panel shows the
+  origin. Only the caught path has a producer today; `caused` is the command pillar (#396) and
+  `derived`/`scheduled` need the rule engine and the clock (the action layer).
+  [events](/architecture/events/) advances `Design` to **`Partial`**; [datapoints](/architecture/datapoints/)
+  notes the `log` kind's graduation. Part of
+  [#395](https://github.com/hyperscaleav/omniglass/issues/395).

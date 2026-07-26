@@ -357,6 +357,20 @@ template once, with no inheritance, so they are yours to rename, re-parent, or d
 installs one **only if absent** rather than reasserting over your edit. The same holds for the shipped
 location types. See [the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs).
 
+## Event types
+
+The [event type](/architecture/events/#the-event_type-registry) commands cover the occurrence keyspace,
+the twin of the property catalog: the discrete happenings an event is typed by (`call.started`,
+`syslog.line`). `event_type:read` sits on the viewer floor; `event_type:create`, `event_type:update`, and
+`event_type:delete` are admin-gated. Official (seed-owned) event types are read-only.
+
+```sh
+omniglass event-type list                                           # the event type catalog
+omniglass event-type create --name cable.unplugged --display-name "Cable unplugged"
+omniglass event-type get syslog.line
+omniglass event-type delete cable.unplugged                        # 409 on an official type
+```
+
 ## Property contracts and values
 
 A classifier **declares** which properties its instances carry; an instance **sets** a value. Both sides
