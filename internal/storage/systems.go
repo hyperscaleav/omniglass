@@ -19,6 +19,7 @@ var (
 	ErrSystemOccupied         = errors.New("storage: system has child systems")
 	ErrSystemExists           = errors.New("storage: system name already exists")
 	ErrParentSystemNotFound   = errors.New("storage: parent system not found")
+	ErrSystemCycle            = errors.New("storage: cannot move a system under itself or a descendant")
 	ErrUnknownStandard        = errors.New("storage: unknown standard")
 	ErrParentStandardNotFound = errors.New("storage: parent standard not found")
 )
@@ -75,16 +76,19 @@ type SystemSpec struct {
 	LocationName *string
 }
 
-// SystemPatch is the update input: nil fields unchanged. StandardID and
-// LocationName follow the house three-state convention, nil unchanged and an
-// explicit empty string CLEARS (converting a classified system to a one-off,
-// or lifting a placed system out of its location). Reparenting is deferred to a
-// later slice.
+// SystemPatch is the update input: nil fields unchanged. StandardID,
+// LocationName, and ParentName follow the house three-state convention, nil
+// unchanged and an explicit empty string CLEARS (converting a classified system
+// to a one-off, lifting a placed system out of its location, or making a nested
+// system a root). ParentName is cycle-guarded and scope-injected: the new parent
+// must be inside the caller's update scope and must not be the system itself or
+// one of its own descendants.
 type SystemPatch struct {
 	Name         *string
 	DisplayName  *string
 	StandardID   *string
 	LocationName *string
+	ParentName   *string
 }
 
 // --- standard registry -------------------------------------------------------
@@ -404,8 +408,30 @@ func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, 
 }
 
 // UpdateSystem patches a system by name with the three-way scope split and
+// systemIsDescendant reports whether candidateID is targetID or a descendant of
+// it: the cycle guard for a reparent, which must not move a system under itself or
+// one of its own children. Mirrors componentIsDescendant on the system tree.
+func (p *PG) systemIsDescendant(ctx context.Context, q querier, targetID, candidateID string) (bool, error) {
+	var ok bool
+	err := q.QueryRow(ctx, `
+		with recursive sub(id) as (
+			select id from system where id = $1
+			union all
+			select s.id from system s join sub on s.parent_id = sub.id
+		) cycle id set is_cycle using path
+		select exists(select 1 from sub where id = $2)`,
+		targetID, candidateID).Scan(&ok)
+	if err != nil {
+		return false, fmt.Errorf("storage: system descendant check: %w", err)
+	}
+	return ok, nil
+}
+
+// UpdateSystem patches a system by name with the three-way scope split and
 // in-transaction audit, recomputing health when the standard or the location
-// moved. Reparenting is deferred.
+// moved. A reparent is a structural move within the system tree (cycle-guarded and
+// scope-injected) that does not move health: the rollup runs system -> location,
+// not through the system tree.
 func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch SystemPatch, read, action scope.Set) (*System, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -441,6 +467,34 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 		}
 		standardPatchID = &sid
 	}
+	// The parent is a reparent within the system tree: resolve by name, require the
+	// new parent inside the caller's action scope, and cycle-guard against moving
+	// the system under itself or a descendant. "" clears to a root system; nil
+	// leaves the parent untouched.
+	parentPatch := patch.ParentName
+	if patch.ParentName != nil && *patch.ParentName != "" {
+		parent, err := p.systemByName(ctx, tx, *patch.ParentName)
+		if errors.Is(err, ErrSystemNotFound) {
+			return nil, ErrParentSystemNotFound
+		} else if err != nil {
+			return nil, err
+		}
+		in, err := inScopeTree(ctx, tx, systemTable, parent.ID, action)
+		if err != nil {
+			return nil, err
+		}
+		if !in {
+			return nil, ErrSystemForbidden
+		}
+		descendant, err := p.systemIsDescendant(ctx, tx, before.ID, parent.ID)
+		if err != nil {
+			return nil, err
+		}
+		if descendant {
+			return nil, ErrSystemCycle
+		}
+		parentPatch = &parent.ID
+	}
 	after, err := scanSystem(tx.QueryRow(ctx, `
 		update system set
 			name         = coalesce($2, name),
@@ -462,10 +516,16 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 				when $5 = '' then null
 				else $5::uuid
 			end,
+			-- parent_id takes the same three states, resolved to an id above.
+			parent_id    = case
+				when $7::text is null then parent_id
+				when $7 = '' then null
+				else $7::uuid
+			end,
 			updated_at   = now()
 		where id = $1
 		returning `+systemCols,
-		before.ID, patch.Name, patch.DisplayName, patch.StandardID, locationPatch, standardPatchID))
+		before.ID, patch.Name, patch.DisplayName, patch.StandardID, locationPatch, standardPatchID, parentPatch))
 	if err != nil {
 		return nil, mapSystemWriteErr(err)
 	}

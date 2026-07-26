@@ -112,6 +112,11 @@ type updateSystemInput struct {
 		Name        *string `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"A new globally unique technical name (rename)"`
 		DisplayName *string `json:"display_name,omitempty"`
 		StandardID  *string `json:"standard_id,omitempty"`
+		// Placement fields, house three-state (omitted unchanged, "" clears, name
+		// sets), passed straight through. Parent is a cycle-guarded, scope-injected
+		// reparent within the system tree.
+		Location *string `json:"location,omitempty" doc:"Relocates the system to this location name. An empty string clears its placement."`
+		Parent   *string `json:"parent,omitempty" doc:"Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system."`
 	}
 }
 
@@ -212,15 +217,17 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodPatch,
 		Path:        "/systems/{name}",
 		Summary:     "Update a system",
-		Description: "Patches a system's display_name or standard. An omitted standard_id leaves it unchanged; an explicit empty string clears it, converting the system to a one-off. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+		Description: "Patches a system's display_name, standard, location, or parent. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 	}, "system", "update"), func(ctx context.Context, in *updateSystemInput) (*systemOutput, error) {
 		s, err := gw.UpdateSystem(ctx, actorID(ctx), in.Name, storage.SystemPatch{
 			Name:        in.Body.Name,
 			DisplayName: in.Body.DisplayName,
 			// Deliberately NOT emptyPtrToNil: that collapses an explicit "" into
-			// "omitted", which would make converting a classified system back to a
-			// one-off impossible. The storage layer reads "" as clear.
-			StandardID: in.Body.StandardID,
+			// "omitted", which would make clearing (declassify, unplace, lift-to-root)
+			// impossible. The storage layer reads "" as clear.
+			StandardID:   in.Body.StandardID,
+			LocationName: in.Body.Location,
+			ParentName:   in.Body.Parent,
 		}, a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update"))
 		if err != nil {
 			return nil, mapSystemErr(err)
@@ -293,6 +300,8 @@ func mapSystemErr(err error) error {
 		return huma.Error422UnprocessableEntity("invalid name")
 	case errors.Is(err, storage.ErrParentSystemNotFound):
 		return huma.Error422UnprocessableEntity("parent system not found")
+	case errors.Is(err, storage.ErrSystemCycle):
+		return huma.Error422UnprocessableEntity("cannot move a system under itself or a descendant")
 	case errors.Is(err, storage.ErrUnknownStandard):
 		return huma.Error422UnprocessableEntity("unknown standard")
 	case errors.Is(err, storage.ErrLocationNotFound):

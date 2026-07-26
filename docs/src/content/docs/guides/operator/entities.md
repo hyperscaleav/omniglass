@@ -72,6 +72,14 @@ sits beside it on the forms that offer one; where it does not, the header **x** 
   unconstrained, every location), excluding the location's own subtree. Moving back to root is
   not offered; a move a stale picker still lets through is refused the same way as create, inline,
   naming both types.
+- A **component** and a **system** are just as mobile: edit re-opens their **Placement** (location
+  and parent) and, for a component, its **Product**. Nothing here is fixed at create. A component
+  can move rooms, re-parent under a different component, or be re-classified onto a different
+  product; a system can move location or re-parent. Re-classifying a component keeps every property
+  value you set by hand and lets the new product's contract defaults take over the rest, so a swap
+  never silently loses your data. Clearing a field is a first-class move: an empty location unplaces
+  it, an empty parent lifts it to a root, an empty product makes it a one-off. A re-parent that would
+  put an entity under itself or one of its own children is refused.
 - **Delete** removes it, with a confirm. These actions appear only if your grants allow them.
 
 ## Properties on the detail

@@ -13,7 +13,12 @@ nest, and how everything else names one of them as owner. The shapes these entit
 
 :::note[Partial]
 Built today: `component`, `system`, and `location` as name-addressable, variable-depth (`parent_id`)
-trees with full scoped CRUD; a delete is refused while a structural child remains. Each of the three
+trees with full scoped CRUD; a delete is refused while a structural child remains. **Placement and
+classification are mutable, not fixed at create** ([ADR-0064](/architecture/decisions/#adr-0064-placement-and-classification-are-mutable-after-create)):
+a component re-parents, relocates, and re-classifies onto a different product; a system re-parents and
+relocates; each field also clears (to a root, an unplaced entity, or a one-off). A re-parent is
+cycle-guarded against moving an entity under its own subtree, and a product swap keeps hand-set property
+values while the new contract's defaults take over. Each of the three
 carries an **optional classifier** that declares what its instances expose: a component points at its
 **`product`**, a system conforms to a **`standard`**, a location is typed by its **`location_type`**
 (the `component_type` registry retired,

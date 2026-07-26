@@ -4206,11 +4206,20 @@ components:
           type: string
         display_name:
           type: string
+        location:
+          description: Relocates the component to this location name. An empty string clears its placement.
+          type: string
         name:
           description: A new globally unique technical name (rename)
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
+        parent:
+          description: Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component.
+          type: string
+        product:
+          description: Re-classifies the component to this product (catalog SKU). An empty string clears it. Explicitly-set property values persist; the new product's contract defaults follow.
           type: string
       type: object
     UpdateDriverInputBody:
@@ -4468,11 +4477,17 @@ components:
           type: string
         display_name:
           type: string
+        location:
+          description: Relocates the system to this location name. An empty string clears its placement.
+          type: string
         name:
           description: A new globally unique technical name (rename)
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
+        parent:
+          description: Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system.
           type: string
         standard_id:
           type: string
@@ -5201,7 +5216,7 @@ paths:
       summary: Get a component
       x-omniglass-permission: component:read
     patch:
-      description: Patches a component's technical name or display_name. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+      description: "Patches a component's technical name, display_name, product, location, or parent. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split."
       operationId: update-component
       parameters:
         - in: path
@@ -8956,7 +8971,7 @@ paths:
       summary: Get a system
       x-omniglass-permission: system:read
     patch:
-      description: Patches a system's display_name or standard. An omitted standard_id leaves it unchanged; an explicit empty string clears it, converting the system to a one-off. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+      description: "Patches a system's display_name, standard, location, or parent. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split."
       operationId: update-system
       parameters:
         - in: path
