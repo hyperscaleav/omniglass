@@ -21,7 +21,7 @@ func TestDeriveDatapoints(t *testing.T) {
 	reg := collection.NewRegistry([]storage.PropertyType{
 		{Name: "tcp.open", Kind: &metric},
 		{Name: "tcp.connect_time", Kind: &metric},
-	})
+	}, nil)
 	owner := storage.TaskOwner{Component: "disp-1", InterfaceName: "disp-1-tcp", InterfaceType: "tcp"}
 	ev := &ogv1.Event{
 		TaskId: "t1",
@@ -48,16 +48,15 @@ func TestDeriveDatapoints(t *testing.T) {
 }
 
 // TestDeriveDatapointsRoutesByKind: a name registered as state routes to the state
-// slice (not metric), a name registered as log routes to the event slice,
-// each stamped with the same task-interface owner; an unregistered name is still
-// dropped (reject-not-project).
+// slice (not metric), a name registered as an event_type routes to the event slice
+// (the log-to-event promotion, origin caught), each stamped with the same
+// task-interface owner; an unregistered name is still dropped (reject-not-project).
 func TestDeriveDatapointsRoutesByKind(t *testing.T) {
-	metric, state, logKind := "metric", "state", "log"
+	metric, state := "metric", "state"
 	reg := collection.NewRegistry([]storage.PropertyType{
 		{Name: "tcp.open", Kind: &metric},
 		{Name: "interface.reachable", Kind: &state},
-		{Name: "some.log", Kind: &logKind},
-	})
+	}, []storage.EventType{{Name: "some.log"}})
 	owner := storage.TaskOwner{Component: "disp-1", InterfaceName: "disp-1-tcp", InterfaceType: "tcp"}
 	ev := &ogv1.Event{Datapoints: []*ogv1.Datapoint{
 		{Name: "tcp.open", Value: &ogv1.Datapoint_DoubleValue{DoubleValue: 1}},
@@ -81,9 +80,9 @@ func TestDeriveDatapointsRoutesByKind(t *testing.T) {
 		t.Fatalf("events = %+v, want one some.log (unregistered dropped)", events)
 	}
 	e := events[0]
-	if e.Key != "some.log" || e.Message != "line" || e.OwnerKind != "component" ||
+	if e.Key != "some.log" || e.Message != "line" || e.Origin != "caught" || e.OwnerKind != "component" ||
 		e.OwnerID != "disp-1" || e.Instance != "disp-1-tcp" || e.Source != "tcp" {
-		t.Fatalf("log routing/owner wrong: %+v", e)
+		t.Fatalf("event routing/owner wrong: %+v", e)
 	}
 }
 

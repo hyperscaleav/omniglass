@@ -28,6 +28,9 @@ var standardsYAML []byte
 //go:embed properties.yaml
 var propertiesYAML []byte
 
+//go:embed event_types.yaml
+var eventTypesYAML []byte
+
 //go:embed interface_types.yaml
 var interfaceTypesYAML []byte
 
@@ -178,6 +181,9 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedProperties(ctx, gw); err != nil {
 		return err
 	}
+	if err := seedEventTypes(ctx, gw); err != nil {
+		return err
+	}
 	if err := seedVendors(ctx, gw); err != nil {
 		return err
 	}
@@ -239,6 +245,29 @@ func seedProperties(ctx context.Context, gw storage.Gateway) error {
 		if err := gw.UpsertPropertyType(ctx, storage.PropertyType{
 			Name: p.Name, DisplayName: p.DisplayName, Kind: kind, DataType: p.DataType,
 			Unit: unit, Validation: validation, Description: p.Description, Official: true,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// seedEventTypes installs the ship-with event_type registry (the occurrence
+// keyspace), authoritative on conflict like the property registry.
+func seedEventTypes(ctx context.Context, gw storage.Gateway) error {
+	var doc struct {
+		EventTypes []struct {
+			Name        string `yaml:"name"`
+			DisplayName string `yaml:"display_name"`
+			Description string `yaml:"description"`
+		} `yaml:"event_types"`
+	}
+	if err := yaml.Unmarshal(eventTypesYAML, &doc); err != nil {
+		return fmt.Errorf("seed: parse event_types: %w", err)
+	}
+	for _, e := range doc.EventTypes {
+		if err := gw.UpsertEventType(ctx, storage.EventType{
+			Name: e.Name, DisplayName: e.DisplayName, Description: e.Description, Official: true,
 		}); err != nil {
 			return err
 		}

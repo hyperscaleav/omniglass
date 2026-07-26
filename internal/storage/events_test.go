@@ -50,9 +50,10 @@ func TestInsertEvents(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("list events: want 2, got %d", len(got))
 	}
-	// Newest first: the "link up" occurrence with its json attributes.
-	if got[0].Message != "link up" || got[0].Provenance != "observed" || string(got[0].Attributes) != `{"iface": "eth0"}` {
-		t.Fatalf("newest event: want 'link up' observed with attributes, got %+v", got[0])
+	// Newest first: the "link up" occurrence with its json attributes, defaulted to
+	// the caught origin (a component-observed occurrence).
+	if got[0].Message != "link up" || got[0].Provenance != "observed" || got[0].Origin != "caught" || string(got[0].Attributes) != `{"iface": "eth0"}` {
+		t.Fatalf("newest event: want 'link up' observed/caught with attributes, got %+v", got[0])
 	}
 	if got[1].Message != "link down" {
 		t.Fatalf("oldest event: want 'link down', got %q", got[1].Message)

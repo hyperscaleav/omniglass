@@ -11,16 +11,20 @@ type Registry struct {
 	kinds map[string]string // name -> kind
 }
 
-// NewRegistry snapshots the observable properties: those carrying a kind
-// (metric/state/log). A declared-only property (nil kind) is not collectable, so
-// it is omitted. A later scope-precedence pass refines this; today last write wins
-// on name.
-func NewRegistry(properties []storage.PropertyType) Registry {
-	kinds := make(map[string]string, len(properties))
+// NewRegistry snapshots the collectable vocabulary: the observable properties
+// (those carrying a metric/state kind) plus the event types (kind "event", the
+// occurrence keyspace, ADR-0063). A declared-only property (nil kind) is not
+// collectable, so it is omitted. A later scope-precedence pass refines this; today
+// last write wins on name.
+func NewRegistry(properties []storage.PropertyType, eventTypes []storage.EventType) Registry {
+	kinds := make(map[string]string, len(properties)+len(eventTypes))
 	for _, p := range properties {
 		if p.Kind != nil {
 			kinds[p.Name] = *p.Kind
 		}
+	}
+	for _, et := range eventTypes {
+		kinds[et.Name] = "event"
 	}
 	return Registry{kinds: kinds}
 }

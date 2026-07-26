@@ -9,13 +9,20 @@ import (
 
 func TestRegistryAllows(t *testing.T) {
 	metric := "metric"
-	reg := collection.NewRegistry([]storage.PropertyType{
-		{Name: "tcp.open", Kind: &metric},
-		{Name: "icmp.reachable", Kind: &metric},
-	})
+	reg := collection.NewRegistry(
+		[]storage.PropertyType{
+			{Name: "tcp.open", Kind: &metric},
+			{Name: "icmp.reachable", Kind: &metric},
+		},
+		[]storage.EventType{{Name: "syslog.line"}},
+	)
 
 	if kind, ok := reg.Allows("tcp.open"); !ok || kind != "metric" {
 		t.Errorf("tcp.open: want (metric,true), got (%q,%v)", kind, ok)
+	}
+	// A registered event_type resolves to kind "event" (the occurrence keyspace).
+	if kind, ok := reg.Allows("syslog.line"); !ok || kind != "event" {
+		t.Errorf("syslog.line: want (event,true), got (%q,%v)", kind, ok)
 	}
 	if _, ok := reg.Allows("bogus.key"); ok {
 		t.Errorf("bogus.key: want reject, got allow")

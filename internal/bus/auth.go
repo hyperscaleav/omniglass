@@ -22,6 +22,10 @@ type Store interface {
 	// metric rows through cp1's insert path.
 	ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (storage.TaskOwner, bool, error)
 	ListPropertyTypes(ctx context.Context) ([]storage.PropertyType, error)
+	// The event-type registry snapshot: with the log kind gone from property_type,
+	// a registered event_type name routes an occurrence to the event sink (kind
+	// "event"), the log-to-event promotion at ingest.
+	ListEventTypes(ctx context.Context) ([]storage.EventType, error)
 	InsertMetricDatapoints(ctx context.Context, evs []storage.MetricDatapointEvent) error
 	// The state sink and its transition-only guard: a state datapoint routes here
 	// (by registry kind), and LatestState lets the consumer skip a write whose
