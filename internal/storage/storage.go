@@ -306,6 +306,9 @@ type Gateway interface {
 	UpsertEventType(ctx context.Context, et EventType) error
 	ListEventTypes(ctx context.Context) ([]EventType, error)
 	GetEventType(ctx context.Context, name string) (*EventType, error)
+	CreateEventType(ctx context.Context, actorID string, spec EventTypeSpec) (*EventType, error)
+	UpdateEventType(ctx context.Context, actorID, name string, patch EventTypePatch) (*EventType, error)
+	DeleteEventType(ctx context.Context, actorID, name string) error
 
 	// The observed-metric sink. reject-not-project is applied by the caller
 	// (collection.Registry) before the write.

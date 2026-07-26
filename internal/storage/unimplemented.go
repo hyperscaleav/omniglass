@@ -267,6 +267,15 @@ func (UnimplementedGateway) ListEventTypes(context.Context) ([]EventType, error)
 func (UnimplementedGateway) GetEventType(context.Context, string) (*EventType, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) CreateEventType(context.Context, string, EventTypeSpec) (*EventType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateEventType(context.Context, string, string, EventTypePatch) (*EventType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteEventType(context.Context, string, string) error {
+	return nil
+}
 func (UnimplementedGateway) GetPropertyType(context.Context, string) (*PropertyType, error) {
 	return nil, nil
 }

@@ -481,6 +481,31 @@ components:
         - name
         - display_name
       type: object
+    CreateEventTypeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateEventTypeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        description:
+          description: What the occurrence means
+          type: string
+        display_name:
+          description: A human label
+          type: string
+        name:
+          description: The event type name (lowercase, dot-hierarchied)
+          minLength: 1
+          type: string
+        payload_schema:
+          description: A JSON Schema fragment for the payload
+      required:
+        - name
+      type: object
     CreateFileInputBody:
       additionalProperties: false
       properties:
@@ -1481,17 +1506,20 @@ components:
       properties:
         attributes:
           description: Structured attributes, when the occurrence carried a JSON payload
+        event_type_id:
+          description: The event_type's uuid, the stable form of key
+          type: string
         instance:
           description: The series discriminator (e.g. the interface), when set
           type: string
         key:
-          description: The property name of the log (e.g. syslog.line)
+          description: The event_type name of the occurrence (e.g. syslog.line)
           type: string
         message:
           description: The occurrence message
           type: string
-        property_type_id:
-          description: The property's uuid, the stable form of key
+        origin:
+          description: How the occurrence arrived (caught/caused/derived/scheduled)
           type: string
         provenance:
           description: The lineage of the occurrence (observed for direct collection)
@@ -1500,15 +1528,44 @@ components:
           description: The interface type that produced the occurrence
           type: string
         ts:
-          description: When the occurrence was observed
+          description: When the occurrence happened
           format: date-time
           type: string
       required:
         - ts
         - key
-        - property_type_id
+        - event_type_id
+        - origin
         - message
         - provenance
+      type: object
+    EventTypeBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EventTypeBody.json
+          format: uri
+          readOnly: true
+          type: string
+        description:
+          type: string
+        display_name:
+          type: string
+        id:
+          description: The event type's uuid, the stable form of name
+          type: string
+        name:
+          type: string
+        official:
+          type: boolean
+        payload_schema:
+          description: A JSON Schema fragment for the occurrence payload
+      required:
+        - id
+        - name
+        - official
       type: object
     EventsOutputBody:
       additionalProperties: false
@@ -2007,6 +2064,25 @@ components:
             - "null"
       required:
         - drivers
+      type: object
+    ListEventTypesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListEventTypesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        event_types:
+          items:
+            $ref: "#/components/schemas/EventTypeBody"
+          type:
+            - array
+            - "null"
+      required:
+        - event_types
       type: object
     ListFilesOutputBody:
       additionalProperties: false
@@ -4281,6 +4357,25 @@ components:
         version:
           type: string
       type: object
+    UpdateEventTypeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateEventTypeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        description:
+          description: What the occurrence means
+          type: string
+        display_name:
+          description: A human label
+          type: string
+        payload_schema:
+          description: A JSON Schema fragment (replaces wholesale)
+      type: object
     UpdateGroupInputBody:
       additionalProperties: false
       properties:
@@ -6005,6 +6100,130 @@ paths:
           description: Error
       summary: Update a driver
       x-omniglass-permission: driver:update
+  /event-types:
+    get:
+      description: Lists every registered event type (official and custom). The catalog is estate-wide reference data. Gated by event_type:read.
+      operationId: list-event-type
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListEventTypesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List event types
+      x-omniglass-permission: event_type:read
+    post:
+      description: Registers a custom event type (official=false). The name must be a valid event key. Gated by event_type:create.
+      operationId: create-event-type
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEventTypeInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventTypeBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create an event type
+      x-omniglass-permission: event_type:create
+  /event-types/{name}:
+    delete:
+      description: Removes a custom event type by name. Official event types are read-only. Gated by event_type:delete.
+      operationId: delete-event-type
+      parameters:
+        - description: The event type's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The event type's name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete an event type
+      x-omniglass-permission: event_type:delete
+    get:
+      description: Returns one event type by name. Gated by event_type:read.
+      operationId: get-event-type
+      parameters:
+        - description: The event type's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The event type's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventTypeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get an event type
+      x-omniglass-permission: event_type:read
+    patch:
+      description: Patches a custom event type's label, description, or payload schema (a nil field is unchanged). The name is fixed at creation. Official event types are read-only. Gated by event_type:update.
+      operationId: update-event-type
+      parameters:
+        - description: The event type's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The event type's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEventTypeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventTypeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update an event type
+      x-omniglass-permission: event_type:update
   /files:
     get:
       description: Lists the file handles the caller may see (searchable metadata, no bytes). Sensitive files appear only to the admin tier. Gated by file:read.
