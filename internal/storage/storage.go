@@ -397,6 +397,14 @@ type Gateway interface {
 	ClearProperty(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, write scope.Set) error
 	EffectiveProperties(ctx context.Context, ownerKind, ownerID string, read scope.Set) ([]EffectiveProperty, error)
 
+	// The property latest-value cache (ADR-0063 #394): the producer provenances
+	// (observed/calculated/intended) upserted latest per series, over the same owner
+	// arc. UpsertProperties is the non-gating ingest derive; LatestValue is the
+	// single-lookup current value. Declared is NOT cached here; it resolves live via
+	// EffectiveProperties.
+	UpsertProperties(ctx context.Context, ups []PropertyUpsert) error
+	LatestValue(ctx context.Context, ownerKind, ownerID, key, instance, provenance string, read scope.Set) (*CachedValue, error)
+
 	// Membership: the binding a role attaches to. Many-valued on purpose, since a
 	// shared device belongs to every system it serves, which a single pointer on
 	// the component cannot express. Staffing a role creates the membership, so the
