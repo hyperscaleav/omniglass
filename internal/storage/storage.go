@@ -404,6 +404,10 @@ type Gateway interface {
 	// EffectiveProperties.
 	UpsertProperties(ctx context.Context, ups []PropertyUpsert) error
 	LatestValue(ctx context.Context, ownerKind, ownerID, key, instance, provenance string, read scope.Set) (*CachedValue, error)
+	// Reconciliation pivots want (declared, resolved live) / told (intended) / is
+	// (observed) per declared property of an owner, with config-drift computed on
+	// read. It backs the reconciliation read surface.
+	Reconciliation(ctx context.Context, ownerKind, ownerID string, read scope.Set) ([]PropertyReconciliation, error)
 
 	// Membership: the binding a role attaches to. Many-valued on purpose, since a
 	// shared device belongs to every system it serves, which a single pointer on

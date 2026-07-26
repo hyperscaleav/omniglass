@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -33,6 +34,52 @@ type CachedValue struct {
 	Value      json.RawMessage
 	TS         time.Time
 	Provenance string
+}
+
+// PropertyReconciliation is one property's want/told/is pivot for an owner: the
+// declared value (want, resolved live from the cascade), the intended value (told,
+// from the cache, nil until a command writes one), and the observed value (is, from
+// the cache). Drift is config-drift: is present and differs from want. The windowed
+// command-settlement verdict (is vs told within a settle window) is a later slice.
+type PropertyReconciliation struct {
+	PropertyTypeName string
+	Want             json.RawMessage
+	Told             json.RawMessage
+	Is               json.RawMessage
+	Drift            bool
+}
+
+// Reconciliation pivots want/told/is for every declared property of an owner. The
+// want side is the cascade's effective declared value (EffectiveProperties, which
+// also scope-guards the owner, so an out-of-scope owner is its non-disclosing
+// not-found); the told and is sides are single-lookup cache reads. Declared is
+// never cached: it is resolved live here, so the pivot is always current.
+func (p *PG) Reconciliation(ctx context.Context, ownerKind, ownerID string, read scope.Set) ([]PropertyReconciliation, error) {
+	effs, err := p.EffectiveProperties(ctx, ownerKind, ownerID, read)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]PropertyReconciliation, 0, len(effs))
+	for _, e := range effs {
+		is, err := p.latestValue(ctx, p.pool, ownerKind, ownerID, e.PropertyTypeName, "", "observed")
+		if err != nil {
+			return nil, err
+		}
+		told, err := p.latestValue(ctx, p.pool, ownerKind, ownerID, e.PropertyTypeName, "", "intended")
+		if err != nil {
+			return nil, err
+		}
+		rec := PropertyReconciliation{PropertyTypeName: e.PropertyTypeName, Want: e.Value}
+		if is != nil {
+			rec.Is = is.Value
+		}
+		if told != nil {
+			rec.Told = told.Value
+		}
+		rec.Drift = rec.Want != nil && rec.Is != nil && !bytes.Equal(rec.Want, rec.Is)
+		out = append(out, rec)
+	}
+	return out, nil
 }
 
 // UpsertProperties writes the newest value per series into the property cache, one

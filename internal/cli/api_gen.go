@@ -939,6 +939,30 @@ func generatedCommands() []*cobra.Command {
 			return parent
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "reconciliation",
+				Short: "Commands for the reconciliation resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <name>",
+						Short:   "Read a component's property reconciliation (want/told/is)",
+						Long:    "Pivots, per declared property, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is), with config-drift computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+						Example: "  omniglass component reconciliation list <name>",
+						Args:    cobra.ExactArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/reconciliation", url.PathEscape(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fKey string
 				cmd := &cobra.Command{

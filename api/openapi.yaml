@@ -3136,6 +3136,50 @@ components:
         - component
         - interfaces
       type: object
+    ReconPropertyBody:
+      additionalProperties: false
+      properties:
+        drift:
+          description: True when the observed value is present and differs from the declared one
+          type: boolean
+        is:
+          description: The observed value from the latest-value cache (null if none)
+        property:
+          description: The property_type key
+          type: string
+        told:
+          description: The intended value from a command (null until commanded)
+        want:
+          description: The declared value, resolved live from the cascade (null if none)
+      required:
+        - property
+        - want
+        - told
+        - is
+        - drift
+      type: object
+    ReconciliationOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ReconciliationOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component:
+          type: string
+        properties:
+          items:
+            $ref: "#/components/schemas/ReconPropertyBody"
+          type:
+            - array
+            - "null"
+      required:
+        - component
+        - properties
+      type: object
     ResetPasswordInputBody:
       additionalProperties: false
       properties:
@@ -5697,6 +5741,33 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Read a component's per-interface reachability
+      x-omniglass-permission: component:read
+  /components/{name}/reconciliation:
+    get:
+      description: Pivots, per declared property, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is), with config-drift computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+      operationId: get-component-reconciliation
+      parameters:
+        - description: The component's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReconciliationOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Read a component's property reconciliation (want/told/is)
       x-omniglass-permission: component:read
   /components/{name}:listTags:
     get:

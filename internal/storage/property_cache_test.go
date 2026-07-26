@@ -99,3 +99,76 @@ func TestPropertyCacheUpsert(t *testing.T) {
 		t.Fatal("latest value for unknown component: want not-found error, got nil")
 	}
 }
+
+// TestReconciliation proves the want/told/is pivot: the declared value is resolved
+// live from the cascade (want), the observed value is the cache (is), and drift is
+// computed on read (want present, is present, differ). Declared equal to observed
+// is no drift. Declared is never a cache row.
+func TestReconciliation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-r"}, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+
+	byName := func(recs []storage.PropertyReconciliation) map[string]storage.PropertyReconciliation {
+		m := make(map[string]storage.PropertyReconciliation, len(recs))
+		for _, r := range recs {
+			m[r.PropertyTypeName] = r
+		}
+		return m
+	}
+
+	// want: an ad-hoc declared value on the component (a productless component's
+	// declared values are all ad-hoc).
+	if _, err := gw.SetProperty(ctx, "", "component", "disp-r", "firmware_version", "", json.RawMessage(`"1.0.0"`), all); err != nil {
+		t.Fatalf("set declared firmware_version: %v", err)
+	}
+	// is: an observed value that differs from the declared one.
+	if err := gw.UpsertProperties(ctx, []storage.PropertyUpsert{{
+		OwnerKind: "component", OwnerID: "disp-r", Key: "firmware_version",
+		Instance: "", Provenance: "observed", Value: json.RawMessage(`"2.0.0"`), TS: time.Now().UTC(),
+	}}); err != nil {
+		t.Fatalf("upsert observed firmware_version: %v", err)
+	}
+
+	recs, err := gw.Reconciliation(ctx, "component", "disp-r", all)
+	if err != nil {
+		t.Fatalf("reconciliation: %v", err)
+	}
+	fw := byName(recs)["firmware_version"]
+	if string(fw.Want) != `"1.0.0"` || string(fw.Is) != `"2.0.0"` || fw.Told != nil || !fw.Drift {
+		t.Fatalf("drift pivot: want want=1.0.0 is=2.0.0 told=nil drift=true, got %+v", fw)
+	}
+
+	// Reality matching intent: no drift.
+	if err := gw.UpsertProperties(ctx, []storage.PropertyUpsert{{
+		OwnerKind: "component", OwnerID: "disp-r", Key: "firmware_version",
+		Instance: "", Provenance: "observed", Value: json.RawMessage(`"1.0.0"`), TS: time.Now().UTC().Add(time.Second),
+	}}); err != nil {
+		t.Fatalf("upsert observed match: %v", err)
+	}
+	recs, err = gw.Reconciliation(ctx, "component", "disp-r", all)
+	if err != nil {
+		t.Fatalf("reconciliation after match: %v", err)
+	}
+	if fw := byName(recs)["firmware_version"]; fw.Drift || string(fw.Is) != `"1.0.0"` {
+		t.Fatalf("no-drift pivot: want is=1.0.0 drift=false, got %+v", fw)
+	}
+
+	// An out-of-scope owner is the non-disclosing not-found.
+	if _, err := gw.Reconciliation(ctx, "component", "ghost", all); err == nil {
+		t.Fatal("reconciliation for unknown component: want not-found error, got nil")
+	}
+}
