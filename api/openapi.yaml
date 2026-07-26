@@ -269,6 +269,36 @@ components:
         - username
         - password
       type: object
+    CommandOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CommandOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        caused_event_id:
+          description: The caused event this command recorded
+          format: int64
+          type: integer
+        command_type:
+          type: string
+        id:
+          format: int64
+          type: integer
+        instance:
+          type: string
+        settlement:
+          description: The computed settlement verdict (none/pending/settled/failed)
+          type: string
+      required:
+        - id
+        - command_type
+        - caused_event_id
+        - settlement
+      type: object
     CommandTypeBody:
       additionalProperties: false
       properties:
@@ -2006,6 +2036,30 @@ components:
         - name
         - interface_type
         - interface_type_id
+      type: object
+    IssueCommandInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/IssueCommandInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        command_type:
+          description: The command_type to invoke
+          minLength: 1
+          type: string
+        instance:
+          description: The series discriminator (e.g. an interface), when the target is instanced
+          type: string
+        params:
+          description: The invocation params, stored on the command and the caused event
+        value:
+          description: The intended value for the target property (a settleable command)
+      required:
+        - command_type
       type: object
     Keybindings:
       additionalProperties: false
@@ -5809,6 +5863,39 @@ paths:
           description: Error
       summary: Declare a capability on a component
       x-omniglass-permission: component:update
+  /components/{name}/commands:issue:
+    post:
+      description: Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Returns the computed settlement verdict. Gated by command:issue; an out-of-scope component is a non-disclosing 404.
+      operationId: issue-component-command
+      parameters:
+        - description: The component name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IssueCommandInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Issue a command to a component
+      x-omniglass-permission: command:issue
   /components/{name}/effective-secrets:
     get:
       description: "Resolves the secrets that cascade onto a component (platform -> location -> component), with the winner and the shadowed candidates it overrode. There is NO system band: a secret is device-facing, and the room a component happens to serve is the wrong owner for a credential the device itself answers with. Fields are masked, as in the directory; plaintext is only ever the audited reveal. Gated by secret:read, which the viewer floor does not carry, and admin-sensitive secrets appear only to the admin tier."

@@ -318,6 +318,10 @@ type Gateway interface {
 	CreateCommandType(ctx context.Context, actorID string, spec CommandTypeSpec) (*CommandType, error)
 	UpdateCommandType(ctx context.Context, actorID, name string, patch CommandTypePatch) (*CommandType, error)
 	DeleteCommandType(ctx context.Context, actorID, name string) error
+	// IssueCommand records an invocation, its caused event, and (for a settleable
+	// command) the intended value it opens. CommandSettlement is the computed verdict.
+	IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, commandType, instance string, value, params json.RawMessage, write scope.Set) (*Command, error)
+	CommandSettlement(ctx context.Context, ownerKind, ownerID, commandType, instance string, read scope.Set) (SettlementVerdict, error)
 
 	// The observed-metric sink. reject-not-project is applied by the caller
 	// (collection.Registry) before the write.

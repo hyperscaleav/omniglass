@@ -604,6 +604,33 @@ Example:
 omniglass component checkName --name name
 ```
 
+### `omniglass component command`
+
+Commands for the command resource
+
+#### `omniglass component command issue`
+
+Issue a command to a component
+
+```
+omniglass component command issue <name> [flags]
+```
+
+Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Returns the computed settlement verdict. Gated by command:issue; an out-of-scope component is a non-disclosing 404.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--command-type` | string | (none) | The command_type to invoke |
+| `--instance` | string | (none) | The series discriminator (e.g. an interface), when the target is instanced |
+| `--params` | string | (none) | The invocation params, stored on the command and the caused event |
+| `--value` | string | (none) | The intended value for the target property (a settleable command) |
+
+Example:
+
+```sh
+omniglass component command issue <name> --command-type command_type
+```
+
 ### `omniglass component create`
 
 Create a component
