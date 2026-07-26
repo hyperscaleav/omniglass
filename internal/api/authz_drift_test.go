@@ -25,7 +25,6 @@ var aheadOfRoutes = map[string]string{
 	"credential:*":          "no credential routes yet (credential management)",
 	"role:*":                "no two-token role routes yet (custom-role editing is a later slice; role:read:admin is the only routed role capability, granted explicitly)",
 	"unit:create":           "no unit routes yet (unit registry)",
-	"event_type:create":     "no event_type routes yet (event registry)",
 	"severity_level:create": "no severity_level routes yet (severity registry)",
 	"source:create":         "no source routes yet (source registry)",
 }

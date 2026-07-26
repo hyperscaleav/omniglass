@@ -43,6 +43,7 @@ var referenceFields = map[string]string{
 	"parent_standard_id": "parent_standard",
 	"interface_type_id":  "interface_type",
 	"property_type_id":   "property_type_name",
+	"event_type_id":      "event_type_name",
 	"location_type_id":   "location_type",
 	"secret_type_id":     "secret_type",
 }
@@ -143,8 +144,10 @@ func TestReferencesCarryBothForms(t *testing.T) {
 			checked++
 			// A property's name appears as `property_type_name` on the contract and value
 			// bodies, but as `key` on the telemetry bodies (the event log), the
-			// datapoint-key vocabulary. Accept either as property_type_id's name pair.
-			if field == "property_type_id" {
+			// datapoint-key vocabulary. The event log types its rows by `event_type_id`
+			// and carries the event_type name as `key` the same way. Accept `key` as the
+			// name pair for either.
+			if field == "property_type_id" || field == "event_type_id" {
 				if _, hasKey := sch.Properties["key"]; hasKey {
 					continue
 				}
