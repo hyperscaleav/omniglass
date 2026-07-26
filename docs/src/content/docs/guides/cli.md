@@ -371,6 +371,21 @@ omniglass event-type get syslog.line
 omniglass event-type delete cable.unplugged                        # 409 on an official type
 ```
 
+## Command types
+
+The [command type](/architecture/commands/#the-command_type-registry) commands cover the "do"
+catalog: what a component can be told, with a target property and a settle window. `command_type:read`
+sits on the viewer floor; create/update/delete are admin-gated, official types read-only. Issuing a
+command (`command:issue`) records the invocation, writes a caused event, and returns the computed
+settlement verdict.
+
+```sh
+omniglass command-type list                                         # the command type catalog
+omniglass command-type create --name set_input --target-property-type video.input --settle-window-seconds 15
+omniglass command-type get reboot
+omniglass component command issue disp-1 --command-type set_input --value '"hdmi2"'   # needs command:issue
+```
+
 ## Property contracts and values
 
 A classifier **declares** which properties its instances carry; an instance **sets** a value. Both sides

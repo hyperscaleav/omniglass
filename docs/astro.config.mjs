@@ -93,6 +93,7 @@ export default defineConfig({
             { label: 'Data collection', slug: 'architecture/collection' },
             { label: 'Datapoints', slug: 'architecture/datapoints' },
             { label: 'Events', slug: 'architecture/events' },
+            { label: 'Commands', slug: 'architecture/commands' },
             { label: 'Calculations', slug: 'architecture/calculations' },
             { label: 'Config & credentials', slug: 'architecture/variables' },
             { label: 'Cascade', slug: 'architecture/cascade' },
