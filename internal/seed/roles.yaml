@@ -28,6 +28,7 @@ roles:
       - "secret:read,reveal,create,update"
       - "variable:create,update"
       - "property_type:create,update"
+      - "event_type:create,update"
       - "alarm:ack,snooze,resolve"
       # files are shared knowledge (not in the sensitive-resource set), so the
       # viewer floor reads ordinary ones; operators upload and delete them. A
@@ -96,6 +97,7 @@ roles:
       - "role:read:admin"
       - "audit:read:admin"
       - "property_type:*"
+      - "event_type:*"
       - "type:create,update,delete"
       - "vendor:create,update,delete"
       - "driver:create,update,delete"

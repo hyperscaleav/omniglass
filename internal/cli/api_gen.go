@@ -1184,6 +1184,136 @@ func generatedCommands() []*cobra.Command {
 	}())
 	roots = append(roots, func() *cobra.Command {
 		parent := &cobra.Command{
+			Use:   "event-type",
+			Short: "Commands for the event-type resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fDescription string
+				var fDisplayName string
+				var fName string
+				var fPayloadSchema string
+				cmd := &cobra.Command{
+					Use:     "create",
+					Short:   "Create an event type",
+					Long:    "Registers a custom event type (official=false). The name must be a valid event key. Gated by event_type:create.",
+					Example: "  omniglass event-type create --name name",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/event-types")
+						body := map[string]any{}
+						if cmd.Flags().Changed("description") {
+							body["description"] = fDescription
+						}
+						if cmd.Flags().Changed("display-name") {
+							body["display_name"] = fDisplayName
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						if cmd.Flags().Changed("payload-schema") {
+							body["payload_schema"] = jsonOrString(fPayloadSchema)
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fDescription, "description", "", "What the occurrence means")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A human label")
+				cmd.Flags().StringVar(&fName, "name", "", "The event type name (lowercase, dot-hierarchied)")
+				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fPayloadSchema, "payload-schema", "", "A JSON Schema fragment for the payload")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "delete <name>",
+					Short:   "Delete an event type",
+					Long:    "Removes a custom event type by name. Official event types are read-only. Gated by event_type:delete.",
+					Example: "  omniglass event-type delete <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/event-types/%s", url.PathEscape(args[0]))
+						return runAPICommand(cmd, "DELETE", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "get <name>",
+					Short:   "Get an event type",
+					Long:    "Returns one event type by name. Gated by event_type:read.",
+					Example: "  omniglass event-type get <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/event-types/%s", url.PathEscape(args[0]))
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "List event types",
+					Long:    "Lists every registered event type (official and custom). The catalog is estate-wide reference data. Gated by event_type:read.",
+					Example: "  omniglass event-type list",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/event-types")
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fDescription string
+				var fDisplayName string
+				var fPayloadSchema string
+				cmd := &cobra.Command{
+					Use:     "update <name>",
+					Short:   "Update an event type",
+					Long:    "Patches a custom event type's label, description, or payload schema (a nil field is unchanged). The name is fixed at creation. Official event types are read-only. Gated by event_type:update.",
+					Example: "  omniglass event-type update <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/event-types/%s", url.PathEscape(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("description") {
+							body["description"] = fDescription
+						}
+						if cmd.Flags().Changed("display-name") {
+							body["display_name"] = fDisplayName
+						}
+						if cmd.Flags().Changed("payload-schema") {
+							body["payload_schema"] = jsonOrString(fPayloadSchema)
+						}
+						return runAPICommand(cmd, "PATCH", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fDescription, "description", "", "What the occurrence means")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A human label")
+				cmd.Flags().StringVar(&fPayloadSchema, "payload-schema", "", "A JSON Schema fragment (replaces wholesale)")
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
 			Use:   "file",
 			Short: "Commands for the file resource",
 		}

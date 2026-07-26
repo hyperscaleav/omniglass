@@ -952,6 +952,103 @@ Example:
 omniglass driver update <id>
 ```
 
+## `omniglass event-type`
+
+Commands for the event-type resource
+
+### `omniglass event-type create`
+
+Create an event type
+
+```
+omniglass event-type create [flags]
+```
+
+Registers a custom event type (official=false). The name must be a valid event key. Gated by event_type:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--description` | string | (none) | What the occurrence means |
+| `--display-name` | string | (none) | A human label |
+| `--name` | string | (none) | The event type name (lowercase, dot-hierarchied) |
+| `--payload-schema` | string | (none) | A JSON Schema fragment for the payload |
+
+Example:
+
+```sh
+omniglass event-type create --name name
+```
+
+### `omniglass event-type delete`
+
+Delete an event type
+
+```
+omniglass event-type delete <name>
+```
+
+Removes a custom event type by name. Official event types are read-only. Gated by event_type:delete.
+
+Example:
+
+```sh
+omniglass event-type delete <name>
+```
+
+### `omniglass event-type get`
+
+Get an event type
+
+```
+omniglass event-type get <name>
+```
+
+Returns one event type by name. Gated by event_type:read.
+
+Example:
+
+```sh
+omniglass event-type get <name>
+```
+
+### `omniglass event-type list`
+
+List event types
+
+```
+omniglass event-type list
+```
+
+Lists every registered event type (official and custom). The catalog is estate-wide reference data. Gated by event_type:read.
+
+Example:
+
+```sh
+omniglass event-type list
+```
+
+### `omniglass event-type update`
+
+Update an event type
+
+```
+omniglass event-type update <name> [flags]
+```
+
+Patches a custom event type's label, description, or payload schema (a nil field is unchanged). The name is fixed at creation. Official event types are read-only. Gated by event_type:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--description` | string | (none) | What the occurrence means |
+| `--display-name` | string | (none) | A human label |
+| `--payload-schema` | string | (none) | A JSON Schema fragment (replaces wholesale) |
+
+Example:
+
+```sh
+omniglass event-type update <name>
+```
+
 ## `omniglass file`
 
 Commands for the file resource
