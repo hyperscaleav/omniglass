@@ -22,6 +22,7 @@ import Groups from "./pages/Groups";
 import Secrets from "./pages/Secrets";
 import Variables from "./pages/Variables";
 import Properties from "./pages/Properties";
+import EventTypes from "./pages/EventTypes";
 import Tags from "./pages/Tags";
 import Types from "./pages/Types";
 import Standards from "./pages/Standards";
@@ -96,6 +97,7 @@ render(
           <Route path="/types" component={Types} />
           <Route path="/standards" component={Standards} />
           <Route path="/properties" component={Properties} />
+          <Route path="/event-types" component={EventTypes} />
           <Route path="/vendors" component={Vendors} />
           <Route path="/drivers" component={Drivers} />
           <Route path="/capabilities" component={Capabilities} />

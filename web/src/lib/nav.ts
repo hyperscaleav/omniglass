@@ -70,6 +70,7 @@ export const navItems: NavItem[] = [
       { label: "Types", path: "/types", live: true, resource: "type", hint: "The location and secret type registries, classified by kind." },
       { label: "Standards", path: "/standards", live: true, resource: "standard", hint: "The blueprints a system conforms to, each declaring the properties every conforming system exposes." },
       { label: "Properties", path: "/properties", live: true, resource: "property", hint: "The signal catalog: the canonical properties a datapoint observes and a field declares." },
+      { label: "Event Types", path: "/event-types", live: true, resource: "event_type", hint: "The occurrence-key catalog: the discrete happenings an event is typed by, the twin of the property registry." },
       { label: "Tags", path: "/tags", live: true, resource: "tag", hint: "The governed tag key vocabulary applied across the inventory." },
       { label: "Vendors", path: "/vendors", live: true, resource: "vendor", hint: "The organizations behind products: manufacturers, integrators, developers." },
       { label: "Drivers", path: "/drivers", live: true, resource: "driver", hint: "The implementations that get, emit, and set a product's signals." },

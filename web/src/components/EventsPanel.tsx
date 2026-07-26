@@ -34,6 +34,9 @@ function EventRow(p: { ev: ComponentEvent }) {
           <span>· {p.ev.instance}</span>
         </Show>
         <span class="uppercase tracking-wide text-[10px] text-base-content/35">{p.ev.provenance}</span>
+        <Show when={p.ev.origin}>
+          <span class="badge badge-ghost badge-xs" title="How the occurrence arrived">{p.ev.origin}</span>
+        </Show>
         <Show when={attrs()}>
           <button
             type="button"
