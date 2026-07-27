@@ -174,17 +174,17 @@ func buildEvent(taskID, node string, dps []collection.Datapoint) *ogv1.Event {
 		Ts:     timestamppb.New(time.Now().UTC()),
 	}
 	for _, d := range dps {
-		pd := &ogv1.Datapoint{
+		pd := &ogv1.Sample{
 			Name:   d.Name,
 			Ts:     timestamppb.New(d.TS),
 			Labels: d.Labels,
 		}
 		if d.IsText {
-			pd.Value = &ogv1.Datapoint_StringValue{StringValue: d.Text}
+			pd.Value = &ogv1.Sample_StringValue{StringValue: d.Text}
 		} else {
-			pd.Value = &ogv1.Datapoint_DoubleValue{DoubleValue: d.Value}
+			pd.Value = &ogv1.Sample_DoubleValue{DoubleValue: d.Value}
 		}
-		ev.Datapoints = append(ev.Datapoints, pd)
+		ev.Samples = append(ev.Samples, pd)
 	}
 	return ev
 }

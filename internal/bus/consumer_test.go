@@ -26,10 +26,10 @@ func TestDeriveDatapoints(t *testing.T) {
 	ev := &ogv1.Event{
 		TaskId: "t1",
 		NodeId: "node-a",
-		Datapoints: []*ogv1.Datapoint{
-			{Name: "tcp.open", Value: &ogv1.Datapoint_DoubleValue{DoubleValue: 1}},
-			{Name: "tcp.connect_time", Value: &ogv1.Datapoint_DoubleValue{DoubleValue: 3.5}},
-			{Name: "not.registered", Value: &ogv1.Datapoint_DoubleValue{DoubleValue: 9}},
+		Samples: []*ogv1.Sample{
+			{Name: "tcp.open", Value: &ogv1.Sample_DoubleValue{DoubleValue: 1}},
+			{Name: "tcp.connect_time", Value: &ogv1.Sample_DoubleValue{DoubleValue: 3.5}},
+			{Name: "not.registered", Value: &ogv1.Sample_DoubleValue{DoubleValue: 9}},
 		},
 	}
 
@@ -58,11 +58,11 @@ func TestDeriveDatapointsRoutesByKind(t *testing.T) {
 		{Name: "interface.reachable", Kind: &state},
 	}, []storage.EventType{{Name: "some.log"}})
 	owner := storage.TaskOwner{Component: "disp-1", InterfaceName: "disp-1-tcp", InterfaceType: "tcp"}
-	ev := &ogv1.Event{Datapoints: []*ogv1.Datapoint{
-		{Name: "tcp.open", Value: &ogv1.Datapoint_DoubleValue{DoubleValue: 1}},
-		{Name: "interface.reachable", Value: &ogv1.Datapoint_StringValue{StringValue: "up"}},
-		{Name: "some.log", Value: &ogv1.Datapoint_StringValue{StringValue: "line"}},
-		{Name: "not.registered", Value: &ogv1.Datapoint_StringValue{StringValue: "up"}},
+	ev := &ogv1.Event{Samples: []*ogv1.Sample{
+		{Name: "tcp.open", Value: &ogv1.Sample_DoubleValue{DoubleValue: 1}},
+		{Name: "interface.reachable", Value: &ogv1.Sample_StringValue{StringValue: "up"}},
+		{Name: "some.log", Value: &ogv1.Sample_StringValue{StringValue: "line"}},
+		{Name: "not.registered", Value: &ogv1.Sample_StringValue{StringValue: "up"}},
 	}}
 	metrics, states, events := deriveDatapoints(ev, owner, reg)
 	if len(metrics) != 1 || metrics[0].Key != "tcp.open" {

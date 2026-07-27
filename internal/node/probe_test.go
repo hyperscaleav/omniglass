@@ -52,10 +52,10 @@ func TestBuildEvent(t *testing.T) {
 	if ev.GetTaskId() != "t1" || ev.GetNodeId() != "node-a" {
 		t.Fatalf("event ids = %q/%q, want t1/node-a", ev.GetTaskId(), ev.GetNodeId())
 	}
-	if len(ev.GetDatapoints()) != 2 {
-		t.Fatalf("datapoints = %d, want 2", len(ev.GetDatapoints()))
+	if len(ev.GetSamples()) != 2 {
+		t.Fatalf("datapoints = %d, want 2", len(ev.GetSamples()))
 	}
-	first := ev.GetDatapoints()[0]
+	first := ev.GetSamples()[0]
 	if first.GetName() != collection.DatapointTCPOpen || first.GetDoubleValue() != 1 {
 		t.Fatalf("first datapoint = %+v, want tcp.open=1", first)
 	}
@@ -69,7 +69,7 @@ func TestBuildEventText(t *testing.T) {
 		{Name: collection.DatapointInterfaceReachable, Text: collection.VerdictUp, IsText: true},
 	}
 	ev := buildEvent("t1", "node-a", dps)
-	verdict := ev.GetDatapoints()[1]
+	verdict := ev.GetSamples()[1]
 	if verdict.GetName() != collection.DatapointInterfaceReachable || verdict.GetStringValue() != "up" {
 		t.Fatalf("verdict datapoint = %+v, want interface.reachable=up on string_value", verdict)
 	}

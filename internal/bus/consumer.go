@@ -261,7 +261,7 @@ func deriveDatapoints(ev *ogv1.Event, owner storage.TaskOwner, reg collection.Re
 	var metrics []storage.MetricDatapointEvent
 	var states []storage.StateDatapointEvent
 	var events []storage.EventOccurrence
-	for _, dp := range ev.GetDatapoints() {
+	for _, dp := range ev.GetSamples() {
 		kind, ok := reg.Allows(dp.GetName())
 		if !ok {
 			continue // reject-not-project: unregistered name
@@ -322,11 +322,11 @@ func deriveDatapoints(ev *ogv1.Event, owner storage.TaskOwner, reg collection.Re
 // numericValue extracts a metric's float value from the datapoint's typed oneof.
 // A metric rides double_value (or int_value); a string/json/empty value is not a
 // metric and yields ok=false (the caller skips it).
-func numericValue(dp *ogv1.Datapoint) (float64, bool) {
+func numericValue(dp *ogv1.Sample) (float64, bool) {
 	switch v := dp.GetValue().(type) {
-	case *ogv1.Datapoint_DoubleValue:
+	case *ogv1.Sample_DoubleValue:
 		return v.DoubleValue, true
-	case *ogv1.Datapoint_IntValue:
+	case *ogv1.Sample_IntValue:
 		return float64(v.IntValue), true
 	default:
 		return 0, false
@@ -336,8 +336,8 @@ func numericValue(dp *ogv1.Datapoint) (float64, bool) {
 // stringValue extracts a state's categorical value from the datapoint's typed
 // oneof. A state rides string_value; a numeric/json/empty value is not a state
 // verdict and yields ok=false (the caller skips it).
-func stringValue(dp *ogv1.Datapoint) (string, bool) {
-	if v, ok := dp.GetValue().(*ogv1.Datapoint_StringValue); ok {
+func stringValue(dp *ogv1.Sample) (string, bool) {
+	if v, ok := dp.GetValue().(*ogv1.Sample_StringValue); ok {
 		return v.StringValue, true
 	}
 	return "", false
@@ -346,11 +346,11 @@ func stringValue(dp *ogv1.Datapoint) (string, bool) {
 // logValue extracts a log occurrence's payload from the datapoint's typed oneof.
 // A log rides string_value (its message) or json_value (structured attributes); a
 // numeric/empty value is not a log and yields ok=false (the caller skips it).
-func logValue(dp *ogv1.Datapoint) (string, []byte, bool) {
+func logValue(dp *ogv1.Sample) (string, []byte, bool) {
 	switch v := dp.GetValue().(type) {
-	case *ogv1.Datapoint_StringValue:
+	case *ogv1.Sample_StringValue:
 		return v.StringValue, nil, true
-	case *ogv1.Datapoint_JsonValue:
+	case *ogv1.Sample_JsonValue:
 		return "", v.JsonValue, true
 	default:
 		return "", nil, false
@@ -359,7 +359,7 @@ func logValue(dp *ogv1.Datapoint) (string, []byte, bool) {
 
 // datapointTime resolves the timestamp for one datapoint: its own ts if set, else
 // the event batch ts, else zero (the insert path then defaults to now).
-func datapointTime(ev *ogv1.Event, dp *ogv1.Datapoint) time.Time {
+func datapointTime(ev *ogv1.Event, dp *ogv1.Sample) time.Time {
 	if dp.GetTs() != nil {
 		return dp.GetTs().AsTime()
 	}

@@ -140,7 +140,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	publishEvent(t, ncA, "node-a", &ogv1.Event{
 		TaskId:     "t-b",
 		NodeId:     "node-a",
-		Datapoints: []*ogv1.Datapoint{{Name: "tcp.open", Value: &ogv1.Datapoint_DoubleValue{DoubleValue: 1}}},
+		Samples: []*ogv1.Sample{{Name: "tcp.open", Value: &ogv1.Sample_DoubleValue{DoubleValue: 1}}},
 	})
 
 	// NEGATIVE (a) REJECT-NOT-PROJECT: node-a publishes for its own t-a but with an
@@ -148,7 +148,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	publishEvent(t, ncA, "node-a", &ogv1.Event{
 		TaskId:     "t-a",
 		NodeId:     "node-a",
-		Datapoints: []*ogv1.Datapoint{{Name: "bogus.metric", Value: &ogv1.Datapoint_DoubleValue{DoubleValue: 9}}},
+		Samples: []*ogv1.Sample{{Name: "bogus.metric", Value: &ogv1.Sample_DoubleValue{DoubleValue: 9}}},
 	})
 
 	// WATERMARK: a valid datapoint published AFTER the negatives. JetStream is
@@ -158,7 +158,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	publishEvent(t, ncA, "node-a", &ogv1.Event{
 		TaskId:     "t-a",
 		NodeId:     "node-a",
-		Datapoints: []*ogv1.Datapoint{{Name: "tcp.connect_time", Value: &ogv1.Datapoint_DoubleValue{DoubleValue: 42}}},
+		Samples: []*ogv1.Sample{{Name: "tcp.connect_time", Value: &ogv1.Sample_DoubleValue{DoubleValue: 42}}},
 	})
 	waitMetric(t, ctx, gw, "disp-1", "tcp.connect_time", func(d *storage.MetricDatapoint) bool { return d != nil && d.Value == 42 })
 
@@ -185,7 +185,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	publishEvent(t, ncA, "node-a", &ogv1.Event{
 		TaskId:     "t-a",
 		NodeId:     "node-a",
-		Datapoints: []*ogv1.Datapoint{{Name: "interface.reachable", Value: &ogv1.Datapoint_StringValue{StringValue: "up"}}},
+		Samples: []*ogv1.Sample{{Name: "interface.reachable", Value: &ogv1.Sample_StringValue{StringValue: "up"}}},
 	})
 	waitState(t, ctx, gw, "disp-1", "interface.reachable", "disp-1-tcp", func(d *storage.StateDatapoint) bool { return d != nil && d.Value == "up" })
 
@@ -195,7 +195,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	publishEvent(t, ncA, "node-a", &ogv1.Event{
 		TaskId:     "t-b",
 		NodeId:     "node-a",
-		Datapoints: []*ogv1.Datapoint{{Name: "interface.reachable", Value: &ogv1.Datapoint_StringValue{StringValue: "up"}}},
+		Samples: []*ogv1.Sample{{Name: "interface.reachable", Value: &ogv1.Sample_StringValue{StringValue: "up"}}},
 	})
 
 	// TRANSITION-ONLY (ingest guard): a repeated identical up must NOT add a second
@@ -204,12 +204,12 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	publishEvent(t, ncA, "node-a", &ogv1.Event{
 		TaskId:     "t-a",
 		NodeId:     "node-a",
-		Datapoints: []*ogv1.Datapoint{{Name: "interface.reachable", Value: &ogv1.Datapoint_StringValue{StringValue: "up"}}},
+		Samples: []*ogv1.Sample{{Name: "interface.reachable", Value: &ogv1.Sample_StringValue{StringValue: "up"}}},
 	})
 	publishEvent(t, ncA, "node-a", &ogv1.Event{
 		TaskId:     "t-a",
 		NodeId:     "node-a",
-		Datapoints: []*ogv1.Datapoint{{Name: "interface.reachable", Value: &ogv1.Datapoint_StringValue{StringValue: "down"}}},
+		Samples: []*ogv1.Sample{{Name: "interface.reachable", Value: &ogv1.Sample_StringValue{StringValue: "down"}}},
 	})
 	waitState(t, ctx, gw, "disp-1", "interface.reachable", "disp-1-tcp", func(d *storage.StateDatapoint) bool { return d != nil && d.Value == "down" })
 
@@ -245,7 +245,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	// reject-not-project as a metric or state. Raw logs are a separate lane, not this.
 	publishEvent(t, ncA, "node-a", &ogv1.Event{
 		TaskId: "t-a", NodeId: "node-a",
-		Datapoints: []*ogv1.Datapoint{{Name: "call.started", Value: &ogv1.Datapoint_StringValue{StringValue: "call started"}}},
+		Samples: []*ogv1.Sample{{Name: "call.started", Value: &ogv1.Sample_StringValue{StringValue: "call started"}}},
 	})
 	waitEvent(t, ctx, gw, "disp-1", func(e storage.Event) bool {
 		return e.Message == "call started" && e.Origin == "caught" && e.Key == "call.started"
