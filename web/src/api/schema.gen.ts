@@ -3834,7 +3834,7 @@ export interface components {
             event_type_id: string;
             /** @description The series discriminator (e.g. the interface), when set */
             instance?: string;
-            /** @description The event_type name of the occurrence (e.g. syslog.line) */
+            /** @description The event_type name of the occurrence (e.g. log.line) */
             key: string;
             /** @description The occurrence message */
             message: string;

@@ -70,7 +70,7 @@ func TestEventTypeAPI(t *testing.T) {
 	for _, e := range listed.EventTypes {
 		names[e.Name] = true
 	}
-	if !names["cable.unplugged"] || !names["syslog.line"] {
+	if !names["cable.unplugged"] || !names["log.line"] {
 		t.Fatalf("list missing event types: %v", names)
 	}
 
@@ -84,8 +84,8 @@ func TestEventTypeAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/event-types", map[string]any{"name": "cable.unplugged"}, http.StatusConflict)
 
 	// An official (seeded) event type is read-only (409).
-	c.do(ownerTok, http.MethodPatch, "/event-types/syslog.line", map[string]any{"display_name": "x"}, http.StatusConflict)
-	c.do(ownerTok, http.MethodDelete, "/event-types/syslog.line", nil, http.StatusConflict)
+	c.do(ownerTok, http.MethodPatch, "/event-types/log.line", map[string]any{"display_name": "x"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodDelete, "/event-types/log.line", nil, http.StatusConflict)
 
 	// An unknown event type is a 404.
 	c.do(ownerTok, http.MethodGet, "/event-types/nope", nil, http.StatusNotFound)

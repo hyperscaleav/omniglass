@@ -13,7 +13,7 @@ const seed: ComponentEvents = {
   events: [
     {
       ts: nowIso,
-      key: "syslog.line",
+      key: "log.line",
       event_type_id: "0192a5f0-1111-7000-8000-0000000000a1",
       origin: "caught",
       instance: "eth0",
@@ -48,7 +48,7 @@ describe("EventsPanel", () => {
   it("renders one row per event with its key, message and source", () => {
     const { getByText } = mount();
     expect(getByText("2 in the last 24h")).toBeTruthy();
-    expect(getByText("syslog.line")).toBeTruthy();
+    expect(getByText("log.line")).toBeTruthy();
     expect(getByText("link state changed to up")).toBeTruthy();
     expect(getByText("snmp.trap")).toBeTruthy();
     expect(getByText("coldStart")).toBeTruthy();

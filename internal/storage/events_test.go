@@ -36,8 +36,8 @@ func TestInsertEvents(t *testing.T) {
 
 	now := time.Now().UTC()
 	err = gw.InsertEvents(ctx, []storage.EventOccurrence{
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "syslog.line", Instance: "disp-1-ssh", Message: "link down", Source: "ssh", TS: now.Add(-2 * time.Minute)},
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "syslog.line", Instance: "disp-1-ssh", Message: "link up", Attributes: []byte(`{"iface":"eth0"}`), Source: "ssh", TS: now},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "log.line", Instance: "disp-1-ssh", Message: "link down", Source: "ssh", TS: now.Add(-2 * time.Minute)},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "log.line", Instance: "disp-1-ssh", Message: "link up", Attributes: []byte(`{"iface":"eth0"}`), Source: "ssh", TS: now},
 	})
 	if err != nil {
 		t.Fatalf("insert events: %v", err)
@@ -70,7 +70,7 @@ func TestInsertEvents(t *testing.T) {
 
 	// An owner component that does not exist violates the component FK.
 	err = gw.InsertEvents(ctx, []storage.EventOccurrence{
-		{OwnerKind: "component", OwnerID: "ghost", Key: "syslog.line", Message: "x", TS: now},
+		{OwnerKind: "component", OwnerID: "ghost", Key: "log.line", Message: "x", TS: now},
 	})
 	if err == nil {
 		t.Fatal("insert with unknown owner: want error, got nil")

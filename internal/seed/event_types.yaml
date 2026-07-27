@@ -3,12 +3,14 @@
 # value. A registered name lets an occurrence be promoted from a raw log line into a
 # typed event, and gives it a known, inspectable identity.
 event_types:
-  - name: syslog.line
-    display_name: Syslog Line
+  - name: log.line
+    display_name: Log Line
     description: >-
       A device log line, the log-to-event sink's canonical starter type: a caught
       occurrence carrying a message (and optional structured attributes), promoted
-      from a raw log rather than sampled as a value.
+      from a raw log rather than sampled as a value. Transport-agnostic: however the
+      line arrived (syslog, an SNMP trap, a device event feed) is a source attribute,
+      not part of the type.
   - name: call.started
     display_name: Call Started
     description: >-

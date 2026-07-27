@@ -223,7 +223,7 @@ views](#reads-beyond-one-resource-are-views), standing in until the `ViewResult`
 **The event read is the log-kind mirror of the reachability read.** `GET /components/{name}/events` returns
 the component's recent **log occurrences** (the [`event` log sink](/architecture/core-entities/#the-event-sink-the-first-arc-owned-occurrence)),
 newest first, bounded to the last 24 hours and capped at 200 rows. Each row carries its `ts`, the
-`event_type` `key` (e.g. `syslog.line`), the `origin` (caught/caused/derived/scheduled, how the occurrence
+`event_type` `key` (e.g. `log.line`), the `origin` (caught/caused/derived/scheduled, how the occurrence
 arrived), the `instance` discriminator, the `message`, optional structured `attributes`, its `provenance`
 (`observed` for direct collection), and the `source` interface type. It is gated by
 `component:read` and scope-injected through the same `GetComponent` gate as the reachability read, so an

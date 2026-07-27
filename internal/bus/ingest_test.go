@@ -239,16 +239,16 @@ func TestTelemetryRoundTrip(t *testing.T) {
 		t.Fatalf("state confinement breached: node-a landed a verdict on disp-2: %+v", got)
 	}
 
-	// LOG-TO-EVENT PROMOTION (ADR-0063 #395): a syslog.line (a seeded event_type,
+	// LOG-TO-EVENT PROMOTION (ADR-0063 #395): a log.line (a seeded event_type,
 	// no longer a log-kind property_type) published by node-a lands as a caught
 	// event on its component, routed by the event registry under the same owner
 	// confinement and reject-not-project as a metric or state.
 	publishEvent(t, ncA, "node-a", &ogv1.Event{
 		TaskId: "t-a", NodeId: "node-a",
-		Datapoints: []*ogv1.Datapoint{{Name: "syslog.line", Value: &ogv1.Datapoint_StringValue{StringValue: "port flap"}}},
+		Datapoints: []*ogv1.Datapoint{{Name: "log.line", Value: &ogv1.Datapoint_StringValue{StringValue: "port flap"}}},
 	})
 	waitEvent(t, ctx, gw, "disp-1", func(e storage.Event) bool {
-		return e.Message == "port flap" && e.Origin == "caught" && e.Key == "syslog.line"
+		return e.Message == "port flap" && e.Origin == "caught" && e.Key == "log.line"
 	})
 
 	// Telemetry publish isolation: node-a cannot publish to node-b's telemetry

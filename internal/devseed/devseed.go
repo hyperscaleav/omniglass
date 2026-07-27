@@ -592,7 +592,7 @@ func seedReachDatapoints(ctx context.Context, gw storage.Gateway, iface string, 
 // CEC, EDID, input) so the console's event-log panel comes up populated instead of
 // empty. eventComponent names an existing fixture component (the display seeded above),
 // so the event's component_id foreign key resolves. All rows use the registered
-// log-kind key syslog.line (reject-not-project), with provenance stamped observed by
+// log-kind key log.line (reject-not-project), with provenance stamped observed by
 // the insert.
 const eventComponent = "lobby-display"
 
@@ -634,7 +634,7 @@ func seedEvents(ctx context.Context, gw storage.Gateway) error {
 		evs = append(evs, storage.EventOccurrence{
 			OwnerKind:  "component",
 			OwnerID:    eventComponent,
-			Key:        "syslog.line",
+			Key:        "log.line",
 			Message:    e.message,
 			Attributes: e.attrs,
 			Source:     "syslog",

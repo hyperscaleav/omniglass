@@ -24,7 +24,7 @@ const (
 
 type eventBody struct {
 	TS          time.Time       `json:"ts" doc:"When the occurrence happened"`
-	Key         string          `json:"key" doc:"The event_type name of the occurrence (e.g. syslog.line)"`
+	Key         string          `json:"key" doc:"The event_type name of the occurrence (e.g. log.line)"`
 	EventTypeID string          `json:"event_type_id" doc:"The event_type's uuid, the stable form of key"`
 	Origin      string          `json:"origin" doc:"How the occurrence arrived (caught/caused/derived/scheduled)"`
 	Instance    string          `json:"instance,omitempty" doc:"The series discriminator (e.g. the interface), when set"`

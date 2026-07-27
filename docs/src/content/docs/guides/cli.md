@@ -361,13 +361,13 @@ location types. See [the seed model](/architecture/core-entities/#the-seed-model
 
 The [event type](/architecture/events/#the-event_type-registry) commands cover the occurrence keyspace,
 the twin of the property catalog: the discrete happenings an event is typed by (`call.started`,
-`syslog.line`). `event_type:read` sits on the viewer floor; `event_type:create`, `event_type:update`, and
+`log.line`). `event_type:read` sits on the viewer floor; `event_type:create`, `event_type:update`, and
 `event_type:delete` are admin-gated. Official (seed-owned) event types are read-only.
 
 ```sh
 omniglass event-type list                                           # the event type catalog
 omniglass event-type create --name cable.unplugged --display-name "Cable unplugged"
-omniglass event-type get syslog.line
+omniglass event-type get log.line
 omniglass event-type delete cable.unplugged                        # 409 on an official type
 ```
 

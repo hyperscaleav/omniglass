@@ -1324,7 +1324,7 @@ below from the project's history. From here it grows one slice at a time.
   returns metrics, states, **and** events, and the persistence path calls **`InsertEvents`**: a **log**-kind
   datapoint that used to be **dropped** at ingest (it had no sink) is routed to `event`, riding `string_value`
   (its message) or `json_value` (its attributes), under the **same** owner-confinement and reject-not-project
-  gates as the metric and state sinks. A boot-seed property **`syslog.line`** (kind `log`) is the canonical
+  gates as the metric and state sinks. A boot-seed property **`log.line`** (kind `log`) is the canonical
   log-kind starter. The reserved **`event_id`** columns on `metric_datapoint` and `state_datapoint` are closed
   into **real foreign keys** to `event(id)` (`on delete set null`), so an **intended**-provenance datapoint
   references the `event` that produced it. Storage adds `InsertEvents` (batch, in-tx, provenance `observed`) and

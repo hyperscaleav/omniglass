@@ -397,7 +397,7 @@ collection pipeline. Where a `metric` or `state` records a **sampled present val
 (a reading that has a value *now*, `last()` is meaningful), an `event` records a **past occurrence**: a
 device log line, something that *happened* and whose "what is it now?" is meaningless (the
 [has-a-value-now razor](/architecture/datapoints/#the-has-a-value-now-razor-datapoint-vs-event)). A
-collected datapoint whose property is **log**-kind (the seeded starter is `syslog.line`) is no longer
+collected datapoint whose property is **log**-kind (the seeded starter is `log.line`) is no longer
 dropped at ingest: it routes to `event` as an occurrence, carrying a **`message`** (its text, from
 `string_value`) and optional structured **`attributes`** (jsonb, from `json_value`).
 
