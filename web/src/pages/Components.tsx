@@ -25,6 +25,7 @@ import TagPills from "../components/TagPills";
 import { tagFilterKeys } from "../lib/predicate";
 import TagAdder from "../components/TagAdder";
 import ReachabilityPanel from "../components/ReachabilityPanel";
+import ReconciliationPanel from "../components/ReconciliationPanel";
 import EventsPanel from "../components/EventsPanel";
 import { interfaceBlade, interfaceCreateBlade } from "../components/interfaceBlades";
 import PropertiesPanel, { propertyResolutionBlade, propertyBladeId } from "../components/PropertiesPanel";
@@ -311,6 +312,10 @@ export default function Components() {
             which keeps view read-only. */}
         <AlarmsPanel component={n().raw.name} canUpdate={editing() && canUpdate()} />
         <EventsPanel name={n().raw.name} />
+        {/* What we want vs what the device reports: the provenance pivot
+            (declared/intended/observed) per property, with drift computed on the
+            server. Read-only, and the teaching surface for reconciliation. */}
+        <ReconciliationPanel name={n().raw.name} />
         {/* Why the tag values are what they are, and for a shared component,
             which system it is being asked about. The list's pills answer what;
             this answers why, which is the only question when one looks wrong. */}

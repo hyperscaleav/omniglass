@@ -223,6 +223,15 @@ func TestTelemetryRoundTrip(t *testing.T) {
 		t.Fatalf("transition-only breached: want [up down], got %+v", trans)
 	}
 
+	// The observed latest-value cache was derived on ingest (ADR-0063 #394): the
+	// current value of a series is one lookup, mirroring the newest sample. The
+	// state's newest value is the "down" flip; the metric's is tcp.open=1. Poll,
+	// since the derive is a non-gating write that runs just after the sample lands.
+	waitValue(t, ctx, gw, "disp-1", "interface.reachable", "disp-1-tcp", "observed",
+		func(cv *storage.CachedValue) bool { return cv != nil && string(cv.Value) == `"down"` })
+	waitValue(t, ctx, gw, "disp-1", "tcp.open", "disp-1-tcp", "observed",
+		func(cv *storage.CachedValue) bool { return cv != nil && string(cv.Value) == "1" })
+
 	// Confinement held for the state path: disp-2 (node-b's component) got no verdict.
 	if got, err := gw.LatestState(ctx, "disp-2", "interface.reachable", "disp-2-tcp"); err != nil {
 		t.Fatalf("latest state disp-2: %v", err)
@@ -286,6 +295,27 @@ func waitMetric(t *testing.T, ctx context.Context, gw storage.Gateway, comp, key
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("metric %s/%s never satisfied the predicate (last=%+v)", comp, key, dp)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// waitValue polls the component-owned latest-value cache until pred is satisfied
+// or a deadline passes, so the derive (a non-gating write just after the sample
+// lands) does not race the assertion.
+func waitValue(t *testing.T, ctx context.Context, gw storage.Gateway, comp, key, instance, provenance string, pred func(*storage.CachedValue) bool) *storage.CachedValue {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		cv, err := gw.LatestValue(ctx, "component", comp, key, instance, provenance, scope.Set{All: true})
+		if err != nil {
+			t.Fatalf("latest value %s/%s[%s]: %v", comp, key, instance, err)
+		}
+		if pred(cv) {
+			return cv
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("value %s/%s[%s] never satisfied the predicate (last=%+v)", comp, key, instance, cv)
 		}
 		time.Sleep(50 * time.Millisecond)
 	}

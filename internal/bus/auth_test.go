@@ -44,6 +44,9 @@ func (f fakeStore) LatestState(context.Context, string, string, string) (*storag
 func (f fakeStore) InsertEvents(context.Context, []storage.EventOccurrence) error {
 	return nil
 }
+func (f fakeStore) UpsertProperties(context.Context, []storage.PropertyUpsert) error {
+	return nil
+}
 
 // fakeClientAuth is a minimal server.ClientAuthentication that carries the
 // presented options and captures the RegisterUser call.

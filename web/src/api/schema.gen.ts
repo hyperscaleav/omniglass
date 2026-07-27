@@ -644,6 +644,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components/{name}/reconciliation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a component's property reconciliation (want/told/is)
+         * @description Pivots, per declared property, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is), with config-drift computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+         */
+        get: operations["get-component-reconciliation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/components/{name}:listTags": {
         parameters: {
             query?: never;
@@ -4582,6 +4602,28 @@ export interface components {
             component: string;
             interfaces: components["schemas"]["ReachInterfaceBody"][] | null;
         };
+        ReconPropertyBody: {
+            /** @description True when the observed value is present and differs from the declared one */
+            drift: boolean;
+            /** @description The observed value from the latest-value cache (null if none) */
+            is: unknown;
+            /** @description The property_type key */
+            property: string;
+            /** @description The intended value from a command (null until commanded) */
+            told: unknown;
+            /** @description The declared value, resolved live from the cascade (null if none) */
+            want: unknown;
+        };
+        ReconciliationOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ReconciliationOutputBody.json
+             */
+            readonly $schema?: string;
+            component: string;
+            properties: components["schemas"]["ReconPropertyBody"][] | null;
+        };
         ResetPasswordInputBody: {
             /**
              * Format: uri
@@ -6761,6 +6803,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReachabilityOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-component-reconciliation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconciliationOutputBody"];
                 };
             };
             /** @description Error */

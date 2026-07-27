@@ -772,6 +772,26 @@ Example:
 omniglass component reachability list <name>
 ```
 
+### `omniglass component reconciliation`
+
+Commands for the reconciliation resource
+
+#### `omniglass component reconciliation list`
+
+Read a component's property reconciliation (want/told/is)
+
+```
+omniglass component reconciliation list <name>
+```
+
+Pivots, per declared property, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is), with config-drift computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass component reconciliation list <name>
+```
+
 ### `omniglass component removeTag`
 
 Remove a tag value from a component

@@ -447,6 +447,15 @@ func (UnimplementedGateway) ClearProperty(context.Context, string, string, strin
 func (UnimplementedGateway) EffectiveProperties(context.Context, string, string, scope.Set) ([]EffectiveProperty, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) UpsertProperties(context.Context, []PropertyUpsert) error {
+	return nil
+}
+func (UnimplementedGateway) LatestValue(context.Context, string, string, string, string, string, scope.Set) (*CachedValue, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) Reconciliation(context.Context, string, string, scope.Set) ([]PropertyReconciliation, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) ListTags(context.Context) ([]Tag, error) {
 	return nil, nil
 }

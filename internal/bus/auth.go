@@ -31,6 +31,10 @@ type Store interface {
 	// The log sink: a log-kind datapoint routes here (by registry kind) as an
 	// occurrence, instead of being dropped.
 	InsertEvents(ctx context.Context, evs []storage.EventOccurrence) error
+	// The observed latest-value cache derive (ADR-0063 #394): after the samples
+	// land, upsert the newest value per series. Non-gating and idempotent, so it
+	// never fails the ack and a redelivery does not double-write.
+	UpsertProperties(ctx context.Context, ups []storage.PropertyUpsert) error
 }
 
 // nodeAuth implements server.Authentication (the in-process

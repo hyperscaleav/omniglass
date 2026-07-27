@@ -2,6 +2,7 @@ package bus
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"time"
 
@@ -147,7 +148,47 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 			return
 		}
 	}
+	// Derive the observed latest-value cache from the samples that just landed
+	// (ADR-0063 #394). This is non-gating: the append tables are the source of
+	// truth and the cache is rebuildable from them, so a failed upsert is logged,
+	// not retried, and never fails the ack. Its series-key upsert is idempotent, so
+	// a redelivery that re-runs it does not double-write (unlike the append sinks).
+	if ups := latestUpserts(metrics, fresh); len(ups) > 0 {
+		if err := s.store.UpsertProperties(ctx, ups); err != nil {
+			slog.Warn("latest-value derive failed (rebuildable from samples)", "subject", msg.Subject(), "error", err)
+		}
+	}
 	_ = msg.Ack()
+}
+
+// latestUpserts turns the observed samples that just landed (metrics and the
+// post-dedupe states) into producer-cache upserts: one newest value per series,
+// provenance observed, the metric's number and the state's string encoded as the
+// jsonb value the cache stores. Pure: no I/O. Events are occurrences, not values,
+// so they never enter the value cache.
+func latestUpserts(metrics []storage.MetricDatapointEvent, states []storage.StateDatapointEvent) []storage.PropertyUpsert {
+	ups := make([]storage.PropertyUpsert, 0, len(metrics)+len(states))
+	for _, m := range metrics {
+		v, err := json.Marshal(m.Value)
+		if err != nil {
+			continue
+		}
+		ups = append(ups, storage.PropertyUpsert{
+			OwnerKind: m.OwnerKind, OwnerID: m.OwnerID, Key: m.Key, Instance: m.Instance,
+			Provenance: "observed", Value: v, TS: m.TS,
+		})
+	}
+	for _, st := range states {
+		v, err := json.Marshal(st.Value)
+		if err != nil {
+			continue
+		}
+		ups = append(ups, storage.PropertyUpsert{
+			OwnerKind: st.OwnerKind, OwnerID: st.OwnerID, Key: st.Key, Instance: st.Instance,
+			Provenance: "observed", Value: v, TS: st.TS,
+		})
+	}
+	return ups
 }
 
 // nakOrTerm redelivers a telemetry message that failed for a transient reason

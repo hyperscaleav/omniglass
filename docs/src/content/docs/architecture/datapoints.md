@@ -8,7 +8,7 @@ sidebar:
 ---
 
 :::caution[Direction: this page is mid-migration to ADR-0063]
-The `property_type` registry and the `property` value store are named per [ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables) (built). Still directional, not yet built: `property` becoming a provenance-keyed latest-value cache (an `observed`, a `calculated`, an `intended` row per series), and `log` occurrences graduating from a `property_type` kind into the `event` family.
+The `property_type` registry and the `property` value store are named per [ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables) (built). The **latest-value cache** is now built for the observed producer: the ingest sink derives a per-series `property` row (upserted on the series key with an out-of-order guard), so the current value of a key is one lookup, and a **reconciliation** read pivots want (declared, resolved live from the cascade) / told (intended) / is (observed) with drift computed on read. Still directional: the `intended` and `calculated` producers (a command and the calc engine write those cache slots), and `log` occurrences graduating from a `property_type` kind into the `event` family.
 :::
 
 :::note[Partial]
