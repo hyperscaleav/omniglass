@@ -24,7 +24,8 @@ var Subsystems = []Cluster{
 	}},
 	{Name: "telemetry", Tables: []string{
 		"property_type", "property", "metric", "state",
-		"event", "alarm", "alarm_capability",
+		"event_type", "event", "alarm", "alarm_capability",
+		"command_type", "command",
 	}},
 	{Name: "collection", Tables: []string{
 		"node", "task",

@@ -6,9 +6,12 @@
 package erd
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // Column is one column of a table. Only primary-key and foreign-key columns are
@@ -167,4 +170,147 @@ func edgeLines(s Schema, loc map[string]string) []string {
 	}
 	sort.Strings(lines)
 	return lines
+}
+
+// querier is the subset of pgx used for introspection; both *pgx.Conn and
+// *pgxpool.Pool satisfy it.
+type querier interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+}
+
+// Introspect reads the public schema of a live Postgres into a Schema: base
+// tables (excluding dbmate's schema_migrations), their columns, and their
+// primary- and foreign-key constraints. Tables and columns come back in catalog
+// order; Render sorts for a stable document.
+func Introspect(ctx context.Context, db querier) (Schema, error) {
+	cols, err := queryColumns(ctx, db)
+	if err != nil {
+		return Schema{}, err
+	}
+	if err := markPrimaryKeys(ctx, db, cols); err != nil {
+		return Schema{}, err
+	}
+	fks, err := queryForeignKeys(ctx, db, cols)
+	if err != nil {
+		return Schema{}, err
+	}
+
+	names, err := queryTables(ctx, db)
+	if err != nil {
+		return Schema{}, err
+	}
+	s := Schema{Tables: make([]Table, 0, len(names))}
+	for _, n := range names {
+		s.Tables = append(s.Tables, Table{Name: n, Columns: cols[n], FKs: fks[n]})
+	}
+	return s, nil
+}
+
+func queryTables(ctx context.Context, db querier) ([]string, error) {
+	rows, err := db.Query(ctx, `
+		SELECT table_name
+		FROM information_schema.tables
+		WHERE table_schema = 'public'
+		  AND table_type = 'BASE TABLE'
+		  AND table_name <> 'schema_migrations'
+		ORDER BY table_name`)
+	if err != nil {
+		return nil, fmt.Errorf("erd: query tables: %w", err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	return out, rows.Err()
+}
+
+// queryColumns returns a per-table, ordinal-ordered column list keyed by table
+// name.
+func queryColumns(ctx context.Context, db querier) (map[string][]Column, error) {
+	rows, err := db.Query(ctx, `
+		SELECT table_name, column_name, data_type
+		FROM information_schema.columns
+		WHERE table_schema = 'public'
+		ORDER BY table_name, ordinal_position`)
+	if err != nil {
+		return nil, fmt.Errorf("erd: query columns: %w", err)
+	}
+	defer rows.Close()
+	out := map[string][]Column{}
+	for rows.Next() {
+		var tbl, name, typ string
+		if err := rows.Scan(&tbl, &name, &typ); err != nil {
+			return nil, err
+		}
+		out[tbl] = append(out[tbl], Column{Name: name, Type: typ})
+	}
+	return out, rows.Err()
+}
+
+func markPrimaryKeys(ctx context.Context, db querier, cols map[string][]Column) error {
+	rows, err := db.Query(ctx, `
+		SELECT kcu.table_name, kcu.column_name
+		FROM information_schema.table_constraints tc
+		JOIN information_schema.key_column_usage kcu
+		  ON tc.constraint_name = kcu.constraint_name
+		 AND tc.table_schema = kcu.table_schema
+		WHERE tc.constraint_type = 'PRIMARY KEY'
+		  AND tc.table_schema = 'public'`)
+	if err != nil {
+		return fmt.Errorf("erd: query primary keys: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var tbl, col string
+		if err := rows.Scan(&tbl, &col); err != nil {
+			return err
+		}
+		setFlag(cols, tbl, col, func(c *Column) { c.PK = true })
+	}
+	return rows.Err()
+}
+
+func queryForeignKeys(ctx context.Context, db querier, cols map[string][]Column) (map[string][]ForeignKey, error) {
+	rows, err := db.Query(ctx, `
+		SELECT kcu.table_name, kcu.column_name,
+		       ccu.table_name AS ref_table, ccu.column_name AS ref_column
+		FROM information_schema.table_constraints tc
+		JOIN information_schema.key_column_usage kcu
+		  ON tc.constraint_name = kcu.constraint_name
+		 AND tc.table_schema = kcu.table_schema
+		JOIN information_schema.constraint_column_usage ccu
+		  ON tc.constraint_name = ccu.constraint_name
+		 AND tc.table_schema = ccu.table_schema
+		WHERE tc.constraint_type = 'FOREIGN KEY'
+		  AND tc.table_schema = 'public'
+		ORDER BY kcu.table_name, kcu.column_name`)
+	if err != nil {
+		return nil, fmt.Errorf("erd: query foreign keys: %w", err)
+	}
+	defer rows.Close()
+	out := map[string][]ForeignKey{}
+	for rows.Next() {
+		var tbl, col, refTbl, refCol string
+		if err := rows.Scan(&tbl, &col, &refTbl, &refCol); err != nil {
+			return nil, err
+		}
+		out[tbl] = append(out[tbl], ForeignKey{Column: col, RefTable: refTbl, RefColumn: refCol})
+		setFlag(cols, tbl, col, func(c *Column) { c.FK = true })
+	}
+	return out, rows.Err()
+}
+
+// setFlag applies fn to the named column in place.
+func setFlag(cols map[string][]Column, tbl, col string, fn func(*Column)) {
+	for i := range cols[tbl] {
+		if cols[tbl][i].Name == col {
+			fn(&cols[tbl][i])
+			return
+		}
+	}
 }
