@@ -2100,3 +2100,13 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   device acknowledgement. A new [commands](/architecture/commands/) page lands at `Partial`. Part of
   [#396](https://github.com/hyperscaleav/omniglass/issues/396).
 - **The datapoint concept retires for property, sample, and current value ([ADR-0065](/architecture/decisions/#adr-0065-property-sample-and-current-value-replace-the-datapoint)).** The one word "datapoint" split the signal from the observation: a **property** is the signal (registry `property_type`), a **sample** is one timestamped observation of it (a `metric` / `state` row, the kind), and the **current value** is the latest sample per series (the `property` cache). A behavior-preserving rename, no tables touched: the proto `Datapoint` message becomes `Sample`, the metric and state datapoint Go types become `*Sample`, `deriveDatapoints` becomes `deriveSamples`, and the value-model page is now [properties](/architecture/properties/) (redirect from the old slug), which carries the current-value cache and want/told/is reconciliation explainer. The ADR also settles that the built `property` cache, a table upserted from the sink rather than the once-sketched metric view, is the architecture-of-record for current values. Part of [#405](https://github.com/hyperscaleav/omniglass/issues/405).
+- **The platform ERD is generated from the schema ([data model](/architecture/data-model/)).** A new
+  `make gen` step (`cmd/erdgen`) applies the embedded migrations to a throwaway Postgres, introspects
+  `information_schema` (tables, primary and foreign keys), and renders a subsystem-clustered D2
+  entity-relationship diagram onto the new **Data model** page, so the diagram can never drift from
+  the tables. The `internal/erd` render core is pure and golden-tested; the introspection and a drift
+  gate (regenerate, compare to the committed D2) run against the real schema. Tables land in
+  hand-mapped subsystem containers (identity, estate, catalog, telemetry, collection, config, content,
+  audit); an unmapped table renders in a visible `unclustered` box that trips the drift gate. The
+  sql_table shapes are themed from the brand tokens so the ERD tracks the light/dark toggle. Part of
+  [#406](https://github.com/hyperscaleav/omniglass/issues/406).
