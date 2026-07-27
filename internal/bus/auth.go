@@ -26,12 +26,12 @@ type Store interface {
 	// a registered event_type name routes a natively-published occurrence (an xAPI
 	// event, a trap) to the event sink (kind "event") as a caught event (ADR-0066).
 	ListEventTypes(ctx context.Context) ([]storage.EventType, error)
-	InsertMetricDatapoints(ctx context.Context, evs []storage.MetricDatapointEvent) error
+	InsertMetricSamples(ctx context.Context, evs []storage.MetricSampleEvent) error
 	// The state sink and its transition-only guard: a state datapoint routes here
 	// (by registry kind), and LatestState lets the consumer skip a write whose
 	// value equals the latest stored value for the series.
-	InsertStateDatapoints(ctx context.Context, evs []storage.StateDatapointEvent) error
-	LatestState(ctx context.Context, componentName, key, instance string) (*storage.StateDatapoint, error)
+	InsertStateSamples(ctx context.Context, evs []storage.StateSampleEvent) error
+	LatestState(ctx context.Context, componentName, key, instance string) (*storage.StateSample, error)
 	// The log sink: a log-kind datapoint routes here (by registry kind) as an
 	// occurrence, instead of being dropped.
 	InsertEvents(ctx context.Context, evs []storage.EventOccurrence) error

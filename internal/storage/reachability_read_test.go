@@ -65,7 +65,7 @@ func TestReachabilityReads(t *testing.T) {
 	// disp-1-tcp value even though it is older.
 	older := time.Now().UTC().Add(-2 * time.Minute)
 	newer := older.Add(time.Minute)
-	if err := gw.InsertMetricDatapoints(ctx, []storage.MetricDatapointEvent{
+	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleEvent{
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp.open", Instance: "disp-1-tcp", Value: 1, Source: "tcp", TS: older},
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp.open", Instance: "disp-1-icmp", Value: 0, Source: "tcp", TS: newer},
 	}); err != nil {

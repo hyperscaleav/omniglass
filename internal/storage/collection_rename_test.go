@@ -64,7 +64,7 @@ func TestCollectionReferencesSurviveARename(t *testing.T) {
 	if err != nil {
 		t.Fatalf("interface: %v", err)
 	}
-	if err := gw.InsertMetricDatapoints(ctx, []storage.MetricDatapointEvent{{
+	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleEvent{{
 		OwnerKind: "component", OwnerID: "old-codec", Key: "tcp.open", Value: 1, Source: "test"}}); err != nil {
 		t.Fatalf("datapoint: %v", err)
 	}

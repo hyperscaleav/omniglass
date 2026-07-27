@@ -348,7 +348,7 @@ func TestDeleteNode(t *testing.T) {
 	}
 	// A component-owned datapoint (owner arc = component, node_id null): it must
 	// survive the node's deletion.
-	if err := gw.InsertMetricDatapoints(ctx, []storage.MetricDatapointEvent{
+	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleEvent{
 		{OwnerKind: "component", OwnerID: "dsp-1", Key: "tcp.open", Instance: "tcp", Value: 1, Source: "tcp", TS: time.Now().UTC()},
 	}); err != nil {
 		t.Fatalf("insert component datapoint: %v", err)

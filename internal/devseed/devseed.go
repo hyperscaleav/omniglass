@@ -551,32 +551,32 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string) e
 		}, all); err != nil {
 			return fmt.Errorf("devseed: create %s interface: %w", c.itype, err)
 		}
-		if err := seedReachDatapoints(ctx, gw, c.itype, c.flapped, c.rttMs, c.connMs, now); err != nil {
+		if err := seedReachSamples(ctx, gw, c.itype, c.flapped, c.rttMs, c.connMs, now); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// seedReachDatapoints writes one interface's reachability datapoints: the
+// seedReachSamples writes one interface's reachability datapoints: the
 // interface.reachable state (a fresh "up"; when flapped, an up baseline then a brief
 // outage then the recovery, so the strip reads mostly up with a thin blip) and the
 // probe-layer metrics (ping + port). Owner = the component, instance = the interface
 // name. Only canonical datapoint_type names are used (reject-not-project).
-func seedReachDatapoints(ctx context.Context, gw storage.Gateway, iface string, flapped bool, rttMs, connMs float64, now time.Time) error {
+func seedReachSamples(ctx context.Context, gw storage.Gateway, iface string, flapped bool, rttMs, connMs float64, now time.Time) error {
 	recovered := now.Add(-30 * time.Second)
-	states := []storage.StateDatapointEvent{}
+	states := []storage.StateSampleEvent{}
 	if flapped {
 		states = append(states,
-			storage.StateDatapointEvent{OwnerKind: "component", OwnerID: reachComponent, Key: "interface.reachable", Instance: iface, Value: "up", Source: "reachability", TS: now.Add(-2 * time.Hour)},
-			storage.StateDatapointEvent{OwnerKind: "component", OwnerID: reachComponent, Key: "interface.reachable", Instance: iface, Value: "down", Source: "reachability", TS: now.Add(-6 * time.Minute)},
+			storage.StateSampleEvent{OwnerKind: "component", OwnerID: reachComponent, Key: "interface.reachable", Instance: iface, Value: "up", Source: "reachability", TS: now.Add(-2 * time.Hour)},
+			storage.StateSampleEvent{OwnerKind: "component", OwnerID: reachComponent, Key: "interface.reachable", Instance: iface, Value: "down", Source: "reachability", TS: now.Add(-6 * time.Minute)},
 		)
 	}
-	states = append(states, storage.StateDatapointEvent{OwnerKind: "component", OwnerID: reachComponent, Key: "interface.reachable", Instance: iface, Value: "up", Source: "reachability", TS: recovered})
-	if err := gw.InsertStateDatapoints(ctx, states); err != nil {
+	states = append(states, storage.StateSampleEvent{OwnerKind: "component", OwnerID: reachComponent, Key: "interface.reachable", Instance: iface, Value: "up", Source: "reachability", TS: recovered})
+	if err := gw.InsertStateSamples(ctx, states); err != nil {
 		return fmt.Errorf("devseed: insert %s state datapoints: %w", iface, err)
 	}
-	if err := gw.InsertMetricDatapoints(ctx, []storage.MetricDatapointEvent{
+	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleEvent{
 		{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp.reachable", Instance: iface, Value: 1, Source: "icmp", TS: recovered},
 		{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp.rtt_avg", Instance: iface, Value: rttMs, Source: "icmp", TS: recovered},
 		{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp.open", Instance: iface, Value: 1, Source: "tcp", TS: recovered},

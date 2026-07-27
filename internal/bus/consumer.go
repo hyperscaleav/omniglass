@@ -127,7 +127,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	// widens the window); atomic-or-idempotent ingest is tracked separately.
 	metrics, states, events := deriveDatapoints(&ev, owner, reg)
 	if len(metrics) > 0 {
-		if err := s.store.InsertMetricDatapoints(ctx, metrics); err != nil {
+		if err := s.store.InsertMetricSamples(ctx, metrics); err != nil {
 			s.nakOrTerm(msg) // DB write failed: redeliver (bounded)
 			return
 		}
@@ -148,7 +148,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 		return
 	}
 	if len(fresh) > 0 {
-		if err := s.store.InsertStateDatapoints(ctx, fresh); err != nil {
+		if err := s.store.InsertStateSamples(ctx, fresh); err != nil {
 			s.nakOrTerm(msg) // DB write failed: redeliver (bounded)
 			return
 		}
@@ -171,7 +171,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 // provenance observed, the metric's number and the state's string encoded as the
 // jsonb value the cache stores. Pure: no I/O. Events are occurrences, not values,
 // so they never enter the value cache.
-func latestUpserts(metrics []storage.MetricDatapointEvent, states []storage.StateDatapointEvent) []storage.PropertyUpsert {
+func latestUpserts(metrics []storage.MetricSampleEvent, states []storage.StateSampleEvent) []storage.PropertyUpsert {
 	ups := make([]storage.PropertyUpsert, 0, len(metrics)+len(states))
 	for _, m := range metrics {
 		v, err := json.Marshal(m.Value)
@@ -232,11 +232,11 @@ func (s *Server) nakOrTerm(msg jetstream.Msg) {
 // identical in-flight duplicates could both read an older latest and both
 // insert. Keep dispatch serial, or move the transition check into the insert (a
 // conditional write) before parallelizing.
-func (s *Server) dedupeStates(ctx context.Context, states []storage.StateDatapointEvent) ([]storage.StateDatapointEvent, error) {
+func (s *Server) dedupeStates(ctx context.Context, states []storage.StateSampleEvent) ([]storage.StateSampleEvent, error) {
 	if len(states) == 0 {
 		return nil, nil
 	}
-	fresh := make([]storage.StateDatapointEvent, 0, len(states))
+	fresh := make([]storage.StateSampleEvent, 0, len(states))
 	for _, ev := range states {
 		latest, err := s.store.LatestState(ctx, ev.OwnerID, ev.Key, ev.Instance)
 		if err != nil {
@@ -257,9 +257,9 @@ func (s *Server) dedupeStates(ctx context.Context, states []storage.StateDatapoi
 // event slice. The owner is stamped identically for all three from the task's
 // interface: owner_kind=component, source=interface type, instance=interface name;
 // provenance is observed (the insert path fixes that).
-func deriveDatapoints(ev *ogv1.Event, owner storage.TaskOwner, reg collection.Registry) ([]storage.MetricDatapointEvent, []storage.StateDatapointEvent, []storage.EventOccurrence) {
-	var metrics []storage.MetricDatapointEvent
-	var states []storage.StateDatapointEvent
+func deriveDatapoints(ev *ogv1.Event, owner storage.TaskOwner, reg collection.Registry) ([]storage.MetricSampleEvent, []storage.StateSampleEvent, []storage.EventOccurrence) {
+	var metrics []storage.MetricSampleEvent
+	var states []storage.StateSampleEvent
 	var events []storage.EventOccurrence
 	for _, dp := range ev.GetSamples() {
 		kind, ok := reg.Allows(dp.GetName())
@@ -272,7 +272,7 @@ func deriveDatapoints(ev *ogv1.Event, owner storage.TaskOwner, reg collection.Re
 			if !ok {
 				continue
 			}
-			metrics = append(metrics, storage.MetricDatapointEvent{
+			metrics = append(metrics, storage.MetricSampleEvent{
 				OwnerKind: "component",
 				OwnerID:   owner.Component,
 				Key:       dp.GetName(),
@@ -286,7 +286,7 @@ func deriveDatapoints(ev *ogv1.Event, owner storage.TaskOwner, reg collection.Re
 			if !ok {
 				continue
 			}
-			states = append(states, storage.StateDatapointEvent{
+			states = append(states, storage.StateSampleEvent{
 				OwnerKind: "component",
 				OwnerID:   owner.Component,
 				Key:       dp.GetName(),

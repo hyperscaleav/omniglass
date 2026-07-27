@@ -316,22 +316,22 @@ func (UnimplementedGateway) UpsertInterfaceType(context.Context, InterfaceType) 
 func (UnimplementedGateway) ListInterfaceTypes(context.Context) ([]InterfaceType, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) InsertMetricDatapoints(context.Context, []MetricDatapointEvent) error {
+func (UnimplementedGateway) InsertMetricSamples(context.Context, []MetricSampleEvent) error {
 	return nil
 }
-func (UnimplementedGateway) LatestMetric(context.Context, string, string) (*MetricDatapoint, error) {
+func (UnimplementedGateway) LatestMetric(context.Context, string, string) (*MetricSample, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) LatestMetricInstance(context.Context, string, string, string) (*MetricDatapoint, error) {
+func (UnimplementedGateway) LatestMetricInstance(context.Context, string, string, string) (*MetricSample, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) InsertStateDatapoints(context.Context, []StateDatapointEvent) error {
+func (UnimplementedGateway) InsertStateSamples(context.Context, []StateSampleEvent) error {
 	return nil
 }
-func (UnimplementedGateway) LatestState(context.Context, string, string, string) (*StateDatapoint, error) {
+func (UnimplementedGateway) LatestState(context.Context, string, string, string) (*StateSample, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) StateTransitions(context.Context, string, string, string, time.Time) ([]StateDatapoint, error) {
+func (UnimplementedGateway) StateTransitions(context.Context, string, string, string, time.Time) ([]StateSample, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) InsertEvents(context.Context, []EventOccurrence) error {

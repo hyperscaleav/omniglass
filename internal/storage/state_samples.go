@@ -9,12 +9,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// StateDatapointEvent is one observed state verdict to persist. OwnerKind picks
+// StateSampleEvent is one observed state verdict to persist. OwnerKind picks
 // the arc; OwnerID is the estate address (component/system/location/node name);
 // Instance discriminates many verdicts of one key on one owner (the interface
 // name for interface.reachable). Value is the categorical text (up/down), the
-// mirror of MetricDatapointEvent but with a value domain, not a number.
-type StateDatapointEvent struct {
+// mirror of MetricSampleEvent but with a value domain, not a number.
+type StateSampleEvent struct {
 	OwnerKind string
 	OwnerID   string
 	Key       string
@@ -24,8 +24,8 @@ type StateDatapointEvent struct {
 	TS        time.Time
 }
 
-// StateDatapoint is a stored observed/derived state row (read side).
-type StateDatapoint struct {
+// StateSample is a stored observed/derived state row (read side).
+type StateSample struct {
 	TS         time.Time
 	OwnerKind  string
 	Key        string
@@ -35,11 +35,11 @@ type StateDatapoint struct {
 	Source     string
 }
 
-// InsertStateDatapoints writes observed state rows in one transaction. Each row
+// InsertStateSamples writes observed state rows in one transaction. Each row
 // sets exactly its owner arc column (the CHECK enforces the rest) and provenance
 // observed. Callers apply reject-not-project (collection.Registry) and the
 // transition-only guard before calling; this is the durable write.
-func (p *PG) InsertStateDatapoints(ctx context.Context, evs []StateDatapointEvent) error {
+func (p *PG) InsertStateSamples(ctx context.Context, evs []StateSampleEvent) error {
 	if len(evs) == 0 {
 		return nil
 	}
@@ -79,8 +79,8 @@ func (p *PG) InsertStateDatapoints(ctx context.Context, evs []StateDatapointEven
 // stamping several rows in the same instant would otherwise resolve to an
 // arbitrary one, and the transition guard would compare against a row that is not
 // the current value.
-func (p *PG) LatestState(ctx context.Context, componentName, key, instance string) (*StateDatapoint, error) {
-	var dp StateDatapoint
+func (p *PG) LatestState(ctx context.Context, componentName, key, instance string) (*StateSample, error) {
+	var dp StateSample
 	err := p.pool.QueryRow(ctx, `
 		select ts, owner_kind,
 			(select p.name from property_type p where p.id = state.property_type_id), instance, value, provenance, source
@@ -101,7 +101,7 @@ func (p *PG) LatestState(ctx context.Context, componentName, key, instance strin
 // ordered oldest-first: the ordered flip sequence the availability strip reads
 // (each row is one transition, since the write path is transition-only). A zero
 // since returns the whole series.
-func (p *PG) StateTransitions(ctx context.Context, componentName, key, instance string, since time.Time) ([]StateDatapoint, error) {
+func (p *PG) StateTransitions(ctx context.Context, componentName, key, instance string, since time.Time) ([]StateSample, error) {
 	rows, err := p.pool.Query(ctx, `
 		select ts, owner_kind,
 			(select p.name from property_type p where p.id = state.property_type_id), instance, value, provenance, source
@@ -113,9 +113,9 @@ func (p *PG) StateTransitions(ctx context.Context, componentName, key, instance 
 		return nil, fmt.Errorf("storage: state transitions %s/%s[%s]: %w", componentName, key, instance, err)
 	}
 	defer rows.Close()
-	var out []StateDatapoint
+	var out []StateSample
 	for rows.Next() {
-		var dp StateDatapoint
+		var dp StateSample
 		if err := rows.Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source); err != nil {
 			return nil, fmt.Errorf("storage: scan state transition %s/%s[%s]: %w", componentName, key, instance, err)
 		}

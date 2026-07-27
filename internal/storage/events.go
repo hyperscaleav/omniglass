@@ -41,7 +41,7 @@ type Event struct {
 // InsertEvents writes observed occurrence rows in one transaction. Each row sets
 // exactly its owner arc column (the CHECK enforces the rest) and provenance
 // observed. Callers apply reject-not-project (collection.Registry) before calling;
-// this is the durable write. Mirrors InsertMetricDatapoints.
+// this is the durable write. Mirrors InsertMetricSamples.
 func (p *PG) InsertEvents(ctx context.Context, evs []EventOccurrence) error {
 	if len(evs) == 0 {
 		return nil
