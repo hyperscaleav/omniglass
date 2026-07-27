@@ -276,19 +276,24 @@ func markPrimaryKeys(ctx context.Context, db querier, cols map[string][]Column) 
 }
 
 func queryForeignKeys(ctx context.Context, db querier, cols map[string][]Column) (map[string][]ForeignKey, error) {
+	// Pair each referencing column with the column it points at via
+	// position_in_unique_constraint (the FK column's slot in the referenced
+	// unique/primary key) matched to the referenced key's ordinal_position.
+	// Joining constraint_column_usage on constraint_name alone would cross-product
+	// a composite foreign key (N columns to N*N rows), pairing the wrong columns.
 	rows, err := db.Query(ctx, `
 		SELECT kcu.table_name, kcu.column_name,
-		       ccu.table_name AS ref_table, ccu.column_name AS ref_column
-		FROM information_schema.table_constraints tc
+		       ref.table_name AS ref_table, ref.column_name AS ref_column
+		FROM information_schema.referential_constraints rc
 		JOIN information_schema.key_column_usage kcu
-		  ON tc.constraint_name = kcu.constraint_name
-		 AND tc.table_schema = kcu.table_schema
-		JOIN information_schema.constraint_column_usage ccu
-		  ON tc.constraint_name = ccu.constraint_name
-		 AND tc.table_schema = ccu.table_schema
-		WHERE tc.constraint_type = 'FOREIGN KEY'
-		  AND tc.table_schema = 'public'
-		ORDER BY kcu.table_name, kcu.column_name`)
+		  ON kcu.constraint_name = rc.constraint_name
+		 AND kcu.constraint_schema = rc.constraint_schema
+		JOIN information_schema.key_column_usage ref
+		  ON ref.constraint_name = rc.unique_constraint_name
+		 AND ref.constraint_schema = rc.unique_constraint_schema
+		 AND ref.ordinal_position = kcu.position_in_unique_constraint
+		WHERE kcu.table_schema = 'public'
+		ORDER BY kcu.table_name, kcu.ordinal_position`)
 	if err != nil {
 		return nil, fmt.Errorf("erd: query foreign keys: %w", err)
 	}
