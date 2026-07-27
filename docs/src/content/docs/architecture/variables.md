@@ -52,13 +52,13 @@ kinds share that resolution but differ in what they are keyed to and what lifecy
 |---|---|---|---|
 | what it is | a declared device setting | an access secret, encrypted at rest | a free interpolated value |
 | keyed by | a canonical signal (`property_type`) | its own `secret_type` shape name | an org config key (cascade namespace) |
-| has an observed side? | yes, a datapoint via a get function | its **validity**, not the secret value | no |
+| has an observed side? | yes, a sample via a get function | its **validity**, not the secret value | no |
 | lifecycle | drift → reconcile (a set function) | refresh + rotation + expiry (deferred) | none; resolved and interpolated |
 | example | `video.input = HDMI1` | an `snmp-community`, a `basic-auth` | `poll_interval = 30s`, a base URL, a label |
 
 The common thread is the cascade and an exclusive-arc scope (exactly one of
 `platform | template | location | system | component`): the same exclusive-arc ownership as
-datapoints, plus a `template`-scoped binding the datapoint arc lacks (and unlike datapoints,
+samples, plus a `template`-scoped binding the sample arc lacks (and unlike samples,
 config is not `node`-owned). The three are not three subsystems; they are three uses of one
 "set a value, resolve it down a scope" idea.
 
@@ -67,20 +67,20 @@ config is not `node`-owned). The three are not three subsystems; they are three 
 A **config** item is the **declared side of a canonical signal**. `video.input` is one key with two
 sides: the **observed** value the device reports (a `state`, provenance=observed) and the
 **declared** value you set. They share the **key** but not the **storage**: the declared value lives
-in the config table, resolved down the cascade, and is **never a datapoint row**. Same name, opposite
+in the config table, resolved down the cascade, and is **never a sample row**. Same name, opposite
 direction, the observed side flowing *up* from the device and the declared side flowing *down* from
-the operator. This is not a "declared provenance" (there are no declared rows in the datapoint
+the operator. This is not a "declared provenance" (there are no declared rows in the sample
 tables); it is one signal with two homes, and their gap is **drift**.
 
 Keying config to the signal registry instead of a private name is what removes the import problem: a
 component template **brings no keys, it references registered ones**, exactly as it does for the
-datapoints it reads. Two display templates that both touch `video.input` are two references to one
+samples it reads. Two display templates that both touch `video.input` are two references to one
 governed key, not a collision. Config reuses the `property_type`'s value domain, so a declared value
 is validated against the same `{values: […]}` the observed side uses.
 
 **The template is the source of truth for configurability.** A signal becomes settable on a device
 class when that class's [component template](/architecture/templates/) binds a **get** function (an
-ordinary collection function that emits the observed datapoint) and a **set** function (a
+ordinary collection function that emits the observed sample) and a **set** function (a
 command-triggered function that writes it). The registry may carry a soft `settable` hint, but the
 binding is authoritative: no set function, not enforceable here.
 
@@ -97,17 +97,17 @@ Each piece of a config item has one home, joined by the canonical key:
 ### Drift and reconcile
 
 When a config item has both a declared and an observed value, their gap is **drift**: the same
-[`disagree(declared, observed)`](/architecture/datapoints/#disagree-and-divergence) comparison used
+[`disagree(declared, observed)`](/architecture/properties/#disagree-and-divergence) comparison used
 everywhere, with the declared side sourced from config. A per-item `reconcile` policy turns drift
 into action:
 
 - **`observe`** (default): record the drift, raise **no** alarm. Log that it differs and go get the
-  info; drift stays visible through [`disagree`](/architecture/datapoints/#disagree-and-divergence)
+  info; drift stays visible through [`disagree`](/architecture/properties/#disagree-and-divergence)
   and the config view, silently.
 - **`warn`**: raise an alarm for the drift, at **warning** severity. Surface it, change nothing.
 - **`enforce`**: declared wins. Call the template's **set** function to push the value back; that
-  issues a command, writes an [`intended`](/architecture/datapoints/#intended-the-declared-effect-of-a-command)
-  datapoint, and reconciles against the next observation (desired-state convergence, the controller
+  issues a command, writes an [`intended`](/architecture/properties/#intended-the-declared-effect-of-a-command)
+  sample, and reconciles against the next observation (desired-state convergence, the controller
   half of spec-and-status). If the set **fails**, raise a real alarm (enforcement failure).
 
 Adopting the observed value as the declared one (reality becomes intent) is **not** an ongoing mode;
@@ -166,7 +166,7 @@ lifecycle fills it. The type also carries a **`default_admin_sensitive`** boolea
 form's `admin_sensitive` default (see the two-axis visibility below): a device type (`snmp-community`,
 `basic-auth`) defaults operational, a platform-integration type (`oauth2-client`) defaults
 admin-sensitive. The ship-with types are `snmp-community`, `basic-auth`, and `oauth2-client`; an
-`official` boolean marks shipped-canonical versus org-local, exactly as the datapoint and role
+`official` boolean marks shipped-canonical versus org-local, exactly as the sample and role
 registries do.
 
 **Envelope-encrypted at rest.** Crypto is **envelope AES-256-GCM** behind a pluggable **KEK provider**:
@@ -226,7 +226,7 @@ template-declared use of functions, time, and flows rather than a new subsystem:
 **Secret health is its validity, not its value.** A secret's observable is whether it still
 works: **intrinsic expiry** (an `oauth2` token, a `tls_cert` `notAfter`) warns proactively, and
 **observed-use failure** flips it unhealthy after N consecutive auth failures consumers report. Both
-surface through the ordinary datapoint-to-alarm pipeline, so a secret gets a health story without
+surface through the ordinary sample-to-alarm pipeline, so a secret gets a health story without
 being a device signal.
 
 **Shared versus per-device is just scope.** A fleet-wide SNMP community is a secret set high in the
@@ -278,7 +278,7 @@ JSON Schema `validation`, plus a nullable observed `kind`), with seed-owned `off
 the declaration, all the same shape: **`product_property`** (for a component), **`standard_property`** (for
 a system), and **`location_type_property`** (for a location), each naming a catalog property with an
 optional `default_value` and a `required` flag, unique per `(classifier, property)`. **`property`** is
-the value store, on the **same owner exclusive-arc** as the datapoint sinks and `event`, carrying an
+the value store, on the **same owner exclusive-arc** as the sample sinks and `event`, carrying an
 `instance` discriminator and a **`provenance`**; the write path fills `provenance=declared`. The read is
 **`EffectiveProperties(ownerKind, ownerID)`**, one parameterized query serving **component, system,
 location, and node**: the contract resolved to `coalesce(the instance's value, the contract default)`, plus
@@ -311,16 +311,16 @@ What the design intends, and this slice does **not** yet do:
   resolves on **one instance alone**: its own declared value, else its own classifier's contract default. All
   four owner kinds resolve, but each in isolation; there is no walk **across** owners yet, even though the
   arc is drawn for it.
-- **The non-declared producers.** `observed` (materializing a current value out of the datapoint stream),
+- **The non-declared producers.** `observed` (materializing a current value out of the sample stream),
   `calculated` (a rule's output), and `intended` (the config member above writing a desired value) all have
   a seat in the provenance column and nothing writing to it. The config section's "declared intent lives in
   config, not as a row" reads against this newer shape; reconciling the two is the config member's own
   slice.
-- **Macro interpolation of a value** (the consumer of `$var:` / `$sec:` / `$datapoint:`). A value holds a
+- **Macro interpolation of a value** (the consumer of `$var:` / `$sec:` / `$sample:`). A value holds a
   literal today; holding a macro string, resolved through the same interpolation engine at read, is
   deferred.
 - **The `sources` model**: the per-property allowed origins (`literal` / `variable` / `secret` /
-  `datapoint` / `file`), the inline pickers they drive, and the override rules.
+  `sample` / `file`), the inline pickers they drive, and the override rules.
 - **File typing** (a `file` `data_type` with accepted MIME types and formats), which would give an attached
   file a semantic role by the property it fills (a `floor_plan`, a `firmware`).
 - **A driver access/mode column** on the contract (whether a driver can get, set, or only declare a
@@ -381,18 +381,18 @@ Free-text values ship either way; the question is how much governance a key plac
   the same cascade with a union-on-key, override-on-value combinator. One resolver
   ([cascade](/architecture/cascade/)).
 - **The exclusive-arc scope.** Each value is owned at exactly one scope: the same exclusive-arc
-  ownership as datapoints, plus a `template`-scoped binding the datapoint arc lacks (and config is
+  ownership as samples, plus a `template`-scoped binding the sample arc lacks (and config is
   not `node`-owned).
 - **Typing.** A secret takes a structured `secret_type` shape registry (per-field secrecy and origin);
   a variable types inline against its `value_type` (a scalar, validated in the app, no registry); config
   instead borrows the `property_type`'s domain, because its key *is* a signal.
 - **Interpolation** renders variables (`$var:`) and secret fields (`$sec:`) into requests (a later
-  consumer slice for both); config is read by key like a datapoint. Secrets are **masked** in every
+  consumer slice for both); config is read by key like a sample. Secrets are **masked** in every
   read and surface in the clear only through the audited reveal; a variable is plaintext.
 
 The observed side of config is maintained by one **event-driven worker** (the one-worker-plus-stages
 model): when a `state` lands whose `(owner, key)` a config item is keyed to, it refreshes
-that item's cached observed value, reverse-indexed so "is this datapoint a config's observed side?" is
+that item's cached observed value, reverse-indexed so "is this sample a config's observed side?" is
 a sargable lookup, not a scan. It is the one controlled, one-directional crossing from the timeseries
 back into current-value config.
 
@@ -416,13 +416,13 @@ command -> device
 ## How this changes provenance
 
 Modeling declared state as **config** (and access secrets as **secrets**) keeps **declared** out of the
-datapoint provenances. Datapoints carry three ([observed, calculated,
-intended](/architecture/datapoints/#provenance-how-we-know-a-value)); declared intent lives in config,
+sample provenances. Samples carry three ([observed, calculated,
+intended](/architecture/properties/#provenance-how-we-know-a-value)); declared intent lives in config,
 keyed to the same signal but stored down the cascade rather than as a row. The `state` **kind** is
 unchanged: an observed `power.state = on` is still a `state`, and a config item is keyed to
-it. What moved is the *declared* value, out of the datapoint tables and into config resolved by the
+it. What moved is the *declared* value, out of the sample tables and into config resolved by the
 cascade. There is no separate property or vault store; config, secrets, and variables are one
-resolution model, and the spec-and-status loop gets a real home instead of overloading datapoint
+resolution model, and the spec-and-status loop gets a real home instead of overloading sample
 provenance with operator intent.
 
 ## Storage
@@ -439,12 +439,12 @@ exclusive-arc scope either way.
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `secret_type` | id, **official**, schema (per-field `{name, type, secret, origin}`) | **Built.** The secret **shape** registry (`snmp-community`, `basic-auth` seeded); `official` marks shipped-canonical versus org-local, like the datapoint and role registries |
+| `secret_type` | id, **official**, schema (per-field `{name, type, secret, origin}`) | **Built.** The secret **shape** registry (`snmp-community`, `basic-auth` seeded); `official` marks shipped-canonical versus org-local, like the sample and role registries |
 | `secret` | (name, **owner arc**), secret_type, **`admin_sensitive`**, **value** (secret fields as `{ciphertext, nonce, wrapped_dek, key_id}` envelopes, non-secret fields plaintext) | **Built.** The encrypted cell and the `$sec:` cascade key; scope is the exclusive arc (platform/location/system/component). Read masked through a **scope-filtered** directory; decrypted only through the audited `:reveal` / `:copy` path. Visibility is placement scope plus the per-secret `admin_sensitive` flag (admin-only when set); `secret` is off the `*:read` floor ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)) |
 | `variable` | (name, **owner arc**), **value_type** (`string`/`int`/`float`/`bool`/`json`), **value** (jsonb) | **Built.** The plaintext variable cell and the `$var:` cascade key; scope is the exclusive arc. Typed inline (no `variable_type` registry: the value is validated against `value_type` in the app), no observed side. The **config** cell (declared/observed/reconcile) is a separate, deferred member |
 | `property` | name (PK), **official**, **data_type** (`string`/`int`/`float`/`bool`/`json`), nullable **kind** (`metric`/`state`/`log`), display_name, unit, **validation** (JSON Schema) | **Built.** The primitive-agnostic **catalog** of typed names, the single source for what a name means whoever produces it; seed-owned `official` rows are read-only. Value tables key by the **name string**, so the catalog governs the vocabulary without owning the values ([ADR-0043](/architecture/decisions/#adr-0043-the-property-catalog)) |
 | `product_property` / `standard_property` / `location_type_property` | (**classifier**, **property**), **default_value** (jsonb), **required** | **Built.** The classifier's declared-property **contract**, one table per classifier and all the same shape: which catalog properties every instance of that product, standard, or location type exposes, with an optional default and a required flag, unique per pair. `data_type` and `validation` are **not** repeated here, they stay on `property`. Replaces the retired `field_definition`. A driver access/mode column is deferred; a `node` has no classifier by design |
-| `property` | (**owner arc**, property, **instance**, **provenance**), **value** (jsonb) | **Built for `declared` on all four owner kinds.** The value store, on the **same exclusive arc** as the datapoint sinks and `event`; the series key is `unique nulls not distinct`, since the arc leaves three owner columns NULL. The effective read is **contract-default-or-override** plus the off-contract set (`is_set` marks the override, `value_id` carries the row id so the UI can clear it), resolved by one owner-generic query and ABAC-scoped on **every** arc, read and write. Replaces the retired `field_value`. The `observed`/`calculated`/`intended` producers, macro-string values, and the cross-owner cascade are deferred |
+| `property` | (**owner arc**, property, **instance**, **provenance**), **value** (jsonb) | **Built for `declared` on all four owner kinds.** The value store, on the **same exclusive arc** as the sample sinks and `event`; the series key is `unique nulls not distinct`, since the arc leaves three owner columns NULL. The effective read is **contract-default-or-override** plus the off-contract set (`is_set` marks the override, `value_id` carries the row id so the UI can clear it), resolved by one owner-generic query and ABAC-scoped on **every** arc, read and write. Replaces the retired `field_value`. The `observed`/`calculated`/`intended` producers, macro-string values, and the cross-owner cascade are deferred |
 | `tag` | name, applies_to, propagates | **Built.** The **tenant-wide governed key vocabulary**; minting a key needs `tag:create` ([identity and access](/architecture/identity-access/)). No `_type`, no namespace; values bind via `tag_binding`. See [tags](/architecture/tags/) |
 | `tag_binding` | (tag, **owner arc**), value | **Built.** The `key: value` binding: **union on key, override on value** down the [cascade](/architecture/cascade/), owned on the exclusive arc (`platform / location / system / component`); setting a value is the owner's own `update` write. Binding via groups and a `template`-scoped binding are deferred |
 

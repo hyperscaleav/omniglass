@@ -90,7 +90,7 @@ read can also **stream over the view layer (a server-side SSE relay)** where lat
 earns it, the same earn-it-with-a-profile discipline. Presentation that depends on config (a severity
 level's id to its label and color) resolves client-side from the config view. A datapoint
 value resolves the same way: on read the UI converts canonical to the operator's preferred
-display unit, looked up from the unit registry by the [datapoints](/architecture/datapoints/)
+display unit, looked up from the unit registry by the [datapoints](/architecture/properties/)
 property_type's canonical unit, so storage stays single-unit while one operator sees
 Celsius and another Fahrenheit.
 

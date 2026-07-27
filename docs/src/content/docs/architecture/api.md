@@ -251,7 +251,7 @@ scope-injected through the component (an out-of-scope component is a non-disclos
 **The reconciliation read pivots want/told/is over the property cache.** `GET /components/{name}/reconciliation`
 returns, per declared property, the **want** (the declared value, resolved live from the
 [cascade](/architecture/variables/), never a cache row), the **told** (the `intended` value a command set),
-and the **is** (the `observed` value from the [latest-value cache](/architecture/datapoints/)), with **drift**
+and the **is** (the `observed` value from the [latest-value cache](/architecture/properties/)), with **drift**
 (the observed value present and disagreeing with the declared one) computed on read. It is gated by
 `component:read` and scope-injected through the same `GetComponent` gate as the reachability read, so an
 out-of-scope component is the same non-disclosing 404. Like reachability and events, it is a hand-written typed

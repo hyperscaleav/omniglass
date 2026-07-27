@@ -38,7 +38,7 @@ wants to author against a non-canonical unit converts at the expression. **`conv
 "<unit>")`** is the stdlib function for this: the **source unit is inferred** from the bound
 datapoint's canonical unit, and the **target** is a registered unit that must be in the
 **same family** (a compile error otherwise, since units only convert within one dimension).
-The conversion itself comes from the [unit registry](/architecture/datapoints/#units-one-canonical-unit-per-key): the target's
+The conversion itself comes from the [unit registry](/architecture/properties/#units-one-canonical-unit-per-key): the target's
 `to_canonical` and `from_canonical` transforms, **affine** (a factor plus offset) for the
 common case or an **Expr** for the rare nonlinear one. So an operator can write
 `convert(value, "fahrenheit") > 100` while storage stays in canonical celsius: the threshold

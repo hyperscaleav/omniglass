@@ -39,7 +39,7 @@ the `official` boolean:
   dashboard widget unchanged.
 - **Private views** are operator-saved **structured** queries (filter + order + fields + params),
   **never raw SQL**. They follow the official / private
-  [namespace shadow](/architecture/datapoints/#key-scope-template-org-official) like the registries.
+  [namespace shadow](/architecture/properties/#key-scope-template-org-official) like the registries.
 - A view is **parameterized**: it declares typed params bound at run time. The
   [API](/architecture/api/) runs one at `/views/{id}:run?param=`; an undeclared or missing-required
   param is a clean 400.
