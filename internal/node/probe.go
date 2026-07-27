@@ -29,7 +29,7 @@ type interfaceParams struct {
 // the server binds the owner at ingest. A probe that cannot be attempted (bad
 // params, unresolved host, no capability) is skipped, not fatal, so one bad task
 // never stalls the rest of the worklist. tcp and icmp are the wired probe types;
-// their datapoints ride the same pipeline (the ingest consumer does not branch
+// their samples ride the same pipeline (the ingest consumer does not branch
 // on probe type).
 func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.WorklistReply, dialer collection.TCPDialer, pinger collection.Pinger, verdicts map[string]string) error {
 	runner := &collection.Runner{TCP: dialer, Ping: pinger}
@@ -42,7 +42,7 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 			continue // an unwired interface type: nothing to publish
 		}
 		// Compute and, on a transition only, append the interface reachability
-		// verdict as a state datapoint. The node remembers the last verdict per
+		// verdict as a state sample. The node remembers the last verdict per
 		// task and emits interface.reachable only on a flip or first observation,
 		// so the state series is transition-only, not one row per tick. The key is
 		// the task id, not the interface name: interface names are unique only per
@@ -65,14 +65,14 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 }
 
 // appendVerdict computes the interface reachability verdict from a probe's
-// datapoints and appends it (a state Datapoint carrying up/down) only when it
+// samples and appends it (a state sample carrying up/down) only when it
 // differs from the last verdict remembered for that task, or is the first
 // observation. It records the emitted verdict in verdicts (keyed by the
 // node-unique task id, since interface names collide across components) so the
 // next tick can tell a flip from a repeat. When the probe produced no
 // reachability metric (nothing to judge) or the verdict is unchanged, dps is
 // returned untouched.
-func appendVerdict(dps []collection.Datapoint, taskID string, verdicts map[string]string) []collection.Datapoint {
+func appendVerdict(dps []collection.Sample, taskID string, verdicts map[string]string) []collection.Sample {
 	up, ok := collection.InterfaceVerdict(dps)
 	if !ok {
 		return dps
@@ -85,8 +85,8 @@ func appendVerdict(dps []collection.Datapoint, taskID string, verdicts map[strin
 		return dps // no transition: transition-only, emit nothing
 	}
 	verdicts[taskID] = verdict
-	return append(dps, collection.Datapoint{
-		Name:   collection.DatapointInterfaceReachable,
+	return append(dps, collection.Sample{
+		Name:   collection.SignalInterfaceReachable,
 		Text:   verdict,
 		IsText: true,
 		TS:     time.Now().UTC(),
@@ -94,13 +94,13 @@ func appendVerdict(dps []collection.Datapoint, taskID string, verdicts map[strin
 }
 
 // collectTask dispatches a task to its probe by interface type and returns the
-// produced datapoints. A nil, nil return is an interface type this node does not
+// produced samples. A nil, nil return is an interface type this node does not
 // run (skip, nothing to publish); an error is an unusable config or an
 // inconclusive probe (skip, no false down). The transport is the reachability
 // axis: tcp, ssh, and http all reach by opening the tcp port (the driver that
 // speaks the protocol over the transport is a later collection layer), so they
 // share the tcp-connect probe; icmp pings.
-func collectTask(ctx context.Context, runner *collection.Runner, task collection.TaskSpec) ([]collection.Datapoint, error) {
+func collectTask(ctx context.Context, runner *collection.Runner, task collection.TaskSpec) ([]collection.Sample, error) {
 	switch task.InterfaceType {
 	case "tcp", "ssh", "http":
 		t, err := parseTCPTask(task)
@@ -164,10 +164,10 @@ func parseICMPTask(task collection.TaskSpec) (collection.ICMPTask, error) {
 	return collection.ICMPTask{Target: p.Target, Count: p.Count, Timeout: timeout}, nil
 }
 
-// buildEvent maps produced datapoints to a telemetry Event. Pure: no I/O. The
-// numeric probe values ride double_value; the per-datapoint labels are carried
+// buildEvent maps produced samples to a telemetry Event. Pure: no I/O. The
+// numeric probe values ride double_value; the per-sample labels are carried
 // but not persisted in this checkpoint.
-func buildEvent(taskID, node string, dps []collection.Datapoint) *ogv1.Event {
+func buildEvent(taskID, node string, dps []collection.Sample) *ogv1.Event {
 	ev := &ogv1.Event{
 		TaskId: taskID,
 		NodeId: node,

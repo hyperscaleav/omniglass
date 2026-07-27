@@ -140,7 +140,7 @@ func TestFixturesEstateIsAForest(t *testing.T) {
 // TestRunIdempotent proves devseed.Run lands the example estate (and the worked
 // reachability check) through the Storage Gateway and that a second run neither
 // duplicates nor errors: make dev runs it on every start. Reference data (roles,
-// location types, datapoint types) must exist first, so the boot seed runs ahead of
+// location types, sample types) must exist first, so the boot seed runs ahead of
 // it, exactly as bootstrap does. Skipped under -short by the testcontainer harness.
 func TestRunIdempotent(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
@@ -258,7 +258,7 @@ func TestRunIdempotent(t *testing.T) {
 
 	// The worked reachability check: an enrolled node, a DSP with two protocol-named
 	// interfaces (web/http, qrc/tcp) placed on the node, a poll task over each, and the
-	// datapoints the panel reads. Every count is over two Runs, so a duplicate here is
+	// samples the panel reads. Every count is over two Runs, so a duplicate here is
 	// the seed failing to be idempotent.
 	all := scope.Set{All: true}
 
@@ -338,10 +338,10 @@ func TestRunIdempotent(t *testing.T) {
 		t.Errorf("reachability task rows = %v, want one poll task per interface (seed not idempotent)", reachTasks)
 	}
 
-	// The datapoints populate the panel: each interface has a fresh "up" verdict and
+	// The samples populate the panel: each interface has a fresh "up" verdict and
 	// both probe layers green. http reads cleanly up (one transition); tcp carries the
 	// up->down->up recovered-blip history (three transitions). The transition counts
-	// also prove the datapoints did not double on the second Run (append-only, so the
+	// also prove the samples did not double on the second Run (append-only, so the
 	// sentinel must have skipped them).
 	for _, tc := range []struct {
 		iface       string

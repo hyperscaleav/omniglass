@@ -53,7 +53,7 @@ import (
 // serialized per owner, and the loser recomputes over the winner's committed
 // state instead of over a snapshot that predates it. See lockHealthOwner.
 
-// healthKey is the state datapoint key carrying a rolled-up verdict. There is one
+// healthKey is the state sample key carrying a rolled-up verdict. There is one
 // series per owner and no instance dimension: an entity has exactly one health.
 const healthKey = "health"
 

@@ -20,8 +20,8 @@ func (f fakeTCP) Dial(context.Context, string, time.Duration) (float64, collecti
 	return f.ms, f.reach, f.err
 }
 
-func index(dps []collection.Datapoint) map[string]collection.Datapoint {
-	m := make(map[string]collection.Datapoint, len(dps))
+func index(dps []collection.Sample) map[string]collection.Sample {
+	m := make(map[string]collection.Sample, len(dps))
 	for _, d := range dps {
 		m[d.Name] = d
 	}
@@ -36,14 +36,14 @@ func TestCollectTCPOpen(t *testing.T) {
 		t.Fatalf("collect: %v", err)
 	}
 	got := index(dps)
-	open, ok := got[collection.DatapointTCPOpen]
+	open, ok := got[collection.SignalTCPOpen]
 	if !ok || open.Value != 1 {
 		t.Fatalf("tcp.open: want present val=1, got %+v", open)
 	}
 	if open.Labels[collection.ReasonLabel] != string(collection.Responded) {
 		t.Fatalf("tcp.open reason label: want responded, got %q", open.Labels[collection.ReasonLabel])
 	}
-	ct, ok := got[collection.DatapointTCPConnectTime]
+	ct, ok := got[collection.SignalTCPConnectTime]
 	if !ok || ct.Value != 4 {
 		t.Fatalf("tcp.connect_time: want present val=4, got %+v (present=%v)", ct, ok)
 	}
@@ -58,14 +58,14 @@ func TestCollectTCPClosed(t *testing.T) {
 		t.Fatalf("collect: %v", err)
 	}
 	got := index(dps)
-	open, ok := got[collection.DatapointTCPOpen]
+	open, ok := got[collection.SignalTCPOpen]
 	if !ok || open.Value != 0 {
 		t.Fatalf("tcp.open: want present val=0, got %+v (present=%v)", open, ok)
 	}
 	if open.Labels[collection.ReasonLabel] != string(collection.Refused) {
 		t.Fatalf("tcp.open reason: want refused, got %q", open.Labels[collection.ReasonLabel])
 	}
-	if _, ok := got[collection.DatapointTCPConnectTime]; ok {
+	if _, ok := got[collection.SignalTCPConnectTime]; ok {
 		t.Fatal("tcp.connect_time must be absent when the port is closed")
 	}
 }

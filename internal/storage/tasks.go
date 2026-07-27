@@ -176,7 +176,7 @@ func (p *PG) GetTask(ctx context.Context, id string, read scope.Set) (*Task, err
 }
 
 // TaskOwner is a task's resolved ingest binding: the component its interface
-// dedicates its datapoints to, plus the interface identity the write records as
+// dedicates its samples to, plus the interface identity the write records as
 // source (type) and instance (name).
 type TaskOwner struct {
 	Component     string
@@ -189,9 +189,9 @@ type TaskOwner struct {
 // published the telemetry (extracted from the NATS subject), it returns the task's
 // interface component. Confinement is against the INTERFACE's placement
 // (i.node_name), the authoritative node binding, since a task carries no node
-// column. ok is false (the datapoint is an orphan the ingest consumer drops, never
+// column. ok is false (the sample is an orphan the ingest consumer drops, never
 // writes) when the task is unknown, its interface belongs to a DIFFERENT node (a
-// node cannot land a datapoint for a component it was not placed on), or its
+// node cannot land a sample for a component it was not placed on), or its
 // interface has no component (a shared interface has no pre-bound owner). err is
 // reserved for a real DB failure, so the caller can leave the message unacked for
 // redelivery.

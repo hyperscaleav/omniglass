@@ -9,7 +9,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// TestRegistrySeed proves the boot seed lands the reachability datapoint_type
+// TestRegistrySeed proves the boot seed lands the reachability property_type
 // canon and the icmp/tcp interface_types, and that a second Run is idempotent.
 func TestRegistrySeed(t *testing.T) {
 	if testing.Short() {

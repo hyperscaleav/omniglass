@@ -45,14 +45,14 @@ func (p *PG) InsertStateSamples(ctx context.Context, evs []StateSampleEvent) err
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("storage: begin insert state datapoints: %w", err)
+		return fmt.Errorf("storage: begin insert state samples: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	for _, ev := range evs {
 		col, err := ownerColumn(ev.OwnerKind)
 		if err != nil {
-			return fmt.Errorf("storage: state datapoint %s/%s: %w", ev.OwnerID, ev.Key, err)
+			return fmt.Errorf("storage: state sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
 		ts := ev.TS
 		if ts.IsZero() {
@@ -61,11 +61,11 @@ func (p *PG) InsertStateSamples(ctx context.Context, evs []StateSampleEvent) err
 		sql := fmt.Sprintf(`insert into state (ts, owner_kind, %s, property_type_id, instance, value, provenance, source)
 			values ($1, $2, %s, (select id from property_type where name = $4), $5, $6, 'observed', $7)`, col, ownerArcExprN(ev.OwnerKind, 3))
 		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, ev.OwnerID, ev.Key, ev.Instance, ev.Value, ev.Source); err != nil {
-			return fmt.Errorf("storage: insert state datapoint %s/%s: %w", ev.OwnerID, ev.Key, err)
+			return fmt.Errorf("storage: insert state sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("storage: commit insert state datapoints: %w", err)
+		return fmt.Errorf("storage: commit insert state samples: %w", err)
 	}
 	return nil
 }

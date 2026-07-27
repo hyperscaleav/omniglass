@@ -7,7 +7,7 @@ import (
 )
 
 // EventOccurrence is one occurrence to persist. It shares the owner-arc shape of a
-// datapoint (OwnerKind picks the arc column, OwnerID is the estate address). Key is
+// sample (OwnerKind picks the arc column, OwnerID is the estate address). Key is
 // the event_type name. Origin is how the occurrence arrived (caught/caused/derived/
 // scheduled); empty defaults to caught (the ingest-promoted path). Message carries a
 // log's text; Attributes carries its structured payload (json), nil when absent.

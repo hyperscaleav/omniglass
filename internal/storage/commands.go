@@ -10,7 +10,7 @@ import (
 )
 
 // Command is a recorded invocation: a component was told to do something. It carries
-// the same owner exclusive-arc as a datapoint and an event, the command_type it
+// the same owner exclusive-arc as a sample and an event, the command_type it
 // invokes, its params, and the caused event it recorded. Settlement is computed, not
 // stored (see Settle / CommandSettlement).
 type Command struct {

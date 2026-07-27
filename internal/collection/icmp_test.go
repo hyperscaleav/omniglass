@@ -20,7 +20,7 @@ func (f fakeICMP) Ping(context.Context, string, int, time.Duration) (collection.
 }
 
 // TestCollectICMPReachable: an echoing target yields icmp.reachable=1 plus a
-// present icmp.rtt_avg, and the reachable datapoint carries a responded reason.
+// present icmp.rtt_avg, and the reachable sample carries a responded reason.
 func TestCollectICMPReachable(t *testing.T) {
 	r := &collection.Runner{Ping: fakeICMP{res: collection.PingResult{
 		Received: 1, AvgRTT: 3 * time.Millisecond, Reason: collection.Responded,
@@ -30,14 +30,14 @@ func TestCollectICMPReachable(t *testing.T) {
 		t.Fatalf("collect: %v", err)
 	}
 	got := index(dps)
-	reach, ok := got[collection.DatapointICMPReachable]
+	reach, ok := got[collection.SignalICMPReachable]
 	if !ok || reach.Value != 1 {
 		t.Fatalf("icmp.reachable: want present val=1, got %+v (present=%v)", reach, ok)
 	}
 	if reach.Labels[collection.ReasonLabel] != string(collection.Responded) {
 		t.Fatalf("icmp.reachable reason: want responded, got %q", reach.Labels[collection.ReasonLabel])
 	}
-	rtt, ok := got[collection.DatapointICMPRTTAvg]
+	rtt, ok := got[collection.SignalICMPRTTAvg]
 	if !ok || rtt.Value != 3 {
 		t.Fatalf("icmp.rtt_avg: want present val=3, got %+v (present=%v)", rtt, ok)
 	}
@@ -52,14 +52,14 @@ func TestCollectICMPUnreachable(t *testing.T) {
 		t.Fatalf("collect: %v", err)
 	}
 	got := index(dps)
-	reach, ok := got[collection.DatapointICMPReachable]
+	reach, ok := got[collection.SignalICMPReachable]
 	if !ok || reach.Value != 0 {
 		t.Fatalf("icmp.reachable: want present val=0, got %+v (present=%v)", reach, ok)
 	}
 	if reach.Labels[collection.ReasonLabel] != string(collection.Timedout) {
 		t.Fatalf("icmp.reachable reason: want timeout, got %q", reach.Labels[collection.ReasonLabel])
 	}
-	if _, ok := got[collection.DatapointICMPRTTAvg]; ok {
+	if _, ok := got[collection.SignalICMPRTTAvg]; ok {
 		t.Fatal("icmp.rtt_avg must be absent when the target is unreachable")
 	}
 }

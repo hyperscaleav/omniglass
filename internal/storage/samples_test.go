@@ -12,8 +12,8 @@ import (
 )
 
 // TestInsertMetricSamples proves an observed, component-owned reachability
-// datapoint is written and read back, and that the owner-arc CHECK rejects a
-// datapoint whose owner component does not exist (FK) as a write error.
+// sample is written and read back, and that the owner-arc CHECK rejects a
+// sample whose owner component does not exist (FK) as a write error.
 func TestInsertMetricSamples(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -39,7 +39,7 @@ func TestInsertMetricSamples(t *testing.T) {
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp.connect_time", Value: 3.2, Source: "tcp", TS: now},
 	})
 	if err != nil {
-		t.Fatalf("insert datapoints: %v", err)
+		t.Fatalf("insert samples: %v", err)
 	}
 
 	dp, err := gw.LatestMetric(ctx, "disp-1", "tcp.open")

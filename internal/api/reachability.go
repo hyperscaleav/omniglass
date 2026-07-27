@@ -16,13 +16,13 @@ import (
 // metrics), and the recent transition history the availability strip reads. It is
 // a plain typed Huma GET (no ViewResult framework exists), gated by component:read
 // and scope-injected through GetComponent: an out-of-scope component is a
-// non-disclosing 404, so the datapoint reads below only ever run on a verified,
+// non-disclosing 404, so the sample reads below only ever run on a verified,
 // in-scope component. Read-only: no engine, bus, or write-path is touched.
 
 // reachHistoryWindow bounds the transition history returned for the strip.
 const reachHistoryWindow = 24 * time.Hour
 
-// verdictKey is the state datapoint that carries the per-interface verdict.
+// verdictKey is the state sample that carries the per-interface verdict.
 const verdictKey = "interface.reachable"
 
 // reachLayer describes one probe layer the panel gates on: its primary signal
@@ -46,7 +46,7 @@ type reachVerdictBody struct {
 
 type reachLayerBody struct {
 	Layer  string    `json:"layer" doc:"The probe layer word (ping, port)"`
-	Check  string    `json:"check" doc:"The datapoint_type key of the primary signal"`
+	Check  string    `json:"check" doc:"The property_type key of the primary signal"`
 	Value  float64   `json:"value" doc:"The latest signal value (1 = reachable/open, 0 = not)"`
 	Detail string    `json:"detail,omitempty" doc:"A human timing detail (rtt / connect time), when present"`
 	TS     time.Time `json:"ts" doc:"When the signal was observed"`
@@ -109,7 +109,7 @@ func registerReachabilityRoutes(api huma.API, a *authenticator, gw storage.Gatew
 
 // composeInterface assembles one interface's reachability row from the state and
 // metric sinks. All reads are keyed by the verified component name and the
-// interface name (the datapoint instance).
+// interface name (the sample instance).
 func composeInterface(ctx context.Context, gw storage.Gateway, comp string, it storage.ComponentInterface, since time.Time) (reachInterfaceBody, error) {
 	row := reachInterfaceBody{
 		Interface: it.Name,

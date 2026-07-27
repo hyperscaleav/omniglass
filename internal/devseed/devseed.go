@@ -435,7 +435,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 // management API) and `qrc` (the Q-SYS-style control protocol over raw tcp). Two
 // interfaces on one device is the "APIs on this box" story: an interface is an API
 // we intend to call, named by its protocol, not a network interface. Each has a poll
-// task and enough datapoints for the panel to render a live verdict + availability
+// task and enough samples for the panel to render a live verdict + availability
 // strip.
 const (
 	reachComponent = "hq-boardroom-dsp"
@@ -463,12 +463,12 @@ var reachChecks = []struct {
 }
 
 // seedReachability installs the worked reachability checks idempotently through the
-// Storage Gateway. Its sentinel is the first interface: datapoints are append-only,
+// Storage Gateway. Its sentinel is the first interface: samples are append-only,
 // so once it exists the whole block has run and a re-run is a no-op (a second
-// `make dev` must not double the datapoints). It authors each check the way a node
-// runs one (interface + poll task) and writes a handful of datapoints keyed by the
+// `make dev` must not double the samples). It authors each check the way a node
+// runs one (interface + poll task) and writes a handful of samples keyed by the
 // component (owner) and interface (instance), using ONLY registered canonical
-// datapoint_type names, so a wrong name would reject-not-project.
+// property_type names, so a wrong name would reject-not-project.
 func seedReachability(ctx context.Context, gw storage.Gateway, actorID string) error {
 	all := scope.Set{All: true}
 
@@ -535,14 +535,14 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string) e
 	}
 
 	// Each interface: named by its protocol, typed by its transport, target = the DSP
-	// host at the protocol's port. A poll task rides each; datapoints tell its story.
+	// host at the protocol's port. A poll task rides each; samples tell its story.
 	comp := reachComponent
 	node := reachNode
 	now := time.Now().UTC()
 	for _, c := range reachChecks {
 		// The interface is protocol-named: its name is DERIVED from its transport
 		// (c.itype). Its poll task derives automatically from creating it, so the
-		// datapoints are instanced by the interface name (the transport).
+		// samples are instanced by the interface name (the transport).
 		if _, err := gw.CreateInterface(ctx, actorID, storage.InterfaceSpec{
 			Type:      c.itype,
 			Component: &comp,
@@ -558,11 +558,11 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string) e
 	return nil
 }
 
-// seedReachSamples writes one interface's reachability datapoints: the
+// seedReachSamples writes one interface's reachability samples: the
 // interface.reachable state (a fresh "up"; when flapped, an up baseline then a brief
 // outage then the recovery, so the strip reads mostly up with a thin blip) and the
 // probe-layer metrics (ping + port). Owner = the component, instance = the interface
-// name. Only canonical datapoint_type names are used (reject-not-project).
+// name. Only canonical property_type names are used (reject-not-project).
 func seedReachSamples(ctx context.Context, gw storage.Gateway, iface string, flapped bool, rttMs, connMs float64, now time.Time) error {
 	recovered := now.Add(-30 * time.Second)
 	states := []storage.StateSampleEvent{}
@@ -574,7 +574,7 @@ func seedReachSamples(ctx context.Context, gw storage.Gateway, iface string, fla
 	}
 	states = append(states, storage.StateSampleEvent{OwnerKind: "component", OwnerID: reachComponent, Key: "interface.reachable", Instance: iface, Value: "up", Source: "reachability", TS: recovered})
 	if err := gw.InsertStateSamples(ctx, states); err != nil {
-		return fmt.Errorf("devseed: insert %s state datapoints: %w", iface, err)
+		return fmt.Errorf("devseed: insert %s state samples: %w", iface, err)
 	}
 	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleEvent{
 		{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp.reachable", Instance: iface, Value: 1, Source: "icmp", TS: recovered},
@@ -582,7 +582,7 @@ func seedReachSamples(ctx context.Context, gw storage.Gateway, iface string, fla
 		{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp.open", Instance: iface, Value: 1, Source: "tcp", TS: recovered},
 		{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp.connect_time", Instance: iface, Value: connMs, Source: "tcp", TS: recovered},
 	}); err != nil {
-		return fmt.Errorf("devseed: insert %s metric datapoints: %w", iface, err)
+		return fmt.Errorf("devseed: insert %s metric samples: %w", iface, err)
 	}
 	return nil
 }

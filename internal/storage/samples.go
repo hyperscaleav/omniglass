@@ -34,7 +34,7 @@ type MetricSample struct {
 }
 
 // ErrUnknownOwnerKind guards the owner-arc column mapping.
-var ErrUnknownOwnerKind = errors.New("storage: unknown datapoint owner_kind")
+var ErrUnknownOwnerKind = errors.New("storage: unknown sample owner_kind")
 
 // ownerColumn maps an owner kind to its arc column, so a bad kind fails in Go
 // (an explicit error) rather than as a NULL that trips the CHECK opaquely.
@@ -63,14 +63,14 @@ func (p *PG) InsertMetricSamples(ctx context.Context, evs []MetricSampleEvent) e
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("storage: begin insert datapoints: %w", err)
+		return fmt.Errorf("storage: begin insert samples: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	for _, ev := range evs {
 		col, err := ownerColumn(ev.OwnerKind)
 		if err != nil {
-			return fmt.Errorf("storage: datapoint %s/%s: %w", ev.OwnerID, ev.Key, err)
+			return fmt.Errorf("storage: sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
 		ts := ev.TS
 		if ts.IsZero() {
@@ -81,16 +81,16 @@ func (p *PG) InsertMetricSamples(ctx context.Context, evs []MetricSampleEvent) e
 		// trips the arc CHECK opaquely.
 		arc, err := p.ownerArcValue(ctx, tx, ev.OwnerKind, ev.OwnerID)
 		if err != nil {
-			return fmt.Errorf("storage: datapoint %s/%s: %w", ev.OwnerID, ev.Key, err)
+			return fmt.Errorf("storage: sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
 		sql := fmt.Sprintf(`insert into metric (ts, owner_kind, %s, property_type_id, instance, value, provenance, source)
 			values ($1, $2, $3, (select id from property_type where name = $4), $5, $6, 'observed', $7)`, col)
 		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arc, ev.Key, ev.Instance, ev.Value, ev.Source); err != nil {
-			return fmt.Errorf("storage: insert datapoint %s/%s: %w", ev.OwnerID, ev.Key, err)
+			return fmt.Errorf("storage: insert sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("storage: commit insert datapoints: %w", err)
+		return fmt.Errorf("storage: commit insert samples: %w", err)
 	}
 	return nil
 }

@@ -23,11 +23,11 @@ import (
 
 // TestTelemetryRoundTrip is the checkpoint-3 closing gate: a node runs a REAL tcp
 // probe against a live listener, ships the result as a protobuf Event over
-// JetStream, and the datapoint lands in metric owned (server-side) by
+// JetStream, and the sample lands in metric owned (server-side) by
 // the target component. It then proves the two invariants are real, not faked:
-// (a) reject-not-project drops an unregistered datapoint name, and (b) the
+// (a) reject-not-project drops an unregistered sample name, and (b) the
 // confinement fence drops an Event whose task belongs to ANOTHER node. Both are
-// asserted structurally by a watermark: a later valid datapoint proves the
+// asserted structurally by a watermark: a later valid sample proves the
 // consumer drained past the negatives, so their absence is a real drop.
 func TestTelemetryRoundTrip(t *testing.T) {
 	if testing.Short() {
@@ -144,14 +144,14 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	})
 
 	// NEGATIVE (a) REJECT-NOT-PROJECT: node-a publishes for its own t-a but with an
-	// unregistered datapoint name; that name must not be written.
+	// unregistered sample name; that name must not be written.
 	publishEvent(t, ncA, "node-a", &ogv1.Event{
 		TaskId:  "t-a",
 		NodeId:  "node-a",
 		Samples: []*ogv1.Sample{{Name: "bogus.metric", Value: &ogv1.Sample_DoubleValue{DoubleValue: 9}}},
 	})
 
-	// WATERMARK: a valid datapoint published AFTER the negatives. JetStream is
+	// WATERMARK: a valid sample published AFTER the negatives. JetStream is
 	// ordered per subject and the consumer processes sequentially, so once the
 	// watermark is visible the two negatives have already been handled (and
 	// dropped). connect_time=42 is distinctive from any real dial.
@@ -162,11 +162,11 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	})
 	waitMetric(t, ctx, gw, "disp-1", "tcp.connect_time", func(d *storage.MetricSample) bool { return d != nil && d.Value == 42 })
 
-	// Confinement held: disp-2 (node-b's component) has NO datapoint from node-a.
+	// Confinement held: disp-2 (node-b's component) has NO sample from node-a.
 	if got, err := gw.LatestMetric(ctx, "disp-2", "tcp.open"); err != nil {
 		t.Fatalf("latest disp-2: %v", err)
 	} else if got != nil {
-		t.Fatalf("confinement breached: node-a landed a datapoint on disp-2: %+v", got)
+		t.Fatalf("confinement breached: node-a landed a sample on disp-2: %+v", got)
 	}
 	// reject-not-project held: the unregistered name was never written.
 	if got, err := gw.LatestMetric(ctx, "disp-1", "bogus.metric"); err != nil {
@@ -175,8 +175,8 @@ func TestTelemetryRoundTrip(t *testing.T) {
 		t.Fatalf("reject-not-project breached: unregistered name was written: %+v", got)
 	}
 
-	// --- STATE PATH (cp5a): interface.reachable is a STATE datapoint, routed by
-	// the datapoint_type kind to state, under the SAME confinement and
+	// --- STATE PATH (cp5a): interface.reachable is a STATE sample, routed by
+	// the property_type kind to state, under the SAME confinement and
 	// reject-not-project as a metric, plus the ingest-side transition-only guard.
 
 	// node-a publishes interface.reachable=up for its own t-a. The registry kind is

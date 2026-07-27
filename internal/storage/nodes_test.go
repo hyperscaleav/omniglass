@@ -346,12 +346,12 @@ func TestDeleteNode(t *testing.T) {
 	}, all); err != nil {
 		t.Fatalf("create interface: %v", err)
 	}
-	// A component-owned datapoint (owner arc = component, node_id null): it must
+	// A component-owned sample (owner arc = component, node_id null): it must
 	// survive the node's deletion.
 	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleEvent{
 		{OwnerKind: "component", OwnerID: "dsp-1", Key: "tcp.open", Instance: "tcp", Value: 1, Source: "tcp", TS: time.Now().UTC()},
 	}); err != nil {
-		t.Fatalf("insert component datapoint: %v", err)
+		t.Fatalf("insert component sample: %v", err)
 	}
 	// A node-owned tag binding (cascades on delete).
 	mustNodeTag(t, gw, node.Name)
@@ -410,7 +410,7 @@ func TestDeleteNode(t *testing.T) {
 	}
 	// The component's own telemetry survives (owner arc = component, not the node).
 	if n := count(`select count(*) from metric where owner_kind = 'component'`); n != 1 {
-		t.Errorf("component datapoints = %d, want 1 (must survive the node delete)", n)
+		t.Errorf("component samples = %d, want 1 (must survive the node delete)", n)
 	}
 }
 

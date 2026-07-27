@@ -3295,7 +3295,7 @@ components:
       additionalProperties: false
       properties:
         check:
-          description: The datapoint_type key of the primary signal
+          description: The property_type key of the primary signal
           type: string
         detail:
           description: A human timing detail (rtt / connect time), when present

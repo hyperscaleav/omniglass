@@ -17,10 +17,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// TestCollectionEndToEnd drives the reachability datapoint path with the REAL
+// TestCollectionEndToEnd drives the reachability sample path with the REAL
 // binaries an operator runs: `omniglass server` (embedded NATS + the telemetry
 // ingest consumer) and `omniglass node` (a real tcp probe, a real protobuf Event
-// over JetStream). A node runs one probe against a live listener; the datapoint
+// over JetStream). A node runs one probe against a live listener; the sample
 // must land in metric owned by the target component. This is the
 // user-facing entry-point tier: the run-mode wiring, not an in-process call.
 func TestCollectionEndToEnd(t *testing.T) {
@@ -41,7 +41,7 @@ func TestCollectionEndToEnd(t *testing.T) {
 	addr := "127.0.0.1:" + freePort(t)
 	natsPort := freePort(t)
 
-	// Run the real server: it migrates, seeds (the tcp interface_type + datapoint
+	// Run the real server: it migrates, seeds (the tcp interface_type + sample
 	// types), and hosts the embedded bus. NATS_URL must match NATS_ADDR so the
 	// claim reply advertises a URL the node can dial.
 	srvCtx, cancel := context.WithCancel(ctx)
@@ -117,7 +117,7 @@ func TestCollectionEndToEnd(t *testing.T) {
 		t.Fatalf("omniglass node exit %d:\n%s", code, out)
 	}
 
-	// The datapoint is observable via the read path: tcp.open=1, component-owned,
+	// The sample is observable via the read path: tcp.open=1, component-owned,
 	// observed. The consumer is async, so poll.
 	deadline := time.Now().Add(5 * time.Second)
 	for {
@@ -132,7 +132,7 @@ func TestCollectionEndToEnd(t *testing.T) {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("tcp.open datapoint never landed for disp-1 after the node run")
+			t.Fatalf("tcp.open sample never landed for disp-1 after the node run")
 		}
 		time.Sleep(50 * time.Millisecond)
 	}

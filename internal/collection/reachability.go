@@ -12,7 +12,7 @@ import (
 // one administratively blocked by a firewall. Without it all three collapse to a
 // bare "down". Only Responded is up; the rest are down but each carries its own
 // reason so an operator can distinguish "nothing answered" from "a firewall is in
-// the way". The reason rides the datapoint as a label (see ReasonLabel), which is
+// the way". The reason rides the sample as a label (see ReasonLabel), which is
 // not persisted in checkpoint 3 (only the typed row) but is produced by the probe.
 type Reachability string
 
@@ -36,7 +36,7 @@ const (
 // value that reads as open).
 func (r Reachability) Up() bool { return r == Responded }
 
-// ReasonLabel is the datapoint label the probe stamps with a Reachability reason,
+// ReasonLabel is the sample label the probe stamps with a Reachability reason,
 // so a down signal carries WHY (a silent timeout vs an administrative block) and
 // the two are distinguishable downstream.
 const ReasonLabel = "reason"
@@ -44,7 +44,7 @@ const ReasonLabel = "reason"
 // pingReason resolves the reason an icmp probe result carries. It prefers the
 // reason the pinger classified; a fake that left Reason unset falls back to the
 // received-count verdict (any echo is Responded, none is a silent Timedout) so
-// the reachable datapoint always carries a non-empty reason.
+// the reachable sample always carries a non-empty reason.
 func pingReason(res PingResult) Reachability {
 	if res.Reason != "" {
 		return res.Reason
@@ -58,7 +58,7 @@ func pingReason(res PingResult) Reachability {
 // Classify maps a connect error to the reachability reason it represents. ok is
 // false when the error is NOT a reachability verdict, i.e. a resolve/setup
 // failure (the node could not even form the probe), which the caller treats as
-// inconclusive (no datapoint), never as down: an unresolvable endpoint says
+// inconclusive (no sample), never as down: an unresolvable endpoint says
 // nothing about whether the target is up. A real failure to reach the target IS a
 // verdict (down): refused / prohibited / unreachable get their own reason, and a
 // deadline or unrecognized network error reads as a silent non-answer (Timedout)

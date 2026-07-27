@@ -13,10 +13,10 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-// TestDeriveDatapoints proves the pure ingest derivation: a registered metric
+// TestDeriveSamples proves the pure ingest derivation: a registered metric
 // name is stamped with the task's interface owner (component / source / instance),
 // and reject-not-project drops an unregistered name (no row produced for it).
-func TestDeriveDatapoints(t *testing.T) {
+func TestDeriveSamples(t *testing.T) {
 	metric := "metric"
 	reg := collection.NewRegistry([]storage.PropertyType{
 		{Name: "tcp.open", Kind: &metric},
@@ -33,7 +33,7 @@ func TestDeriveDatapoints(t *testing.T) {
 		},
 	}
 
-	metrics, states, events := deriveDatapoints(ev, owner, reg)
+	metrics, states, events := deriveSamples(ev, owner, reg)
 	if len(metrics) != 2 || len(states) != 0 || len(events) != 0 {
 		t.Fatalf("derived %d metrics %d states %d events, want 2/0/0 (unregistered name dropped): %+v", len(metrics), len(states), len(events), metrics)
 	}
@@ -47,11 +47,11 @@ func TestDeriveDatapoints(t *testing.T) {
 	}
 }
 
-// TestDeriveDatapointsRoutesByKind: a name registered as state routes to the state
+// TestDeriveSamplesRoutesByKind: a name registered as state routes to the state
 // slice (not metric), a name registered as an event_type routes to the event slice
 // (the log-to-event promotion, origin caught), each stamped with the same
 // task-interface owner; an unregistered name is still dropped (reject-not-project).
-func TestDeriveDatapointsRoutesByKind(t *testing.T) {
+func TestDeriveSamplesRoutesByKind(t *testing.T) {
 	metric, state := "metric", "state"
 	reg := collection.NewRegistry([]storage.PropertyType{
 		{Name: "tcp.open", Kind: &metric},
@@ -64,7 +64,7 @@ func TestDeriveDatapointsRoutesByKind(t *testing.T) {
 		{Name: "some.log", Value: &ogv1.Sample_StringValue{StringValue: "line"}},
 		{Name: "not.registered", Value: &ogv1.Sample_StringValue{StringValue: "up"}},
 	}}
-	metrics, states, events := deriveDatapoints(ev, owner, reg)
+	metrics, states, events := deriveSamples(ev, owner, reg)
 	if len(metrics) != 1 || metrics[0].Key != "tcp.open" {
 		t.Fatalf("metrics = %+v, want one tcp.open", metrics)
 	}

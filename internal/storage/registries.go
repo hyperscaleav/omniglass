@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-// PropertyType is a canonical registered signal: the typed keyspace entry a datapoint
+// PropertyType is a canonical registered signal: the typed keyspace entry a sample
 // observes and a field declares. Unit/Precision are observed-only; Kind
 // (metric/state/log) is null for a declared-only property; Validation/FusionPolicy
 // are raw jsonb passed through. Official marks a seed-owned, read-only property. A

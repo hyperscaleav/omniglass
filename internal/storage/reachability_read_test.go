@@ -80,7 +80,7 @@ func TestReachabilityReads(t *testing.T) {
 		t.Fatalf("tcp.open[disp-1-tcp]: want value 1, got %+v", dp)
 	}
 
-	// A series with no datapoint returns nil, not an error.
+	// A series with no sample returns nil, not an error.
 	if none, err := gw.LatestMetricInstance(ctx, "disp-1", "icmp.reachable", "disp-1-icmp"); err != nil {
 		t.Fatalf("latest missing metric: %v", err)
 	} else if none != nil {
