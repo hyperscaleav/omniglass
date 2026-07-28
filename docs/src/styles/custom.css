@@ -65,6 +65,43 @@
   fill: #1a1205;
 }
 
+/* Generated ERD (the data-model page): D2 `sql_table` shapes. D2 bakes its own
+   light and dark palettes but only swaps them on the OS preference, so on
+   Starlight's manual toggle the table parts would keep the light palette (white
+   bodies on a dark page). Re-theme them from the brand tokens, which flip on
+   [data-theme], so the ERD tracks the toggle like every other diagram. Scoped to
+   the palette classes sql_table uses (class_header, the fill-N7 body, the fill-B4
+   container), which the node/key diagrams do not, so this does not bleed into them.
+   D2 scopes its palette under `.d2-<hash>` (specificity 0,2,0), so each override
+   must reach at least 0,2,1: the shape/element-qualified selectors below do. */
+.d2-svg rect.class_header {
+  fill: var(--sl-color-accent-low);
+}
+.d2-svg .shape.fill-N7 {
+  fill: var(--sl-color-bg);
+}
+.d2-svg rect.fill-B4 {
+  fill: transparent;
+  stroke: var(--sl-color-accent);
+}
+.d2-svg text.fill-N7 {
+  fill: var(--sl-color-accent-high);
+}
+.d2-svg text.fill-N2,
+.d2-svg text.fill-N1 {
+  fill: var(--sl-color-text);
+}
+.d2-svg text.fill-B2 {
+  fill: var(--sl-color-accent);
+}
+.d2-svg text.fill-AA2 {
+  fill: var(--sl-color-accent-high);
+}
+.d2-svg rect.stroke-N1,
+.d2-svg line.stroke-N1 {
+  stroke: var(--sl-color-hairline);
+}
+
 /* Status badges. "Design" rides the caution variant; restyle it to a refined amber
    that stays legible in both themes and reads distinct from Partial (blue) and Built
    (green). The :::caution asides are a different element, so they are untouched. */

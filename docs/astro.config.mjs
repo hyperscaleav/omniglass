@@ -108,6 +108,7 @@ export default defineConfig({
             // the foundations underneath
             { label: 'Nodes', slug: 'architecture/nodes' },
             { label: 'Storage', slug: 'architecture/storage' },
+            { label: 'Data model', slug: 'architecture/data-model' },
             { label: 'Workers', slug: 'architecture/workers' },
             { label: 'Scaling and deployment', slug: 'architecture/scaling' },
             { label: 'Settings', slug: 'architecture/settings' },
