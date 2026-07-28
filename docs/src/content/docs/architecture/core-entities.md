@@ -392,14 +392,16 @@ pattern and the storage DDL are on [storage](/architecture/storage/).
 
 ### The event sink: the first arc-owned occurrence
 
-The arc's first built sink beyond the datapoint tables is **`event`**, the **log-kind sink** of the
+The arc's first built sink beyond the datapoint tables is **`event`**, the **occurrence sink** of the
 collection pipeline. Where a `metric` or `state` records a **sampled present value**
-(a reading that has a value *now*, `last()` is meaningful), an `event` records a **past occurrence**: a
-device log line, something that *happened* and whose "what is it now?" is meaningless (the
+(a reading that has a value *now*, `last()` is meaningful), an `event` records a **past occurrence**:
+something that *happened* and whose "what is it now?" is meaningless (the
 [has-a-value-now razor](/architecture/datapoints/#the-has-a-value-now-razor-datapoint-vs-event)). A
-collected datapoint whose property is **log**-kind (the seeded starter is `log.line`) is no longer
-dropped at ingest: it routes to `event` as an occurrence, carrying a **`message`** (its text, from
-`string_value`) and optional structured **`attributes`** (jsonb, from `json_value`).
+component that publishes an event natively (an xAPI event, an SNMP trap) routes it to `event`, carrying a
+**`message`** (its text, from `string_value`) and optional structured **`attributes`** (jsonb, from
+`json_value`). Raw log lines are a **separate ingest lane**, not events
+([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)): the `log_line`
+table, and the derivation that turns a log line into an event, are a later slice.
 
 An `event` row carries the **identical owner exclusive-arc** as a datapoint (`owner_kind` plus the
 matching `component_id` / `system_id` / `location_id` / `node_id`, under the same CHECK that exactly one

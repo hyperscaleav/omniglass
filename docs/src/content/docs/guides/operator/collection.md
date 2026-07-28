@@ -93,7 +93,7 @@ Alongside sampled readings, a node ships a component's **log occurrences**: thin
 *happened* (a device log line) rather than a value that is true *now*. Every component's detail
 carries a read-only **Events** panel (with `component:read`) showing the most recent occurrences,
 **newest first**, over the **last 24 hours** (capped at 200). One row per occurrence shows its
-**time**, the property **key** (the log's name, e.g. `log.line`), the **message**, and, when the
+**time**, the **event key** (e.g. `call.started`), the **message**, and, when the
 occurrence carried a structured payload, its **attributes**. Where a reachability verdict is a
 sampled state, an event is a past occurrence, so the two panels are read differently: the verdict
 answers "is it reachable *now*", the event log answers "what did it *say*, and when".
