@@ -632,6 +632,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components/{name}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a component's recent log lines
+         * @description Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+         */
+        get: operations["list-component-logs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/components/{name}/memberships": {
         parameters: {
             query?: never;
@@ -4629,6 +4649,29 @@ export interface components {
             /** @description Whether every location of this type must set the property */
             required: boolean;
         };
+        LogBody: {
+            /** @description Structured fields parsed from the line, when present */
+            attributes?: unknown;
+            /** @description Threads related lines and their derived events */
+            correlation_id?: string;
+            /** @description The line's facility, when classified */
+            facility?: string;
+            /** @description The series discriminator, when set */
+            instance?: string;
+            /** @description Freeform classification labels, when present */
+            labels?: unknown;
+            /** @description The raw log text */
+            message: string;
+            /** @description The line's severity, when classified */
+            severity?: string;
+            /** @description The channel the line arrived on (e.g. syslog) */
+            source?: string;
+            /**
+             * Format: date-time
+             * @description When the line arrived
+             */
+            ts: string;
+        };
         LoginInputBody: {
             /**
              * Format: uri
@@ -4638,6 +4681,16 @@ export interface components {
             readonly $schema?: string;
             password: string;
             username: string;
+        };
+        LogsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/LogsOutputBody.json
+             */
+            readonly $schema?: string;
+            component: string;
+            logs: components["schemas"]["LogBody"][] | null;
         };
         MeOutputBody: {
             /**
@@ -7125,6 +7178,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EventsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-component-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogsOutputBody"];
                 };
             };
             /** @description Error */
