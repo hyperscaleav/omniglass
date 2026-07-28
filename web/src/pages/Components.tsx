@@ -27,6 +27,7 @@ import TagAdder from "../components/TagAdder";
 import ReachabilityPanel from "../components/ReachabilityPanel";
 import ReconciliationPanel from "../components/ReconciliationPanel";
 import EventsPanel from "../components/EventsPanel";
+import LogsPanel from "../components/LogsPanel";
 import { interfaceBlade, interfaceCreateBlade } from "../components/interfaceBlades";
 import PropertiesPanel, { propertyResolutionBlade, propertyBladeId } from "../components/PropertiesPanel";
 import ResolutionPanel from "../components/ResolutionPanel";
@@ -312,6 +313,7 @@ export default function Components() {
             which keeps view read-only. */}
         <AlarmsPanel component={n().raw.name} canUpdate={editing() && canUpdate()} />
         <EventsPanel name={n().raw.name} />
+        <LogsPanel name={n().raw.name} />
         {/* What we want vs what the device reports: the provenance pivot
             (declared/intended/observed) per property, with drift computed on the
             server. Read-only, and the teaching surface for reconciliation. */}
