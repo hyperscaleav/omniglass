@@ -54,7 +54,11 @@ type Event struct {
 	// raw is the original wire payload, preserved verbatim for replay. Empty for
 	// the inline tcp probe (no protocol payload). Raw-Event persistence is deferred
 	// to a later checkpoint.
-	Raw           []byte `protobuf:"bytes,6,opt,name=raw,proto3" json:"raw,omitempty"`
+	Raw []byte `protobuf:"bytes,6,opt,name=raw,proto3" json:"raw,omitempty"`
+	// logs is the raw log lines in this batch (ADR-0066): untyped arrival, not
+	// registry-resolved samples. The consumer writes them to log_line, owner-confined
+	// like samples. A node's self-logs ride here.
+	Logs          []*LogLine `protobuf:"bytes,7,rep,name=logs,proto3" json:"logs,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -127,6 +131,13 @@ func (x *Event) GetSamples() []*Sample {
 func (x *Event) GetRaw() []byte {
 	if x != nil {
 		return x.Raw
+	}
+	return nil
+}
+
+func (x *Event) GetLogs() []*LogLine {
+	if x != nil {
+		return x.Logs
 	}
 	return nil
 }
@@ -280,18 +291,123 @@ func (*Sample_StringValue) isSample_Value() {}
 
 func (*Sample_JsonValue) isSample_Value() {}
 
+// LogLine is one raw log line off the ingest lane (ADR-0066): untyped text, not a
+// registry-resolved Sample. The consumer writes it to log_line, owner-confined to
+// the publishing node (self-logs) or the task's component. severity and facility
+// are the retention/routing axes; attributes and labels are freeform JSON.
+type LogLine struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Message       string                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
+	Source        string                 `protobuf:"bytes,2,opt,name=source,proto3" json:"source,omitempty"`
+	Severity      string                 `protobuf:"bytes,3,opt,name=severity,proto3" json:"severity,omitempty"`
+	Facility      string                 `protobuf:"bytes,4,opt,name=facility,proto3" json:"facility,omitempty"`
+	Attributes    []byte                 `protobuf:"bytes,5,opt,name=attributes,proto3" json:"attributes,omitempty"`
+	Labels        []byte                 `protobuf:"bytes,6,opt,name=labels,proto3" json:"labels,omitempty"`
+	CorrelationId string                 `protobuf:"bytes,7,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
+	Ts            *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=ts,proto3" json:"ts,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogLine) Reset() {
+	*x = LogLine{}
+	mi := &file_proto_og_v1_event_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogLine) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogLine) ProtoMessage() {}
+
+func (x *LogLine) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_og_v1_event_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogLine.ProtoReflect.Descriptor instead.
+func (*LogLine) Descriptor() ([]byte, []int) {
+	return file_proto_og_v1_event_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *LogLine) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *LogLine) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *LogLine) GetSeverity() string {
+	if x != nil {
+		return x.Severity
+	}
+	return ""
+}
+
+func (x *LogLine) GetFacility() string {
+	if x != nil {
+		return x.Facility
+	}
+	return ""
+}
+
+func (x *LogLine) GetAttributes() []byte {
+	if x != nil {
+		return x.Attributes
+	}
+	return nil
+}
+
+func (x *LogLine) GetLabels() []byte {
+	if x != nil {
+		return x.Labels
+	}
+	return nil
+}
+
+func (x *LogLine) GetCorrelationId() string {
+	if x != nil {
+		return x.CorrelationId
+	}
+	return ""
+}
+
+func (x *LogLine) GetTs() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Ts
+	}
+	return nil
+}
+
 var File_proto_og_v1_event_proto protoreflect.FileDescriptor
 
 const file_proto_og_v1_event_proto_rawDesc = "" +
 	"\n" +
-	"\x17proto/og/v1/event.proto\x12\x05og.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x8d\x02\n" +
+	"\x17proto/og/v1/event.proto\x12\x05og.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xb1\x02\n" +
 	"\x05Event\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12*\n" +
 	"\x02ts\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x120\n" +
 	"\x06labels\x18\x04 \x03(\v2\x18.og.v1.Event.LabelsEntryR\x06labels\x12'\n" +
 	"\asamples\x18\x05 \x03(\v2\r.og.v1.SampleR\asamples\x12\x10\n" +
-	"\x03raw\x18\x06 \x01(\fR\x03raw\x1a9\n" +
+	"\x03raw\x18\x06 \x01(\fR\x03raw\x12\"\n" +
+	"\x04logs\x18\a \x03(\v2\x0e.og.v1.LogLineR\x04logs\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc9\x02\n" +
@@ -307,7 +423,18 @@ const file_proto_og_v1_event_proto_rawDesc = "" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\a\n" +
-	"\x05valueB4Z2github.com/hyperscaleav/omniglass/proto/og/v1;ogv1b\x06proto3"
+	"\x05value\"\xfe\x01\n" +
+	"\aLogLine\x12\x18\n" +
+	"\amessage\x18\x01 \x01(\tR\amessage\x12\x16\n" +
+	"\x06source\x18\x02 \x01(\tR\x06source\x12\x1a\n" +
+	"\bseverity\x18\x03 \x01(\tR\bseverity\x12\x1a\n" +
+	"\bfacility\x18\x04 \x01(\tR\bfacility\x12\x1e\n" +
+	"\n" +
+	"attributes\x18\x05 \x01(\fR\n" +
+	"attributes\x12\x16\n" +
+	"\x06labels\x18\x06 \x01(\fR\x06labels\x12%\n" +
+	"\x0ecorrelation_id\x18\a \x01(\tR\rcorrelationId\x12*\n" +
+	"\x02ts\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\x02tsB4Z2github.com/hyperscaleav/omniglass/proto/og/v1;ogv1b\x06proto3"
 
 var (
 	file_proto_og_v1_event_proto_rawDescOnce sync.Once
@@ -321,25 +448,28 @@ func file_proto_og_v1_event_proto_rawDescGZIP() []byte {
 	return file_proto_og_v1_event_proto_rawDescData
 }
 
-var file_proto_og_v1_event_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_proto_og_v1_event_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_proto_og_v1_event_proto_goTypes = []any{
 	(*Event)(nil),                 // 0: og.v1.Event
 	(*Sample)(nil),                // 1: og.v1.Sample
-	nil,                           // 2: og.v1.Event.LabelsEntry
-	nil,                           // 3: og.v1.Sample.LabelsEntry
-	(*timestamppb.Timestamp)(nil), // 4: google.protobuf.Timestamp
+	(*LogLine)(nil),               // 2: og.v1.LogLine
+	nil,                           // 3: og.v1.Event.LabelsEntry
+	nil,                           // 4: og.v1.Sample.LabelsEntry
+	(*timestamppb.Timestamp)(nil), // 5: google.protobuf.Timestamp
 }
 var file_proto_og_v1_event_proto_depIdxs = []int32{
-	4, // 0: og.v1.Event.ts:type_name -> google.protobuf.Timestamp
-	2, // 1: og.v1.Event.labels:type_name -> og.v1.Event.LabelsEntry
+	5, // 0: og.v1.Event.ts:type_name -> google.protobuf.Timestamp
+	3, // 1: og.v1.Event.labels:type_name -> og.v1.Event.LabelsEntry
 	1, // 2: og.v1.Event.samples:type_name -> og.v1.Sample
-	4, // 3: og.v1.Sample.ts:type_name -> google.protobuf.Timestamp
-	3, // 4: og.v1.Sample.labels:type_name -> og.v1.Sample.LabelsEntry
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	2, // 3: og.v1.Event.logs:type_name -> og.v1.LogLine
+	5, // 4: og.v1.Sample.ts:type_name -> google.protobuf.Timestamp
+	4, // 5: og.v1.Sample.labels:type_name -> og.v1.Sample.LabelsEntry
+	5, // 6: og.v1.LogLine.ts:type_name -> google.protobuf.Timestamp
+	7, // [7:7] is the sub-list for method output_type
+	7, // [7:7] is the sub-list for method input_type
+	7, // [7:7] is the sub-list for extension type_name
+	7, // [7:7] is the sub-list for extension extendee
+	0, // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_proto_og_v1_event_proto_init() }
@@ -359,7 +489,7 @@ func file_proto_og_v1_event_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_og_v1_event_proto_rawDesc), len(file_proto_og_v1_event_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

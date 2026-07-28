@@ -87,6 +87,25 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 		return
 	}
 
+	// Log lines ride the ingest lane owner-bound to the publishing node (ADR-0066
+	// self-logs): untyped, no task, no registry gate. They resolve their owner from
+	// the trusted subject node, not the task, so they land even on an Event that
+	// carries no task_id, ahead of the sample owner-confinement below.
+	if logs := logLineWrites(&ev, node); len(logs) > 0 {
+		if err := s.store.InsertLogLines(ctx, logs); err != nil {
+			s.nakOrTerm(msg) // DB write failed: redeliver (bounded)
+			return
+		}
+	}
+
+	// Samples are owner-bound to the task's component. A logs-only Event (a node's
+	// self-log batch carries no samples and no task_id) has nothing more to route,
+	// so ack and return before the task resolution treats the empty task as an orphan.
+	if len(ev.GetSamples()) == 0 {
+		_ = msg.Ack()
+		return
+	}
+
 	// Owner + confinement: the owner is the task's interface component, and the
 	// task must belong to THIS node. A task on another node, an unknown task, or a
 	// shared interface resolves to !ok: the sample is an orphan, dropped (acked
@@ -248,6 +267,44 @@ func (s *Server) dedupeStates(ctx context.Context, states []storage.StateSampleE
 		fresh = append(fresh, ev)
 	}
 	return fresh, nil
+}
+
+// logLineWrites turns an Event's raw log lines into node-owned log_line writes
+// (ADR-0066 self-logs): owner_kind=node, owner=the trusted subject node. Pure: no
+// I/O and no registry (a log line is untyped by design). Each line's own ts wins
+// when set, else the batch ts; empty severity/facility/correlation stay "" and the
+// storage layer maps them to NULL.
+func logLineWrites(ev *ogv1.Event, node string) []storage.LogLineWrite {
+	logs := ev.GetLogs()
+	if len(logs) == 0 {
+		return nil
+	}
+	out := make([]storage.LogLineWrite, 0, len(logs))
+	for _, l := range logs {
+		// A line's own ts wins, else the batch ts; when neither is set leave TS zero
+		// so the storage layer stamps now() (GetTs().AsTime() on a nil timestamp is
+		// the 1970 epoch, not the zero time, and would slip past that guard).
+		var ts time.Time
+		switch {
+		case l.GetTs() != nil:
+			ts = l.GetTs().AsTime()
+		case ev.GetTs() != nil:
+			ts = ev.GetTs().AsTime()
+		}
+		out = append(out, storage.LogLineWrite{
+			OwnerKind:     "node",
+			OwnerID:       node,
+			Source:        l.GetSource(),
+			Severity:      l.GetSeverity(),
+			Facility:      l.GetFacility(),
+			Message:       l.GetMessage(),
+			Attributes:    l.GetAttributes(),
+			Labels:        l.GetLabels(),
+			CorrelationID: l.GetCorrelationId(),
+			TS:            ts,
+		})
+	}
+	return out
 }
 
 // deriveSamples turns a decoded Event + its resolved owner into the typed rows

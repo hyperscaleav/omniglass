@@ -348,9 +348,10 @@ type Gateway interface {
 
 	// The raw-log lane (ADR-0066): log lines are untyped arrival, not events, so
 	// InsertLogLines has no registry gate. ListComponentLogs backs the component
-	// log panel.
+	// log panel; ListNodeLogs backs the node self-log panel (owner arc = node).
 	InsertLogLines(ctx context.Context, lines []LogLineWrite) error
 	ListComponentLogs(ctx context.Context, componentName string, since time.Time, limit int) ([]LogLine, error)
+	ListNodeLogs(ctx context.Context, nodeName string, since time.Time, limit int) ([]LogLine, error)
 
 	// The node tier: the edge runtime's enrollment lifecycle and worklist. A node
 	// is estate-wide (all-scope create/enroll/read, like a principal). The claim,

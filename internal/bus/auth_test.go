@@ -44,6 +44,9 @@ func (f fakeStore) LatestState(context.Context, string, string, string) (*storag
 func (f fakeStore) InsertEvents(context.Context, []storage.EventOccurrence) error {
 	return nil
 }
+func (f fakeStore) InsertLogLines(context.Context, []storage.LogLineWrite) error {
+	return nil
+}
 func (f fakeStore) UpsertProperties(context.Context, []storage.PropertyUpsert) error {
 	return nil
 }
