@@ -404,6 +404,17 @@ func TestRunIdempotent(t *testing.T) {
 	if withAttrs != 2 {
 		t.Errorf("boardroom-a-bar events with attributes = %d, want 2", withAttrs)
 	}
+
+	// The raw-log lane (ADR-0066): the lobby display carries its seeded log lines,
+	// so the console log panel comes up populated. Counted over two Runs, so a
+	// duplicate is the seed failing to be idempotent.
+	var logs int
+	if err := conn.QueryRow(ctx, `select count(*) from log_line where component_id = (select id from component where name = 'lobby-display')`).Scan(&logs); err != nil {
+		t.Fatalf("count lobby-display log lines: %v", err)
+	}
+	if logs != 6 {
+		t.Errorf("lobby-display log lines = %d, want 6 (seed not idempotent or incomplete)", logs)
+	}
 }
 
 // TestSeededEstateTeachesPlatformReach carries the forest into the database and

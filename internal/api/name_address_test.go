@@ -85,6 +85,7 @@ var idOnlyIsCorrect = map[string]string{
 	"target_id":       "an impersonation target is a principal, as above",
 	"node_id":         "a node is addressed by its enrollment identity, which is its primary key",
 	"caused_event_id": "an event is addressed by its bigint id; an occurrence has no name handle",
+	"correlation_id":  "a freeform string that threads related log lines and events, not a reference to a named entity",
 }
 
 // References exempt from the both-forms rule, each for a reason of its own.

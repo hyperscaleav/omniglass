@@ -804,6 +804,26 @@ Example:
 omniglass component listTags <name>
 ```
 
+### `omniglass component log`
+
+Commands for the log resource
+
+#### `omniglass component log list`
+
+List a component's recent log lines
+
+```
+omniglass component log list <name>
+```
+
+Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass component log list <name>
+```
+
 ### `omniglass component membership`
 
 Commands for the membership resource

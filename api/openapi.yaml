@@ -2903,6 +2903,39 @@ components:
         - property_type_id
         - required
       type: object
+    LogBody:
+      additionalProperties: false
+      properties:
+        attributes:
+          description: Structured fields parsed from the line, when present
+        correlation_id:
+          description: Threads related lines and their derived events
+          type: string
+        facility:
+          description: The line's facility, when classified
+          type: string
+        instance:
+          description: The series discriminator, when set
+          type: string
+        labels:
+          description: Freeform classification labels, when present
+        message:
+          description: The raw log text
+          type: string
+        severity:
+          description: The line's severity, when classified
+          type: string
+        source:
+          description: The channel the line arrived on (e.g. syslog)
+          type: string
+        ts:
+          description: When the line arrived
+          format: date-time
+          type: string
+      required:
+        - ts
+        - message
+      type: object
     LoginInputBody:
       additionalProperties: false
       properties:
@@ -2920,6 +2953,28 @@ components:
       required:
         - username
         - password
+      type: object
+    LogsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/LogsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component:
+          type: string
+        logs:
+          items:
+            $ref: "#/components/schemas/LogBody"
+          type:
+            - array
+            - "null"
+      required:
+        - component
+        - logs
       type: object
     MeOutputBody:
       additionalProperties: false
@@ -6010,6 +6065,33 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List a component's recent events
+      x-omniglass-permission: component:read
+  /components/{name}/logs:
+    get:
+      description: Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+      operationId: list-component-logs
+      parameters:
+        - description: The component's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a component's recent log lines
       x-omniglass-permission: component:read
   /components/{name}/memberships:
     get:

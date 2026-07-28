@@ -421,10 +421,70 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 	if err := seedReachability(ctx, gw, actorID); err != nil {
 		return err
 	}
-	// A handful of example log occurrences on the lobby display, so the console's
-	// event-log panel comes up populated instead of empty.
+	// A handful of native call.started events on a boardroom video bar, so the
+	// console's event panel comes up populated instead of empty.
 	if err := seedEvents(ctx, gw); err != nil {
 		return err
+	}
+	// Raw device log lines on the lobby display, so the console's log panel (the
+	// ingest lane, ADR-0066) comes up populated. These are logs, not events.
+	if err := seedLogs(ctx, gw); err != nil {
+		return err
+	}
+	return nil
+}
+
+// logComponent hangs the example log lines on the lobby display (a device that
+// emits ordinary device logs: link, CEC, EDID, input, thermal).
+const logComponent = "lobby-display"
+
+// exampleLogs are the display's recent raw log lines (ADR-0066), each offset back
+// from now so the panel reads as a recent window (newest last). Two carry a higher
+// severity so the panel's severity badges are visible; one carries a structured
+// attributes payload. minsAgo is minutes before the seed's now.
+var exampleLogs = []struct {
+	message  string
+	severity string
+	facility string
+	attrs    []byte
+	minsAgo  int
+}{
+	{message: "power state changed to on", severity: "info", facility: "kern", minsAgo: 214},
+	{message: "hdmi link state changed to up", severity: "info", facility: "kern", minsAgo: 212},
+	{message: "edid read complete: 3840x2160@60", severity: "info", facility: "daemon", minsAgo: 211},
+	{message: "cec handshake ok", severity: "info", facility: "daemon", minsAgo: 127},
+	{message: "input switched to HDMI2", severity: "notice", facility: "daemon", attrs: []byte(`{"input":"hdmi2"}`), minsAgo: 46},
+	{message: "backlight temperature high, throttling", severity: "warning", facility: "kern", minsAgo: 12},
+}
+
+// seedLogs installs the example log lines on the lobby display idempotently. The
+// log_line table has an auto id and no natural unique key, so a naive re-insert
+// would pile up duplicates on every make dev; guard on the component already
+// carrying lines (ListComponentLogs from the epoch, limit 1) and skip when present.
+func seedLogs(ctx context.Context, gw storage.Gateway) error {
+	existing, err := gw.ListComponentLogs(ctx, logComponent, time.Time{}, 1)
+	if err != nil {
+		return fmt.Errorf("devseed: check logs: %w", err)
+	}
+	if len(existing) > 0 {
+		return nil
+	}
+	now := time.Now().UTC()
+	lines := make([]storage.LogLineWrite, 0, len(exampleLogs))
+	for _, l := range exampleLogs {
+		lines = append(lines, storage.LogLineWrite{
+			OwnerKind:  "component",
+			OwnerID:    logComponent,
+			Source:     "syslog",
+			Severity:   l.severity,
+			Facility:   l.facility,
+			Message:    l.message,
+			Attributes: l.attrs,
+			TS:         now.Add(-time.Duration(l.minsAgo) * time.Minute),
+		})
+	}
+	if err := gw.InsertLogLines(ctx, lines); err != nil {
+		return fmt.Errorf("devseed: insert logs: %w", err)
 	}
 	return nil
 }

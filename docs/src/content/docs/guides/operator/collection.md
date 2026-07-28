@@ -5,7 +5,7 @@ description: "Enrolling a collection node, adding a protocol-named interface to 
 
 Collection is how the estate learns whether a device is reachable and what it reports. An **edge
 node** runs the probes, a component's **interface** is the API the node reaches for, the component's
-**Reachability** panel shows the verdict, and its **Events** panel shows the recent log occurrences
+**Reachability** panel shows the verdict, and its **Events** and **Logs** panels show recent occurrences
 the node ships back. This page walks the console surfaces; the model behind them is
 [data collection](/architecture/collection/), and every action here has the same
 [scope](/guides/operator/inventory/) and permission checks as the rest of the console.
@@ -89,16 +89,18 @@ its derived poll task, created from the Interfaces page.
 
 ## Events
 
-Alongside sampled readings, a node ships a component's **log occurrences**: things that
-*happened* (a device log line) rather than a value that is true *now*. Every component's detail
-carries a read-only **Events** panel (with `component:read`) showing the most recent occurrences,
-**newest first**, over the **last 24 hours** (capped at 200). One row per occurrence shows its
-**time**, the **event key** (e.g. `call.started`), the **message**, and, when the
-occurrence carried a structured payload, its **attributes**. Where a reachability verdict is a
-sampled state, an event is a past occurrence, so the two panels are read differently: the verdict
-answers "is it reachable *now*", the event log answers "what did it *say*, and when".
+Alongside sampled readings, a component carries two occurrence panels, both read-only and gated by
+`component:read`. The **Events** panel shows the most recent typed **events**, newest first, over the
+last 24 hours (capped at 200): discrete things that *happened* (a `call.started`) that a component
+published natively or a rule derived, each row showing its **time**, the **event key**, the **message**,
+and any structured **attributes**. Below it, the **Logs** panel shows the component's raw **log lines**
+(the ingest lane, [ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)):
+untyped device text a rule may later derive events from, each row showing its **time**, a **severity**
+badge, the **facility** and **source**, the **message**, and its structured **fields** on demand. Most
+log lines never become events.
 
-Occurrences land here automatically: a collected datapoint whose property is **log**-kind routes to
-the component's event log under the same [scope](/guides/operator/inventory/) and owner checks as
-every other reading, so an out-of-scope component's events are a non-disclosing 404, exactly like its
-reachability. The rows are read-only and every value is a real occurrence from the node.
+Where a reachability verdict is a sampled state, an event or a log line is a past occurrence, so the
+panels are read differently: the verdict answers "is it reachable *now*", the logs and events answer
+"what did it *say*, and when". Both land under the same [scope](/guides/operator/inventory/) and owner
+checks as every other reading, so an out-of-scope component's events and logs are a non-disclosing 404,
+exactly like its reachability. Every value is a real occurrence from the node.

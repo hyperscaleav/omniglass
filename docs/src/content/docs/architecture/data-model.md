@@ -245,6 +245,14 @@ telemetry: {
     shape: sql_table
     id: uuid {constraint: primary_key}
   }
+  log_line: {
+    shape: sql_table
+    id: bigint {constraint: primary_key}
+    component_id: uuid {constraint: foreign_key}
+    location_id: uuid {constraint: foreign_key}
+    node_id: uuid {constraint: foreign_key}
+    system_id: uuid {constraint: foreign_key}
+  }
   metric: {
     shape: sql_table
     id: bigint {constraint: primary_key}
@@ -440,6 +448,10 @@ telemetry.event.event_type_id -> telemetry.event_type.id
 telemetry.event.location_id -> estate.location.id
 telemetry.event.node_id -> collection.node.principal_id
 telemetry.event.system_id -> estate.system.id
+telemetry.log_line.component_id -> estate.component.id
+telemetry.log_line.location_id -> estate.location.id
+telemetry.log_line.node_id -> collection.node.principal_id
+telemetry.log_line.system_id -> estate.system.id
 telemetry.metric.component_id -> estate.component.id
 telemetry.metric.event_id -> telemetry.event.id
 telemetry.metric.location_id -> estate.location.id
