@@ -62,19 +62,32 @@ function LogRow(p: { line: ComponentLog }) {
   );
 }
 
-export default function LogsPanel(p: { name: string }) {
-  const q = useQuery(() => ({ queryKey: LOGS_KEY(p.name), queryFn: () => getLogs(p.name) }));
+// LogsPanel reads a raw-log stream (ADR-0066) and renders it. It defaults to a
+// component's logs, but accepts an explicit source (query key + fetcher) and copy
+// so the same panel serves a node's self-logs; both are the same LogBody row.
+export default function LogsPanel(p: {
+  name: string;
+  title?: string;
+  intro?: string;
+  queryKey?: readonly unknown[];
+  queryFn?: () => Promise<{ logs: ComponentLog[] }>;
+}) {
+  const q = useQuery(() => ({
+    queryKey: [...(p.queryKey ?? LOGS_KEY(p.name))],
+    queryFn: () => (p.queryFn ? p.queryFn() : getLogs(p.name)),
+  }));
   const lines = createMemo(() => q.data?.logs ?? []);
   return (
     <div class="flex flex-col gap-1.5">
       <div class="flex items-center gap-2">
-        <span class="eyebrow">Logs</span>
+        <span class="eyebrow">{p.title ?? "Logs"}</span>
         <Show when={lines().length}>
           <span class="text-[11px] text-base-content/40">{lines().length} in the last 24h</span>
         </Show>
       </div>
       <p class="text-[12px] text-base-content/50">
-        Raw log lines the component emitted, the ingest lane, untyped and unfiltered, that a rule may later derive events from. Newest first, last 24 hours.
+        {p.intro ??
+          "Raw log lines the component emitted, the ingest lane, untyped and unfiltered, that a rule may later derive events from. Newest first, last 24 hours."}
       </p>
       <Show
         when={lines().length}

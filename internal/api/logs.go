@@ -40,6 +40,33 @@ type logsOutput struct {
 	}
 }
 
+type nodeLogsOutput struct {
+	Body struct {
+		Node string    `json:"node"`
+		Logs []logBody `json:"logs"`
+	}
+}
+
+// logBodies maps stored log rows to the wire body. Shared by the component and
+// node reads: both are the same raw log line, only the owner differs.
+func logBodies(rows []storage.LogLine) []logBody {
+	out := make([]logBody, 0, len(rows))
+	for _, l := range rows {
+		out = append(out, logBody{
+			TS:            l.TS,
+			Source:        l.Source,
+			Severity:      l.Severity,
+			Facility:      l.Facility,
+			Instance:      l.Instance,
+			Message:       l.Message,
+			Attributes:    json.RawMessage(l.Attributes),
+			Labels:        json.RawMessage(l.Labels),
+			CorrelationID: l.CorrelationID,
+		})
+	}
+	return out
+}
+
 // registerLogRoutes wires the per-component raw-log read, the operator-facing
 // surface over the ingest lane.
 func registerLogRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
@@ -61,20 +88,32 @@ func registerLogRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		}
 		out := &logsOutput{}
 		out.Body.Component = comp.Name
-		out.Body.Logs = make([]logBody, 0, len(rows))
-		for _, l := range rows {
-			out.Body.Logs = append(out.Body.Logs, logBody{
-				TS:            l.TS,
-				Source:        l.Source,
-				Severity:      l.Severity,
-				Facility:      l.Facility,
-				Instance:      l.Instance,
-				Message:       l.Message,
-				Attributes:    json.RawMessage(l.Attributes),
-				Labels:        json.RawMessage(l.Labels),
-				CorrelationID: l.CorrelationID,
-			})
+		out.Body.Logs = logBodies(rows)
+		return out, nil
+	})
+
+	// The node self-log read (ADR-0066): a node's own operational log lines, the
+	// same raw lane but owner-bound to the node. Gated by node:read and scope-injected
+	// through GetNode; an out-of-scope node is a non-disclosing 404.
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "list-node-logs",
+		Method:      http.MethodGet,
+		Path:        "/nodes/{name}/logs",
+		Summary:     "List a node's recent self-logs",
+		Description: "Returns the node's own recent operational log lines (the raw ingest lane of ADR-0066, owner-bound to the node), newest first, bounded to the last 24 hours. Gated by node:read; an out-of-scope node is a non-disclosing 404.",
+	}, "node", "read"), func(ctx context.Context, in *nodePathInput) (*nodeLogsOutput, error) {
+		n, err := gw.GetNode(ctx, in.Name, a.scopeFor(ctx, "node", "read"))
+		if err != nil {
+			return nil, mapNodeErr(err)
 		}
+		since := time.Now().UTC().Add(-logHistoryWindow)
+		rows, err := gw.ListNodeLogs(ctx, n.Name, since, logReadLimit)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("read node logs")
+		}
+		out := &nodeLogsOutput{}
+		out.Body.Node = n.Name
+		out.Body.Logs = logBodies(rows)
 		return out, nil
 	})
 }

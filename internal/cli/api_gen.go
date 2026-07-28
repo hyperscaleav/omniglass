@@ -2453,6 +2453,30 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "log",
+				Short: "Commands for the log resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <name>",
+						Short:   "List a node's recent self-logs",
+						Long:    "Returns the node's own recent operational log lines (the raw ingest lane of ADR-0066, owner-bound to the node), newest first, bounded to the last 24 hours. Gated by node:read; an out-of-scope node is a non-disclosing 404.",
+						Example: "  omniglass node log list <name>",
+						Args:    cobra.ExactArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/nodes/%s/logs", url.PathEscape(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fKey string
 				cmd := &cobra.Command{

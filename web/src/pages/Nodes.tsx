@@ -7,6 +7,8 @@ import Button from "../components/Button";
 import { useFormActions } from "../lib/formactions";
 import { Check, Copy, Plus, Server } from "../components/icons";
 import KVStacked from "../components/KVStacked";
+import LogsPanel from "../components/LogsPanel";
+import { NODE_LOGS_KEY, getNodeLogs } from "../lib/logs";
 import TagAdder from "../components/TagAdder";
 import TagPills from "../components/TagPills";
 import { tagFilterKeys } from "../lib/predicate";
@@ -345,6 +347,14 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
               </div>
             </Show>
           </div>
+
+          <LogsPanel
+            name={props.name}
+            title="Self-logs"
+            intro="Operational log lines the node emitted about itself (connected to the bus, worklist pulled, a task skipped), shipped back over the telemetry lane. The node's own story, not a component's. Newest first, last 24 hours."
+            queryKey={NODE_LOGS_KEY(props.name)}
+            queryFn={() => getNodeLogs(props.name)}
+          />
         </div>
       )}
     </Show>

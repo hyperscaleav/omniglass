@@ -113,3 +113,89 @@ func TestLogsAPI(t *testing.T) {
 	c.do(viewerTok, http.MethodGet, "/components/disp-1/logs", nil, http.StatusNotFound)
 	c.do(viewerTok, http.MethodGet, "/components/other-1/logs", nil, http.StatusOK)
 }
+
+// nodeLogsResp mirrors the node self-log read body: the node and its own lines.
+type nodeLogsResp struct {
+	Node string `json:"node"`
+	Logs []struct {
+		TS         time.Time       `json:"ts"`
+		Source     string          `json:"source"`
+		Severity   string          `json:"severity"`
+		Facility   string          `json:"facility"`
+		Message    string          `json:"message"`
+		Attributes json.RawMessage `json:"attributes"`
+	} `json:"logs"`
+}
+
+// TestNodeLogsAPI drives the per-node self-log read over HTTP (ADR-0066): a node's
+// own operational log lines come back newest-first with severity and attributes,
+// owner-bound to the node not a component. A node is estate-wide, so an all-scope
+// viewer reads them (node:read), an unknown node is a 404, and an unauthenticated
+// request is a 401. Skipped under -short.
+func TestNodeLogsAPI(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatalf("mint owner: %v", err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	all := scope.Set{All: true}
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "site-a"}, all); err != nil {
+		t.Fatalf("create node: %v", err)
+	}
+
+	t0 := time.Now().UTC().Add(-2 * time.Minute)
+	t1 := t0.Add(time.Minute)
+	if err := gw.InsertLogLines(ctx, []storage.LogLineWrite{
+		{OwnerKind: "node", OwnerID: "site-a", Source: "node", Severity: "info", Facility: "enrollment", Message: "connected to bus", TS: t0},
+		{OwnerKind: "node", OwnerID: "site-a", Source: "collection", Severity: "warning", Facility: "collection", Message: "task skipped", Attributes: []byte(`{"task":"t-a"}`), TS: t1},
+	}); err != nil {
+		t.Fatalf("insert node log lines: %v", err)
+	}
+
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	out := c.do(ownerTok, http.MethodGet, "/nodes/site-a/logs", nil, http.StatusOK)
+	var r nodeLogsResp
+	if err := json.Unmarshal(out, &r); err != nil {
+		t.Fatalf("decode node logs: %v", err)
+	}
+	if r.Node != "site-a" || len(r.Logs) != 2 {
+		t.Fatalf("node logs: want site-a with 2 lines, got %+v", r)
+	}
+	// Newest first: the warning/collection line with its structured attributes.
+	if r.Logs[0].Message != "task skipped" || r.Logs[0].Severity != "warning" || r.Logs[0].Source != "collection" {
+		t.Fatalf("newest node log: want 'task skipped' warning/collection, got %+v", r.Logs[0])
+	}
+	if string(r.Logs[0].Attributes) != `{"task":"t-a"}` {
+		t.Fatalf("newest node log attributes: want {task t-a}, got %s", r.Logs[0].Attributes)
+	}
+	if r.Logs[1].Message != "connected to bus" || r.Logs[1].Facility != "enrollment" {
+		t.Fatalf("oldest node log: want 'connected to bus' enrollment, got %+v", r.Logs[1])
+	}
+
+	// A node is estate-wide: an all-scope viewer reads its logs (node:read). An
+	// unknown node is a 404; an unauthenticated request is a 401.
+	viewerTok := setupAllViewer(t, ctx, dsn, "viewer-node")
+	c.do(viewerTok, http.MethodGet, "/nodes/site-a/logs", nil, http.StatusOK)
+	c.do(ownerTok, http.MethodGet, "/nodes/ghost/logs", nil, http.StatusNotFound)
+	c.do("", http.MethodGet, "/nodes/site-a/logs", nil, http.StatusUnauthorized)
+}
