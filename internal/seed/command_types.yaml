@@ -1,0 +1,19 @@
+# The ship-with command_type registry (ADR-0063): the driver-owned catalog of what a
+# component can be told, the "do" half of the telemetry model. A settleable command
+# targets a property (it opens an intended value and settles when observed matches);
+# a fire-and-forget command has no target and just records the invocation.
+command_types:
+  - name: set_input
+    display_name: Set Input
+    description: >-
+      Tell a display or switcher which video input to select. A settleable command:
+      it opens an intended video.input and settles when the device reports that input
+      within the settle window.
+    target_property_type: video.input
+    settle_window_seconds: 15
+  - name: reboot
+    display_name: Reboot
+    description: >-
+      Tell a component to restart. A fire-and-forget command: it records the
+      invocation and a caused event, with no intended value to settle.
+    settle_window_seconds: 0

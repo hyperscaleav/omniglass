@@ -238,6 +238,16 @@ are the custom-type CRUD, gated `event_type:read` / `:create` / `:update` / `:de
 a 409). A registered `event_type` name is what an ingested occurrence is typed by (the log-to-event
 promotion, ADR-0063); its optional `payload_schema` is a JSON Schema fragment for the occurrence payload.
 
+**The command_type registry is the do catalog, and `:issue` is the write.** `GET /command-types` +
+`GET/POST/PATCH/DELETE /command-types[/{name}]` are the driver-owned catalog of what a component can
+be told, gated `command_type:read` / `:create` / `:update` / `:delete` on the same shape as
+`/property-types` (official types read-only, a 409). Each carries a `settle_window_seconds` and an
+optional `target_property_type` (the property a settleable command sets). `POST
+/components/{name}/commands:issue` is the AIP custom method that issues a command: it records the
+invocation, writes a caused event, and (for a settleable command) opens an intended value, returning
+the computed settlement verdict (none/pending/settled/failed). It is gated by `command:issue` and
+scope-injected through the component (an out-of-scope component is a non-disclosing 404).
+
 **The reconciliation read pivots want/told/is over the property cache.** `GET /components/{name}/reconciliation`
 returns, per declared property, the **want** (the declared value, resolved live from the
 [cascade](/architecture/variables/), never a cache row), the **told** (the `intended` value a command set),

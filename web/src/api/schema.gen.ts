@@ -340,6 +340,58 @@ export interface paths {
         patch: operations["update-capability"];
         trace?: never;
     };
+    "/command-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List command types
+         * @description Lists every registered command type (official and custom). Estate-wide reference data. Gated by command_type:read.
+         */
+        get: operations["list-command-type"];
+        put?: never;
+        /**
+         * Create a command type
+         * @description Registers a custom command type (official=false). The name must be a valid key; a target property, when set, must be registered. Gated by command_type:create.
+         */
+        post: operations["create-command-type"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/command-types/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a command type
+         * @description Returns one command type by name. Gated by command_type:read.
+         */
+        get: operations["get-command-type"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a command type
+         * @description Removes a custom command type by name. Official types are read-only. Gated by command_type:delete.
+         */
+        delete: operations["delete-command-type"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a command type
+         * @description Patches a custom command type's label, description, params schema, settle window, or target (a nil field is unchanged; an empty target clears it). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
+         */
+        patch: operations["update-command-type"];
+        trace?: never;
+    };
     "/components": {
         parameters: {
             query?: never;
@@ -475,6 +527,26 @@ export interface paths {
          * @description Removes the component's own fact about the capability, so it falls back to whatever its product declares. Clearing a fact the component never declared is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
          */
         delete: operations["clear-component-capability"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/commands:issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue a command to a component
+         * @description Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Returns the computed settlement verdict. Gated by command:issue; an out-of-scope component is a non-disclosing 404.
+         */
+        post: operations["issue-component-command"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3142,6 +3214,48 @@ export interface components {
             /** @description The node's NATS username (its node name) */
             username: string;
         };
+        CommandOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CommandOutputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description The caused event this command recorded
+             */
+            caused_event_id: number;
+            command_type: string;
+            /** Format: int64 */
+            id: number;
+            instance?: string;
+            /** @description The computed settlement verdict (none/pending/settled/failed) */
+            settlement: string;
+        };
+        CommandTypeBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CommandTypeBody.json
+             */
+            readonly $schema?: string;
+            description?: string;
+            display_name?: string;
+            /** @description The command type's uuid, the stable form of name */
+            id: string;
+            name: string;
+            official: boolean;
+            /** @description A JSON Schema fragment for the invocation params */
+            params_schema?: unknown;
+            /**
+             * Format: int64
+             * @description How long the device is given to actuate before a mismatch is a failed command
+             */
+            settle_window_seconds: number;
+            /** @description The property this command sets (empty for a fire-and-forget command) */
+            target_property_type?: string;
+        };
         ComponentBody: {
             /**
              * Format: uri
@@ -3227,6 +3341,29 @@ export interface components {
             display_name: string;
             /** @description The globally unique kebab handle; renameable */
             name: string;
+        };
+        CreateCommandTypeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateCommandTypeInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description What the command does */
+            description?: string;
+            /** @description A human label */
+            display_name?: string;
+            /** @description The command type name (lowercase, dot-hierarchied) */
+            name: string;
+            /** @description A JSON Schema fragment for the params */
+            params_schema?: unknown;
+            /**
+             * Format: int64
+             * @description The actuation window in seconds (0 = fire-and-forget)
+             */
+            settle_window_seconds?: number;
+            /** @description The property this command sets, for settlement */
+            target_property_type?: string;
         };
         CreateComponentInputBody: {
             /**
@@ -4061,6 +4198,22 @@ export interface components {
             /** @description The endpoint/target settings (jsonb) */
             params?: unknown;
         };
+        IssueCommandInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/IssueCommandInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The command_type to invoke */
+            command_type: string;
+            /** @description The series discriminator (e.g. an interface), when the target is instanced */
+            instance?: string;
+            /** @description The invocation params, stored on the command and the caused event */
+            params?: unknown;
+            /** @description The intended value for the target property (a settleable command) */
+            value?: unknown;
+        };
         Keybindings: {
             /**
              * @description Close the top blade
@@ -4101,6 +4254,15 @@ export interface components {
              */
             readonly $schema?: string;
             capabilities: components["schemas"]["CapabilityBody"][] | null;
+        };
+        ListCommandTypesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListCommandTypesOutputBody.json
+             */
+            readonly $schema?: string;
+            command_types: components["schemas"]["CommandTypeBody"][] | null;
         };
         ListComponentMembershipsOutputBody: {
             /**
@@ -5311,6 +5473,27 @@ export interface components {
             readonly $schema?: string;
             display_name?: string;
         };
+        UpdateCommandTypeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateCommandTypeInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description What the command does */
+            description?: string;
+            /** @description A human label */
+            display_name?: string;
+            /** @description A JSON Schema fragment (replaces wholesale) */
+            params_schema?: unknown;
+            /**
+             * Format: int64
+             * @description The actuation window in seconds
+             */
+            settle_window_seconds?: number;
+            /** @description The property this command sets (empty clears it) */
+            target_property_type?: string;
+        };
         UpdateComponentInputBody: {
             /**
              * Format: uri
@@ -6266,6 +6449,166 @@ export interface operations {
             };
         };
     };
+    "list-command-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListCommandTypesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-command-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCommandTypeInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-command-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The command type's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-command-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The command type's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-command-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The command type's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCommandTypeInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-components": {
         parameters: {
             query?: never;
@@ -6616,6 +6959,42 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "issue-component-command": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueCommandInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandOutputBody"];
+                };
             };
             /** @description Error */
             default: {

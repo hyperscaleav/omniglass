@@ -76,14 +76,15 @@ var reverseNameOnlyOK = map[string]bool{
 // Schemas where a *_id field addresses something with no name to pair it with.
 // Each entry is a real decision: if the target has a name, carry the name too.
 var idOnlyIsCorrect = map[string]string{
-	"resource_id":  "an audit row's target is polymorphic and may since have been deleted",
-	"value_id":     "a stored property value has no name, only the property it answers",
-	"interface_id": "an interface's name is unique only within its component",
-	"principal_id": "a principal is addressed by uuid; a username is a credential, not an address",
-	"scope_id":     "a scope root is a uuid handle on a subtree",
-	"group_id":     "a principal group is uuid-keyed",
-	"target_id":    "an impersonation target is a principal, as above",
-	"node_id":      "a node is addressed by its enrollment identity, which is its primary key",
+	"resource_id":     "an audit row's target is polymorphic and may since have been deleted",
+	"value_id":        "a stored property value has no name, only the property it answers",
+	"interface_id":    "an interface's name is unique only within its component",
+	"principal_id":    "a principal is addressed by uuid; a username is a credential, not an address",
+	"scope_id":        "a scope root is a uuid handle on a subtree",
+	"group_id":        "a principal group is uuid-keyed",
+	"target_id":       "an impersonation target is a principal, as above",
+	"node_id":         "a node is addressed by its enrollment identity, which is its primary key",
+	"caused_event_id": "an event is addressed by its bigint id; an occurrence has no name handle",
 }
 
 // References exempt from the both-forms rule, each for a reason of its own.
