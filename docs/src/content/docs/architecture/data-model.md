@@ -234,11 +234,12 @@ telemetry: {
   event: {
     shape: sql_table
     id: bigint {constraint: primary_key}
-    caused_by_event_id: bigint {constraint: foreign_key}
     component_id: uuid {constraint: foreign_key}
     event_type_id: uuid {constraint: foreign_key}
     location_id: uuid {constraint: foreign_key}
     node_id: uuid {constraint: foreign_key}
+    source_event_id: bigint {constraint: foreign_key}
+    source_log_line_id: bigint {constraint: foreign_key}
     system_id: uuid {constraint: foreign_key}
   }
   event_type: {
@@ -442,11 +443,12 @@ telemetry.command.location_id -> estate.location.id
 telemetry.command.node_id -> collection.node.principal_id
 telemetry.command.system_id -> estate.system.id
 telemetry.command_type.target_property_type_id -> telemetry.property_type.id
-telemetry.event.caused_by_event_id -> telemetry.event.id
 telemetry.event.component_id -> estate.component.id
 telemetry.event.event_type_id -> telemetry.event_type.id
 telemetry.event.location_id -> estate.location.id
 telemetry.event.node_id -> collection.node.principal_id
+telemetry.event.source_event_id -> telemetry.event.id
+telemetry.event.source_log_line_id -> telemetry.log_line.id
 telemetry.event.system_id -> estate.system.id
 telemetry.log_line.component_id -> estate.component.id
 telemetry.log_line.location_id -> estate.location.id

@@ -44,10 +44,15 @@ func TestEventTypeFamilyMigration(t *testing.T) {
 	if n, ok := col("event_type_id"); !ok || n != "NO" {
 		t.Errorf("event.event_type_id: want present and NOT NULL, got nullable=%q present=%v", n, ok)
 	}
-	for _, c := range []string{"origin", "caused_by_event_id", "correlation_id"} {
+	// The lineage columns (ADR-0066): caused_by_event_id is renamed to
+	// source_event_id, and source_log_line_id + derived_by_rule_id are added.
+	for _, c := range []string{"origin", "source_event_id", "correlation_id", "source_log_line_id", "derived_by_rule_id"} {
 		if _, ok := col(c); !ok {
 			t.Errorf("event.%s: missing after migration", c)
 		}
+	}
+	if _, ok := col("caused_by_event_id"); ok {
+		t.Error("event.caused_by_event_id should be renamed to source_event_id")
 	}
 	if _, ok := col("property_type_id"); ok {
 		t.Error("event.property_type_id should be dropped after the repoint")
