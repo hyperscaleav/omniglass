@@ -340,6 +340,12 @@ func (UnimplementedGateway) InsertEvents(context.Context, []EventOccurrence) err
 func (UnimplementedGateway) ListComponentEvents(context.Context, string, time.Time, int) ([]Event, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) InsertLogLines(context.Context, []LogLineWrite) error {
+	return nil
+}
+func (UnimplementedGateway) ListComponentLogs(context.Context, string, time.Time, int) ([]LogLine, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) CreateNode(context.Context, string, NodeSpec, scope.Set) (*Node, error) {
 	return nil, nil
 }
