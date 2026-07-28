@@ -260,6 +260,22 @@ func (UnimplementedGateway) UpsertPropertyType(context.Context, PropertyType) er
 func (UnimplementedGateway) ListPropertyTypes(context.Context) ([]PropertyType, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) UpsertEventType(context.Context, EventType) error { return nil }
+func (UnimplementedGateway) ListEventTypes(context.Context) ([]EventType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) GetEventType(context.Context, string) (*EventType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateEventType(context.Context, string, EventTypeSpec) (*EventType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateEventType(context.Context, string, string, EventTypePatch) (*EventType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteEventType(context.Context, string, string) error {
+	return nil
+}
 func (UnimplementedGateway) GetPropertyType(context.Context, string) (*PropertyType, error) {
 	return nil, nil
 }

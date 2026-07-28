@@ -1,0 +1,11 @@
+# The ship-with event_type registry (ADR-0063): the occurrence keyspace, the twin
+# of the property_type registry. An event is a discrete, semantic happening, a
+# component published it natively or a rule derived it (ADR-0066), not a sampled
+# value and not a raw log line (raw logs are a separate ingest lane).
+event_types:
+  - name: call.started
+    display_name: Call Started
+    description: >-
+      A conferencing endpoint entered an active call. A caught occurrence when the
+      device reports it natively (an xAPI event), or a derived one when a rule
+      infers it from other signals.

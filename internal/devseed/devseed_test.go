@@ -380,29 +380,29 @@ func TestRunIdempotent(t *testing.T) {
 		}
 	}
 
-	// The example event log: a handful of log occurrences on the lobby display, so
-	// the console's event-log panel comes up populated. The count is over two Runs, so
-	// a duplicate here is the seed failing to be idempotent (the event table has an
-	// auto id and no natural unique key, so only the sentinel guard keeps a re-run a
-	// no-op).
+	// The example events: a handful of native call.started occurrences on a boardroom
+	// video bar, so the console's event panel comes up populated. The count is over two
+	// Runs, so a duplicate here is the seed failing to be idempotent (the event table
+	// has an auto id and no natural unique key, so only the sentinel guard keeps a re-run
+	// a no-op).
 	var events int
-	if err := conn.QueryRow(ctx, `select count(*) from event where component_id = (select id from component where name = 'lobby-display')`).Scan(&events); err != nil {
-		t.Fatalf("count lobby-display events: %v", err)
+	if err := conn.QueryRow(ctx, `select count(*) from event where component_id = (select id from component where name = 'boardroom-a-bar')`).Scan(&events); err != nil {
+		t.Fatalf("count boardroom-a-bar events: %v", err)
 	}
-	if events != 6 {
-		t.Errorf("lobby-display events = %d, want 6 (seed not idempotent or incomplete)", events)
+	if events != 4 {
+		t.Errorf("boardroom-a-bar events = %d, want 4 (seed not idempotent or incomplete)", events)
 	}
-	// One occurrence carries a structured attributes payload (the switched input); the
-	// rest are plain messages. Provenance is stamped observed by the insert.
+	// Two occurrences carry a structured attributes payload (the call's peer and
+	// protocol); the rest are plain messages. Provenance is stamped observed by the insert.
 	var withAttrs int
 	if err := conn.QueryRow(ctx, `
 		select count(*) from event
-		where component_id = (select id from component where name = 'lobby-display')
+		where component_id = (select id from component where name = 'boardroom-a-bar')
 		  and attributes is not null and provenance = 'observed'`).Scan(&withAttrs); err != nil {
-		t.Fatalf("count lobby-display events with attributes: %v", err)
+		t.Fatalf("count boardroom-a-bar events with attributes: %v", err)
 	}
-	if withAttrs != 1 {
-		t.Errorf("lobby-display events with attributes = %d, want 1", withAttrs)
+	if withAttrs != 2 {
+		t.Errorf("boardroom-a-bar events with attributes = %d, want 2", withAttrs)
 	}
 }
 

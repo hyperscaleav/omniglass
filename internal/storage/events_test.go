@@ -36,8 +36,8 @@ func TestInsertEvents(t *testing.T) {
 
 	now := time.Now().UTC()
 	err = gw.InsertEvents(ctx, []storage.EventOccurrence{
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "syslog.line", Instance: "disp-1-ssh", Message: "link down", Source: "ssh", TS: now.Add(-2 * time.Minute)},
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "syslog.line", Instance: "disp-1-ssh", Message: "link up", Attributes: []byte(`{"iface":"eth0"}`), Source: "ssh", TS: now},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "call.started", Message: "call started", Source: "xapi", TS: now.Add(-2 * time.Minute)},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "call.started", Message: "call joined by 4 participants", Attributes: []byte(`{"peer":"room-204","protocol":"sip"}`), Source: "xapi", TS: now},
 	})
 	if err != nil {
 		t.Fatalf("insert events: %v", err)
@@ -50,12 +50,13 @@ func TestInsertEvents(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("list events: want 2, got %d", len(got))
 	}
-	// Newest first: the "link up" occurrence with its json attributes.
-	if got[0].Message != "link up" || got[0].Provenance != "observed" || string(got[0].Attributes) != `{"iface": "eth0"}` {
-		t.Fatalf("newest event: want 'link up' observed with attributes, got %+v", got[0])
+	// Newest first: the "call joined by 4 participants" occurrence with its json attributes, defaulted to
+	// the caught origin (a component-observed occurrence).
+	if got[0].Message != "call joined by 4 participants" || got[0].Provenance != "observed" || got[0].Origin != "caught" || string(got[0].Attributes) != `{"peer": "room-204", "protocol": "sip"}` {
+		t.Fatalf("newest event: want 'call joined by 4 participants' observed/caught with attributes, got %+v", got[0])
 	}
-	if got[1].Message != "link down" {
-		t.Fatalf("oldest event: want 'link down', got %q", got[1].Message)
+	if got[1].Message != "call started" {
+		t.Fatalf("oldest event: want 'call started', got %q", got[1].Message)
 	}
 
 	// The since window excludes the older occurrence.
@@ -63,13 +64,13 @@ func TestInsertEvents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list windowed events: %v", err)
 	}
-	if len(windowed) != 1 || windowed[0].Message != "link up" {
-		t.Fatalf("windowed events: want only 'link up', got %+v", windowed)
+	if len(windowed) != 1 || windowed[0].Message != "call joined by 4 participants" {
+		t.Fatalf("windowed events: want only 'call joined by 4 participants', got %+v", windowed)
 	}
 
 	// An owner component that does not exist violates the component FK.
 	err = gw.InsertEvents(ctx, []storage.EventOccurrence{
-		{OwnerKind: "component", OwnerID: "ghost", Key: "syslog.line", Message: "x", TS: now},
+		{OwnerKind: "component", OwnerID: "ghost", Key: "call.started", Message: "x", TS: now},
 	})
 	if err == nil {
 		t.Fatal("insert with unknown owner: want error, got nil")

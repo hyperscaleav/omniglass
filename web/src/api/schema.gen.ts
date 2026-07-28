@@ -796,6 +796,58 @@ export interface paths {
         patch: operations["update-driver"];
         trace?: never;
     };
+    "/event-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List event types
+         * @description Lists every registered event type (official and custom). The catalog is estate-wide reference data. Gated by event_type:read.
+         */
+        get: operations["list-event-type"];
+        put?: never;
+        /**
+         * Create an event type
+         * @description Registers a custom event type (official=false). The name must be a valid event key. Gated by event_type:create.
+         */
+        post: operations["create-event-type"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/event-types/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get an event type
+         * @description Returns one event type by name. Gated by event_type:read.
+         */
+        get: operations["get-event-type"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete an event type
+         * @description Removes a custom event type by name. Official event types are read-only. Gated by event_type:delete.
+         */
+        delete: operations["delete-event-type"];
+        options?: never;
+        head?: never;
+        /**
+         * Update an event type
+         * @description Patches a custom event type's label, description, or payload schema (a nil field is unchanged). The name is fixed at creation. Official event types are read-only. Gated by event_type:update.
+         */
+        patch: operations["update-event-type"];
+        trace?: never;
+    };
     "/files": {
         parameters: {
             query?: never;
@@ -3207,6 +3259,22 @@ export interface components {
             name: string;
             version?: string;
         };
+        CreateEventTypeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateEventTypeInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description What the occurrence means */
+            description?: string;
+            /** @description A human label */
+            display_name?: string;
+            /** @description The event type name (lowercase, dot-hierarchied) */
+            name: string;
+            /** @description A JSON Schema fragment for the payload */
+            payload_schema?: unknown;
+        };
         CreateFileInputBody: {
             /**
              * Format: uri
@@ -3762,23 +3830,41 @@ export interface components {
         EventBody: {
             /** @description Structured attributes, when the occurrence carried a JSON payload */
             attributes?: unknown;
+            /** @description The event_type's uuid, the stable form of key */
+            event_type_id: string;
             /** @description The series discriminator (e.g. the interface), when set */
             instance?: string;
-            /** @description The property name of the log (e.g. syslog.line) */
+            /** @description The event_type name of the occurrence (e.g. call.started) */
             key: string;
             /** @description The occurrence message */
             message: string;
-            /** @description The property's uuid, the stable form of key */
-            property_type_id: string;
+            /** @description How the occurrence arrived (caught/caused/derived/scheduled) */
+            origin: string;
             /** @description The lineage of the occurrence (observed for direct collection) */
             provenance: string;
             /** @description The interface type that produced the occurrence */
             source?: string;
             /**
              * Format: date-time
-             * @description When the occurrence was observed
+             * @description When the occurrence happened
              */
             ts: string;
+        };
+        EventTypeBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EventTypeBody.json
+             */
+            readonly $schema?: string;
+            description?: string;
+            display_name?: string;
+            /** @description The event type's uuid, the stable form of name */
+            id: string;
+            name: string;
+            official: boolean;
+            /** @description A JSON Schema fragment for the occurrence payload */
+            payload_schema?: unknown;
         };
         EventsOutputBody: {
             /**
@@ -4043,6 +4129,15 @@ export interface components {
              */
             readonly $schema?: string;
             drivers: components["schemas"]["DriverBody"][] | null;
+        };
+        ListEventTypesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListEventTypesOutputBody.json
+             */
+            readonly $schema?: string;
+            event_types: components["schemas"]["EventTypeBody"][] | null;
         };
         ListFilesOutputBody: {
             /**
@@ -5242,6 +5337,20 @@ export interface components {
             readonly $schema?: string;
             display_name?: string;
             version?: string;
+        };
+        UpdateEventTypeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateEventTypeInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description What the occurrence means */
+            description?: string;
+            /** @description A human label */
+            display_name?: string;
+            /** @description A JSON Schema fragment (replaces wholesale) */
+            payload_schema?: unknown;
         };
         UpdateGroupInputBody: {
             /**
@@ -7129,6 +7238,166 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DriverBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-event-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListEventTypesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-event-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateEventTypeInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-event-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The event type's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-event-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The event type's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-event-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The event type's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateEventTypeInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventTypeBody"];
                 };
             };
             /** @description Error */

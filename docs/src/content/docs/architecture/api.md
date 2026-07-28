@@ -222,13 +222,21 @@ views](#reads-beyond-one-resource-are-views), standing in until the `ViewResult`
 
 **The event read is the log-kind mirror of the reachability read.** `GET /components/{name}/events` returns
 the component's recent **log occurrences** (the [`event` log sink](/architecture/core-entities/#the-event-sink-the-first-arc-owned-occurrence)),
-newest first, bounded to the last 24 hours and capped at 200 rows. Each row carries its `ts`, the property
-`key` (e.g. `syslog.line`), the `instance` discriminator, the `message`, optional structured `attributes`,
-its `provenance` (`observed` for direct collection), and the `source` interface type. It is gated by
+newest first, bounded to the last 24 hours and capped at 200 rows. Each row carries its `ts`, the
+`event_type` `key` (e.g. `call.started`), the `origin` (caught/caused/derived/scheduled, how the occurrence
+arrived), the `instance` discriminator, the `message`, optional structured `attributes`, its `provenance`
+(`observed` for direct collection), and the `source` interface type. It is gated by
 `component:read` and scope-injected through the same `GetComponent` gate as the reachability read, so an
 out-of-scope component is the same non-disclosing 404 and the event read only ever runs on a verified,
 in-scope component. Like reachability, it is a hand-written typed `GET` standing in until the `ViewResult`
 framework lands.
+
+**The event_type registry is the occurrence keyspace, the twin of the property catalog.** `GET /event-types`
+lists the registered occurrence types (official and custom), and `GET/POST/PATCH/DELETE /event-types[/{name}]`
+are the custom-type CRUD, gated `event_type:read` / `:create` / `:update` / `:delete` on the same shape as
+`/property-types` (estate-wide reference data, no scope injection; official seed-owned types are read-only,
+a 409). A registered `event_type` name is what an ingested occurrence is typed by (the log-to-event
+promotion, ADR-0063); its optional `payload_schema` is a JSON Schema fragment for the occurrence payload.
 
 **The reconciliation read pivots want/told/is over the property cache.** `GET /components/{name}/reconciliation`
 returns, per declared property, the **want** (the declared value, resolved live from the

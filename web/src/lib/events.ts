@@ -2,9 +2,9 @@ import { api } from "../api/client";
 import type { components } from "../api/schema.gen";
 
 // The events data layer: a thin typed wrapper over the generated client for a
-// component's recent log-kind observations. Where reachability samples a value on
-// a cadence (a metric or a state), the event sink collects discrete occurrences:
-// syslog lines, traps, and the like, each a message stamped when it happened. The
+// component's recent events. Where reachability samples a value on a cadence (a
+// metric or a state), the event sink collects discrete occurrences a component
+// published natively or a rule derived, each a message stamped when it happened. The
 // API returns them newest first (last 24 hours, capped), so this layer is pure I/O
 // over the generated client and unit-testable against a mocked fetch. Shapes follow
 // the OpenAPI (see api/events.go); the row type is the generated EventBody, never

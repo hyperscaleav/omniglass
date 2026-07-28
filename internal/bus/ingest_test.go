@@ -239,6 +239,18 @@ func TestTelemetryRoundTrip(t *testing.T) {
 		t.Fatalf("state confinement breached: node-a landed a verdict on disp-2: %+v", got)
 	}
 
+	// NATIVE CAUGHT EVENT (ADR-0066): a component publishes an event natively (a
+	// call.started, a seeded event_type) and it lands as a caught event on its
+	// component, routed by the event registry under the same owner confinement and
+	// reject-not-project as a metric or state. Raw logs are a separate lane, not this.
+	publishEvent(t, ncA, "node-a", &ogv1.Event{
+		TaskId: "t-a", NodeId: "node-a",
+		Datapoints: []*ogv1.Datapoint{{Name: "call.started", Value: &ogv1.Datapoint_StringValue{StringValue: "call started"}}},
+	})
+	waitEvent(t, ctx, gw, "disp-1", func(e storage.Event) bool {
+		return e.Message == "call started" && e.Origin == "caught" && e.Key == "call.started"
+	})
+
 	// Telemetry publish isolation: node-a cannot publish to node-b's telemetry
 	// subject (a permissions violation), the same fence as worklist/heartbeat.
 	if err := ncA.Publish(collection.TelemetrySubject("node-b"), []byte("x")); err != nil {
@@ -247,6 +259,28 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	_ = ncA.Flush()
 	if !awaitPermissionViolation(permErrs, 3*time.Second) {
 		t.Fatalf("expected a permissions violation publishing to node-b's telemetry subject")
+	}
+}
+
+// waitEvent polls a component's recent events until one matches pred, or a
+// deadline passes. The ingest path writes a caught event; this reads it back.
+func waitEvent(t *testing.T, ctx context.Context, gw storage.Gateway, comp string, pred func(storage.Event) bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		evs, err := gw.ListComponentEvents(ctx, comp, time.Now().Add(-time.Hour), 50)
+		if err != nil {
+			t.Fatalf("list events %s: %v", comp, err)
+		}
+		for _, e := range evs {
+			if pred(e) {
+				return
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no event on %s matched the predicate (got %d)", comp, len(evs))
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 }
 

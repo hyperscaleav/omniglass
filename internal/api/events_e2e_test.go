@@ -67,8 +67,8 @@ func TestEventsAPI(t *testing.T) {
 	t0 := time.Now().UTC().Add(-2 * time.Minute)
 	t1 := t0.Add(time.Minute)
 	if err := gw.InsertEvents(ctx, []storage.EventOccurrence{
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "syslog.line", Instance: "disp-1-ssh", Message: "link down", Source: "ssh", TS: t0},
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "syslog.line", Instance: "disp-1-ssh", Message: "link up", Attributes: []byte(`{"iface":"eth0"}`), Source: "ssh", TS: t1},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "call.started", Message: "call started", Source: "xapi", TS: t0},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "call.started", Message: "call joined by 4 participants", Attributes: []byte(`{"peer":"room-204","protocol":"sip"}`), Source: "xapi", TS: t1},
 	}); err != nil {
 		t.Fatalf("insert events: %v", err)
 	}
@@ -85,18 +85,18 @@ func TestEventsAPI(t *testing.T) {
 	if r.Component != "disp-1" || len(r.Events) != 2 {
 		t.Fatalf("events: want disp-1 with 2 events, got %+v", r)
 	}
-	// Newest first: "link up" with its structured attributes, observed provenance.
-	if r.Events[0].Message != "link up" || r.Events[0].Key != "syslog.line" ||
-		r.Events[0].Provenance != "observed" || r.Events[0].Source != "ssh" {
-		t.Fatalf("newest event: want 'link up' syslog.line observed, got %+v", r.Events[0])
+	// Newest first: "call joined by 4 participants" with its structured attributes, observed provenance.
+	if r.Events[0].Message != "call joined by 4 participants" || r.Events[0].Key != "call.started" ||
+		r.Events[0].Provenance != "observed" || r.Events[0].Source != "xapi" {
+		t.Fatalf("newest event: want 'call joined by 4 participants' call.started observed, got %+v", r.Events[0])
 	}
 	// The wire form is JSON-compacted (encoding/json compacts a RawMessage), unlike
 	// the DB's jsonb normalization which inserts a space after the colon.
-	if string(r.Events[0].Attributes) != `{"iface":"eth0"}` {
-		t.Fatalf("newest event attributes: want {iface eth0}, got %s", r.Events[0].Attributes)
+	if string(r.Events[0].Attributes) != `{"peer":"room-204","protocol":"sip"}` {
+		t.Fatalf("newest event attributes: want {peer room-204}, got %s", r.Events[0].Attributes)
 	}
-	if r.Events[1].Message != "link down" {
-		t.Fatalf("oldest event: want 'link down', got %q", r.Events[1].Message)
+	if r.Events[1].Message != "call started" {
+		t.Fatalf("oldest event: want 'call started', got %q", r.Events[1].Message)
 	}
 
 	// A viewer scoped to a different component (out of scope on disp-1) gets a

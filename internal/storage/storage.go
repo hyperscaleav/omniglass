@@ -300,6 +300,16 @@ type Gateway interface {
 	UpsertInterfaceType(ctx context.Context, it InterfaceType) error
 	ListInterfaceTypes(ctx context.Context) ([]InterfaceType, error)
 
+	// The event_type registry (ADR-0063 #395): the occurrence keyspace, the twin of
+	// property_type. Seeded official and operator-extensible; a registered event_type
+	// name routes an occurrence to the event sink.
+	UpsertEventType(ctx context.Context, et EventType) error
+	ListEventTypes(ctx context.Context) ([]EventType, error)
+	GetEventType(ctx context.Context, name string) (*EventType, error)
+	CreateEventType(ctx context.Context, actorID string, spec EventTypeSpec) (*EventType, error)
+	UpdateEventType(ctx context.Context, actorID, name string, patch EventTypePatch) (*EventType, error)
+	DeleteEventType(ctx context.Context, actorID, name string) error
+
 	// The observed-metric sink. reject-not-project is applied by the caller
 	// (collection.Registry) before the write.
 	InsertMetricDatapoints(ctx context.Context, evs []MetricDatapointEvent) error

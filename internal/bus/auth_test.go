@@ -47,6 +47,9 @@ func (f fakeStore) InsertEvents(context.Context, []storage.EventOccurrence) erro
 func (f fakeStore) UpsertProperties(context.Context, []storage.PropertyUpsert) error {
 	return nil
 }
+func (f fakeStore) ListEventTypes(context.Context) ([]storage.EventType, error) {
+	return nil, nil
+}
 
 // fakeClientAuth is a minimal server.ClientAuthentication that carries the
 // presented options and captures the RegisterUser call.
