@@ -1470,7 +1470,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   `/components/{name}/events` HTTP e2e (the newest-first window and the out-of-scope 404). With metric, state,
   **and** log all flowing, this is the **P1 follow-up** of the estate-model roadmap
   ([ADR-0046](/architecture/decisions/#adr-0046-the-event-log-kind-sink)); the
-  [datapoints](/architecture/datapoints/) and [data collection](/architecture/collection/) pages stay `Partial`
+  [datapoints](/architecture/properties/) and [data collection](/architecture/collection/) pages stay `Partial`
   (the `log_datapoint` table, the `event_type` registry, and log-to-event promotion are still `Design`).
 - **The fields fold: the product contract and the property value store.** The standalone **fields** feature
   **retires**: a field was never a primitive, it was a **property with `declared` provenance**. Two tables take
@@ -2060,7 +2060,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   computed on read; a read-only Reconciliation panel on the component detail teaches the pivot. Only
   `observed` has a live producer today; `intended` (the command pillar) and `calculated` (the calc engine)
   are tested cache slots. One additive migration adds the value's own `ts` to `property`. The
-  [datapoints](/architecture/datapoints/) and [config, secrets, and variables](/architecture/variables/)
+  [datapoints](/architecture/properties/) and [config, secrets, and variables](/architecture/variables/)
   pages stay `Partial` (the cache and reconciliation are built; the intended/calculated producers,
   log-to-event, calc, and fusion remain). Part of
   [#394](https://github.com/hyperscaleav/omniglass/issues/394).
@@ -2080,7 +2080,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   the `log_line` table and the derivation rules that turn a log line into an event are a later slice. Only
   the caught path has a producer today; `caused` is the command pillar (#396) and `derived`/`scheduled` need
   the rule engine and the clock (the action layer).
-  [events](/architecture/events/) advances `Design` to **`Partial`**; [datapoints](/architecture/datapoints/)
+  [events](/architecture/events/) advances `Design` to **`Partial`**; [datapoints](/architecture/properties/)
   notes the `log` kind's graduation. Part of
   [#395](https://github.com/hyperscaleav/omniglass/issues/395).
 - **The command pillar lands: the do primitive and computed settlement ([ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables), third and final slice).**
@@ -2099,3 +2099,4 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   actuation half): the outbound push to a driver or node, the protobuf `Command` on the wire, and the
   device acknowledgement. A new [commands](/architecture/commands/) page lands at `Partial`. Part of
   [#396](https://github.com/hyperscaleav/omniglass/issues/396).
+- **The datapoint concept retires for property, sample, and current value ([ADR-0065](/architecture/decisions/#adr-0065-property-sample-and-current-value-replace-the-datapoint)).** The one word "datapoint" split the signal from the observation: a **property** is the signal (registry `property_type`), a **sample** is one timestamped observation of it (a `metric` / `state` row, the kind), and the **current value** is the latest sample per series (the `property` cache). A behavior-preserving rename, no tables touched: the proto `Datapoint` message becomes `Sample`, the metric and state datapoint Go types become `*Sample`, `deriveDatapoints` becomes `deriveSamples`, and the value-model page is now [properties](/architecture/properties/) (redirect from the old slug), which carries the current-value cache and want/told/is reconciliation explainer. The ADR also settles that the built `property` cache, a table upserted from the sink rather than the once-sketched metric view, is the architecture-of-record for current values. Part of [#405](https://github.com/hyperscaleav/omniglass/issues/405).

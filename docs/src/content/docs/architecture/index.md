@@ -77,11 +77,11 @@ How to reach a class of device, and what to read from it, is declared once in th
 **template**, the reusable device shape. The node runs that and, crucially, **parses the answer
 right there at the edge**, turning a vendor's raw response into a normalized reading on the spot.
 
-That normalized reading is a **datapoint**.
+That normalized reading is a **sample**.
 
-## The datapoint
+## The sample
 
-A **[datapoint](/architecture/datapoints/)** is one value of one **canonical signal** (`power.state`,
+A **[sample](/architecture/properties/)** is one value of one **canonical signal** (`power.state`,
 `audio.level`), owned by exactly one entity through the **exclusive arc**: one owner, a component or
 a system or a location, never more than one. It carries a **provenance** (how we know it: **observed**
 from the device, **calculated** by Omniglass, or **intended** by a command we sent) and a **source**
@@ -105,7 +105,7 @@ a fix you can push back.
 
 ## Detect
 
-An **[event_rule](/architecture/alarms-actions/)** watches a datapoint and fires when its condition
+An **[event_rule](/architecture/alarms-actions/)** watches a sample and fires when its condition
 is met, recording an **event**: our assertion, in our own words, that something happened. Pair a fire
 with a clear and the two events open and resolve an **alarm**, the stateful incident, one row per
 occurrence, the thing an operator works and a ticket binds to. An alarm names the **capabilities it
@@ -114,7 +114,7 @@ degrades**, which is what turns a detection into a verdict on the system.
 ## Model health
 
 A single alarm is rarely the point. The headline is **[health](/architecture/health/)**: a verdict on
-the **system**, carried as a calculated datapoint. The chain is one hop per question: an alarm degrades
+the **system**, carried as a calculated sample. The chain is one hop per question: an alarm degrades
 a **capability**, so the component that had it no longer **satisfies** the **role** it was filling; a
 role below its **quorum** is impaired and contributes its declared **impact** (outage, degraded, or
 none); the system takes the worst contribution, and a location the worst of its systems. That is the
@@ -132,7 +132,7 @@ against half of it.
 
 An **action_rule** subscribes to events and alarms and runs an **[action](/architecture/alarms-actions/)**.
 An action can be one step (notify the right person) or many (remediate, wait, re-check the real
-datapoint, escalate if it did not take; or open and close a ticket as the alarm opens and clears).
+sample, escalate if it did not take; or open and close a ticket as the alarm opens and clears).
 The loop closes where it started, at the gear.
 
 ## See it
@@ -156,7 +156,7 @@ classes: {
 }
 
 gear: gear { class: node }
-datapoint: "datapoint\ncanonical signal" { class: key }
+sample: "sample\ncanonical signal" { class: key }
 event: event { class: node }
 alarm: alarm { class: node }
 health: "health\nrolls up the system" { class: node }
@@ -164,14 +164,14 @@ action: "action\nnotify · remediate · ticket" { class: node }
 config: "config\ndeclared" { class: node }
 views: "views → console" { class: node }
 
-gear -> datapoint: collect (node + edge parse)
-datapoint -> event: event_rule
+gear -> sample: collect (node + edge parse)
+sample -> event: event_rule
 event -> alarm: fire / clear
 alarm -> health: degrades a capability
 alarm -> action: action_rule
 action -> gear: command { style.stroke-dash: 4 }
-config -- datapoint: drift { style.stroke-dash: 4 }
-datapoint -> views
+config -- sample: drift { style.stroke-dash: 4 }
+sample -> views
 alarm -> views
 health -> views
 ```
@@ -193,7 +193,7 @@ The journey rides on a few foundations, named once:
   modes, deployed as one container for a small estate or scaled out on Kubernetes with a distributed
   edge. One binary is the packaging, not a scale ceiling.
 
-Datapoints are parsed and emitted at the edge, so they are not re-derived from a raw store. Raw
+Samples are parsed and emitted at the edge, so they are not re-derived from a raw store. Raw
 payloads are a debugging aid (a raw mode you turn on while developing, plus failure logging on
 collection); how much of that to persist, and for how long, is still being settled.
 
@@ -201,7 +201,7 @@ collection); how much of that to persist, and for how long, is still being settl
 
 A handful of patterns hold everywhere, and they are why the model stays coherent:
 
-- **Exclusive-arc ownership**: every datapoint, event, and alarm names exactly one owner (component,
+- **Exclusive-arc ownership**: every sample, event, and alarm names exactly one owner (component,
   system, location, node, or global), so system- and location-level signals are first-class.
 - **Immutable template versions**: an instance pins a frozen template version (or tracks `latest`);
   editing mints a new version; re-pointing is explicit.

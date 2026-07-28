@@ -35,7 +35,7 @@ const (
 // deletes it the instant it is acked, so disk stays bounded to the current
 // backlog rather than growing forever; the consumer redelivers a transient
 // failure up to maxTelemetryDeliveries (nakOrTerm), so a DB hiccup never loses a
-// datapoint but a permanently-failing one still leaves the queue.
+// sample but a permanently-failing one still leaves the queue.
 func (s *Server) startTelemetryConsumer() error {
 	js, err := jetstream.New(s.nc)
 	if err != nil {
@@ -69,7 +69,7 @@ func (s *Server) startTelemetryConsumer() error {
 
 // handleTelemetry is the ingest handler for one telemetry Event: decode, bind +
 // confine the owner, apply reject-not-project, write the surviving typed
-// datapoints, and ack. The ack discipline is deliberate: a permanent condition
+// samples, and ack. The ack discipline is deliberate: a permanent condition
 // (undecodable payload, or an orphan the confinement fence drops) is terminated /
 // acked so it is not redelivered; only a transient failure (DB, registry read) is
 // left for nakOrTerm, which redelivers (Nak) up to maxTelemetryDeliveries and then
@@ -89,7 +89,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 
 	// Owner + confinement: the owner is the task's interface component, and the
 	// task must belong to THIS node. A task on another node, an unknown task, or a
-	// shared interface resolves to !ok: the datapoint is an orphan, dropped (acked
+	// shared interface resolves to !ok: the sample is an orphan, dropped (acked
 	// so it is not redelivered), never written for a component the node was not
 	// placed on.
 	owner, ok, err := s.store.ResolveTaskOwner(ctx, ev.GetTaskId(), node)
@@ -125,9 +125,9 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	// metric and event have no uniqueness key, so that double-inserts. This
 	// is a pre-existing multi-tx-then-ack characteristic (adding the event write only
 	// widens the window); atomic-or-idempotent ingest is tracked separately.
-	metrics, states, events := deriveDatapoints(&ev, owner, reg)
+	metrics, states, events := deriveSamples(&ev, owner, reg)
 	if len(metrics) > 0 {
-		if err := s.store.InsertMetricDatapoints(ctx, metrics); err != nil {
+		if err := s.store.InsertMetricSamples(ctx, metrics); err != nil {
 			s.nakOrTerm(msg) // DB write failed: redeliver (bounded)
 			return
 		}
@@ -148,7 +148,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 		return
 	}
 	if len(fresh) > 0 {
-		if err := s.store.InsertStateDatapoints(ctx, fresh); err != nil {
+		if err := s.store.InsertStateSamples(ctx, fresh); err != nil {
 			s.nakOrTerm(msg) // DB write failed: redeliver (bounded)
 			return
 		}
@@ -171,7 +171,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 // provenance observed, the metric's number and the state's string encoded as the
 // jsonb value the cache stores. Pure: no I/O. Events are occurrences, not values,
 // so they never enter the value cache.
-func latestUpserts(metrics []storage.MetricDatapointEvent, states []storage.StateDatapointEvent) []storage.PropertyUpsert {
+func latestUpserts(metrics []storage.MetricSampleEvent, states []storage.StateSampleEvent) []storage.PropertyUpsert {
 	ups := make([]storage.PropertyUpsert, 0, len(metrics)+len(states))
 	for _, m := range metrics {
 		v, err := json.Marshal(m.Value)
@@ -232,11 +232,11 @@ func (s *Server) nakOrTerm(msg jetstream.Msg) {
 // identical in-flight duplicates could both read an older latest and both
 // insert. Keep dispatch serial, or move the transition check into the insert (a
 // conditional write) before parallelizing.
-func (s *Server) dedupeStates(ctx context.Context, states []storage.StateDatapointEvent) ([]storage.StateDatapointEvent, error) {
+func (s *Server) dedupeStates(ctx context.Context, states []storage.StateSampleEvent) ([]storage.StateSampleEvent, error) {
 	if len(states) == 0 {
 		return nil, nil
 	}
-	fresh := make([]storage.StateDatapointEvent, 0, len(states))
+	fresh := make([]storage.StateSampleEvent, 0, len(states))
 	for _, ev := range states {
 		latest, err := s.store.LatestState(ctx, ev.OwnerID, ev.Key, ev.Instance)
 		if err != nil {
@@ -250,18 +250,18 @@ func (s *Server) dedupeStates(ctx context.Context, states []storage.StateDatapoi
 	return fresh, nil
 }
 
-// deriveDatapoints turns a decoded Event + its resolved owner into the typed rows
-// to persist, split by datapoint kind. Pure: no I/O. reject-not-project drops any
-// datapoint whose name is not a registered datapoint_type; the registry kind then
+// deriveSamples turns a decoded Event + its resolved owner into the typed rows
+// to persist, split by sample kind. Pure: no I/O. reject-not-project drops any
+// sample whose name is not a registered property_type; the registry kind then
 // routes a metric to the metric slice, a state to the state slice, and a log to the
 // event slice. The owner is stamped identically for all three from the task's
 // interface: owner_kind=component, source=interface type, instance=interface name;
 // provenance is observed (the insert path fixes that).
-func deriveDatapoints(ev *ogv1.Event, owner storage.TaskOwner, reg collection.Registry) ([]storage.MetricDatapointEvent, []storage.StateDatapointEvent, []storage.EventOccurrence) {
-	var metrics []storage.MetricDatapointEvent
-	var states []storage.StateDatapointEvent
+func deriveSamples(ev *ogv1.Event, owner storage.TaskOwner, reg collection.Registry) ([]storage.MetricSampleEvent, []storage.StateSampleEvent, []storage.EventOccurrence) {
+	var metrics []storage.MetricSampleEvent
+	var states []storage.StateSampleEvent
 	var events []storage.EventOccurrence
-	for _, dp := range ev.GetDatapoints() {
+	for _, dp := range ev.GetSamples() {
 		kind, ok := reg.Allows(dp.GetName())
 		if !ok {
 			continue // reject-not-project: unregistered name
@@ -272,28 +272,28 @@ func deriveDatapoints(ev *ogv1.Event, owner storage.TaskOwner, reg collection.Re
 			if !ok {
 				continue
 			}
-			metrics = append(metrics, storage.MetricDatapointEvent{
+			metrics = append(metrics, storage.MetricSampleEvent{
 				OwnerKind: "component",
 				OwnerID:   owner.Component,
 				Key:       dp.GetName(),
 				Instance:  owner.InterfaceName,
 				Value:     val,
 				Source:    owner.InterfaceType,
-				TS:        datapointTime(ev, dp),
+				TS:        sampleTime(ev, dp),
 			})
 		case "state":
 			val, ok := stringValue(dp)
 			if !ok {
 				continue
 			}
-			states = append(states, storage.StateDatapointEvent{
+			states = append(states, storage.StateSampleEvent{
 				OwnerKind: "component",
 				OwnerID:   owner.Component,
 				Key:       dp.GetName(),
 				Instance:  owner.InterfaceName,
 				Value:     val,
 				Source:    owner.InterfaceType,
-				TS:        datapointTime(ev, dp),
+				TS:        sampleTime(ev, dp),
 			})
 		case "event":
 			msg, attrs, ok := logValue(dp)
@@ -312,54 +312,54 @@ func deriveDatapoints(ev *ogv1.Event, owner storage.TaskOwner, reg collection.Re
 				Message:    msg,
 				Attributes: attrs,
 				Source:     owner.InterfaceType,
-				TS:         datapointTime(ev, dp),
+				TS:         sampleTime(ev, dp),
 			})
 		}
 	}
 	return metrics, states, events
 }
 
-// numericValue extracts a metric's float value from the datapoint's typed oneof.
+// numericValue extracts a metric's float value from the sample's typed oneof.
 // A metric rides double_value (or int_value); a string/json/empty value is not a
 // metric and yields ok=false (the caller skips it).
-func numericValue(dp *ogv1.Datapoint) (float64, bool) {
+func numericValue(dp *ogv1.Sample) (float64, bool) {
 	switch v := dp.GetValue().(type) {
-	case *ogv1.Datapoint_DoubleValue:
+	case *ogv1.Sample_DoubleValue:
 		return v.DoubleValue, true
-	case *ogv1.Datapoint_IntValue:
+	case *ogv1.Sample_IntValue:
 		return float64(v.IntValue), true
 	default:
 		return 0, false
 	}
 }
 
-// stringValue extracts a state's categorical value from the datapoint's typed
+// stringValue extracts a state's categorical value from the sample's typed
 // oneof. A state rides string_value; a numeric/json/empty value is not a state
 // verdict and yields ok=false (the caller skips it).
-func stringValue(dp *ogv1.Datapoint) (string, bool) {
-	if v, ok := dp.GetValue().(*ogv1.Datapoint_StringValue); ok {
+func stringValue(dp *ogv1.Sample) (string, bool) {
+	if v, ok := dp.GetValue().(*ogv1.Sample_StringValue); ok {
 		return v.StringValue, true
 	}
 	return "", false
 }
 
-// logValue extracts a log occurrence's payload from the datapoint's typed oneof.
+// logValue extracts a log occurrence's payload from the sample's typed oneof.
 // A log rides string_value (its message) or json_value (structured attributes); a
 // numeric/empty value is not a log and yields ok=false (the caller skips it).
-func logValue(dp *ogv1.Datapoint) (string, []byte, bool) {
+func logValue(dp *ogv1.Sample) (string, []byte, bool) {
 	switch v := dp.GetValue().(type) {
-	case *ogv1.Datapoint_StringValue:
+	case *ogv1.Sample_StringValue:
 		return v.StringValue, nil, true
-	case *ogv1.Datapoint_JsonValue:
+	case *ogv1.Sample_JsonValue:
 		return "", v.JsonValue, true
 	default:
 		return "", nil, false
 	}
 }
 
-// datapointTime resolves the timestamp for one datapoint: its own ts if set, else
+// sampleTime resolves the timestamp for one sample: its own ts if set, else
 // the event batch ts, else zero (the insert path then defaults to now).
-func datapointTime(ev *ogv1.Event, dp *ogv1.Datapoint) time.Time {
+func sampleTime(ev *ogv1.Event, dp *ogv1.Sample) time.Time {
 	if dp.GetTs() != nil {
 		return dp.GetTs().AsTime()
 	}

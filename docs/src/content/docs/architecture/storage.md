@@ -14,8 +14,10 @@ patterns every other leaf's entities land on, not a per-table column dump.
 Built today: the Storage Gateway as the only door to the database, dbmate migrations (run-once,
 embedded, idempotent), the per-action scope predicate and the in-transaction `audit_log` write, and the
 shared scoped-tree and scoped-CRUD primitives. Still `Design`: the CDC publisher and persistence
-consumer, the data-lane / record-lane split, partitioning and tiering, the `current_value` views, and
-the go-jet typed query builder. See [implementation status](/architecture/status/).
+consumer, the data-lane / record-lane split, partitioning and tiering, and
+the go-jet typed query builder. The `property` current-value cache is built, a table upserted from
+the sink, not the metric-view once sketched here ([properties](/architecture/properties/#the-current-value-cache)).
+See [implementation status](/architecture/status/).
 :::
 
 Postgres is the **relational system of record**: it holds the entities, events, alarms, actions,
@@ -24,12 +26,12 @@ message bus**: the live signal travels on NATS JetStream, and Postgres earns its
 record. Two writes paths land here, and only one is the request path. **Operator mutations and the
 record/state/intent lane** (config, ack/snooze, settings, manual commands, plus the `event` and
 `alarm` rows an `event_rule` consumer commits in one transaction) are written synchronously through
-the Storage Gateway. **The datapoint tables are an async SINK**: a NATS **persistence consumer**
-batch-writes datapoints off the data lane ([datapoints](/architecture/datapoints/)), idempotent on
-`(series, ts)`, so the rule engine never waits on a datapoint reaching Postgres. Committed changes on
+the Storage Gateway. **The sample tables are an async SINK**: a NATS **persistence consumer**
+batch-writes samples off the data lane ([samples](/architecture/properties/)), idempotent on
+`(series, ts)`, so the rule engine never waits on a sample reaching Postgres. Committed changes on
 the record lane are fanned out by a leader-elected **CDC publisher** (logical decoding of the WAL) to
 JetStream; there is no dual-write, the change is born in the commit and CDC carries it. The column schemas live
-with each owning feature: [datapoints](/architecture/datapoints/#the-datapoint-tables) (the three
+with each owning feature: [samples](/architecture/properties/#the-sample-tables) (the three
 kind-tables), [events](/architecture/events/#storage) (the `event` row), [alarms and
 actions](/architecture/alarms-actions/#storage) (`alarm` / `action`), [config and
 credentials](/architecture/variables/#storage) (`variable` / config / tags), [core
@@ -42,7 +44,7 @@ template tables), [collection](/architecture/collection/#storage) (interfaces an
 
 - **No `tenant_id`.** Isolation is per-database (a database per tenant); there is no tenant column
   anywhere. The key registries `property_type` and `event_type` carry a **`scope`** (template / org /
-  official) deciding where the name is unique ([key scope](/architecture/datapoints/#key-scope-template-org-official)),
+  official) deciding where the name is unique ([key scope](/architecture/properties/#key-scope-template-org-official)),
   and the non-template registries and catalogs (`interface_type`, `location_type`, `secret_type`,
   `vendor`, `driver`, `capability`, `product`, `standard`) carry an
   **`official` boolean**, the same axis minus the template layer: `official: true` rows are the
@@ -54,30 +56,30 @@ template tables), [collection](/architecture/collection/#storage) (interfaces an
   authoritative `ON CONFLICT DO UPDATE`, so a release can correct the shared vocabulary
   ([the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs)).
 - **Three storage shapes.** **Ground-truth records** are append-only and immutable, each named for
-  what it is: `log_datapoint` (a datapoint kind), `audit_log` (operator actions), and the standing
+  what it is: `log_datapoint` (a sample kind), `audit_log` (operator actions), and the standing
   `*_log` ground-truth logs (`session_log`, `internal_log`, plus the `collection_log` /
-  `node_log` companions). There is **no `telemetry` table**: datapoints are published to the
+  `node_log` companions). There is **no `telemetry` table**: samples are published to the
   JetStream data lane, not synchronously inserted, so the raw payload is not persisted in steady
-  state; the persistence consumer sinks the typed datapoint, and raw appears only on a
-  `collection.failed` event or a dev raw-mode tap ([datapoints](/architecture/datapoints/)). A
+  state; the persistence consumer sinks the typed sample, and raw appears only on a
+  `collection.failed` event or a dev raw-mode tap ([samples](/architecture/properties/)). A
   schedule fire is not a record here: it is an `event` with `origin=scheduled`.
   There is no separate rule-execution table: derived rows carry their lineage on the row.
-  **Datapoints** (`metric` / `state` / `log_datapoint`) are the typed
+  **Samples** (`metric` / `state` / `log_datapoint`) are the typed
   observation firehose. **Stateful entities and projections** (`alarm`, `action`, current-value)
   hold state directly or are rebuildable read models, **views by default**. The model is **not
   event-sourced**.
-- **Provenance and lineage on every datapoint**: `provenance` (observed / calculated / intended),
+- **Provenance and lineage on every sample**: `provenance` (observed / calculated / intended),
   `source` (which sensor or path, for observed), and a lineage pointer. observed and calculated both
   carry `source_rule` (+ version), the function or calc_rule that produced the row; intended carries
   `event_id` (the command). A CHECK enforces the pointer per provenance; **observed vs calculated is
-  the `provenance` value itself**, not a column-presence trick. Declared config is not a datapoint
+  the `provenance` value itself**, not a column-presence trick. Declared config is not a sample
   provenance; it lives in [config](/architecture/variables/), keyed to the same signal.
-- **Ownership is the exclusive-arc** on every datapoint table, `event`, `alarm`, and `variable`:
+- **Ownership is the exclusive-arc** on every sample table, `event`, `alarm`, and `variable`:
   `owner_kind` enum plus the matching typed FK (`component_id` / `system_id` / `location_id` /
   `node_id`, or none for the singleton `global`) plus a CHECK that exactly the matching column is set
-  (or all null for `global`). System-, location-, node-, and global-level datapoints are first-class.
+  (or all null for `global`). System-, location-, node-, and global-level samples are first-class.
   The full pattern is on [core entities](/architecture/core-entities/#ownership-the-exclusive-arc).
-- **Keys**: datapoints and events use a surrogate id plus `ts`; the key registry `property_type`
+- **Keys**: samples and events use a surrogate id plus `ts`; the key registry `property_type`
   carries a **`scope`** (template / org / official) deciding where the name is unique (`(template_id, name)`
   at template scope, `name` at org/official); structural entities are name-keyed; a `task` is **content-addressed**
   (`hash(interface, kind, schedule, params)`); a `node` by its `principal_id`, its enrollment
@@ -96,14 +98,15 @@ state: state { class: node }
 event: event { class: node }
 alarm: alarm { class: node }
 action: action { class: node }
-current: current_value { class: node }
+property: property { class: node }
 variable: variable { class: node }
 metric -> metric: calc_rule
 state -> event: event_rule
 event -> alarm: fire opens · clear resolves
 event -> action: action_rule
 alarm -> action
-metric -> current: view: latest per key+provenance
+metric -> property: current value
+state -> property: current value
 state -> variable: linked_state (observed side)
 ```
 
@@ -118,12 +121,12 @@ collection entities (`interface_type` / `interface` / `task`) on
 Every row in Postgres arrives on one of two lanes, and the lane decides how the row is written and
 how the rest of the platform learns it changed.
 
-- **The data lane (a sink).** Observed and calculated datapoints live on the JetStream data lane.
+- **The data lane (a sink).** Observed and calculated samples live on the JetStream data lane.
   The rule engine consumes them directly off NATS; Postgres is the durable record, not the live
   signal. The **persistence consumer** is a durable JetStream consumer that batch-writes the
   `metric` / `state` / `log_datapoint` tables as an async sink, idempotent on
   `(series, ts)`, so a redelivery lands the same row and the firehose never blocks on the database.
-  Datapoints do **not** flow through CDC: they are already on NATS.
+  Samples do **not** flow through CDC: they are already on NATS.
 - **The record/state/intent lane (PG-first, CDC-out).** Events, alarms, actions, and operator
   mutations (config, ack/snooze, settings, manual commands) are born in a **Postgres transaction**.
   When an `event_rule` consumer fires, it writes the `event` row and the `alarm` transition in one
@@ -148,7 +151,7 @@ a backtest reads; none is derived. The detailed columns of `audit_log` live on
 [audit](/architecture/audit/), `session_log` on [nodes](/architecture/nodes/#sessions); the rest is a
 compact list here because storage is their natural architectural home:
 
-- **`log_datapoint`** (a component's own words, a datapoint kind, [datapoints](/architecture/datapoints/));
+- **`log_datapoint`** (a component's own words, a sample kind, [samples](/architecture/properties/));
 - **`audit_log`** (operator actions: actor, verb, resource, `old -> new`; the lineage target for
   operator writes; secret decrypts always recorded, [audit](/architecture/audit/));
 - **`session_log`** (connection-lifecycle transitions, node-reported; the connection log,
@@ -166,7 +169,7 @@ carrying its lineage on the row (below).
 Lineage lives on the derived row, no separate execution table. This is the **pattern** every derived
 row follows: `source_rule` (+ version) is set for observed and calculated (the function or calc_rule
 that produced the row); intended carries the command `event_id`. The pointer per provenance is enforced
-so e.g. "intended with no command event" is impossible at the storage layer. One example, the datapoint
+so e.g. "intended with no command event" is impossible at the storage layer. One example, the sample
 tables:
 
 ```sql
@@ -181,12 +184,12 @@ column**, not a pointer-presence trick (an edge function versus a calc_rule). Th
 the one the CHECK enforces. This is one of three layers: the CHECK enforces *which pointers are populated*, foreign keys enforce
 *the ids are real*, and the app enforces *the value type matches the key's kind*.
 
-The datapoint tables also carry nullable **`correlation_id`** and **`caused_by_event_id`** trace
+The sample tables also carry nullable **`correlation_id`** and **`caused_by_event_id`** trace
 columns. These are orthogonal to the lineage pointers above: they are not lineage pointers, so they
 do not participate in the exclusive-lineage CHECK. They carry causation across the command -> device
--> observed-datapoint round trip so the cycle guard walks a real id ([datapoints](/architecture/datapoints/),
+-> observed-sample round trip so the cycle guard walks a real id ([samples](/architecture/properties/),
 [alarms and actions](/architecture/alarms-actions/)). On the wire these ride in **NATS message
-headers**: a datapoint published to the data lane carries its `correlation_id` / `caused_by_event_id`
+headers**: a sample published to the data lane carries its `correlation_id` / `caused_by_event_id`
 in the message header alongside the `Nats-Msg-Id` dedup key, and the persistence consumer lands them
 into these columns, so the trace is unbroken from the live signal to the durable record.
 
@@ -199,7 +202,7 @@ a **plain SQL view** (always-correct, never stale, zero maintenance). A worker-m
 
 | Read model | Of | Shape | Notes |
 |---|---|---|---|
-| `current_value` | latest datapoint per (owner, key, **instance**, **provenance**), fused across sources per the key's `fusion_policy` | **view** | the dashboard read; per-provenance so observed and intended are both visible (the divergence model needs both), per-instance so siblings of one key stay distinct, fusion applied on read. The one table candidate if a profile earns it, metric kind only |
+| `current_value` | latest sample per (owner, key, **instance**, **provenance**), fused across sources per the key's `fusion_policy` | **view** | the dashboard read; per-provenance so observed and intended are both visible (the divergence model needs both), per-instance so siblings of one key stay distinct, fusion applied on read. The one table candidate if a profile earns it, metric kind only |
 | `session` | `session_log` | **view** | low-volume; node, interface, status, opened_at, last_activity_at, command/error counts |
 
 **When the view stops scaling.** A latest-per-key view's cost scales with the number of **distinct
@@ -210,7 +213,7 @@ whole log and dies on the firehose; never that plan.
 
 So only `current_value` for the **metric** firehose is even a table candidate, and only when
 frequent full-fleet reads meet low-millions-plus distinct keys. The sparse kinds (`state` / `log`)
-stay views indefinitely. A worker-maintained table costs **one upsert per datapoint write** (write
+stay views indefinitely. A worker-maintained table costs **one upsert per sample write** (write
 amplification, hot-key contention) and reintroduces a staleness window; that cost must be earned by
 a read profile, not assumed. **Never a materialized view**: a PG MV is stale between refreshes and
 has no incremental refresh, so a refresh is a full firehose recompute. The choice is plain view
@@ -228,7 +231,7 @@ key, instance, provenance)?
   (`metric`) is the partitioning-critical one.
 - **Retention is per table**, set by policy, not one blanket TTL: `metric` short,
   `state` / `log_datapoint` longer, `audit_log` longest (compliance), `internal_log`
-  short. On-row lineage ages out with its datapoint. The per-table defaults are **cascade-resolved**
+  short. On-row lineage ages out with its sample. The per-table defaults are **cascade-resolved**
   ([cascade](/architecture/cascade/)) with an install-wide `platform` binding, so a class or entity can
   hold longer or shorter without changing the whole install.
 - **The `raw_sample` buffer** (the opt-in raw-retention policy, [collection](/architecture/collection/))
@@ -238,7 +241,7 @@ key, instance, provenance)?
   underlying tables, never the source of truth.
 
 :::caution[Open question]
-The index strategy per datapoint table beyond the obvious (BRIN on metric `ts`, GIN on log body),
+The index strategy per sample table beyond the obvious (BRIN on metric `ts`, GIN on log body),
 tuned against real volume.
 :::
 
@@ -254,16 +257,16 @@ PostgREST); it is also where IAM scope is injected, **per action**: every query 
 `:ack` write filters by ack-scope. A write whose action-scoped predicate matches **0 rows** is surfaced to
 the handler as a 403 or 404, never a silent success, matching the up-front `canDo` decision
 ([identity and access](/architecture/identity-access/)). Isolation is per-database (one database per
-tenant, paired one-to-one with one NATS account, [datapoints](/architecture/datapoints/)), so there
+tenant, paired one-to-one with one NATS account, [samples](/architecture/properties/)), so there
 is no tenant context to set. Every read and write lands here: the synchronous request path runs in
-**scoped** mode, and the persistence-consumer datapoint sink and the CDC publisher run in **system**
+**scoped** mode, and the persistence-consumer sample sink and the CDC publisher run in **system**
 mode (trusted internal work, all-visibility), the same three-mode contract identity and access
 describes. The CDC publisher reads committed changes by **logical decoding of the WAL**, a
 replication-protocol stream beneath the table surface; that is how it learns of a change without
 re-querying, not a second application path around the Gateway. Because every
 application read and write goes through the Gateway, the physical backend is swappable beneath it:
 
-- **default**: Postgres for everything (datapoints, ground-truth records, views, registries). In
+- **default**: Postgres for everything (samples, ground-truth records, views, registries). In
   single-binary mode the one binary embeds a real Postgres (the same code path runs an external
   Postgres at scale); the data lane's persistence consumer and the record lane's CDC publisher both
   target this one backend.
@@ -300,7 +303,7 @@ is **structural, not by discipline**:
 A wrong column or type fails the build, so the compiler and tests catch a bad query before runtime, which
 is what keeps the gateway safe to evolve and safe for an AI to edit. Because all dynamic construction
 lives in this one module, the injection-safe discipline is a single reviewable chokepoint. The one
-carve-out is the high-volume datapoint insert (the persistence consumer), which may use `pgx` `COPY` for
+carve-out is the high-volume sample insert (the persistence consumer), which may use `pgx` `COPY` for
 throughput, still inside the gateway. It runs in all-visibility **system mode**, not per-row scoped: its
 safety rests on the typed column targets plus the upstream **admission consumer** having already confined
 owners ([identity and access](/architecture/identity-access/)), not on a per-write scope predicate.

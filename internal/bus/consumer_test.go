@@ -13,10 +13,10 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-// TestDeriveDatapoints proves the pure ingest derivation: a registered metric
+// TestDeriveSamples proves the pure ingest derivation: a registered metric
 // name is stamped with the task's interface owner (component / source / instance),
 // and reject-not-project drops an unregistered name (no row produced for it).
-func TestDeriveDatapoints(t *testing.T) {
+func TestDeriveSamples(t *testing.T) {
 	metric := "metric"
 	reg := collection.NewRegistry([]storage.PropertyType{
 		{Name: "tcp.open", Kind: &metric},
@@ -26,14 +26,14 @@ func TestDeriveDatapoints(t *testing.T) {
 	ev := &ogv1.Event{
 		TaskId: "t1",
 		NodeId: "node-a",
-		Datapoints: []*ogv1.Datapoint{
-			{Name: "tcp.open", Value: &ogv1.Datapoint_DoubleValue{DoubleValue: 1}},
-			{Name: "tcp.connect_time", Value: &ogv1.Datapoint_DoubleValue{DoubleValue: 3.5}},
-			{Name: "not.registered", Value: &ogv1.Datapoint_DoubleValue{DoubleValue: 9}},
+		Samples: []*ogv1.Sample{
+			{Name: "tcp.open", Value: &ogv1.Sample_DoubleValue{DoubleValue: 1}},
+			{Name: "tcp.connect_time", Value: &ogv1.Sample_DoubleValue{DoubleValue: 3.5}},
+			{Name: "not.registered", Value: &ogv1.Sample_DoubleValue{DoubleValue: 9}},
 		},
 	}
 
-	metrics, states, events := deriveDatapoints(ev, owner, reg)
+	metrics, states, events := deriveSamples(ev, owner, reg)
 	if len(metrics) != 2 || len(states) != 0 || len(events) != 0 {
 		t.Fatalf("derived %d metrics %d states %d events, want 2/0/0 (unregistered name dropped): %+v", len(metrics), len(states), len(events), metrics)
 	}
@@ -47,24 +47,24 @@ func TestDeriveDatapoints(t *testing.T) {
 	}
 }
 
-// TestDeriveDatapointsRoutesByKind: a name registered as state routes to the state
+// TestDeriveSamplesRoutesByKind: a name registered as state routes to the state
 // slice (not metric), a name registered as an event_type routes to the event slice
 // (the log-to-event promotion, origin caught), each stamped with the same
 // task-interface owner; an unregistered name is still dropped (reject-not-project).
-func TestDeriveDatapointsRoutesByKind(t *testing.T) {
+func TestDeriveSamplesRoutesByKind(t *testing.T) {
 	metric, state := "metric", "state"
 	reg := collection.NewRegistry([]storage.PropertyType{
 		{Name: "tcp.open", Kind: &metric},
 		{Name: "interface.reachable", Kind: &state},
 	}, []storage.EventType{{Name: "some.log"}})
 	owner := storage.TaskOwner{Component: "disp-1", InterfaceName: "disp-1-tcp", InterfaceType: "tcp"}
-	ev := &ogv1.Event{Datapoints: []*ogv1.Datapoint{
-		{Name: "tcp.open", Value: &ogv1.Datapoint_DoubleValue{DoubleValue: 1}},
-		{Name: "interface.reachable", Value: &ogv1.Datapoint_StringValue{StringValue: "up"}},
-		{Name: "some.log", Value: &ogv1.Datapoint_StringValue{StringValue: "line"}},
-		{Name: "not.registered", Value: &ogv1.Datapoint_StringValue{StringValue: "up"}},
+	ev := &ogv1.Event{Samples: []*ogv1.Sample{
+		{Name: "tcp.open", Value: &ogv1.Sample_DoubleValue{DoubleValue: 1}},
+		{Name: "interface.reachable", Value: &ogv1.Sample_StringValue{StringValue: "up"}},
+		{Name: "some.log", Value: &ogv1.Sample_StringValue{StringValue: "line"}},
+		{Name: "not.registered", Value: &ogv1.Sample_StringValue{StringValue: "up"}},
 	}}
-	metrics, states, events := deriveDatapoints(ev, owner, reg)
+	metrics, states, events := deriveSamples(ev, owner, reg)
 	if len(metrics) != 1 || metrics[0].Key != "tcp.open" {
 		t.Fatalf("metrics = %+v, want one tcp.open", metrics)
 	}

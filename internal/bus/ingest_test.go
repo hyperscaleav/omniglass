@@ -23,11 +23,11 @@ import (
 
 // TestTelemetryRoundTrip is the checkpoint-3 closing gate: a node runs a REAL tcp
 // probe against a live listener, ships the result as a protobuf Event over
-// JetStream, and the datapoint lands in metric owned (server-side) by
+// JetStream, and the sample lands in metric owned (server-side) by
 // the target component. It then proves the two invariants are real, not faked:
-// (a) reject-not-project drops an unregistered datapoint name, and (b) the
+// (a) reject-not-project drops an unregistered sample name, and (b) the
 // confinement fence drops an Event whose task belongs to ANOTHER node. Both are
-// asserted structurally by a watermark: a later valid datapoint proves the
+// asserted structurally by a watermark: a later valid sample proves the
 // consumer drained past the negatives, so their absence is a real drop.
 func TestTelemetryRoundTrip(t *testing.T) {
 	if testing.Short() {
@@ -116,12 +116,12 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	if _, err := node.Run(ctx, node.Config{ServerURL: apiSrv.URL, Name: "node-a", Token: tokenA, Once: true}); err != nil {
 		t.Fatalf("node run: %v", err)
 	}
-	dp := waitMetric(t, ctx, gw, "disp-1", "tcp.open", func(d *storage.MetricDatapoint) bool { return d != nil && d.Value == 1 })
+	dp := waitMetric(t, ctx, gw, "disp-1", "tcp.open", func(d *storage.MetricSample) bool { return d != nil && d.Value == 1 })
 	if dp.OwnerKind != "component" || dp.Provenance != "observed" || dp.Source != "tcp" {
 		t.Fatalf("tcp.open row = %+v, want component/observed/tcp", dp)
 	}
 	// connect_time landed too (the port was open).
-	waitMetric(t, ctx, gw, "disp-1", "tcp.connect_time", func(d *storage.MetricDatapoint) bool { return d != nil })
+	waitMetric(t, ctx, gw, "disp-1", "tcp.connect_time", func(d *storage.MetricSample) bool { return d != nil })
 
 	// A node client to publish crafted Events (only its OWN telemetry subject).
 	permErrs := make(chan error, 16)
@@ -138,35 +138,35 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	// NEGATIVE (b) CONFINEMENT: node-a publishes an Event for t-b, which belongs to
 	// node-b (owner disp-2). The consumer must drop it (orphan): disp-2 gets no row.
 	publishEvent(t, ncA, "node-a", &ogv1.Event{
-		TaskId:     "t-b",
-		NodeId:     "node-a",
-		Datapoints: []*ogv1.Datapoint{{Name: "tcp.open", Value: &ogv1.Datapoint_DoubleValue{DoubleValue: 1}}},
+		TaskId:  "t-b",
+		NodeId:  "node-a",
+		Samples: []*ogv1.Sample{{Name: "tcp.open", Value: &ogv1.Sample_DoubleValue{DoubleValue: 1}}},
 	})
 
 	// NEGATIVE (a) REJECT-NOT-PROJECT: node-a publishes for its own t-a but with an
-	// unregistered datapoint name; that name must not be written.
+	// unregistered sample name; that name must not be written.
 	publishEvent(t, ncA, "node-a", &ogv1.Event{
-		TaskId:     "t-a",
-		NodeId:     "node-a",
-		Datapoints: []*ogv1.Datapoint{{Name: "bogus.metric", Value: &ogv1.Datapoint_DoubleValue{DoubleValue: 9}}},
+		TaskId:  "t-a",
+		NodeId:  "node-a",
+		Samples: []*ogv1.Sample{{Name: "bogus.metric", Value: &ogv1.Sample_DoubleValue{DoubleValue: 9}}},
 	})
 
-	// WATERMARK: a valid datapoint published AFTER the negatives. JetStream is
+	// WATERMARK: a valid sample published AFTER the negatives. JetStream is
 	// ordered per subject and the consumer processes sequentially, so once the
 	// watermark is visible the two negatives have already been handled (and
 	// dropped). connect_time=42 is distinctive from any real dial.
 	publishEvent(t, ncA, "node-a", &ogv1.Event{
-		TaskId:     "t-a",
-		NodeId:     "node-a",
-		Datapoints: []*ogv1.Datapoint{{Name: "tcp.connect_time", Value: &ogv1.Datapoint_DoubleValue{DoubleValue: 42}}},
+		TaskId:  "t-a",
+		NodeId:  "node-a",
+		Samples: []*ogv1.Sample{{Name: "tcp.connect_time", Value: &ogv1.Sample_DoubleValue{DoubleValue: 42}}},
 	})
-	waitMetric(t, ctx, gw, "disp-1", "tcp.connect_time", func(d *storage.MetricDatapoint) bool { return d != nil && d.Value == 42 })
+	waitMetric(t, ctx, gw, "disp-1", "tcp.connect_time", func(d *storage.MetricSample) bool { return d != nil && d.Value == 42 })
 
-	// Confinement held: disp-2 (node-b's component) has NO datapoint from node-a.
+	// Confinement held: disp-2 (node-b's component) has NO sample from node-a.
 	if got, err := gw.LatestMetric(ctx, "disp-2", "tcp.open"); err != nil {
 		t.Fatalf("latest disp-2: %v", err)
 	} else if got != nil {
-		t.Fatalf("confinement breached: node-a landed a datapoint on disp-2: %+v", got)
+		t.Fatalf("confinement breached: node-a landed a sample on disp-2: %+v", got)
 	}
 	// reject-not-project held: the unregistered name was never written.
 	if got, err := gw.LatestMetric(ctx, "disp-1", "bogus.metric"); err != nil {
@@ -175,43 +175,43 @@ func TestTelemetryRoundTrip(t *testing.T) {
 		t.Fatalf("reject-not-project breached: unregistered name was written: %+v", got)
 	}
 
-	// --- STATE PATH (cp5a): interface.reachable is a STATE datapoint, routed by
-	// the datapoint_type kind to state, under the SAME confinement and
+	// --- STATE PATH (cp5a): interface.reachable is a STATE sample, routed by
+	// the property_type kind to state, under the SAME confinement and
 	// reject-not-project as a metric, plus the ingest-side transition-only guard.
 
 	// node-a publishes interface.reachable=up for its own t-a. The registry kind is
 	// state, so it lands in state (not metric), owned disp-1 and
 	// instanced by the interface (disp-1-tcp).
 	publishEvent(t, ncA, "node-a", &ogv1.Event{
-		TaskId:     "t-a",
-		NodeId:     "node-a",
-		Datapoints: []*ogv1.Datapoint{{Name: "interface.reachable", Value: &ogv1.Datapoint_StringValue{StringValue: "up"}}},
+		TaskId:  "t-a",
+		NodeId:  "node-a",
+		Samples: []*ogv1.Sample{{Name: "interface.reachable", Value: &ogv1.Sample_StringValue{StringValue: "up"}}},
 	})
-	waitState(t, ctx, gw, "disp-1", "interface.reachable", "disp-1-tcp", func(d *storage.StateDatapoint) bool { return d != nil && d.Value == "up" })
+	waitState(t, ctx, gw, "disp-1", "interface.reachable", "disp-1-tcp", func(d *storage.StateSample) bool { return d != nil && d.Value == "up" })
 
 	// CONFINEMENT (state path): node-a publishes interface.reachable=up for t-b,
 	// which belongs to node-b (owner disp-2). The same fence that drops a foreign
 	// metric drops a foreign state: disp-2 gets no verdict.
 	publishEvent(t, ncA, "node-a", &ogv1.Event{
-		TaskId:     "t-b",
-		NodeId:     "node-a",
-		Datapoints: []*ogv1.Datapoint{{Name: "interface.reachable", Value: &ogv1.Datapoint_StringValue{StringValue: "up"}}},
+		TaskId:  "t-b",
+		NodeId:  "node-a",
+		Samples: []*ogv1.Sample{{Name: "interface.reachable", Value: &ogv1.Sample_StringValue{StringValue: "up"}}},
 	})
 
 	// TRANSITION-ONLY (ingest guard): a repeated identical up must NOT add a second
 	// row (the latest-value guard skips it); only a flip to down writes. The first
 	// up is already committed (waitState above), so the guard sees it deterministically.
 	publishEvent(t, ncA, "node-a", &ogv1.Event{
-		TaskId:     "t-a",
-		NodeId:     "node-a",
-		Datapoints: []*ogv1.Datapoint{{Name: "interface.reachable", Value: &ogv1.Datapoint_StringValue{StringValue: "up"}}},
+		TaskId:  "t-a",
+		NodeId:  "node-a",
+		Samples: []*ogv1.Sample{{Name: "interface.reachable", Value: &ogv1.Sample_StringValue{StringValue: "up"}}},
 	})
 	publishEvent(t, ncA, "node-a", &ogv1.Event{
-		TaskId:     "t-a",
-		NodeId:     "node-a",
-		Datapoints: []*ogv1.Datapoint{{Name: "interface.reachable", Value: &ogv1.Datapoint_StringValue{StringValue: "down"}}},
+		TaskId:  "t-a",
+		NodeId:  "node-a",
+		Samples: []*ogv1.Sample{{Name: "interface.reachable", Value: &ogv1.Sample_StringValue{StringValue: "down"}}},
 	})
-	waitState(t, ctx, gw, "disp-1", "interface.reachable", "disp-1-tcp", func(d *storage.StateDatapoint) bool { return d != nil && d.Value == "down" })
+	waitState(t, ctx, gw, "disp-1", "interface.reachable", "disp-1-tcp", func(d *storage.StateSample) bool { return d != nil && d.Value == "down" })
 
 	// The series is exactly [up, down]: the duplicate up was guarded out, so the
 	// availability strip has one row per transition, not one per publish.
@@ -245,7 +245,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	// reject-not-project as a metric or state. Raw logs are a separate lane, not this.
 	publishEvent(t, ncA, "node-a", &ogv1.Event{
 		TaskId: "t-a", NodeId: "node-a",
-		Datapoints: []*ogv1.Datapoint{{Name: "call.started", Value: &ogv1.Datapoint_StringValue{StringValue: "call started"}}},
+		Samples: []*ogv1.Sample{{Name: "call.started", Value: &ogv1.Sample_StringValue{StringValue: "call started"}}},
 	})
 	waitEvent(t, ctx, gw, "disp-1", func(e storage.Event) bool {
 		return e.Message == "call started" && e.Origin == "caught" && e.Key == "call.started"
@@ -297,7 +297,7 @@ func publishEvent(t *testing.T, nc *nats.Conn, node string, ev *ogv1.Event) {
 }
 
 // waitState polls LatestState until pred is satisfied or a deadline passes.
-func waitState(t *testing.T, ctx context.Context, gw storage.Gateway, comp, key, instance string, pred func(*storage.StateDatapoint) bool) *storage.StateDatapoint {
+func waitState(t *testing.T, ctx context.Context, gw storage.Gateway, comp, key, instance string, pred func(*storage.StateSample) bool) *storage.StateSample {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for {
@@ -316,7 +316,7 @@ func waitState(t *testing.T, ctx context.Context, gw storage.Gateway, comp, key,
 }
 
 // waitMetric polls LatestMetric until pred is satisfied or a deadline passes.
-func waitMetric(t *testing.T, ctx context.Context, gw storage.Gateway, comp, key string, pred func(*storage.MetricDatapoint) bool) *storage.MetricDatapoint {
+func waitMetric(t *testing.T, ctx context.Context, gw storage.Gateway, comp, key string, pred func(*storage.MetricSample) bool) *storage.MetricSample {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for {

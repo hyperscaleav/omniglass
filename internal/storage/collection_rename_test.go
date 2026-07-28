@@ -64,9 +64,9 @@ func TestCollectionReferencesSurviveARename(t *testing.T) {
 	if err != nil {
 		t.Fatalf("interface: %v", err)
 	}
-	if err := gw.InsertMetricDatapoints(ctx, []storage.MetricDatapointEvent{{
+	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleEvent{{
 		OwnerKind: "component", OwnerID: "old-codec", Key: "tcp.open", Value: 1, Source: "test"}}); err != nil {
-		t.Fatalf("datapoint: %v", err)
+		t.Fatalf("sample: %v", err)
 	}
 
 	// The renames an operator can actually perform. A node's name is immutable (it
@@ -116,13 +116,13 @@ func TestCollectionReferencesSurviveARename(t *testing.T) {
 		t.Errorf("node location = %v, want new-room", deref(n.LocationName))
 	}
 
-	// The datapoint still resolves under the component's new name.
+	// The sample still resolves under the component's new name.
 	dp, err := gw.LatestMetric(ctx, "new-codec", "tcp.open")
 	if err != nil {
 		t.Fatalf("latest metric: %v", err)
 	}
 	if dp == nil {
-		t.Fatal("no datapoint under the new name: the owner arc did not follow the rename")
+		t.Fatal("no sample under the new name: the owner arc did not follow the rename")
 	}
 
 	// The node arc, at the level it is actually guaranteed. A node's name is not

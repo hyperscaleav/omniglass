@@ -34,8 +34,8 @@ See [implementation status](/architecture/status/).
 **stays high until it is interacted with**. The `alarm` row **holds its current
 state directly** (`status`, `severity`, `opened_at`, `resolved_at`, `acked_by`); it
 is **not** event-sourced. It is **one incident, a new row per open**, keyed by
-`(event_rule, owner)` (the exclusive-arc owner, so a system- or location-owned datapoint
-yields a system/location-owned alarm), the ITSM correlation anchor ([datapoints](/architecture/datapoints/)).
+`(event_rule, owner)` (the exclusive-arc owner, so a system- or location-owned sample
+yields a system/location-owned alarm), the ITSM correlation anchor ([samples](/architecture/properties/)).
 The open and resolve **events** carry the `alarm_id` and are the edge log; the alarm
 row is the live state.
 
@@ -56,8 +56,8 @@ Transitions, by who drives them:
 The full timeline assembles by `alarm_id` across events + audit; the alarm row is
 never reconstructed from them.
 
-Alarms are **terminal upstream**: they never write datapoints, so they cannot feed
-back into the datapoint layer (see *Cycle safety*).
+Alarms are **terminal upstream**: they never write samples, so they cannot feed
+back into the sample layer (see *Cycle safety*).
 
 ## The `event_rule`
 
@@ -69,7 +69,7 @@ alarm). There is no separate `alarm_rule`.
 ```yaml
 event_rule:
   scope: 'component.template == "polaris-dsp-16"'   # the shared selector (expressions)
-  datapoint: dsp.temperature
+  sample: dsp.temperature
   window: { reduce: avg, over: 10m }                 # machinery (optional)
   fire_criteria: "value > 65"                        # opens the alarm
   clear_criteria: "value < 60"                       # resolves it (defaults to !fire_criteria)
@@ -79,7 +79,7 @@ event_rule:
   degrades: [microphone]                             # optional: the capabilities this alarm takes away
 ```
 
-`scope` selects the entities (fan-out, one alarm per match); `datapoint` is the
+`scope` selects the entities (fan-out, one alarm per match); `sample` is the
 input; `window` / `for` / `for_clear` are the aggregation machinery; `fire_criteria` / `clear_criteria`
 are the Expr leaves; `severity` names a level by id (below). A rule is **suppressible by name through
 the cascade** ([cascade](/architecture/cascade/)): a high-weight group can remove a
@@ -102,7 +102,7 @@ rather than a parallel computation. **The rule does not declare a health verdict
 much a lost capability matters is the **impact** on the role that wanted it, since the
 same failure means different things in different slots
 ([health](/architecture/health/)). Because a rule is scoped to
-whichever arc owns its datapoint, the same machinery yields **component-level** and
+whichever arc owns its sample, the same machinery yields **component-level** and
 **system-level** alarms: a system-scoped rule reads member data and fires a
 system-owned alarm for a condition only the system cares about (a display on input 2
 is fine for the display but wrong for the room), which is how system health sees what
@@ -159,7 +159,7 @@ action/operation tangle: the `event_rule` does not contain its response. Instead
 with an Expr predicate, so one action rule can serve many alarms. Subscriptions are **indexed by event key and label**, so dispatch
 evaluates only the predicates whose key or label already matches, not every rule on every event;
 an action rule may carry **multiple triggers** and fires if any matches (including a label or
-wildcard trigger, e.g. any event labeled `room=boardroom-a`). It is a subscription, not a fourth datapoint-pipeline
+wildcard trigger, e.g. any event labeled `room=boardroom-a`). It is a subscription, not a fourth sample-pipeline
 rule family (the derivation rules, calc and event, produce data; the
 `action_rule` wires the resulting events and alarms to actions):
 
@@ -184,10 +184,10 @@ one alarm per affected owner. Two primitives keep that fan-out from becoming a p
 storm without collapsing the grain.
 
 **Dependency suppression** mutes a child alarm whose owner's **parent entity on the
-[exclusive-arc](/architecture/datapoints/) structural tree** is itself down. When the
+[exclusive-arc](/architecture/properties/) structural tree** is itself down. When the
 parent is in an `outage` health state, the child alarms beneath it are held suppressed
 (open, but not dispatched), so one upstream failure does not emit N child pages. It is
-expressed over the exclusive-arc tree: the same arc that owns a datapoint and its
+expressed over the exclusive-arc tree: the same arc that owns a sample and its
 alarm gives the parent walk for free, no separate dependency graph.
 
 **Action-level grouping** coalesces alarms sharing **owner / label / `correlation_id`**
@@ -227,15 +227,15 @@ credential-health model in [config and credentials](/architecture/variables/)).
 
 ## Cycle safety in the action layer
 
-The `collection -> datapoint -> alarm` core is acyclic by construction (see *Cycle
-safety*), and **only data authors events**: an `event_rule` over datapoints (plus the
+The `collection -> sample -> alarm` core is acyclic by construction (see *Cycle
+safety*), and **only data authors events**: an `event_rule` over samples (plus the
 clock's `origin=scheduled`) is the *only* way an event enters the log. Flows and
 actions never manufacture events, so the response layer cannot inject into the event
 graph at all. That leaves a single possible loop, the **data-mediated control loop**
-(an action commands a device, the device's new state arrives as a datapoint, which
+(an action commands a device, the device's new state arrives as a sample, which
 opens an alarm, which fires the action again), closed with three rules:
 
-1. **Alarms are terminal upstream** (they never write datapoints), so detection cannot
+1. **Alarms are terminal upstream** (they never write samples), so detection cannot
    feed itself directly.
 2. **ack / snooze transitions do not match `action_rule`s** (only open / resolve do),
    which breaks the `action -> alarm(ack) -> action` loop.
@@ -248,26 +248,26 @@ opens an alarm, which fires the action again), closed with three rules:
 
 The walk crosses the command-to-device round trip because the command **stamps its
 originating `correlation_id` onto the intended write and onto the adaptive-poll's
-observed datapoint** ([datapoints](/architecture/datapoints/)). The `event_rule` that
-fires off that observed datapoint inherits the id, so the lineage walk follows a real
+observed sample** ([samples](/architecture/properties/)). The `event_rule` that
+fires off that observed sample inherits the id, so the lineage walk follows a real
 carried id across the device edge rather than an assumed lineage; the depth bound stays
 as the backstop.
 
 The carrier crosses the lane boundary, not one continuous header hop. The `event_rule`
-writes the triggering datapoint's `correlation_id` **and a `caused_by_event_id` parent
+writes the triggering sample's `correlation_id` **and a `caused_by_event_id` parent
 edge** onto the `event` row it creates (the record lane, [events](/architecture/events/)),
 and the CDC publisher re-emits both into the record-lane message header. So "carried on
 NATS headers" is really header (data lane) -> PG column -> header (record lane): the walk
 is unbroken because each hop copies the pair forward.
 
 So no edge can close a loop: events come only from data, alarms are terminal toward
-datapoints, the response layer cannot author events, operator transitions never
+samples, the response layer cannot author events, operator transitions never
 re-trigger, and the one real-world control loop is lineage-bounded.
 
 ### Correlation id: the trace of a causal chain
 
 The same causation lineage the cycle guard walks also powers a read-side **trace**: a
-**correlation id** that threads a whole causal chain end to end. A datapoint fires an
+**correlation id** that threads a whole causal chain end to end. A sample fires an
 **event**, which opens an **alarm**, which triggers a **flow / action**, which runs a
 **function / command**, which may change a value and clear the alarm. The `alarm_id` links
 one alarm's own open / clear events; the **correlation id** links the *entire* chain, the
@@ -279,11 +279,11 @@ motion."
 
 The caused edge that crosses the device is carried explicitly: when an action runs a
 command, the command **stamps its `correlation_id` onto the intended write and onto the
-adaptive-poll's observed datapoint** ([datapoints](/architecture/datapoints/)), so the
+adaptive-poll's observed sample** ([samples](/architecture/properties/)), so the
 chain stays threaded through the device round trip and the `event_rule` that fires off
-the returned datapoint inherits the id.
+the returned sample inherits the id.
 
-It is **not** a datapoint kind and **not** a stored span subsystem, just an id carried on
+It is **not** a sample kind and **not** a stored span subsystem, just an id carried on
 the chain and queryable. No new tables, no tracing backend.
 
 ## Flows: the multi-step action
@@ -294,8 +294,8 @@ A **flow** is a bounded multi-step action: a **DAG of steps** (`notify`, `comman
 above, and **finite** by a depth / step cap. It depends on the durable per-incident timer
 ([time](/architecture/time/)) for its `wait` steps.
 
-The canonical case is an **escalation**: remediate, `wait`, re-check the **real datapoint** the alarm
-is built on, and escalate if it is unchanged ("run the fix, wait 10m, if the datapoint still trips
+The canonical case is an **escalation**: remediate, `wait`, re-check the **real sample** the alarm
+is built on, and escalate if it is unchanged ("run the fix, wait 10m, if the sample still trips
 page a human, wait 1h, page the next tier"). Two more cases fall out of the same engine: a **time-bound
 access grant** (grant, `wait`, revoke) and an **AI-troubleshooting flow** that fetches more data, has
 the model analyze it, and routes on the verdict.

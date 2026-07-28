@@ -4823,7 +4823,7 @@ export interface components {
             verdict: components["schemas"]["ReachVerdictBody"];
         };
         ReachLayerBody: {
-            /** @description The datapoint_type key of the primary signal */
+            /** @description The property_type key of the primary signal */
             check: string;
             /** @description A human timing detail (rtt / connect time), when present */
             detail?: string;

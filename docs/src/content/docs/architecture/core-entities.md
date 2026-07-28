@@ -7,9 +7,9 @@ sidebar:
     variant: note
 ---
 
-Core entities are the things an operator actually manages, the component, system, location, and node, and giving each its own identity is what lets every datapoint, event, alarm, and config name exactly one of them as its owner. This page covers the structural entities, how they
+Core entities are the things an operator actually manages, the component, system, location, and node, and giving each its own identity is what lets every sample, event, alarm, and config name exactly one of them as its owner. This page covers the structural entities, how they
 nest, and how everything else names one of them as owner. The shapes these entities pin are [templates](/architecture/templates/); the data they own is
-[datapoints](/architecture/datapoints/); the physical tables are [storage](/architecture/storage/).
+[samples](/architecture/properties/); the physical tables are [storage](/architecture/storage/).
 
 :::note[Partial]
 Built today: `component`, `system`, and `location` as name-addressable, variable-depth (`parent_id`)
@@ -25,7 +25,7 @@ carries an **optional classifier** that declares what its instances expose: a co
 [ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property); the
 `system_type` registry was promoted to `standard`,
 [ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)). The
-**exclusive-arc** owner columns are now real, carrying the datapoint sinks, the **`event`** log sink
+**exclusive-arc** owner columns are now real, carrying the sample sinks, the **`event`** log sink
 (see [The event sink](#the-event-sink-the-first-arc-owned-occurrence) below), and **`property`**
 (see [Declared properties](#declared-properties-the-classifier-contracts-and-the-value-store) below); a
 component, system, and location each own a recorded **[health](/architecture/health/)** series on that
@@ -42,7 +42,7 @@ See [implementation status](/architecture/status/).
 Three nouns describe what you operate, plus the edge process that collects for them.
 
 - A **component** is a deployed device, app, or service: a display, a codec, a DSP, a control
-  processor, a cloud UCC service. It owns datapoints, pins a `component_template_version`, and points
+  processor, a cloud UCC service. It owns samples, pins a `component_template_version`, and points
   at the **`product`** it is, which is where its shape comes from (its vendor, its driver, the
   capabilities it provides, and the properties it declares). The pointer is optional: a productless
   component is legal, it simply carries no contract.
@@ -160,7 +160,7 @@ optional `default_value` in jsonb, and a `required` flag), unique per `(classifi
 validation are deliberately **not** repeated here: they live on the property, which stays the single
 source for what a name means.
 
-The value lives in **`property`**, which carries the **same owner exclusive-arc** as the datapoint
+The value lives in **`property`**, which carries the **same owner exclusive-arc** as the sample
 sinks and `event` (`owner_kind` plus `component_id` / `system_id` / `location_id` / `node_id`, one-set
 CHECK), plus the property name, an `instance` discriminator, a **`provenance`**, and the jsonb `value`.
 Provenance is what makes the fold work: the same table holds a value an operator **declared**, a value a
@@ -373,7 +373,7 @@ guidance if a use case needs more. The depth-resolution and rollup semantics the
 ## Ownership: the exclusive-arc
 
 Everything observed, asserted, or set in Omniglass attaches to exactly one structural entity, through
-the **exclusive-arc**. Every datapoint table, plus `event`, `property`, `alarm`, and `variable`,
+the **exclusive-arc**. Every sample table, plus `event`, `property`, `alarm`, and `variable`,
 carries:
 
 - an **`owner_kind`** enum, plus
@@ -381,40 +381,40 @@ carries:
   singleton `global`), plus
 - a **CHECK** that exactly the column matching `owner_kind` is set (or all null for `global`).
 
-This makes **system-, location-, node-, and global-level datapoints first-class** (e.g. `health` is a
+This makes **system-, location-, node-, and global-level samples first-class** (e.g. `health` is a
 `state` owned by a system, estate-wide availability is owned by `global`, and a node's
 self-health is owned by the node), the fix for a monitoring tool that can only put state on a single
 host. It is also what carries a recorded [health](/architecture/health/) verdict: a component, a system,
 and a location each own their own transition series under the same `health` key, and the **owner** is what
-gives a reading its level. The same arc owns the `event` rows a datapoint produces, and is the design for
-`alarm` (component-local today), so a system-owned datapoint will yield a system-owned alarm. The full
+gives a reading its level. The same arc owns the `event` rows a sample produces, and is the design for
+`alarm` (component-local today), so a system-owned sample will yield a system-owned alarm. The full
 pattern and the storage DDL are on [storage](/architecture/storage/).
 
 ### The event sink: the first arc-owned occurrence
 
-The arc's first built sink beyond the datapoint tables is **`event`**, the **occurrence sink** of the
+The arc's first built sink beyond the sample tables is **`event`**, the **occurrence sink** of the
 collection pipeline. Where a `metric` or `state` records a **sampled present value**
 (a reading that has a value *now*, `last()` is meaningful), an `event` records a **past occurrence**:
 something that *happened* and whose "what is it now?" is meaningless (the
-[has-a-value-now razor](/architecture/datapoints/#the-has-a-value-now-razor-datapoint-vs-event)). A
+[has-a-value-now razor](/architecture/properties/#the-has-a-value-now-razor-sample-vs-event)). A
 component that publishes an event natively (an xAPI event, an SNMP trap) routes it to `event`, carrying a
 **`message`** (its text, from `string_value`) and optional structured **`attributes`** (jsonb, from
 `json_value`). Raw log lines are a **separate ingest lane**, not events
 ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)): the `log_line`
 table, and the derivation that turns a log line into an event, are a later slice.
 
-An `event` row carries the **identical owner exclusive-arc** as a datapoint (`owner_kind` plus the
+An `event` row carries the **identical owner exclusive-arc** as a sample (`owner_kind` plus the
 matching `component_id` / `system_id` / `location_id` / `node_id`, under the same CHECK that exactly one
 is set) and the **same provenance** vocabulary (`observed` / `calculated` / `intended` / `declared`,
 default `observed`), so a log occurrence is owned, addressed, and confined exactly like the value
-datapoints beside it: the **same** owner-confinement and reject-not-project gates apply at ingest. This
-is why the ownership pattern above already named `event` alongside the datapoint tables; it is the same
+samples beside it: the **same** owner-confinement and reject-not-project gates apply at ingest. This
+is why the ownership pattern above already named `event` alongside the sample tables; it is the same
 arc, now with a built sink on it.
 
 Closing the loop, the reserved **`event_id`** columns on `metric` and `state` are
-now **real foreign keys** to `event(id)` (`on delete set null`): an **intended**-provenance datapoint (a
-value a command set) references the `event` that produced it, so a datapoint's lineage can point at the
-occurrence behind it. See [datapoints](/architecture/datapoints/) for the value sinks and
+now **real foreign keys** to `event(id)` (`on delete set null`): an **intended**-provenance sample (a
+value a command set) references the `event` that produced it, so a sample's lineage can point at the
+occurrence behind it. See [samples](/architecture/properties/) for the value sinks and
 [events](/architecture/events/) for the normalized-occurrence model layered above the raw log sink.
 
 ## Structural multi-membership (a component in N systems)
@@ -440,7 +440,7 @@ is_primary)`, described under [membership](#membership-what-a-role-attaches-to).
 the role onto that same row and pinned it to a frozen template BOM; what shipped keeps the row to the
 binding alone and lets `system_role_assignment` carry the role, so a member can exist without one.
 
-A `system_template_member` declares, per role, a **requirement** (the canonical datapoints and commands a
+A `system_template_member` declares, per role, a **requirement** (the canonical samples and commands a
 member must provide) plus its `health_role`; any component whose template meets the requirement can fill
 the role, validated on assignment. Detailed on [templates](/architecture/templates/).
 
@@ -449,7 +449,7 @@ the role, validated on assignment. Detailed on [templates](/architecture/templat
 `Design`. The **built** slot is
 [`system_role`](#system-roles-the-slots-a-system-needs-filled), declared on a standard or a system rather
 than frozen into a `system_template_version`, requiring a **capability** set rather than canonical
-datapoints and commands, and assigned through `system_role_assignment`. Its **`impact`** also replaces the
+samples and commands, and assigned through `system_role_assignment`. Its **`impact`** also replaces the
 `health_role` tag above: `required` / `redundant` / `informational` are expressed by quorum plus impact,
 with no fourth vocabulary
 ([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).
@@ -476,7 +476,7 @@ suppresses consequences but keeps watching (so an operator can verify the work);
   ticket ([alarms and actions](/architecture/alarms-actions/)).
 - **drift is observed, not enforced**: the set function never fires, so a tech mid-swap is not fought
   ([config](/architecture/variables/)). The device-swap case (a brief declared-identity authority,
-  [datapoints](/architecture/datapoints/)) is just maintenance suppressing drift.
+  [samples](/architecture/properties/)) is just maintenance suppressing drift.
 - **health rolls up no impact**: a member in maintenance or disabled does not sink its parent's
   [health](/architecture/health/); it surfaces as "outage (maintenance)", the truth plus the mode, not a
   fourth verdict value.
@@ -491,7 +491,7 @@ cascade-resolved, maintenance on a system covers its components.
 ## Decommission and delete
 
 "Delete" is **decommission** by default, a **soft delete**: the entity is tombstoned, drops out of
-placement, worklists, and default views, but its **history is retained** (datapoints, events, alarms,
+placement, worklists, and default views, but its **history is retained** (samples, events, alarms,
 audit), attributed to the tombstone and aging out by [retention](/architecture/storage/). An observability
 and control plane must not let "remove this projector" erase the incident record, and a decommissioned
 entity can be **re-commissioned** if the device returns. **Purge** is the privileged, audited hard erase

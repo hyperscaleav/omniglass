@@ -42,39 +42,39 @@ func TestParseICMPTask(t *testing.T) {
 }
 
 // TestBuildEvent: the Event carries the task id and node id, no component
-// identity, and one proto datapoint per produced datapoint with double_value set.
+// identity, and one proto sample per produced sample with double_value set.
 func TestBuildEvent(t *testing.T) {
-	dps := []collection.Datapoint{
-		{Name: collection.DatapointTCPOpen, Value: 1, Labels: map[string]string{collection.ReasonLabel: "responded"}},
-		{Name: collection.DatapointTCPConnectTime, Value: 3.5},
+	dps := []collection.Sample{
+		{Name: collection.SignalTCPOpen, Value: 1, Labels: map[string]string{collection.ReasonLabel: "responded"}},
+		{Name: collection.SignalTCPConnectTime, Value: 3.5},
 	}
 	ev := buildEvent("t1", "node-a", dps)
 	if ev.GetTaskId() != "t1" || ev.GetNodeId() != "node-a" {
 		t.Fatalf("event ids = %q/%q, want t1/node-a", ev.GetTaskId(), ev.GetNodeId())
 	}
-	if len(ev.GetDatapoints()) != 2 {
-		t.Fatalf("datapoints = %d, want 2", len(ev.GetDatapoints()))
+	if len(ev.GetSamples()) != 2 {
+		t.Fatalf("samples = %d, want 2", len(ev.GetSamples()))
 	}
-	first := ev.GetDatapoints()[0]
-	if first.GetName() != collection.DatapointTCPOpen || first.GetDoubleValue() != 1 {
-		t.Fatalf("first datapoint = %+v, want tcp.open=1", first)
+	first := ev.GetSamples()[0]
+	if first.GetName() != collection.SignalTCPOpen || first.GetDoubleValue() != 1 {
+		t.Fatalf("first sample = %+v, want tcp.open=1", first)
 	}
 }
 
-// TestBuildEventText: a text (state) datapoint rides the proto string_value, not
+// TestBuildEventText: a text (state) sample rides the proto string_value, not
 // double_value, so the ingest consumer routes it to state.
 func TestBuildEventText(t *testing.T) {
-	dps := []collection.Datapoint{
-		{Name: collection.DatapointTCPOpen, Value: 1},
-		{Name: collection.DatapointInterfaceReachable, Text: collection.VerdictUp, IsText: true},
+	dps := []collection.Sample{
+		{Name: collection.SignalTCPOpen, Value: 1},
+		{Name: collection.SignalInterfaceReachable, Text: collection.VerdictUp, IsText: true},
 	}
 	ev := buildEvent("t1", "node-a", dps)
-	verdict := ev.GetDatapoints()[1]
-	if verdict.GetName() != collection.DatapointInterfaceReachable || verdict.GetStringValue() != "up" {
-		t.Fatalf("verdict datapoint = %+v, want interface.reachable=up on string_value", verdict)
+	verdict := ev.GetSamples()[1]
+	if verdict.GetName() != collection.SignalInterfaceReachable || verdict.GetStringValue() != "up" {
+		t.Fatalf("verdict sample = %+v, want interface.reachable=up on string_value", verdict)
 	}
 	if verdict.GetDoubleValue() != 0 {
-		t.Fatalf("a text datapoint must not set double_value, got %v", verdict.GetDoubleValue())
+		t.Fatalf("a text sample must not set double_value, got %v", verdict.GetDoubleValue())
 	}
 }
 
@@ -84,8 +84,8 @@ func TestBuildEventText(t *testing.T) {
 // is the restart net.
 func TestAppendVerdict(t *testing.T) {
 	verdicts := map[string]string{}
-	up := []collection.Datapoint{{Name: collection.DatapointTCPOpen, Value: 1}}
-	down := []collection.Datapoint{{Name: collection.DatapointTCPOpen, Value: 0}}
+	up := []collection.Sample{{Name: collection.SignalTCPOpen, Value: 1}}
+	down := []collection.Sample{{Name: collection.SignalTCPOpen, Value: 0}}
 
 	// First observation (up): the verdict is appended.
 	got := appendVerdict(up, "if-1", verdicts)
@@ -110,7 +110,7 @@ func TestAppendVerdict(t *testing.T) {
 	}
 
 	// An interface whose probe carries no reachability metric has no verdict.
-	if got := appendVerdict([]collection.Datapoint{{Name: collection.DatapointTCPConnectTime, Value: 3}}, "if-3", verdicts); len(got) != 1 {
+	if got := appendVerdict([]collection.Sample{{Name: collection.SignalTCPConnectTime, Value: 3}}, "if-3", verdicts); len(got) != 1 {
 		t.Fatalf("no reachability metric: want no verdict, got %+v", got)
 	}
 }

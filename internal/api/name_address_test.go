@@ -145,7 +145,7 @@ func TestReferencesCarryBothForms(t *testing.T) {
 			checked++
 			// A property's name appears as `property_type_name` on the contract and value
 			// bodies, but as `key` on the telemetry bodies (the event log), the
-			// datapoint-key vocabulary. The event log types its rows by `event_type_id`
+			// sample-key vocabulary. The event log types its rows by `event_type_id`
 			// and carries the event_type name as `key` the same way. Accept `key` as the
 			// name pair for either.
 			if field == "property_type_id" || field == "event_type_id" {

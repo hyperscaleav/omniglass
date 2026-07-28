@@ -86,7 +86,7 @@ written:
   tick, no restart.
 
 The generation moves at **operator-config pace, not telemetry pace**: it is a
-read-side aggregate over interface config, and the high-volume datapoint-write
+read-side aggregate over interface config, and the high-volume sample-write
 path never touches `interface.updated_at`. A no-op re-apply (identical rendered
 config) does not advance it, so nodes are never woken for nothing.
 
@@ -98,8 +98,8 @@ credential bound to `node.name`, [identity and access](/architecture/identity-ac
 server-to-node arrives as messages on subjects the node is permitted to consume. Three flows share that
 connection:
 
-- **Telemetry up** (node to server): the node **publishes** `Event` batches (`{datapoints, labels}` plus
-  the `(task, ts)` envelope, [below](#shipping-datapoints)) to a **JetStream raw ingress subject**;
+- **Telemetry up** (node to server): the node **publishes** `Event` batches (`{samples, labels}` plus
+  the `(task, ts)` envelope, [below](#shipping-samples)) to a **JetStream raw ingress subject**;
   JetStream acknowledges each publish (at-least-once), and a `Nats-Msg-Id` lets the server dedup a replay
   (the admission consumer preserves it when it republishes to the trusted stream). The firehose from the edge.
 - **Control down** (server to node): the node holds a **durable JetStream consumer** on its
@@ -125,15 +125,15 @@ The node publishes **at-least-once** and reconnects by **resuming unacked publis
 `Nats-Msg-Id` dedup); the server makes replay safe **without a separate idempotency layer**, because
 everything the edge ships is idempotent by its own key:
 
-- **datapoints** dedup on **`(series, ts)`**: a replayed point at the same timestamp is the same point,
+- **samples** dedup on **`(series, ts)`**: a replayed point at the same timestamp is the same point,
   an idempotent upsert. The edge stamps `ts`, so the server is **ts-authoritative** and reorders
   out-of-order arrivals for free, so there is **no strict-ordering requirement** on the wire.
 - **command results** are an **idempotent status update** on a known `action` row (by id): applying
   "done" twice is "done".
 
 **Events are not shipped from the edge**, so there is nothing to dedup for them: an event is **derived
-server-side** (an `event_rule` over datapoints, or a `log_datapoint` promoted by a rule,
-[events](/architecture/events/)). The edge produces datapoints (including log lines) and command status;
+server-side** (an `event_rule` over samples, or a `log_datapoint` promoted by a rule,
+[events](/architecture/events/)). The edge produces samples (including log lines) and command status;
 the server derives the events. "We do not re-raise the same event next poll" is the **alarm** model's job
 (one stateful open alarm, fire and clear), not a delivery concern.
 
@@ -144,7 +144,7 @@ the edge** (the edge is a worker, the durable side is the server). Both the **bu
 policy) and **retention** are **cascade-resolved** ([cascade](/architecture/cascade/)) with an
 **install-wide `platform` binding**, overridable down the tree, so a chatty site gets a bigger buffer and a sensitive class a
 longer retention, tuned like any other setting rather than per-node flags. When the buffer fills the node
-**sheds oldest metrics first and surfaces it** as a `node.buffer` datapoint (depth, drops), so shedding
+**sheds oldest metrics first and surfaces it** as a `node.buffer` sample (depth, drops), so shedding
 is visible, never silent.
 
 ### Credentials at the edge
@@ -168,7 +168,7 @@ mints no per-node token.
 ## Placement (ETL, cascaded)
 
 Collection follows **ETL**: extract **and transform** (including the extractor's Expr
-transform) default to the **edge**, then the shaped datapoints are **loaded** to the
+transform) default to the **edge**, then the shaped samples are **loaded** to the
 server, where resolve / bind / calc / evaluate default to **central**. Placement is a **cascaded property** ([cascade](/architecture/cascade/)), not a
 special mode: `placement: central` makes the **server itself the node target**, for
 cloud APIs, SaaS pollers, and inbound webhooks from external sources. A listener
@@ -180,7 +180,7 @@ registered callback URL resolves to the placed listener's address, not a hardcod
 
 For each task the node runs the protocol over the interface's connection,
 then **normalizes at the edge**: it applies the locate + Expr extraction
-([collection](/architecture/collection/)) to produce datapoints and stamps labels (cascading
+([collection](/architecture/collection/)) to produce samples and stamps labels (cascading
 union + override); it keeps the original wire bytes as `raw` only on a parse or validation
 failure (for `collection.failed`) or under dev raw-mode, and drops them on success. A task
 runs in one of **two modes** ([collection](/architecture/collection/)); a held-open connection
@@ -195,7 +195,7 @@ is a **stateful interface transport**, not a third task type:
 Both assemble the same telemetry payload (below).
 
 The built interface types (poll protocols and listeners), their per-task params, and the fixed
-datapoints each emits are the collection **type catalog**: see
+samples each emits are the collection **type catalog**: see
 [built interface types and their config](/architecture/collection/#built-interface-types-and-their-config).
 This page covers how the node *executes* them; the rest of this section is the runtime that wraps that
 catalog (reachability gating, sessions, the task queue, tick scheduling).
@@ -232,7 +232,7 @@ Generic lifecycle:
 auth rejected, dropped, timeout). The **data event owns parse health**: a parse
 failure (connected, got bytes, the extraction did not match) emits a `collection.failed`
 event carrying the `raw` (the caused `event` + the `action` row for commands), and surfaces
-as a collection-health datapoint so it is alertable. A command timeout can touch both.
+as a collection-health sample so it is alertable. A command timeout can touch both.
 
 ## Inbound handling on a shared connection
 
@@ -256,9 +256,9 @@ matcher set**:
 ## The component task queue
 
 The node's work is the **component task queue** (distinct from the central
-**rule engine** that consumes datapoints off NATS and does derivation; see
+**rule engine** that consumes samples off NATS and does derivation; see
 [workers](/architecture/workers/)). It
-holds **poll tasks** (produce datapoints) and **command tasks** (from `run`
+holds **poll tasks** (produce samples) and **command tasks** (from `run`
 actions, produce a caused `event` + `action`-row status), and splits work by shape:
 
 - **discrete tasks** (pollers, commands): scheduled or triggered, request/response,
@@ -274,7 +274,7 @@ actions, produce a caused `event` + `action`-row status), and splits work by sha
 **Smart-wait gate.** After a disruptive command, the lane blocks until reachability
 reports the host back up, then releases the next task. The gate is a condition over
 live reachability read from the node's **local** copy, not a round-trip to the
-datapoint store; a fixed timeout is only the backstop.
+sample store; a fixed timeout is only the backstop.
 
 Tasks within a single interface run serially (one probe, then its tasks in order); only distinct
 interfaces run concurrently.
@@ -295,20 +295,20 @@ Any interface with a host address gets reachability for free: the node pings the
 host and checks the declared port(s) are listening, continuously and out of band.
 Smart default, **bypassable per interface** (endpoints that drop ICMP or have no port
 to check opt out or override the probe). The results come back as `reachable` /
-`port_open` **datapoints** usable in rules and dashboards, and they feed the
+`port_open` **samples** usable in rules and dashboards, and they feed the
 smart-wait gate from the node's local copy, so the connection detector and the
 dashboard signal are the same always-on probe.
 
 **The layered availability gate.** The gate is an **OSI-layered**
 set of cheap checks run as a **concurrent pre-pass** (its own high concurrency,
 short timeouts) before a connection-interface's poll tasks. All applicable checks
-run (they are cheap), each ships a built-in datapoint, instanced (the ping by
+run (they are cheap), each ships a built-in sample, instanced (the ping by
 host, the rest by interface) and owned by the queried component, and the
 interface's **`interface.reachable`** verdict is their AND. The pre-pass is
 separate from the bounded poll phase, so a node pinned to `--workers 1` (to
 trickle telemetry past the queue) still gates a large fleet in ~one wave.
 
-| Layer | Check | Datapoint | Notes |
+| Layer | Check | Sample | Notes |
 |---|---|---|---|
 | L3 network | ICMP ping, **batched once per host** per tick | `icmp.reachable` / `icmp.rtt_avg` | **informational** (see verdict below); shared by every interface on the host |
 | L4 transport | TCP connect (tcp-family) **or** UDP presence (snmp/UDP) | `tcp.open`/`tcp.connect_time` · `udp.open` | a closed UDP port answers ICMP port-unreachable, so absence of that is "present"; this is why SNMP's transport check is L4, not its auth-dependent get |
@@ -355,13 +355,13 @@ rejected handshake is down); telnet completes the `login:`/`Password:` chain
 **Poller** tasks run only if the verdict is up; **listener** (`mode=listen`) tasks
 are inbound and run ungated (and are never pinged); **inline probes** (`icmp`/`tcp`
 with the host on the task, no interface endpoint) *are* the check and run ungated.
-A down interface's gate datapoints all ship in **one** batched call. L5 (socket),
+A down interface's gate samples all ship in **one** batched call. L5 (socket),
 L6 (TLS), and further L7 handshakes slot in by extending the check stack: one
 `append` in `ifaceChecks`, gated by its own `_check` param.
 
-## Shipping datapoints
+## Shipping samples
 
-The node ships a native `Event`: `{ datapoints, labels }` plus an envelope
+The node ships a native `Event`: `{ samples, labels }` plus an envelope
 (`task`, batch `ts`), **published to the JetStream raw ingress subject** (protobuf-encoded
 message, the proto surviving as the NATS message schema), buffered with
 retry/backoff. On a parse or validation failure it also ships the **raw** wire bytes so the
@@ -374,7 +374,7 @@ direction: right
 classes: { node: { style.border-radius: 8 } }
 worklist: "pull worklist\n(placed tasks + commands)" { class: node }
 execute: "execute:\nprotocol + locate/Expr extraction" { class: node }
-normalize: "normalize: datapoints + labels\n(+ raw on failure)" { class: node }
+normalize: "normalize: samples + labels\n(+ raw on failure)" { class: node }
 ship: "buffer + publish\nraw ingress subject" { class: node }
 admission: "admission: bind owner\n(consume time) → trusted" { class: node }
 worker: "rule engine + persistence\n(trusted stream)" { class: node }
@@ -387,12 +387,12 @@ admission -> worker
 ship -> failed: "raw on failure" { style.stroke-dash: 4 }
 ```
 
-The node has already produced the datapoints at the edge; an **admission consumer** binds
+The node has already produced the samples at the edge; an **admission consumer** binds
 owner (registry lookup, owner attribution against the node's placement) at **consume time**
 and republishes to the trusted stream the rule engine and persistence read, so a forged owner
 is dropped before evaluation, not at the durable write. On a parse or
 validation failure it emits a `collection.failed` event carrying the raw; on success there is
-no raw to store. The server does not re-derive observed datapoints; only calc and event rules
+no raw to store. The server does not re-derive observed samples; only calc and event rules
 derive. The node's job ends at the ship.
 
 ## Tick scheduling, concurrency, and self-observability
@@ -423,16 +423,16 @@ silently.
 
 Each tick the node reports its own execution by publishing a `node.self` envelope: tick
 duration, task attempted/ran/skipped/failed counts, interface probed/up/down counts, and the
-`node.overrun` state. It is **not special-cased**: `node.self` is node-owned datapoints (the
+`node.overrun` state. It is **not special-cased**: `node.self` is node-owned samples (the
 seeded `node.*` types) that ride the **same raw-ingress -> admission -> trusted** path as any
-other node datapoint, and the rule engine derives node-health from them like any other
-datapoint. A node carries no operator-authored template; its self shape is **built into the
-binary** (the seeded `node.*` datapoint types and node-health rules), and the `node.self`
+other node sample, and the rule engine derives node-health from them like any other
+sample. A node carries no operator-authored template; its self shape is **built into the
+binary** (the seeded `node.*` sample types and node-health rules), and the `node.self`
 shape selects that built-in template at derive time. The one node-specific piece is owner
 resolution: the **admission consumer** binds `node.self` to the **reporting node**
 (`owner_kind = node`, a `node` owner arc, the `node_id` arm of the exclusive arc alongside
 component/system/location/global), the node-arc analogue of a per-component interface binding
-its datapoints to its component. So node datapoints land node-owned, and the rule engine's
+its samples to its component. So node samples land node-owned, and the rule engine's
 batching + concurrency + amortized rule refresh apply for free. This is the operator-visible
 health of the collection layer itself. Self-telemetry is best-effort (a failed
 report is logged, never fatal; it must not break collection).
@@ -442,18 +442,18 @@ is not enough. A **node-liveness sweep** runs server-side alongside the rule eng
 whose last heartbeat (or its registration, if it has never checked in) predates
 the staleness window (`OMNIGLASS_NODE_DOWN_AFTER`, default 90s) gets a node-owned
 **`node.down` alarm**, auto-resolved the moment it heartbeats again. The alarm is
-raised directly by the sweep (no event_rule: a dead node emits no datapoint to
+raised directly by the sweep (no event_rule: a dead node emits no sample to
 evaluate), keyed by `(node.down, node owner)` so it is idempotent across sweeps.
-This is why the node owner arc reaches `event` and `alarm`, not just datapoints:
+This is why the node owner arc reaches `event` and `alarm`, not just samples:
 "the node isn't working" is a first-class node-owned incident.
 
 A degraded-but-alive node, by contrast, *does* report, so it alarms through the
-ordinary **event_rule** path the rule engine runs over every arriving datapoint, no
+ordinary **event_rule** path the rule engine runs over every arriving sample, no
 node-specific evaluation: a rule on a `node.*` key opens a node-owned alarm. Two
 are seeded by default: `node-overrun` (fires while `node.overrun` is true) and
 `node-tasks-failing` (fires while `node.tasks.failed > 0`), both resolving
 implicitly on the next clean tick. This works because the trigger engine is
-owner-general: `Evaluate` opens and resolves alarms for the datapoint's actual
+owner-general: `Evaluate` opens and resolves alarms for the sample's actual
 owner (component, system, location, or node), which also unlocks system- and
 location-owned alarms.
 

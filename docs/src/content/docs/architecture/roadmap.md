@@ -50,7 +50,7 @@ pointing at the page that already describes the target:
 1. **Collection at the edge.** The [node](/architecture/nodes/) runtime, [templates](/architecture/templates/)
    (the reusable device shape), and [interfaces](/architecture/collection/), so a reading can come off real
    gear and be parsed at the edge.
-2. **The data model.** [Datapoints](/architecture/datapoints/) (the canonical-signal registry and the
+2. **The data model.** [Datapoints](/architecture/properties/) (the canonical-signal registry and the
    exclusive-arc owner columns), [config and variables](/architecture/variables/) resolved down the
    [cascade](/architecture/cascade/), and the [expression engine](/architecture/expressions/) the rules and
    filters share.

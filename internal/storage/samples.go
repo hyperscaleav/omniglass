@@ -9,10 +9,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// MetricDatapointEvent is one observed metric to persist. OwnerKind picks the
+// MetricSampleEvent is one observed metric to persist. OwnerKind picks the
 // arc; OwnerID is the estate address (component/system/location/node name).
 // Instance discriminates many values of one key on one owner (default "").
-type MetricDatapointEvent struct {
+type MetricSampleEvent struct {
 	OwnerKind string
 	OwnerID   string
 	Key       string
@@ -22,8 +22,8 @@ type MetricDatapointEvent struct {
 	TS        time.Time
 }
 
-// MetricDatapoint is a stored observed/derived metric row (read side).
-type MetricDatapoint struct {
+// MetricSample is a stored observed/derived metric row (read side).
+type MetricSample struct {
 	TS         time.Time
 	OwnerKind  string
 	Key        string
@@ -34,7 +34,7 @@ type MetricDatapoint struct {
 }
 
 // ErrUnknownOwnerKind guards the owner-arc column mapping.
-var ErrUnknownOwnerKind = errors.New("storage: unknown datapoint owner_kind")
+var ErrUnknownOwnerKind = errors.New("storage: unknown sample owner_kind")
 
 // ownerColumn maps an owner kind to its arc column, so a bad kind fails in Go
 // (an explicit error) rather than as a NULL that trips the CHECK opaquely.
@@ -53,24 +53,24 @@ func ownerColumn(kind string) (string, error) {
 	}
 }
 
-// InsertMetricDatapoints writes observed metric rows in one transaction. Each
+// InsertMetricSamples writes observed metric rows in one transaction. Each
 // row sets exactly its owner arc column (the CHECK enforces the rest) and
 // provenance observed. Callers apply reject-not-project (collection.Registry)
 // before calling; this is the durable write.
-func (p *PG) InsertMetricDatapoints(ctx context.Context, evs []MetricDatapointEvent) error {
+func (p *PG) InsertMetricSamples(ctx context.Context, evs []MetricSampleEvent) error {
 	if len(evs) == 0 {
 		return nil
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("storage: begin insert datapoints: %w", err)
+		return fmt.Errorf("storage: begin insert samples: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	for _, ev := range evs {
 		col, err := ownerColumn(ev.OwnerKind)
 		if err != nil {
-			return fmt.Errorf("storage: datapoint %s/%s: %w", ev.OwnerID, ev.Key, err)
+			return fmt.Errorf("storage: sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
 		ts := ev.TS
 		if ts.IsZero() {
@@ -81,24 +81,24 @@ func (p *PG) InsertMetricDatapoints(ctx context.Context, evs []MetricDatapointEv
 		// trips the arc CHECK opaquely.
 		arc, err := p.ownerArcValue(ctx, tx, ev.OwnerKind, ev.OwnerID)
 		if err != nil {
-			return fmt.Errorf("storage: datapoint %s/%s: %w", ev.OwnerID, ev.Key, err)
+			return fmt.Errorf("storage: sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
 		sql := fmt.Sprintf(`insert into metric (ts, owner_kind, %s, property_type_id, instance, value, provenance, source)
 			values ($1, $2, $3, (select id from property_type where name = $4), $5, $6, 'observed', $7)`, col)
 		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arc, ev.Key, ev.Instance, ev.Value, ev.Source); err != nil {
-			return fmt.Errorf("storage: insert datapoint %s/%s: %w", ev.OwnerID, ev.Key, err)
+			return fmt.Errorf("storage: insert sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("storage: commit insert datapoints: %w", err)
+		return fmt.Errorf("storage: commit insert samples: %w", err)
 	}
 	return nil
 }
 
 // LatestMetric returns the most recent metric row for a component and key, or
 // nil if none. Read helper for the component reachability panel and tests.
-func (p *PG) LatestMetric(ctx context.Context, componentName, key string) (*MetricDatapoint, error) {
-	var dp MetricDatapoint
+func (p *PG) LatestMetric(ctx context.Context, componentName, key string) (*MetricSample, error) {
+	var dp MetricSample
 	err := p.pool.QueryRow(ctx, `
 		select ts, owner_kind,
 			(select p.name from property_type p where p.id = metric.property_type_id), instance, value, provenance, source
@@ -120,8 +120,8 @@ func (p *PG) LatestMetric(ctx context.Context, componentName, key string) (*Metr
 // (tcp.open, icmp.reachable, and their rtt/connect_time companions) are
 // per-interface instance, so the layer signals must resolve one interface's
 // latest value, not the newest across every interface as LatestMetric does.
-func (p *PG) LatestMetricInstance(ctx context.Context, componentName, key, instance string) (*MetricDatapoint, error) {
-	var dp MetricDatapoint
+func (p *PG) LatestMetricInstance(ctx context.Context, componentName, key, instance string) (*MetricSample, error) {
+	var dp MetricSample
 	err := p.pool.QueryRow(ctx, `
 		select ts, owner_kind,
 			(select p.name from property_type p where p.id = metric.property_type_id), instance, value, provenance, source

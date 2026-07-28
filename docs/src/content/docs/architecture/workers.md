@@ -7,7 +7,7 @@ sidebar:
     variant: caution
 ---
 
-Workers are how Omniglass does the steady background work, deriving datapoints, sending actions, firing timers, reconciling drift, on one machinery instead of a pile of bespoke loops, so the operator gets crash recovery and exactly-once outcomes for free everywhere.
+Workers are how Omniglass does the steady background work, deriving samples, sending actions, firing timers, reconciling drift, on one machinery instead of a pile of bespoke loops, so the operator gets crash recovery and exactly-once outcomes for free everywhere.
 
 ## One machinery, several consumers
 
@@ -16,17 +16,17 @@ pool (pull a message, do work, ack, with at-least-once delivery plus `Nats-Msg-I
 idempotent sink so it inherits crash recovery, exactly-once outcomes, and event-time semantics for
 free). It is instantiated over several consumers rather than separate loops:
 
-- **the admission consumer**: owner-confines raw-ingress datapoints (node and webhook) against the
-  publisher's placement, preserving `Nats-Msg-Id`, and republishes to the **trusted** datapoints stream,
+- **the admission consumer**: owner-confines raw-ingress samples (node and webhook) against the
+  publisher's placement, preserving `Nats-Msg-Id`, and republishes to the **trusted** samples stream,
   so the rule engine and persistence read only confined points (system mode, [messaging](/architecture/messaging/));
-- **the rule engine** (datapoint consumers): consume arriving datapoints from the **trusted**
-  JetStream datapoints stream, apply `calc_rule`s and `event_rule`s, publish derived datapoints back
+- **the rule engine** (sample consumers): consume arriving samples from the **trusted**
+  JetStream samples stream, apply `calc_rule`s and `event_rule`s, publish derived samples back
   onto the trusted stream (a trusted producer, no admission pass), and write events and alarm transitions
   to Postgres in one transaction;
 - **the action sender** ([alarms and actions](/architecture/alarms-actions/)): consumes
   action work fanned out by CDC, sends at-least-once, advances action step state (PG-first, CDC-out);
-- **the persistence consumer**: a batch sink that consumes the **trusted** datapoints stream and writes
-  datapoints to the Postgres metric/state/log tables asynchronously, so rules never wait on PG;
+- **the persistence consumer**: a batch sink that consumes the **trusted** samples stream and writes
+  samples to the Postgres metric/state/log tables asynchronously, so rules never wait on PG;
 - **the clock** ([time](/architecture/time/)): fires schedules and armed timers (a leader-elected
   singleton, below);
 - **reconcile**: the desired-state loop (below).
@@ -52,10 +52,10 @@ that produces work still publishes onto the bus, where the competing consumers s
 
 ## Re-entry, not one mega-pass
 
-The pipeline `datapoint -> alarm -> action` is **not one transaction**. A datapoint arrives on the
-datapoints stream; `event_rule`s evaluate it (the stateless then stateful stages below); two edges
-re-enter: **calc** (a `calc_rule` produces *new* datapoints) re-enters by publishing the derived
-datapoints back onto the data lane, where the consumers pick them up again, and **actions** are born
+The pipeline `sample -> alarm -> action` is **not one transaction**. A sample arrives on the
+samples stream; `event_rule`s evaluate it (the stateless then stateful stages below); two edges
+re-enter: **calc** (a `calc_rule` produces *new* samples) re-enters by publishing the derived
+samples back onto the data lane, where the consumers pick them up again, and **actions** are born
 when an `event_rule` writes the event and alarm to PG in one transaction, after which CDC fans the
 committed change out to the action sender. So the rule engine never recurses unboundedly in one
 transaction; a cross-producing stage hands off to the bus, which is also what makes it independently
@@ -63,7 +63,7 @@ durable. Calc re-entry **terminates by write-on-change** (a recompute that lands
 publishes nothing, the fixpoint) with a depth cap as a cyclic-rule backstop, carrying a rollup one hop
 per pass. **[Health](/architecture/health/) is the exception, and deliberately not a worker stage**: its
 rollup (component -> system -> location) runs **inside the write transaction** that changed it, because a
-verdict recomputed a hop later would record its transition at the wrong moment. Parsing into datapoints is **not** a
+verdict recomputed a hop later would record its transition at the wrong moment. Parsing into samples is **not** a
 worker stage; it happens at the edge ([collection](/architecture/collection/)).
 
 ## The stateless / stateful fork
@@ -86,27 +86,27 @@ This is the axis that decides almost everything else about a subsystem.
 
 ## Lineage the engine stamps
 
-Every derived datapoint carries its lineage **on the row** (a `provenance`, `source_rule` plus
+Every derived sample carries its lineage **on the row** (a `provenance`, `source_rule` plus
 version, and the one provenance pointer; see [storage](/architecture/storage/),
-[datapoints](/architecture/datapoints/)). There is no separate execution table: a derived row is itself
-the evidence of its rule's run, and a fan-out (one execution to N datapoints) stamps the same
+[samples](/architecture/properties/)). There is no separate execution table: a derived row is itself
+the evidence of its rule's run, and a fan-out (one execution to N samples) stamps the same
 `source_rule` on each. The rule version is the hinge for backtest.
 
-## Backtest: re-run a changed rule over retained datapoints
+## Backtest: re-run a changed rule over retained samples
 
-The model is **not event-sourced**: current state lives in the datapoint tables and the `alarm` /
+The model is **not event-sourced**: current state lives in the sample tables and the `alarm` /
 `action` rows directly, never reconstructed from a log. Omniglass does **not** re-run history to rebuild
 events or state. But a changed `calc_rule` or `event_rule` can be **backtested**: a read-only
-what-if that re-runs the new rule version over the **retained datapoints** and diffs its output
+what-if that re-runs the new rule version over the **retained samples** and diffs its output
 against what the old version produced, purely as DX sugar, without writing a new event or touching
 live state. Only the **calculated** and **event-derived** slices are server-rule-derived, so only
 they re-derive. Everything else does not:
 
-- **observed** datapoints are parsed at the edge and are not re-derived server-side (the raw payload
+- **observed** samples are parsed at the edge and are not re-derived server-side (the raw payload
   is not stored, so there is no server-side re-parse);
 - **operator alarm transitions** (ack, snooze) come from `audit_log`;
 - **action delivery status** comes from the action rows (the real-world send is not re-done);
-- **no-data staleness** re-derives from the datapoint gaps ([time](/architecture/time/)).
+- **no-data staleness** re-derives from the sample gaps ([time](/architecture/time/)).
 
 Two modes, switched by the `source_rule` version: **historical** uses the original rule versions
 recorded on each derived row (showing what the system actually computed, for audit), and

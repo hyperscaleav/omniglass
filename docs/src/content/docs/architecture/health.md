@@ -390,6 +390,6 @@ instead of a parallel feature. An operator who understands alarms and datapoints
 
 Related: [core entities](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled) (the
 role, the capability, and the quorum), [alarms and actions](/architecture/alarms-actions/) (the detection
-tier that will raise alarms), [datapoints](/architecture/datapoints/) (the state datapoint and the owner
+tier that will raise alarms), [datapoints](/architecture/properties/) (the state datapoint and the owner
 arc), and the [Standards](/guides/admin/standards/) and
 [Work with an entity](/guides/operator/entities/) guides for the operator loop.

@@ -18,7 +18,7 @@ type Store interface {
 	NodeWorklist(ctx context.Context, name string) (storage.Worklist, error)
 	RecordHeartbeat(ctx context.Context, name string) error
 	// The telemetry ingest consumer surface: resolve+confine a task's owner,
-	// snapshot the datapoint registry (reject-not-project), and write the typed
+	// snapshot the sample registry (reject-not-project), and write the typed
 	// metric rows through cp1's insert path.
 	ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (storage.TaskOwner, bool, error)
 	ListPropertyTypes(ctx context.Context) ([]storage.PropertyType, error)
@@ -26,13 +26,13 @@ type Store interface {
 	// a registered event_type name routes a natively-published occurrence (an xAPI
 	// event, a trap) to the event sink (kind "event") as a caught event (ADR-0066).
 	ListEventTypes(ctx context.Context) ([]storage.EventType, error)
-	InsertMetricDatapoints(ctx context.Context, evs []storage.MetricDatapointEvent) error
-	// The state sink and its transition-only guard: a state datapoint routes here
+	InsertMetricSamples(ctx context.Context, evs []storage.MetricSampleEvent) error
+	// The state sink and its transition-only guard: a state sample routes here
 	// (by registry kind), and LatestState lets the consumer skip a write whose
 	// value equals the latest stored value for the series.
-	InsertStateDatapoints(ctx context.Context, evs []storage.StateDatapointEvent) error
-	LatestState(ctx context.Context, componentName, key, instance string) (*storage.StateDatapoint, error)
-	// The log sink: a log-kind datapoint routes here (by registry kind) as an
+	InsertStateSamples(ctx context.Context, evs []storage.StateSampleEvent) error
+	LatestState(ctx context.Context, componentName, key, instance string) (*storage.StateSample, error)
+	// The log sink: a log-kind sample routes here (by registry kind) as an
 	// occurrence, instead of being dropped.
 	InsertEvents(ctx context.Context, evs []storage.EventOccurrence) error
 	// The observed latest-value cache derive (ADR-0063 #394): after the samples

@@ -11,7 +11,7 @@ import (
 )
 
 // propertyBody is the wire shape of a property: the typed signal-catalog entry a
-// datapoint observes and a field declares. Kind (metric/state/log) is present only
+// sample observes and a field declares. Kind (metric/state/log) is present only
 // for an observed property; validation is a JSON Schema fragment; official marks a
 // seed-owned, read-only property.
 type propertyBody struct {

@@ -23,7 +23,7 @@ import (
 // resolves it by self-checking its capability ONCE against loopback: if the
 // loopback run succeeds, ICMP works here, so a subsequent per-target run error is
 // a reachability verdict (down with a reason); if loopback itself fails, the node
-// lacks the capability and every probe is inconclusive (no datapoint).
+// lacks the capability and every probe is inconclusive (no sample).
 func NewICMPPinger() ICMPPinger { return ICMPPinger{cap: &icmpCapability{}} }
 
 // ICMPPinger is the real Pinger. Its capability self-check is cached once across

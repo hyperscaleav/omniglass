@@ -6,14 +6,14 @@ import (
 	"time"
 )
 
-// The canonical reachability datapoint names the tcp probe emits. They are
-// seeded datapoint_types (internal/seed/datapoint_types.yaml); the ingest
+// The canonical reachability sample names the tcp probe emits. They are
+// seeded property_types (internal/seed/properties.yaml); the ingest
 // consumer's reject-not-project drops any name absent from that registry.
 const (
-	DatapointTCPOpen        = "tcp.open"
-	DatapointTCPConnectTime = "tcp.connect_time"
-	DatapointICMPReachable  = "icmp.reachable"
-	DatapointICMPRTTAvg     = "icmp.rtt_avg"
+	SignalTCPOpen        = "tcp.open"
+	SignalTCPConnectTime = "tcp.connect_time"
+	SignalICMPReachable  = "icmp.reachable"
+	SignalICMPRTTAvg     = "icmp.rtt_avg"
 )
 
 // defaultTCPTimeout bounds a connect attempt when the task sets none.
@@ -26,13 +26,13 @@ const (
 	defaultICMPCount   = 1
 )
 
-// Datapoint is one observation produced by a probe or computed by the node: a
+// Sample is one observation produced by a probe or computed by the node: a
 // canonical name, a value, a timestamp, and labels. A metric rides Value (float);
 // a state verdict (interface.reachable) rides Text with IsText set, so the same
-// list carries both to buildEvent, which maps a text datapoint to the proto
+// list carries both to buildEvent, which maps a text sample to the proto
 // string_value and a metric to double_value. Labels (the reason) are not
 // persisted yet, but the probe still produces them.
-type Datapoint struct {
+type Sample struct {
 	Name   string
 	Value  float64
 	Text   string
@@ -59,7 +59,7 @@ type ICMPTask struct {
 }
 
 // Runner runs a node's collection tasks against injected probe primitives. It
-// assigns NO component identity: produced datapoints carry only the measurement,
+// assigns NO component identity: produced samples carry only the measurement,
 // and the owning component is bound server-side at ingest from the task's
 // interface. Checkpoint 3 wired the tcp probe; checkpoint 4 adds the icmp probe;
 // http/snmp extend it further.
@@ -68,13 +68,13 @@ type Runner struct {
 	Ping Pinger
 }
 
-// CollectTCP runs one tcp task and returns its datapoints. A tcp probe always
+// CollectTCP runs one tcp task and returns its samples. A tcp probe always
 // emits tcp.open (1.0 open, 0.0 closed) carrying the verdict reason as a label,
 // and emits tcp.connect_time (ms) ONLY when open (absent when closed). A failed
 // connect is data, not an error; err is returned only when the target could not
 // be attempted (an unresolved host), so the caller skips the task rather than
 // recording a false down.
-func (r *Runner) CollectTCP(ctx context.Context, t TCPTask) ([]Datapoint, error) {
+func (r *Runner) CollectTCP(ctx context.Context, t TCPTask) ([]Sample, error) {
 	if t.Target == "" {
 		return nil, fmt.Errorf("collection: tcp task: empty target")
 	}
@@ -93,15 +93,15 @@ func (r *Runner) CollectTCP(ctx context.Context, t TCPTask) ([]Datapoint, error)
 	if open {
 		openVal = 1.0
 	}
-	out := []Datapoint{{
-		Name:   DatapointTCPOpen,
+	out := []Sample{{
+		Name:   SignalTCPOpen,
 		Value:  openVal,
 		TS:     now,
 		Labels: map[string]string{ReasonLabel: string(reach)},
 	}}
 	if open {
-		out = append(out, Datapoint{
-			Name:  DatapointTCPConnectTime,
+		out = append(out, Sample{
+			Name:  SignalTCPConnectTime,
 			Value: connectMS,
 			TS:    now,
 		})
@@ -123,19 +123,19 @@ type PingResult struct {
 // hermetic (no raw sockets, no privilege). A target that does not echo is DATA:
 // Received==0 with a down Reason (Timedout / Prohibited / Unreachable). err is
 // reserved for the one inconclusive case, a node that cannot do ICMP at all (or
-// an unresolvable host), which the caller treats as no datapoint, never as down.
+// an unresolvable host), which the caller treats as no sample, never as down.
 type Pinger interface {
 	Ping(ctx context.Context, target string, count int, timeout time.Duration) (PingResult, error)
 }
 
-// CollectICMP runs one icmp (ping) task and returns its datapoints. A ping probe
+// CollectICMP runs one icmp (ping) task and returns its samples. A ping probe
 // always emits icmp.reachable (1.0 if any echo returned, 0.0 otherwise) carrying
 // the verdict reason as a label, and emits icmp.rtt_avg (ms) ONLY when reachable
 // (absent when unreachable). A target that does not answer is data, not an error;
 // err is returned only when the node cannot attempt the probe at all (no ICMP
 // capability, or an unresolvable host), so the caller skips the task rather than
 // recording a false down.
-func (r *Runner) CollectICMP(ctx context.Context, t ICMPTask) ([]Datapoint, error) {
+func (r *Runner) CollectICMP(ctx context.Context, t ICMPTask) ([]Sample, error) {
 	if t.Target == "" {
 		return nil, fmt.Errorf("collection: icmp task: empty target")
 	}
@@ -158,15 +158,15 @@ func (r *Runner) CollectICMP(ctx context.Context, t ICMPTask) ([]Datapoint, erro
 	if reachable {
 		reachVal = 1.0
 	}
-	out := []Datapoint{{
-		Name:   DatapointICMPReachable,
+	out := []Sample{{
+		Name:   SignalICMPReachable,
 		Value:  reachVal,
 		TS:     now,
 		Labels: map[string]string{ReasonLabel: string(pingReason(res))},
 	}}
 	if reachable {
-		out = append(out, Datapoint{
-			Name:  DatapointICMPRTTAvg,
+		out = append(out, Sample{
+			Name:  SignalICMPRTTAvg,
 			Value: float64(res.AvgRTT) / float64(time.Millisecond),
 			TS:    now,
 		})

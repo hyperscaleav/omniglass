@@ -10,7 +10,7 @@ import (
 
 // audit_id was a placeholder for the audit_log row that declared a value, but it
 // was never wired, typed bigint against a uuid audit_log.id so it could never FK,
-// and served only a 'declared' datapoint provenance the design does not use
+// and served only a 'declared' sample provenance the design does not use
 // (declared values are config, not observations). It is dropped. The neighbouring
 // source_rule_version and value_json are DELIBERATELY kept: they are designed-but-
 // unbuilt on-row lineage (the backtest version hinge and ADR-0038's structured

@@ -12,7 +12,7 @@ import (
 
 // EventType is a registered occurrence key: the "happen" half of the telemetry
 // model, the twin of PropertyType (the "know" half). An event is a different shape
-// from a datapoint (an occurrence, not a value), so it gets its own registry.
+// from a sample (an occurrence, not a value), so it gets its own registry.
 // PayloadSchema is an optional jsonb schema for the occurrence payload. Official
 // marks a seed-owned, read-only type. An event type is addressed by its name.
 type EventType struct {

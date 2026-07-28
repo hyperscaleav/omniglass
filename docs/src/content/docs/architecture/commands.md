@@ -16,7 +16,7 @@ protobuf `Command` on the wire, the device acknowledgement), and the `event_rule
 :::
 
 A **command** is the "do" half of the telemetry model, the third of the triad alongside a
-[datapoint](/architecture/datapoints/) (**know**) and an [event](/architecture/events/) (**happen**).
+[datapoint](/architecture/properties/) (**know**) and an [event](/architecture/events/) (**happen**).
 Where a datapoint records what a device reports and an event records what happened, a command
 records what a component was **told**. Its registry is `command_type`, the driver-owned catalog of
 what a component can be told, the twin of `property_type` and `event_type`.
@@ -35,7 +35,7 @@ target_property_type, official)`. Two facts are the driver's, not the abstract s
   invocation and a caused event, with no value to settle.
 
 The registry is seeded official and operator-extensible, official rows read-only, on the same shape
-as the [property](/architecture/datapoints/#the-property_type-registry) and
+as the [property](/architecture/properties/#the-property_type-registry) and
 [event](/architecture/events/#the-event_type-registry) catalogs (a console **Command Types** page,
 `/command-types` CRUD gated by `command_type:*`).
 
@@ -45,11 +45,11 @@ Issuing a command is one transaction that writes three things, which is where th
 meet:
 
 1. the **`command`** row (the invocation: owner, command_type, params, actor), over the same
-   [exclusive owner arc](/architecture/datapoints/#ownership-the-exclusive-arc) as every datapoint
+   [exclusive owner arc](/architecture/properties/#ownership-the-exclusive-arc) as every datapoint
    and event;
 2. a **caused `event`** ([`origin=caused`](/architecture/events/#events-caught-caused-derived-scheduled),
    typed `command.issued`), the lineage record that a command happened; and
-3. for a settleable command, an **`intended`** value in the [property cache](/architecture/datapoints/)
+3. for a settleable command, an **`intended`** value in the [property cache](/architecture/properties/)
    (`provenance=intended`, its `ts` the moment of issue), the **told** in the want/told/is pivot.
 
 So a command is not a side channel: it feeds the same cache and event log everything else reads.
@@ -83,7 +83,7 @@ The physical layout (the owner arc, the caused-event lineage, partitioning) live
 | `command_type` | name, params_schema (jsonb), **settle_window_seconds**, **target_property_type_id?**, official | the do registry; the settle window and target property are driver facts |
 | `command` | id, ts, owner arc, command_type_id, instance, params (jsonb), actor, **caused_event_id** | the invocation log; `caused_event_id` points at the event the command recorded |
 
-Related: [datapoints](/architecture/datapoints/) (the intended value a command opens),
+Related: [datapoints](/architecture/properties/) (the intended value a command opens),
 [events](/architecture/events/) (the caused event it records), [config, secrets, and
 variables](/architecture/variables/) (the reconciliation read settlement closes), and
 [alarms and actions](/architecture/alarms-actions/) (where a reconcile policy issues a command).

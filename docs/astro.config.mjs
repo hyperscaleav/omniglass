@@ -20,6 +20,7 @@ export default defineConfig({
   // Keep its old URL alive for external links and bookmarks.
   redirects: {
     '/guides/console/': '/guides/operator/',
+    '/architecture/datapoints/': '/architecture/properties/',
   },
   integrations: [
     // Diagrams are authored in D2 and rendered to inline SVG. ELK layout; dark theme
@@ -91,7 +92,7 @@ export default defineConfig({
             { label: 'Templates', slug: 'architecture/templates' },
             // the journey, in the order the data travels
             { label: 'Data collection', slug: 'architecture/collection' },
-            { label: 'Datapoints', slug: 'architecture/datapoints' },
+            { label: 'Properties', slug: 'architecture/properties' },
             { label: 'Events', slug: 'architecture/events' },
             { label: 'Commands', slug: 'architecture/commands' },
             { label: 'Calculations', slug: 'architecture/calculations' },

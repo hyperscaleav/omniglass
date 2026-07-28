@@ -129,7 +129,7 @@ func (s *Server) subscribe() error {
 	s.subs = append(s.subs, wl, hb)
 
 	// The telemetry ingest path: a JetStream stream + durable consumer over the
-	// same internal client. It carries the node -> server datapoint flow.
+	// same internal client. It carries the node -> server sample flow.
 	if err := s.startTelemetryConsumer(); err != nil {
 		return fmt.Errorf("bus: start telemetry consumer: %w", err)
 	}

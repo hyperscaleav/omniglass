@@ -843,7 +843,7 @@ below from the project's history. From here it grows one slice at a time.
 
 ### ADR-0037: Telemetry is a protobuf Event over JetStream with an inline owner-confining consumer
 
-- **Date:** 2026-07-07 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [datapoints](/architecture/datapoints/)
+- **Date:** 2026-07-07 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [datapoints](/architecture/properties/)
 - **Decision:** A node ships each collected batch as a protobuf `Event` (proto3, `proto/og/v1/event.proto`,
   `Event` + `Datapoint` messages only, no gRPC service) published to `og.v1.telemetry.<node>`. This is
   omniglass's first protobuf; the wire is generated with `protoc` + `protoc-gen-go` via a `gen-proto` stage on
@@ -872,7 +872,7 @@ below from the project's history. From here it grows one slice at a time.
 
 ### ADR-0038: The reachability verdict is a built-in state
 
-- **Date:** 2026-07-07 | **Status:** Accepted | **Pages:** [datapoints](/architecture/datapoints/), [collection](/architecture/collection/)
+- **Date:** 2026-07-07 | **Status:** Accepted | **Pages:** [datapoints](/architecture/properties/), [collection](/architecture/collection/)
 - **Decision:** The per-interface reachability verdict `interface.reachable` (value domain `up` / `down`) is a
   first-class **state** datapoint, not a metric, seeded as an official `datapoint_type` at `kind=state`,
   `value_type=text`, `validation: {values:[up,down]}`. It is gated **per interface**: the verdict is the AND of
@@ -1313,7 +1313,7 @@ below from the project's history. From here it grows one slice at a time.
 
 ### ADR-0046: The `event` log-kind sink
 
-- **Date:** 2026-07-20 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/), [datapoints](/architecture/datapoints/), [data collection](/architecture/collection/), [API](/architecture/api/), [Nodes and reachability guide](/guides/operator/collection/)
+- **Date:** 2026-07-20 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/), [datapoints](/architecture/properties/), [data collection](/architecture/collection/), [API](/architecture/api/), [Nodes and reachability guide](/guides/operator/collection/)
 - **Decision:** A collected **log**-kind observation now has a durable home. A new **`event`** table is the
   **log-kind sink** of the collection pipeline, the counterpart of `metric_datapoint` / `state_datapoint`: where
   a datapoint records a **sampled present value**, an `event` records a **past occurrence** (a device log line, a
@@ -1342,13 +1342,13 @@ below from the project's history. From here it grows one slice at a time.
   occurrence owned, addressed, and traced identically to the values beside it, the primitive-first move.
 - **Deferred:** the **`datapoint` -> `sample`** rename (a naming cleanup that lands in a later slice, so the
   datapoint tables keep their current names here); **`property_value`** and the materialized current-value store
-  (the [fold-fields slice](/architecture/datapoints/#reads-current-value-is-a-view)); the normalized **event_type**
+  (the [fold-fields slice](/architecture/properties/#reads-current-value-is-a-view)); the normalized **event_type**
   registry and the **promotion** of a raw `event` occurrence into a registered event ([events](/architecture/events/));
   a scope-wide `event` read (this ships the per-component read only); and any `calculated` / `intended` / `declared`
   event producer (the write path is `observed` collection only).
 - **Supersedes:** the checkpoint behavior where a **log**-kind datapoint had no sink and was **dropped** at ingest
   (recorded in [ADR-0038](#adr-0038-the-reachability-verdict-is-a-built-in-state)); the log kind now persists to
-  `event`. **Divergence from [datapoints](/architecture/datapoints/):** that page's present-tense design routes the
+  `event`. **Divergence from [datapoints](/architecture/properties/):** that page's present-tense design routes the
   log kind to a **`log_datapoint`** table and treats `event` as a strictly normalized, `event_type`-registered
   occurrence promoted from a raw line. The built log sink is the **`event`** table directly (the raw occurrence
   lands there, not in a separate `log_datapoint` table), and the `log_datapoint` table plus the promotion ladder
@@ -2099,7 +2099,7 @@ below from the project's history. From here it grows one slice at a time.
 
 ### ADR-0061: A calculated series is current at its highest id, not its newest timestamp
 
-- **Date:** 2026-07-22 | **Status:** Accepted | **Pages:** [datapoints](/architecture/datapoints/)
+- **Date:** 2026-07-22 | **Status:** Accepted | **Pages:** [datapoints](/architecture/properties/)
 - **Decision:** for a **calculated** series (health, and anything else the engine derives), the current
   value is the row with the **highest id**. `ts` records when the value was computed and is for display
   and history; it does not decide which row is current. For an **observed** series, `ts` still orders,
@@ -2162,7 +2162,7 @@ below from the project's history. From here it grows one slice at a time.
 
 ### ADR-0063: The telemetry model is typed registries over bare-noun data tables
 
-- **Date:** 2026-07-23 | **Status:** Accepted | **Pages:** [datapoints](/architecture/datapoints/), [events](/architecture/events/), [variables](/architecture/variables/), [storage](/architecture/storage/), [glossary](/architecture/glossary/)
+- **Date:** 2026-07-23 | **Status:** Accepted | **Pages:** [datapoints](/architecture/properties/), [events](/architecture/events/), [variables](/architecture/variables/), [storage](/architecture/storage/), [glossary](/architecture/glossary/)
 - **Decision:** every component interaction normalizes to one of three **registries**, each suffixed
   `_type` (`property_type`, `event_type`, `command_type`), over bare-noun **data tables**
   (`metric`, `state`, `property`, `event`, `command`). A registry is a classification, so it takes the
@@ -2173,7 +2173,7 @@ below from the project's history. From here it grows one slice at a time.
   registries and are no longer modeled as a `property` kind.
 - **Context:** using bare nouns for registries was the root inconsistency. `property` named the
   registry while `property_value` named the data; `event` had been folded into the property registry as
-  `kind=log`, the "false unification" [datapoints](/architecture/datapoints/) and
+  `kind=log`, the "false unification" [datapoints](/architecture/properties/) and
   [events](/architecture/events/) explicitly warn against; and the code said `property` while the pages
   still said `datapoint_type`. Suffixing the registry `_type` and freeing the bare noun for the data
   fixes all three at once, and it **vindicates the two-registry separation the pages always wanted**:
@@ -2263,6 +2263,20 @@ below from the project's history. From here it grows one slice at a time.
   of it on the API. It unblocks the [CRUD form primitive](/contributing/design-system/), whose generated
   edit form reads mutability off the create-minus-update schema difference and would otherwise render
   these fields read-only.
+
+### ADR-0065: Property, sample, and current value replace the datapoint
+
+**Status:** accepted.
+
+The one word "datapoint" conflated two things: the signal (what is measured) and the observation (a single reading of it). Splitting them removes the ambiguity that let "the datapoint's current value" and "a datapoint arrives" name different nouns.
+
+- A **property** is the canonical signal on one owning entity (the key a sample observes and config declares); its registry is `property_type`.
+- A **sample** is one timestamped observation of a property, a row in `metric` / `state` (the kind).
+- The **current value** is the latest sample per series, held in the `property` cache.
+
+No tables were renamed (`metric`, `state`, `event`, `property`, `property_type` stay); the shift is vocabulary across the code (the proto `Sample` message, the `*Sample` Go types, `deriveSamples`) and the docs (the value-model page is now [properties](/architecture/properties/), with a redirect from the old slug).
+
+It also settles the built shape the earlier design left open: the **`property` cache is the architecture-of-record for current values**, a table upserted from the persistence sink with an out-of-order guard, not the "view over metric" once sketched on [storage](/architecture/storage/). The `intended` value a command opens is written in the command's Postgres transaction; the data-lane re-entry of intended and the adaptive-poll reconciliation described under [intended](/architecture/properties/#intended-the-declared-effect-of-a-command) are the deferred **actuation** evolution, not the built path. Refines [ADR-0063](#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables).
 
 ### ADR-0066: Logs are a raw ingest lane, not events
 

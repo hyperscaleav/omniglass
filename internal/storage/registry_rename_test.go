@@ -150,9 +150,9 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 	if _, err := gw.SetProperty(ctx, "", "component", "bar-1", "serial_number", "", []byte(`"SN-1"`), all); err != nil {
 		t.Fatalf("value: %v", err)
 	}
-	if err := gw.InsertMetricDatapoints(ctx, []storage.MetricDatapointEvent{{
+	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleEvent{{
 		OwnerKind: "component", OwnerID: "bar-1", Key: "tcp.open", Value: 1, Source: "test"}}); err != nil {
-		t.Fatalf("datapoint: %v", err)
+		t.Fatalf("sample: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `update property_type set name = 'serial_no' where name = 'serial_number'`); err != nil {
 		t.Fatalf("rename property: %v", err)
@@ -168,14 +168,14 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 	if len(props2) != 1 || props2[0].PropertyTypeName != "serial_no" {
 		t.Errorf("contract property = %v, want serial_no", props2)
 	}
-	// The datapoint's key follows the property rename, which is the point of the
+	// The sample's key follows the property rename, which is the point of the
 	// telemetry foreign key.
 	dp, err := gw.LatestMetric(ctx, "bar-1", "tcp.reachable")
 	if err != nil {
 		t.Fatalf("latest metric by the new key: %v", err)
 	}
 	if dp == nil || dp.Key != "tcp.reachable" {
-		t.Errorf("datapoint key = %v, want tcp.reachable through the rename", dp)
+		t.Errorf("sample key = %v, want tcp.reachable through the rename", dp)
 	}
 
 	// Slice 4: the leaf registries (driver, location_type, secret_type,

@@ -25,7 +25,7 @@ triggers, macros, and tags, ours ships:
 - **commands** (command-triggered functions the device supports, e.g. `reboot`, `set-input`), detail
   in [collection](/architecture/collection/);
 - **`property_type`s** (kind / unit / validation live on the registry, see
-  [datapoints](/architecture/datapoints/#the-property_type-registry); a template declares its keys at
+  [datapoints](/architecture/properties/#the-property_type-registry); a template declares its keys at
   **template** scope, or references an **org** / **official** key, see [Template-scoped keys](#template-scoped-keys-and-optional-alignment));
 - required **[config](/architecture/variables/)** and defaults, and the **credential shapes** it needs
   (see [config and credentials](/architecture/variables/));
@@ -54,13 +54,13 @@ schema; this page covers the rest of the device shape.
 
 A template declares its datapoints **and** commands at **template scope** by default: auto-discoverable,
 no registry friction, identified by `(template_id, name)` so two templates can both declare an `input`
-with no collision ([key scope](/architecture/datapoints/#key-scope-template-org-official)). It may
+with no collision ([key scope](/architecture/properties/#key-scope-template-org-official)). It may
 **optionally align** each datapoint to an org or official canonical key. Alignment is just
 **referencing** a canonical `property_type` (plus an optional value transform), which is what buys
 cross-fleet comparability, dashboards, and AI; the shipped official set covers the common signals, so
 most templates align by referencing one. That value transform is also where the device's **native
 unit** is normalized to the key's **canonical unit** before the datapoint is emitted (a Fahrenheit
-display's template emits celsius), so storage stays single-unit ([datapoints](/architecture/datapoints/)). Commands are template-scoped (the functions live on
+display's template emits celsius), so storage stays single-unit ([datapoints](/architecture/properties/)). Commands are template-scoped (the functions live on
 the template); a canonical **command type** (the abstract `reboot` to per-model layer) follows the same
 promotion ladder.
 
@@ -202,7 +202,7 @@ health_role: required
 ```
 
 - **A checklist, not a matching engine.** A component's template **qualifies** when it aligns the
-  required canonical [property_types](/architecture/datapoints/) and command types (its set is a
+  required canonical [property_types](/architecture/properties/) and command types (its set is a
   superset of the requirement). The requirement is stated in **canonical** keys, because it only means
   the same thing across templates when it names a canonical signal, not a template-local one.
 - **Qualify, then assign.** Pairing a component to a role **filters the picker to qualifying templates**,

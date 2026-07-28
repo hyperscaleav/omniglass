@@ -183,7 +183,7 @@ func (p *PG) UpdateNode(ctx context.Context, actorID, name string, patch NodePat
 
 // DeleteNode decommissions a node: a hard delete of its kind='node' principal,
 // which cascades the node detail row and, through it, everything keyed to the
-// node, its interfaces and their derived tasks, its node-owned datapoints and tag
+// node, its interfaces and their derived tasks, its node-owned samples and tag
 // bindings, and its enrollment credential (every referencing FK is ON DELETE
 // CASCADE). A node is estate-wide, so this requires an all scope, like create. An
 // unknown name is ErrNodeNotFound. Audited before the row is gone; the actor is

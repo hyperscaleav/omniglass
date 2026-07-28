@@ -10,17 +10,17 @@ import "testing"
 func TestInterfaceVerdict(t *testing.T) {
 	cases := []struct {
 		name   string
-		dps    []Datapoint
+		dps    []Sample
 		wantUp bool
 		wantOk bool
 	}{
-		{"single tcp open", []Datapoint{{Name: DatapointTCPOpen, Value: 1}, {Name: DatapointTCPConnectTime, Value: 3}}, true, true},
-		{"single tcp closed", []Datapoint{{Name: DatapointTCPOpen, Value: 0}}, false, true},
-		{"single icmp up", []Datapoint{{Name: DatapointICMPReachable, Value: 1}, {Name: DatapointICMPRTTAvg, Value: 2}}, true, true},
-		{"single icmp down", []Datapoint{{Name: DatapointICMPReachable, Value: 0}}, false, true},
-		{"and of two up", []Datapoint{{Name: DatapointTCPOpen, Value: 1}, {Name: DatapointICMPReachable, Value: 1}}, true, true},
-		{"and one down", []Datapoint{{Name: DatapointTCPOpen, Value: 1}, {Name: DatapointICMPReachable, Value: 0}}, false, true},
-		{"no reachability metric", []Datapoint{{Name: DatapointTCPConnectTime, Value: 3}}, false, false},
+		{"single tcp open", []Sample{{Name: SignalTCPOpen, Value: 1}, {Name: SignalTCPConnectTime, Value: 3}}, true, true},
+		{"single tcp closed", []Sample{{Name: SignalTCPOpen, Value: 0}}, false, true},
+		{"single icmp up", []Sample{{Name: SignalICMPReachable, Value: 1}, {Name: SignalICMPRTTAvg, Value: 2}}, true, true},
+		{"single icmp down", []Sample{{Name: SignalICMPReachable, Value: 0}}, false, true},
+		{"and of two up", []Sample{{Name: SignalTCPOpen, Value: 1}, {Name: SignalICMPReachable, Value: 1}}, true, true},
+		{"and one down", []Sample{{Name: SignalTCPOpen, Value: 1}, {Name: SignalICMPReachable, Value: 0}}, false, true},
+		{"no reachability metric", []Sample{{Name: SignalTCPConnectTime, Value: 3}}, false, false},
 		{"empty", nil, false, false},
 	}
 	for _, c := range cases {
