@@ -3,10 +3,11 @@ import { useQuery } from "@tanstack/solid-query";
 import { rel } from "../lib/format";
 import { EVENTS_KEY, getEvents, formatAttributes, type ComponentEvent } from "../lib/events";
 
-// EventsPanel: a component's recent log-kind observations. Where the reachability
-// strip above renders sampled values (a metric or a state read on a cadence), the
-// event sink collects discrete occurrences: syslog lines, traps, and the like, each
-// a message stamped when it happened rather than a value averaged over a window.
+// EventsPanel: a component's recent events. Where the reachability strip above
+// renders sampled values (a metric or a state read on a cadence), the event sink
+// collects discrete semantic occurrences a component published natively or a rule
+// derived, each a message stamped when it happened rather than a value averaged over
+// a window.
 // This panel reads that stream (newest first, the last 24 hours, capped) so the
 // operator can see what a component has been saying. Read-only: every field on a row
 // (ts, key, message, source, instance, attributes) is a real API value, nothing
@@ -67,7 +68,7 @@ export default function EventsPanel(p: { name: string }) {
         </Show>
       </div>
       <p class="text-[12px] text-base-content/50">
-        Log-kind observations (syslog lines, traps, discrete occurrences) routed to the event sink, as opposed to the sampled metric and state values above. Newest first, last 24 hours.
+        Discrete occurrences a component published natively or a rule derived, as opposed to the sampled metric and state values above. Newest first, last 24 hours.
       </p>
       <Show
         when={events().length}

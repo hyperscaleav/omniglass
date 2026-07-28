@@ -23,7 +23,7 @@ func TestEventTypeFamilyMigration(t *testing.T) {
 
 	// The log kind left property_type: metric is accepted, log is rejected.
 	mustExec(t, conn, `insert into property_type (name, kind, data_type) values ('cpu.load', 'metric', 'float')`)
-	if _, err := conn.Exec(ctx, `insert into property_type (name, kind, data_type) values ('log.line', 'log', 'string')`); err == nil {
+	if _, err := conn.Exec(ctx, `insert into property_type (name, kind, data_type) values ('device.log', 'log', 'string')`); err == nil {
 		t.Error("expected property_type.kind check to reject 'log'")
 	}
 

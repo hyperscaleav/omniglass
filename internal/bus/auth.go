@@ -23,8 +23,8 @@ type Store interface {
 	ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (storage.TaskOwner, bool, error)
 	ListPropertyTypes(ctx context.Context) ([]storage.PropertyType, error)
 	// The event-type registry snapshot: with the log kind gone from property_type,
-	// a registered event_type name routes an occurrence to the event sink (kind
-	// "event"), the log-to-event promotion at ingest.
+	// a registered event_type name routes a natively-published occurrence (an xAPI
+	// event, a trap) to the event sink (kind "event") as a caught event (ADR-0066).
 	ListEventTypes(ctx context.Context) ([]storage.EventType, error)
 	InsertMetricDatapoints(ctx context.Context, evs []storage.MetricDatapointEvent) error
 	// The state sink and its transition-only guard: a state datapoint routes here

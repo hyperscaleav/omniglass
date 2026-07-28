@@ -239,16 +239,16 @@ func TestTelemetryRoundTrip(t *testing.T) {
 		t.Fatalf("state confinement breached: node-a landed a verdict on disp-2: %+v", got)
 	}
 
-	// LOG-TO-EVENT PROMOTION (ADR-0063 #395): a log.line (a seeded event_type,
-	// no longer a log-kind property_type) published by node-a lands as a caught
-	// event on its component, routed by the event registry under the same owner
-	// confinement and reject-not-project as a metric or state.
+	// NATIVE CAUGHT EVENT (ADR-0066): a component publishes an event natively (a
+	// call.started, a seeded event_type) and it lands as a caught event on its
+	// component, routed by the event registry under the same owner confinement and
+	// reject-not-project as a metric or state. Raw logs are a separate lane, not this.
 	publishEvent(t, ncA, "node-a", &ogv1.Event{
 		TaskId: "t-a", NodeId: "node-a",
-		Datapoints: []*ogv1.Datapoint{{Name: "log.line", Value: &ogv1.Datapoint_StringValue{StringValue: "port flap"}}},
+		Datapoints: []*ogv1.Datapoint{{Name: "call.started", Value: &ogv1.Datapoint_StringValue{StringValue: "call started"}}},
 	})
 	waitEvent(t, ctx, gw, "disp-1", func(e storage.Event) bool {
-		return e.Message == "port flap" && e.Origin == "caught" && e.Key == "log.line"
+		return e.Message == "call started" && e.Origin == "caught" && e.Key == "call.started"
 	})
 
 	// Telemetry publish isolation: node-a cannot publish to node-b's telemetry
@@ -263,7 +263,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 }
 
 // waitEvent polls a component's recent events until one matches pred, or a
-// deadline passes. The log-to-event promotion writes an event; this reads it back.
+// deadline passes. The ingest path writes a caught event; this reads it back.
 func waitEvent(t *testing.T, ctx context.Context, gw storage.Gateway, comp string, pred func(storage.Event) bool) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)

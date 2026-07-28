@@ -2307,8 +2307,9 @@ firmware and error lines longer, drop debug faster). The shape is
 `log_line { ts, owner, source, severity?, facility?, message, attributes, labels, correlation_id }`.
 
 **Build gate.** The `log_line` table, retention, the derivation engine, the lineage columns, and
-native-event producers are their own slice, worth building when logs are a real firehose to search and
-age out separately. This ADR records the target; it is not built all at once.
+native-event producers are their own slice ([#410](https://github.com/hyperscaleav/omniglass/issues/410)),
+worth building when logs are a real firehose to search and age out separately. This ADR records the
+target; it is not built all at once.
 
 **Consequence for #395 (the event_type family slice).** The bits that encode the retired model come
 out now: the ingest log-to-event promotion and the seeded `log.line` event type. The slice keeps the

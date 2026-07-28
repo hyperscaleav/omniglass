@@ -13,23 +13,22 @@ const seed: ComponentEvents = {
   events: [
     {
       ts: nowIso,
-      key: "log.line",
+      key: "call.started",
       event_type_id: "0192a5f0-1111-7000-8000-0000000000a1",
       origin: "caught",
-      instance: "eth0",
-      message: "link state changed to up",
+      message: "call started with room-204",
       provenance: "observed",
-      source: "syslog",
-      attributes: { severity: "info", facility: "kern" },
+      source: "xapi",
+      attributes: { peer: "sip:room-204", protocol: "sip" },
     },
     {
       ts: nowIso,
-      key: "snmp.trap",
+      key: "meeting.ended",
       event_type_id: "0192a5f0-2222-7000-8000-0000000000a2",
       origin: "derived",
-      message: "coldStart",
+      message: "meeting ended (call dropped, no rejoin)",
       provenance: "observed",
-      source: "snmp",
+      source: "rule",
     },
   ],
 };
@@ -48,18 +47,18 @@ describe("EventsPanel", () => {
   it("renders one row per event with its key, message and source", () => {
     const { getByText } = mount();
     expect(getByText("2 in the last 24h")).toBeTruthy();
-    expect(getByText("log.line")).toBeTruthy();
-    expect(getByText("link state changed to up")).toBeTruthy();
-    expect(getByText("snmp.trap")).toBeTruthy();
-    expect(getByText("coldStart")).toBeTruthy();
+    expect(getByText("call.started")).toBeTruthy();
+    expect(getByText("call started with room-204")).toBeTruthy();
+    expect(getByText("meeting.ended")).toBeTruthy();
+    expect(getByText("meeting ended (call dropped, no rejoin)")).toBeTruthy();
   });
 
   it("discloses the attributes JSON only on demand", () => {
     const { getByText, queryByText } = mount();
     // The payload is hidden until the row's attributes disclosure is opened.
-    expect(queryByText(/facility/)).toBeNull();
+    expect(queryByText(/protocol/)).toBeNull();
     fireEvent.click(getByText("attributes"));
-    expect(getByText(/"facility": "kern"/)).toBeTruthy();
+    expect(getByText(/"protocol": "sip"/)).toBeTruthy();
   });
 
   it("shows the empty state when a component has no events", () => {

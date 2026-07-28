@@ -587,33 +587,32 @@ func seedReachDatapoints(ctx context.Context, gw storage.Gateway, iface string, 
 	return nil
 }
 
-// The example log occurrences the dev seed installs on the lobby display, the
-// log-kind sink of the collection pipeline: a display emits device log lines (link,
-// CEC, EDID, input) so the console's event-log panel comes up populated instead of
-// empty. eventComponent names an existing fixture component (the display seeded above),
-// so the event's component_id foreign key resolves. All rows use the registered
-// log-kind key log.line (reject-not-project), with provenance stamped observed by
-// the insert.
-const eventComponent = "lobby-display"
+// The example events the dev seed installs on a boardroom video bar: a conferencing
+// endpoint publishes call.started natively (an xAPI event) so the console's event
+// panel comes up populated instead of empty. eventComponent names an existing fixture
+// component (a video bar seeded above), so the event's component_id foreign key
+// resolves. Every row uses the registered event_type key call.started
+// (reject-not-project) and is stamped origin=caught: the device reported it, the
+// platform did not derive it. Raw device logs are a separate ingest lane (ADR-0066),
+// not seeded here.
+const eventComponent = "boardroom-a-bar"
 
-// exampleEvents are the display's recent log lines, each offset back from now so the
-// panel reads as a recent window (spread over the last few hours, newest last). One
-// line carries a structured attributes payload (the switched input); the rest are
-// plain messages. minsAgo is minutes before the seed's now.
+// exampleEvents are the bar's recent call.started occurrences, each offset back from
+// now so the panel reads as a recent window (spread over the last day, newest last).
+// Two rows carry a structured attributes payload (the call's peer and protocol); the
+// rest are plain messages. minsAgo is minutes before the seed's now.
 var exampleEvents = []struct {
 	message string
 	attrs   []byte
 	minsAgo int
 }{
-	{message: "power state changed to on", minsAgo: 214},
-	{message: "hdmi link state changed to up", minsAgo: 212},
-	{message: "edid read complete: 3840x2160@60", minsAgo: 211},
-	{message: "cec handshake ok", minsAgo: 127},
-	{message: "input switched to HDMI2", attrs: []byte(`{"input":"hdmi2"}`), minsAgo: 46},
-	{message: "backlight brightness set to 80%", minsAgo: 12},
+	{message: "call started with sip:room-204@hq.example", attrs: []byte(`{"peer":"sip:room-204@hq.example","protocol":"sip"}`), minsAgo: 1290},
+	{message: "inbound call answered", minsAgo: 642},
+	{message: "joined Teams meeting: Weekly Standup", attrs: []byte(`{"peer":"teams:weekly-standup","protocol":"msteams"}`), minsAgo: 213},
+	{message: "call started with 4 participants", minsAgo: 27},
 }
 
-// seedEvents installs the example log occurrences on the lobby display idempotently.
+// seedEvents installs the example events on the video bar idempotently.
 // The event table has an auto id (bigint identity) and no natural unique key, so a
 // naive re-insert would pile up duplicates on every `make dev`; guard on the component
 // already carrying events (ListComponentEvents from the epoch, limit 1) and skip when
@@ -634,10 +633,11 @@ func seedEvents(ctx context.Context, gw storage.Gateway) error {
 		evs = append(evs, storage.EventOccurrence{
 			OwnerKind:  "component",
 			OwnerID:    eventComponent,
-			Key:        "log.line",
+			Key:        "call.started",
+			Origin:     "caught",
 			Message:    e.message,
 			Attributes: e.attrs,
-			Source:     "syslog",
+			Source:     "xapi",
 			TS:         now.Add(-time.Duration(e.minsAgo) * time.Minute),
 		})
 	}

@@ -10,7 +10,6 @@ import { ME_KEY, type Me } from "../lib/auth";
 // the caller holds event_type:create / event_type:update. Data is seeded into the
 // query cache so no server is needed.
 const seed: EventTypeRow[] = [
-  { name: "log.line", display_name: "Log Line", official: true },
   { name: "call.started", display_name: "Call Started", official: true },
   { name: "cable.unplugged", display_name: "Cable unplugged", official: false },
 ];
@@ -34,7 +33,6 @@ describe("Event Types page", () => {
 
   it("lists the seeded event types", () => {
     mount();
-    expect(screen.getByText("log.line")).toBeTruthy();
     expect(screen.getByText("call.started")).toBeTruthy();
     expect(screen.getByText("cable.unplugged")).toBeTruthy();
   });

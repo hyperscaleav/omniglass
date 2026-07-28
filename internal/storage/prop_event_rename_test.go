@@ -51,8 +51,8 @@ func TestPropertiesAndEventsSurviveARename(t *testing.T) {
 		t.Fatalf("set property: %v", err)
 	}
 	if err := gw.InsertEvents(ctx, []storage.EventOccurrence{{
-		OwnerKind: "component", OwnerID: "old-comp", Key: "log.line",
-		Message: "link down", Source: "test",
+		OwnerKind: "component", OwnerID: "old-comp", Key: "call.started",
+		Message: "call started", Source: "test",
 	}}); err != nil {
 		t.Fatalf("insert event: %v", err)
 	}

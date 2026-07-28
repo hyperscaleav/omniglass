@@ -300,9 +300,9 @@ func deriveDatapoints(ev *ogv1.Event, owner storage.TaskOwner, reg collection.Re
 			if !ok {
 				continue
 			}
-			// A component-observed occurrence is caught: the node reported it, the
-			// platform did not derive it. This is the log-to-event promotion path
-			// (a raw log line lands as a typed event).
+			// A component published this occurrence natively (an xAPI event, an SNMP
+			// trap): it is caught, the platform did not derive it. Raw log lines are a
+			// separate ingest lane, not this path (ADR-0066).
 			events = append(events, storage.EventOccurrence{
 				OwnerKind:  "component",
 				OwnerID:    owner.Component,

@@ -1513,7 +1513,7 @@ components:
           description: The series discriminator (e.g. the interface), when set
           type: string
         key:
-          description: The event_type name of the occurrence (e.g. log.line)
+          description: The event_type name of the occurrence (e.g. call.started)
           type: string
         message:
           description: The occurrence message
