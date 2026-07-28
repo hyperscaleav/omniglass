@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"os"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/nats-io/nats.go"
+	"google.golang.org/protobuf/proto"
 )
 
 // worklistTimeout bounds a single worklist request-reply.
@@ -34,6 +37,13 @@ type Config struct {
 // pulls its worklist, and heartbeats until the context is cancelled (or a single
 // cycle if Once). It returns the last worklist it pulled.
 func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
+	// The node's own logger: an slog handler that writes to the console and buffers
+	// every record for shipment as a self-log (ADR-0066). The run loop drains and
+	// publishes the buffer on the node's telemetry subject, so the node's operational
+	// story (enrolled, worklist pulled, a task skipped) reaches the platform.
+	sink := newLogSink(slog.NewTextHandler(os.Stderr, nil))
+	logger := slog.New(sink).With("node", cfg.Name)
+
 	creds, err := Claim(ctx, cfg.ServerURL, cfg.Name, cfg.Token)
 	if err != nil {
 		return collection.WorklistReply{}, err
@@ -47,6 +57,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 		return collection.WorklistReply{}, fmt.Errorf("node: connect bus at %s: %w", creds.NatsURL, err)
 	}
 	defer nc.Close()
+	logger.Info("connected to bus", "facility", "enrollment", "url", creds.NatsURL)
 
 	dialer := cfg.Dialer
 	if dialer == nil {
@@ -67,12 +78,14 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	if err != nil {
 		return collection.WorklistReply{}, err
 	}
-	if err := runTasks(ctx, nc, cfg.Name, wl, dialer, pinger, verdicts); err != nil {
+	logger.Info("worklist pulled", "facility", "collection", "tasks", len(wl.Tasks))
+	if err := runTasks(ctx, nc, cfg.Name, wl, dialer, pinger, verdicts, logger); err != nil {
 		return wl, err
 	}
 	if err := publishHeartbeat(nc, cfg.Name); err != nil {
 		return wl, err
 	}
+	publishSelfLogs(nc, cfg.Name, sink)
 
 	if cfg.Once {
 		_ = nc.Flush()
@@ -99,7 +112,9 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			}
 			// Run the worklist's tcp tasks and publish their telemetry. A publish
 			// failure is non-fatal (retry next tick).
-			_ = runTasks(ctx, nc, cfg.Name, wl, dialer, pinger, verdicts)
+			_ = runTasks(ctx, nc, cfg.Name, wl, dialer, pinger, verdicts, logger)
+			// Ship whatever the node logged this tick as self-logs.
+			publishSelfLogs(nc, cfg.Name, sink)
 		}
 	}
 }
@@ -115,6 +130,22 @@ func pullWorklist(nc *nats.Conn, name string) (collection.WorklistReply, error) 
 		return collection.WorklistReply{}, fmt.Errorf("node: decode worklist: %w", err)
 	}
 	return reply, nil
+}
+
+// publishSelfLogs drains the node's captured log records and publishes them as a
+// logs-only telemetry Event on the node's own subject, where the ingest consumer
+// lands them owner-bound to the node (ADR-0066). Non-fatal: a marshal or publish
+// failure is logged (buffered for the next tick), never fatal to the run loop.
+func publishSelfLogs(nc *nats.Conn, name string, sink *logSink) {
+	ev := selfLogEvent(name, sink.drain())
+	if ev == nil {
+		return
+	}
+	b, err := proto.Marshal(ev)
+	if err != nil {
+		return
+	}
+	_ = nc.Publish(collection.TelemetrySubject(name), b)
 }
 
 // publishHeartbeat sends one liveness heartbeat on the node's own subject.
