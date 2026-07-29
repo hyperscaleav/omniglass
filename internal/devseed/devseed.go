@@ -452,6 +452,7 @@ var exampleLogs = []struct {
 	severity string
 	facility string
 	attrs    []byte
+	labels   []byte
 	minsAgo  int
 }{
 	{message: "power state changed to on", severity: "info", facility: "kern", minsAgo: 214},
@@ -459,7 +460,10 @@ var exampleLogs = []struct {
 	{message: "edid read complete: 3840x2160@60", severity: "info", facility: "daemon", minsAgo: 211},
 	{message: "cec handshake ok", severity: "info", facility: "daemon", minsAgo: 127},
 	{message: "input switched to HDMI2", severity: "notice", facility: "daemon", attrs: []byte(`{"input":"hdmi2"}`), minsAgo: 46},
-	{message: "backlight temperature high, throttling", severity: "warning", facility: "kern", minsAgo: 12},
+	// A classified line: a log line is untyped, but labels are how it gets sorted
+	// into a class (system, firmware, application) without a registry (ADR-0066).
+	// This is the one seeded line carrying both structured columns.
+	{message: "backlight temperature high, throttling", severity: "warning", facility: "kern", attrs: []byte(`{"celsius":71,"limit":68}`), labels: []byte(`{"class":"firmware"}`), minsAgo: 12},
 }
 
 // seedLogs installs the example log lines on the lobby display idempotently. The
@@ -485,6 +489,7 @@ func seedLogs(ctx context.Context, gw storage.Gateway) error {
 			Facility:   l.facility,
 			Message:    l.message,
 			Attributes: l.attrs,
+			Labels:     l.labels,
 			TS:         now.Add(-time.Duration(l.minsAgo) * time.Minute),
 		})
 	}

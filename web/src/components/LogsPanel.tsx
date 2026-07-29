@@ -11,8 +11,9 @@ import { LOGS_KEY, getLogs, severityVariant, type ComponentLog } from "../lib/lo
 // can see what a component has been logging. Read-only: every field on a row (ts,
 // severity, facility, source, message, attributes, labels) is a real API value,
 // nothing derived. Severity rides a colored badge, the message carries the row,
-// source/facility/correlation sit on a secondary line, and a structured payload
-// (when present) opens as a compact JSON snippet.
+// source/facility/correlation sit on a secondary line, and the structured columns
+// (attributes, labels) open as compact JSON snippets, each captioned and the
+// disclosure named for whichever the line carries.
 
 // LogRow renders one log line: the relative time, a severity badge, the message,
 // then a secondary metadata line and an optional attributes disclosure.
@@ -20,6 +21,13 @@ function LogRow(p: { line: ComponentLog }) {
   const [open, setOpen] = createSignal(false);
   const attrs = createMemo(() => formatAttributes(p.line.attributes));
   const labels = createMemo(() => formatAttributes(p.line.labels));
+  // Name the disclosure after the log_line columns it reveals, the way the events
+  // panel names its attributes: a line can carry structured attributes parsed from
+  // it, freeform classification labels, or both, and the operator should know which
+  // before opening it. ("fields" said neither, and collides with secret fields.)
+  const disclosure = createMemo(() =>
+    attrs() && labels() ? "attributes + labels" : attrs() ? "attributes" : "labels",
+  );
   return (
     <div class="flex flex-col gap-1 px-3 py-2.5">
       <div class="flex items-baseline gap-2">
@@ -44,17 +52,23 @@ function LogRow(p: { line: ComponentLog }) {
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open()}
           >
-            {open() ? "hide fields" : "fields"}
+            {open() ? `hide ${disclosure()}` : disclosure()}
           </button>
         </Show>
       </div>
       <Show when={open()}>
-        <div class="ml-[4.5rem] flex flex-col gap-1">
+        <div class="ml-[4.5rem] flex flex-col gap-1.5">
           <Show when={attrs()}>
-            <pre class="overflow-x-auto rounded-md bg-base-200/60 px-2 py-1.5 font-data text-[11px] text-base-content/70">{attrs()}</pre>
+            <div class="flex flex-col gap-0.5">
+              <span class="text-[10px] uppercase tracking-wide text-base-content/35">attributes</span>
+              <pre class="overflow-x-auto rounded-md bg-base-200/60 px-2 py-1.5 font-data text-[11px] text-base-content/70">{attrs()}</pre>
+            </div>
           </Show>
           <Show when={labels()}>
-            <pre class="overflow-x-auto rounded-md bg-base-200/40 px-2 py-1.5 font-data text-[11px] text-base-content/60" title="labels">{labels()}</pre>
+            <div class="flex flex-col gap-0.5">
+              <span class="text-[10px] uppercase tracking-wide text-base-content/35">labels</span>
+              <pre class="overflow-x-auto rounded-md bg-base-200/40 px-2 py-1.5 font-data text-[11px] text-base-content/60">{labels()}</pre>
+            </div>
           </Show>
         </div>
       </Show>

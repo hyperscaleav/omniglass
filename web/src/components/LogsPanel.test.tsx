@@ -49,11 +49,37 @@ describe("LogsPanel", () => {
     expect(getAllByText("syslog").length).toBe(2);
   });
 
-  it("discloses the structured fields only on demand", () => {
+  // The disclosure names the schema it reveals (attributes, labels), matching the
+  // events panel and the log_line columns. "fields" was overloaded (the secrets
+  // list has a Fields column) and said nothing about which of the two you get.
+  it("discloses the attributes only on demand, named for the column", () => {
     const { getByText, queryByText } = mount();
     expect(queryByText(/"code"/)).toBeNull();
-    fireEvent.click(getByText("fields"));
+    fireEvent.click(getByText("attributes"));
     expect(getByText(/"code": 504/)).toBeTruthy();
+    expect(getByText("hide attributes")).toBeTruthy();
+  });
+
+  it("names the disclosure for whichever of attributes and labels the line carries", () => {
+    const { getByText } = mount({
+      component: "disp-1",
+      logs: [
+        { ts: nowIso, message: "classified only", labels: { class: "firmware" } },
+        { ts: nowIso, message: "both", attributes: { code: 1 }, labels: { class: "kernel" } },
+      ],
+    });
+    expect(getByText("labels")).toBeTruthy();
+    expect(getByText("attributes + labels")).toBeTruthy();
+  });
+
+  it("captions each block once open, so the two are told apart", () => {
+    const { getByText } = mount({
+      component: "disp-1",
+      logs: [{ ts: nowIso, message: "both", attributes: { code: 1 }, labels: { class: "kernel" } }],
+    });
+    fireEvent.click(getByText("attributes + labels"));
+    expect(getByText(/"code": 1/)).toBeTruthy();
+    expect(getByText(/"class": "kernel"/)).toBeTruthy();
   });
 
   it("shows the empty state when a component has no logs", () => {
