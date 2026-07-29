@@ -8,7 +8,7 @@ sidebar:
 ---
 
 :::caution[Direction: mid-migration to ADR-0063]
-Named per [ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables) (built): the `property_type` registry, the `property` **current-value cache**, and the vocabulary this page now uses, a **property** is the signal, a **sample** is one timestamped observation of it (a row in `metric` / `state`), and the **current value** is the latest sample per series. The cache is built for the observed producer (the ingest sink upserts a per-series `property` row with an out-of-order guard, so the current value is one lookup), and a **reconciliation** read pivots want (declared, resolved live from the cascade) / told (intended) / is (observed) with drift computed on read. The `intended` producer is built (a [command](/architecture/commands/) opens an intended value on issue, #396); still directional: the `calculated` producer (the calc engine). The `log` kind graduated out of `property_type` into the [event family](/architecture/events/) (#395): `property_type.kind` is `{metric, state}`, and a log occurrence is a typed `event` (`origin=caught`). The `log`-as-a-kind and NATS-data-lane sections below are the superseded design.
+Named per [ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables) (built): the `property_type` registry, the `property` **current-value cache**, and the vocabulary this page now uses, a **property** is the signal, a **sample** is one timestamped observation of it (a row in `metric` / `state`), and the **current value** is the latest sample per series. The cache is built for the observed producer (the ingest sink upserts a per-series `property` row with an out-of-order guard, so the current value is one lookup), and a **reconciliation** read pivots want (declared, resolved live from the cascade) / told (intended) / is (observed) with drift computed on read. The `intended` producer is built (a [command](/architecture/commands/) opens an intended value on issue, #396); still directional: the `calculated` producer (the calc engine). The `log` kind graduated out of `property_type` (#395), so `property_type.kind` is `{metric, state}`. A raw log line is **not** an event either: per [ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events) it lands on its own untyped lane (`log_line`, built) and a derivation rule may later produce an `event` from it. The `log`-as-a-kind and NATS-data-lane sections below are the superseded design.
 :::
 
 :::note[Partial]
@@ -19,11 +19,11 @@ against the `property_type` registry. The observed **state** path now has its fi
 computes the per-interface reachability verdict `interface.reachable` (up/down, the AND of the interface's probe
 results), and the ingest consumer **routes by the `property_type` kind** (metric to `metric`, state to
 `state`), so the verdict lands in `state` under the same owner-confinement, **transition-only**
-(one row per flip, guarded at the node and again at ingest). A **log**-kind observation now persists too, but as
-an **`event`** occurrence (the log-kind sink), not a `log_datapoint` row: it is **no longer dropped** at ingest
-([ADR-0046](/architecture/decisions/#adr-0046-the-event-log-kind-sink)), routed to `event` under the same
-owner-confinement and reject-not-project as the metric and state sinks. The `log_datapoint` table described below,
-calculated provenance, fusion, and the live NATS data-lane are still design. See
+(one row per flip, guarded at the node and again at ingest). There is **no log sample kind**: raw log
+lines are their own untyped ingest lane (`log_line`, built), and a rule derives a typed `event` from one
+([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events), superseding the
+log-kind sink of [ADR-0046](/architecture/decisions/#adr-0046-the-event-log-kind-sink)).
+Calculated provenance, fusion, and the live NATS data-lane are still design. See
 [ADR-0033](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer)
 and [ADR-0034](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state).
 :::
@@ -36,13 +36,18 @@ Samples are the **data lane**: observed and calculated samples are NATS-native, 
 
 Three words, split from the one they used to be. A **property** is a canonical signal on one owning entity (component, system, location, or node): `fan.speed` on a switch, `power.state` on a display. A **sample** is one timestamped observation of a property, `(owner, key, instance, ts, value, provenance, source, lineage)`. The **current value** is the latest sample per series, held in the [`property` cache](#the-current-value-cache) so reading it is one lookup, not a scan through every sample.
 
-Samples land in one of two physical tables by the property's **kind**, three tables only because they index and retain differently, not because they are different concepts:
+Samples land in one of two physical tables by the property's **kind**, two tables only because they index and retain differently, not because they are different concepts:
 
 - **metric** (`metric`): numeric (float), carries a **unit**. Continuous, aggregatable. Has a current value.
 - **state** (`state`): categorical, text, or a structured object. Discrete, dwell-measurable. Has a current value (`last()` is meaningful).
-- **log** (`log_datapoint`): a component's own words, the value is the log line (text or jsonb), keyed by log type (`log.system`, `log.os`, `log.app.<name>`). A stream, not a current value, but still an observation with a value at a time, so it is a sample, not a separate primitive. In practice only components emit logs.
-
-Treating log as a sample removes the usual special case: an alarm on a log line is just an event rule whose condition matches a `log_datapoint` value, no different in shape from a metric threshold.
+A log line is **not** a third sample kind. It is untyped raw arrival on its own lane (`log_line`), with
+no property name and no registry gate, and a rule may later derive a typed `event` from one
+([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events),
+[events](/architecture/events/)). This page previously modeled it as a `log` kind keyed by log type
+(`log.system`, `log.os`, `log.app.<name>`) on the argument that treating a log as a sample removed a
+special case. ADR-0066 reversed that: a sample is a *value of a named property at a time*, and a log
+line has neither, so forcing it into the sample shape required inventing a key for text that carries
+none.
 
 **An event is not a sample.** A sample is an observation (a value we recorded); an **event** is *our semantic assertion that something happened*, in our vocabulary. Samples are what rules read; events are what event rules produce. See [events](/architecture/events/).
 
@@ -52,7 +57,7 @@ A sample attaches to a **structural entity**, not only a component. The owner is
 
 ### The instance dimension: many values of one key on one owner
 
-One owner can hold several distinct values of the *same* canonical key: three fan speeds on a switch, per-port counters, per-channel audio levels. The canonical registry deliberately holds **one** `property_type` per measurement (`fan.speed`, not `fan.speed.intake`), so the discriminator lives outside the key, as an `instance text NOT NULL DEFAULT ''` column on all three sample tables. Series identity is therefore **`(owner, property_type, instance, provenance)`**: each instance is its own series, while a singleton (`instance = ''`) is the default. Aggregation stays clean (group by `key`, ignore `instance`); per-instance trends stay distinct.
+One owner can hold several distinct values of the *same* canonical key: three fan speeds on a switch, per-port counters, per-channel audio levels. The canonical registry deliberately holds **one** `property_type` per measurement (`fan.speed`, not `fan.speed.intake`), so the discriminator lives outside the key, as an `instance text NOT NULL DEFAULT ''` column on both sample tables. Series identity is therefore **`(owner, property_type, instance, provenance)`**: each instance is its own series, while a singleton (`instance = ''`) is the default. Aggregation stays clean (group by `key`, ignore `instance`); per-instance trends stay distinct.
 
 The instance rides the pipeline as a reserved **`instance` label** on the collected sample: the collection extract spec authors it as a `key[instance]` suffix (`fan.speed[intake]=<oid>`, `fan.speed[exhaust]=<oid2>`), the parser strips the bracket into the label so `registryAllows` / `kindFor` still match the bare canonical key, and the derive step reads `instance` into the column. Calc folds **every** instance of an input key into the reduce: a rule reading `fan.speed` from a component gets one candidate per fan, so `worst` / `average` / `count` / Expr aggregate across all of them (a singleton key yields one candidate). An input filter can select one instance (`instance == "intake"`). Recompute needs no instance granularity: a calc consumer reacting to a `fan.speed` sample on the stream recomputes over the current state of every instance for `(owner, key)`, so two fan changes in close succession converge on one correct recompute. Calc **outputs** stay aggregate (`instance = ''`); per-instance outputs (one health per fan, a group-by) are a separate capability, not a silent gap, output owners default to the singleton.
 
@@ -63,13 +68,13 @@ A sample records a value; an event records an occurrence.
 - `"input is 1"` is a value, so it is a **sample** (state).
 - `"call started"` is an occurrence, "what is call-started now?" is meaningless, so it is an **event**. See [events](/architecture/events/).
 
-A raw occurrence we have not normalized (a syslog line, a raw webhook frame) lands as a **`log_datapoint`** (observed, value = the line). An event rule can then **promote** it into a normalized event. So the log table is also the holding pen for un-normalized occurrences until a rule recognizes them.
+A raw occurrence we have not normalized (a syslog line, a raw webhook frame) is neither: it lands on the **raw log lane** (`log_line`), untyped, and a derivation rule may later turn it into a normalized `event` ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)). The lane is the holding pen for un-normalized arrival until a rule recognizes it, and most lines never become events.
 
 ## Kind and provenance: the two axes
 
 Every sample sits on two independent axes:
 
-- **Kind** answers *what kind of thing is this?* It is fixed per **key**, decided once when the key is defined (`power.state` is always a state), so kind is a property of the **key**, the three kinds above.
+- **Kind** answers *what kind of thing is this?* It is fixed per **key**, decided once when the key is defined (`power.state` is always a state), so kind is a property of the **key**, the two kinds above.
 - **Provenance** answers *how do we know this particular value?* It varies per **row**: the same `power.state` can be observed or intended at different moments. (A *declared* desired value is not a provenance; it lives in [config](/architecture/variables/), keyed to the signal.) Provenance is a property of the **row**, detailed below.
 
 Kind is set by the key, provenance by the row, and the two never depend on each other.
@@ -259,8 +264,8 @@ gated on the command's settle window (pending inside it, settled on a match past
 Distinguished by a property of the table, not a naming suffix.
 
 - **Raw payload: not stored.** Samples are emitted at the edge, so the verbatim wire payload is **not persisted** (no `telemetry` table). Raw surfaces only on a **`collection.failed`** event when a parse or validation rejects (diagnosis, and the one backfill-after-fix case) and via a **dev raw-mode** tap; the sample is authoritative, its lineage is `source_rule` + version. The opt-in `raw_sample` policy ([collection](/architecture/collection/)) can retain raw for a bounded, sampled, short-lived window, off by default, still not a telemetry table.
-- **Live on NATS, durable in PG.** The live sample is the message on the JetStream `samples` stream; the durable copy in the `metric` / `state` / `log_datapoint` tables is written by a **persistence consumer** that batch-writes off the stream as an **async sink**, idempotent on series identity. The sink never gates the rule engine: rules read samples from NATS, and a slow or paused persistence consumer holds up only the durable record, not the live signal. Samples are the firehose, so they reach Postgres through the sink and **do not go through CDC**, unlike the record/state lane (events, alarms, actions), which is born in a PG transaction and fanned out by CDC.
-- **Ground truth, logs** (immutable, append-only, the actor's own record): **`log_datapoint`** (a component's words, a sample kind), **`audit_log`** (an operator), **`session_log`** (connection lifecycle, node-reported), **`internal_log`** (platform self-narration), and the **`collection_log`** / **`node_log`** companions. Each named for what it is. There is no separate rule-execution table: a derived row *is* the evidence of its rule's run, carrying `source_rule` + `source_rule_version` on the row itself.
+- **Live on NATS, durable in PG.** The live sample is the message on the JetStream `samples` stream; the durable copy in the `metric` / `state` tables is written by a **persistence consumer** that batch-writes off the stream as an **async sink**, idempotent on series identity. The sink never gates the rule engine: rules read samples from NATS, and a slow or paused persistence consumer holds up only the durable record, not the live signal. Samples are the firehose, so they reach Postgres through the sink and **do not go through CDC**, unlike the record/state lane (events, alarms, actions), which is born in a PG transaction and fanned out by CDC.
+- **Ground truth, logs** (immutable, append-only, the actor's own record): **`log_line`** (a component's or node's words, its own untyped lane, not a sample kind), **`audit_log`** (an operator), **`session_log`** (connection lifecycle, node-reported), **`internal_log`** (platform self-narration), and the **`collection_log`** / **`node_log`** companions. Each named for what it is. There is no separate rule-execution table: a derived row *is* the evidence of its rule's run, carrying `source_rule` + `source_rule_version` on the row itself.
 - **Derived** (produced by rules, reconstructable in principle from ground truth): **`metric`**, **`state`**, **event**, **alarm**, **action**.
 
 A sample's lineage is `source_rule` + version (the function that made it). The companions extend it: `collection_log` is the cheap per-run execution record (every run, including failures), `node_log` the node's operational narration. A failed parse rides a `collection.failed` event carrying the raw; there is no telemetry table in the chain. See the architecture overview on the spine.
@@ -302,15 +307,16 @@ Current value (latest per owner / key / **instance** / **provenance**, reduced a
 
 ## The sample tables
 
-The three kinds are three physical tables only because they index and retain differently; the [physical layout, partitioning, and the lineage CHECK](/architecture/storage/) live on storage.
+The two kinds are two physical tables only because they index and retain differently; the [physical layout, partitioning, and the lineage CHECK](/architecture/storage/) live on storage.
 
 | Table | Key columns | Notes |
 |---|---|---|
 | `metric` | id, ts, **owner_kind, component_id/system_id/location_id/node_id**, key, **instance**, **value float8**, provenance, source, **source_rule, source_rule_version, event_id**, **correlation_id?, caused_by_event_id?** | the firehose; BRIN on ts; numeric aggregation. `instance` (`''` default) discriminates many values of one canonical key on one owner. `correlation_id` / `caused_by_event_id` are nullable trace cols, outside the lineage CHECK |
 | `state` | id, ts, owner arc, key, instance, **value text/jsonb**, provenance, source, + same lineage and trace cols | sparse, transition-only; time-in-state and dwell. [Config](/architecture/variables/) is keyed to one as its observed side |
-| `log_datapoint` | id, ts, owner arc, key, instance, **value text/jsonb (the line)**, level, provenance, source, + same lineage and trace cols | GIN / tsvector full-text; also the holding pen for un-normalized occurrences |
 
-Common sample columns (all three kind-tables): `ts`, the **owner arc** (`owner_kind` plus `component_id` / `system_id` / `location_id` / `node_id`), `key, provenance, source`, the on-row lineage `source_rule, source_rule_version, event_id`, and the nullable trace columns `correlation_id, caused_by_event_id` (outside the lineage CHECK); only the value column differs (float8 / text-jsonb / line). A `sample` view UNIONs the common columns for "all samples for owner X".
+Raw log lines are **not** in this set: `log_line` is its own lane, not a sample table, and its columns are different in kind (no property name, no provenance, no lineage CHECK): `id, ts`, the owner arc, `instance, source, severity, facility, message, attributes jsonb, labels jsonb, correlation_id`, with `severity` / `facility` indexed as the retention and routing axes ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)).
+
+Common sample columns (both kind-tables): `ts`, the **owner arc** (`owner_kind` plus `component_id` / `system_id` / `location_id` / `node_id`), `key, provenance, source`, the on-row lineage `source_rule, source_rule_version, event_id`, and the nullable trace columns `correlation_id, caused_by_event_id` (outside the lineage CHECK); only the value column differs (float8 / text-jsonb). A `sample` view UNIONs the common columns for "all samples for owner X".
 
 The key registry that types these tables is `property_type` (one registry across the metric and state kinds), detailed at [the property_type registry](#the-property_type-registry):
 
@@ -375,6 +381,6 @@ operator -> audit: "audit" { style.stroke-dash: 4 }
 cdc -- divergence: "disagree(A,B): drift / conflict" { style.stroke-dash: 4 }
 ```
 
-Two lanes, one bus. The **data lane** is the JetStream **trusted** `samples` stream. Untrusted publishers (the edge node, an external webhook) land on a **raw ingress** subject; an **admission consumer** owner-confines each sample against the publisher's placement (or the webhook interface's declared owner) and re-publishes only confined points to the trusted stream, so a forged owner is dropped before the live `event_rule` can act on it ([identity and access](/architecture/identity-access/)). **Trusted server producers** (calc output, a command's intended write) publish to the trusted stream directly, no admission pass. The `event_rule` consumer evaluates against the trusted stream live, and a **persistence consumer** batch-writes the three sample tables (`metric`, `state`, `log_datapoint`) as an async sink (samples never go through CDC). The **record/state lane** is PG-first: an `event_rule` fire writes the event and alarm transition to PG in one transaction, and a leader-elected **CDC publisher** (logical decoding of the WAL) fans those committed changes onto JetStream, where `action_rule` consumers react. A command's intended sample re-enters the data lane (the device round trip). The teal node is `audit_log`, the ground-truth record of operator writes (including config changes); observed and calculated carry `source_rule` on the row, intended points at the command `event` (via `event_id`). The raw payload is not stored: a parse or validation failure rides a `collection.failed` event. [config](/architecture/variables/) holds declared intent (PG-first), keyed to a state sample as its observed side.
+Two lanes, one bus. The **data lane** is the JetStream **trusted** `samples` stream. Untrusted publishers (the edge node, an external webhook) land on a **raw ingress** subject; an **admission consumer** owner-confines each sample against the publisher's placement (or the webhook interface's declared owner) and re-publishes only confined points to the trusted stream, so a forged owner is dropped before the live `event_rule` can act on it ([identity and access](/architecture/identity-access/)). **Trusted server producers** (calc output, a command's intended write) publish to the trusted stream directly, no admission pass. The `event_rule` consumer evaluates against the trusted stream live, and a **persistence consumer** batch-writes the two sample tables (`metric`, `state`) as an async sink (samples never go through CDC). The **record/state lane** is PG-first: an `event_rule` fire writes the event and alarm transition to PG in one transaction, and a leader-elected **CDC publisher** (logical decoding of the WAL) fans those committed changes onto JetStream, where `action_rule` consumers react. A command's intended sample re-enters the data lane (the device round trip). The teal node is `audit_log`, the ground-truth record of operator writes (including config changes); observed and calculated carry `source_rule` on the row, intended points at the command `event` (via `event_id`). The raw payload is not stored: a parse or validation failure rides a `collection.failed` event. [config](/architecture/variables/) holds declared intent (PG-first), keyed to a state sample as its observed side.
 
 Related: [events](/architecture/events/) (the event family and `event_type`), [calculations](/architecture/calculations/) (calc rules and the rule families), [config and credentials](/architecture/variables/) (declared config, drift, reconcile), [collection](/architecture/collection/) (how telemetry arrives), [alarms and actions](/architecture/alarms-actions/) (alarm lifecycle, actions), and [the glossary](/architecture/glossary/) (every term defined once).

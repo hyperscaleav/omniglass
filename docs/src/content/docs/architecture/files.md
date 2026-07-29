@@ -68,7 +68,7 @@ A blob is keyed by the hash of its bytes, not a UUID, which buys:
 So **rows reference a hash, never inline bytes.** Inline `bytea` would kill the hash-ref stability
 property and bloat the firehose row. Small structured values (a datapoint, its labels) stay inline
 in the row's jsonb; **large or opaque payloads become a blob hash-ref** (a dedicated **indexed**
-`blob_sha256` column on the referencing row, so GC can probe it, not buried in jsonb): a big `log_datapoint`
+`blob_sha256` column on the referencing row, so GC can probe it, not buried in jsonb): a big `log_line`
 body, and especially a **`collection.failed` event's raw** when the
 wire payload is large (a full SNMP walk, a big HTTP body, a capture). Raw stays inline when small;
 the size threshold is the switch.
@@ -111,7 +111,7 @@ one a *recent* event references, so collecting by the blob's own age would orpha
 References come from:
 
 - a **`file`** handle;
-- a large `log_datapoint` body;
+- a large `log_line` body;
 - a `collection.failed` raw hash-ref;
 - an **attach event** (a `state` or `audit_log` recording "this component was attached
   to this file at T").

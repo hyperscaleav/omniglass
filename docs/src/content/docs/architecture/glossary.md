@@ -27,7 +27,7 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **current value** | The latest sample per series `(owner, property_type, instance, provenance)`, held in the `property` cache so a read is one lookup, not a scan over samples. Producer provenances (observed/calculated/intended) are cached; declared resolves live from the cascade. |
 | **metric** | Numeric (float8) sample. Continuous, aggregatable. The firehose. |
 | **state** | Categorical/text/object sample. Discrete, dwell-measurable. [Config](/architecture/variables/) is keyed to one as its observed side. |
-| **log_datapoint** | A component's own log lines; value = the line. A stream; also the holding pen for un-normalized occurrences. |
+| **log_line** | A component's or node's own log lines, untyped raw arrival on its own ingest lane (not a sample, no property name, no registry gate). A rule may derive an `event` from one. |
 | **kind** | What a key is: metric, state, or log. Fixed per key at definition. |
 | **key** | The identity of what is measured or asserted; registered in `property_type`. |
 | **canonical signal** | A registered, owner-agnostic measurement name (`power.state`, not `room.power`); one comparable signal across every vendor. |
@@ -127,7 +127,7 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **audit_log** | Who-did-what ground truth; one row per operator write, same-tx; the lineage target for operator writes, including config changes. |
 | **session_log** | Connection-lifecycle transitions (node-reported, diagnostic). |
 | **internal_log** | Platform self-narration (startup, reconcile, migration, node-reg, config-sync). |
-| **ground truth** | Immutable append-only records: log_datapoint, audit_log, session_log, internal_log. |
+| **ground truth** | Immutable append-only records: log_line, audit_log, session_log, internal_log. |
 | **principal / role / grant** | IAM subject (kind `human` / `service` / `node`; identity is an opaque uuid, never a name); an RBAC capability set crossed with a scope. The base `principal` holds identity + kind only; a human's `display_name` lives on the `human` per-kind table. A `principal_group` is a group of principals used as a grant subject. An AI tool acts via OAuth as a `human` / `service` principal (first-class agent identity is deferred, [identity and access](/architecture/identity-access/)). See [identity and access](/architecture/identity-access/). |
 | **secret:read** | The IAM permission to read a credential in plaintext; gated per role, and every decrypt is audited. |
 | **file / blob** | Searchable metadata over content-addressed bytes (pgblobs/S3/disk); dedup. |

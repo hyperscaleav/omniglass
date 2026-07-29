@@ -132,7 +132,7 @@ everything the edge ships is idempotent by its own key:
   "done" twice is "done".
 
 **Events are not shipped from the edge**, so there is nothing to dedup for them: an event is **derived
-server-side** (an `event_rule` over samples, or a `log_datapoint` promoted by a rule,
+server-side** (an `event_rule` over samples, or an `event` a rule derived from a `log_line`,
 [events](/architecture/events/)). The edge produces samples (including log lines) and command status;
 the server derives the events. "We do not re-raise the same event next poll" is the **alarm** model's job
 (one stateful open alarm, fire and clear), not a delivery concern.
