@@ -56,7 +56,7 @@ template tables), [collection](/architecture/collection/#storage) (interfaces an
   authoritative `ON CONFLICT DO UPDATE`, so a release can correct the shared vocabulary
   ([the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs)).
 - **Three storage shapes.** **Ground-truth records** are append-only and immutable, each named for
-  what it is: `log_datapoint` (a sample kind), `audit_log` (operator actions), and the standing
+  what it is: `log_line` (the raw log lane, not a sample), `audit_log` (operator actions), and the standing
   `*_log` ground-truth logs (`session_log`, `internal_log`, plus the `collection_log` /
   `node_log` companions). There is **no `telemetry` table**: samples are published to the
   JetStream data lane, not synchronously inserted, so the raw payload is not persisted in steady
@@ -64,8 +64,10 @@ template tables), [collection](/architecture/collection/#storage) (interfaces an
   `collection.failed` event or a dev raw-mode tap ([samples](/architecture/properties/)). A
   schedule fire is not a record here: it is an `event` with `origin=scheduled`.
   There is no separate rule-execution table: derived rows carry their lineage on the row.
-  **Samples** (`metric` / `state` / `log_datapoint`) are the typed
-  observation firehose. **Stateful entities and projections** (`alarm`, `action`, current-value)
+  **Samples** (`metric` / `state`) are the typed
+  observation firehose, and `log_line` is the untyped raw arrival beside them
+  ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)): a log line is
+  not a sample kind, so it carries no property name and passes no registry gate. **Stateful entities and projections** (`alarm`, `action`, current-value)
   hold state directly or are rebuildable read models, **views by default**. The model is **not
   event-sourced**.
 - **Provenance and lineage on every sample**: `provenance` (observed / calculated / intended),
@@ -124,8 +126,10 @@ how the rest of the platform learns it changed.
 - **The data lane (a sink).** Observed and calculated samples live on the JetStream data lane.
   The rule engine consumes them directly off NATS; Postgres is the durable record, not the live
   signal. The **persistence consumer** is a durable JetStream consumer that batch-writes the
-  `metric` / `state` / `log_datapoint` tables as an async sink, idempotent on
+  `metric` / `state` tables as an async sink, idempotent on
   `(series, ts)`, so a redelivery lands the same row and the firehose never blocks on the database.
+  Raw log lines ride the same ingest path into `log_line`, but keyed on nothing (an untyped arrival has
+  no series), so their at-least-once story is the lane's own, not this one's.
   Samples do **not** flow through CDC: they are already on NATS.
 - **The record/state/intent lane (PG-first, CDC-out).** Events, alarms, actions, and operator
   mutations (config, ack/snooze, settings, manual commands) are born in a **Postgres transaction**.
@@ -151,7 +155,8 @@ a backtest reads; none is derived. The detailed columns of `audit_log` live on
 [audit](/architecture/audit/), `session_log` on [nodes](/architecture/nodes/#sessions); the rest is a
 compact list here because storage is their natural architectural home:
 
-- **`log_datapoint`** (a component's own words, a sample kind, [samples](/architecture/properties/));
+- **`log_line`** (a component's or node's own words, the untyped raw ingest lane, not a sample,
+  [ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events));
 - **`audit_log`** (operator actions: actor, verb, resource, `old -> new`; the lineage target for
   operator writes; secret decrypts always recorded, [audit](/architecture/audit/));
 - **`session_log`** (connection-lifecycle transitions, node-reported; the connection log,
@@ -230,8 +235,11 @@ key, instance, provenance)?
   `pg_partman` where the provider permits, else a documented manual roll). The firehose
   (`metric`) is the partitioning-critical one.
 - **Retention is per table**, set by policy, not one blanket TTL: `metric` short,
-  `state` / `log_datapoint` longer, `audit_log` longest (compliance), `internal_log`
-  short. On-row lineage ages out with its sample. The per-table defaults are **cascade-resolved**
+  `state` longer, `audit_log` longest (compliance), `internal_log`
+  short, and `log_line` keyed on its own axes (`severity` / `facility` are indexed columns precisely so
+  retention and routing can discriminate: a debug line ages out long before a warning). On-row lineage
+  ages out with its sample, and a `log_line` aged out from under an event it was derived from leaves
+  `event.source_log_line_id` null rather than deleting the event (`on delete set null`). The per-table defaults are **cascade-resolved**
   ([cascade](/architecture/cascade/)) with an install-wide `platform` binding, so a class or entity can
   hold longer or shorter without changing the whole install.
 - **The `raw_sample` buffer** (the opt-in raw-retention policy, [collection](/architecture/collection/))
@@ -271,11 +279,11 @@ application read and write goes through the Gateway, the physical backend is swa
   Postgres at scale); the data lane's persistence consumer and the record lane's CDC publisher both
   target this one backend.
 - **tiering**: the firehose does not stay in hot Postgres forever. Aged
-  `metric` / `log_datapoint` partitions tier out to a **columnar or object
+  `metric` / `log_line` partitions tier out to a **columnar or object
   store** (Parquet on S3-compatible, or an embedded columnar engine) behind the same gateway, so
   historical queries fan across hot and cold with no model change. The cold tier is partitioned by
   `ts`.
-- **blobs**: opaque bytes (a firmware image, a config dump, a capture, and later a large `log_datapoint`
+- **blobs**: opaque bytes (a firmware image, a config dump, a capture, and later a large `log_line`
   body or a `collection.failed` raw payload) live in the content-addressed [blob store](/architecture/files/),
   a `blob.Store` seam behind the same gateway. The default **pgblobs** backend holds bytes inline in Postgres;
   an S3-compatible or disk backend swaps in with no model change, since a row references a blob by its `sha256`,
