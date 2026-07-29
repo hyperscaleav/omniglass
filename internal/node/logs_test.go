@@ -87,6 +87,63 @@ func TestSelfLogEventDefaultsAndEmpty(t *testing.T) {
 	}
 }
 
+// deepNodeWork stands in for arbitrary node code far from the run loop: it holds
+// no logger and takes none, it just calls the package-level slog. The self-log
+// lane must still carry what it emits.
+func deepNodeWork() {
+	slog.Warn("probe capability missing", "facility", "collection", "probe", "icmp")
+}
+
+// TestSelfLogsAreNodeWide is the emitter contract: once the run loop installs the
+// sink as the process default, node code anywhere emits self-logs through the
+// package-level slog with no logger threaded to it.
+func TestSelfLogsAreNodeWide(t *testing.T) {
+	sink := newLogSink(slog.NewTextHandler(io.Discard, nil))
+	restore := slog.Default()
+	slog.SetDefault(slog.New(sink).With("node", "site-a"))
+	defer slog.SetDefault(restore)
+
+	deepNodeWork()
+
+	recs := sink.drain()
+	if len(recs) != 1 {
+		t.Fatalf("drain returned %d records, want 1 from package-level slog", len(recs))
+	}
+	if recs[0].message != "probe capability missing" || recs[0].severity != "warning" {
+		t.Fatalf("record = %+v, want warning/probe capability missing", recs[0])
+	}
+	// The run loop's bound attrs still ride along, so the line is attributable.
+	if recs[0].attrs["node"] != "site-a" || recs[0].attrs["probe"] != "icmp" {
+		t.Fatalf("attrs = %v, want bound node + inline probe", recs[0].attrs)
+	}
+}
+
+// TestLogSinkBoundsBuffer proves the buffer cannot grow without bound: once every
+// node slog call buffers, a chatty node between ticks (or a publish that never
+// drains) would otherwise leak. The newest records win and the drain leads with an
+// honest overflow line rather than silently losing the count.
+func TestLogSinkBoundsBuffer(t *testing.T) {
+	sink := newLogSink(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(sink)
+	for i := 0; i < maxBufferedLogs+10; i++ {
+		logger.Info("chatty", "i", i)
+	}
+
+	recs := sink.drain()
+	if len(recs) != maxBufferedLogs+1 {
+		t.Fatalf("drain returned %d records, want the cap plus one overflow line", len(recs))
+	}
+	notice := recs[0]
+	if notice.severity != "warning" || notice.attrs["dropped"] != 10 {
+		t.Fatalf("overflow notice = %+v, want warning with dropped=10", notice)
+	}
+	// The oldest were dropped, so the retained window ends at the newest record.
+	// slog carries an int attr as int64, which is what rides the attributes JSON.
+	if recs[len(recs)-1].attrs["i"] != int64(maxBufferedLogs+9) {
+		t.Fatalf("newest retained = %v, want the last emitted record", recs[len(recs)-1].attrs["i"])
+	}
+}
+
 func TestSeverityOf(t *testing.T) {
 	cases := []struct {
 		level slog.Level

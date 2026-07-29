@@ -41,8 +41,19 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// every record for shipment as a self-log (ADR-0066). The run loop drains and
 	// publishes the buffer on the node's telemetry subject, so the node's operational
 	// story (enrolled, worklist pulled, a task skipped) reaches the platform.
+	//
+	// It is installed as the PROCESS DEFAULT, which is what makes this a node-wide
+	// emitter: any node code emits a self-log with a plain `slog.Info(...)`, with no
+	// logger threaded down to it. The node run mode owns its process, so a global
+	// default is the right scope; the prior default is restored on return so a test
+	// binary (many Runs in one process) does not leak a dead sink. Emitting a new
+	// self-log is one slog call, conventionally carrying a `facility` attr (and
+	// optionally `source`), which the mapping lifts into the log_line columns.
 	sink := newLogSink(slog.NewTextHandler(os.Stderr, nil))
 	logger := slog.New(sink).With("node", cfg.Name)
+	prior := slog.Default()
+	defer slog.SetDefault(prior)
+	slog.SetDefault(logger)
 
 	creds, err := Claim(ctx, cfg.ServerURL, cfg.Name, cfg.Token)
 	if err != nil {
@@ -79,7 +90,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 		return collection.WorklistReply{}, err
 	}
 	logger.Info("worklist pulled", "facility", "collection", "tasks", len(wl.Tasks))
-	if err := runTasks(ctx, nc, cfg.Name, wl, dialer, pinger, verdicts, logger); err != nil {
+	if err := runTasks(ctx, nc, cfg.Name, wl, dialer, pinger, verdicts); err != nil {
 		return wl, err
 	}
 	if err := publishHeartbeat(nc, cfg.Name); err != nil {
@@ -112,7 +123,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			}
 			// Run the worklist's tcp tasks and publish their telemetry. A publish
 			// failure is non-fatal (retry next tick).
-			_ = runTasks(ctx, nc, cfg.Name, wl, dialer, pinger, verdicts, logger)
+			_ = runTasks(ctx, nc, cfg.Name, wl, dialer, pinger, verdicts)
 			// Ship whatever the node logged this tick as self-logs.
 			publishSelfLogs(nc, cfg.Name, sink)
 		}
@@ -135,7 +146,9 @@ func pullWorklist(nc *nats.Conn, name string) (collection.WorklistReply, error) 
 // publishSelfLogs drains the node's captured log records and publishes them as a
 // logs-only telemetry Event on the node's own subject, where the ingest consumer
 // lands them owner-bound to the node (ADR-0066). Non-fatal: a marshal or publish
-// failure is logged (buffered for the next tick), never fatal to the run loop.
+// failure drops this batch and the loop continues. It deliberately does not log its
+// own failure, since emitting from the drain path would feed the buffer it just
+// emptied; a publish outage is visible as a gap on the lane and in the heartbeat.
 func publishSelfLogs(nc *nats.Conn, name string, sink *logSink) {
 	ev := selfLogEvent(name, sink.drain())
 	if ev == nil {

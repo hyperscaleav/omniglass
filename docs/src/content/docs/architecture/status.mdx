@@ -2131,7 +2131,11 @@ capabilities ship, so an early slice can prove a seam without moving any page of
 - **The raw-log lane gets its first producer: node self-logs ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)).**
   The telemetry `Event` gains a `LogLine` message and a `repeated logs` field: raw log lines are untyped
   arrival, not registry-resolved samples, so they need their own wire slot. The node now runs an slog handler
-  that writes to its console and buffers every record; the run loop drains it each tick and publishes the
+  that writes to its console and buffers every record, **installed as the process default so it is a node-wide
+  emitter**: any node code ships a self-log with a plain `slog.Info(...)` (carrying a `facility`, and optionally
+  a `source`, which the mapping lifts into the `log_line` columns), with no logger threaded down to it, and the
+  buffer is bounded (oldest dropped, count reported) so a chatty stretch between ticks cannot grow the edge
+  process without bound. The run loop drains it each tick and publishes the
   records as a logs-only Event, which the ingest consumer routes to `log_line` **owner-bound to the node**,
   ahead of the sample owner-confinement and independent of any task (a logs-only Event lands without a
   `task_id`). The node narrates its operational story back to the platform (connected to the bus, worklist

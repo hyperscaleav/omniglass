@@ -32,14 +32,16 @@ type interfaceParams struct {
 // never stalls the rest of the worklist. tcp and icmp are the wired probe types;
 // their samples ride the same pipeline (the ingest consumer does not branch
 // on probe type).
-func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.WorklistReply, dialer collection.TCPDialer, pinger collection.Pinger, verdicts map[string]string, logger *slog.Logger) error {
+func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.WorklistReply, dialer collection.TCPDialer, pinger collection.Pinger, verdicts map[string]string) error {
 	runner := &collection.Runner{TCP: dialer, Ping: pinger}
 	for _, task := range wl.Tasks {
 		dps, err := collectTask(ctx, runner, task)
 		if err != nil {
 			// A skipped task is the node's own operational story, not a component
 			// signal: log it as a self-log rather than a false-down state sample.
-			logger.Warn("task skipped", "facility", "collection", "task", task.ID, "error", err.Error())
+			// The package-level slog is the node-wide emitter (Run installs the
+			// self-log sink as the process default), so nothing is threaded here.
+			slog.Warn("task skipped", "facility", "collection", "task", task.ID, "error", err.Error())
 			continue // unusable config or inconclusive probe: skip, no false down
 		}
 		if dps == nil {
