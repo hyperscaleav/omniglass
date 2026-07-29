@@ -251,6 +251,24 @@ func TestTelemetryRoundTrip(t *testing.T) {
 		return e.Message == "call started" && e.Origin == "caught" && e.Key == "call.started"
 	})
 
+	// RAW LOG LANE (ADR-0066): node-a ships its own self-log as a LogLine on the
+	// telemetry Event (no task, no registry name, no sample). It lands on log_line
+	// owner-bound to the node, the separate raw ingest lane, never the event table.
+	publishEvent(t, ncA, "node-a", &ogv1.Event{
+		NodeId: "node-a",
+		Logs: []*ogv1.LogLine{{
+			Message:    "tcp probe on disp-1 timed out after 3 retries",
+			Source:     "collection",
+			Severity:   "warning",
+			Facility:   "node",
+			Attributes: []byte(`{"task":"t-a"}`),
+		}},
+	})
+	waitNodeLog(t, ctx, gw, "node-a", func(l storage.LogLine) bool {
+		return l.Message == "tcp probe on disp-1 timed out after 3 retries" &&
+			l.OwnerKind == "node" && l.Severity == "warning" && l.Source == "collection"
+	})
+
 	// Telemetry publish isolation: node-a cannot publish to node-b's telemetry
 	// subject (a permissions violation), the same fence as worklist/heartbeat.
 	if err := ncA.Publish(collection.TelemetrySubject("node-b"), []byte("x")); err != nil {
@@ -279,6 +297,28 @@ func waitEvent(t *testing.T, ctx context.Context, gw storage.Gateway, comp strin
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("no event on %s matched the predicate (got %d)", comp, len(evs))
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// waitNodeLog polls a node's self-logs until one matches pred, or a deadline
+// passes. The raw log lane writes a node-owned log_line; this reads it back.
+func waitNodeLog(t *testing.T, ctx context.Context, gw storage.Gateway, node string, pred func(storage.LogLine) bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		logs, err := gw.ListNodeLogs(ctx, node, time.Now().Add(-time.Hour), 50)
+		if err != nil {
+			t.Fatalf("list node logs %s: %v", node, err)
+		}
+		for _, l := range logs {
+			if pred(l) {
+				return
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no node log on %s matched the predicate (got %d)", node, len(logs))
 		}
 		time.Sleep(50 * time.Millisecond)
 	}

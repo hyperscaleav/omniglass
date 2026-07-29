@@ -1420,6 +1420,26 @@ export interface paths {
         patch: operations["update-node"];
         trace?: never;
     };
+    "/nodes/{name}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a node's recent self-logs
+         * @description Returns the node's own recent operational log lines (the raw ingest lane of ADR-0066, owner-bound to the node), newest first, bounded to the last 24 hours. Gated by node:read; an out-of-scope node is a non-disclosing 404.
+         */
+        get: operations["list-node-logs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/nodes/{name}:enroll": {
         parameters: {
             query?: never;
@@ -4734,6 +4754,16 @@ export interface components {
             /** @description The location's id; the stable form of location */
             location_id?: string;
             name: string;
+        };
+        NodeLogsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/NodeLogsOutputBody.json
+             */
+            readonly $schema?: string;
+            logs: components["schemas"]["LogBody"][] | null;
+            node: string;
         };
         PlatformBindingInputBody: {
             /**
@@ -9022,6 +9052,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NodeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-node-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The node's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NodeLogsOutputBody"];
                 };
             };
             /** @description Error */

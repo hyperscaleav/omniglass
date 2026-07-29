@@ -431,6 +431,11 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 	if err := seedLogs(ctx, gw); err != nil {
 		return err
 	}
+	// The edge node's own self-logs, so the node blade's Self-logs panel comes up
+	// populated: the node narrating itself (ADR-0066), owner-bound to the node.
+	if err := seedNodeLogs(ctx, gw); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -447,6 +452,7 @@ var exampleLogs = []struct {
 	severity string
 	facility string
 	attrs    []byte
+	labels   []byte
 	minsAgo  int
 }{
 	{message: "power state changed to on", severity: "info", facility: "kern", minsAgo: 214},
@@ -454,7 +460,10 @@ var exampleLogs = []struct {
 	{message: "edid read complete: 3840x2160@60", severity: "info", facility: "daemon", minsAgo: 211},
 	{message: "cec handshake ok", severity: "info", facility: "daemon", minsAgo: 127},
 	{message: "input switched to HDMI2", severity: "notice", facility: "daemon", attrs: []byte(`{"input":"hdmi2"}`), minsAgo: 46},
-	{message: "backlight temperature high, throttling", severity: "warning", facility: "kern", minsAgo: 12},
+	// A classified line: a log line is untyped, but labels are how it gets sorted
+	// into a class (system, firmware, application) without a registry (ADR-0066).
+	// This is the one seeded line carrying both structured columns.
+	{message: "backlight temperature high, throttling", severity: "warning", facility: "kern", attrs: []byte(`{"celsius":71,"limit":68}`), labels: []byte(`{"class":"firmware"}`), minsAgo: 12},
 }
 
 // seedLogs installs the example log lines on the lobby display idempotently. The
@@ -480,11 +489,63 @@ func seedLogs(ctx context.Context, gw storage.Gateway) error {
 			Facility:   l.facility,
 			Message:    l.message,
 			Attributes: l.attrs,
+			Labels:     l.labels,
 			TS:         now.Add(-time.Duration(l.minsAgo) * time.Minute),
 		})
 	}
 	if err := gw.InsertLogLines(ctx, lines); err != nil {
 		return fmt.Errorf("devseed: insert logs: %w", err)
+	}
+	return nil
+}
+
+// exampleNodeLogs are the edge node's own operational self-logs (ADR-0066): the
+// node narrating itself (connected, worklist pulled, a task skipped), not a
+// component's device output. source and facility name the node subsystem; one
+// carries a structured attributes payload and a higher severity so the panel's
+// badge and disclosure both show. minsAgo is minutes before the seed's now.
+var exampleNodeLogs = []struct {
+	message  string
+	source   string
+	severity string
+	facility string
+	attrs    []byte
+	minsAgo  int
+}{
+	{message: "connected to bus", source: "node", severity: "info", facility: "enrollment", minsAgo: 63},
+	{message: "worklist pulled", source: "node", severity: "info", facility: "collection", attrs: []byte(`{"tasks":2}`), minsAgo: 63},
+	{message: "worklist pulled", source: "node", severity: "info", facility: "collection", attrs: []byte(`{"tasks":2}`), minsAgo: 33},
+	{message: "task skipped", source: "collection", severity: "warning", facility: "collection", attrs: []byte(`{"task":"boardroom-a-hdmi","error":"unresolved host"}`), minsAgo: 12},
+	{message: "worklist pulled", source: "node", severity: "info", facility: "collection", attrs: []byte(`{"tasks":2}`), minsAgo: 3},
+}
+
+// seedNodeLogs installs the edge node's example self-logs idempotently, guarded on
+// the node already carrying lines (ListNodeLogs from the epoch, limit 1) the same
+// way seedLogs guards, since log_line has an auto id and no natural unique key.
+func seedNodeLogs(ctx context.Context, gw storage.Gateway) error {
+	existing, err := gw.ListNodeLogs(ctx, reachNode, time.Time{}, 1)
+	if err != nil {
+		return fmt.Errorf("devseed: check node logs: %w", err)
+	}
+	if len(existing) > 0 {
+		return nil
+	}
+	now := time.Now().UTC()
+	lines := make([]storage.LogLineWrite, 0, len(exampleNodeLogs))
+	for _, l := range exampleNodeLogs {
+		lines = append(lines, storage.LogLineWrite{
+			OwnerKind:  "node",
+			OwnerID:    reachNode,
+			Source:     l.source,
+			Severity:   l.severity,
+			Facility:   l.facility,
+			Message:    l.message,
+			Attributes: l.attrs,
+			TS:         now.Add(-time.Duration(l.minsAgo) * time.Minute),
+		})
+	}
+	if err := gw.InsertLogLines(ctx, lines); err != nil {
+		return fmt.Errorf("devseed: insert node logs: %w", err)
 	}
 	return nil
 }

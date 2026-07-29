@@ -98,6 +98,31 @@ func TestNodeRunOnce(t *testing.T) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
+
+	// The node's self-logs landed (ADR-0066): its own operational records
+	// ("connected to bus", "worklist pulled") rode the telemetry lane as LogLines
+	// and the ingest consumer wrote them to log_line owner-bound to the node, not
+	// to any component. This closes the raw-log-lane producer loop end to end.
+	deadline = time.Now().Add(3 * time.Second)
+	for {
+		logs, err := gw.ListNodeLogs(ctx, "site-a", time.Now().Add(-time.Hour), 50)
+		if err != nil {
+			t.Fatalf("list node logs: %v", err)
+		}
+		var pulled bool
+		for _, l := range logs {
+			if l.Message == "worklist pulled" && l.OwnerKind == "node" && l.Facility == "collection" {
+				pulled = true
+			}
+		}
+		if pulled {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("node self-log 'worklist pulled' never landed in log_line")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 }
 
 // TestNodeVerdictPerInterface pins the per-component-name regression: two

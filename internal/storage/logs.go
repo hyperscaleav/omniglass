@@ -123,3 +123,33 @@ func (p *PG) ListComponentLogs(ctx context.Context, componentName string, since 
 	}
 	return out, nil
 }
+
+// ListNodeLogs returns a node's own log lines newest-first, from since, capped at
+// limit. Owner arc is the node (node_id = the node's principal_id): these are the
+// self-logs a node ships back over the ingest lane (ADR-0066), not a component's.
+func (p *PG) ListNodeLogs(ctx context.Context, nodeName string, since time.Time, limit int) ([]LogLine, error) {
+	rows, err := p.pool.Query(ctx, `
+		select id, ts, owner_kind, instance, source,
+			coalesce(severity, ''), coalesce(facility, ''), message, attributes, labels, coalesce(correlation_id, '')
+		from log_line
+		where node_id = (select principal_id from node where name = $1) and ts >= $2
+		order by ts desc
+		limit $3`, nodeName, since, limit)
+	if err != nil {
+		return nil, fmt.Errorf("storage: list node logs %s: %w", nodeName, err)
+	}
+	defer rows.Close()
+
+	var out []LogLine
+	for rows.Next() {
+		var l LogLine
+		if err := rows.Scan(&l.ID, &l.TS, &l.OwnerKind, &l.Instance, &l.Source, &l.Severity, &l.Facility, &l.Message, &l.Attributes, &l.Labels, &l.CorrelationID); err != nil {
+			return nil, fmt.Errorf("storage: scan node log %s: %w", nodeName, err)
+		}
+		out = append(out, l)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("storage: iterate node logs %s: %w", nodeName, err)
+	}
+	return out, nil
+}

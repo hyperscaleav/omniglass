@@ -76,3 +76,70 @@ func TestInsertLogLines(t *testing.T) {
 		t.Fatal("insert with unknown owner: want error, got nil")
 	}
 }
+
+// TestInsertNodeLogLines round-trips the node arc of the raw-log lane (ADR-0066):
+// a node's self-logs are owned by the node (owner arc = node, resolved to its
+// principal_id), read back by ListNodeLogs, with empty severity/facility coalesced
+// to "". A node-owned line never surfaces on a component's log read.
+func TestInsertNodeLogLines(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-1"}, all); err != nil {
+		t.Fatalf("create node: %v", err)
+	}
+
+	now := time.Now().UTC()
+	if err := gw.InsertLogLines(ctx, []storage.LogLineWrite{
+		{OwnerKind: "node", OwnerID: "edge-1", Source: "node", Message: "connected to bus", TS: now.Add(-time.Minute)},
+		{OwnerKind: "node", OwnerID: "edge-1", Source: "node", Severity: "info", Facility: "collection", Message: "worklist pulled", Attributes: []byte(`{"tasks":2}`), TS: now},
+	}); err != nil {
+		t.Fatalf("insert node log lines: %v", err)
+	}
+
+	got, err := gw.ListNodeLogs(ctx, "edge-1", now.Add(-time.Hour), 10)
+	if err != nil {
+		t.Fatalf("list node logs: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("list node logs: want 2, got %d", len(got))
+	}
+	if got[0].Message != "worklist pulled" || got[0].OwnerKind != "node" || got[0].Facility != "collection" ||
+		string(got[0].Attributes) != `{"tasks": 2}` {
+		t.Fatalf("newest node log: unexpected row %+v", got[0])
+	}
+	// The line with no severity/facility coalesces those columns to "".
+	if got[1].Message != "connected to bus" || got[1].Severity != "" || got[1].Facility != "" {
+		t.Fatalf("oldest node log: want empty severity/facility, got %+v", got[1])
+	}
+
+	// A node-owned line does not surface on a component log read (owner arcs do not
+	// bleed): a fresh component sees nothing.
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-x"}, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	compLogs, err := gw.ListComponentLogs(ctx, "disp-x", now.Add(-time.Hour), 10)
+	if err != nil {
+		t.Fatalf("list component logs: %v", err)
+	}
+	if len(compLogs) != 0 {
+		t.Fatalf("component log read leaked node-owned lines: %+v", compLogs)
+	}
+
+	// An owner node that does not exist violates the node FK.
+	if err := gw.InsertLogLines(ctx, []storage.LogLineWrite{
+		{OwnerKind: "node", OwnerID: "ghost-node", Message: "x", TS: now},
+	}); err == nil {
+		t.Fatal("insert with unknown node owner: want error, got nil")
+	}
+}

@@ -19,6 +19,19 @@ export async function getLogs(name: string): Promise<ComponentLogs> {
   return { component: data?.component ?? name, logs: (data?.logs ?? []) as ComponentLog[] };
 }
 
+// A node's own self-logs (ADR-0066): the same raw log line, owner-bound to the
+// node instead of a component. The node's operational story (connected, worklist
+// pulled, a task skipped) shipped back over the telemetry lane.
+export type NodeLogs = { node: string; logs: ComponentLog[] };
+
+export const NODE_LOGS_KEY = (name: string) => ["node-logs", name] as const;
+
+export async function getNodeLogs(name: string): Promise<NodeLogs> {
+  const { data, error } = await api.GET("/nodes/{name}/logs", { params: { path: { name } } });
+  if (error) throw error;
+  return { node: data?.node ?? name, logs: (data?.logs ?? []) as ComponentLog[] };
+}
+
 // severityVariant maps a syslog-style severity onto a daisyUI badge variant, so an
 // error or warning line reads at a glance. Anything unclassified stays neutral.
 export function severityVariant(severity: string | undefined): string {

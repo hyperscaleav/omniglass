@@ -23,7 +23,15 @@ the AND of that interface's probe results) and emits it as a built-in **state** 
 **routes by the registry kind** (metric to `metric`, state to `state`, and a **log** to the
 new **`event`** log sink, no longer dropped, see [ADR-0046](/architecture/decisions/#adr-0046-the-event-log-kind-sink))
 under the same confinement, and the state series is **transition-only** (one row per flip, guarded both at the
-node and at ingest). Of the two collection primitives this pipeline reads, the **interface** is the authored one and the
+node and at ingest). The Event also carries a node's own **self-logs** as raw `LogLine`s (untyped, no registry name,
+no task): the ingest consumer lands them in `log_line` owner-bound to the node ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)),
+the raw log lane the node narrates itself on (connected, worklist pulled, a task skipped), distinct from the typed
+samples above and routed before the task owner-confinement so a logs-only Event lands without a `task_id`. The node
+half is a **node-wide emitter**: the run loop installs a capturing `slog` handler as the process default, so any node
+code emits a self-log with a plain `slog.Info(...)` (conventionally carrying a `facility`, and optionally a `source`,
+which the mapping lifts into the `log_line` columns), with no logger threaded down to it. The buffer between ticks is
+bounded, dropping the oldest lines and reporting the count, so a chatty stretch cannot grow the edge process without
+bound. Of the two collection primitives this pipeline reads, the **interface** is the authored one and the
 **task** is **derived**. An interface has an operator **CRUD API** (gateway + Huma routes at `/interfaces`,
 generated into the OpenAPI document, the cobra CLI, and the typed client); it is **named by its protocol** (the
 name derives from its `interface_type`, unique within its component, never a hand-typed label), so create takes a

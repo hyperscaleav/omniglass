@@ -43,6 +43,11 @@ message Event {
   // the inline tcp probe (no protocol payload). Raw-Event persistence is deferred
   // to a later checkpoint.
   bytes raw = 6;
+
+  // logs is the raw log lines in this batch (ADR-0066): untyped arrival, not
+  // registry-resolved samples. The consumer writes them to log_line, owner-confined
+  // like samples. A node's self-logs ride here.
+  repeated LogLine logs = 7;
 }
 
 // Sample is one observation: a registry-resolved property name plus a typed value.
@@ -68,4 +73,19 @@ message Sample {
   // labels are sample-specific dimensional metadata (e.g. the reason). Not
   // persisted in checkpoint 3.
   map<string, string> labels = 7;
+}
+
+// LogLine is one raw log line off the ingest lane (ADR-0066): untyped text, not a
+// registry-resolved Sample. The consumer writes it to log_line, owner-confined to
+// the publishing node (self-logs) or the task's component. severity and facility
+// are the retention/routing axes; attributes and labels are freeform JSON.
+message LogLine {
+  string message = 1;
+  string source = 2;
+  string severity = 3;
+  string facility = 4;
+  bytes attributes = 5;
+  bytes labels = 6;
+  string correlation_id = 7;
+  google.protobuf.Timestamp ts = 8;
 }

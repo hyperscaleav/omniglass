@@ -1925,6 +1925,26 @@ Example:
 omniglass node listTags <name>
 ```
 
+### `omniglass node log`
+
+Commands for the log resource
+
+#### `omniglass node log list`
+
+List a node's recent self-logs
+
+```
+omniglass node log list <name>
+```
+
+Returns the node's own recent operational log lines (the raw ingest lane of ADR-0066, owner-bound to the node), newest first, bounded to the last 24 hours. Gated by node:read; an out-of-scope node is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass node log list <name>
+```
+
 ### `omniglass node removeTag`
 
 Remove a tag value from a node

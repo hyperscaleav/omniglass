@@ -3063,6 +3063,28 @@ components:
         - name
         - enrolled
       type: object
+    NodeLogsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/NodeLogsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        logs:
+          items:
+            $ref: "#/components/schemas/LogBody"
+          type:
+            - array
+            - "null"
+        node:
+          type: string
+      required:
+        - node
+        - logs
+      type: object
     PlatformBindingInputBody:
       additionalProperties: false
       properties:
@@ -7562,6 +7584,33 @@ paths:
           description: Error
       summary: Update a node
       x-omniglass-permission: node:update
+  /nodes/{name}/logs:
+    get:
+      description: Returns the node's own recent operational log lines (the raw ingest lane of ADR-0066, owner-bound to the node), newest first, bounded to the last 24 hours. Gated by node:read; an out-of-scope node is a non-disclosing 404.
+      operationId: list-node-logs
+      parameters:
+        - description: The node's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The node's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeLogsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a node's recent self-logs
+      x-omniglass-permission: node:read
   /nodes/{name}:enroll:
     post:
       description: Mints (or re-mints) the node's enrollment token and returns it once. The token is stored only as a hash; it is never logged. Gated by node:enroll.

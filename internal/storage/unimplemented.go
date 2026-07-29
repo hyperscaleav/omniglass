@@ -346,6 +346,9 @@ func (UnimplementedGateway) InsertLogLines(context.Context, []LogLineWrite) erro
 func (UnimplementedGateway) ListComponentLogs(context.Context, string, time.Time, int) ([]LogLine, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) ListNodeLogs(context.Context, string, time.Time, int) ([]LogLine, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) CreateNode(context.Context, string, NodeSpec, scope.Set) (*Node, error) {
 	return nil, nil
 }

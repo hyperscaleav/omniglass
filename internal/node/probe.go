@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
@@ -36,6 +37,11 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 	for _, task := range wl.Tasks {
 		dps, err := collectTask(ctx, runner, task)
 		if err != nil {
+			// A skipped task is the node's own operational story, not a component
+			// signal: log it as a self-log rather than a false-down state sample.
+			// The package-level slog is the node-wide emitter (Run installs the
+			// self-log sink as the process default), so nothing is threaded here.
+			slog.Warn("task skipped", "facility", "collection", "task", task.ID, "error", err.Error())
 			continue // unusable config or inconclusive probe: skip, no false down
 		}
 		if dps == nil {
