@@ -17,11 +17,22 @@ alongside, the feature that implements it.
 Concretely, a user-facing PR must do one of:
 
 - change `docs/` to add or update the page(s) that explain the new behavior, or
-- carry the `no-docs` label with a one-line justification (pure refactor, internal-only
-  change, etc.).
+- state a one-line justification in the PR body (pure refactor, internal-only change,
+  etc.).
 
-CI enforces the docs-touched gate. The justification path exists so the gate never blocks
-a genuine internal change, not as a routine escape hatch.
+The docs-touched gate is enforced by the PR template checklist and the `/ship-slice`
+pre-ship pass, not by a label-driven CI check (the
+[label taxonomy](/contributing/labels/) is closed, and no workflow reads a docs label). The
+justification path exists so the gate never blocks a genuine internal change, not as a
+routine escape hatch.
+
+A mechanical layer backs the human gate: the **docs lint suite** (`internal/docslint`, run
+by `go test` and so by `make test` and CI) checks the hand-written docs against the code.
+Today that is the banned-vocabulary lint (retired identifiers must not appear in
+current-tense prose) and the decisions-format lint (ADR numbering, index rows, required
+fields), plus the docs-command guard in `internal/cli`; more lints (routes, permissions,
+make targets, env vars, file paths) land under
+[#429](https://github.com/hyperscaleav/omniglass/issues/429).
 
 ## What "the docs" means here
 
@@ -42,7 +53,7 @@ a genuine internal change, not as a routine escape hatch.
 
 So a feature that adds an operator surface usually touches two homes: the **architecture**
 page (the model) and a **guide** (the how-to). A purely internal change touches neither and
-takes the `no-docs` label.
+states its one-line justification in the PR body.
 
 ## Status moves with the code
 
@@ -102,5 +113,8 @@ captures; a real UI change moves far more.)
 
 ## Publishing
 
-Docs build in CI on every PR (so a broken docs build fails the PR) and are embedded into
-the binary at release. The published site is docs.omniglass.hyperscaleav.com.
+The docs site builds in CI on every PR that touches `docs/**` (the `docs-build` workflow,
+`.github/workflows/docs-build.yml`, path-filtered), so a broken `.mdx` page, a dead import,
+or invalid frontmatter fails the PR that introduces it. The published site is
+docs.omniglass.hyperscaleav.com; in time, the same content is embedded into the Go binary
+to serve at `/docs`.

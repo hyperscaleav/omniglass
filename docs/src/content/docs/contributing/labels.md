@@ -28,10 +28,11 @@ that matters: does the label **describe** the issue, or does it **trigger** auto
 
 ### `area:<subsystem>` describes
 
-The subsystem a change touches, matching the architecture glossary:
+The subsystem a change touches, named to match the architecture glossary. The set grows as
+subsystems land; today:
 
 `area:foundation` `area:api` `area:storage` `area:auth` `area:collection` `area:expr`
-`area:ui` `area:node`
+`area:ui` `area:node` `area:health` `area:settings` `area:tags` `area:files`
 
 Purely descriptive: it filters the issue list by subsystem. An issue can carry more than
 one.

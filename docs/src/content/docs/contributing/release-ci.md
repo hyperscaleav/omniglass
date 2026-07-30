@@ -5,20 +5,31 @@ description: "The CI gates on every PR and the manual semantic-release versionin
 
 `make test` is the local gate (the [test-driven](/contributing/test-driven/) doctrine says
 validate locally, do not lean on CI). CI is the backstop and, on `main`, the release driver.
-Three workflows carry it.
+Nine workflows carry it: `test`, `pr-title`, `image`, `docs-shots`, `gen-drift`,
+`docs-build`, `preview-comment`, `release`, and `goreleaser`.
 
 ## On every pull request
 
 - **`test.yml`** (the test gate) runs `go build ./...` and `go test ./...` on a runner with a
-  Docker daemon, so the testcontainers-backed integration and e2e tiers actually execute. It
-  also runs on `main` after merge.
+  Docker daemon, so the testcontainers-backed integration and e2e tiers actually execute
+  (after widening `net.ipv4.ping_group_range` so the collection tier's unprivileged ICMP
+  probe can open its socket). It also runs on `main` after merge.
 - **`pr-title.yml`** lints the PR title to the conventional-commit grammar. This matters
   because the repo squash-merges: the squash subject *is* the PR title, and semantic-release
   reads it to decide the next version. A malformed title would either mis-version or silently
   skip a release, so it is blocked at the PR.
+- **`gen-drift.yml`** runs `make gen` and fails the PR on any diff in the committed generated
+  artifacts (the OpenAPI, the cobra tree, the CLI reference, the ERD, the typed SPA client,
+  the protobuf wire), the drift gate [API first](/contributing/api-first/) promises.
+- **`docs-build.yml`** (path-filtered to `docs/**`) builds the Astro docs site, so a broken
+  page fails the PR that introduces it instead of the next deploy.
+- **`docs-shots.yml`** (path-filtered to `docs/**` and `web/**`) gates the generated docs
+  screenshots: every declared shot has a committed PNG, and a recapture against the real
+  console fails if a shot drifted beyond the tolerance.
 
-The other PR check, **`image.yml`**, builds the multi-arch container image (see
-[Container image](/guides/container-image/)).
+Two more PR checks: **`image.yml`** builds the multi-arch container image (see
+[Container image](/guides/container-image/)), and **`preview-comment.yml`** reacts to the
+`run:preview` label (see [PR previews](/guides/pr-previews/)).
 
 ## Cutting a release (manual)
 

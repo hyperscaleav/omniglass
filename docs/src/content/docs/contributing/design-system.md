@@ -1,6 +1,6 @@
 ---
 title: UI and the design system
-description: The SolidJS and daisyUI console, a config-driven ListView shell over a generated typed client.
+description: The SolidJS and daisyUI console, config-driven ListShell pages (with FlatList / TreeList bodies) over a generated typed client.
 ---
 
 The operator console is a **SolidJS** SPA styled with **daisyUI 5** on **Tailwind CSS 4**. It is
@@ -39,10 +39,11 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
 
 ## Core UI contracts
 
-- **One inventory shell: `ListView<N>`.** Every inventory page (Components, Systems, Locations)
+- **One inventory shell: `ListShell` with `FlatList` / `TreeList` bodies.** Every inventory page
+  (Components, Systems, Locations)
   is a `ListConfig` over the one shell, **never a fork**. The shell owns the faceted filter
   header, the action rail (tree/list toggle, expand/collapse, column visibility + drag reorder,
-  the primary create), tree and flattened rendering, the stacked detail blades, the full-page
+  the primary create), the tree and flattened body rendering, the stacked detail blades, the full-page
   detail, the create/edit `Drawer`, and an optional summary widget board. Adding an entity of
   this class is a data layer + a config + a route (see the `add-inventory-view` skill).
 - **The faceted filter is a tested engine.** `lib/predicate` is the pure matcher: values within a
@@ -51,7 +52,7 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   flatten-vs-tree rows, client-preference parsing) are pure in `lib/listmodel`. Both are unit
   tested; `FilterBar` has a component test.
 - **`can(me, resource, action)` from `/auth/me`.** The console reads the principal's flat,
-  wildcard-expanded `permissions` once and gates UI affordances with O(1) checks; `ListView`
+  wildcard-expanded `permissions` once and gates UI affordances with O(1) checks; `ListShell`
   gates create/update/delete by the entity's resource name. The server is the authority; this is
   a hint only.
 - **Blades are ephemeral, the full page is addressable.** A row opens a stacked blade (the Azure
@@ -123,10 +124,11 @@ themes at the same weight as the soft hues. The same reason keeps `type` values 
 
 ## Primitives (the reuse target)
 
-`ListView`, `FilterBar`, `Drawer`, `PanelFooter`, `Donut`, `Badge`, `Fact`, `Page`, `DataTable`,
+`ListShell` (with its `FlatList` / `TreeList` bodies), `FilterBar`, `Drawer`, `PanelFooter`,
+`Donut`, `Badge`, `Fact`, `Page`, `DataTable`,
 `CommandPalette`, plus the `Sidebar` / `TopBar` shell. New inventory pages consume these; new
 surface *classes* (dashboards, alarms, explore, learn) add their own primitive rather than
-bending `ListView`.
+bending `ListShell`.
 
 ## Build and embed
 
@@ -139,13 +141,14 @@ console. In dev, `npm run dev` serves the SPA on :5173 with `/api` proxied to a 
 
 Component-level tests (Vitest + `@solidjs/testing-library`) cover the interactive widgets and the
 pure list/filter logic (`lib/predicate`, `lib/listmodel`, `FilterBar`, the data layers). The
-**browser-driven e2e tier** (drive the console as a user against the full stack) is the remaining
-gate per the [test-first doctrine](/contributing/test-driven/); until it lands, user-observable
-behavior is verified by hand/Playwright and is not yet a committed gate.
+**browser-driven e2e tier** is `make test-e2e` (`web/e2e/run.sh`): it brings up the dev
+Postgres, builds the binary with the console embedded, serves it, and runs Playwright against
+the real login form and console, driving the surfaces as a user would per the
+[test-first doctrine](/contributing/test-driven/).
 
 ## How this relates to the UI architecture
 
 This page is the **build and dev guide** for the console: the stack, the generated client, the
-`ListView` shell and its primitives, and the build-and-embed pipeline. The **architecture** (the
+`ListShell` and its primitives, and the build-and-embed pipeline. The **architecture** (the
 information architecture, the read-side BFF, the live-update model) is [UI](/architecture/ui/) on
 the architecture spine. Build mechanics live here; the model lives there.

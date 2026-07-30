@@ -21,8 +21,8 @@ through a fixed lifecycle so quality is a process, not a hope.
 | **Ship** | the ship-review (below), then squash-merge | architect approves |
 | **Log** | record what shipped, the decisions, and the follow-ups | logged |
 
-The first six stages are the [five doctrines](/) in motion; the last two are how the work
-becomes externally visible and approvable.
+The first seven stages (Define through Review) are the [five doctrines](/) in motion; the
+last two (Ship and Log) are how the work becomes externally visible and approvable.
 
 ## What "validated" means
 
@@ -70,6 +70,8 @@ Verdict:   ready | ready-pending-your-call
 
 Scope:     in / thin cut / deferred (#issues)
 Proof:     make test green (fresh, N packages); the load-bearing behaviors; tiers; make gen clean
+Visual:    live screenshots for any operator-facing surface (the PR template's
+           Visual confirmation section) | n/a (no UI surface)
 Docs:      what shipped; arch-of-record consistent or a divergence note
 Status:    pages advanced (page: Design->Partial); status.mdx entry; ADR-#### if diverged
 Review:    findings and how addressed; security note if relevant

@@ -13,22 +13,28 @@ cannot drift from the implementation.
 Request/response types are Go structs (Huma). The OpenAPI 3.1 document is *generated* from
 them, server-less, and committed. Everything downstream is generated from that document.
 This is the rule: **you change a Go route or shape, you regenerate, you commit the derived
-artifacts.** A drift check in CI fails the PR if the committed artifacts are stale.
+artifacts.** The `gen-drift` workflow (`.github/workflows/gen-drift.yml`) enforces it in CI:
+it runs `make gen` and fails the PR on any diff in the committed generated artifacts.
 
 ## The generation pipeline
 
 | Generator | Input | Output | Consumer |
 |---|---|---|---|
 | `cmd/openapigen` | Huma Go structs | `api/openapi.json` (+ `.yaml`) | everything below |
-| `web pnpm gen:api` | `openapi.json` | `web/src/api/schema.gen.ts` | typed `openapi-fetch` SPA client |
+| `cd web && npm run gen:api` | `openapi.json` | `web/src/api/schema.gen.ts` | typed `openapi-fetch` SPA client |
 | `cmd/cligen` | `openapi.json` | `internal/cli/api_gen.go` (cobra) | the CLI, patched via `api_hooks.go` |
-| `cmd/mcpgen` | `openapi.json` | the MCP server (a curated tool catalog) | AI agents over the [API contract](/architecture/api/) |
-| `cmd/schemagen` | authoring structs | `schema/*.schema.json` | YAML editor validation (VSCode) |
-| `gen-proto` | `proto/og/v1/*.proto` | committed `*.pb.go` | the gRPC ingest path |
+| `cmd/docsgen` | the live cobra tree | `docs/src/content/docs/reference/cli/index.md` | the published CLI reference |
+| `cmd/erdgen` | the embedded migrations, applied to a throwaway Postgres and introspected | the D2 region of `docs/src/content/docs/architecture/data-model.md` | the published ERD |
+| `gen-proto` | `proto/og/v1/*.proto` | committed `*.pb.go` | the NATS `TelemetryBatch` telemetry message |
 
-One command runs them all (`make gen`); each has a focused target (`make gen-api`,
-`gen-cli`, `gen-schema`, `gen-proto`). The committed `*.pb.go` and JSONSchema let a
-contributor build without protoc or a running server.
+Two more stages are planned but have **no generator yet**: an MCP tool catalog for AI agents
+over the [API contract](/architecture/api/), and a JSONSchema for YAML editor validation.
+Neither exists today; they land with their consuming slices.
+
+One command runs them all (`make gen`); two focused targets regenerate a subset
+(`make gen-proto` for the protobuf wire, `make gen-web` for the spec plus the typed SPA
+client). The committed `*.pb.go` lets a contributor build without protoc or a running
+server.
 
 ## A name is the address, a uuid is identity
 
@@ -79,7 +85,7 @@ Every operation lives under `/api/v1/*`. The path shape is derivable, not specia
 - **`:verb` (not `/verb`) for non-CRUD custom methods**: `/alarms/{id}:ack`,
   `/nodes/{name}:heartbeat`, `/rules/calc:validate`, `/components/{name}:apply`,
   `/views/{id}:run`.
-- **Singular kind sub-segments**: `/rules/calc`, `/datapoints/metric`,
+- **Singular kind sub-segments**: `/rules/calc`, `/property-types`,
   `/location-types`, `/types/event`.
 - **official / private namespace** on every registry and rule family (below).
 - **List conventions** (AIP-132 target): `filter` / `orderBy` / `pageSize`+
@@ -110,5 +116,5 @@ Writes go through resource CRUD (each emitting an `audit_log` row in the same tr
 
 Every typed route carries a per-route coverage test (an `openapi_coverage_test.go`-style
 gate) and the CLI-covers-every-route test, so the generated clients never fall behind the
-API. After any route change: `make gen-api && make gen-cli`, add the per-route test, keep
-the coverage tests green.
+API. After any route change: `make gen`, add the per-route test, keep the coverage tests
+green.

@@ -30,7 +30,7 @@ already exists.
 | **Admission consumer and the two lanes** | the one owner fence and the one data / record split on the bus | [messaging](/architecture/messaging/) |
 | **Timer and clock** | schedule, watchdog, for-duration, and runbook-wait, all one durable model | [time](/architecture/time/) |
 | **The `action` row** | every long-running operation's handle, rule-fired or API-called | [API](/architecture/api/), [alarms and actions](/architecture/alarms-actions/) |
-| **`property_type` registry** | one registry across metric, state, and log | [datapoints](/architecture/properties/) |
+| **`property_type` registry** | one registry across metric, state, and log | [properties](/architecture/properties/) |
 
 ## How to apply
 
@@ -39,8 +39,10 @@ already exists.
 - **Extract on the second use, not the third.** The moment a pattern is copied it is a primitive
   that has not been named yet. Pull it out, give it tests, point both callers at it.
 - **A primitive lands with its tests and its first consumer in the same slice** (vertical, not
-  horizontal): build the primitive, prove it with one real consumer, ship both. The
-  `/add-collection-primitive` and `/canonical-datapoint` skills are this doctrine made procedural.
+  horizontal): build the primitive, prove it with one real consumer, ship both. Procedural
+  skills make this doctrine repeatable, ported as their subsystems land: `/add-inventory-view`
+  exists today; a collection-primitive skill and a canonical-property skill follow with the
+  collection-engine and registry slices.
 - **Do not fork an engine.** A second filter language, a second DB path, a second timer model is
   the anti-pattern this doctrine exists to prevent.
 
