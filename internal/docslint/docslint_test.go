@@ -5,15 +5,13 @@ import (
 	"testing"
 )
 
-// enforceVocabulary flips the vocabulary lint from warn to red. It stays warn
-// until the wave-2 vocabulary sweep lands (#428); flipping it is that PR's
-// last commit. TODO(#437): flip to true.
-const enforceVocabulary = false
+// enforceVocabulary makes the vocabulary lint a red gate. It was warn-only
+// while the wave-2 sweep (#428) cleared the pre-existing findings.
+const enforceVocabulary = true
 
-// enforceDecisions flips the decisions-format lint from warn to red. It stays
-// warn until the wave-3 decision-log hygiene PR lands (#428).
-// TODO(#437): flip to true.
-const enforceDecisions = false
+// enforceDecisions makes the decisions-format lint a red gate. It was
+// warn-only while the wave-3 hygiene pass (#428) cleared the backlog.
+const enforceDecisions = true
 
 // TestVocabulary scans the docs for retired vocabulary (the Banned denylist).
 // Every ADR that retires a term appends its entry to Banned in the same PR,
