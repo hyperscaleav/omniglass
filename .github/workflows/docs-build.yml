@@ -1,0 +1,49 @@
+name: docs-build
+
+# The docs build gate docs-with-everything.md promises: the Astro site builds
+# on every PR that touches it, so a broken .mdx page, a dead import, or an
+# invalid frontmatter schema fails the PR instead of the next deploy.
+#
+# The build is hermetic by design: the D2 diagrams are pre-rendered SVGs
+# committed under docs/public/d2/ (astro-d2 runs with skipGeneration), so no
+# d2 binary is needed here.
+
+on:
+  pull_request:
+    paths:
+      - docs/**
+  push:
+    branches: [main]
+    paths:
+      - docs/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: docs/pnpm-lock.yaml
+
+      - name: Install docs dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: docs
+
+      - name: Build the docs site
+        run: pnpm build
+        working-directory: docs
