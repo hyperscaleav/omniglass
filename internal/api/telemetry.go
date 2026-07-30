@@ -26,7 +26,7 @@ import (
 // would be invisible to every rule, alarm, and derivation. One lane for history,
 // regardless of how a record arrived.
 
-// pushRegistryLimit bounds how many names one batch may carry, so a single request
+// pushBatchLimit bounds how many items one batch may carry, so a single request
 // cannot pin the registry snapshot or the publish path for an unbounded time.
 const pushBatchLimit = 1000
 

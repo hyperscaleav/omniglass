@@ -23,6 +23,14 @@ results), and the ingest consumer **routes by the `property_type` kind** (metric
 lines are their own untyped ingest lane (`log_line`, built), and a rule derives a typed `event` from one
 ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events), superseding the
 log-kind sink of [ADR-0046](/architecture/decisions/#adr-0046-the-event-log-kind-sink)).
+There are now **two ingest lanes** and they meet at the same write path: the node lane (a node
+collects and publishes on its own subject, and the server binds the owner from the task's interface)
+and the **API push lane** (`POST /telemetry:push`, where a scoped caller declares the owner and the
+scope check is the fence). A push publishes onto the data lane rather than writing Postgres directly,
+so pushed samples are visible to the stream consumers the rule engine will be, one lane for history
+regardless of how a record arrived. Both call one `land()`, so a lane cannot drift from the other's
+semantics (reject-not-project, the transition-only state guard, the current-value derive). Owner
+kinds beyond `component` are still directional (#422).
 Calculated provenance, fusion, and the live NATS data-lane are still design. See
 [ADR-0033](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer)
 and [ADR-0034](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state).
