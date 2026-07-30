@@ -51,7 +51,7 @@ every reader; the write gates decide who may change it.
 - A **duplicate** name is refused (409), and an attempt to change an official property is refused
   too: the catalog has exactly one entry per name.
 
-The catalog is also the collection vocabulary: a telemetry datapoint lands only if its name is a
+The catalog is also the collection vocabulary: a telemetry sample lands only if its name is a
 registered property with a `metric`, `state`, or `log` kind (an unregistered name is dropped, not
 invented).
 
@@ -118,8 +118,8 @@ rest of the detail, and **Cancel** discards them.
   same scope check runs on the **write**, so setting a property on a system or location outside your
   scope is a 404 too, never a silent success.
 
-From the CLI, the contract side is `omniglass product property list|set-property|delete-property`,
-`omniglass standard property list|set-property|delete-property`, and
-`omniglass location-type property list|set-property|delete-property`; the value side is
-`omniglass component|system|location property list|set-property|clear-property` (see the
+From the CLI, the contract side is `omniglass product property list|update|delete`,
+`omniglass standard property list|update|delete`, and
+`omniglass location-type property list|update|delete`; the value side is
+`omniglass component|system|location property list|update|delete` (see the
 [CLI reference](/reference/cli/)).

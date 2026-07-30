@@ -44,7 +44,7 @@ users. Because a principal is not part of any location or system tree, that gran
   pause to remove to destroy. The left slot is the reversible toggle: **Disable** (`principal:update`)
   suspends sign-in (the row reads **inactive**), **Enable** restores it. The kebab holds the stronger,
   red steps: **Archive** (`principal:archive`) soft-deletes a user (hidden from the directory, cannot
-  sign in, reversibly), and **Purge** (`principal:purge`, admin-sensitive so admin and owner only)
+  sign in, reversibly), and **Purge** (`principal:purge:admin`, admin-sensitive so admin and owner only)
   permanently deletes an archived user and its grants and memberships, with a confirm. The audit trail
   is kept through a purge. An archived user shows **Restore** in the left slot; the **Show archived**
   toggle above the directory surfaces hidden accounts so you can re-find one to restore or purge. The

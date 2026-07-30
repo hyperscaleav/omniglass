@@ -21,7 +21,7 @@ along those grants, so what an administrator sees is what they are allowed to ch
 Every task on these pages has two front doors, and they call the same API with the same checks:
 
 - **The console.** The **Admin** area of the [web console](/guides/operator/) holds Users,
-  Roles, Groups, and Audit. Secrets and Variables have moved to **Inventory**, in the **Values**
+  Roles, Groups, Settings, and Audit. Secrets and Variables have moved to **Inventory**, in the **Values**
   band. A tab you have no read grant for is hidden and its route refused, so the console never
   paints a page you cannot use.
 - **The CLI.** The same surfaces are generated commands on the [`omniglass` CLI](/guides/cli/)
@@ -42,6 +42,16 @@ Every task on these pages has two front doors, and they call the same API with t
   config and credentials the estate resolves down the [cascade](/architecture/cascade/):
   encrypted secrets and plaintext variables, owned at a scope and resolved most-specific-wins
   onto a component.
+- **[Files](/guides/admin/files/)** is the content kept with the estate: uploads in the blob
+  store, owned at a scope like the other values.
+- **[Tags](/guides/admin/tags/)** is the governed key vocabulary behind the tag chips, and
+  **[properties](/guides/admin/properties/)** is the signal catalog of canonical typed names.
+- The classifier catalogs shape the estate's entities:
+  **[types](/guides/admin/types/)** for locations, **[standards](/guides/admin/standards/)** for
+  systems, and **[products](/guides/admin/products/)** for components, with
+  **[vendors](/guides/admin/vendors/)**, **[drivers](/guides/admin/drivers/)**, and
+  **[capabilities](/guides/admin/capabilities/)** the reference registries a product ties
+  together.
 
 The model behind all of this is [identity and access](/architecture/identity-access/) and
 [config and credentials](/architecture/variables/); those pages say how it is built, these say
