@@ -189,6 +189,9 @@ func (s *Server) cleanupStoreDir() {
 	}
 }
 
+// publishFlushTimeout bounds the post-publish flush (see PublishTelemetry).
+const publishFlushTimeout = 5 * time.Second
+
 // PublishTelemetry puts an already-authorized batch on the API telemetry lane. It
 // satisfies the API's TelemetryPublisher seam, so the HTTP handler never holds a
 // NATS connection of its own. Publishing uses the server's internal credential, the
@@ -202,5 +205,16 @@ func (s *Server) PublishTelemetry(ctx context.Context, b *ogv1.TelemetryBatch) e
 	if err := s.nc.Publish(collection.APITelemetrySubject, raw); err != nil {
 		return fmt.Errorf("bus: publish telemetry: %w", err)
 	}
-	return s.nc.FlushWithContext(ctx)
+	// Flush so a 202 means the broker actually has the batch, not merely that we
+	// queued it locally (an unflushed publish is lost silently if the connection
+	// drops). The flush gets its own bound rather than inheriting the caller's
+	// context: FlushWithContext REQUIRES a deadline, and an HTTP request context has
+	// none, so passing it straight through fails every publish. WithTimeout also
+	// keeps a shorter caller deadline if there is one.
+	ctx, cancel := context.WithTimeout(ctx, publishFlushTimeout)
+	defer cancel()
+	if err := s.nc.FlushWithContext(ctx); err != nil {
+		return fmt.Errorf("bus: flush telemetry publish: %w", err)
+	}
+	return nil
 }
