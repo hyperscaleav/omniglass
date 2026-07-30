@@ -298,20 +298,20 @@ fact it aspires to change, which is what keeps it updated.
 
 ## 7. Proposed issue breakdown (for approval before any branch)
 
-- **Epic: drift honesty pass** — one issue per Wave-1 PR (approx. 6 small PRs).
-- **Epic: drift prevention tooling** — CI gates; `internal/docslint` slice 1
+- **Epic: drift honesty pass**: one issue per Wave-1 PR (approx. 6 small PRs).
+- **Epic: drift prevention tooling**: CI gates; `internal/docslint` slice 1
   (vocabulary, CLI, decisions); slice 2 (routes, permissions, make/env/paths);
   ship-slice + record-decision skill changes.
-- **Epic: telemetry integrity** — the instance ADR + reconciliation/settlement fix;
+- **Epic: telemetry integrity**: the instance ADR + reconciliation/settlement fix;
   delivery stages 2, 3, 4 as separate issues; registry namespace uniqueness.
-- **Epic: scope and secrets integrity** — ListSecrets scoped query; secret system
+- **Epic: scope and secrets integrity**: ListSecrets scoped query; secret system
   band removal (CHECK + UI + guide); CHECK tightening migration; dead grants/table
   removal.
-- **Epic: console address honesty** — uuid-as-Id fixes; blank Huma `doc:` tags;
+- **Epic: console address honesty**: uuid-as-Id fixes; blank Huma `doc:` tags;
   audit diff drawer.
-- **Epic: generated docs facts** — schema.json; seed.json; api-surface.json;
+- **Epic: generated docs facts**: schema.json; seed.json; api-surface.json;
   config.json/permissions.json (one issue each).
-- **Epic: corpus restructure** — design fence component + lint contract; one-home
+- **Epic: corpus restructure**: design fence component + lint contract; one-home
   dedup; sketch demotion; status log split; glossary prune; decisions/roadmap/spine
   refresh.
 - **Deferred decisions to schedule:** CLI verb naming ADR (before #57), official-row
