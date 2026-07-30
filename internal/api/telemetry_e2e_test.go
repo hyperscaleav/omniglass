@@ -191,6 +191,25 @@ func TestTelemetryPushAPI(t *testing.T) {
 		"samples": []map[string]any{{"name": "video.input", "text": "hdmi2"}},
 	}, http.StatusAccepted)
 
+	// PRIVILEGE ESCALATION, pinned closed. A principal can easily hold a WIDE read
+	// and a NARROW push: viewer over the whole estate plus operator on one component
+	// is an ordinary shape. If the route fenced the write with the component:read
+	// scope, this caller could push telemetry to any component it can see, which is
+	// everything. The fence must be the scope that actually confers telemetry:push.
+	wideReadNarrowPush := setupScopedPrincipal(t, ctx, dsn, "wide-read-narrow-push",
+		grantSpec{role: "viewer", scopeKind: "all"},
+		grantSpec{role: "operator", scopeKind: "component", scopeID: otherID},
+	)
+	c.do(wideReadNarrowPush, http.MethodPost, "/telemetry:push", map[string]any{
+		"owner":   map[string]any{"kind": "component", "ref": "bar-1"},
+		"samples": []map[string]any{{"name": "video.input", "text": "hdmi2"}},
+	}, http.StatusNotFound)
+	// Its own push scope still works, so the fence is narrow, not broken.
+	c.do(wideReadNarrowPush, http.MethodPost, "/telemetry:push", map[string]any{
+		"owner":   map[string]any{"kind": "component", "ref": "other-1"},
+		"samples": []map[string]any{{"name": "video.input", "text": "hdmi2"}},
+	}, http.StatusAccepted)
+
 	// A viewer has the read floor but not telemetry:push.
 	viewerTok := setupScopedViewer(t, ctx, dsn, "just-viewer", "viewer", "component", otherID)
 	c.do(viewerTok, http.MethodPost, "/telemetry:push", map[string]any{

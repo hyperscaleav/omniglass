@@ -108,10 +108,19 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 			return nil, huma.Error422UnprocessableEntity("batch exceeds the per-request item limit")
 		}
 
-		// Scope is the fence that makes a caller-declared owner trustworthy: reading
-		// the component through the gateway with the caller's read scope means an
-		// out-of-scope owner is a non-disclosing 404, exactly as it is everywhere else.
-		comp, err := gw.GetComponent(ctx, in.Body.Owner.Ref, a.scopeFor(ctx, "component", "read"))
+		// Scope is the fence that makes a caller-declared owner trustworthy, and it must
+		// be the scope that actually confers telemetry:push, NOT the component:read
+		// scope. A principal routinely holds a wide read and a narrow write (viewer over
+		// the estate plus operator on one component), so fencing this with the read scope
+		// would let it push telemetry to anything it can see. Resolving the push scope and
+		// looking the owner up through it means an owner outside the caller's push
+		// authority is a non-disclosing 404, the same shape as everywhere else.
+		//
+		// This is the ONLY fence on the write: the route publishes to the bus, and the
+		// consumer that finally writes runs as a trusted server process with no scope of
+		// its own. Nothing downstream will catch a mistake made here.
+		pushScope := a.scopeFor(ctx, "telemetry", "push")
+		comp, err := gw.GetComponent(ctx, in.Body.Owner.Ref, pushScope)
 		if err != nil {
 			return nil, mapComponentErr(err)
 		}
