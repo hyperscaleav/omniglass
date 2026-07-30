@@ -106,7 +106,7 @@ no default**. Absent means absent:
 | Kind | Where its default is declared |
 |---|---|
 | [setting](/architecture/settings/) | The tagged struct field on `Settings` (its `default:` tag). |
-| [property](/architecture/variables/#property-one-typed-name-a-classifier-contract-a-stored-value) | The **classifier contract's** `default_value` column (`product_property`, `standard_property`, `location_type_property`), the shipped instance of the pattern: `EffectiveProperties` reads `coalesce(the instance's set value, the contract default)` ([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property)). |
+| [property](/architecture/variables/#property-one-typed-name-a-classifier-contract-a-stored-value) | The **classifier contract's** `default_value` column (`product_property`, `standard_property`, `location_type_property`), the shipped instance of the pattern: `EffectiveProperties` reads `coalesce(the instance's set value, the contract default)` ([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)). |
 | [variable](/architecture/variables/) | None. |
 | secret | None. |
 | [tag](/architecture/tags/) | None. |

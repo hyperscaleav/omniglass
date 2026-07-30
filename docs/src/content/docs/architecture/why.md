@@ -1,10 +1,6 @@
 ---
 title: Why Omniglass
 description: "What Omniglass is, what it is for, and why AV needs its own observability platform instead of an IT monitoring tool."
-sidebar:
-  badge:
-    text: Design
-    variant: caution
 ---
 
 Run AV at scale and you know the feeling. You find out a room is broken when someone walks out
@@ -124,23 +120,23 @@ follows it end to end.
 direction: right
 classes: { node: { style.border-radius: 8 }; key: { style: { border-radius: 8; bold: true } } }
 gear: "AV gear\nSNMP · HTTP · SSH · raw AV control" { class: node }
-datapoint: "datapoint\none canonical signal" { class: key }
+sample: "sample\none canonical signal" { class: key }
 event: event { class: node }
 alarm: "alarm\nroom degraded" { class: node }
 act: "notify · remediate · ticket" { class: node }
 config: "config\ndesired: input = HDMI1" { class: node }
-gear -> datapoint: collect: functions, parse at the edge
-datapoint -> event: evaluate: event_rule
+gear -> sample: collect: parse at the edge
+sample -> event: evaluate: event_rule
 event -> alarm: fire opens / clear resolves
 alarm -> act: act
-config -- datapoint: "drift?" { style.stroke-dash: 4 }
+config -- sample: "drift?" { style.stroke-dash: 4 }
 ```
 
 Read it as a journey, and each stop is a page:
 
 1. **[Collection](/architecture/collection/)** goes and gets the data from gear that never wanted to
    give it, and parses it at the edge.
-2. **[Datapoints](/architecture/properties/)** type every reading into one owned, canonical signal, the
+2. **[Properties](/architecture/properties/)** type every reading into one owned, canonical signal, the
    same measurement across every vendor.
 3. **[Config](/architecture/variables/)** holds what a device *should* be, so drift becomes
    a signal you can see and a fix you can push.
