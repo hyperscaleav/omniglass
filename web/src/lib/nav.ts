@@ -38,7 +38,7 @@ export type NavItem = {
 export const navItems: NavItem[] = [
   { label: "Home", path: "/", icon: Icons.Home, live: true, hint: "Your environment at a glance, and what needs attention right now." },
   { label: "Dashboards", path: "/dashboards", icon: Icons.LayoutDashboard, hint: "Official, shared, and your own dashboards." },
-  { label: "Alarms", path: "/alarms", icon: Icons.Bell, hint: "What is firing now, with drill-down to the triggering datapoint." },
+  { label: "Alarms", path: "/alarms", icon: Icons.Bell, hint: "What is firing now, with drill-down to the triggering sample." },
   {
     label: "Inventory", icon: Icons.Package, hint: "The monitored estate: components, systems, locations, and the collection nodes, each addressable with its health and configuration.",
     children: [
@@ -69,7 +69,7 @@ export const navItems: NavItem[] = [
       { label: "Templates", path: "/templates", hint: "Author device shapes: component and system templates, versioned." },
       { label: "Types", path: "/types", live: true, resource: "type", hint: "The location and secret type registries, classified by kind." },
       { label: "Standards", path: "/standards", live: true, resource: "standard", hint: "The blueprints a system conforms to, each declaring the properties every conforming system exposes." },
-      { label: "Properties", path: "/properties", live: true, resource: "property", hint: "The signal catalog: the canonical properties a datapoint observes and a field declares." },
+      { label: "Properties", path: "/properties", live: true, resource: "property", hint: "The signal catalog: the canonical properties a sample observes and a field declares." },
       { label: "Event Types", path: "/event-types", live: true, resource: "event_type", hint: "The occurrence-key catalog: the discrete happenings an event is typed by, the twin of the property registry." },
       { label: "Command Types", path: "/command-types", live: true, resource: "command_type", hint: "The do catalog: what a component can be told, with a target property and a settle window, the driver-owned twin of the property and event registries." },
       { label: "Tags", path: "/tags", live: true, resource: "tag", hint: "The governed tag key vocabulary applied across the inventory." },
@@ -80,8 +80,8 @@ export const navItems: NavItem[] = [
       { label: "Rules", path: "/rules", hint: "Transform, calc, and event rules, with CEL and blast-radius preview." },
     ],
   },
-  { label: "Explore", path: "/explore", icon: Icons.Compass, hint: "Datapoint history, the event log, and the cascade resolve view." },
-  { label: "Learn", path: "/learn", icon: Icons.GraduationCap, hint: "How collection turns a device into owned datapoints." },
+  { label: "Explore", path: "/explore", icon: Icons.Compass, hint: "Sample history, the event log, and the cascade resolve view." },
+  { label: "Learn", path: "/learn", icon: Icons.GraduationCap, hint: "How collection turns a device into owned samples." },
   {
     label: "Admin", icon: Icons.Settings, hint: "Platform administration: users, roles, groups, the audit trail, and platform settings.",
     children: [

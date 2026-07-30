@@ -16,7 +16,7 @@ shell. These ship as **config-driven `ListShell` pages (with `FlatList` / `TreeL
 `ViewResult` renderer described next: an inventory page is CRUD over a scoped resource, so it
 reads the resource directly and renders one configurable shell. The `ViewResult` / views model,
 the renderer library, and composable dashboards below remain the intended **read side** for the
-analytical and dashboard surfaces (alarms, datapoint history, the cascade view, fleet
+analytical and dashboard surfaces (alarms, sample history, the cascade view, fleet
 dashboards), which are not built yet. The realized inventory shell and its primitives are in the
 [design system](/contributing/design-system/); how to operate it is the
 [operator guide](/guides/operator/), and the per-slice breakdown is on
@@ -88,11 +88,11 @@ backs a dashboard widget unchanged.
 Live data is **query polling** (a refetch interval; slow-changing config uses a long stale time). A
 read can also **stream over the view layer (a server-side SSE relay)** where latency or fan-out
 earns it, the same earn-it-with-a-profile discipline. Presentation that depends on config (a severity
-level's id to its label and color) resolves client-side from the config view. A datapoint
+level's id to its label and color) resolves client-side from the config view. A sample
 value resolves the same way: on read the UI converts canonical to the operator's preferred
-display unit, looked up from the unit registry by the [datapoints](/architecture/properties/)
-property_type's canonical unit, so storage stays single-unit while one operator sees
-Celsius and another Fahrenheit.
+display unit, looked up from a future unit registry by the
+[property_type](/architecture/properties/)'s canonical unit, so storage stays single-unit
+while one operator sees Celsius and another Fahrenheit.
 
 :::caution[Open question]
 Which high-frequency surfaces move from polling to the SSE relay, and what latency earns it.
@@ -113,7 +113,7 @@ page**:
 
 - an **Expr editor** for the predicate or condition, with the prepared-input contract surfaced
   ([expressions](/architecture/expressions/));
-- a **live blast-radius preview** (which entities a scope selects, which datapoints a rule would
+- a **live blast-radius preview** (which entities a scope selects, which samples a rule would
   have fired on), so a rule is validated against reality before it is saved;
 - the **AI-suggestion seam** ([AI](/architecture/ai/)): AI may propose a rule pre-filled with
   provenance; the operator edits and approves, and approval is the ordinary audited create. AI never
@@ -126,9 +126,9 @@ Coded pages with rich interaction, all reading through views:
 - **The cascade resolve view** (the standout): "why did this value win", rendered from the
   [cascade](/architecture/cascade/) resolve output: the effective value, the winning source, and the
   ordered shadowed bindings it beat. The feature that makes an opinionated cascade explainable.
-- **Datapoint history**: a `line` or `heatmap` over a chosen time range, with the stale / unknown
+- **Sample history**: a `line` or `heatmap` over a chosen time range, with the stale / unknown
   distinction surfaced ([time](/architecture/time/)).
-- **Alarm drill-down**: the alarm, its triggering datapoint and history, the actions it fired, and
+- **Alarm drill-down**: the alarm, its triggering sample and history, the actions it fired, and
   ack / snooze / resolve controls.
 - **Inventory and topology**: the location / system / component trees, navigable, with
   [health](/architecture/health/) (`status-grid`) at each level.
@@ -159,7 +159,7 @@ platform Settings (preferences: severity scales, schedules, retention, defaults)
 (free interpolated values with no observed side).
 
 **Inventory holds the estate entities**: locations, systems, components, and **nodes**, the collection
-daemons that gather datapoints. A node is a monitored, scope-controlled entity like any other estate
+daemons that gather samples. A node is a monitored, scope-controlled entity like any other estate
 member (live, gated on `node:read` plus ABAC scope), so it stays in Inventory rather than Admin. **Interfaces and tasks are not nav items**: an
 interface is a panel on a component (its device endpoints), and a task is a panel on a node (its
 collection assignments), each a facet of its owning entity's detail page rather than a directory of
@@ -168,9 +168,9 @@ its own.
 Admin is the renamed Settings group: it holds the platform-administration surfaces (Users, Roles,
 Groups, Audit) plus the live Settings leaf, the platform-preferences page.
 
-**Home is distinct from Dashboards.** Dashboards monitor the *fleet* (datapoint views over the
+**Home is distinct from Dashboards.** Dashboards monitor the *fleet* (property views over the
 inventory). Home monitors the *monitor*: the operator and admin situation room for config lifecycle
-(stale or out-of-date templates), control-plane health (rules failing to evaluate, datapoints
+(stale or out-of-date templates), control-plane health (rules failing to evaluate, samples
 dropped with no matching rule), and proactive suggestions. A dashboard cannot model that, so Home
 earns its own slot; "Overview" is the name of the default dashboard, not the landing.
 

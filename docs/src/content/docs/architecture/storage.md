@@ -212,7 +212,7 @@ the one the CHECK enforces. This is one of three layers: the CHECK enforces *whi
 *the ids are real*, and the app enforces *the value type matches the key's kind*.
 
 The **trace columns live beside the lineage pointers, but not on the sample tables**: `event` carries
-`correlation_id` and `source_event_id` (the causation parent, renamed from `caused_by_event_id`, plus
+`correlation_id` and `source_event_id` (the causation parent, plus
 `source_log_line_id` and `derived_by_rule_id`), and `log_line` carries `correlation_id`; `metric` and
 `state` carry no trace columns today. These are orthogonal to the lineage CHECK. The designed
 carriage, causation riding **NATS message headers** across the command -> device -> observed-sample

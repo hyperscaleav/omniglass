@@ -20,7 +20,7 @@ import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Properties: the estate-model signal catalog (Catalog > Properties). A property is
-// a typed, registered signal named by a key that a datapoint observes and a field
+// a typed, registered signal named by a key that a sample observes and a field
 // declares. Official (seed-owned) properties are read-only; custom properties are
 // operator-created. The catalog is estate-wide reference data, not a scoped resource.
 

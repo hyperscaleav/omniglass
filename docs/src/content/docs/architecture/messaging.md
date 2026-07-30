@@ -25,12 +25,13 @@ inter-service diagram are on [scaling](/architecture/scaling/).
 
 Internal traffic splits by what is moving:
 
-- **Data lane (NATS-native): datapoints.** Untrusted publishers (a node, an external webhook sender)
-  publish to a **raw ingress subject**; an **admission consumer** at the head of the lane owner-confines
-  each datapoint and re-publishes only confined ones to the **trusted** datapoints stream. The confinement
+- **Data lane (NATS-native): samples.** Untrusted publishers (a node, an external webhook sender)
+  publish to a **raw ingress subject** (the wire unit is a `Sample` in a `TelemetryBatch`); an
+  **admission consumer** at the head of the lane owner-confines
+  each sample and re-publishes only confined ones to the **trusted** samples stream. The confinement
   set is **per publisher class**: a **node**'s payload owner is checked against its placement `visible_set`;
   a **central webhook**'s against the interface's declared owner (from the trusted server-set `interface`
-  label). The republish copies the original `Nats-Msg-Id`, `correlation_id`, and `caused_by_event_id`
+  label). The republish copies the original `Nats-Msg-Id`, `correlation_id`, and `source_event_id`
   headers verbatim, so dedup survives the hop. **Trusted server-internal producers publish straight to the
   trusted stream**, no admission pass: calc output (owner from the validated `calc_rule` scope) and the
   action layer's intended write (owner from the command target) are already inside the trust boundary. The
@@ -38,8 +39,8 @@ Internal traffic splits by what is moving:
   Postgres as an async sink. Confinement is at **consume time, ahead of evaluation**, because the rule
   engine reacts live: a forged owner must be dropped before it can open an alarm, not just before it is
   persisted. The admission consumer itself runs in **system mode** (its owner lookup is a system-mode
-  gateway read; a dropped datapoint is logged as a discovery candidate,
-  [identity and access](/architecture/identity-access/)). Datapoints do not go through CDC, they are
+  gateway read; a dropped sample is logged as a discovery candidate,
+  [identity and access](/architecture/identity-access/)). Samples do not go through CDC, they are
   already on the bus, idempotent on `(series, ts)`.
 - **Record / state lane (Postgres-first, CDC-out): events, alarms, actions, operator mutations.** Born in
   a Postgres transaction (a firing `event_rule` writes the event plus the alarm transition atomically; the
@@ -52,9 +53,9 @@ Internal traffic splits by what is moving:
 As built today there is **one stream**, `OG_TELEMETRY` on `og.v1.telemetry.*`, consumed by the single
 durable `og-telemetry-worker`; the set below is the target topology, not the current one.
 
-- **datapoints** (data lane): untrusted publishers (node, external webhook) publish to a **raw ingress**
+- **samples** (data lane): untrusted publishers (node, external webhook) publish to a **raw ingress**
   subject; the **admission consumer** owner-confines per publisher class and re-publishes to the **trusted**
-  datapoints stream that the rule engine, calc, and the persistence consumer read. Trusted server producers
+  samples stream that the rule engine, calc, and the persistence consumer read. Trusted server producers
   (calc, the action layer's intended write) publish to the trusted stream directly. A **work-queue consumer
   group** scales horizontally (each message to exactly one consumer), so adding worker replicas adds
   throughput with no leader.
@@ -66,7 +67,7 @@ durable `og-telemetry-worker`; the set below is the target topology, not the cur
   in this list (with the firehose on a raw ingress subject) is Design.
 
 Durable consumers track their own position; delivery is at-least-once with `Nats-Msg-Id` dedup plus double
-ack, which with the idempotent sinks (a datapoint on `(series, ts)`, an action transition on
+ack, which with the idempotent sinks (a sample on `(series, ts)`, an action transition on
 `(alarm, action, transition)`, the CDC idempotency key) gives exactly-once **outcomes**. This triple
 (`Nats-Msg-Id` dedup, double ack, idempotent sink) is the canonical exactly-once mechanism the other pages
 refer to. The edge stamps `ts`, so the system is ts-authoritative and needs no strict ordering on the wire.
@@ -82,7 +83,7 @@ Subjects are hierarchical and **scope is expressed in them**, not bolted on:
   per-database isolation (storage): no shared subjects, no shared rows ([identity and access](/architecture/identity-access/)).
 - **Subject permissions gate the subject string; the admission consumer gates the owner.** A node may
   publish and subscribe only the subjects for its placement; the grant is **mechanically derived from
-  placement**, a coarse transport gate, not a second copy of the ABAC model. But a datapoint's owner lives
+  placement**, a coarse transport gate, not a second copy of the ABAC model. But a sample's owner lives
   in the **payload** (a multi-owner function resolves owner from labels), which subject permissions cannot
   see, so the **admission consumer** (above) is the authoritative owner fence, and authorization stays
   authoritative in the [Storage Gateway](/architecture/storage/). **Operators never connect to the bus**,
@@ -122,7 +123,7 @@ live path introduces **no second authorization model**:
 - **Seed then stream.** A [view](/architecture/views/) over HTTP paints current state; the SSE stream
   keeps it live with deltas. Bulk reads stay on the views BFF; live deltas come over the relay.
 - **Where it shines:** a live fleet tile, the alarm console, and the **template-debug / dev-tap** surface,
-  where an operator watches datapoints arrive in real time as a template runs (the learning-tool "render
+  where an operator watches samples arrive in real time as a template runs (the learning-tool "render
   the real engine against live data" surface, [the learning tool](/contributing/learning-tool/)).
 
 Related: [API](/architecture/api/) (the public HTTP contract), [scaling](/architecture/scaling/) (the

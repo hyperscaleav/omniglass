@@ -2,7 +2,7 @@ import { api } from "../api/client";
 
 // The Properties catalog data layer: thin typed wrappers over the /property-types
 // surface. A property is a canonical, typed signal named by a key (a dot-hierarchied
-// identifier) that a datapoint observes and a field declares. Official properties are
+// identifier) that a sample observes and a field declares. Official properties are
 // seed-owned and read-only; custom properties are operator created. validation is a
 // JSON Schema fragment.
 

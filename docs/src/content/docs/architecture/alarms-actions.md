@@ -267,7 +267,7 @@ carried id across the device edge rather than an assumed lineage; the depth boun
 as the backstop.
 
 The carrier crosses the lane boundary, not one continuous header hop. The `event_rule`
-writes the triggering sample's `correlation_id` **and a `caused_by_event_id` parent
+writes the triggering sample's `correlation_id` **and a `source_event_id` parent
 edge** onto the `event` row it creates (the record lane, [events](/architecture/events/)),
 and the CDC publisher re-emits both into the record-lane message header. So "carried on
 NATS headers" is really header (data lane) -> PG column -> header (record lane): the walk
