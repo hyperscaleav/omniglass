@@ -15,8 +15,9 @@ Tags directory** (mint, edit governance fields, delete a key), the per-entity **
 values from an entity's detail blade), **value-domain enums** that constrain a key's values ([#190](https://github.com/hyperscaleav/omniglass/issues/190)),
 and the directory **Tags column** with per-key **tag filtering** (narrow a directory by any tag's effective value,
 plus **is set** / **is absent**) are built too ([#189](https://github.com/hyperscaleav/omniglass/issues/189),
-[#226](https://github.com/hyperscaleav/omniglass/issues/226)). Deferred to later slices: the winner-plus-shadowed
-**cascade provenance** panel on an entity's detail (the rest of [#189](https://github.com/hyperscaleav/omniglass/issues/189)),
+[#226](https://github.com/hyperscaleav/omniglass/issues/226)), as is the winner-plus-shadowed
+**cascade provenance** panel (the ResolutionPanel on the component detail, the rest of [#189](https://github.com/hyperscaleav/omniglass/issues/189)).
+Deferred to later slices:
 binding through [groups](/architecture/groups/) and a `template`-scoped binding (the shared-resolver work in
 [#184](https://github.com/hyperscaleav/omniglass/issues/184)), binding onto a [file](/architecture/files/)
 ([#191](https://github.com/hyperscaleav/omniglass/issues/191)), and a stored per-key color override. Those divergences
@@ -85,7 +86,10 @@ component tree`), the same walk the variable and secret resolvers use, but with 
 
 A non-propagating key is admitted into the resolve only from the target entity itself, so its ancestor bindings never
 leak downward. The `GET /components/{name}/effective-tags` route returns the resolved set (winner plus shadowed
-candidates); `GET /components/{name}/tags` returns only the bindings set **directly** on the component.
+candidates); `GET /components/{name}:listTags` (a custom method) returns only the bindings set **directly** on the
+component, and the writes are the `:setTag` / `:removeTag` custom methods. The system band resolves through
+`system_member` membership (the primary membership by default, `?system=` to ask as a specific system the component
+belongs to), so a shared device answers differently per system.
 
 **Systems and locations resolve too.** A component walks the full arc, but every entity has an effective set. A
 **location** resolves `platform` plus its own location tree. A **system** resolves `platform`, its own system tree, and

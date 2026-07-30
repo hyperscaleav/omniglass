@@ -11,21 +11,24 @@ The audit log is how an operator answers "who changed this, and to what?" withou
 
 :::note[Partial]
 Built today: the `audit_log` row written in the same transaction as every entity mutation, carrying the
-resolved actor, verb, resource, and `old -> new` diff. Still `Design`: secret-decrypt audit, the
-read-audit toggle, retention partitioning, and the backtest / reconcile consumers. See
+resolved actor, verb, resource, and `old -> new` diff; the secret-decrypt audit (distinct `reveal` and
+`copy` verbs); the auth-event lane; and the `GET /audit-log` read with the console Admin > Audit page.
+Still `Design`: the read-audit toggle, retention partitioning, the backtest / reconcile consumers, and
+the alarm ack / snooze projection (no such surface exists yet). See
 [implementation status](/architecture/status/).
 :::
 
 ## The model
 
 `audit_log` is **ground truth** (not derived): one row per mutation, carrying `actor`, `verb`,
-`resource_kind`, `resource_id`, and the `old -> new` diff.
+`resource`, `resource_id`, and the `old -> new` diff.
 
 - **Write-time mandatory.** Every API write emits one `audit_log` in the **same transaction**
   as the data write, a storage-layer responsibility, not per-handler discipline, so it cannot
   be forgotten or bypassed.
 - **The actor** is resolved by IAM ([identity and access](/architecture/identity-access/)): the
-  human, service, or node.
+  human, service, or node. On the read side a **human** actor is additionally resolved to a username;
+  a service or node actor surfaces as its principal id.
 - **An AI-accepted suggestion is one row.** An AI tool acts via OAuth as a `human` or `service`
   principal, so the actor is **that principal**, attributed and audited like any caller; the AI-sourced
   marking rides alongside the row ([AI](/architecture/ai/)).
@@ -45,10 +48,28 @@ read-audit toggle, retention partitioning, and the backtest / reconcile consumer
 The read-audit granularity: per-resource opt-in versus a global verbosity setting.
 :::
 
+## Reading the trail
+
+The read surface is `GET /audit-log`, gated by the admin-sensitive `audit:read:admin` (which a two-token
+wildcard cannot reach, so only admin and owner see the security trail). It returns rows newest first,
+filterable by `resource` and `verb`, and pages backward with a `before` timestamp plus a `limit`
+(default 100, capped at 500). The console renders it as the Admin > Audit page.
+
+Beside the in-transaction estate lane there is a **second write lane for auth events**. Login and logout
+run on read / no-transaction paths, so they emit through a standalone non-transactional seam
+(`WriteAuthEvent`), recorded under `resource = 'auth'` with the verbs `login`, `logout`, `login_failed`
+(a wrong password on a real account), `login_denied` (a correct password on a disabled account),
+`login_locked` (an attempt inside the lockout window), and `revoke_session` (an admin ending another
+principal's session). An impersonated action records **both** actors: `actor_principal_id` is the
+impersonated principal and `real_actor_principal_id` the admin behind it, and both usernames are
+**denormalized onto the row** (`actor_username`, `real_actor_username`) with the foreign keys going
+`ON DELETE SET NULL`, so the trail stays attributable even after its actor is purged
+([ADR-0016](/architecture/decisions/#adr-0016-a-principal-can-be-purged-and-the-audit-trail-is-denormalized-to-survive-it)).
+
 ## Retention and integrity
 
-Audit carries the **longest retention** of any ground-truth log (compliance), range-partitioned
-by `ts` like the others. It is append-only by construction.
+Audit carries the **longest retention** of any ground-truth log (compliance); the retention
+partitioning itself is still Design, per the status note above. It is append-only by construction.
 
 :::caution[Open question]
 Tamper-evidence (a hash-chain or signed audit) for high-assurance deployments.

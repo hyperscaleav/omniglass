@@ -10,9 +10,10 @@ A vendor is not a device; it is the company a device comes from. Each row shows 
 **display name**, its **kind** (**manufacturer**, **integrator**, or **developer**), an optional
 **icon** glyph key, and its **origin** (**official**, seed-owned, or **custom**).
 
-Today a vendor stands alone: nothing in the estate points at one yet. It is a landed piece of a
-larger catalog, the layer a future `product` ("Acme 123A, by Acme") will reference; a `product`
-and its assignment to a component are later slices of the same effort, not built yet. See
+A vendor is consumed by the [product](/guides/admin/products/) catalog: a `product` ("Acme 123A,
+by Acme") references its vendor through an optional `vendor_id`, chosen from a vendor picker on
+the product's create and edit forms, and a component then points at that product. Several shipped
+official products carry a vendor this way. See
 [core entities](/architecture/core-entities/) for where the vendor registry sits in the estate
 model, and [Drivers](/guides/admin/drivers/) and [Capabilities](/guides/admin/capabilities/) for
 the two leaf catalogs beside it.
@@ -43,6 +44,6 @@ the two leaf catalogs beside it.
   rule the [Types](/guides/admin/types/) registry enforces lives instead on `component.product_id`
   (a product with components cannot be deleted), not on the vendor.
 
-Minting a vendor is admin-gated; the picker that consumes it, choosing a product's vendor, does not
-exist yet, since it waits on `product`. The same operations are `omniglass vendor
+Minting a vendor is admin-gated; the picker that consumes it lives on the
+[product](/guides/admin/products/) create and edit forms. The same operations are `omniglass vendor
 list/get/create/update/delete` from the CLI (see the [CLI reference](/reference/cli/)).

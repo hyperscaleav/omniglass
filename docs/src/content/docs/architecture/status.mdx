@@ -41,10 +41,14 @@ capability it describes is shipped, so a page with one unbuilt corner stays `Par
   </tbody>
 </table>
 
-The repository is **public and published ahead of the code**: the foundation and the first estate tiers
-are `Partial` (auth and the Storage Gateway, the generation pipeline, and the `location` / `system` /
-`component` trees), while most of the monitoring spine is still `Design`. As a page's badge flips, the
-grid below follows automatically, because it reads the badges directly.
+The repository is **public and published ahead of the code**, and the build has converged over most of
+the spine: 23 of the 30 architecture pages are `Partial`, the [data model](/architecture/data-model/) is
+`Built`, and the pages still at `Design` are the automation and read tier ahead
+([templates](/architecture/templates/), [calculations](/architecture/calculations/),
+[expressions](/architecture/expressions/), [time](/architecture/time/), [views](/architecture/views/),
+and [AI](/architecture/ai/)), plus design-only corners inside `Partial` pages (for example
+[group](/architecture/groups/) scope beyond principal groups). As a page's badge flips, the grid below
+follows automatically, because it reads the badges directly.
 
 A `Partial` page can also carry a **divergence in one of its built corners**, where the shipped code
 differs from that part of the prose. The page flags it inline and the
@@ -1190,7 +1194,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   on Systems and Components, and a drag-to-reparent affordance (this slice's picker is a select,
   not a drag surface).
 - **Collection slice (checkpoint 5g): the derived interface/task model.** The reachability primitives were
-  reframed to their honest shape ([ADR-0036](/architecture/decisions/#adr-0040-the-task-is-derived-read-only-plumbing-projected-from-its-interface)):
+  reframed to their honest shape ([ADR-0040](/architecture/decisions/#adr-0040-the-task-is-derived-read-only-plumbing-projected-from-its-interface)):
   the **interface** is the only authored primitive and the **task** is **derived**. An interface is now
   **named by its protocol** (the name derives from its `interface_type`, unique per component), so the create
   surface takes a type, not a free-text name. Creating an interface **derives its one poll task**, so the task

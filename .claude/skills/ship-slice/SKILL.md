@@ -42,18 +42,32 @@ Each is a gate; a red one blocks the ship.
      command**: if `make gen` touched `internal/cli/api_gen.go`, the CLI guide is in scope (this
      is how the password and profile commands shipped undocumented);
    - a changed **console surface** (`web/src`) to the console guide (`guides/console.md`) plus the
-     live screenshots (item 8).
-5. **Dev seed.** If the slice adds a new operator entity (a Storage Gateway create plus a surface
+     live screenshots (item 9).
+
+   Mechanically, run the docs lint suite; it must be green:
+   `go test ./internal/docslint/ ./internal/cli/ -run 'TestVocabulary|TestDecisionsFormat|TestDocsOnlyNameRealCommands' -count=1`.
+   Then sweep the architecture pages the slice touches for `Still Design`, `later slice`,
+   `not yet`, `soon`, and `deferred` fences and confirm none of them describes what the slice
+   just built; a fence still hedging a shipped capability is a red gate. And if the slice
+   renames or retires an identifier, the `internal/docslint` denylist entry and the docs sweep
+   land in the same PR (the rename ripple, like `/storage-schema-change`'s gateway ripple).
+5. **The neighbor check.** A slice that flips a behavior greps the docs for the claim it
+   falsified, not just its own page: search the whole docs tree for the key nouns of the
+   changed behavior and list the hits in the ship-review's Docs line. The two shipped
+   lessons: the alarms-actions cycle-safety premise died on a health slice, and the vendors
+   guide died on the products slice; in both, a neighboring page kept teaching the falsified
+   claim because only the slice's own page was updated.
+6. **Dev seed.** If the slice adds a new operator entity (a Storage Gateway create plus a surface
    for it), it adds example rows for that entity to the dev seed (`internal/devseed/fixtures.yaml`),
    so `make dev` comes up populated and nobody hand-creates locations, users, or grants to exercise
    the feature. The seed stays idempotent: a re-run of `make dev` changes nothing. `n/a` when the
    slice adds no new entity. This is the dev-only example estate, never the boot seed
    (`internal/seed`, ship-with reference data that also runs in production).
-6. **Review.** A reviewer pass over the diff (`code-review` or `cavecrew-reviewer`), findings
+7. **Review.** A reviewer pass over the diff (`code-review` or `cavecrew-reviewer`), findings
    addressed. Add a `security-review` lens if the slice touches authz, secrets, the edge, or an
    invariant. Verify behavior to the outcome line, not just call sites.
-7. **Scope honesty.** Every thin cut is documented; every deferral is a filed issue.
-8. **Evidence in the PR.** Paste the *actual* fresh test output (the tail of `make test`, plus
+8. **Scope honesty.** Every thin cut is documented; every deferral is a filed issue.
+9. **Evidence in the PR.** Paste the *actual* fresh test output (the tail of `make test`, plus
    web tests if touched) into the PR body, not a "they pass" claim. For any operator-facing
    change, include **screenshots driven live** (e.g. against `make dev`). Capture them headless
    with `node web/e2e/shot.mjs <url> <out.png> [--token <og-token>] [--click <sel>]...
@@ -76,7 +90,7 @@ Each is a gate; a red one blocks the ship.
    the visual sibling of the `make gen` drift check, so a stale screenshot cannot merge.
    Adding a new one is a frontmatter entry plus a `::screenshot{#id}` directive in the prose,
    not a code change.
-8. **Audit coverage.** Every privileged **mutation** and every **auth event** the slice adds
+10. **Audit coverage.** Every privileged **mutation** and every **auth event** the slice adds
    writes an `audit_log` row: an estate or IAM mutation through `writeAuditRes` **in the same
    transaction** as the change (a committed change without its audit row is a red gate), and an
    auth event (login, logout, a denied sign-in) through `WriteAuthEvent` on the read/no-tx path.
@@ -107,8 +121,10 @@ Proof (ran fresh)
 Visual:    <screenshots in the PR for any UI surface | n/a>
 Dev seed:  <new-entity example rows added to internal/devseed | n/a>
 
-Docs:      <what shipped; arch-of-record consistent | divergence note>
-Status:    <pages advanced (page: Design->Partial); status.mdx entry; ADR-#### if diverged>
+Docs:      <what shipped; arch-of-record consistent | divergence note; lint: green;
+            neighbor-check hits and how resolved | none>
+Status:    <pages advanced (page: Design->Partial); status.mdx entry; ADR-#### if diverged;
+            fences swept: <pages | n/a>>
 Review:    <reviewer findings + how addressed; security: n/a | note>
 
 Decisions I made (your veto window): <judgment calls that bound the design>

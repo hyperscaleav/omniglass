@@ -17,7 +17,7 @@ architecture decision record (ADR), kept lightweight and append-only.
 
 - **One entry per decision** that reverses a prior call, settles an [open question](/architecture/status/),
   or records a point where the build diverges from a page's present-tense design.
-- Each entry carries a **date**, a **status** (`Proposed`, `Accepted`, or `Superseded`), the **decision**
+- Each entry carries a **date**, a **status** (`Proposed`, `Accepted`, `Resolved`, or `Superseded`), the **decision**
   in one line, the **context** that forced it, and the **page(s)** it touches.
 - A **divergence** entry is the partner of a page's inline note: the page says what is true *now*, this
   log says *why* and *when* it diverged, and which issue tracks closing the gap.
@@ -64,6 +64,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0027](#adr-0027-create-is-a-route-inventory-create-and-edit-unify-on-the-detail-accordion) | 2026-07-14 | Accepted | Inventory create/edit unify on the detail accordion: `New` routes to `/<entity>/create` (a draft) and Save hands off to `/<entity>/<id>` in edit; view is read-only, edit is the sole writer; the create/edit Drawer is retired |
 | [ADR-0028](#adr-0028-rank-retired-from-the-type-registries-sort-is-alphabetical) | 2026-07-14 | Accepted | `rank` is dropped from `location_type`, `system_type`, and `component_type`; the three list operations sort by `display_name, id` instead |
 | [ADR-0029](#adr-0029-files-slice-1-a-content-addressed-blob-store-and-a-tenant-wide-file-handle) | 2026-07-14 | Accepted | Files slice 1: a content-addressed `blob` store primitive (pgblobs) and a tenant-wide `file` handle; no placement arc (a file is 1:many, its locality is a future attachment), a binary `sensitive` flag reusing the secret `:admin` tier (defaults off), a delete frees its unreferenced blob synchronously (async mark-sweep GC deferred), base64-in-JSON on the wire |
+| [ADR-0030](#adr-0030-allowed_parent_types-constrains-where-a-location-may-be-placed) | 2026-07-14 | Accepted | `allowed_parent_types` constrains where a location may be placed |
 | [ADR-0031](#adr-0031-component_make-registry-slice-1-an-official-boolean-a-deferred-referential-guard-and-website-scheme-validation) | 2026-07-14 | Accepted | `component_make` slice 1: an `official` boolean (not an `origin` enum) for consistency with the type registries; the in-use referential delete guard deferred to the `component_model` slice (nothing references a make yet); `website` scheme-validated to `http`/`https`, client and server, against stored XSS |
 | [ADR-0032](#adr-0032-the-required-permission-is-published-per-route-and-the-permission-universe-is-route-derived) | 2026-07-17 | Accepted | Every gated route stamps its required permission into the OpenAPI (`x-omniglass-permission`), so the permission universe is derived from the routes rather than a hand-kept catalog |
 | [ADR-0033](#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory) | 2026-07-17 | Accepted | The settings engine persists only the override level; the `code` and `file` base layers are recomputed in memory each boot, so restore is a delete (diverges from scaling.md's "materialized in Postgres") |
@@ -79,13 +80,31 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0043](#adr-0043-the-property-catalog) | 2026-07-19 | Accepted | The `datapoint_type` catalog is generalized into a primitive-agnostic **`property`** catalog (the typed set of signals a datapoint observes and a field declares): the unused scope ladder becomes an `official` boolean, `value_type` becomes `data_type` (text to string, add bool), `kind` is nullable (a declared-only property has none), and `validation` is a **JSON Schema** validated by Huma's own validator (zero new dependencies). Value/source tables key by **name** (no FK), so the rename is behavior-preserving; the type-schema (`field_definition.key`) is the only binding and lands in PR-B |
 | [ADR-0044](#adr-0044-the-component-classification-catalogs) | 2026-07-20 | Accepted | The `component_make` catalog is generalized into **`vendor`** (a `kind` of manufacturer / integrator / developer), and two new leaf catalogs join it, **`driver`** (id, display_name, version) and **`capability`** (id, display_name), as the component-classification reference data: each a gated CRUD Catalog console page with read-only official seeded rows. `product` + `product_capability` + `component.product` are the next slice. This is PR2 of the estate-model shift toward property / event / command + vendor / product / driver / capability / standard / role / health |
 | [ADR-0045](#adr-0045-the-product-catalog) | 2026-07-20 | Accepted | **`product`** lands as a first-class catalog entity, the concrete SKU that binds a **`vendor`**, a **`driver`**, a **`kind`** (`device` / `app` / `service` / `vm`), and a capability set via the **`product_capability`** join; **`parent_product_id`** models variants, and **`component.product_id`** (`on delete restrict`) points a component at the SKU it is, making the product the source of a component's shape and retiring the `component_type`-as-shape notion. PR3 of the estate-model shift; consumes the vendor / driver / capability catalogs from ADR-0044 |
-| [ADR-0046](#adr-0046-the-event-log-kind-sink) | 2026-07-20 | Accepted | A **log**-kind observation is no longer dropped at ingest: it lands in a new **`event`** table, the log-kind sink (a past occurrence) beside `metric_datapoint` / `state_datapoint` (a sampled present value). `event` carries the same datapoint owner exclusive-arc and provenance, plus `message` + `attributes`, and the reserved `event_id` FK stubs on the two datapoint tables are closed (`on delete set null`). Scope excludes the `datapoint`->`sample` rename (a later cleanup) and `property_value` / the current-value store (the fold-fields slice). P1 follow-up of the estate-model roadmap |
+| [ADR-0046](#adr-0046-the-event-log-kind-sink) | 2026-07-20 | Accepted; superseded in part by [ADR-0066](#adr-0066-logs-are-a-raw-ingest-lane-not-events) | A **log**-kind observation is no longer dropped at ingest: it lands in a new **`event`** table, the log-kind sink (a past occurrence) beside `metric_datapoint` / `state_datapoint` (a sampled present value). `event` carries the same datapoint owner exclusive-arc and provenance, plus `message` + `attributes`, and the reserved `event_id` FK stubs on the two datapoint tables are closed (`on delete set null`). Scope excludes the `datapoint`->`sample` rename (a later cleanup) and `property_value` / the current-value store (the fold-fields slice). P1 follow-up of the estate-model roadmap |
 | [ADR-0047](#adr-0047-the-fields-fold-product_property-and-property_value) | 2026-07-21 | Accepted | The standalone **fields** feature retires and folds into the estate model: a field was only ever a **property with `declared` provenance**, never a primitive of its own. **`product_property`** is the product's declared-property **contract** (`product_id`, `property_name`, `default_value`, `required`), replacing `field_definition`; **`property_value`** is the value store, carrying the **same owner exclusive-arc** as `metric_datapoint` / `event` plus `instance` and `provenance`, replacing `field_value`. `EffectiveProperties` unions the contract arm (`coalesce(set value, contract default)`) with the off-contract arm, so a productless component still resolves. `field_definition`, `field_value`, `component.component_type`, and the whole `component_type` registry retire. PR5 of the estate-model shift |
 | [ADR-0048](#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model) | 2026-07-21 | Accepted | `system_type` is promoted to **`standard`**, the blueprint a system conforms to and the system-side counterpart of `product`: it gains `parent_standard_id` (variants), a declared-property contract, and its own `standard:*` Catalog resource, and `system.standard_id` becomes **optional**. `standard_property` and `location_type_property` join `product_property`, and one **owner-generic** `EffectiveProperties(ownerKind, ownerID)` resolves component, system, location, and node off a single parameterized template. A standard and a location type are created by **forking an in-code template** (one-time, no inheritance), so a shipped row is **operator-owned** (`official: false`, seeded **if absent**), while a system **conforms** to its standard with **live** inheritance; only the canonical catalogs keep the authoritative upsert. PR6 of the estate-model shift |
 | [ADR-0049](#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set) | 2026-07-21 | Accepted | A **`system_role`** is a slot a system needs filled (a table microphone, a main display), declared on a **standard** (inherited live by every conforming system) or on one **system** (ad-hoc) over the same exclusive arc `property_value` uses, requiring a **conjunctive** `role_capability` set and carrying a **`quorum`**. A component's capabilities become a **resolved set** (`EffectiveCapabilities` = its product's, plus its own `component_capability` `present=true` rows, minus its `present=false` ones), because `product` is optional and a strict guard over a product-only fact would lock a productless component out of every role. `AssignRole` **refuses (422) and names the missing capabilities**, joining the location placement constraint as a refusal on modeled grounds that names the parties. **Quorum** ships here (staffing is visible without health); **impact** and the SLI rollup land in PR8. Supersedes the `system_template_member` role-requirement design. PR7 of the estate-model shift |
 | [ADR-0050](#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain) | 2026-07-21 | Accepted | Health is **recorded as a transition** and **recomputed at the write**, never on read. An **`alarm`** is component-local and names the **capabilities** it degrades; a component satisfies a role only when it provides every required capability and none of them is degraded; a role below its **quorum** is impaired and contributes its **`impact`** (`outage` / `degraded` / `none`); a system takes the worst of its roles, a location the worst of its systems. The verdict domain is **`healthy` / `degraded` / `outage`** and the judgement is a **pure package** (`internal/health`), unit-tested with no database. The recorded carrier is **`state_datapoint`**, already transition-only, so the history is edges and only edges; **compute-on-read** (no history) and **write-through-on-read** (the edge timestamped when somebody looked) are both rejected. A **read never writes**, and it computes the verdict it serves from the same rows it shows, so a report cannot contradict its own evidence. PR8 of the estate-model shift, closing epic [#266](https://github.com/hyperscaleav/omniglass/issues/266) |
+| [ADR-0051](#adr-0051-membership-is-the-attachment-and-a-role-is-what-it-does) | 2026-07-21 | Accepted | Membership is the attachment, and a role is what it does |
+| [ADR-0052](#adr-0052-the-cascade-resolves-through-membership-and-secrets-carry-no-system-band) | 2026-07-21 | Accepted | The cascade resolves through membership, and secrets carry no system band |
+| [ADR-0053](#adr-0053-a-name-is-the-address-a-uuid-is-identity) | 2026-07-21 | Superseded in part by [ADR-0056](#adr-0056-every-foreign-key-stores-a-primary-key) | A name is the address, a uuid is identity |
 | [ADR-0054](#adr-0054-the-shell-owns-a-panels-action-rail-the-body-registers-and-never-draws) | 2026-07-21 | Accepted | A panel's action bar is **declared, not laid out**: a blade body binds through `lib/blades`, a Drawer form body through `lib/formactions`, and `BladeStack` / `Drawer` draw the result through the one `PanelFooter` rail. The opt-in `DrawerFooter` helper is deleted. A convention a body must remember can be forgotten, and was, by two forms for months while it was copied into six new pages around them |
+| [ADR-0055](#adr-0055-the-tag-variable-and-secret-owner-arcs-key-by-name) | 2026-07-21 | Superseded by [ADR-0056](#adr-0056-every-foreign-key-stores-a-primary-key) | The tag, variable, and secret owner arcs key by name |
+| [ADR-0056](#adr-0056-every-foreign-key-stores-a-primary-key) | 2026-07-22 | Accepted; the slug-keyed carve-out is retired by [ADR-0062](#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle) | Every foreign key stores a primary key |
 | [ADR-0057](#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier) | 2026-07-21 | Accepted | The cascade's least-specific **binding** tier is renamed `global` to **`platform`** on both axes (same rung, no precedence change); a **`default`** is off the axis entirely, a column on a type declaration rather than a tier; there is **no root location**; a write at the tier needs its own **`platform:<action>`** permission. **Breaking:** a secret sealed at the old tier can no longer be decrypted (the AEAD binds the owner kind) |
+| [ADR-0058](#adr-0058-a-run-mode-is-a-verb-under-its-noun-and-no-command-may-be-shadowed) | 2026-07-22 | Accepted | A run mode is a verb under its noun, and no command may be shadowed |
+| [ADR-0059](#adr-0059-every-collection-segment-is-a-command-level) | 2026-07-22 | Accepted | Every collection segment is a command level |
+| [ADR-0060](#adr-0060-a-resource-is-one-kebab-case-noun-nesting-means-ownership) | 2026-07-22 | Accepted | A resource is one kebab-case noun; nesting means ownership |
+| [ADR-0061](#adr-0061-a-calculated-series-is-current-at-its-highest-id-not-its-newest-timestamp) | 2026-07-22 | Accepted | A calculated series is current at its highest id, not its newest timestamp |
+| [ADR-0062](#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle) | 2026-07-22 | Accepted | A registry takes a uuid primary key and a renameable handle |
+| [ADR-0063](#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables) | 2026-07-23 | Accepted | The telemetry model is typed registries over bare-noun data tables |
+| [ADR-0064](#adr-0064-placement-and-classification-are-mutable-after-create) | 2026-07-23 | Accepted | Placement and classification are mutable after create |
+| [ADR-0065](#adr-0065-property-sample-and-current-value-replace-the-datapoint) | 2026-07-28 | Accepted | Property, sample, and current value replace the datapoint |
+| [ADR-0066](#adr-0066-logs-are-a-raw-ingest-lane-not-events) | 2026-07-28 | Accepted | Logs are a raw ingest lane, not events |
+| [ADR-0067](#adr-0067-bookings-are-exclusive-arc-owned-schedules-reconciled-against-observed-usage) | 2026-07-28 | Accepted | Bookings are exclusive-arc-owned schedules, reconciled against observed usage |
+| [ADR-0068](#adr-0068-the-api-error-model-is-the-stock-rfc-9457-shape) | 2026-07-30 | Accepted | The API error model is Huma's stock RFC 9457 problem+json (`ErrorModel` with `ErrorDetail` `{location, message, value}`); the custom `code` plus `violations` envelope sketched on the API page is retired |
+| [ADR-0069](#adr-0069-cycle-safety-is-provenance-based-not-topology-based) | 2026-07-30 | Accepted | Cycle safety is provenance-based: consequence writes carry `provenance='calculated'` with a `source_rule` naming the producer, and rules never route on their own consequences; supersedes the "alarms are terminal upstream and never write samples" premise |
+| [ADR-0070](#adr-0070-retire-the-standalone-effective-secrets-and-effective-variables-per-component-panels-fields-become-the-component-value-surface) | 2026-07-16 | Accepted | retire the standalone effective-secrets and effective-variables per-component panels; fields become the component value surface |
 
 ## Entries
 
@@ -388,7 +407,7 @@ below from the project's history. From here it grows one slice at a time.
   trail through a hard delete, the actor's human-readable label is **denormalized** into every `audit_log` row
   at write time, and the audit foreign keys become `ON DELETE SET NULL`: a purge nulls the id link but the text
   survives, so "who did X" outlives the principal. The read side coalesces the live join to the snapshot.
-- **Context:** [ADR-0006](#adr-0006-a-single-owner-invariant-enforced-at-the-database)'s single-owner invariant
+- **Context:** [ADR-0006](#adr-0006-the-owner-invariant-is-enforced-by-bootstrap-for-now)'s single-owner invariant
   meant accounts were **disabled, never hard-deleted**, since audit rows referenced them (`RESTRICT`). But
   operators need to remove accounts created by mistake, a common task, without erasing history or orphaning the
   trail. Denormalizing the actor label decouples the audit record from the principal row, so the row can be
@@ -404,49 +423,6 @@ below from the project's history. From here it grows one slice at a time.
   (`include_archived`) all follow the verb.
 - **Closes:** issue [#143](https://github.com/hyperscaleav/omniglass/issues/143) (backend),
   [#146](https://github.com/hyperscaleav/omniglass/issues/146) (console + rename).
-
-### ADR-0019: Every credential is time-bounded; token `purpose`, not expiry shape
-
-- **Date:** 2026-07-11 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/)
-- **Decision:** All credentials are time-bounded (reverses the earlier tokens-never-expire choice). A
-  web-login session keeps a 12h absolute lifetime; CLI/API tokens and the bootstrap token get a 90-day
-  default expiry with a `--ttl` override capped at 365 days; nothing is issued without an expiry. Sessions
-  and API tokens are distinguished by a `credential.purpose` column, not by whether `expires_at` is set.
-  Expiry is enforced lazily at authentication; there is no background sweep, and session/token lists show
-  only live credentials. Deferred: a sliding idle timeout, a housekeeping sweep of long-expired rows, and
-  nearing-expiry notifications.
-- **Context:** The credential-expiry slice ([#157](https://github.com/hyperscaleav/omniglass/issues/157))
-  bounded only the web-login session and left the CLI/API token unbounded (`expires_at` null), overloading
-  "has an expiry" to mean "is a session". That left an eternal secret in the field, against the every-secret-
-  rotates principle, and coupled the session-vs-token distinction to a nullable column that both kinds now
-  populate. A dedicated `purpose` column names the concept directly, so the list and the console read the
-  discriminator rather than inferring it, and the default 90-day / 365-day-cap window keeps a minted token
-  usable for real automation without becoming permanent. `AuthenticateBearer` already refused a passed
-  expiry, so enforcement needed no change: giving tokens a future expiry is enough, and the list reuses the
-  same `expires_at is null or expires_at > now()` filter so a dead row is never shown.
-- **Reverses:** the tokens-never-expire behavior introduced with
-  [#157](https://github.com/hyperscaleav/omniglass/issues/157).
-- **Closes:** issue [#172](https://github.com/hyperscaleav/omniglass/issues/172) (self-service sessions and
-  the every-credential-expires model).
-### ADR-0018: The avatar read endpoint is JSON, not raw image bytes
-
-- **Date:** 2026-07-10 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/)
-- **Decision:** A human principal's profile picture is read through a **JSON** endpoint
-  (`GET /principals/{id}/avatar` gated `principal:read`, `GET /auth/me/avatar` on the self lane) that returns
-  `{ image_base64 }`, which the console decodes into a `data:` URL for the `<img>`. The write lanes take base64
-  JSON in (`POST /principals/{id}:setAvatar` and the `/auth/me` self lane), and the server-normalized 256x256
-  JPEG is stored base64 on the `human` row; the principal read models carry only a `has_avatar` bool, so no
-  image payload rides a list or the `loadPrincipal` hot path.
-- **Context:** The slice design spec proposed a **raw `image/jpeg`** read endpoint (with `ETag` /
-  `Cache-Control` / `304`) so a browser `<img src>` could load it directly. But a raw-bytes handler would be a
-  chi-native route sitting **outside** the Huma authz middleware, breaking the two-layer invariant that a
-  `<resource>:<action>` capability is checked on **every** route, and a bare `<img src>` cannot send a bearer
-  header, so a token-only (non-cookie) session could not authenticate the image. Keeping the read as a Huma
-  JSON route puts it under the same `authn` + `require("principal","read")` (admin) or authn-only (self) path
-  as every other route, and the typed client (session cookie or bearer, both work) fetches the JSON and builds
-  the data URL. The one normalized size is small (roughly 30 to 50 KB base64), so per-request payload is not a
-  concern, and HTTP caching over `avatar_updated_at` is a later refinement if it is ever needed. This
-  supersedes the spec's raw-bytes read decision; the write transport (base64 JSON) is unchanged.
 
 ### ADR-0017: `credential` is renamed `secret`; the cascade is the reuse mechanism
 
@@ -475,6 +451,50 @@ below from the project's history. From here it grows one slice at a time.
   naming and any "references inside the value" reading on the page; the `variable` and `config` members stay
   `Design`.
 - **Closes:** issue [#155](https://github.com/hyperscaleav/omniglass/issues/155) (secret slice 1).
+
+### ADR-0018: The avatar read endpoint is JSON, not raw image bytes
+
+- **Date:** 2026-07-10 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/)
+- **Decision:** A human principal's profile picture is read through a **JSON** endpoint
+  (`GET /principals/{id}/avatar` gated `principal:read`, `GET /auth/me/avatar` on the self lane) that returns
+  `{ image_base64 }`, which the console decodes into a `data:` URL for the `<img>`. The write lanes take base64
+  JSON in (`POST /principals/{id}:setAvatar` and the `/auth/me` self lane), and the server-normalized 256x256
+  JPEG is stored base64 on the `human` row; the principal read models carry only a `has_avatar` bool, so no
+  image payload rides a list or the `loadPrincipal` hot path.
+- **Context:** The slice design spec proposed a **raw `image/jpeg`** read endpoint (with `ETag` /
+  `Cache-Control` / `304`) so a browser `<img src>` could load it directly. But a raw-bytes handler would be a
+  chi-native route sitting **outside** the Huma authz middleware, breaking the two-layer invariant that a
+  `<resource>:<action>` capability is checked on **every** route, and a bare `<img src>` cannot send a bearer
+  header, so a token-only (non-cookie) session could not authenticate the image. Keeping the read as a Huma
+  JSON route puts it under the same `authn` + `require("principal","read")` (admin) or authn-only (self) path
+  as every other route, and the typed client (session cookie or bearer, both work) fetches the JSON and builds
+  the data URL. The one normalized size is small (roughly 30 to 50 KB base64), so per-request payload is not a
+  concern, and HTTP caching over `avatar_updated_at` is a later refinement if it is ever needed. This
+  supersedes the spec's raw-bytes read decision; the write transport (base64 JSON) is unchanged.
+
+### ADR-0019: Every credential is time-bounded; token `purpose`, not expiry shape
+
+- **Date:** 2026-07-11 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/)
+- **Decision:** All credentials are time-bounded (reverses the earlier tokens-never-expire choice). A
+  web-login session keeps a 12h absolute lifetime; CLI/API tokens and the bootstrap token get a 90-day
+  default expiry with a `--ttl` override capped at 365 days; nothing is issued without an expiry. Sessions
+  and API tokens are distinguished by a `credential.purpose` column, not by whether `expires_at` is set.
+  Expiry is enforced lazily at authentication; there is no background sweep, and session/token lists show
+  only live credentials. Deferred: a sliding idle timeout, a housekeeping sweep of long-expired rows, and
+  nearing-expiry notifications.
+- **Context:** The credential-expiry slice ([#157](https://github.com/hyperscaleav/omniglass/issues/157))
+  bounded only the web-login session and left the CLI/API token unbounded (`expires_at` null), overloading
+  "has an expiry" to mean "is a session". That left an eternal secret in the field, against the every-secret-
+  rotates principle, and coupled the session-vs-token distinction to a nullable column that both kinds now
+  populate. A dedicated `purpose` column names the concept directly, so the list and the console read the
+  discriminator rather than inferring it, and the default 90-day / 365-day-cap window keeps a minted token
+  usable for real automation without becoming permanent. `AuthenticateBearer` already refused a passed
+  expiry, so enforcement needed no change: giving tokens a future expiry is enough, and the list reuses the
+  same `expires_at is null or expires_at > now()` filter so a dead row is never shown.
+- **Reverses:** the tokens-never-expire behavior introduced with
+  [#157](https://github.com/hyperscaleav/omniglass/issues/157).
+- **Closes:** issue [#172](https://github.com/hyperscaleav/omniglass/issues/172) (self-service sessions and
+  the every-credential-expires model).
 
 ### ADR-0020: `variable` slice 1 types inline and mirrors the secret arc
 
@@ -643,6 +663,7 @@ below from the project's history. From here it grows one slice at a time.
   `variable` stays viewer-visible by decision and is not in the set. The move of Secrets, Variables, and Config out
   of Settings into Catalog is a separate branch, not this slice.
 - **Closes:** issue [#210](https://github.com/hyperscaleav/omniglass/issues/210).
+
 ### ADR-0026: Console nav IA: estate values get their own top-level group; the Settings group becomes Admin
 
 - **Date:** 2026-07-13 | **Status:** Accepted | **Pages:** [ui](/architecture/ui/)
@@ -674,6 +695,7 @@ below from the project's history. From here it grows one slice at a time.
   `docs/superpowers/specs/2026-07-13-operator-console-nav-ia-design.md`.
 - **Closes:** issue [#222](https://github.com/hyperscaleav/omniglass/issues/222).
 - **Update (2026-07-14):** **Files** joins the **Values** group. The files slice ([ADR-0029](#adr-0029-files-slice-1-a-content-addressed-blob-store-and-a-tenant-wide-file-handle)) first shipped the Files directory under Inventory, but a file is not part of the monitored estate (no health, not polled): it is operator-uploaded **content**. So the Values group broadens from "operator-set values resolved down the cascade" to **operator-set values and content**, with the (deliberately non-cascading, flat) file as its content member alongside the cascaded variables, secrets, and config ([#249](https://github.com/hyperscaleav/omniglass/issues/249)).
+
 ### ADR-0027: create is a route; inventory create and edit unify on the detail accordion
 
 - **Date:** 2026-07-14 | **Status:** Accepted | **Pages:** [design system](/contributing/design-system/), [core entities](/architecture/core-entities/)
@@ -806,6 +828,141 @@ below from the project's history. From here it grows one slice at a time.
   editable-Parent pattern to two more pages is a follow-up, not bundled here.
 - **Closes:** issue [#239](https://github.com/hyperscaleav/omniglass/issues/239). Design:
   `docs/superpowers/specs/2026-07-14-type-placement-constraints-design.md`.
+
+### ADR-0031: `component_make` registry slice 1, an `official` boolean, a deferred referential guard, and website scheme validation
+
+- **Date:** 2026-07-14 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/), [Vendors guide](/guides/admin/vendors/)
+- **Decision:** Three calls on the first slice of the `component_make` manufacturer registry (id,
+  display_name, icon, support_phone, website), lands ahead of the rest of the make/model catalog.
+  **(1) `official boolean`, not an `origin` enum.** The design sketch (below) proposed
+  `origin official | seed | custom` on make and model, matching the model layer's eventual needs.
+  Slice 1 ships a plain `official` boolean instead, because `component_type` and the other
+  registries already distinguish seed-owned from operator rows with a boolean, and a
+  two-value distinction gains nothing from a three-value enum until a real `seed` (installed,
+  mutable) tier exists to fill it; `origin` can still land on `component_model` if that tier turns
+  out to be real. **(2) The in-use / referential delete guard is deferred.** `component_type`,
+  `location_type`, and `system_type` all refuse a delete while a location, system, or component
+  still references the row (409). `component_make` ships **no equivalent guard**: nothing
+  references a `component_make` yet (`component_model`, the referencing entity, does not exist),
+  so a custom make deletes unconditionally (an official row is still refused, 422, the seed-owned
+  rule). The guard is added when `component_model` lands and gives the registry something to be
+  in-use by, rather than building an unused check now. **(3) Website URL scheme validation, client
+  and server.** The create/edit form renders `website` as a live anchor; an operator-entered value
+  with no scheme check is a stored-XSS vector (`javascript:`/`data:` executing on click). A
+  `validWebsiteScheme` guard on the API (`http`/`https` only, empty allowed, else 422) and a
+  matching `safeUrl` guard on the console (render a live link only when safe, else plain text,
+  never a dead or unsafe anchor) close it in both places: server-side so a non-browser caller
+  (CLI/curl) cannot persist a dangerous scheme, client-side so a value written before the
+  server-side check existed (or by any path that bypassed it) still renders safely.
+- **Context:** `docs/superpowers/specs/2026-07-14-component-make-model-catalog-design.md` sketches
+  the full make/model catalog (`component_make`, a `component_type` genus tree, `component_model`,
+  and `component.model_id`) as four independent vertical slices; this is slice 1, make alone, with
+  no dependency on the tree or the model layer. A review pass on the first cut of the console page
+  (Task 4) found the missing website-scheme check as a stored-XSS gap before this shipped, closed
+  in the same slice rather than carried as a follow-up.
+- **Divergences logged:** the design sketch's `origin official | seed | custom` enum is not what
+  shipped; `official boolean` did, per (1) above. The design's delete-refused-while-referenced rule
+  is not enforced yet; per (2), it is deferred to the `component_model` slice that gives it
+  something to check.
+- **Lands:** [epic #254](https://github.com/hyperscaleav/omniglass/issues/254), issue
+  [#255](https://github.com/hyperscaleav/omniglass/issues/255). Design:
+  `docs/superpowers/specs/2026-07-14-component-make-model-catalog-design.md`. Plan:
+  `docs/superpowers/plans/2026-07-14-component-make-registry.md`.
+
+### ADR-0032: the required permission is published per route, and the permission universe is route-derived
+
+- **Date:** 2026-07-17 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/), [API](/architecture/api/), [Access guide](/guides/admin/access/)
+- **Decision:** Every capability-gated route registers through one helper, `gated(op, tokens...)`,
+  which sets the `authn` + `require` middleware (unchanged enforcement), stamps the operation with
+  an `x-omniglass-permission` OpenAPI extension, and records the permission in an in-process
+  registry. The required permission for each request is therefore **published in the generated
+  `api/openapi.json`**, and the **permission universe** (the deduped set of every stamp) is
+  **derived from the routes**, not a hand-kept catalog. `GET /roles` reports the universe plus, per
+  role, the **held** subset (resolved by the same `rbac.Set.Allows` matcher as the effective set),
+  and the console role blade renders it as a net `Held / Missing / All` view. Two build-time guards
+  keep it honest: a **published-gate guard** (every gated route is stamped, allow-listed routes are
+  not, so "gated" and "published" are the same set) and a **seed-drift guard** (every seed-role
+  grant resolves into the universe or sits in an explicit `aheadOfRoutes` allow-list).
+- **Context:** the authz contract already existed (`require(...)` enforced a permission on every
+  route) but lived only in Go middleware, invisible to the spec, the clients, and any reader; and
+  a role blade could show only what a role granted, never the capabilities it lacked. Three options
+  were weighed for the universe source: a hand-kept catalog YAML (drifts), a runtime-only set
+  (invisible in diffs), and the route-derived stamp (self-maintaining, reviewable in the committed
+  spec, exactly the enforced surface). The stamp won because it makes the universe fall out of the
+  API-first pipeline with no second source to drift. Held is resolved server-side so the single
+  rbac matcher is not duplicated in the SPA. Grants that resolve to nothing (for example
+  `alarm:*`, `interface:*` before those subsystems have HTTP surfaces) are legitimate but ahead of
+  their routes; they show as held-nothing and are allow-listed until the route lands.
+- **Lands:** issue [#272](https://github.com/hyperscaleav/omniglass/issues/272) under epic
+  [#27](https://github.com/hyperscaleav/omniglass/issues/27). Design:
+  `docs/superpowers/specs/2026-07-17-net-permissions-role-blade-design.md`.
+
+### ADR-0033: settings persist only the override level; base layers are recomputed in memory
+
+- **Date:** 2026-07-17 | **Status:** Accepted | **Pages:** [settings](/architecture/settings/), [scaling and deployment](/architecture/scaling/)
+- **Decision:** The settings engine stores **only the override level** in Postgres (`setting_override`). The two
+  base layers, the embedded `code` defaults and the operator `file`, are **recomputed into memory on every boot**
+  and never written to the table, so the effective document is the in-memory base layers merged with the live DB
+  override. Restore is therefore a `DELETE`: dropping a namespace's override row (or truncating the scope)
+  re-exposes the base defaults, with no separate reset column and no re-seed of the file into the store.
+- **Context:** The [scaling](/architecture/scaling/) page sketched a single settings store "materialized in
+  Postgres ... seeded declaratively from a settings file reconciled on every boot" (an `ON CONFLICT DO UPDATE` of
+  the file into the table). Building the engine showed that materializing the file into the DB is the wrong shape:
+  it duplicates the GitOps source into a second authoritative copy that can drift, and it conflates ship-with
+  defaults (a compile-time asset) with operator changes (the only thing worth persisting). Keeping the base layers
+  in memory makes the file always-fresh (a ConfigMap change lands on restart), keeps the store lean (it holds only
+  what an operator actually changed), and makes restore fall out of the model as a delete rather than a re-seed.
+  This diverges from the scaling page's "materialized in Postgres" wording; the settings page carries the corrected
+  model and the scaling page moves to `Partial`.
+- **Closes:** issue [#271](https://github.com/hyperscaleav/omniglass/issues/271) (settings engine slice-0), under
+  epic [#270](https://github.com/hyperscaleav/omniglass/issues/270). Design:
+  `docs/superpowers/specs/2026-07-17-settings-engine-design.md`.
+- **Amended by [ADR-0057](#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier):** the model is unchanged, the level names are not: `code` is now `default` (off the axis, the setting's own declaration) and `global` is now `platform` (the install-wide rung).
+
+### ADR-0034: the settings Gateway is unscoped; only the permission gates it
+
+- **Date:** 2026-07-17 | **Status:** Accepted | **Pages:** [settings](/architecture/settings/), [storage](/architecture/storage/), [identity and access](/architecture/identity-access/)
+- **Decision:** The Storage Gateway methods for settings (`GetSettingOverrides`, `UpsertSettingOverride`,
+  `DeleteSettingOverride`, `DeleteAllSettingOverrides`) are **unscoped**: no ABAC storage-scope predicate is
+  injected. Only the `settings:<action>` permission at the route gates them (`settings:read` admin read with
+  provenance, `settings:update` write / restore / lock, both admin-tier; the client-safe `/settings/me` is
+  authn-only). This is a deliberate carve-out from the "scope on every applicable query" invariant, recorded so it
+  reads as intentional.
+- **Context:** The two authorization layers ([identity and access](/architecture/identity-access/)) are a
+  `<resource>:<action>` permission on every route and an ABAC **scope** injected on every **applicable** query.
+  Platform and cascade settings describe the **platform and its principals**, not the estate, so there is no
+  location / system / component subtree to scope them by, exactly as with the registry-type reads
+  (`GET /types/...`), which are also unscoped. Forcing a scope predicate here would be meaningless (there is
+  nothing to filter on) and would misrepresent settings as estate data. The carve-out is narrow: it applies only
+  because the data is platform config. When the group and user override rungs land, override reads and writes
+  **will** be constrained by the acting principal (a user edits only their own `user` row), but that is a
+  per-principal ownership check, a different mechanism than estate ABAC, not a return of tree scope.
+- **Closes:** issue [#271](https://github.com/hyperscaleav/omniglass/issues/271) (settings engine slice-0).
+- **Amended by [ADR-0057](#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier):** the model is unchanged, the level names are not: `code` is now `default` (off the axis, the setting's own declaration) and `global` is now `platform` (the install-wide rung).
+
+### ADR-0035: settings resolve as a cascade over principals with a broader-wins lock
+
+- **Date:** 2026-07-17 | **Status:** Accepted | **Pages:** [settings](/architecture/settings/), [cascade](/architecture/cascade/)
+- **Decision:** A setting's effective value resolves down the **principal** hierarchy (global to group to user),
+  reusing the same [cascade](/architecture/cascade/) primitive the estate uses down location to system to
+  component: ordered layers deep-merged in JSON map-space (most-specific-wins by key presence), with per-key
+  **provenance** (the winning level) reported alongside the value. Layered on top is a **top-down lock**: an admin
+  locks a key at a level, pinning that level's value and forbidding any more-specific level from overriding it, and
+  when two levels lock the same key the **broader level wins** (a `global` lock supersedes a `group` lock, so
+  top-down admin authority is absolute). Slice-0 ships the global rung; group and user are a fast-follow.
+- **Context:** Omniglass already had one cascade resolver (the estate's secrets / variables / tags / config,
+  [config and credentials](/architecture/variables/)). Rather than write a second resolver for settings, the engine
+  points the same primitive at the identity axis (doctrine 5, primitive-first): a value defined once at a broad
+  scope inherits below, which is exactly the reuse a variable-reference model (Windmill-style) would buy, provided
+  here by inheritance for free. The **lock** is the piece the estate cascade did not need: settings are governance
+  (an admin enforcing an org default a user cannot escape), so the engine adds a per-key lock with a broader-wins
+  conflict rule, the inverse of the most-specific-wins value rule, applied to the enforcement axis. Provenance
+  reuses the estate's effective-values vocabulary (the winning level per key), extended from three estate bands to
+  five principal levels plus a lock chip. The pure `settings` package is the primary unit-test target; the DB
+  override is supplied through a narrow function seam so the package never imports storage.
+- **Closes:** issue [#271](https://github.com/hyperscaleav/omniglass/issues/271) (settings engine slice-0), under
+  epic [#270](https://github.com/hyperscaleav/omniglass/issues/270).
+- **Amended by [ADR-0057](#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier):** the model is unchanged, the level names are not: `code` is now `default` (off the axis, the setting's own declaration) and `global` is now `platform` (the install-wide rung).
 
 ### ADR-0036: A node is a kind=node principal with an interim bearer credential and static per-connection NATS subject permissions
 
@@ -983,170 +1140,6 @@ below from the project's history. From here it grows one slice at a time.
 - **Refines:** [ADR-0039](#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver)
   (the interface is the authored API; this ADR settles that its task is derived, not co-authored).
 
-### ADR-0031: `component_make` registry slice 1, an `official` boolean, a deferred referential guard, and website scheme validation
-
-- **Date:** 2026-07-14 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/), [Vendors guide](/guides/admin/vendors/)
-- **Decision:** Three calls on the first slice of the `component_make` manufacturer registry (id,
-  display_name, icon, support_phone, website), lands ahead of the rest of the make/model catalog.
-  **(1) `official boolean`, not an `origin` enum.** The design sketch (below) proposed
-  `origin official | seed | custom` on make and model, matching the model layer's eventual needs.
-  Slice 1 ships a plain `official` boolean instead, because `component_type` and the other
-  registries already distinguish seed-owned from operator rows with a boolean, and a
-  two-value distinction gains nothing from a three-value enum until a real `seed` (installed,
-  mutable) tier exists to fill it; `origin` can still land on `component_model` if that tier turns
-  out to be real. **(2) The in-use / referential delete guard is deferred.** `component_type`,
-  `location_type`, and `system_type` all refuse a delete while a location, system, or component
-  still references the row (409). `component_make` ships **no equivalent guard**: nothing
-  references a `component_make` yet (`component_model`, the referencing entity, does not exist),
-  so a custom make deletes unconditionally (an official row is still refused, 422, the seed-owned
-  rule). The guard is added when `component_model` lands and gives the registry something to be
-  in-use by, rather than building an unused check now. **(3) Website URL scheme validation, client
-  and server.** The create/edit form renders `website` as a live anchor; an operator-entered value
-  with no scheme check is a stored-XSS vector (`javascript:`/`data:` executing on click). A
-  `validWebsiteScheme` guard on the API (`http`/`https` only, empty allowed, else 422) and a
-  matching `safeUrl` guard on the console (render a live link only when safe, else plain text,
-  never a dead or unsafe anchor) close it in both places: server-side so a non-browser caller
-  (CLI/curl) cannot persist a dangerous scheme, client-side so a value written before the
-  server-side check existed (or by any path that bypassed it) still renders safely.
-- **Context:** `docs/superpowers/specs/2026-07-14-component-make-model-catalog-design.md` sketches
-  the full make/model catalog (`component_make`, a `component_type` genus tree, `component_model`,
-  and `component.model_id`) as four independent vertical slices; this is slice 1, make alone, with
-  no dependency on the tree or the model layer. A review pass on the first cut of the console page
-  (Task 4) found the missing website-scheme check as a stored-XSS gap before this shipped, closed
-  in the same slice rather than carried as a follow-up.
-- **Divergences logged:** the design sketch's `origin official | seed | custom` enum is not what
-  shipped; `official boolean` did, per (1) above. The design's delete-refused-while-referenced rule
-  is not enforced yet; per (2), it is deferred to the `component_model` slice that gives it
-  something to check.
-- **Lands:** [epic #254](https://github.com/hyperscaleav/omniglass/issues/254), issue
-  [#255](https://github.com/hyperscaleav/omniglass/issues/255). Design:
-  `docs/superpowers/specs/2026-07-14-component-make-model-catalog-design.md`. Plan:
-  `docs/superpowers/plans/2026-07-14-component-make-registry.md`.
-
-### ADR-0032: the required permission is published per route, and the permission universe is route-derived
-
-- **Date:** 2026-07-17 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/), [API](/architecture/api/), [Access guide](/guides/admin/access/)
-- **Decision:** Every capability-gated route registers through one helper, `gated(op, tokens...)`,
-  which sets the `authn` + `require` middleware (unchanged enforcement), stamps the operation with
-  an `x-omniglass-permission` OpenAPI extension, and records the permission in an in-process
-  registry. The required permission for each request is therefore **published in the generated
-  `api/openapi.json`**, and the **permission universe** (the deduped set of every stamp) is
-  **derived from the routes**, not a hand-kept catalog. `GET /roles` reports the universe plus, per
-  role, the **held** subset (resolved by the same `rbac.Set.Allows` matcher as the effective set),
-  and the console role blade renders it as a net `Held / Missing / All` view. Two build-time guards
-  keep it honest: a **published-gate guard** (every gated route is stamped, allow-listed routes are
-  not, so "gated" and "published" are the same set) and a **seed-drift guard** (every seed-role
-  grant resolves into the universe or sits in an explicit `aheadOfRoutes` allow-list).
-- **Context:** the authz contract already existed (`require(...)` enforced a permission on every
-  route) but lived only in Go middleware, invisible to the spec, the clients, and any reader; and
-  a role blade could show only what a role granted, never the capabilities it lacked. Three options
-  were weighed for the universe source: a hand-kept catalog YAML (drifts), a runtime-only set
-  (invisible in diffs), and the route-derived stamp (self-maintaining, reviewable in the committed
-  spec, exactly the enforced surface). The stamp won because it makes the universe fall out of the
-  API-first pipeline with no second source to drift. Held is resolved server-side so the single
-  rbac matcher is not duplicated in the SPA. Grants that resolve to nothing (for example
-  `alarm:*`, `interface:*` before those subsystems have HTTP surfaces) are legitimate but ahead of
-  their routes; they show as held-nothing and are allow-listed until the route lands.
-- **Lands:** issue [#272](https://github.com/hyperscaleav/omniglass/issues/272) under epic
-  [#27](https://github.com/hyperscaleav/omniglass/issues/27). Design:
-  `docs/superpowers/specs/2026-07-17-net-permissions-role-blade-design.md`.
-
-### ADR-0033: settings persist only the override level; base layers are recomputed in memory
-
-- **Date:** 2026-07-17 | **Status:** Accepted | **Pages:** [settings](/architecture/settings/), [scaling and deployment](/architecture/scaling/)
-- **Decision:** The settings engine stores **only the override level** in Postgres (`setting_override`). The two
-  base layers, the embedded `code` defaults and the operator `file`, are **recomputed into memory on every boot**
-  and never written to the table, so the effective document is the in-memory base layers merged with the live DB
-  override. Restore is therefore a `DELETE`: dropping a namespace's override row (or truncating the scope)
-  re-exposes the base defaults, with no separate reset column and no re-seed of the file into the store.
-- **Context:** The [scaling](/architecture/scaling/) page sketched a single settings store "materialized in
-  Postgres ... seeded declaratively from a settings file reconciled on every boot" (an `ON CONFLICT DO UPDATE` of
-  the file into the table). Building the engine showed that materializing the file into the DB is the wrong shape:
-  it duplicates the GitOps source into a second authoritative copy that can drift, and it conflates ship-with
-  defaults (a compile-time asset) with operator changes (the only thing worth persisting). Keeping the base layers
-  in memory makes the file always-fresh (a ConfigMap change lands on restart), keeps the store lean (it holds only
-  what an operator actually changed), and makes restore fall out of the model as a delete rather than a re-seed.
-  This diverges from the scaling page's "materialized in Postgres" wording; the settings page carries the corrected
-  model and the scaling page moves to `Partial`.
-- **Closes:** issue [#271](https://github.com/hyperscaleav/omniglass/issues/271) (settings engine slice-0), under
-  epic [#270](https://github.com/hyperscaleav/omniglass/issues/270). Design:
-  `docs/superpowers/specs/2026-07-17-settings-engine-design.md`.
-- **Amended by [ADR-0057](#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier):** the model is unchanged, the level names are not: `code` is now `default` (off the axis, the setting's own declaration) and `global` is now `platform` (the install-wide rung).
-
-### ADR-0034: the settings Gateway is unscoped; only the permission gates it
-
-- **Date:** 2026-07-17 | **Status:** Accepted | **Pages:** [settings](/architecture/settings/), [storage](/architecture/storage/), [identity and access](/architecture/identity-access/)
-- **Decision:** The Storage Gateway methods for settings (`GetSettingOverrides`, `UpsertSettingOverride`,
-  `DeleteSettingOverride`, `DeleteAllSettingOverrides`) are **unscoped**: no ABAC storage-scope predicate is
-  injected. Only the `settings:<action>` permission at the route gates them (`settings:read` admin read with
-  provenance, `settings:update` write / restore / lock, both admin-tier; the client-safe `/settings/me` is
-  authn-only). This is a deliberate carve-out from the "scope on every applicable query" invariant, recorded so it
-  reads as intentional.
-- **Context:** The two authorization layers ([identity and access](/architecture/identity-access/)) are a
-  `<resource>:<action>` permission on every route and an ABAC **scope** injected on every **applicable** query.
-  Platform and cascade settings describe the **platform and its principals**, not the estate, so there is no
-  location / system / component subtree to scope them by, exactly as with the registry-type reads
-  (`GET /types/...`), which are also unscoped. Forcing a scope predicate here would be meaningless (there is
-  nothing to filter on) and would misrepresent settings as estate data. The carve-out is narrow: it applies only
-  because the data is platform config. When the group and user override rungs land, override reads and writes
-  **will** be constrained by the acting principal (a user edits only their own `user` row), but that is a
-  per-principal ownership check, a different mechanism than estate ABAC, not a return of tree scope.
-- **Closes:** issue [#271](https://github.com/hyperscaleav/omniglass/issues/271) (settings engine slice-0).
-- **Amended by [ADR-0057](#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier):** the model is unchanged, the level names are not: `code` is now `default` (off the axis, the setting's own declaration) and `global` is now `platform` (the install-wide rung).
-
-### ADR-0035: settings resolve as a cascade over principals with a broader-wins lock
-
-- **Date:** 2026-07-17 | **Status:** Accepted | **Pages:** [settings](/architecture/settings/), [cascade](/architecture/cascade/)
-- **Decision:** A setting's effective value resolves down the **principal** hierarchy (global to group to user),
-  reusing the same [cascade](/architecture/cascade/) primitive the estate uses down location to system to
-  component: ordered layers deep-merged in JSON map-space (most-specific-wins by key presence), with per-key
-  **provenance** (the winning level) reported alongside the value. Layered on top is a **top-down lock**: an admin
-  locks a key at a level, pinning that level's value and forbidding any more-specific level from overriding it, and
-  when two levels lock the same key the **broader level wins** (a `global` lock supersedes a `group` lock, so
-  top-down admin authority is absolute). Slice-0 ships the global rung; group and user are a fast-follow.
-- **Context:** Omniglass already had one cascade resolver (the estate's secrets / variables / tags / config,
-  [config and credentials](/architecture/variables/)). Rather than write a second resolver for settings, the engine
-  points the same primitive at the identity axis (doctrine 5, primitive-first): a value defined once at a broad
-  scope inherits below, which is exactly the reuse a variable-reference model (Windmill-style) would buy, provided
-  here by inheritance for free. The **lock** is the piece the estate cascade did not need: settings are governance
-  (an admin enforcing an org default a user cannot escape), so the engine adds a per-key lock with a broader-wins
-  conflict rule, the inverse of the most-specific-wins value rule, applied to the enforcement axis. Provenance
-  reuses the estate's effective-values vocabulary (the winning level per key), extended from three estate bands to
-  five principal levels plus a lock chip. The pure `settings` package is the primary unit-test target; the DB
-  override is supplied through a narrow function seam so the package never imports storage.
-- **Closes:** issue [#271](https://github.com/hyperscaleav/omniglass/issues/271) (settings engine slice-0), under
-  epic [#270](https://github.com/hyperscaleav/omniglass/issues/270).
-- **Amended by [ADR-0057](#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier):** the model is unchanged, the level names are not: `code` is now `default` (off the axis, the setting's own declaration) and `global` is now `platform` (the install-wide rung).
-
-### ADR-0036: retire the standalone effective-secrets and effective-variables per-component panels; fields become the component value surface
-
-- **Date:** 2026-07-16 | **Status:** Accepted | **Pages:** [config, secrets, and variables](/architecture/variables/), [identity and access](/architecture/identity-access/), [API](/architecture/api/)
-- **Decision:** The standalone per-component **Effective secrets** and **Effective variables** panels are removed,
-  along with their `GET /components/{name}/effective-secrets` and `GET /components/{name}/effective-variables` routes
-  (and the generated `omniglass effective-secret list` / `effective-variable list` commands and the matching
-  typed-client methods). A component's value surface is the **field** primitive: a component's values are its
-  **fields**, each resolving override-versus-type-default and shown in the **Effective fields** panel. A secret or a
-  variable reaches a component by being **sourced into a field** (the deferred field `sources` model) or **bound to a
-  collection interface input**, not through a per-component cascade-browse panel. **Kept** unchanged: the storage
-  cascade **resolvers** (`ResolveSecrets` / `ResolveVariables`) as the internal primitive the future `$sec:` /
-  `$var:` interpolation consumer will call, and the **Secrets** and **Variables** directories (browse, create, edit,
-  reveal) with all their routes and CLI.
-- **Context:** The per-component effective-* panels predated the field primitive and listed **every**
-  cascade-resolving cell that reached a component, which at any real depth is mostly inherited noise (a global SNMP
-  community, a location poll interval) rather than anything set on that component. The
-  [field](/architecture/variables/#property-one-typed-name-a-product-contract-a-stored-value) primitive
-  ([#266](https://github.com/hyperscaleav/omniglass/issues/266)) is the schema-over-cells consumer the design always
-  intended: a component carries a typed set of fields, each resolving to a set literal or its type default, and the
-  intended `sources` model lets a field draw its value from a variable, a secret, a datapoint, or a file. Once fields
-  are the value surface, a second per-component cascade browser over the raw cells is redundant and misleading (it
-  reads as though the cells attach to the component when they only resolve onto it). Retiring the panels narrows the
-  component detail to its fields and keeps the cells' own management on the Secrets and Variables directories, where
-  the cascade is authored. The resolvers stay because the interpolation consumer (`$sec:` / `$var:`) still needs
-  them; only the browse-panel surface retires.
-- **Closes:** issue [#281](https://github.com/hyperscaleav/omniglass/issues/281) (retire the per-component
-  effective-secrets / effective-variables panels), under the field epic
-  [#266](https://github.com/hyperscaleav/omniglass/issues/266).
-
 ### ADR-0041: settings are a reflected typed struct with generated client and server validation
 
 - **Date:** 2026-07-19 | **Status:** Accepted | **Pages:** [settings](/architecture/settings/)
@@ -1178,6 +1171,7 @@ below from the project's history. From here it grows one slice at a time.
   map with a `Default()` method) and the group and user cascade rungs; none is built here.
 - **Closes:** issue [#288](https://github.com/hyperscaleav/omniglass/issues/288) (settings engine slice-1), under
   epic [#270](https://github.com/hyperscaleav/omniglass/issues/270).
+
 ### ADR-0042: Field cascade and the type-default floor
 
 - **Date:** 2026-07-19 | **Status:** Accepted | **Pages:** [config, secrets, and variables](/architecture/variables/)
@@ -1202,7 +1196,6 @@ below from the project's history. From here it grows one slice at a time.
   the resolution outcome is unchanged (any value set at any scope beats the default, and the default is what
   remains when the arc is empty), but the default is **off the axis**, a column on the definition row, rather
   than the cascade's bottom rung. The vocabulary moved; the rule did not.
-
 
 ### ADR-0043: The property catalog
 
@@ -1313,7 +1306,7 @@ below from the project's history. From here it grows one slice at a time.
 
 ### ADR-0046: The `event` log-kind sink
 
-- **Date:** 2026-07-20 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/), [datapoints](/architecture/properties/), [data collection](/architecture/collection/), [API](/architecture/api/), [Nodes and reachability guide](/guides/operator/collection/)
+- **Date:** 2026-07-20 | **Status:** Accepted; superseded in part by [ADR-0066](#adr-0066-logs-are-a-raw-ingest-lane-not-events) (the log-to-event ingest promotion and the seeded `log.line` type were removed) | **Pages:** [core entities](/architecture/core-entities/), [datapoints](/architecture/properties/), [data collection](/architecture/collection/), [API](/architecture/api/), [Nodes and reachability guide](/guides/operator/collection/)
 - **Decision:** A collected **log**-kind observation now has a durable home. A new **`event`** table is the
   **log-kind sink** of the collection pipeline, the counterpart of `metric_datapoint` / `state_datapoint`: where
   a datapoint records a **sampled present value**, an `event` records a **past occurrence** (a device log line, a
@@ -1727,7 +1720,7 @@ below from the project's history. From here it grows one slice at a time.
 
 ### ADR-0051: Membership is the attachment, and a role is what it does
 
-- **Status:** accepted, built.
+- **Date:** 2026-07-21 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/)
 - **Context:** a component's relationship to a system was **two unrelated facts that could silently
   disagree**. `component.system_id` was a single pointer, set once at create with no path to change it,
   which no authorization and no health path ever read; `role_assignment` was many-to-many and carried what
@@ -1767,7 +1760,7 @@ below from the project's history. From here it grows one slice at a time.
 
 ### ADR-0052: The cascade resolves through membership, and secrets carry no system band
 
-- **Status:** accepted, built.
+- **Date:** 2026-07-21 | **Status:** Accepted | **Pages:** [cascade](/architecture/cascade/)
 - **Context:** [ADR-0051](#adr-0051-membership-is-the-attachment-and-a-role-is-what-it-does) made
   membership explicit but deliberately left resolution alone: the tag, variable, and secret cascades
   still seeded their system band from `component.system_id`, the write-once pointer. That left the
@@ -1801,7 +1794,7 @@ below from the project's history. From here it grows one slice at a time.
 
 ### ADR-0053: A name is the address, a uuid is identity
 
-- **Status:** superseded in part by
+- **Date:** 2026-07-21 | **Status:** Superseded in part by
   [ADR-0056](#adr-0056-every-foreign-key-stores-a-primary-key). Its API half stands: a reference is
   addressed by name. Its schema half ("a new table references an estate entity by `name` with `on
   update cascade`") is reversed, and responses now carry the id **beside** the name rather than
@@ -1833,6 +1826,7 @@ below from the project's history. From here it grows one slice at a time.
 - **Breaking.** Response shapes change. At v0.0.0 this is the right moment, since the cost only grows.
 - **Tracked as** [#334](https://github.com/hyperscaleav/omniglass/issues/334), following
   [#328](https://github.com/hyperscaleav/omniglass/issues/328).
+
 ### ADR-0054: The shell owns a panel's action rail; the body registers and never draws
 
 - **Date:** 2026-07-21 | **Status:** Accepted | **Pages:** [design system](/contributing/design-system/)
@@ -1860,9 +1854,10 @@ below from the project's history. From here it grows one slice at a time.
   says it), and the new-interface blade lost its Cancel button, since a blade already dismisses two
   ways and no other blade in the stack carries one.
 - **Tracked under** [#332](https://github.com/hyperscaleav/omniglass/issues/332).
+
 ### ADR-0055: The tag, variable, and secret owner arcs key by name
 
-- **Status:** superseded by [ADR-0056](#adr-0056-every-foreign-key-stores-a-primary-key), which
+- **Date:** 2026-07-21 | **Status:** Superseded by [ADR-0056](#adr-0056-every-foreign-key-stores-a-primary-key), which
   converts these nine columns back to uuids along with every other name-keyed foreign key. Kept in
   full because the reasoning below is a worked example of the mistake: it is internally consistent,
   it shipped green, and it is wrong at the premise.
@@ -2003,6 +1998,7 @@ below from the project's history. From here it grows one slice at a time.
   [ADR-0047](#adr-0047-the-fields-fold-product_property-and-property_value). Each keeps its model; only the
   level names and the default's place in the vocabulary move.
 - **Closes:** issue [#316](https://github.com/hyperscaleav/omniglass/issues/316).
+
 ### ADR-0058: A run mode is a verb under its noun, and no command may be shadowed
 
 - **Date:** 2026-07-22 | **Status:** Accepted | **Pages:** [CLI guide](/guides/cli/)
@@ -2244,7 +2240,7 @@ below from the project's history. From here it grows one slice at a time.
   and recreate**, which destroys its telemetry history. The gap was invisible from any single body; it
   only showed up as the set difference between the create and update schemas, which is what surfaced it
   ([#342](https://github.com/hyperscaleav/omniglass/issues/342)).
-- **Why product is the sharp one:** [ADR-0047](#adr-0047-the-fields-fold-product_property-and-property)
+- **Why product is the sharp one:** [ADR-0047](#adr-0047-the-fields-fold-product_property-and-property_value)
   made `product` the carrier of the property contract, so a wrong product resolves the wrong property
   defaults. A swap therefore keeps every explicitly-set value (they key by component and property_type,
   independent of product) and lets only the unset defaults follow the new product, so re-classifying is
@@ -2266,7 +2262,7 @@ below from the project's history. From here it grows one slice at a time.
 
 ### ADR-0065: Property, sample, and current value replace the datapoint
 
-**Status:** accepted.
+- **Date:** 2026-07-28 | **Status:** Accepted | **Pages:** [properties](/architecture/properties/), [storage](/architecture/storage/)
 
 The one word "datapoint" conflated two things: the signal (what is measured) and the observation (a single reading of it). Splitting them removes the ambiguity that let "the datapoint's current value" and "a datapoint arrives" name different nouns.
 
@@ -2279,6 +2275,8 @@ No tables were renamed (`metric`, `state`, `event`, `property`, `property_type` 
 It also settles the built shape the earlier design left open: the **`property` cache is the architecture-of-record for current values**, a table upserted from the persistence sink with an out-of-order guard, not the "view over metric" once sketched on [storage](/architecture/storage/). The `intended` value a command opens is written in the command's Postgres transaction; the data-lane re-entry of intended and the adaptive-poll reconciliation described under [intended](/architecture/properties/#intended-the-declared-effect-of-a-command) are the deferred **actuation** evolution, not the built path. Refines [ADR-0063](#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables).
 
 ### ADR-0066: Logs are a raw ingest lane, not events
+
+- **Date:** 2026-07-28 | **Status:** Accepted
 
 Pulling `log` out of `property_type` into `event_type` (#395) also promoted every raw log line, at
 ingest, into a caught `log.line` event. Reviewing the seeded event types showed that conflates two
@@ -2334,6 +2332,8 @@ piecemeal here.
 
 ### ADR-0067: Bookings are exclusive-arc-owned schedules, reconciled against observed usage
 
+- **Date:** 2026-07-28 | **Status:** Accepted
+
 Tracking how systems and spaces are used needs the **scheduled** side, not only the observed telemetry.
 A booking (a room reservation, an equipment checkout, a virtual-room reservation) is what a calendar
 system holds, and it is a different shape from a telemetry event: an **interval** (a start and an end)
@@ -2345,7 +2345,8 @@ the ownership model the rest of the estate uses. The arc **is** the binding, so 
 layer is needed: a room booking owns to a **location**, a mobile-equipment checkout owns to a
 **component**, a virtual meeting room owns to a **system** (the bridge modeled as a virtual conferencing
 system), and a bookable space with no AV owns to a **location** that has no systems. The heterogeneity
-Fred flagged (not every reservation is a physical room) is exactly what the arc already expresses.
+flagged during design review (not every reservation is a physical room) is exactly what the arc
+already expresses.
 
 **A booking is an observed intended schedule.** Its provenance is **observed**: the platform did not
 declare it, it caught it from an external calendar. Its meaning is **intended**: a declaration of how the
@@ -2375,3 +2376,66 @@ minimal busy/free plus booked-by by default and make the full subject opt-in; th
 (Microsoft 365 Graph first, Google Workspace second, Teams and Zoom Rooms scheduling as a later layer);
 and recurrence (expand a series to instances versus store the series) with the sync window. Nothing here
 is built. This ADR records the target so the booking slice ([#412](https://github.com/hyperscaleav/omniglass/issues/412)) inherits a decided model.
+
+### ADR-0068: The API error model is the stock RFC 9457 shape
+
+- **Date:** 2026-07-30 | **Status:** Accepted | **Pages:** [API](/architecture/api/)
+- **Decision:** the API's error model is Huma's stock RFC 9457 `application/problem+json` shape: the
+  `ErrorModel` (`title`, `status`, `detail`), carrying for validation an `errors` array of `ErrorDetail`
+  entries, each `{location, message, value}`. The custom envelope sketched on the API page (a stable
+  machine `code` plus a `violations` array of `{field, message}`) is retired.
+- **Context:** the custom envelope was designed before any route existed. Today 141 routes serve the
+  stock model, and the generated SPA client and the CLI already render it uniformly. A bespoke envelope
+  would be cost without a driving consumer: no caller keys on an error `code`, and Huma's `ErrorDetail`
+  already names the failing field through `location`.
+- **Reversible:** additive. If a consumer ever needs a stable machine code, it can be added as an
+  extension field on the stock model without breaking the shape.
+
+### ADR-0069: Cycle safety is provenance-based, not topology-based
+
+- **Date:** 2026-07-30 | **Status:** Accepted | **Pages:** [alarms and actions](/architecture/alarms-actions/), [health](/architecture/health/)
+- **Decision:** the guarantee that automation cannot feed back into itself rests on **provenance**, not
+  on a topological "alarms are terminal upstream and never write samples" rule. A consequence write
+  carries `provenance='calculated'` with a `source_rule` naming its producer (today: the health
+  rollup's `state` sample, `source_rule='health-rollup'`, written on alarm raise and clear), and rules
+  must never route on their own consequences: the routing layer refuses to re-trigger a rule off a
+  sample whose `source_rule` is that rule.
+- **Context:** the alarms page argued cycle safety from the premise that alarms never write samples.
+  The build falsified it: raising or clearing an alarm recomputes health in the same transaction
+  (`internal/storage/alarms.go`), and the rollup records the verdict transition as a
+  calculated-provenance `state` row (`internal/storage/health.go`). That write is correct, it is the
+  recorded-transition model of
+  [ADR-0050](#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain);
+  the premise was too strong. The real invariant is lineage-based and survives future consequence
+  writers (calculations, action side effects) that a topology rule would forbid.
+- **Supersedes** the terminal-upstream cycle-safety argument on
+  [alarms and actions](/architecture/alarms-actions/); the page now derives safety from provenance.
+
+### ADR-0070: retire the standalone effective-secrets and effective-variables per-component panels; fields become the component value surface
+
+- **Date:** 2026-07-16 | **Status:** Accepted | **Pages:** [config, secrets, and variables](/architecture/variables/), [identity and access](/architecture/identity-access/), [API](/architecture/api/)
+- **Decision:** The standalone per-component **Effective secrets** and **Effective variables** panels are removed,
+  along with their `GET /components/{name}/effective-secrets` and `GET /components/{name}/effective-variables` routes
+  (and the generated `omniglass effective-secret list` / `effective-variable list` commands and the matching
+  typed-client methods). A component's value surface is the **field** primitive: a component's values are its
+  **fields**, each resolving override-versus-type-default and shown in the **Effective fields** panel. A secret or a
+  variable reaches a component by being **sourced into a field** (the deferred field `sources` model) or **bound to a
+  collection interface input**, not through a per-component cascade-browse panel. **Kept** unchanged: the storage
+  cascade **resolvers** (`ResolveSecrets` / `ResolveVariables`) as the internal primitive the future `$sec:` /
+  `$var:` interpolation consumer will call, and the **Secrets** and **Variables** directories (browse, create, edit,
+  reveal) with all their routes and CLI.
+- **Context:** The per-component effective-* panels predated the field primitive and listed **every**
+  cascade-resolving cell that reached a component, which at any real depth is mostly inherited noise (a global SNMP
+  community, a location poll interval) rather than anything set on that component. The
+  [field](/architecture/variables/#property-one-typed-name-a-product-contract-a-stored-value) primitive
+  ([#266](https://github.com/hyperscaleav/omniglass/issues/266)) is the schema-over-cells consumer the design always
+  intended: a component carries a typed set of fields, each resolving to a set literal or its type default, and the
+  intended `sources` model lets a field draw its value from a variable, a secret, a datapoint, or a file. Once fields
+  are the value surface, a second per-component cascade browser over the raw cells is redundant and misleading (it
+  reads as though the cells attach to the component when they only resolve onto it). Retiring the panels narrows the
+  component detail to its fields and keeps the cells' own management on the Secrets and Variables directories, where
+  the cascade is authored. The resolvers stay because the interpolation consumer (`$sec:` / `$var:`) still needs
+  them; only the browse-panel surface retires.
+- **Closes:** issue [#281](https://github.com/hyperscaleav/omniglass/issues/281) (retire the per-component
+  effective-secrets / effective-variables panels), under the field epic
+  [#266](https://github.com/hyperscaleav/omniglass/issues/266).

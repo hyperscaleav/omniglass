@@ -13,10 +13,17 @@ patterns every other leaf's entities land on, not a per-table column dump.
 :::note[Partial]
 Built today: the Storage Gateway as the only door to the database, dbmate migrations (run-once,
 embedded, idempotent), the per-action scope predicate and the in-transaction `audit_log` write, and the
-shared scoped-tree and scoped-CRUD primitives. Still `Design`: the CDC publisher and persistence
-consumer, the data-lane / record-lane split, partitioning and tiering, and
-the go-jet typed query builder. The `property` current-value cache is built, a table upserted from
-the sink, not the metric-view once sketched here ([properties](/architecture/properties/#the-current-value-cache)).
+shared scoped-tree and scoped-CRUD primitives. Scope arrives at the gateway as an explicit per-call
+`scope.Set` argument; seed and system callers pass an all-scope set. Still `Design`: the CDC publisher
+and persistence consumer, the data-lane / record-lane split, the **idempotent sample sink** (there is no
+`series` column and no uniqueness key on `metric` / `state` today, so redelivery can duplicate;
+[#430](https://github.com/hyperscaleav/omniglass/issues/430) stage 3), the ground-truth `*_log` tables
+beyond `log_line` and `audit_log` (`session_log`, `internal_log`, `collection_log`, `node_log`), every
+SQL **view** (the schema holds zero views today), the `raw_sample` buffer, the named three-query-mode
+gateway contract, embedded Postgres in the single binary (today Postgres is BYO), partitioning and
+tiering, and the go-jet typed query builder. The `property` current-value cache is built, a table
+upserted from the sink, not the metric-view once sketched here
+([properties](/architecture/properties/#the-current-value-cache)).
 See [implementation status](/architecture/status/).
 :::
 
@@ -28,12 +35,15 @@ record/state/intent lane** (config, ack/snooze, settings, manual commands, plus 
 `alarm` rows an `event_rule` consumer commits in one transaction) are written synchronously through
 the Storage Gateway. **The sample tables are an async SINK**: a NATS **persistence consumer**
 batch-writes samples off the data lane ([samples](/architecture/properties/)), idempotent on
-`(series, ts)`, so the rule engine never waits on a sample reaching Postgres. Committed changes on
+`(series, ts)` in the target contract (the idempotency key is still Design, per the status note), so
+the rule engine never waits on a sample reaching Postgres. Committed changes on
 the record lane are fanned out by a leader-elected **CDC publisher** (logical decoding of the WAL) to
 JetStream; there is no dual-write, the change is born in the commit and CDC carries it. The column schemas live
 with each owning feature: [samples](/architecture/properties/#the-sample-tables) (the three
 kind-tables), [events](/architecture/events/#storage) (the `event` row), [alarms and
-actions](/architecture/alarms-actions/#storage) (`alarm` / `action`), [config and
+actions](/architecture/alarms-actions/#storage) (`alarm` / `action`),
+[commands](/architecture/commands/) (the command pillar: the `command_type` registry, the `command`
+invocation row, and its computed settlement), [config and
 credentials](/architecture/variables/#storage) (`variable` / config / tags), [core
 entities](/architecture/core-entities/) and [templates](/architecture/templates/) (the structural and
 template tables), [collection](/architecture/collection/#storage) (interfaces and tasks),
@@ -43,11 +53,11 @@ template tables), [collection](/architecture/collection/#storage) (interfaces an
 ## Conventions
 
 - **No `tenant_id`.** Isolation is per-database (a database per tenant); there is no tenant column
-  anywhere. The key registries `property_type` and `event_type` carry a **`scope`** (template / org /
-  official) deciding where the name is unique ([key scope](/architecture/properties/#key-scope-template-org-official)),
-  and the non-template registries and catalogs (`interface_type`, `location_type`, `secret_type`,
-  `vendor`, `driver`, `capability`, `product`, `standard`) carry an
-  **`official` boolean**, the same axis minus the template layer: `official: true` rows are the
+  anywhere. The registries and catalogs (`property_type`, `event_type`, `interface_type`,
+  `location_type`, `secret_type`, `vendor`, `driver`, `capability`, `product`, `standard`) carry an
+  **`official` boolean** (a richer per-registry `scope` ladder, template / org / official, remains
+  future design; see [key scope](/architecture/properties/#key-scope-template-org-official)):
+  `official: true` rows are the
   ship-with canonical set distributed with the binary, and `official: false` rows are operator- or
   org-authored, local to this deployment. The boolean is about **authority, not provenance**: a row
   the binary seeds is not automatically `official`. A `standard` and a `location_type` ship as
@@ -58,7 +68,7 @@ template tables), [collection](/architecture/collection/#storage) (interfaces an
 - **Three storage shapes.** **Ground-truth records** are append-only and immutable, each named for
   what it is: `log_line` (the raw log lane, not a sample), `audit_log` (operator actions), and the standing
   `*_log` ground-truth logs (`session_log`, `internal_log`, plus the `collection_log` /
-  `node_log` companions). There is **no `telemetry` table**: samples are published to the
+  `node_log` companions; these four are still Design, only `log_line` and `audit_log` exist today). There is **no `telemetry` table**: samples are published to the
   JetStream data lane, not synchronously inserted, so the raw payload is not persisted in steady
   state; the persistence consumer sinks the typed sample, and raw appears only on a
   `collection.failed` event or a dev raw-mode tap ([samples](/architecture/properties/)). A
@@ -70,21 +80,27 @@ template tables), [collection](/architecture/collection/#storage) (interfaces an
   not a sample kind, so it carries no property name and passes no registry gate. **Stateful entities and projections** (`alarm`, `action`, current-value)
   hold state directly or are rebuildable read models, **views by default**. The model is **not
   event-sourced**.
-- **Provenance and lineage on every sample**: `provenance` (observed / calculated / intended),
-  `source` (which sensor or path, for observed), and a lineage pointer. observed and calculated both
-  carry `source_rule` (+ version), the function or calc_rule that produced the row; intended carries
-  `event_id` (the command). A CHECK enforces the pointer per provenance; **observed vs calculated is
-  the `provenance` value itself**, not a column-presence trick. Declared config is not a sample
-  provenance; it lives in [config](/architecture/variables/), keyed to the same signal.
-- **Ownership is the exclusive-arc** on every sample table, `event`, `alarm`, and `variable`:
-  `owner_kind` enum plus the matching typed FK (`component_id` / `system_id` / `location_id` /
-  `node_id`, or none for the singleton `global`) plus a CHECK that exactly the matching column is set
-  (or all null for `global`). System-, location-, node-, and global-level samples are first-class.
+- **Provenance and lineage on every sample**: `provenance` (observed / calculated / intended /
+  declared), `source` (which sensor or path, for observed), and a lineage pointer. **calculated**
+  requires `source_rule` (+ version), the rule that produced the row; **intended** requires `event_id`
+  (the command) and no `source_rule`; **observed** requires only that `event_id` is null (it may carry
+  a `source_rule` when an edge function produced it, but the CHECK does not demand one); **declared**
+  requires neither pointer. A CHECK enforces the pointer per provenance, and **observed vs calculated
+  is the `provenance` value itself**, not a column-presence trick. `declared` exists as a sample
+  provenance in the schema ([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)),
+  although the model going forward keeps declared config in [config](/architecture/variables/), keyed
+  to the same signal.
+- **Ownership is the exclusive-arc**, though not one uniform arc. The sample tables (`metric` /
+  `state`) and `event` carry `owner_kind` (`component` / `system` / `location` / `node`) plus the
+  matching typed FK and a CHECK that exactly the matching column is set; there is no platform or
+  global arm on a sample. `variable`'s arc is `platform` / `component` / `system` / `location` (no
+  node arm; the `platform` kind sets all three FKs null). `alarm` carries **no arc**: a single NOT
+  NULL `component_id`, component-local by design today.
   The full pattern is on [core entities](/architecture/core-entities/#ownership-the-exclusive-arc).
-- **Keys**: samples and events use a surrogate id plus `ts`; the key registry `property_type`
-  carries a **`scope`** (template / org / official) deciding where the name is unique (`(template_id, name)`
-  at template scope, `name` at org/official); structural entities are name-keyed; a `task` is **content-addressed**
-  (`hash(interface, kind, schedule, params)`); a `node` by its `principal_id`, its enrollment
+- **Keys**: samples and events use a surrogate id plus `ts`; the key registry `property_type` is
+  name-unique with the **`official` boolean** deciding authority (the template / org / official
+  `scope` ladder is future design); structural entities are name-keyed; a `task` is **content-addressed**
+  (`sha256` over `(interface_id, mode, spec)`); a `node` by its `principal_id`, its enrollment
   identity. Every foreign key stores the target's primary key, so a rename is free
   ([ADR-0056](/architecture/decisions/#adr-0056-every-foreign-key-stores-a-primary-key)).
 
@@ -127,7 +143,9 @@ how the rest of the platform learns it changed.
   The rule engine consumes them directly off NATS; Postgres is the durable record, not the live
   signal. The **persistence consumer** is a durable JetStream consumer that batch-writes the
   `metric` / `state` tables as an async sink, idempotent on
-  `(series, ts)`, so a redelivery lands the same row and the firehose never blocks on the database.
+  `(series, ts)` in the target contract (still Design: today's tables carry no `series` column and no
+  uniqueness key, [#430](https://github.com/hyperscaleav/omniglass/issues/430) stage 3), so a
+  redelivery lands the same row and the firehose never blocks on the database.
   Raw log lines ride the same ingest path into `log_line`, but keyed on nothing (an untyped arrival has
   no series), so their at-least-once story is the lane's own, not this one's.
   Samples do **not** flow through CDC: they are already on NATS.
@@ -153,17 +171,18 @@ idempotency key per change, so a consumer that sees a change twice is a no-op.
 The immutable, append-only records, each named for what it is. They are the lineage targets and what
 a backtest reads; none is derived. The detailed columns of `audit_log` live on
 [audit](/architecture/audit/), `session_log` on [nodes](/architecture/nodes/#sessions); the rest is a
-compact list here because storage is their natural architectural home:
+compact list here because storage is their natural architectural home. Of these, only `log_line` and
+`audit_log` exist today; the other four are still Design (the status note above):
 
 - **`log_line`** (a component's or node's own words, the untyped raw ingest lane, not a sample,
   [ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events));
 - **`audit_log`** (operator actions: actor, verb, resource, `old -> new`; the lineage target for
   operator writes; secret decrypts always recorded, [audit](/architecture/audit/));
-- **`session_log`** (connection-lifecycle transitions, node-reported; the connection log,
+- **`session_log`** (Design: connection-lifecycle transitions, node-reported; the connection log,
   [nodes](/architecture/nodes/#sessions));
-- **`internal_log`** (platform self-narration: startup / reconcile / migration / node-reg /
+- **`internal_log`** (Design: platform self-narration: startup / reconcile / migration / node-reg /
   config-sync, [workers](/architecture/workers/));
-- the **`collection_log`** / **`node_log`** companions (the cheap per-run execution record
+- the **`collection_log`** / **`node_log`** companions (Design: the cheap per-run execution record
   and the node's operational narration).
 
 There is **no separate rule-execution table**: a derived row *is* the evidence of its rule's run,
@@ -172,38 +191,43 @@ carrying its lineage on the row (below).
 ## The lineage CHECK (the pattern)
 
 Lineage lives on the derived row, no separate execution table. This is the **pattern** every derived
-row follows: `source_rule` (+ version) is set for observed and calculated (the function or calc_rule
-that produced the row); intended carries the command `event_id`. The pointer per provenance is enforced
-so e.g. "intended with no command event" is impossible at the storage layer. One example, the sample
-tables:
+row follows: **calculated** requires `source_rule` (+ version), the rule that produced the row;
+**intended** requires the command `event_id` and no `source_rule`; **observed** requires only that
+`event_id` is null (it may carry a `source_rule`, but the CHECK does not demand one); **declared**
+requires neither pointer. The pointer per provenance is enforced so e.g. "intended with no command
+event" is impossible at the storage layer. The real four-branch CHECK on the sample tables:
 
 ```sql
 CHECK (
-     (provenance IN ('observed','calculated') AND source_rule IS NOT NULL AND event_id IS NULL)
-  OR (provenance = 'intended'                 AND event_id IS NOT NULL AND source_rule IS NULL)
+     (provenance = 'observed'   AND event_id IS NULL)
+  OR (provenance = 'calculated' AND source_rule IS NOT NULL AND event_id IS NULL)
+  OR (provenance = 'intended'   AND event_id IS NOT NULL AND source_rule IS NULL)
+  OR (provenance = 'declared'   AND source_rule IS NULL AND event_id IS NULL)
 )
 ```
 
-Observed and calculated both carry `source_rule`; they are distinguished by the **`provenance`
-column**, not a pointer-presence trick (an edge function versus a calc_rule). The intended split is
+Observed and calculated are distinguished by the **`provenance` column**, not a pointer-presence
+trick (an edge function versus a calc_rule). The intended split is
 the one the CHECK enforces. This is one of three layers: the CHECK enforces *which pointers are populated*, foreign keys enforce
 *the ids are real*, and the app enforces *the value type matches the key's kind*.
 
-The sample tables also carry nullable **`correlation_id`** and **`caused_by_event_id`** trace
-columns. These are orthogonal to the lineage pointers above: they are not lineage pointers, so they
-do not participate in the exclusive-lineage CHECK. They carry causation across the command -> device
--> observed-sample round trip so the cycle guard walks a real id ([samples](/architecture/properties/),
-[alarms and actions](/architecture/alarms-actions/)). On the wire these ride in **NATS message
-headers**: a sample published to the data lane carries its `correlation_id` / `caused_by_event_id`
-in the message header alongside the `Nats-Msg-Id` dedup key, and the persistence consumer lands them
-into these columns, so the trace is unbroken from the live signal to the durable record.
+The **trace columns live beside the lineage pointers, but not on the sample tables**: `event` carries
+`correlation_id` and `source_event_id` (the causation parent, plus
+`source_log_line_id` and `derived_by_rule_id`), and `log_line` carries `correlation_id`; `metric` and
+`state` carry no trace columns today. These are orthogonal to the lineage CHECK. The designed
+carriage, causation riding **NATS message headers** across the command -> device -> observed-sample
+round trip and landing on the sample row so the cycle guard walks a real id
+([samples](/architecture/properties/), [alarms and actions](/architecture/alarms-actions/)), is still
+Design along with the persistence consumer itself.
 
 ## Current value and projections: views by default
 
 `alarm` and `action` are **stateful entities** that hold their own current state in a real table
 (not event-sourced). Everything else that is "current state" is a **read model**, and the default is
 a **plain SQL view** (always-correct, never stale, zero maintenance). A worker-maintained table is a
-**measured optimization**, earned only when a read profile shows a view too slow.
+**measured optimization**, earned only when a read profile shows a view too slow. This section is the
+target model: **the schema holds zero SQL views today** (the shipped current-value read is the
+`property` cache table, per the status note), so the read models below are still Design.
 
 | Read model | Of | Shape | Notes |
 |---|---|---|---|
@@ -242,7 +266,7 @@ key, instance, provenance)?
   `event.source_log_line_id` null rather than deleting the event (`on delete set null`). The per-table defaults are **cascade-resolved**
   ([cascade](/architecture/cascade/)) with an install-wide `platform` binding, so a class or entity can
   hold longer or shorter without changing the whole install.
-- **The `raw_sample` buffer** (the opt-in raw-retention policy, [collection](/architecture/collection/))
+- **The `raw_sample` buffer** (still Design; the opt-in raw-retention policy, [collection](/architecture/collection/))
   is range-partitioned by `ts` and cold-tierable like the metric partitions, on a short retention. It
   is bounded, sampled, and short-lived; it is not a telemetry table.
 - **Views are not partitioned** (bounded by fleet size, not time) and are computed from the
@@ -266,17 +290,18 @@ PostgREST); it is also where IAM scope is injected, **per action**: every query 
 the handler as a 403 or 404, never a silent success, matching the up-front `canDo` decision
 ([identity and access](/architecture/identity-access/)). Isolation is per-database (one database per
 tenant, paired one-to-one with one NATS account, [samples](/architecture/properties/)), so there
-is no tenant context to set. Every read and write lands here: the synchronous request path runs in
-**scoped** mode, and the persistence-consumer sample sink and the CDC publisher run in **system**
-mode (trusted internal work, all-visibility), the same three-mode contract identity and access
-describes. The CDC publisher reads committed changes by **logical decoding of the WAL**, a
+is no tenant context to set. Every read and write lands here. Scope arrives as an **explicit per-call
+`scope.Set` argument**: the request path passes the caller's action-scoped set, and seed and system
+callers pass an all-scope set. The named three-mode contract (scoped / node / system) that identity
+and access describes is the Design formalization of that convention, not a built mode switch. The CDC
+publisher reads committed changes by **logical decoding of the WAL**, a
 replication-protocol stream beneath the table surface; that is how it learns of a change without
 re-querying, not a second application path around the Gateway. Because every
 application read and write goes through the Gateway, the physical backend is swappable beneath it:
 
-- **default**: Postgres for everything (samples, ground-truth records, views, registries). In
-  single-binary mode the one binary embeds a real Postgres (the same code path runs an external
-  Postgres at scale); the data lane's persistence consumer and the record lane's CDC publisher both
+- **default**: Postgres for everything (samples, ground-truth records, views, registries). Postgres
+  is **BYO today**; embedding a real Postgres in the single binary (the same code path either way) is
+  still Design. The data lane's persistence consumer and the record lane's CDC publisher both
   target this one backend.
 - **tiering**: the firehose does not stay in hot Postgres forever. Aged
   `metric` / `log_line` partitions tier out to a **columnar or object

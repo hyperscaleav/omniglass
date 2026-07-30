@@ -11,22 +11,23 @@ sidebar:
 The first collection path is live end to end: an edge node runs real **reachability probes** against a
 component's interfaces (each an **API named by the protocol it speaks** and typed by its **transport**: `tcp`,
 `ssh`, and `http` interfaces reach by opening the tcp port, `icmp` pings), ships the result as a protobuf
-`Event` over a JetStream durable consumer, and the `tcp.open` / `tcp.connect_time` and `icmp.reachable` /
+`TelemetryBatch` over a JetStream durable consumer, and the `tcp.open` / `tcp.connect_time` and `icmp.reachable` /
 `icmp.rtt_avg` samples land in `metric` owned by the target component. The owner is
 bound **server-side** from the task's interface (the node stamps no component identity), and the ingest consumer
-confines a node to its own tasks (an Event carrying another node's `task_id` is orphan-dropped) and rejects
+confines a node to its own tasks (a TelemetryBatch carrying another node's `task_id` is orphan-dropped) and rejects
 unregistered sample names. The icmp probe rides the same pipeline unchanged (the consumer does not branch on
 probe type); a target that does not answer is DATA (`icmp.reachable=0` with a reason), and an error is reserved
 for a node that cannot do ICMP at all, told apart by a once-cached loopback capability self-check. On top of the
 raw probe metrics the node now computes the per-interface **reachability verdict** `interface.reachable` (up/down,
 the AND of that interface's probe results) and emits it as a built-in **state** sample; the ingest consumer
-**routes by the registry kind** (metric to `metric`, state to `state`, and a **log** to the
-new **`event`** log sink, no longer dropped, see [ADR-0046](/architecture/decisions/#adr-0046-the-event-log-kind-sink))
+**routes by the registry kind** (metric to `metric`, state to `state`, and a **log** to the raw-log
+lane's `log_line` sink per [ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events);
+the [ADR-0046](/architecture/decisions/#adr-0046-the-event-log-kind-sink) log-to-event promotion is superseded)
 under the same confinement, and the state series is **transition-only** (one row per flip, guarded both at the
-node and at ingest). The Event also carries a node's own **self-logs** as raw `LogLine`s (untyped, no registry name,
+node and at ingest). The TelemetryBatch also carries a node's own **self-logs** as raw `LogLine`s (untyped, no registry name,
 no task): the ingest consumer lands them in `log_line` owner-bound to the node ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)),
 the raw log lane the node narrates itself on (connected, worklist pulled, a task skipped), distinct from the typed
-samples above and routed before the task owner-confinement so a logs-only Event lands without a `task_id`. The node
+samples above and routed before the task owner-confinement so a logs-only TelemetryBatch lands without a `task_id`. The node
 half is a **node-wide emitter**: the run loop installs a capturing `slog` handler as the process default, so any node
 code emits a self-log with a plain `slog.Info(...)` (conventionally carrying a `facility`, and optionally a `source`,
 which the mapping lifts into the `log_line` columns), with no logger threaded down to it. The buffer between ticks is
@@ -45,10 +46,10 @@ non-disclosing 404, reusing the component tier with no new scope kind). The full
 what is built is the reach gate over four transports (`tcp`/`ssh`/`http` open the port, `icmp` pings). The
 protocol **drivers** that collect a normalized menu of samples and functions over a transport are the next
 slices. See
-[ADR-0033](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer),
-[ADR-0034](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state),
-[ADR-0035](/architecture/decisions/#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver),
-and [ADR-0036](/architecture/decisions/#adr-0040-the-task-is-derived-read-only-plumbing-projected-from-its-interface).
+[ADR-0037](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer),
+[ADR-0038](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state),
+[ADR-0039](/architecture/decisions/#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver),
+and [ADR-0040](/architecture/decisions/#adr-0040-the-task-is-derived-read-only-plumbing-projected-from-its-interface).
 :::
 
 Collection is built from **functions**. A versioned `ComponentTemplate` declares how to reach a
@@ -122,7 +123,7 @@ interfaces:
   default reachability probe. The protocol handler that turns a device's API into a normalized menu of
   samples and functions (the OIDs, the commands, the parse) is a separate **driver** layer, so the
   same protocol can run over several transports and a device's OIDs live in its driver, never on a
-  template. See [ADR-0035](/architecture/decisions/#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver).
+  template. See [ADR-0039](/architecture/decisions/#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver).
 - **`liveness`** is the per-interface reachability gate; it decides whether the interface's
   functions run. See [nodes](/architecture/nodes/).
 - **`persistent: true`** keeps a session open across function runs (interface lifecycle contains
@@ -183,13 +184,16 @@ directly) is self-describing (it carries its key), so its edge parse is a near-i
 pass-through, marked `shape=native`. As with any function, a failed parse keeps the raw on a
 `collection.failed` event.
 
-## Built interface types and their config
+## Interface types and their config
 
 The poll types and listeners in the `interface_type` registry and the operator config they read.
 The node translates each stored task + interface into a poller the collection engine runs; how the
 node *executes* these (tick scheduling, reachability gating, the task queue) is [nodes](/architecture/nodes/).
 
-### Built poll protocols and their config
+Built today: the `icmp` and `tcp` probes, with `ssh` and `http` probing as tcp-connect; the
+`snmp`, `telnet`, and `raw-tcp` rows and the rich `ssh`/`http` configs below are Design.
+
+### Poll protocols and their config
 
 | interface type | shape | host/target | per-task params | samples |
 |---|---|---|---|---|
@@ -207,16 +211,14 @@ connection (host/port/version/community for snmp, base URL + headers for http,
 address + framing + auth for the text family) lives on the interface and the task
 names what to read.
 
-Every fixed built-in name (`icmp.reachable`/`icmp.rtt_avg`, `tcp.open`/
-`tcp.connect_time`, `udp.open`, `snmp.reachable`, `http.reachable`/
-`http.status_code`/`http.response_time`, and `<proto>.reachable`/`<proto>.response_time`
-for the text family) is a **registered canonical `property_type`** in the ship-with registry,
+The ship-with registry seeds the 11 real `property_type` rows
+(`internal/seed/properties.yaml`), including the probe built-ins the node emits today
+(`icmp.reachable`/`icmp.rtt_avg`, `tcp.open`/`tcp.connect_time`, `interface.reachable`),
 so probe/liveness results persist as samples, not only as raw wire
-bytes. They are owner-agnostic measurements like any other: unregistered,
-reject-not-project would drop them at ingest. `registry.seed_validation_test`'s
-`liveness_builtins_present` locks the registry to exactly the names the node
-emits, so a rename on either side fails the build instead of silently going
-un-derived.
+bytes; the wider per-transport name set (`udp.open`, `snmp.reachable`, the http trio, and
+`<proto>.reachable`/`<proto>.response_time` for the text family) is Design. They are
+owner-agnostic measurements like any other: unregistered,
+reject-not-project would drop them at ingest.
 
 For `snmp`, each OID is carried in its **native SNMP type**: numeric OIDs as
 numbers, string OIDs (OctetString / IPAddress / OID) as text, so a string-valued
@@ -273,7 +275,9 @@ family over a persistent connection, with multi-line prompt-expect beyond the fi
 delimiter, command echo handling, and Q-SYS-style frame/checksum framing; ssh runs
 its commands as a one-shot `exec`.
 
-### Built listeners and their config
+### Listeners and their config
+
+This whole listener section is Design: no webhook route exists today.
 
 A **listener** is inbound: rather than us polling, **we wait for pushed data**
 (`mode: listen`). That data can arrive several ways, a webhook POST, an
@@ -544,5 +548,5 @@ The connection registry, the declared connections, and the node's units of work;
 | Table | Key columns | Notes |
 |---|---|---|
 | `interface_type` | name, **built**, direction (in/out), param_schema (jsonb) | the protocol-and-style registry (`ssh`, `http`, `snmp`, `mqtt`, `webhook`, ...); generates the template config schema |
-| `interface` | **id** (surrogate), **name derived from interface_type** (unique per component, never hand-typed), **component** (nullable: set = pre-bound, null = shared/match-key), params (jsonb), **node** (placement, `ON DELETE CASCADE` so a node purge drops its interfaces) | the connection, the **authored** primitive ([nodes](/architecture/nodes/)) |
-| `task` | **id = content hash**, **interface** (`ON DELETE CASCADE`), **mode (poll/listen)**, spec (jsonb), enabled | a **derived** unit of collection work: created with its interface, read-only (no operator CRUD). **No node column**, placement **projects from the interface**. Parsing to samples is the **edge function**, not the task's job |
+| `interface` | **id** (surrogate), **name derived from interface_type** (unique per component, never hand-typed), **component** (nullable: set = pre-bound, null = shared/match-key), params (jsonb), **node_name** (placement, `ON DELETE CASCADE` so a node purge drops its interfaces) | the connection, the **authored** primitive ([nodes](/architecture/nodes/)) |
+| `task` | **id = content hash**, display_name, **interface** (`ON DELETE CASCADE`), **mode (poll/listen)**, spec (jsonb), enabled | a **derived** unit of collection work: created with its interface, read-only (no operator CRUD). **No node column**, placement **projects from the interface**. Parsing to samples is the **edge function**, not the task's job |

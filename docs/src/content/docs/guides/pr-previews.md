@@ -21,8 +21,9 @@ you sign in with your reviewer identity first. Each push to the PR rolls the
 preview forward to that commit.
 
 Previews are **opt-in** (the label) to bound how many run at once, and only
-same-repo branches get one: a fork PR has no published image, so label it only
-after a maintainer has built one.
+same-repo branches get one: CI never publishes an image for a fork PR, so
+labelling a fork PR does nothing until a maintainer pushes the branch to this
+repo (or builds and pushes an image by hand).
 
 ## What is inside
 
@@ -30,8 +31,10 @@ Each preview is a throwaway, isolated instance in its own `og-pr-<number>`
 namespace: the single binary with the console embedded, plus a bundled ephemeral
 Postgres (data does not survive a restart, which is the point). It runs the chart
 from *this PR's* commit, so schema migrations and API changes in the PR are
-exercised end to end. Sign in as the seeded owner (the bot comment and the
-[Helm guide](/guides/helm/) cover the credential).
+exercised end to end. Sign in as the seeded owner: the bot comment carries only
+the link, never a credential; the credential is the bootstrap token printed once
+to the init container's logs (the [Helm guide](/guides/helm/) shows how to read
+it).
 
 ## Teardown
 

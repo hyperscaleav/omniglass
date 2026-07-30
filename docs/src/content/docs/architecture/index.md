@@ -1,10 +1,6 @@
 ---
 title: Architecture
 description: "The architecture told as one journey, following a single reading from the gear through its whole life to the answer and the action on it."
-sidebar:
-  badge:
-    text: Design
-    variant: caution
 ---
 
 Monitoring, stripped down, is one shape: **collect the data, evaluate it, see it, act on it.** The
@@ -70,11 +66,11 @@ of.
 AV gear is **agentless**: you cannot install something inside it, so the reading has to come from
 the outside. Sometimes the component **pushes** it to Omniglass; usually Omniglass **polls** for it
 on an interval. Either way, a **[node](/architecture/nodes/)** running close to the gear reaches a
-component over an **interface** (whatever the device speaks: SNMP, HTTP, SSH, a control processor's
-own command language) and reads.
+component over an **[interface](/architecture/collection/)** (whatever the device speaks: SNMP, HTTP,
+SSH, a control processor's own command language) and reads.
 
 How to reach a class of device, and what to read from it, is declared once in the component's
-**template**, the reusable device shape. The node runs that and, crucially, **parses the answer
+**[template](/architecture/templates/)**, the reusable device shape. The node runs that and, crucially, **parses the answer
 right there at the edge**, turning a vendor's raw response into a normalized reading on the spot.
 
 That normalized reading is a **sample**.
@@ -84,8 +80,8 @@ That normalized reading is a **sample**.
 A **[sample](/architecture/properties/)** is one value of one **canonical signal** (`power.state`,
 `audio.level`), owned by exactly one entity through the **exclusive arc**: one owner, a component or
 a system or a location, never more than one. It carries a **provenance** (how we know it: **observed**
-from the device, **calculated** by Omniglass, or **intended** by a command we sent) and a **source**
-(which sensor or path told us).
+from the device, **[calculated](/architecture/calculations/)** by Omniglass, or **intended** by a
+**[command](/architecture/commands/)** we sent) and a **source** (which sensor or path told us).
 
 The meaning of each signal (its kind, unit, and validation) lives in a governed **registry**, and
 a template *references* a registered signal rather than inventing one. That is the whole trick: two
@@ -99,14 +95,18 @@ Not every value is measured. Some are **declared**, set by an operator rather th
 device: a setting that should hold (this input should be HDMI1), or a value that rides down the tree
 (this system polls every 30 seconds). A declared value is **[config](/architecture/variables/)** when
 it is bound to a signal, or a plain **variable** when it just rides down the tree, both resolved down
-a **[cascade](/architecture/cascade/)**: set once high, overridden exactly where it matters. Config
-has an observed side, so the gap between intent and reality is **drift**, a signal you can alarm on or
-a fix you can push back.
+a **[cascade](/architecture/cascade/)**: set once high, overridden exactly where it matters. The same
+cascade resolves **[tags](/architecture/tags/)** (the governed label vocabulary), encrypted secrets,
+and platform **[settings](/architecture/settings/)**, and **[files](/architecture/files/)** attach
+alongside them as searchable handles over a content-addressed blob store. Config has an observed side,
+so the gap between intent and reality is **drift**, a signal you can alarm on or a fix you can push
+back.
 
 ## Detect
 
-An **[event_rule](/architecture/alarms-actions/)** watches a sample and fires when its condition
-is met, recording an **event**: our assertion, in our own words, that something happened. Pair a fire
+An **[event_rule](/architecture/alarms-actions/)** watches a sample and fires when its condition, an
+**[expression](/architecture/expressions/)**, is met, recording an
+**[event](/architecture/events/)**: our assertion, in our own words, that something happened. Pair a fire
 with a clear and the two events open and resolve an **alarm**, the stateful incident, one row per
 occurrence, the thing an operator works and a ticket binds to. An alarm names the **capabilities it
 degrades**, which is what turns a detection into a verdict on the system.
@@ -137,10 +137,11 @@ The loop closes where it started, at the gear.
 
 ## See it
 
-The operator never queries raw tables. Reads go through **views** (a named query returning a uniform
-`{columns, rows}`), rendered in the **[console](/architecture/ui/)**: the fleet-health grid, the
-alarm drill-down, the "why did this value win" cascade explainer. The whole journey is visible the
-entire time.
+The operator never queries raw tables. Reads go through **[views](/architecture/views/)** (a named
+query returning a uniform `{columns, rows}`), rendered in the **[console](/architecture/ui/)**: the
+fleet-health grid, the alarm drill-down, the "why did this value win" cascade explainer. The console
+is one client of the **[API](/architecture/api/)**, the same contract the generated CLI and the
+**[AI](/architecture/ai/)** seams (MCP included) drive. The whole journey is visible the entire time.
 
 ## The journey, end to end
 
@@ -182,9 +183,11 @@ The journey rides on a few foundations, named once:
 
 - the **[Storage Gateway](/architecture/storage/)** is the one door to the database; every read and
   write goes through it, which is where **scope** ([identity and access](/architecture/identity-access/))
-  is enforced: a permission on every route, a visibility filter on every query.
-- the **[workers](/architecture/workers/)** are one machinery draining a few worklists (the rule
-  engine, the outbox, the clock, reconcile); no bespoke loops.
+  is enforced: a permission on every route, a visibility filter on every query. A grant can target a
+  **[group](/architecture/groups/)** of principals as well as a single one.
+- the **[workers](/architecture/workers/)** are one machinery: durable JetStream consumers over the
+  **[messaging](/architecture/messaging/)** subject contract. The built one is the telemetry
+  consumer; the rule engine, the clock, and reconcile follow the same shape; no bespoke loops.
 - the **[audit](/architecture/audit/)** trail and the operational logs are immutable, append-only
   ground truth: the record of who changed what and what the platform did.
 - **[time](/architecture/time/)** is the one primitive that turns the passage of time into events, so
@@ -202,14 +205,13 @@ collection); how much of that to persist, and for how long, is still being settl
 A handful of patterns hold everywhere, and they are why the model stays coherent:
 
 - **Exclusive-arc ownership**: every sample, event, and alarm names exactly one owner (component,
-  system, location, node, or global), so system- and location-level signals are first-class.
+  system, location, or node), so system- and location-level signals are first-class.
 - **Immutable template versions**: an instance pins a frozen template version (or tracks `latest`);
   editing mints a new version; re-pointing is explicit.
 - **On-row lineage**: a derived row carries its own evidence; there is no separate execution table.
-- **Scope and the `official` boolean**: the key registries (`property_type`, `event_type`) carry a
-  `scope` (template / org / official) deciding where a name is unique; the other registries and rule
-  rows carry an `official` boolean (the same axis minus the template layer). `official` is the curated
-  ship-with set, the rest is operator-authored and local to a deployment.
+- **The `official` boolean**: every registry (`property_type`, `event_type`, `command_type`, and the
+  catalogs) and rule row carries an `official` boolean. `official` is the curated ship-with set,
+  seeded at boot and authoritative; the rest is operator-authored and local to a deployment.
 - **Views by default**: current-state reads are plain views, materialized only when a profile proves
   it necessary.
 - **Not event-sourced**: stateful entities (alarm, action) hold their state directly.
@@ -222,4 +224,5 @@ pages in the sidebar follow this same journey: collection, the device shape, the
 config and credentials, the cascade, health, alarms and actions, then the foundations underneath.
 
 Omniglass is built greenfield, one vertical slice per PR; the physical schema lives in
-[storage](/architecture/storage/).
+[storage](/architecture/storage/), and the generated ERD over it in the
+[data model](/architecture/data-model/).

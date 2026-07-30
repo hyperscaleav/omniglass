@@ -19,7 +19,8 @@ live in [API first](/contributing/api-first/); this page is the conventions that
 
 :::note[Partial]
 Built today: the Huma-over-chi API with the OpenAPI 3.1 document generated from the Go structs
-(`make gen`), the AIP-style resource and `:verb` routing, and the problem+json error envelope, proven
+(`make gen`), the AIP-style resource and `:verb` routing, and the problem+json error model (Huma's
+stock RFC 9457 shape, [ADR-0068](/architecture/decisions/#adr-0068-the-api-error-model-is-the-stock-rfc-9457-shape)), proven
 on `/auth`, `/roles`, `/locations`, `/systems`, `/components`, `/nodes`, `/interfaces`, `/tasks`, the
 first-party ingest write `POST /telemetry:push` (gated `telemetry:push`, owner declared in the body and
 fenced by the caller's scope), and the
@@ -28,8 +29,11 @@ classifier-contract and instance-value property routes, the role declaration, re
 routes, and the component alarm plus system and location [health](#health-the-verdict-and-why) reads. The
 node `:enroll` and `:claim` custom methods
 are the first `:verb` routes in the wild. Still `Design`:
-the expression `filter` language, idempotency keys, long-running operations over the `action` row, the
-MCP surface, the SSE relay, and the NATS node contract. See [implementation status](/architecture/status/).
+the AIP list conventions (`filter`, `order_by`, `page_size`, `page_token`, `fields`; today's one
+paginated route, `GET /audit-log`, pages backward with `before` plus `limit`), the expression `filter`
+language, idempotency keys, `ETag` / `If-Match` optimistic concurrency, long-running operations over the
+`action` row, the MCP surface, the SSE relay, and the NATS node contract. See
+[implementation status](/architecture/status/).
 :::
 
 ## Shape: resources and `:verb` methods
@@ -51,8 +55,9 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   `principal:revoke-session`) let an administrator list and end **another** principal's sessions, the revoke
   bounded to that target and behind the owner takeover guard. `POST /principals/{id}/sessions:revokeAll` (a
   `{ purpose }` body, same gate and guard) bulk-ends all of one kind at once, returning the count.
-- **Singular kind sub-segments** for the typed families: `/rules/calc`, `/datapoints/metric`,
-  `/location-types`.
+- **Each typed registry is its own plural collection**: `/location-types`, `/property-types`,
+  `/event-types`. Kind sub-segments under an umbrella path were retired
+  ([ADR-0060](/architecture/decisions/#adr-0060-a-resource-is-one-kebab-case-noun-nesting-means-ownership)).
 - **Collection-level custom methods** carry the colon on the collection, not a member:
   `POST /systems:checkName` (also `/components:checkName`, `/locations:checkName`) is an advisory
   precheck for a technical-name rename, returning `{ valid, available, reason }`. It is gated by
@@ -70,7 +75,11 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
 
 ## Lists: filter, order, page
 
-A list takes `filter`, `order_by`, `page_size` (capped by a server maximum), `page_token`, and `fields`:
+**This section is still Design.** No route implements these parameters yet: the built lists take a
+small fixed set of query params (`kind`, `resource`, `verb`, `system`, `include_archived`,
+`include_cleared`), and the one paginated route, `GET /audit-log`, pages backward with `before` plus
+`limit`. The target contract: a list takes `filter`, `order_by`, `page_size` (capped by a server
+maximum), `page_token`, and `fields`:
 
 - **Cursor pagination, never offset.** A list returns a `next_page_token`; the client echoes it on the
   next call. The token is opaque and stable under concurrent inserts, where an offset would skip or
@@ -81,13 +90,14 @@ A list takes `filter`, `order_by`, `page_size` (capped by a server maximum), `pa
   gateway's generated-column allow-list (an unknown field is a 400), and values are bound parameters, so
   none of the three can inject SQL ([storage](/architecture/storage/)).
 - **Every list runs through the scoped gateway**, so results are already scope-filtered: a list never
-  returns a row outside the caller's visible set, and the page count is over visible rows only.
+  returns a row outside the caller's visible set, and the page count is over visible rows only. This
+  invariant holds today; the parameters above do not exist yet.
 
 ## Partial responses: field masks
 
-The `fields` parameter selects a subset of the response (a read field mask, AIP-157); the default is the
-full resource. `PATCH` carries a **write mask implicitly**: only the fields present in the body change,
-so a partial update never clobbers an omitted field.
+The `fields` read mask (a response subset, AIP-157) is **still Design**; the default, and today the only
+behavior, is the full resource. `PATCH` carries a **write mask implicitly**, and this part is built:
+only the fields present in the body change, so a partial update never clobbers an omitted field.
 
 :::caution[Open question]
 Field-mask depth: top-level fields only, or nested paths (`a.b.c`), and whether a list's `fields` and a
@@ -96,9 +106,12 @@ get's `fields` share one grammar.
 
 ## Errors: one problem+json envelope
 
-Every error is **RFC 9457 `application/problem+json`**: `type`, `title`, `status`, `detail`, `instance`,
-plus an Omniglass `code` (a stable machine string) and, for validation, a `violations` array of
-`{field, message}`. One shape, so the generated client and the CLI render every failure uniformly. The
+Every error is **RFC 9457 `application/problem+json`**, in Huma's stock shape: `title`, `status`,
+`detail`, and, for validation, an `errors` array of `{location, message, value}` details. One shape, so
+the generated client and the CLI render every failure uniformly. A custom envelope (a stable machine
+`code` plus a `violations` array) was sketched here and is retired: the stock model serves all 141
+routes and no consumer drives a custom shape
+([ADR-0068](/architecture/decisions/#adr-0068-the-api-error-model-is-the-stock-rfc-9457-shape)). The
 status mapping:
 
 | Status | Meaning |
@@ -121,6 +134,9 @@ caller's visible set. Out-of-read-scope is the only 404 case; a readable-but-not
 403, never a 404.
 
 ## Idempotency and concurrency
+
+**Both mechanisms in this section are still Design** (listed in the status note above); no route
+accepts `Idempotency-Key` or `If-Match` today.
 
 - **`Idempotency-Key`** is accepted on `POST` and on state-changing custom methods. The server records
   the key with its **effect** (the created or changed resource) for a retention window; a retry with the
@@ -218,7 +234,7 @@ non-disclosing **404**, exactly the [403/404 split](#errors-one-problemjson-enve
 composes, per interface, the latest verdict state (`interface.reachable`), the probe-layer signals that
 compose it (the raw `icmp`/`tcp` metrics), and the recent verdict transitions the availability strip reads.
 It is gated by `component:read` and scope-injected through the component, so an out-of-scope component is a
-non-disclosing 404 and the datapoint reads only ever run on a verified, in-scope component. It is a
+non-disclosing 404 and the telemetry reads only ever run on a verified, in-scope component. It is a
 hand-written typed `GET`, an early and deliberate exception to [reads beyond one resource are
 views](#reads-beyond-one-resource-are-views), standing in until the `ViewResult` framework lands.
 
@@ -260,9 +276,10 @@ out-of-scope component is the same non-disclosing 404. Like reachability and eve
 `GET` standing in until the `ViewResult` framework lands.
 
 :::note[Thin cuts today]
-These routes ship the operationally useful slice, not the full CRUD matrix. A **node** has create, list, get,
-`:enroll`, and `:claim`, but no update or delete; a node **purge cascades** its interfaces and their derived
-tasks. An **interface** `PATCH` changes only its node placement and its params (target); the type (and so the
+These routes ship the operationally useful slice, not the full CRUD matrix. A **node** carries the full
+set (create, list, get, update, delete, plus `:enroll` and `:claim`); its delete **cascades** its
+interfaces, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential.
+An **interface** `PATCH` changes only its node placement and its params (target); the type (and so the
 name it derives) and the owning component are fixed at creation, and a delete is refused while a task still
 references it (a **409**). A **task** is **derived and read-only**: it is created with its interface and has no
 write routes, and its placement follows the interface's rather than being set on the task. The four built
@@ -273,17 +290,20 @@ interface types are `icmp`, `tcp`, `ssh`, and `http`; there is no `interface_typ
 A **secret** is a typed, encrypted-at-rest operator value ([config, credentials, and
 variables](/architecture/variables/)), and its routes are a worked instance of the conventions above:
 the AIP resource plus a `:verb` custom method, the verb-is-the-permission rule, the implicit `PATCH`
-write mask, same-transaction audit, and a scoped read. The registry and the directory read ride the
-**viewer read floor** (`secret:read`, which `*:read` satisfies);
+write mask, same-transaction audit, and a scoped read. Secret is a **sensitive resource**
+([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)),
+so the viewer `*:read` floor does **not** reach it: the registry and the directory read need an
+explicit `secret:read` grant (seeded to operator, deploy, admin, and owner);
 the three writes gate on `secret:create` / `secret:update` / `secret:delete`; the plaintext decrypt
-gates on **`secret:reveal`**, a permission the `*:read` floor does **not** carry, so a plain "read
-everything" grant sees only masks and **only admin (`secret:*`) and owner (`>`) reveal**. Every
+gates on **`secret:reveal`**, held by operator and deploy (the device secrets in their scope) as well
+as admin (via `secret:>`, which alone reaches the admin-sensitive `:admin` tier) and owner (`>`). Every
 `:reveal` writes an [audit](/architecture/audit/) row (verb `reveal`) in the same call.
 
 - `GET /secret-types` lists the shape registry, each `{id, name, display_name, official, fields:[{name, type,
   secret, origin}]}` (`secret:read`).
-- `GET /secrets` is the **all-scope admin directory** (`{secrets: [secret]}`); like the principal
-  directory it needs an all-scope grant, and a non-all scope is a 403 (`secret:read`).
+- `GET /secrets` lists the secrets the caller may see (`{secrets: [secret]}`), each row filtered by its
+  owner's placement against the caller's read scope, with admin-sensitive secrets visible only to the
+  admin tier (`secret:read`).
 - `POST /secrets` creates one from `{name, secret_type, owner_kind: platform|location|system|component,
   owner?, fields}` (201, `secret:create`); a `platform` secret needs an all-scope grant **and**
   `platform:create` (the install-wide tier permission below). `PATCH` and `DELETE` on a secret that sits at
@@ -424,7 +444,7 @@ read-only (`PATCH` and `DELETE` both 422).
 - `GET /products` lists the registry, ordered alphabetically by display name (`{products: [product]}`,
   `product:read`). Each row carries its vendor, driver, kind, and capabilities.
 - `POST /products` mints a custom product from
-  `{id, display_name, kind?, vendor_id?, driver_id?, parent_product_id?, capabilities?}` (201,
+  `{name, display_name, kind?, vendor_id?, driver_id?, parent_product_id?, capabilities?}` (201,
   `product:create`, admin).
 - `GET /products/{id}` reads one, with its capabilities (`product:read`).
 - `PATCH /products/{id}` updates

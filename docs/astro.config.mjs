@@ -97,6 +97,7 @@ export default defineConfig({
             { label: 'Commands', slug: 'architecture/commands' },
             { label: 'Calculations', slug: 'architecture/calculations' },
             { label: 'Config & credentials', slug: 'architecture/variables' },
+            { label: 'Tags', slug: 'architecture/tags' },
             { label: 'Cascade', slug: 'architecture/cascade' },
             { label: 'Groups', slug: 'architecture/groups' },
             { label: 'Health & KPIs', slug: 'architecture/health' },

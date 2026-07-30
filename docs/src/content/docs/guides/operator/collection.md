@@ -37,6 +37,10 @@ A row opens the node's detail.
   kebab: it re-mints the token, invalidating the previous one.
 - The detail also shows whether the node is enrolled and when it last sent a heartbeat.
 
+The node detail also carries a read-only **Self-logs** panel (backed by `GET /nodes/{name}/logs`,
+gated by `node:read`): the node's own recent operational log lines, newest first, over the last
+24 hours, so a node that is up but misbehaving explains itself without a shell on the box.
+
 ## Interfaces
 
 An interface is an **API on a component** that a node reaches for, and it lives **on the
@@ -48,7 +52,8 @@ interface takes that protocol as its name, unique within its component, so one c
 have one `tcp` and one `http`.
 
 - With `interface:create`, **Add interface** on the component detail creates one: choose a
-  **type** (the built types are `icmp`, `tcp`, `ssh`, and `http`; there is no free-text name),
+  **type** (the console picker offers `icmp` and `tcp` today; the `ssh` and `http` types exist
+  through the API and CLI, probing as a tcp connect; there is no free-text name),
   a node placement, and a target (`host:port` for the tcp-family transports, `host` for icmp).
   The owning component is the one you are on. Creating an interface **derives its poll task**
   for you, so a fresh interface is a working reachability check with no second step.
@@ -74,18 +79,20 @@ collects, add or remove the **interface**; there is no task create, edit, or del
 
 ## Reachability
 
-Every component's detail carries a read-only **Reachability** panel: is each of its interfaces
-reachable, and why. One row per interface shows the interface and its endpoint, a **verdict
+Every component's detail carries an **Interfaces** panel showing composed reachability: is each
+of its interfaces reachable, and why. One row per interface shows the interface and its endpoint, a **verdict
 pill** (responding, down, stale, or unknown), an **availability strip** drawn from the
 verdict's up/down transitions over time, and an expandable **gate breakdown** (the L3/L4 ping
 and port probes this slice ships) with each probe's signal and timing, then the composed
 verdict (the interface is up only when every applicable probe passed). A down interface also
-shows a plain-language **why** line. The rows are read-only and every value is a real reading
-from the node.
+shows a plain-language **why** line. Every value is a real reading from the node, and the panel
+is also the authoring surface: its header carries **Add interface** (with `interface:create`)
+and each row that maps to an interface a **Manage** affordance opening that interface's detail.
 
 To author a reachability check, add an **interface** to the component (above): a proper
 driver-based authoring flow is a later collection slice, so today a check is an interface plus
-its derived poll task, created from the Interfaces page.
+its derived poll task, created from this panel on the component's own detail (there is no
+standalone Interfaces page).
 
 ## Events
 

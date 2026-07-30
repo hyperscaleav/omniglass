@@ -91,13 +91,21 @@ omniglass auth update-profile --display-name "Ops Lead"
 omniglass auth change-password --current-password 'orange-boat-42x' --new-password 'purple-canyon-7'
 omniglass auth set-avatar --image-base64 "$(base64 -w0 me.jpg)"   # set your profile picture
 omniglass auth remove-avatar                            # clear it, falling back to initials
-omniglass principal principal avatar list                                # read your picture back as { image_base64 }
+omniglass auth avatar                                   # read your picture back as { image_base64 }
 ```
+
+`--image-base64` takes a plain base64 string, not a file path (base64-encode the image
+yourself, as the `$(base64 …)` above does); the server accepts JPEG, PNG, or WebP and
+normalizes it to a 256x256 JPEG. An administrator manages **any** principal's picture with
+`omniglass principal setAvatar <id> --image-base64 …` and `omniglass principal removeAvatar <id>`
+(gated by `principal:set-avatar`), reading one back with `omniglass principal avatar list <id>` (gated by
+`principal:read:admin`). A principal with no picture is a 404.
 
 ## Collection commands
 
-The [collection](/architecture/collection/) surface regenerates into four command groups:
-`node`, `interface`, `task`, and `reachability`. They follow the same derivation as every
+The [collection](/architecture/collection/) surface regenerates into three top-level command
+groups, `node`, `interface`, and `task`; the composed reachability read hangs off the component
+that owns it (`component reachability`). They follow the same derivation as every
 other resource (`POST /interfaces` is `interface create`, `GET /tasks/{id}` is `task get
 <id>`), so nothing here is special-cased. All examples require the matching permission on
 the running server.
@@ -128,13 +136,8 @@ a node presents its name and token to receive its NATS credential:
 omniglass node claim --name edge-hq --token ogp_...
 ```
 
-:::note[Thin cut: `node enroll`]
-`omniglass node enroll` regenerates as a command, but the `{name}` path parameter of the
-`:enroll` custom method is not yet bound (it takes no positional argument), so it cannot
-target a specific node from the CLI today. Mint an enrollment token from the console (the
-Nodes page) or against the API until that binding lands. `node claim`, which carries its
-name in the body, works as shown.
-:::
+`omniglass node enroll <name>` mints (or re-mints) a node's enrollment token and prints it
+once (gated by `node:enroll`), the same action as the console's Enroll / Re-enroll.
 
 Author a reachability check by **creating an interface** (its poll task is derived
 automatically):
@@ -166,7 +169,7 @@ Read a component's composed reachability (the verdict, the probe-layer signals, 
 recent transitions the availability strip draws):
 
 ```sh
-omniglass component component reachability list disp-1                              # needs component:read
+omniglass component reachability list disp-1                              # needs component:read
 ```
 
 Read a component's property reconciliation, the want/told/is pivot (the declared value
@@ -176,12 +179,6 @@ from the latest-value cache) with drift computed on read:
 ```sh
 omniglass component reconciliation list disp-1                                       # needs component:read
 ```
-`--image-base64` takes a plain base64 string, not a file path (base64-encode the image
-yourself, as the `$(base64 …)` above does); the server accepts JPEG, PNG, or WebP and
-normalizes it to a 256x256 JPEG. An administrator manages **any** principal's picture with
-`omniglass principal setAvatar <id> --image-base64 …` and `omniglass principal removeAvatar <id>`
-(gated by `principal:set-avatar`), reading one back with `omniglass principal principal avatar list <id>` (gated by
-`principal:read`). A principal with no picture is a 404.
 
 ## Secrets
 
@@ -238,16 +235,18 @@ bare `30`, `true`, or `{"k":"v"}` sends the number, the boolean, or the object; 
 falls back to a string, so the common case needs no quoting. A string value that would otherwise parse
 as JSON (`30`, `true`) is quoted to force a string: `--value '"30"'`. (`secret create --fields` parses
 the same way.)
-generated self-scoped commands (`omniglass auth me`, `auth update-profile`,
-`auth change-password`, `auth set-avatar` / `removeAvatar`); an administrator manages other
-principals, roles, groups, secrets, and variables through the resource commands, all covered
-in the [admin guide](/guides/admin/) and listed in full in the [CLI reference](/reference/cli/).
+
+A signed-in principal manages its own account through the generated self-scoped commands
+(`omniglass auth me`, `auth update-profile`, `auth change-password`, `auth set-avatar` /
+`auth remove-avatar`); an administrator manages other principals, roles, groups, secrets,
+and variables through the resource commands, all covered in the [admin guide](/guides/admin/)
+and listed in full in the [CLI reference](/reference/cli/).
 
 ## Tags
 
 The [tag](/architecture/tags/) commands split along the governance line. The `tag` resource covers the
 **key vocabulary** (minting, editing, and deleting keys, plus the install-wide `platform` binding), while binding a
-value onto an entity is a **custom method on the entity** (`component set-tag` and friends), so it needs
+value onto an entity is a **custom method on the entity** (`component setTag` and friends), so it needs
 only the write the operator already holds on that entity. `effective-tag` reads the resolved cascade onto
 one component.
 
@@ -266,7 +265,7 @@ omniglass component removeTag codec-1 --key environment
 omniglass system setTag east-auditorium-av --key environment --value prod
 omniglass location setTag hq --key environment --value staging
 
-omniglass component component effective-tag list codec-1                # the cascade resolved onto a component
+omniglass component effective-tag list codec-1                # the cascade resolved onto a component
 ```
 
 Binding is a custom method on the entity (`component setTag`), like the principal lifecycle verbs, so it
@@ -289,7 +288,7 @@ A **vendor** names an organization, carrying a `--kind` of `manufacturer`, `inte
 
 ```sh
 omniglass vendor list                                               # the vendor registry
-omniglass vendor create --id barco --display-name Barco --kind manufacturer \
+omniglass vendor create --name barco --display-name Barco --kind manufacturer \
   --icon monitor --support-phone "+1-555-0100" --website https://www.barco.com
 omniglass vendor get barco
 omniglass vendor update barco --support-phone "+1-555-0199"
@@ -301,12 +300,12 @@ A **driver** names the implementation that gets, emits, or sets a product's sign
 
 ```sh
 omniglass driver list                                               # the driver registry
-omniglass driver create --id barco-snmp --display-name "Barco SNMP" --version 1.0.0
+omniglass driver create --name barco-snmp --display-name "Barco SNMP" --version 1.0.0
 omniglass driver update barco-snmp --version 1.1.0
 omniglass driver delete barco-snmp                                  # refused (422) if official
 
 omniglass capability list                                           # the capability registry
-omniglass capability create --id projector --display-name Projector
+omniglass capability create --name projector --display-name Projector
 omniglass capability delete projector                               # refused (422) if official
 ```
 
@@ -327,7 +326,7 @@ provides (a JSON array of capability ids):
 
 ```sh
 omniglass product list                                              # the product registry
-omniglass product create --id barco-ub12 --display-name "Barco UB12" --kind device \
+omniglass product create --name barco-ub12 --display-name "Barco UB12" --kind device \
   --vendor-id barco --driver-id barco-snmp --capabilities '["projector"]'
 omniglass product get barco-ub12
 omniglass product update barco-ub12 --capabilities '["projector","speaker"]'  # replaces the whole set
@@ -346,7 +345,7 @@ viewer floor; `standard:create`, `standard:update`, and `standard:delete` are ad
 
 ```sh
 omniglass standard list                                             # the standard catalog
-omniglass standard create --id lecture-hall --display-name "Lecture Hall" \
+omniglass standard create --name lecture-hall --display-name "Lecture Hall" \
   --parent-standard-id classroom                                    # a variant of an existing standard
 omniglass standard get lecture-hall
 omniglass standard delete lecture-hall                              # 409 if a system still conforms to it
@@ -427,8 +426,9 @@ non-disclosing 404 on the read and on the write. The registry and its contract s
   `--help` plus the example come from the operation's summary and description.
 - **Hand-written** (`internal/cli/api_hooks.go` and the run-mode files): the client
   runtime the generated tree calls, plus commands that are not API operations, the
-  `server` and `migrate` run modes and the trusted direct-DB owner lane (`bootstrap`,
-  `token`, `set-password`).
+  `server`, `node run`, and `migrate` run modes, the trusted direct-DB owner lane
+  (`bootstrap`, `token`, `set-password`), and the idempotent dev-estate seeder
+  (`seed-dev`, the same trusted lane, never for production).
 
 To add a hand-written command, write a `newXxxCmd()` returning a `*cobra.Command` and add
 it in `newRoot`, exactly as `bootstrap` does. Regenerating the API commands never touches

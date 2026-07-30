@@ -25,10 +25,10 @@ triggers, macros, and tags, ours ships:
 - **commands** (command-triggered functions the device supports, e.g. `reboot`, `set-input`), detail
   in [collection](/architecture/collection/);
 - **`property_type`s** (kind / unit / validation live on the registry, see
-  [datapoints](/architecture/properties/#the-property_type-registry); a template declares its keys at
+  [properties](/architecture/properties/#the-property_type-registry); a template declares its keys at
   **template** scope, or references an **org** / **official** key, see [Template-scoped keys](#template-scoped-keys-and-optional-alignment));
-- required **[config](/architecture/variables/)** and defaults, and the **credential shapes** it needs
-  (see [config and credentials](/architecture/variables/));
+- required **[config](/architecture/variables/)** and defaults, and the **secret shapes** it needs
+  (see [config and secrets](/architecture/variables/));
 - default **tags**;
 - default **alarms / health** (the trigger mirror; [alarms and actions](/architecture/alarms-actions/)
   owns the detail).
@@ -46,21 +46,21 @@ result.
 
 A template's collection is authored as [functions](/architecture/collection/): `inputs` (typed
 parameters), `interfaces` (connections declared once, possibly persistent), and `functions` (each a
-trigger plus a DAG of steps that parse at the edge and emit datapoints). A command is a
+trigger plus a DAG of steps that parse at the edge and emit samples). A command is a
 command-triggered function in the same model. See [collection](/architecture/collection/) for the full
 schema; this page covers the rest of the device shape.
 
 ### Template-scoped keys and optional alignment
 
-A template declares its datapoints **and** commands at **template scope** by default: auto-discoverable,
+A template declares its properties **and** commands at **template scope** by default: auto-discoverable,
 no registry friction, identified by `(template_id, name)` so two templates can both declare an `input`
 with no collision ([key scope](/architecture/properties/#key-scope-template-org-official)). It may
-**optionally align** each datapoint to an org or official canonical key. Alignment is just
+**optionally align** each property to an org or official canonical key. Alignment is just
 **referencing** a canonical `property_type` (plus an optional value transform), which is what buys
 cross-fleet comparability, dashboards, and AI; the shipped official set covers the common signals, so
 most templates align by referencing one. That value transform is also where the device's **native
-unit** is normalized to the key's **canonical unit** before the datapoint is emitted (a Fahrenheit
-display's template emits celsius), so storage stays single-unit ([datapoints](/architecture/properties/)). Commands are template-scoped (the functions live on
+unit** is normalized to the key's **canonical unit** before the sample is emitted (a Fahrenheit
+display's template emits celsius), so storage stays single-unit ([properties](/architecture/properties/)). Commands are template-scoped (the functions live on
 the template); a canonical **command type** (the abstract `reboot` to per-model layer) follows the same
 promotion ladder.
 
@@ -74,10 +74,10 @@ command results beyond `success-when` map to the `action` row fields.
 - **Config.** The template declares the [config](/architecture/variables/) a component *requires*
   (connection and inventory facts, e.g. `ip-addr`, `serial`) and their defaults. Effective values
   resolve through the cascade ([cascade](/architecture/cascade/)).
-- **Credential shapes.** The template declares the *kinds* of credential the device needs
-  (`basic_auth`, `snmp_community`, `bearer_token`); these are
-  [`variable_type`](/architecture/variables/) shapes, bound to actual secret values at assignment
-  (credentials).
+- **Secret shapes.** The template declares the *kinds* of secret the device needs
+  (`basic-auth`, `snmp-community`, `oauth2-client`); these are
+  [`secret_type`](/architecture/variables/) shapes, bound to actual secret values at assignment
+  (secrets).
 - **Tags.** Default org labels seeded onto the component (`category: audio-dsp`).
 - **Alarms / health.** Default `event_rule`s the template ships, the conditions worth catching for
   its device class (the Zabbix-trigger mirror: a fan-stall on a DSP template, a person-entered event
@@ -121,11 +121,11 @@ A template carries two distinct trust properties, and they are not the same prop
   claims to cover is rejected.
 
 A template also declares a **capability manifest**: the set of **write-commands** it exercises and the
-**credential shapes** it requires (the `reboot` / `set-input` commands it issues, the `basic_auth` /
-`snmp_community` / `bearer_token` shapes it binds). The manifest is derived from the template, not
+**secret shapes** it requires (the `reboot` / `set-input` commands it issues, the `basic-auth` /
+`snmp-community` / `oauth2-client` shapes it binds). The manifest is derived from the template, not
 operator-asserted, so it cannot understate what the template does. At [`:apply`](#deploy-assign-a-template-to-an-existing-component)
 the manifest is **shown and approved**: an operator sees exactly which device-mutating commands and
-credential shapes they are authorizing before the template materializes onto a component. Approving the
+secret shapes they are authorizing before the template materializes onto a component. Approving the
 manifest is the consent record for that capability set.
 
 A **device-mutating** template (one whose manifest declares any write-command) does **not** silently
@@ -150,7 +150,7 @@ system can see. Like a component template it is mutable, **versioned**, and **co
 version** and a system pins the **immutable** `system_template_version` snapshot.
 
 - **The frozen bill of materials.** A `system_template_version` carries a **`system_template_member`**
-  for each role: the role, its **requirement** (the canonical datapoints and commands a member must
+  for each role: the role, its **requirement** (the canonical properties and commands a member must
   provide), and the `health_role` (how it counts in the rollup). The role list, the requirements, and
   the health roles are **frozen into the version**; what an instance actually assigns is any component
   whose template meets the role's requirement, so the role validates against the system's frozen version
@@ -175,7 +175,7 @@ version** and a system pins the **immutable** `system_template_version` snapshot
   and [health](/architecture/health/).
 - **System-level config.** Config declared on a system template (or a role slot) resolves onto
   whichever component fills the role, so `video.input = HDMI1` for the main-display role applies to
-  whatever display is assigned ([config and credentials](/architecture/variables/)).
+  whatever display is assigned ([config and secrets](/architecture/variables/)).
 
 ### Role requirements
 
@@ -183,7 +183,7 @@ version** and a system pins the **immutable** `system_template_version` snapshot
 This section is `Design`. The **built** role slot is
 [`system_role`](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled): declared on a
 **standard** (inherited live by every conforming system) or on one **system**, not frozen into a
-`system_template_version`; requiring a set of **capabilities**, not canonical datapoints and commands; and
+`system_template_version`; requiring a set of **capabilities**, not canonical properties and commands; and
 assigned through `system_role_assignment`, not `system_member`. The strict validate-on-assign this section calls
 for is built and does refuse by name, over the capability vocabulary. The two models reconcile when
 template pinning lands
@@ -196,7 +196,7 @@ can fill the role:
 ```yaml
 role: main-display
 requires:
-  datapoints: [display.power, video.input]   # canonical property_types
+  properties: [display.power, video.input]   # canonical property_types
   commands:   [set-input, power]             # canonical command types
 health_role: required
 ```
@@ -207,13 +207,13 @@ health_role: required
   the same thing across templates when it names a canonical signal, not a template-local one.
 - **Qualify, then assign.** Pairing a component to a role **filters the picker to qualifying templates**,
   and the [API](/architecture/api/) **validates on assign** (a clean 422 if the component's template is
-  missing a required datapoint or command). Mixed-vendor falls out for free: an LG and a Sony display
+  missing a required property or command). Mixed-vendor falls out for free: an LG and a Sony display
   both qualify for `display` if both align the required signals, with nothing to enumerate.
 - **No allow-list of templates.** A role names *what it needs*, never *which templates*. Declare the
   requirement on the system template, and any qualifying component, today's or a future vendor's, fills
   it.
 
-**Removing a capability is gated at adoption, not authoring.** Dropping a required datapoint from a
+**Removing a capability is gated at adoption, not authoring.** Dropping a required property from a
 component template means **minting a new `component_template_version`** without it, which is never
 blocked. The old version is **immutable**, so every live assignment pinned to it keeps working. The new
 version simply **no longer qualifies** for any role requiring the dropped signal, so it cannot be adopted
@@ -223,7 +223,7 @@ break. (Deleting an org-canonical `property_type` a requirement references is a 
 or block, the same surfaced-not-silent pattern.)
 
 **The runtime backstop.** Validate-on-assign is prevention; detection covers anything it misses (an
-optional input, a drifted alignment). A system calc that reads a datapoint it cannot find **fails
+optional input, a drifted alignment). A system calc that reads a property it cannot find **fails
 loudly**, a `calc.failed` event and a health-impacting "misconfigured" alarm, never a silent empty
 result. Two layers: gate at assignment, shout at runtime.
 
@@ -233,9 +233,9 @@ versions with a noisy backstop (reliability).
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `system_template` | name, type, **spec (jsonb)** | the mutable system shape; editing mints a new version |
+| `system_template` | name, standard, **spec (jsonb)** | the mutable system shape; editing mints a new version |
 | `system_template_version` | (template, **version**), frozen **spec** | the **immutable** snapshot a system pins; roles never change under it |
-| `system_template_member` | (system_template_version, **role**, **requires** (canonical datapoints + commands), **health_role**) | the frozen **role requirement**: role -> the canonical datapoints and commands a member must provide + health role (required / redundant / informational, [health](/architecture/health/)). Any component whose template meets it can fill the role, validated on assign ([role requirements](#role-requirements)) |
+| `system_template_member` | (system_template_version, **role**, **requires** (canonical properties + commands), **health_role**) | the frozen **role requirement**: role -> the canonical properties and commands a member must provide + health role (required / redundant / informational, [health](/architecture/health/)). Any component whose template meets it can fill the role, validated on assign ([role requirements](#role-requirements)) |
 
 ```d2
 direction: right

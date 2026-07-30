@@ -28,7 +28,10 @@ anyone below admin, so their existence and field names never appear to an operat
 - **New secret** (with `secret:create`) opens a create **drawer**: pick a **type** (the shape,
   `snmp-community`, `basic-auth`, or `oauth2-client`), a **scope** (platform, location, system, or
   component), then the entity itself from the shared indented **tree picker**, and finally the type's
-  operator fields (a password input for a secret field). A **platform** secret is install-wide, so it
+  operator fields (a password input for a secret field). One caveat: secret **resolution has no
+  system band** ([ADR-0052](/architecture/decisions/)), so a **system-scoped secret never resolves
+  onto any component**; prefer a location- or component-scoped secret until the form stops offering
+  the system scope (tracked in issue #431). A **platform** secret is install-wide, so it
   needs an all-scope grant plus `platform:create` on top of `secret:create`; without it the
   **Platform** scope is not offered at all, and the form says which capability that takes. Each
   type carries a **sensitivity default**: an integration type like `oauth2-client` creates an
@@ -46,5 +49,5 @@ anyone below admin, so their existence and field names never appear to an operat
   need the matching `platform:<action>`; holding only the secret half leaves the blade read-only with a
   note naming what is missing.
 
-From the CLI the same surface is `omniglass secret list` / `create` / `update` / `reveal` / `delete`
-and `omniglass secret-type list` (see the [CLI reference](/reference/cli/)).
+From the CLI the same surface is `omniglass secret list` / `create` / `update` / `reveal` / `copy` /
+`delete` and `omniglass secret-type list` (see the [CLI reference](/reference/cli/)).

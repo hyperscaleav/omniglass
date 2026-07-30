@@ -5,9 +5,9 @@ description: "The Omniglass Helm chart: install, values, and the bundled-Postgre
 
 The chart at `deploy/chart/` is the deploy primitive: one chart serves both
 disposable per-PR previews and production. It runs the
-[container image](/guides/container-image/); the per-PR preview environments (a
-later slice) are its first consumer, and production reuses it unchanged by
-flipping two values.
+[container image](/guides/container-image/); the live
+[per-PR preview environments](/guides/pr-previews/) are its first consumer, and
+production reuses it unchanged by flipping two values.
 
 ## Two modes
 
@@ -26,7 +26,7 @@ Preview (bundled Postgres, an auto-created owner):
 
 ```bash
 helm install og-pr-42 deploy/chart -n og-pr-42 --create-namespace \
-  --set image.tag=sha-<short>
+  --set image.tag=sha-<full-sha>
 ```
 
 Production (BYO Postgres, no auto-owner):
@@ -75,6 +75,8 @@ instead, to avoid concurrent migrators.
 | `postgres.image` / `user` / `password` / `database` | `postgres:18` / `omniglass` x3 | bundled Postgres settings |
 | `postgres.resources` | small requests/limits | bound the throwaway DB |
 | `externalDsn` | empty | required when `postgres.enabled` is false |
+| `nameOverride` | empty | override the chart name in resource names |
+| `fullnameOverride` | empty | override resource names outright; default release-named resources keep preview service DNS predictable (e.g. `og-pr-42`) |
 
 ## Exposure
 

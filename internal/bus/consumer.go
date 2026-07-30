@@ -18,11 +18,11 @@ import (
 // it. The durable consumer IS the ingest worklist (no separate Postgres queue in
 // this checkpoint): its handler derives, confines, writes, and acks inline.
 //
-// maxTelemetryDeliveries bounds how many times a single Event is redelivered
-// before nakOrTerm gives up on it: without a bound, a permanently-failing
-// message (a row the handler will never manage to write) would redeliver
-// forever, the mirror problem to the stream's own retention (see
-// startTelemetryConsumer).
+// maxTelemetryDeliveries bounds how many times a single TelemetryBatch is
+// redelivered before nakOrTerm gives up on it: without a bound, a
+// permanently-failing message (a row the handler will never manage to write)
+// would redeliver forever, the mirror problem to the stream's own retention
+// (see startTelemetryConsumer).
 const (
 	telemetryStream        = "OG_TELEMETRY"
 	telemetryConsumer      = "og-telemetry-worker"
@@ -31,7 +31,7 @@ const (
 
 // startTelemetryConsumer creates (idempotently) the telemetry stream + durable
 // consumer over the full-permission internal client and begins consuming. The
-// stream persists an Event the instant a node publishes it, and (WorkQueuePolicy)
+// stream persists a TelemetryBatch the instant a node publishes it, and (WorkQueuePolicy)
 // deletes it the instant it is acked, so disk stays bounded to the current
 // backlog rather than growing forever; the consumer redelivers a transient
 // failure up to maxTelemetryDeliveries (nakOrTerm), so a DB hiccup never loses a
@@ -222,9 +222,11 @@ func (s *Server) land(ctx context.Context, ev *ogv1.TelemetryBatch, bind ingestB
 	reg := collection.NewRegistry(properties, eventTypes)
 
 	// Route by the registry kind: a metric name lands in metric, a state name in
-	// state, a registered event_type name in event as a caught occurrence. All
+	// state, a registered event_type name in event as a caught occurrence (the
+	// ADR-0066 lanes; raw self-logs ride their own lane to log_line). All
 	// survive the SAME owner binding and reject-not-project; the split is only the
-	// sink, not a second trust decision.
+	// sink, not a second trust decision. The multi-transaction-then-ack
+	// redelivery characteristic is NOTE(#311) on land above.
 	metrics, states, events := deriveSamples(ev, *bind.SampleOwner, reg)
 	if len(metrics) > 0 {
 		if err := s.store.InsertMetricSamples(ctx, metrics); err != nil {
@@ -392,11 +394,11 @@ func logLineWrites(ev *ogv1.TelemetryBatch, ownerKind, ownerID string) []storage
 	return out
 }
 
-// deriveSamples turns a decoded Event + its resolved owner into the typed rows
-// to persist, split by sample kind. Pure: no I/O. reject-not-project drops any
-// sample whose name is not a registered property_type; the registry kind then
-// routes a metric to the metric slice, a state to the state slice, and a log to the
-// event slice. The owner is stamped identically for all three from the task's
+// deriveSamples turns a decoded TelemetryBatch + its resolved owner into the
+// typed rows to persist, split by sample kind. Pure: no I/O. reject-not-project
+// drops any sample whose name is not a registered property_type or event_type;
+// the registry kind then routes a metric to the metric slice, a state to the
+// state slice, and an event-type occurrence to the event slice. The owner is stamped identically for all three from the task's
 // interface: owner_kind=component, source=interface type, instance=interface name;
 // provenance is observed (the insert path fixes that).
 func deriveSamples(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collection.Registry) ([]storage.MetricSampleWrite, []storage.StateSampleWrite, []storage.EventWrite) {

@@ -7,7 +7,15 @@ sidebar:
     variant: caution
 ---
 
-Writes go through typed resource CRUD; **everything read goes through a view**. A view is a named query
+:::caution[Design: the ViewResult contract is entirely unbuilt]
+Nothing on this page is built: there is no `view` table, no `ViewResult` shape, no `/views/{id}:run`
+route, and no renderer library. Today's read side is typed CRUD `GET`s plus five hand-written composed
+reads (reachability, events, reconciliation, and the component and node log reads) that stand in until
+this framework lands, which the [API](/architecture/api/) page's views-exception note covers.
+:::
+
+Writes go through typed resource CRUD; in the target model **everything read goes through a view**
+(today's reality is the typed CRUD `GET`s plus the five composed reads named above). A view is a named query
 that returns a uniform **`ViewResult`** (`{columns, rows}`) and executes through the scoped
 [Storage Gateway](/architecture/storage/), so the read side is a safe backend-for-frontend that the
 console, the [API](/architecture/api/), and an AI agent all hit without ever touching raw tables or
@@ -34,9 +42,10 @@ A `view` carries an id, a typed **params schema**, the query it runs, a **defaul
 the `official` boolean:
 
 - **Default views** ship with the binary (curated, PR-governed, optionally backed by a Postgres view).
-  They are the read surface the console's coded pages query: the Alarms page reads the `firing-now`
-  view, not `GET /alarms` directly, so the read contract stays uniform and the same view backs a
-  dashboard widget unchanged.
+  They are the read surface the console's coded pages would query: the designed example is an Alarms
+  page reading a `firing-now` view rather than a bespoke route, so the read contract stays uniform and
+  the same view backs a dashboard widget unchanged. (None of that trio exists yet: there is no
+  `firing-now` view, no `GET /alarms` route, and the console's Alarms page is a stub.)
 - **Private views** are operator-saved **structured** queries (filter + order + fields + params),
   **never raw SQL**. They follow the official / private
   [namespace shadow](/architecture/properties/#key-scope-template-org-official) like the registries.
@@ -51,8 +60,9 @@ and rows are the records. The shape is uniform so the renderer library is decoup
 view; a **field-mapping** tells a renderer which column is the value, label, time, or series key
 ([UI](/architecture/ui/)).
 
-- **Cursor-paginated** like any [API](/architecture/api/) list (`page_token`), over the already-scoped
-  result.
+- **Cursor-paginated** like the designed [API](/architecture/api/) list convention (`page_token`), over
+  the already-scoped result. No built route takes `page_token` today; the API page fences the list
+  conventions as Design.
 - **Views by default, materialized only when earned**: most views are live queries; a hot view becomes
   a materialized projection only when a read profile proves the live query too slow (the same discipline
   as [storage](/architecture/storage/)).
@@ -72,8 +82,10 @@ view; a **field-mapping** tells a renderer which column is the value, label, tim
 
 One read contract, three consumers:
 
-- **The console** renders a view through the renderer library ([UI](/architecture/ui/)): coded pages and
-  dashboard widgets both bind `view ref + renderer + field-mapping + params`.
+- **The console** would render a view through the renderer library ([UI](/architecture/ui/)): coded
+  pages and dashboard widgets both binding `view ref + renderer + field-mapping + params`. The built
+  console instead binds hand-written page configs over `ListShell` / `FlatList` / `TreeList` to the
+  generated typed client; the renderer library arrives with this contract.
 - **The API** exposes every view at `/views/{id}:run` ([API](/architecture/api/)); views are part of the
   public contract.
 - **An AI agent** reads through view-backed tools on the [MCP surface](/architecture/api/) (the agent's

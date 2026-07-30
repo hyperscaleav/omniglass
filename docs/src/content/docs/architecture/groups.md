@@ -3,9 +3,19 @@ title: Groups
 description: "Named sets of component, system, location, or principal: static or dynamic membership, weighted, a cascade overlay and an access scope."
 sidebar:
   badge:
-    text: Design
-    variant: caution
+    text: Partial
+    variant: note
 ---
+
+:::note[Implementation status]
+Built end to end: the **principal** kind of group (`principal_group` plus membership,
+group-targeted grants via `principal_grant.group_id`, the effective-grant union in the loader,
+`/principal-groups` CRUD gated by `principal_group:*`, and the console Groups pages). Everything
+else on this page (entity groups, dynamic membership filters, weights, cascade bindings,
+group-as-scope) is still Design. Note the distinction: the built group is a grant **subject**
+(members inherit the grants targeted at the group), while group as a **scope**
+(`scope_kind=group`) is refused today with a 422.
+:::
 
 A group lets an operator gather entities that the structural trees keep apart, so you can configure or grant access to "all AV displays" or "everything in this pilot" by attribute or by hand. A **group** is a named set of entities that cuts
 across the structural trees. The structural tree handles config by position and kind; groups handle

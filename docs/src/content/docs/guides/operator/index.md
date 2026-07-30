@@ -29,11 +29,12 @@ There are two ways to operate, and they are the same API with the same checks be
 
 ## Getting around
 
-- The **sidebar** is the information architecture: sections grouped into Inventory, Catalog,
-  and Admin. A live section is full strength; a section whose backend has not landed yet
+- The **sidebar** is the information architecture: sections grouped into Inventory, Values,
+  Catalog, and Admin. A live section is full strength; a section whose backend has not landed yet
   is dimmed with a **soon** tag (still clickable, with a short note on what it will do).
-- The **top bar** shows the current section, a **Search (⌘K)** button, and the light/dark
-  toggle.
+- The **top bar** shows the current section and a **Search (⌘K)** button. The console is
+  dark-only today; the theme is an [Admin > Settings](/guides/admin/) value resolved by the
+  settings engine, not a per-session toggle.
 - Press **⌘K** (or Ctrl-K) to open the command palette and jump to any section by name. Arrow
   keys move the selection, Enter navigates, Esc closes. This is a global jump, distinct from a
   page's own [filter](/guides/operator/inventory/#filter).

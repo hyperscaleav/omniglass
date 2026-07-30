@@ -11,14 +11,16 @@ Health gives an operator the one answer that matters most, "is this system worki
 one that matters next, "since when?". Omniglass is **opinionated about health**: it is a **first-class
 capability**, not a byproduct of a customizable rules engine. The *model* is deliberate (an alarm degrades
 a capability, a capability failure impairs a role, an impaired role sinks its system by a declared
-impact); the *carrier* is the ordinary datapoint pipeline, so health is stored, queried, and trended like
+impact); the *carrier* is the ordinary sample pipeline, so health is stored, queried, and trended like
 any other signal, with no parallel subsystem.
 
 :::note[Partial]
 Built today: the **`alarm`** table (component-local, with the capabilities it degrades), **`impact`** on a
 `system_role`, the **rollup** from component through system to location, and the **recorded transition
 history** that answers "since when". Two reads serve it (`GET /systems/{name}/health` and
-`GET /locations/{name}/health`) alongside the alarm write surface on a component. Still `Design`: alarms
+`GET /locations/{name}/health`) alongside the alarm write surface on a component. The console surface
+shipped too: **HealthPanel**, **HealthBadge**, and **HealthHistory**, plus the **AlarmsPanel**, on the
+component, system, and location details. Still `Design`: alarms
 raised by an [`event_rule`](/architecture/alarms-actions/) rather than by a caller, system- and
 location-owned alarms, the `unknown` verdict and its coverage reasons, the **`global`** estate top, and
 the whole **SLI / SLO / SLA** and **KPI** tier below
@@ -131,9 +133,11 @@ carrier already exists.
 
 Health lands in **`state`**, which is **already transition-only**: the ingest path writes a row
 only when the value differs from the last one stored for that owner, and `StateTransitions` reads the
-ordered flips that draw the reachability availability strip. Health reuses that primitive exactly as it
-is, on the **[owner arc](/architecture/core-entities/#ownership-the-exclusive-arc)** (a component, a
-system, or a location owns its own health series), with `provenance='calculated'` and
+ordered flips that draw the reachability availability strip. Health reuses the same transition-only
+primitive with its own owner-arc read (`healthTransitions`, the same ordered flip sequence on the
+**[owner arc](/architecture/core-entities/#ownership-the-exclusive-arc)** rather than the
+component-and-instance one): a component, a
+system, or a location owns its own health series, with `provenance='calculated'` and
 `source_rule='health-rollup'` naming the producer in the row's lineage. There is **no `health_history`
 table**, because it would have been a second and worse copy of one that already exists.
 
@@ -245,7 +249,7 @@ carries an accurate history of what was wrong with it.
 ## Still design: where alarms come from
 
 Today an alarm is written by an **operator or an API caller**. The full model has them produced by the
-detection tier: an [`event_rule`](/architecture/alarms-actions/) watches datapoints, fires an event, and an
+detection tier: an [`event_rule`](/architecture/alarms-actions/) watches samples, fires an event, and an
 alarm **opens** and stays open while its condition holds, closing on the paired clear event. Health is
 **ack-independent**, because ack is not close: an acknowledged alarm stays open while its condition holds,
 so acking annotates and never makes a broken room look healthy.
@@ -255,19 +259,19 @@ change when it lands: a rule-opened alarm names the capabilities it degrades exa
 does.
 
 :::caution[Open question]
-Whether a rule declares the degraded capability set directly, or derives it from the datapoint it watched.
+Whether a rule declares the degraded capability set directly, or derives it from the property it watched.
 :::
 
 ### Alarms owned by a system or a location
 
 The alarm arc is **component-only** today. The design gives an alarm the same
-[exclusive-arc owner](/architecture/core-entities/#ownership-the-exclusive-arc) every datapoint and event
+[exclusive-arc owner](/architecture/core-entities/#ownership-the-exclusive-arc) every sample and event
 has, so a **system-scoped** rule can raise a **system-owned** alarm over member data. The canonical case: a
 display sitting on **input 2** is a perfectly normal state *for the display*, but in a specific room it
 means the wrong source is on screen. The system template owns the conditions only the system cares about,
 and the component stays generic.
 
-The same discipline governs **SaaS and vendor status** (a UCC platform mapped to system-owned datapoints,
+The same discipline governs **SaaS and vendor status** (a UCC platform mapped to system-owned properties,
 [shared-API collection](/architecture/collection/)): a vendor's reported "offline" is an *observed signal
 from one source*, not a verdict on the room. Author the system condition over it, **corroborated** where
 you can, rather than trusting it. The vendor's opinion is an input to health, not health itself.
@@ -308,17 +312,17 @@ location, and global without cross-triggering.
 
 A **Service Level Indicator** is a `time_in_state` calc over a window (`time_in_state(s)` = the fraction of
 the window the entity held state `s`, derived from the health transitions this page records), emitted as
-its own datapoint (the temporal reducer, [expressions](/architecture/expressions/)):
+its own property (the temporal reducer, [expressions](/architecture/expressions/)):
 
 ```yaml
 # availability = fraction of the last 30 days the system was healthy
-source: { datapoint: health, over: 30d }
+source: { property: health, over: 30d }
 reduce: time_in_state
 when: "value.healthy / value.total"   # an Expr leaf shapes it into a ratio
 # -> emits system.availability
 ```
 
-An SLI is therefore just another derived datapoint, queryable and trendable like any other. It is also the
+An SLI is therefore just another derived property, queryable and trendable like any other. It is also the
 clearest payoff of transition-only recording: `time_in_state` over a stream of edges is exact and cheap,
 where the same calc over samples is an approximation whose accuracy depends on who was looking.
 
@@ -333,7 +337,7 @@ compliance over the contractual window is itself an SLI.
 ```yaml
 event_rule:
   scope: 'system.standard == "meeting-room"'
-  datapoint: system.availability
+  property: system.availability
   when: "value < $var:availability.slo"   # the SLO target, a config value
   severity: high
 ```
@@ -349,7 +353,7 @@ The SLA calendar-window boundaries and timezone, co-designed with the time primi
 
 ## KPIs: what every estate should track
 
-A **KPI** is a derived datapoint (a calc or SLI), registered as a canonical property and owned at the level
+A **KPI** is a derived property (a calc or SLI), registered as a canonical property and owned at the level
 it describes (system, location, or **global**). It is no new primitive: a KPI is a shipped calc the same
 way health is. Omniglass ships an opinionated **default set** so the data is there out of the box, with the
 escape hatch to author your own.
@@ -366,7 +370,7 @@ availability is its ratio, so it ships free at every level up to global.
 
 Both inputs are **ordinary components**, no special integration: an occupancy sensor emitting `occupancy.*`
 and the booking system, a component whose interface is the calendar API, emitting `booking.*`. The KPIs are
-then calcs over those datapoints, owned at room / system / location / global like any rollup. A booking API
+then calcs over those samples, owned at room / system / location / global like any rollup. A booking API
 is just an interface; a ghost meeting is just `occupied < booked`.
 
 :::caution[Open question]
@@ -384,12 +388,12 @@ templates that feed the utilization KPIs.
 Zabbix bolts services, SLA, and the service tree on as a separate subsystem. Omniglass does the opposite:
 health is **first-class but not separate**. The model is opinionated (an alarm degrades a capability, a
 role declares its impact, the rollup is engine behavior rather than an editable reducer) and it rides the
-one datapoint pipeline, so the **system tree is the service tree**: the verdict is a state datapoint, the
+one sample pipeline, so the **system tree is the service tree**: the verdict is a `state` sample, the
 history is its transitions, the SLI is a calc over them, and the SLA is an alarm. One model, composed,
-instead of a parallel feature. An operator who understands alarms and datapoints already understands health.
+instead of a parallel feature. An operator who understands alarms and properties already understands health.
 
 Related: [core entities](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled) (the
 role, the capability, and the quorum), [alarms and actions](/architecture/alarms-actions/) (the detection
-tier that will raise alarms), [datapoints](/architecture/properties/) (the state datapoint and the owner
+tier that will raise alarms), [properties](/architecture/properties/) (the `state` sample and the owner
 arc), and the [Standards](/guides/admin/standards/) and
 [Work with an entity](/guides/operator/entities/) guides for the operator loop.

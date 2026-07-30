@@ -3,15 +3,21 @@ title: Glossary
 description: "The authoritative glossary: every official term in the architecture, defined once."
 sidebar:
   badge:
-    text: Design
-    variant: caution
+    text: Partial
+    variant: note
 ---
+
+:::caution[Known to lag the build]
+This glossary is known to lag the build; a term-by-term reconciliation is tracked under
+issue #434 (the corpus restructure epic). Until then, where an entry disagrees with the code
+or a per-subsystem page, the code and the per-subsystem pages win.
+:::
 
 This is the **authoritative glossary**: every official term in the architecture, defined once. The other pages introduce these terms in **bold** as the story reaches them; this is where you look any of them up.
 
 | Term | Definition |
 |---|---|
-| **node** | Edge process (`--mode node`); pulls and runs tasks and commands over interfaces; carries placement, heartbeat, bound credential. |
+| **node** | Edge process (`omniglass node run`); pulls and runs tasks and commands over interfaces; carries placement, heartbeat, bound credential. |
 | **node mode** | The Storage Gateway's placement-scoped write mode for node-driven ingest, between `scoped` and `system`: visibility is the node's placement-derived `visible_set`, not all-visibility. See [identity and access](/architecture/identity-access/). |
 | **placement visible_set** | The owners a node may write, derived from its materialized worklist (the owners of the tasks assigned to it). A node's writes are confined to this set; an emitted owner outside it is an orphan / discovery candidate, never an authoritative write. See [collection](/architecture/collection/). |
 | **function** | A trigger plus a DAG of steps, declared in a component template; the unit of edge collection. Triggered by a schedule (poll), incoming data (listen), or a command. See [collection](/architecture/collection/). |
@@ -44,7 +50,7 @@ This is the **authoritative glossary**: every official term in the architecture,
 | **calculated** | Derived from other samples by a calc_rule. On-row lineage: `source_rule` (+ version), the calc_rule. Distinguished from observed by the `provenance` column. |
 | **intended** | A command's declared effect, pending reconciliation. Lineage: the command `event_id`. Only commands set it. |
 | **source** | Which sensor/path produced an observed value; distinct from provenance; enables multi-source rows + fusion. A `source` registry carries default weights. |
-| **correlation_id (sample) / caused_by_event_id** | Nullable trace columns on the sample tables, orthogonal to the exclusive-lineage CHECK (not lineage pointers). A command propagates its originating `correlation_id` onto the adaptive-poll's observed sample, so the `event_rule` that fires off it inherits the id and the cycle-guard walk crosses the command -> device -> observed round trip. Distinct from the read-side [correlation id](/architecture/properties/) trace. See [samples](/architecture/properties/). |
+| **correlation_id (sample) / source_event_id** | Nullable trace columns on the sample tables, orthogonal to the exclusive-lineage CHECK (not lineage pointers). A command propagates its originating `correlation_id` onto the adaptive-poll's observed sample, so the `event_rule` that fires off it inherits the id and the cycle-guard walk crosses the command -> device -> observed round trip. Distinct from the read-side [correlation id](/architecture/properties/) trace. See [samples](/architecture/properties/). |
 | **perspectives** | The source-tagged observed rows for one signal: multiple sources reporting one value, all preserved; a reduce-on-read policy produces the effective value, while every perspective stays queryable. |
 | **fusion_policy** | Per-key reduce-on-read **default/hint** for multi-source observations (mode + tie-break + source weights), not a mandate: a policy may default from the type but can be source-weighted, per-instance, or left to read time (keep all perspectives, decide on read). Applied on read. |
 | **fusion** | Reading one effective value from multiple **perspectives** on a signal: same-key multi-source reduces by a policy (read-time, defaulting from the key's fusion_policy); cross-key/system-level = a calc_rule. Perspectives are always preserved. |

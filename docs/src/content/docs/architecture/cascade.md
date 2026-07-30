@@ -10,14 +10,16 @@ sidebar:
 :::note[Partial]
 The **binding chain** is built for the three cells that ride it: a
 [tag](/architecture/tags/), a [variable](/architecture/variables/), and a secret each own a value on the
-exclusive arc `platform | location | system | component` and resolve most-specific-wins down the
+exclusive arc `platform | location | system | component` (the tag arc has a fifth kind, `node`) and resolve most-specific-wins down the
 location, system, and component trees (union-on-key for tags), with the least-specific tier named
 **`platform`** and gated by its own `platform:<action>` permission
 ([ADR-0057](/architecture/decisions/#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier)).
-The same primitive resolves down the principal axis for [settings](/architecture/settings/). Still
+The same primitive resolves down the principal axis for [settings](/architecture/settings/). The
+operator-facing **resolve view** is also built: the three `/components/{name}/effective-*` routes
+return the winner plus the ordered shadowed bindings, rendered by the console ResolutionPanel. Still
 `Design`: the two **template** bands, [group](/architecture/groups/) placement by weight, additive
-**rule** accumulation with suppression, and the operator-facing **resolve view** (winner plus ordered
-shadowed bindings, including the fall-through-to-declaration provenance).
+**rule** accumulation with suppression, and the fall-through-to-declaration provenance in the
+resolve view.
 :::
 
 The cascade lets an operator set a value once, high up, and have it apply everywhere below while still being overridable on any one entity, and then explain exactly why a given value won. It resolves the effective settings (config, variables, tags, rule-sets) for any entity.
@@ -104,7 +106,7 @@ no default**. Absent means absent:
 | Kind | Where its default is declared |
 |---|---|
 | [setting](/architecture/settings/) | The tagged struct field on `Settings` (its `default:` tag). |
-| [property](/architecture/variables/#property-one-typed-name-a-classifier-contract-a-stored-value) | The **classifier contract's** `default_value` column (`product_property`, `standard_property`, `location_type_property`), the shipped instance of the pattern: `EffectiveProperties` reads `coalesce(the instance's set value, the contract default)` ([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property)). |
+| [property](/architecture/variables/#property-one-typed-name-a-classifier-contract-a-stored-value) | The **classifier contract's** `default_value` column (`product_property`, `standard_property`, `location_type_property`), the shipped instance of the pattern: `EffectiveProperties` reads `coalesce(the instance's set value, the contract default)` ([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)). |
 | [variable](/architecture/variables/) | None. |
 | secret | None. |
 | [tag](/architecture/tags/) | None. |
@@ -165,7 +167,7 @@ position. The tree is structural; attributes are groups.
 ## The registry is outside the cascade
 
 `property_type` defines **identity** (kind, unit, validation, fusion_policy) for
-every datapoint key, which the cascade never overrides (policy, not ontology). A
+every property, which the cascade never overrides (policy, not ontology). A
 type's **default** lives on that declaration too, off the cascade: it is what the
 value is when no layer bound anything, not a rung the layers compete with. The
 resolve view reports it as a declaration rather than as a winning source.

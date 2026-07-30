@@ -23,7 +23,10 @@ exclusive arc, resolved down the same cascade, with a Variables directory. The b
 members are the Secrets and Variables **directories** (browse, create, edit the cells), plus the **property**
 slot that consumes a cell into a component's value surface; the standalone per-component effective-secrets and
 effective-variables panels were retired ([#281](https://github.com/hyperscaleav/omniglass/issues/281),
-[decision log](/architecture/decisions/)). Each member's section below marks what is built versus deferred; the
+[decision log](/architecture/decisions/)). The cascade-resolution surface lives on as the unified
+**ResolutionPanel** on the component details, backed by the still-live
+`GET /components/{name}/effective-variables` and `GET /components/{name}/effective-secrets` routes.
+Each member's section below marks what is built versus deferred; the
 [build progress](/architecture/status/#build-progress) note carries the shipped shape. A related primitive,
 the **`property`**, also lands `Partial`: the typed-name catalog, the **classifier contracts** that say which
 properties an instance carries (a product's, a standard's, a location type's), and the arc-owned **value
@@ -31,7 +34,7 @@ store** are built for the `declared` provenance on a component, system, location
 cross-owner cascade, macro interpolation, and the other provenance producers are
 deferred; its section is below. (The standalone **fields** feature folded into it: a field was a property with
 `declared` provenance,
-[ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property).) The
+[ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value).) The
 **config** member stays `Design`, so this page is `Partial`. (`secret` was renamed from `credential`; the ADR
 anchor keeps the old term.)
 :::
@@ -271,7 +274,7 @@ has no lifecycle.
 ## property: one typed name, a classifier contract, a stored value
 
 :::note[Partial: the catalog, the three classifier contracts, and the declared value on an instance]
-Three pieces are **built**. The **`property` catalog** is the primitive-agnostic registry of typed names
+Three pieces are **built**. The **`property_type` catalog** is the primitive-agnostic registry of typed names
 (`name`, `data_type` over `string` / `int` / `float` / `bool` / `json`, optional label, unit, and a
 JSON Schema `validation`, plus a nullable observed `kind`), with seed-owned `official` rows read-only
 ([ADR-0043](/architecture/decisions/#adr-0043-the-property-catalog)). Three **classifier contracts** carry
@@ -290,7 +293,7 @@ permission, the values gated by the owning entity's `:read` / `:update` and ABAC
 the generated CLI and typed client, and the console (a **Declared properties** editor on the product,
 standard, and location type blades, and a **Properties** panel on the component, system, and location
 details). The rest of the design below is **deferred**, listed plainly so a built badge never hides drift
-([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property)).
+([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)).
 :::
 
 A **property** is one typed name used three ways: the **catalog** says the name exists and what it means,
@@ -311,11 +314,12 @@ What the design intends, and this slice does **not** yet do:
   resolves on **one instance alone**: its own declared value, else its own classifier's contract default. All
   four owner kinds resolve, but each in isolation; there is no walk **across** owners yet, even though the
   arc is drawn for it.
-- **The non-declared producers.** `observed` (materializing a current value out of the sample stream),
-  `calculated` (a rule's output), and `intended` (the config member above writing a desired value) all have
-  a seat in the provenance column and nothing writing to it. The config section's "declared intent lives in
-  config, not as a row" reads against this newer shape; reconciling the two is the config member's own
-  slice.
+- **The `calculated` producer.** Two of the non-declared provenances have real writers today: the
+  ingest path upserts `observed` latest values and the command pillar upserts `intended` values into
+  the `property` cache (the same table, cache-side rows). Only `calculated` (a rule's output) still
+  has a seat in the provenance column and nothing writing to it. The config section's "declared intent
+  lives in config, not as a row" reads against this newer shape; reconciling the two is the config
+  member's own slice.
 - **Macro interpolation of a value** (the consumer of `$var:` / `$sec:` / `$sample:`). A value holds a
   literal today; holding a macro string, resolved through the same interpolation engine at read, is
   deferred.
@@ -367,11 +371,12 @@ a `maintenance_window`.
 
 :::caution[Open question]
 Value-domain normalization. Key normalization is settled (the governed registry plus the `tag:create`
-gate). The open part is the **value** side: whether a tag key may **constrain** its values (an enum or
-`value_type` on the key, so `environment` accepts only its allowed set, validated and autocompleted like
-a `property_type` domain), and whether it may **normalize** them on input through an Expr transform
-(lowercase, trim whitespace, fold synonyms) so `Prod`, `prod `, and `PROD` resolve to one value.
-Free-text values ship either way; the question is how much governance a key places on its values.
+gate), and so is the enum constraint: a key may declare an **`allowed_values`** set, enforced on the
+binding write, built as `tag.allowed_values`
+([ADR-0024](/architecture/decisions/#adr-0024-a-tag-key-may-constrain-its-values-to-an-enum)). The open
+part is whether a key may **normalize** values on input through an Expr transform (lowercase, trim
+whitespace, fold synonyms) so `Prod`, `prod `, and `PROD` resolve to one value. Free-text values ship
+either way; the question is how much normalization a key places on its values.
 :::
 
 ## What's shared
@@ -442,9 +447,9 @@ exclusive-arc scope either way.
 | `secret_type` | id, **official**, schema (per-field `{name, type, secret, origin}`) | **Built.** The secret **shape** registry (`snmp-community`, `basic-auth` seeded); `official` marks shipped-canonical versus org-local, like the sample and role registries |
 | `secret` | (name, **owner arc**), secret_type, **`admin_sensitive`**, **value** (secret fields as `{ciphertext, nonce, wrapped_dek, key_id}` envelopes, non-secret fields plaintext) | **Built.** The encrypted cell and the `$sec:` cascade key; scope is the exclusive arc (platform/location/system/component). Read masked through a **scope-filtered** directory; decrypted only through the audited `:reveal` / `:copy` path. Visibility is placement scope plus the per-secret `admin_sensitive` flag (admin-only when set); `secret` is off the `*:read` floor ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)) |
 | `variable` | (name, **owner arc**), **value_type** (`string`/`int`/`float`/`bool`/`json`), **value** (jsonb) | **Built.** The plaintext variable cell and the `$var:` cascade key; scope is the exclusive arc. Typed inline (no `variable_type` registry: the value is validated against `value_type` in the app), no observed side. The **config** cell (declared/observed/reconcile) is a separate, deferred member |
-| `property` | name (PK), **official**, **data_type** (`string`/`int`/`float`/`bool`/`json`), nullable **kind** (`metric`/`state`/`log`), display_name, unit, **validation** (JSON Schema) | **Built.** The primitive-agnostic **catalog** of typed names, the single source for what a name means whoever produces it; seed-owned `official` rows are read-only. Value tables key by the **name string**, so the catalog governs the vocabulary without owning the values ([ADR-0043](/architecture/decisions/#adr-0043-the-property-catalog)) |
-| `product_property` / `standard_property` / `location_type_property` | (**classifier**, **property**), **default_value** (jsonb), **required** | **Built.** The classifier's declared-property **contract**, one table per classifier and all the same shape: which catalog properties every instance of that product, standard, or location type exposes, with an optional default and a required flag, unique per pair. `data_type` and `validation` are **not** repeated here, they stay on `property`. Replaces the retired `field_definition`. A driver access/mode column is deferred; a `node` has no classifier by design |
-| `property` | (**owner arc**, property, **instance**, **provenance**), **value** (jsonb) | **Built for `declared` on all four owner kinds.** The value store, on the **same exclusive arc** as the sample sinks and `event`; the series key is `unique nulls not distinct`, since the arc leaves three owner columns NULL. The effective read is **contract-default-or-override** plus the off-contract set (`is_set` marks the override, `value_id` carries the row id so the UI can clear it), resolved by one owner-generic query and ABAC-scoped on **every** arc, read and write. Replaces the retired `field_value`. The `observed`/`calculated`/`intended` producers, macro-string values, and the cross-owner cascade are deferred |
-| `tag` | name, applies_to, propagates | **Built.** The **tenant-wide governed key vocabulary**; minting a key needs `tag:create` ([identity and access](/architecture/identity-access/)). No `_type`, no namespace; values bind via `tag_binding`. See [tags](/architecture/tags/) |
-| `tag_binding` | (tag, **owner arc**), value | **Built.** The `key: value` binding: **union on key, override on value** down the [cascade](/architecture/cascade/), owned on the exclusive arc (`platform / location / system / component`); setting a value is the owner's own `update` write. Binding via groups and a `template`-scoped binding are deferred |
+| `property_type` | uuid **id** (PK), **name** (UNIQUE, the renameable handle), **official**, **data_type** (`string`/`int`/`float`/`bool`/`json`), nullable **kind** (`metric`/`state`), display_name, unit, **validation** (JSON Schema) | **Built.** The primitive-agnostic **catalog** of typed names, the single source for what a name means whoever produces it; seed-owned `official` rows are read-only. Value tables key by the **`property_type_id`** uuid FK, so the catalog governs the vocabulary without owning the values and a name stays renameable ([ADR-0043](/architecture/decisions/#adr-0043-the-property-catalog)) |
+| `product_property` / `standard_property` / `location_type_property` | (**classifier**, **property**), **default_value** (jsonb), **required** | **Built.** The classifier's declared-property **contract**, one table per classifier and all the same shape: which catalog properties every instance of that product, standard, or location type exposes, with an optional default and a required flag, unique per pair. `data_type` and `validation` are **not** repeated here, they stay on `property_type`. Replaces the retired `field_definition`. A driver access/mode column is deferred; a `node` has no classifier by design |
+| `property` | (**owner arc**, property_type_id, **instance**, **provenance**), **value** (jsonb), **ts** (the value's own time) | **Built for `declared` on all four owner kinds, plus the `observed` and `intended` cache rows.** The value store, on the **same exclusive arc** as the sample sinks and `event`; the series key is `unique nulls not distinct`, since the arc leaves three owner columns NULL. The effective read is **contract-default-or-override** plus the off-contract set (`is_set` marks the override, `value_id` carries the row id so the UI can clear it), resolved by one owner-generic query and ABAC-scoped on **every** arc, read and write. Replaces the retired `field_value`. Ingest upserts `observed` and the command pillar upserts `intended` latest values, keyed on the value's own `ts`; the `calculated` producer, macro-string values, and the cross-owner cascade are deferred |
+| `tag` | name, applies_to, propagates, allowed_values | **Built.** The **tenant-wide governed key vocabulary**; minting a key needs `tag:create` ([identity and access](/architecture/identity-access/)). No `_type`, no namespace; `allowed_values` is the optional value enum (empty = free text), enforced on the binding write; values bind via `tag_binding`. See [tags](/architecture/tags/) |
+| `tag_binding` | (tag, **owner arc**), value | **Built.** The `key: value` binding: **union on key, override on value** down the [cascade](/architecture/cascade/), owned on the exclusive arc (`platform / location / system / component / node`); setting a value is the owner's own `update` write. Binding via groups and a `template`-scoped binding are deferred |
 

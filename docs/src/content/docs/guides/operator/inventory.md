@@ -7,8 +7,8 @@ screenshots:
     alt: "The Locations inventory: a summary board by place type, the chip filter, and the tree of campuses."
 ---
 
-Systems, Components, and Locations are the live inventory pages. They share one shape, so
-once you know one you know all three. This page is how you **find** something in that
+Systems, Components, Locations, and Nodes are the live inventory pages. They share one shape, so
+once you know one you know them all. This page is how you **find** something in that
 inventory; [working with an entity](/guides/operator/entities/) is what you do once you have
 opened it.
 

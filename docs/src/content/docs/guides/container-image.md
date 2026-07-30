@@ -17,7 +17,9 @@ automatically. See [Platforms](#platforms) for how that is built.
 ## Where it ships
 
 The `image` workflow builds and pushes to the GitHub Container Registry on every
-push to `main` and every pull request:
+push to `main` and every same-repo pull request. A fork PR builds the image but
+does not push it (a fork run has no registry credential), so a fork branch never
+gets a published tag:
 
 ```
 ghcr.io/hyperscaleav/omniglass
@@ -28,10 +30,11 @@ Tags:
 | Tag | When | Mutable? |
 |-----|------|----------|
 | `latest` | push to `main` | yes |
-| `sha-<short>` | every build | no, pins an exact commit |
+| `sha-<full sha>` | every build | no, pins an exact commit |
 | `pr-<n>` | head of open PR #n | yes, moves on each push |
 
-The preview pipeline pins a deploy to `sha-<short>` so a rollout follows the
+The sha tag carries the full 40-character commit sha (`type=sha,format=long`).
+The preview pipeline pins a deploy to `sha-<full sha>` so a rollout follows the
 exact build.
 
 ## Platforms
@@ -55,12 +58,21 @@ The binary is configured by environment, BYO Postgres:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `OMNIGLASS_DSN` (or `DATABASE_URL`) | local dev DSN | Postgres connection string the Storage Gateway dials |
+| `OMNIGLASS_DSN` | local dev DSN | Postgres connection string the Storage Gateway dials |
+| `DATABASE_URL` | (none) | conventional DSN fallback; `OMNIGLASS_DSN` wins when both are set |
 | `OMNIGLASS_ADDR` | `:8080` | HTTP listen address |
+| `OMNIGLASS_SECURE_COOKIES` | off | set `true` behind TLS to mark the session cookie `Secure` (https only) |
+| `OMNIGLASS_NATS_ADDR` | `127.0.0.1:4222` | listen address (host:port) of the embedded NATS server |
+| `OMNIGLASS_NATS_STORE_DIR` | temp dir | JetStream store directory |
+| `OMNIGLASS_NATS_URL` | `nats://127.0.0.1:4222` | bus URL the node-claim exchange advertises to nodes |
+| `OMNIGLASS_DATA_DIR` | `.omniglass` | local non-Postgres server state (notably the fallback secret key) |
+| `OMNIGLASS_SETTINGS_FILE` | (none) | optional operator settings file (JSON or YAML), the layer between code defaults and the DB override |
 
 ## Running it
 
-Apply the schema once, then run the server:
+Apply the schema once, then run the server. (The server also applies pending
+migrations itself on boot, so the separate `migrate` run is optional; it is
+still useful to surface a schema problem before the server starts.)
 
 ```bash
 DSN='postgres://user:pass@host:5432/omniglass?sslmode=require'
@@ -80,7 +92,7 @@ a token:
 docker run --rm -e OMNIGLASS_DSN="$DSN" \
   ghcr.io/hyperscaleav/omniglass:latest bootstrap alice
 docker run --rm -e OMNIGLASS_DSN="$DSN" \
-  ghcr.io/hyperscaleav/omniglass:latest token alice
+  ghcr.io/hyperscaleav/omniglass:latest token alice --description "alice laptop"
 ```
 
 ## Building it locally

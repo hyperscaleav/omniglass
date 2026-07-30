@@ -7,20 +7,25 @@ description: "The Drivers catalog: the implementations that get, emit, and set a
 is the directory of **drivers**: the implementation that gets, emits, and sets a product's signals,
 on the same flat-registry pattern as [Types](/guides/admin/types/) and [Tags](/guides/admin/tags/).
 Where a [vendor](/guides/admin/vendors/) names who a device comes from, a driver names how it is
-talked to (for example `Generic SNMP` or `Cisco xAPI`). Each row shows the **id**, the **display
-name**, an optional **version**, and its **origin** (**official**, seed-owned, or **custom**).
+talked to (for example `Generic SNMP` or `Cisco xAPI`). Each row shows the **name** (the
+operator-facing kebab handle, for example `snmp-generic`), the **display name**, an optional
+**version**, and its **origin** (**official**, seed-owned, or **custom**). A driver also carries
+an `id`, a uuid minted by the database, the internal address the handle resolves to
+([ADR-0062](/architecture/decisions/)); the handle is what you type and read.
 
-Today a driver stands alone: nothing in the estate points at one yet. It is a leaf catalog beside
-the vendor and [capability](/guides/admin/capabilities/) registries, the layer a future `product`
-will reference to say which driver reads it. See [core entities](/architecture/core-entities/) for
-where it sits in the estate model.
+A driver is consumed by the [product](/guides/admin/products/) catalog: a `product` references
+its driver through an optional `driver_id` to say which driver reads it, chosen from a driver
+picker on the product's create and edit forms, and three of the shipped official products bind a
+driver this way. It is a leaf catalog beside the vendor and
+[capability](/guides/admin/capabilities/) registries. See
+[core entities](/architecture/core-entities/) for where it sits in the estate model.
 
-- **New driver** (with `driver:create`, an admin permission) opens a create drawer: name its **id**
-  (a short identifier, unique tenant-wide, e.g. `snmp-generic`), give it a **display name**, and,
+- **New driver** (with `driver:create`, an admin permission) opens a create drawer: give it a
+  **name** (the kebab handle, unique tenant-wide, e.g. `snmp-generic`), a **display name**, and,
   optionally, a **version**.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `driver:update`) edits
-  the display name and version; the id is fixed. **Delete** (with `driver:delete`) removes the row,
-  behind a confirm.
+  the display name and version; the uuid `id` is database-minted and never edited. **Delete**
+  (with `driver:delete`) removes the row, behind a confirm.
 - An **official** (seed-owned) row is always read-only: no Edit, no Delete, and the blade marks it
   "Seed-owned, read-only." Omniglass ships a starter set of official drivers (Generic SNMP, Cisco
   xAPI, Crestron CIP, HTTP JSON), upserted idempotently at boot so the shared set cannot drift
@@ -32,6 +37,6 @@ where it sits in the estate model.
   rule the [Types](/guides/admin/types/) registry enforces lives instead on `component.product_id`
   (a product with components cannot be deleted), not on the driver.
 
-Minting a driver is admin-gated; the picker that consumes it, choosing a product's driver, does not
-exist yet, since it waits on `product`. The same operations are `omniglass driver
+Minting a driver is admin-gated; the picker that consumes it lives on the
+[product](/guides/admin/products/) create and edit forms. The same operations are `omniglass driver
 list/get/create/update/delete` from the CLI (see the [CLI reference](/reference/cli/)).

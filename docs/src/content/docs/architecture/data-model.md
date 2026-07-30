@@ -22,16 +22,22 @@ skeleton, so a forty-plus-table platform stays legible; the full column list of
 any table lives in its migration and its Storage Gateway type, not here. Each
 edge is a **foreign key**, drawn from the referencing column to the row it
 points at. Edges that cross container borders are the seams between subsystems:
-a component pointing at a property, a grant pointing at a principal.
+`estate.component.product_id` pointing at `catalog.product.id`, or
+`catalog.product_property.property_type_id` pointing at
+`telemetry.property_type.id`.
 
-A table that has not yet been assigned to a subsystem renders in an
-`unclustered` container. That is a prompt, not a resting place: it means the
-cluster map in `cmd/erdgen` needs a one-line entry for the new table.
+The generator would render a table not yet assigned to a subsystem in an
+`unclustered` container, but a committed diagram never shows one: the
+introspection test hard-fails on any unmapped table, so the failure is the
+prompt to add a one-line entry for the new table to the cluster map in
+`internal/erd/cluster.go` (`cmd/erdgen` only calls it).
 
 :::note[Generated: do not edit the diagram]
 The D2 between the markers below is written by `cmd/erdgen` (it applies the
 embedded migrations to a throwaway Postgres, introspects the catalog, and renders
-the diagram). Edit the generator or the subsystem map, never the region. After a
+the diagram). Edit the generator or the subsystem map, never the region; even the
+marker comment text itself is emitted by `cmd/erdgen`, so it is fixed there when
+the generator changes. After a
 schema change: `make gen` to redraw the D2, then `pnpm diagrams` to re-render the
 committed SVG.
 :::
@@ -485,8 +491,8 @@ telemetry.state.system_id -> estate.system.id
   standards, plus the capabilities and properties they define.
 - **telemetry** - the observability model of [ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables):
   the typed registries (`property_type`, `event_type`, `command_type`) over the
-  bare-noun data tables (`property`, `metric`, `state`, `event`, `command`) and
-  the alarms raised off them.
+  bare-noun data tables (`property`, `metric`, `state`, `event`, `log_line`,
+  `command`) and the alarms raised off them (`alarm`, `alarm_capability`).
 - **collection** - where and how telemetry is gathered: the nodes that run probes
   and the tasks they execute.
 - **config** - the settings, variables, secrets, and credentials that parameterize

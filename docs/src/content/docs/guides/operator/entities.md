@@ -36,8 +36,9 @@ The blade header is chrome only (back, full-page, close); the actions live in th
 **Edit** (right) opens edit mode: the profile becomes inputs, the members and grants go live, and the right
 cluster swaps to **Cancel** and **Save**. Changes stage locally so you can check your work first; **Save**
 commits them together, **Cancel** discards them. The **destructive** action sits on the **left** and is always
-available, with no need to enter edit mode: a red **Delete** for a group (a user is disabled, never deleted, so a
-user's is **Disable / Enable**), each behind a confirm. Secondary actions like **Impersonate** fold into a
+available, with no need to enter edit mode: a red **Delete** for a group (a user instead has the escalating
+[lifecycle](/guides/admin/users/) of **Disable**, then **Archive**, then **Purge**, so its left slot is
+**Disable / Enable** and the stronger steps sit in the kebab), each behind a confirm. Secondary actions like **Impersonate** fold into a
 **⋯** menu. Edit appears only if your grants allow it, and a read-only blade (a role) shows no bar at all.
 
 The same bar carries **create**. A form that opens in a slide-over (New user, New tag key, Upload
