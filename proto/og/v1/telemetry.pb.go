@@ -62,7 +62,19 @@ type TelemetryBatch struct {
 	// logs is the raw log lines in this batch (ADR-0066): untyped arrival, not
 	// registry-resolved samples. The consumer writes them to log_line, owner-confined
 	// like samples. A node's self-logs ride here.
-	Logs          []*LogLine `protobuf:"bytes,7,rep,name=logs,proto3" json:"logs,omitempty"`
+	Logs []*LogLine `protobuf:"bytes,7,rep,name=logs,proto3" json:"logs,omitempty"`
+	// owner is the estate address this batch belongs to, set ONLY on the API push
+	// lane (og.v1.api.telemetry), where the route already authorized the caller
+	// against it. It is believed because of the subject the batch arrived on, never
+	// because the field is populated: a batch on og.v1.telemetry.<node> that sets
+	// owner is REJECTED, since a node's owner is the server's to resolve from the
+	// task's interface, not the node's to assert.
+	Owner *Owner `protobuf:"bytes,8,opt,name=owner,proto3" json:"owner,omitempty"`
+	// source is who observed this batch ("webex-cloud", "manual"), the provenance
+	// recorded on every row it lands. The node lane leaves it empty and the server
+	// fills it from the task's interface_type; a push has no interface, so without
+	// this its rows would be unattributable.
+	Source        string `protobuf:"bytes,9,opt,name=source,proto3" json:"source,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -146,6 +158,76 @@ func (x *TelemetryBatch) GetLogs() []*LogLine {
 	return nil
 }
 
+func (x *TelemetryBatch) GetOwner() *Owner {
+	if x != nil {
+		return x.Owner
+	}
+	return nil
+}
+
+func (x *TelemetryBatch) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+// Owner is an exclusive-arc address: which kind of estate entity owns the batch,
+// and which one. Only the API lane sets it (see TelemetryBatch.owner).
+type Owner struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// kind is the arc: component, system, location, or node.
+	Kind string `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
+	// ref addresses the entity within that kind, by name or id.
+	Ref           string `protobuf:"bytes,2,opt,name=ref,proto3" json:"ref,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Owner) Reset() {
+	*x = Owner{}
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Owner) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Owner) ProtoMessage() {}
+
+func (x *Owner) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Owner.ProtoReflect.Descriptor instead.
+func (*Owner) Descriptor() ([]byte, []int) {
+	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *Owner) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *Owner) GetRef() string {
+	if x != nil {
+		return x.Ref
+	}
+	return ""
+}
+
 // Sample is one observation: a registry-resolved property name plus a typed value.
 // The registry (property_type) says the kind and value type; the ingest consumer
 // validates the name (reject-not-project) before writing.
@@ -166,6 +248,13 @@ type Sample struct {
 	Value isSample_Value `protobuf_oneof:"value"`
 	// ts is the per-sample timestamp; defaults to the batch ts when unset.
 	Ts *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=ts,proto3" json:"ts,omitempty"`
+	// instance discriminates many values of ONE property name on one owner (three
+	// fan speeds, per-port counters), the first-class dimension of the data model
+	// (instance text NOT NULL DEFAULT ”). The node lane leaves it empty and the
+	// server fills it from the interface name, which doubles as the discriminator
+	// there; a push has no interface, so without this a caller could not express
+	// per-instance data at all.
+	Instance string `protobuf:"bytes,8,opt,name=instance,proto3" json:"instance,omitempty"`
 	// labels are sample-specific dimensional metadata (e.g. the reason). Not
 	// persisted in checkpoint 3.
 	Labels        map[string]string `protobuf:"bytes,7,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
@@ -175,7 +264,7 @@ type Sample struct {
 
 func (x *Sample) Reset() {
 	*x = Sample{}
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[1]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -187,7 +276,7 @@ func (x *Sample) String() string {
 func (*Sample) ProtoMessage() {}
 
 func (x *Sample) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[1]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -200,7 +289,7 @@ func (x *Sample) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Sample.ProtoReflect.Descriptor instead.
 func (*Sample) Descriptor() ([]byte, []int) {
-	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{1}
+	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *Sample) GetName() string {
@@ -260,6 +349,13 @@ func (x *Sample) GetTs() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *Sample) GetInstance() string {
+	if x != nil {
+		return x.Instance
+	}
+	return ""
+}
+
 func (x *Sample) GetLabels() map[string]string {
 	if x != nil {
 		return x.Labels
@@ -315,7 +411,7 @@ type LogLine struct {
 
 func (x *LogLine) Reset() {
 	*x = LogLine{}
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[2]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -327,7 +423,7 @@ func (x *LogLine) String() string {
 func (*LogLine) ProtoMessage() {}
 
 func (x *LogLine) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[2]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -340,7 +436,7 @@ func (x *LogLine) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogLine.ProtoReflect.Descriptor instead.
 func (*LogLine) Descriptor() ([]byte, []int) {
-	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{2}
+	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *LogLine) GetMessage() string {
@@ -403,7 +499,7 @@ var File_proto_og_v1_telemetry_proto protoreflect.FileDescriptor
 
 const file_proto_og_v1_telemetry_proto_rawDesc = "" +
 	"\n" +
-	"\x1bproto/og/v1/telemetry.proto\x12\x05og.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xc3\x02\n" +
+	"\x1bproto/og/v1/telemetry.proto\x12\x05og.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xff\x02\n" +
 	"\x0eTelemetryBatch\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12*\n" +
@@ -411,10 +507,15 @@ const file_proto_og_v1_telemetry_proto_rawDesc = "" +
 	"\x06labels\x18\x04 \x03(\v2!.og.v1.TelemetryBatch.LabelsEntryR\x06labels\x12'\n" +
 	"\asamples\x18\x05 \x03(\v2\r.og.v1.SampleR\asamples\x12\x10\n" +
 	"\x03raw\x18\x06 \x01(\fR\x03raw\x12\"\n" +
-	"\x04logs\x18\a \x03(\v2\x0e.og.v1.LogLineR\x04logs\x1a9\n" +
+	"\x04logs\x18\a \x03(\v2\x0e.og.v1.LogLineR\x04logs\x12\"\n" +
+	"\x05owner\x18\b \x01(\v2\f.og.v1.OwnerR\x05owner\x12\x16\n" +
+	"\x06source\x18\t \x01(\tR\x06source\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc9\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"-\n" +
+	"\x05Owner\x12\x12\n" +
+	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x10\n" +
+	"\x03ref\x18\x02 \x01(\tR\x03ref\"\xe5\x02\n" +
 	"\x06Sample\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n" +
 	"\tint_value\x18\x02 \x01(\x03H\x00R\bintValue\x12#\n" +
@@ -422,7 +523,8 @@ const file_proto_og_v1_telemetry_proto_rawDesc = "" +
 	"\fstring_value\x18\x04 \x01(\tH\x00R\vstringValue\x12\x1f\n" +
 	"\n" +
 	"json_value\x18\x05 \x01(\fH\x00R\tjsonValue\x12*\n" +
-	"\x02ts\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x121\n" +
+	"\x02ts\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12\x1a\n" +
+	"\binstance\x18\b \x01(\tR\binstance\x121\n" +
 	"\x06labels\x18\a \x03(\v2\x19.og.v1.Sample.LabelsEntryR\x06labels\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
@@ -452,28 +554,30 @@ func file_proto_og_v1_telemetry_proto_rawDescGZIP() []byte {
 	return file_proto_og_v1_telemetry_proto_rawDescData
 }
 
-var file_proto_og_v1_telemetry_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_proto_og_v1_telemetry_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_proto_og_v1_telemetry_proto_goTypes = []any{
 	(*TelemetryBatch)(nil),        // 0: og.v1.TelemetryBatch
-	(*Sample)(nil),                // 1: og.v1.Sample
-	(*LogLine)(nil),               // 2: og.v1.LogLine
-	nil,                           // 3: og.v1.TelemetryBatch.LabelsEntry
-	nil,                           // 4: og.v1.Sample.LabelsEntry
-	(*timestamppb.Timestamp)(nil), // 5: google.protobuf.Timestamp
+	(*Owner)(nil),                 // 1: og.v1.Owner
+	(*Sample)(nil),                // 2: og.v1.Sample
+	(*LogLine)(nil),               // 3: og.v1.LogLine
+	nil,                           // 4: og.v1.TelemetryBatch.LabelsEntry
+	nil,                           // 5: og.v1.Sample.LabelsEntry
+	(*timestamppb.Timestamp)(nil), // 6: google.protobuf.Timestamp
 }
 var file_proto_og_v1_telemetry_proto_depIdxs = []int32{
-	5, // 0: og.v1.TelemetryBatch.ts:type_name -> google.protobuf.Timestamp
-	3, // 1: og.v1.TelemetryBatch.labels:type_name -> og.v1.TelemetryBatch.LabelsEntry
-	1, // 2: og.v1.TelemetryBatch.samples:type_name -> og.v1.Sample
-	2, // 3: og.v1.TelemetryBatch.logs:type_name -> og.v1.LogLine
-	5, // 4: og.v1.Sample.ts:type_name -> google.protobuf.Timestamp
-	4, // 5: og.v1.Sample.labels:type_name -> og.v1.Sample.LabelsEntry
-	5, // 6: og.v1.LogLine.ts:type_name -> google.protobuf.Timestamp
-	7, // [7:7] is the sub-list for method output_type
-	7, // [7:7] is the sub-list for method input_type
-	7, // [7:7] is the sub-list for extension type_name
-	7, // [7:7] is the sub-list for extension extendee
-	0, // [0:7] is the sub-list for field type_name
+	6, // 0: og.v1.TelemetryBatch.ts:type_name -> google.protobuf.Timestamp
+	4, // 1: og.v1.TelemetryBatch.labels:type_name -> og.v1.TelemetryBatch.LabelsEntry
+	2, // 2: og.v1.TelemetryBatch.samples:type_name -> og.v1.Sample
+	3, // 3: og.v1.TelemetryBatch.logs:type_name -> og.v1.LogLine
+	1, // 4: og.v1.TelemetryBatch.owner:type_name -> og.v1.Owner
+	6, // 5: og.v1.Sample.ts:type_name -> google.protobuf.Timestamp
+	5, // 6: og.v1.Sample.labels:type_name -> og.v1.Sample.LabelsEntry
+	6, // 7: og.v1.LogLine.ts:type_name -> google.protobuf.Timestamp
+	8, // [8:8] is the sub-list for method output_type
+	8, // [8:8] is the sub-list for method input_type
+	8, // [8:8] is the sub-list for extension type_name
+	8, // [8:8] is the sub-list for extension extendee
+	0, // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_proto_og_v1_telemetry_proto_init() }
@@ -481,7 +585,7 @@ func file_proto_og_v1_telemetry_proto_init() {
 	if File_proto_og_v1_telemetry_proto != nil {
 		return
 	}
-	file_proto_og_v1_telemetry_proto_msgTypes[1].OneofWrappers = []any{
+	file_proto_og_v1_telemetry_proto_msgTypes[2].OneofWrappers = []any{
 		(*Sample_IntValue)(nil),
 		(*Sample_DoubleValue)(nil),
 		(*Sample_StringValue)(nil),
@@ -493,7 +597,7 @@ func file_proto_og_v1_telemetry_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_og_v1_telemetry_proto_rawDesc), len(file_proto_og_v1_telemetry_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

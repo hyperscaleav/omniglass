@@ -14,7 +14,7 @@ func index() rbac.RoleIndex {
 	return rbac.NewRoleIndex([]rbac.Role{
 		{ID: "viewer", Permissions: []string{"*:read"}},
 		{ID: "loc-editor", Permissions: []string{"location:create,update,delete"}},
-		{ID: "operator", Inherits: []string{"viewer"}, Permissions: []string{"secret:create,update", "variable:create,update", "field:create,update"}},
+		{ID: "operator", Inherits: []string{"viewer"}, Permissions: []string{"secret:create,update", "variable:create,update", "field:create,update", "telemetry:push"}},
 		{ID: "owner", Permissions: []string{"*:*"}},
 	})
 }
@@ -36,6 +36,39 @@ func TestResolveSecretArcKinds(t *testing.T) {
 	vr := scope.Resolve([]scope.Grant{{Role: "viewer", ScopeKind: "component", ScopeID: "C"}}, idx, "secret", "create")
 	if !vr.Empty() {
 		t.Fatalf("viewer secret:create scope = %+v, want empty", vr)
+	}
+}
+
+// Pushed telemetry is owned on the same exclusive arc, so an arc-tier grant can
+// contain its owner. This is the fence on POST /telemetry:push, and it is resolved
+// from telemetry:push rather than component:read on purpose: a principal routinely
+// holds a wide read and a narrow write (viewer over the estate plus operator on one
+// component), so resolving the read scope would let it push anywhere it can see.
+func TestResolveTelemetryArcKinds(t *testing.T) {
+	idx := index()
+	for _, kind := range []string{"location", "system", "component"} {
+		g := []scope.Grant{{Role: "operator", ScopeKind: kind, ScopeID: "ROOT"}}
+		set := scope.Resolve(g, idx, "telemetry", "push")
+		if len(set.IDs) != 1 || set.IDs[0] != "ROOT" {
+			t.Fatalf("operator@%s telemetry:push scope = %+v, want ROOT", kind, set)
+		}
+	}
+	// The read floor confers no push scope: a viewer can see telemetry, not write it.
+	vr := scope.Resolve([]scope.Grant{{Role: "viewer", ScopeKind: "component", ScopeID: "C"}}, idx, "telemetry", "push")
+	if !vr.Empty() {
+		t.Fatalf("viewer telemetry:push scope = %+v, want empty", vr)
+	}
+	// The escalation shape, at the resolver: a wide read plus a narrow push must
+	// resolve the NARROW set for push, never the wide one.
+	wide := scope.Resolve([]scope.Grant{
+		{Role: "viewer", ScopeKind: "all"},
+		{Role: "operator", ScopeKind: "component", ScopeID: "NARROW"},
+	}, idx, "telemetry", "push")
+	if wide.All {
+		t.Fatal("a wide read grant widened the telemetry:push scope to all")
+	}
+	if len(wide.IDs) != 1 || wide.IDs[0] != "NARROW" {
+		t.Fatalf("wide-read narrow-push scope = %+v, want only NARROW", wide)
 	}
 }
 

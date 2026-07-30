@@ -269,6 +269,42 @@ func TestTelemetryRoundTrip(t *testing.T) {
 			l.OwnerKind == "node" && l.Severity == "warning" && l.Source == "collection"
 	})
 
+	// THE PUSH LANE IS NOT REACHABLE BY A NODE. This is the fence the whole
+	// trust-by-subject model rests on: the consumer believes the owner carried on
+	// og.v1.api.telemetry, so a node that could publish there could forge ownership
+	// of any component. Its grant is an explicit allow-list of three own subjects,
+	// so NATS refuses this before the consumer ever sees it.
+	if err := ncA.Publish(collection.APITelemetrySubject, []byte("forged")); err != nil {
+		t.Fatalf("client-side publish to the api lane: %v", err)
+	}
+	_ = ncA.Flush()
+	if !awaitPermissionViolation(permErrs, 3*time.Second) {
+		t.Fatal("a node was allowed to publish on the trusted API telemetry lane")
+	}
+
+	// And a node-lane batch that ASSERTS an owner is dropped, not honoured: on this
+	// lane the owner is the server's to resolve from the task's interface. Publishing
+	// one must leave disp-2 untouched even though the batch names it.
+	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
+		TaskId: "t-a", NodeId: "node-a",
+		Owner:   &ogv1.Owner{Kind: "component", Ref: "disp-2"},
+		Samples: []*ogv1.Sample{{Name: "tcp.open", Value: &ogv1.Sample_DoubleValue{DoubleValue: 1}}},
+	})
+	// Watermark: a later valid publish proves the forged one was processed and
+	// dropped rather than merely still in flight.
+	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
+		TaskId:  "t-a",
+		Samples: []*ogv1.Sample{{Name: "tcp.connect_time", Value: &ogv1.Sample_DoubleValue{DoubleValue: 42}}},
+	})
+	waitMetric(t, ctx, gw, "disp-1", "tcp.connect_time", func(d *storage.MetricSample) bool {
+		return d != nil && d.Value == 42
+	})
+	if dp, err := gw.LatestMetric(ctx, "disp-2", "tcp.open"); err != nil {
+		t.Fatalf("latest disp-2 tcp.open: %v", err)
+	} else if dp != nil {
+		t.Fatalf("a node forged ownership of disp-2 via the owner field: %+v", dp)
+	}
+
 	// Telemetry publish isolation: node-a cannot publish to node-b's telemetry
 	// subject (a permissions violation), the same fence as worklist/heartbeat.
 	if err := ncA.Publish(collection.TelemetrySubject("node-b"), []byte("x")); err != nil {

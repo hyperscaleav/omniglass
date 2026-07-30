@@ -5046,6 +5046,57 @@ func generatedCommands() []*cobra.Command {
 	}())
 	roots = append(roots, func() *cobra.Command {
 		parent := &cobra.Command{
+			Use:   "telemetry",
+			Short: "Commands for the telemetry resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fLogs string
+				var fOwner string
+				var fSamples string
+				var fSource string
+				var fTs string
+				cmd := &cobra.Command{
+					Use:     "push",
+					Short:   "Push telemetry for an owner",
+					Long:    "Accepts samples and raw log lines for one owner and publishes them onto the ingest lane. The registry decides where each sample lands (metric, state, or a caught event); an unregistered name is rejected and reported in the response rather than silently dropped. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.",
+					Example: "  omniglass telemetry push --owner owner",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/telemetry:push")
+						body := map[string]any{}
+						if cmd.Flags().Changed("logs") {
+							body["logs"] = jsonOrString(fLogs)
+						}
+						if cmd.Flags().Changed("owner") {
+							body["owner"] = jsonOrString(fOwner)
+						}
+						if cmd.Flags().Changed("samples") {
+							body["samples"] = jsonOrString(fSamples)
+						}
+						if cmd.Flags().Changed("source") {
+							body["source"] = fSource
+						}
+						if cmd.Flags().Changed("ts") {
+							body["ts"] = fTs
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fLogs, "logs", "", "Raw untyped log lines. No registry gate")
+				cmd.Flags().StringVar(&fOwner, "owner", "", "")
+				_ = cmd.MarkFlagRequired("owner")
+				cmd.Flags().StringVar(&fSamples, "samples", "", "Registry-resolved observations. The registry decides which table each lands in")
+				cmd.Flags().StringVar(&fSource, "source", "", "Who observed this batch (recorded as the provenance source on every row)")
+				cmd.Flags().StringVar(&fTs, "ts", "", "Batch timestamp; a per-item timestamp overrides it")
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
 			Use:   "variable",
 			Short: "Commands for the variable resource",
 		}

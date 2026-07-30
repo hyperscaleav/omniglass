@@ -31,6 +31,10 @@ roles:
       - "event_type:create,update"
       - "command_type:create,update"
       - "command:issue"
+      # telemetry:push is a WRITE of observations, so it sits with the other
+      # operator writes and deliberately outside the viewer read floor. An
+      # integration that only reports data can be granted this alone.
+      - "telemetry:push"
       - "alarm:ack,snooze,resolve"
       # files are shared knowledge (not in the sensitive-resource set), so the
       # viewer floor reads ordinary ones; operators upload and delete them. A

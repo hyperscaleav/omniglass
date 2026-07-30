@@ -3004,6 +3004,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/telemetry:push": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Push telemetry for an owner
+         * @description Accepts samples and raw log lines for one owner and publishes them onto the ingest lane. The registry decides where each sample lands (metric, state, or a caught event); an unregistered name is rejected and reported in the response rather than silently dropped. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.
+         */
+        post: operations["push-telemetry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/variables": {
         parameters: {
             query?: never;
@@ -3108,6 +3128,12 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AcceptedStruct: {
+            /** Format: int64 */
+            logs: number;
+            /** Format: int64 */
+            samples: number;
+        };
         AddMemberInputBody: {
             /**
              * Format: uri
@@ -4765,6 +4791,15 @@ export interface components {
             logs: components["schemas"]["LogBody"][] | null;
             node: string;
         };
+        OwnerStruct: {
+            /**
+             * @description The owner arc. Only component today; system and location arrive with #422
+             * @enum {string}
+             */
+            kind: "component";
+            /** @description The owning entity, by name or id */
+            ref: string;
+        };
         PlatformBindingInputBody: {
             /**
              * Format: uri
@@ -4866,6 +4901,71 @@ export interface components {
             unit?: string;
             /** @description A JSON Schema fragment constraining the value */
             validation?: unknown;
+        };
+        PushInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/PushInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Raw untyped log lines. No registry gate */
+            logs?: components["schemas"]["PushLog"][] | null;
+            owner: components["schemas"]["OwnerStruct"];
+            /** @description Registry-resolved observations. The registry decides which table each lands in */
+            samples?: components["schemas"]["PushSample"][] | null;
+            /** @description Who observed this batch (recorded as the provenance source on every row) */
+            source?: string;
+            /**
+             * Format: date-time
+             * @description Batch timestamp; a per-item timestamp overrides it
+             */
+            ts?: string;
+        };
+        PushLog: {
+            /** @description Threads related lines and their derived events */
+            correlation_id?: string;
+            /** @description The line's facility, when classified */
+            facility?: string;
+            /** @description The raw log text */
+            message: string;
+            /** @description The line's severity, when classified */
+            severity?: string;
+            /** @description The channel the line arrived on; falls back to the batch source */
+            source?: string;
+            /**
+             * Format: date-time
+             * @description When the line arrived; defaults to the batch timestamp
+             */
+            ts?: string;
+        };
+        PushOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/PushOutputBody.json
+             */
+            readonly $schema?: string;
+            accepted: components["schemas"]["AcceptedStruct"];
+            /** @description Names dropped by reject-not-project. Reported synchronously so a caller learns about a typo */
+            rejected?: components["schemas"]["PushRejection"][] | null;
+        };
+        PushRejection: {
+            name: string;
+            reason: string;
+        };
+        PushSample: {
+            /** @description Discriminates many values of one name on one owner (three fan speeds, per-port counters) */
+            instance?: string;
+            /** @description The canonical property name, or a registered event_type name */
+            name: string;
+            /**
+             * Format: double
+             * @description The value for a metric-kind property
+             */
+            number?: number;
+            /** @description The value for a state-kind property, or the message for an event_type */
+            text?: string;
         };
         RaiseAlarmInputBody: {
             /**
@@ -12554,6 +12654,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "push-telemetry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushInputBody"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushOutputBody"];
                 };
             };
             /** @description Error */

@@ -9,7 +9,7 @@ sidebar:
 
 :::note[Implementation status]
 Built today: the embedded nats-server with JetStream (`internal/bus/server.go`), per-node subject
-isolation with the auth callback, one `OG_TELEMETRY` stream on `og.v1.telemetry.*` with the single
+isolation with the auth callback, one `OG_TELEMETRY` stream on the node subjects (`og.v1.telemetry.*`) and the API push subject (`og.v1.api.telemetry`), with the single
 durable `og-telemetry-worker` consumer writing straight to Postgres, and the worklist and heartbeat
 request-reply lanes. Still Design: the raw/trusted two-lane split and the admission republish, CDC,
 KV, distributed locks and leader election, the object store, per-tenant accounts, and the SSE relay.
@@ -50,7 +50,7 @@ Internal traffic splits by what is moving:
 
 ## Streams and consumers
 
-As built today there is **one stream**, `OG_TELEMETRY` on `og.v1.telemetry.*`, consumed by the single
+As built today there is **one stream**, `OG_TELEMETRY`, bound to the node subjects (`og.v1.telemetry.*`) and the API push subject (`og.v1.api.telemetry`), consumed by the single
 durable `og-telemetry-worker`; the set below is the target topology, not the current one.
 
 - **samples** (data lane): untrusted publishers (node, external webhook) publish to a **raw ingress**
@@ -81,6 +81,14 @@ Subjects are hierarchical and **scope is expressed in them**, not bolted on:
 
 - **Tenant = one NATS account.** Per-account isolation (messaging) is the same boundary as the
   per-database isolation (storage): no shared subjects, no shared rows ([identity and access](/architecture/identity-access/)).
+- **The API telemetry lane (`og.v1.api.telemetry`) is trusted by subject.** A first-party push
+  (`POST /telemetry:push`) is authorized at the route, so the API publishes as a **trusted server
+  producer** with no admission pass, and the ingest consumer believes the owner the batch carries
+  **because of the subject it arrived on**, never because the field is populated. A batch on
+  `og.v1.telemetry.*` that asserts an owner is dropped. Only the server's own credential can reach
+  this subject: a node's grant is an explicit allow-list of its own three subjects, and the lane
+  deliberately sits **outside** the single-token `og.v1.telemetry.*` wildcard, so a node named for
+  whatever literal we might reserve there cannot be handed it.
 - **Subject permissions gate the subject string; the admission consumer gates the owner.** A node may
   publish and subscribe only the subjects for its placement; the grant is **mechanically derived from
   placement**, a coarse transport gate, not a second copy of the ABAC model. But a sample's owner lives

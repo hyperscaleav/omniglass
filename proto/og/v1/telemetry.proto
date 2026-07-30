@@ -52,6 +52,30 @@ message TelemetryBatch {
   // registry-resolved samples. The consumer writes them to log_line, owner-confined
   // like samples. A node's self-logs ride here.
   repeated LogLine logs = 7;
+
+  // owner is the estate address this batch belongs to, set ONLY on the API push
+  // lane (og.v1.api.telemetry), where the route already authorized the caller
+  // against it. It is believed because of the subject the batch arrived on, never
+  // because the field is populated: a batch on og.v1.telemetry.<node> that sets
+  // owner is REJECTED, since a node's owner is the server's to resolve from the
+  // task's interface, not the node's to assert.
+  Owner owner = 8;
+
+  // source is who observed this batch ("webex-cloud", "manual"), the provenance
+  // recorded on every row it lands. The node lane leaves it empty and the server
+  // fills it from the task's interface_type; a push has no interface, so without
+  // this its rows would be unattributable.
+  string source = 9;
+}
+
+// Owner is an exclusive-arc address: which kind of estate entity owns the batch,
+// and which one. Only the API lane sets it (see TelemetryBatch.owner).
+message Owner {
+  // kind is the arc: component, system, location, or node.
+  string kind = 1;
+
+  // ref addresses the entity within that kind, by name or id.
+  string ref = 2;
 }
 
 // Sample is one observation: a registry-resolved property name plus a typed value.
@@ -73,6 +97,14 @@ message Sample {
 
   // ts is the per-sample timestamp; defaults to the batch ts when unset.
   google.protobuf.Timestamp ts = 6;
+
+  // instance discriminates many values of ONE property name on one owner (three
+  // fan speeds, per-port counters), the first-class dimension of the data model
+  // (instance text NOT NULL DEFAULT ''). The node lane leaves it empty and the
+  // server fills it from the interface name, which doubles as the discriminator
+  // there; a push has no interface, so without this a caller could not express
+  // per-instance data at all.
+  string instance = 8;
 
   // labels are sample-specific dimensional metadata (e.g. the reason). Not
   // persisted in checkpoint 3.

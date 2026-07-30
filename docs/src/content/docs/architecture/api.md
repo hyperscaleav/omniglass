@@ -21,7 +21,9 @@ live in [API first](/contributing/api-first/); this page is the conventions that
 Built today: the Huma-over-chi API with the OpenAPI 3.1 document generated from the Go structs
 (`make gen`), the AIP-style resource and `:verb` routing, and the problem+json error model (Huma's
 stock RFC 9457 shape, [ADR-0068](/architecture/decisions/#adr-0068-the-api-error-model-is-the-stock-rfc-9457-shape)), proven
-on `/auth`, `/roles`, `/locations`, `/systems`, `/components`, `/nodes`, `/interfaces`, `/tasks`, and the
+on `/auth`, `/roles`, `/locations`, `/systems`, `/components`, `/nodes`, `/interfaces`, `/tasks`, the
+first-party ingest write `POST /telemetry:push` (gated `telemetry:push`, owner declared in the body and
+fenced by the caller's scope), and the
 per-component reachability read, plus the type registries, the `/products` and `/standards` catalogs, the
 classifier-contract and instance-value property routes, the role declaration, resolution, and staffing
 routes, and the component alarm plus system and location [health](#health-the-verdict-and-why) reads. The

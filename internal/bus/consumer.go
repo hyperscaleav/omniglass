@@ -45,7 +45,7 @@ func (s *Server) startTelemetryConsumer() error {
 	defer cancel()
 	stream, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name:      telemetryStream,
-		Subjects:  []string{collection.TelemetryWildcard},
+		Subjects:  []string{collection.TelemetryWildcard, collection.APITelemetrySubject},
 		Retention: jetstream.WorkQueuePolicy,
 	})
 	if err != nil {
@@ -76,10 +76,6 @@ func (s *Server) startTelemetryConsumer() error {
 // terminates the message so it does not loop forever.
 func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	ctx := context.Background()
-	// The node published only its own telemetry subject (per-node grant), so the
-	// node extracted from the subject is trusted, the same trust the heartbeat sink
-	// relies on.
-	node := collection.NodeFromSubject(msg.Subject())
 
 	var ev ogv1.TelemetryBatch
 	if err := proto.Unmarshal(msg.Data(), &ev); err != nil {
@@ -87,103 +83,186 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 		return
 	}
 
-	// Log lines ride the ingest lane owner-bound to the publishing node (ADR-0066
-	// self-logs): untyped, no task, no registry gate. They resolve their owner from
-	// the trusted subject node, not the task, so they land even on an Event that
-	// carries no task_id, ahead of the sample owner-confinement below.
-	if logs := logLineWrites(&ev, node); len(logs) > 0 {
-		if err := s.store.InsertLogLines(ctx, logs); err != nil {
-			s.nakOrTerm(msg) // DB write failed: redeliver (bounded)
+	// TRUST DECIDED BY SUBJECT, never by which fields are populated. The API lane
+	// carries an owner the route already authorized; the node lane's owner is the
+	// server's to resolve from the task's interface.
+	if msg.Subject() == collection.APITelemetrySubject {
+		bind, ok := apiBinding(&ev)
+		if !ok {
+			_ = msg.Term() // malformed owner: it will never resolve, stop redelivery
 			return
 		}
-	}
-
-	// Samples are owner-bound to the task's component. A logs-only Event (a node's
-	// self-log batch carries no samples and no task_id) has nothing more to route,
-	// so ack and return before the task resolution treats the empty task as an orphan.
-	if len(ev.GetSamples()) == 0 {
+		if err := s.land(ctx, &ev, bind); err != nil {
+			s.nakOrTerm(msg)
+			return
+		}
 		_ = msg.Ack()
 		return
 	}
 
-	// Owner + confinement: the owner is the task's interface component, and the
-	// task must belong to THIS node. A task on another node, an unknown task, or a
-	// shared interface resolves to !ok: the sample is an orphan, dropped (acked
-	// so it is not redelivered), never written for a component the node was not
-	// placed on.
-	owner, ok, err := s.store.ResolveTaskOwner(ctx, ev.GetTaskId(), node)
-	if err != nil {
-		s.nakOrTerm(msg) // transient DB failure: redeliver (bounded)
+	// The node published only its own telemetry subject (per-node grant), so the
+	// node extracted from the subject is trusted, the same trust the heartbeat sink
+	// relies on.
+	node := collection.NodeFromSubject(msg.Subject())
+
+	// A node does not get to assert its own owner. Populating owner on this lane is a
+	// protocol error, not something to quietly ignore: ignoring it would leave a
+	// field that looks authoritative and is not, so say so and stop redelivery.
+	if ev.GetOwner() != nil {
+		slog.Warn("node-lane batch asserted an owner, dropped", "node", node)
+		_ = msg.Term()
 		return
 	}
-	if !ok {
-		_ = msg.Ack() // orphan: drop
+
+	// The node lane's binding. Log lines are owned by the publishing NODE (ADR-0066
+	// self-logs: untyped, no task, no registry gate), while samples are owned by the
+	// task's COMPONENT, so one batch carries two owners and the binding states both.
+	bind := ingestBinding{LogOwnerKind: "node", LogOwnerID: node}
+
+	// Samples are owner-bound to the task's component, resolved only when there are
+	// samples to bind: a logs-only batch (a node's self-log tick) carries no task_id,
+	// and asking the resolver about an empty task would read as an orphan.
+	if len(ev.GetSamples()) > 0 {
+		// Owner + confinement: the owner is the task's interface component, and the
+		// task must belong to THIS node. A task on another node, an unknown task, or
+		// a shared interface resolves to !ok: the samples are orphans, never written
+		// for a component the node was not placed on. The batch's log lines still
+		// land, since they were never the task's to begin with.
+		owner, ok, err := s.store.ResolveTaskOwner(ctx, ev.GetTaskId(), node)
+		if err != nil {
+			s.nakOrTerm(msg) // transient DB failure: redeliver (bounded)
+			return
+		}
+		if ok {
+			bind.SampleOwner = &owner
+		}
+	}
+
+	if err := s.land(ctx, &ev, bind); err != nil {
+		s.nakOrTerm(msg) // transient registry read or DB write failure: redeliver (bounded)
 		return
+	}
+	_ = msg.Ack()
+}
+
+// apiBinding builds the binding for a batch that arrived on the API push lane. The
+// route already authorized the caller against this owner, so both the samples and
+// the log lines land on it: unlike the node lane, a push has one owner, not two.
+//
+// It returns false for a batch whose owner is missing or not addressable, which the
+// caller terminates rather than redelivers: a malformed owner will never resolve.
+// Only component owners are accepted for now, because deriveSamples still hardcodes
+// owner_kind=component downstream; widening to system and location is #422, and
+// rejecting here beats writing a sample to the wrong arc.
+func apiBinding(ev *ogv1.TelemetryBatch) (ingestBinding, bool) {
+	o := ev.GetOwner()
+	if o == nil || o.GetKind() == "" || o.GetRef() == "" {
+		return ingestBinding{}, false
+	}
+	if o.GetKind() != "component" {
+		slog.Warn("push batch owner kind not yet supported, dropped",
+			"kind", o.GetKind(), "ref", o.GetRef())
+		return ingestBinding{}, false
+	}
+	owner := storage.TaskOwner{Component: o.GetRef()}
+	return ingestBinding{
+		LogOwnerKind: o.GetKind(),
+		LogOwnerID:   o.GetRef(),
+		SampleOwner:  &owner,
+	}, true
+}
+
+// ingestBinding is the resolved ownership for one batch: where its log lines land
+// and where its samples land. They differ by lane, which is the whole reason this
+// is explicit rather than a single owner. On the node lane, log lines are
+// node-owned self-logs while samples are owned by the task's component. On the
+// push lane, both are the owner the API authorized. A nil SampleOwner means the
+// batch's samples must not be written (no samples, or an orphan task).
+type ingestBinding struct {
+	LogOwnerKind string
+	LogOwnerID   string
+	SampleOwner  *storage.TaskOwner
+}
+
+// land writes one batch to its sinks: the raw log lines, then the samples routed by
+// registry kind, then the derived latest-value cache. It is the ONE write path, and
+// both ingest lanes call it, so a new lane cannot drift from the node lane's
+// semantics (reject-not-project, the transition-only state guard, the cache derive).
+//
+// It deliberately knows nothing about JetStream: no message, no ack, no nak. The
+// caller owns delivery semantics and decides what a returned error means, which is
+// what lets a synchronous API caller reuse it. A returned error is always transient
+// (a registry read or a sink write); anything permanent is dropped in place, since
+// re-delivering it would not help.
+//
+// NOTE(#311): the sinks each write in their own transaction and the caller acks
+// once afterward. Under at-least-once redelivery, a failure in a later write after
+// an earlier one committed re-runs the committed write on redelivery; metric and
+// event have no uniqueness key, so that double-inserts. This is a pre-existing
+// multi-tx-then-ack characteristic; atomic-or-idempotent ingest is tracked
+// separately.
+func (s *Server) land(ctx context.Context, ev *ogv1.TelemetryBatch, bind ingestBinding) error {
+	if logs := logLineWrites(ev, bind.LogOwnerKind, bind.LogOwnerID); len(logs) > 0 {
+		if err := s.store.InsertLogLines(ctx, logs); err != nil {
+			return err
+		}
+	}
+	if bind.SampleOwner == nil || len(ev.GetSamples()) == 0 {
+		return nil
 	}
 
 	properties, err := s.store.ListPropertyTypes(ctx)
 	if err != nil {
-		s.nakOrTerm(msg) // transient registry read failure: redeliver (bounded)
-		return
+		return err
 	}
 	eventTypes, err := s.store.ListEventTypes(ctx)
 	if err != nil {
-		s.nakOrTerm(msg) // transient registry read failure: redeliver (bounded)
-		return
+		return err
 	}
 	reg := collection.NewRegistry(properties, eventTypes)
 
-	// Route by the registry kind (the cp3-deferred "route by kind" note): a metric
-	// name lands in metric, a state name in state, an event-type name in event
-	// (the ADR-0066 lanes; raw self-logs ride their own lane to log_line). All
-	// survive the SAME owner-confinement and reject-not-project above; the
-	// split is only the sink, not a second trust decision.
-	//
-	// NOTE(#311): the three sinks each write in their own transaction, then the
-	// message is acked once. Under at-least-once redelivery, a failure in a later
-	// write after an earlier one committed re-runs the committed write on redelivery;
-	// metric and event have no uniqueness key, so that double-inserts. This
-	// is a pre-existing multi-tx-then-ack characteristic (adding the event write only
-	// widens the window); atomic-or-idempotent ingest is tracked separately.
-	metrics, states, events := deriveSamples(&ev, owner, reg)
+	// Route by the registry kind: a metric name lands in metric, a state name in
+	// state, a registered event_type name in event as a caught occurrence (the
+	// ADR-0066 lanes; raw self-logs ride their own lane to log_line). All
+	// survive the SAME owner binding and reject-not-project; the split is only the
+	// sink, not a second trust decision. The multi-transaction-then-ack
+	// redelivery characteristic is NOTE(#311) on land above.
+	metrics, states, events := deriveSamples(ev, *bind.SampleOwner, reg)
 	if len(metrics) > 0 {
 		if err := s.store.InsertMetricSamples(ctx, metrics); err != nil {
-			s.nakOrTerm(msg) // DB write failed: redeliver (bounded)
-			return
+			return err
 		}
 	}
 	if len(events) > 0 {
 		if err := s.store.InsertEvents(ctx, events); err != nil {
-			s.nakOrTerm(msg) // DB write failed: redeliver (bounded)
-			return
+			return err
 		}
 	}
-	// The ingest-side transition guard: a state series is transition-only, so skip a
-	// write whose value equals the latest stored value for that series. The node's
-	// own change detection is the primary defense; this is the robustness net for a
-	// node restart that re-emits an unchanged verdict.
+	// The transition guard: a state series is transition-only, so skip a write whose
+	// value equals the latest stored value for that series. A producer's own change
+	// detection is the primary defense; this is the robustness net for a restart that
+	// re-emits an unchanged verdict.
 	fresh, err := s.dedupeStates(ctx, states)
 	if err != nil {
-		s.nakOrTerm(msg) // latest-state read failed: redeliver (bounded)
-		return
+		return err
 	}
 	if len(fresh) > 0 {
 		if err := s.store.InsertStateSamples(ctx, fresh); err != nil {
-			s.nakOrTerm(msg) // DB write failed: redeliver (bounded)
-			return
+			return err
 		}
 	}
 	// Derive the observed latest-value cache from the samples that just landed
-	// (ADR-0063 #394). This is non-gating: the append tables are the source of
-	// truth and the cache is rebuildable from them, so a failed upsert is logged,
-	// not retried, and never fails the ack. Its series-key upsert is idempotent, so
-	// a redelivery that re-runs it does not double-write (unlike the append sinks).
+	// (ADR-0063 #394). This is non-gating: the append tables are the source of truth
+	// and the cache is rebuildable from them, so a failed upsert is logged, not
+	// retried, and never fails the caller. Its series-key upsert is idempotent, so a
+	// redelivery that re-runs it does not double-write (unlike the append sinks).
 	if ups := latestUpserts(metrics, fresh); len(ups) > 0 {
 		if err := s.store.UpsertProperties(ctx, ups); err != nil {
-			slog.Warn("latest-value derive failed (rebuildable from samples)", "subject", msg.Subject(), "error", err)
+			slog.Warn("latest-value derive failed (rebuildable from samples)",
+				"component", bind.SampleOwner.Component, "error", err)
 		}
 	}
-	_ = msg.Ack()
+	return nil
 }
 
 // latestUpserts turns the observed samples that just landed (metrics and the
@@ -270,12 +349,13 @@ func (s *Server) dedupeStates(ctx context.Context, states []storage.StateSampleW
 	return fresh, nil
 }
 
-// logLineWrites turns an Event's raw log lines into node-owned log_line writes
-// (ADR-0066 self-logs): owner_kind=node, owner=the trusted subject node. Pure: no
-// I/O and no registry (a log line is untyped by design). Each line's own ts wins
-// when set, else the batch ts; empty severity/facility/correlation stay "" and the
-// storage layer maps them to NULL.
-func logLineWrites(ev *ogv1.TelemetryBatch, node string) []storage.LogLineWrite {
+// logLineWrites turns a batch's raw log lines into log_line writes owned by the
+// caller-supplied arc (ADR-0066): the node lane passes owner_kind=node for a node's
+// self-logs, the push lane passes the owner the API authorized. Pure: no I/O and no
+// registry (a log line is untyped by design). Each line's own ts wins when set, else
+// the batch ts; empty severity/facility/correlation stay "" and the storage layer
+// maps them to NULL.
+func logLineWrites(ev *ogv1.TelemetryBatch, ownerKind, ownerID string) []storage.LogLineWrite {
 	logs := ev.GetLogs()
 	if len(logs) == 0 {
 		return nil
@@ -292,10 +372,16 @@ func logLineWrites(ev *ogv1.TelemetryBatch, node string) []storage.LogLineWrite 
 		case ev.GetTs() != nil:
 			ts = ev.GetTs().AsTime()
 		}
+		// A line's own source wins, else the batch's (a push declares it once for the
+		// batch; a node's self-logs set it per line).
+		source := l.GetSource()
+		if source == "" {
+			source = ev.GetSource()
+		}
 		out = append(out, storage.LogLineWrite{
-			OwnerKind:     "node",
-			OwnerID:       node,
-			Source:        l.GetSource(),
+			OwnerKind:     ownerKind,
+			OwnerID:       ownerID,
+			Source:        source,
 			Severity:      l.GetSeverity(),
 			Facility:      l.GetFacility(),
 			Message:       l.GetMessage(),
@@ -319,7 +405,20 @@ func deriveSamples(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collect
 	var metrics []storage.MetricSampleWrite
 	var states []storage.StateSampleWrite
 	var events []storage.EventWrite
+	// The wire value wins where the batch supplies one, else fall back to what the
+	// task's interface implies. The node lane sets neither (its interface name IS the
+	// instance discriminator and its interface type IS the source), so it is
+	// unchanged; a push has no interface, so it must be able to say both.
+	batchSource := ev.GetSource()
 	for _, dp := range ev.GetSamples() {
+		instance := dp.GetInstance()
+		if instance == "" {
+			instance = owner.InterfaceName
+		}
+		source := batchSource
+		if source == "" {
+			source = owner.InterfaceType
+		}
 		kind, ok := reg.Allows(dp.GetName())
 		if !ok {
 			continue // reject-not-project: unregistered name
@@ -334,9 +433,9 @@ func deriveSamples(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collect
 				OwnerKind: "component",
 				OwnerID:   owner.Component,
 				Key:       dp.GetName(),
-				Instance:  owner.InterfaceName,
+				Instance:  instance,
 				Value:     val,
-				Source:    owner.InterfaceType,
+				Source:    source,
 				TS:        sampleTime(ev, dp),
 			})
 		case "state":
@@ -348,9 +447,9 @@ func deriveSamples(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collect
 				OwnerKind: "component",
 				OwnerID:   owner.Component,
 				Key:       dp.GetName(),
-				Instance:  owner.InterfaceName,
+				Instance:  instance,
 				Value:     val,
-				Source:    owner.InterfaceType,
+				Source:    source,
 				TS:        sampleTime(ev, dp),
 			})
 		case "event":
@@ -365,11 +464,11 @@ func deriveSamples(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collect
 				OwnerKind:  "component",
 				OwnerID:    owner.Component,
 				Key:        dp.GetName(),
-				Instance:   owner.InterfaceName,
+				Instance:   instance,
 				Origin:     "caught",
 				Message:    msg,
 				Attributes: attrs,
-				Source:     owner.InterfaceType,
+				Source:     source,
 				TS:         sampleTime(ev, dp),
 			})
 		}
