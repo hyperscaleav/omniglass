@@ -3,9 +3,17 @@ title: Workers
 description: "One worker machinery over several JetStream consumers, plus the backtest capability and the reconcile desired-state loop."
 sidebar:
   badge:
-    text: Design
-    variant: caution
+    text: Partial
+    variant: note
 ---
+
+:::note[Implementation status]
+Built today: one durable JetStream work-queue consumer, `og-telemetry-worker`
+(`internal/bus/consumer.go`: explicit ack, MaxDeliver 5, bounded nak backoff, serial dispatch),
+which does owner confinement and persistence inline. Still Design: everything else on this page,
+the admission/persistence split, the clock, reconcile, backtest, the rule engine, the action
+sender, and CDC.
+:::
 
 Workers are how Omniglass does the steady background work, deriving samples, sending actions, firing timers, reconciling drift, on one machinery instead of a pile of bespoke loops, so the operator gets crash recovery and exactly-once outcomes for free everywhere.
 
@@ -14,7 +22,11 @@ Workers are how Omniglass does the steady background work, deriving samples, sen
 There is one worker machinery, a **JetStream work-queue consumer** over a configurable concurrency
 pool (pull a message, do work, ack, with at-least-once delivery plus `Nats-Msg-Id` dedup and an
 idempotent sink so it inherits crash recovery, exactly-once outcomes, and event-time semantics for
-free). It is instantiated over several consumers rather than separate loops:
+free). That triple is the target contract, not the current one: today there is no `Nats-Msg-Id`
+dedup and the sink is not idempotent (#311, #430), and the one built consumer dispatches serially
+on purpose because the state transition guard depends on it (`internal/bus/consumer.go:246-253`),
+so the configurable concurrency pool and exactly-once outcomes are Design. It is instantiated over
+several consumers rather than separate loops:
 
 - **the admission consumer**: owner-confines raw-ingress samples (node and webhook) against the
   publisher's placement, preserving `Nats-Msg-Id`, and republishes to the **trusted** samples stream,
@@ -37,8 +49,9 @@ group scale horizontally with no leader: JetStream hands each message to exactly
 adding instances just adds throughput. Alongside the consumers, a **node-liveness sweep** runs on its
 own ticker. Unlike a consumer it is a *poll*, not a drain: a down node produces no message, so it is
 found by scanning heartbeat freshness, raising and resolving the node-owned `node.down` alarm
-idempotently (the one-open index). There is no separate projector either: current state is **views by
-default** ([storage](/architecture/storage/)), and `alarm` / `action` hold their state directly.
+idempotently (the one-open index). There is no separate projector either: current values live in the
+`property` latest-value cache table (ADR-0065; see [storage](/architecture/storage/)), and
+`alarm` / `action` hold their state directly.
 
 ## Consumer groups versus singletons
 

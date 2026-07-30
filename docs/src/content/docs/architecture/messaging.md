@@ -3,9 +3,17 @@ title: Messaging
 description: "The internal and edge NATS subject contract, the sibling to the public API: JetStream streams and consumers, the two lanes, request-reply, KV, the live UI relay, and per-tenant subject isolation."
 sidebar:
   badge:
-    text: Design
-    variant: caution
+    text: Partial
+    variant: note
 ---
+
+:::note[Implementation status]
+Built today: the embedded nats-server with JetStream (`internal/bus/server.go`), per-node subject
+isolation with the auth callback, one `OG_TELEMETRY` stream on `og.v1.telemetry.*` with the single
+durable `og-telemetry-worker` consumer writing straight to Postgres, and the worklist and heartbeat
+request-reply lanes. Still Design: the raw/trusted two-lane split and the admission republish, CDC,
+KV, distributed locks and leader election, the object store, per-tenant accounts, and the SSE relay.
+:::
 
 Omniglass has **two typed contracts**. The [public API](/architecture/api/) is the north face (HTTP and
 OpenAPI: operators, the SPA, the CLI, integrations, MCP). This is its sibling: the **internal and edge
@@ -41,6 +49,9 @@ Internal traffic splits by what is moving:
 
 ## Streams and consumers
 
+As built today there is **one stream**, `OG_TELEMETRY` on `og.v1.telemetry.*`, consumed by the single
+durable `og-telemetry-worker`; the set below is the target topology, not the current one.
+
 - **datapoints** (data lane): untrusted publishers (node, external webhook) publish to a **raw ingress**
   subject; the **admission consumer** owner-confines per publisher class and re-publishes to the **trusted**
   datapoints stream that the rule engine, calc, and the persistence consumer read. Trusted server producers
@@ -50,13 +61,18 @@ Internal traffic splits by what is moving:
 - **records** (events, alarms, actions): published by the CDC publisher from Postgres commits; consumed by
   `action_rule`, reconcile, and projection consumers.
 - **commands**: a durable, per-node **command queue** the edge holds a consumer on ([nodes](/architecture/nodes/)).
-- **telemetry** (control-plane, not the datapoint firehose, which lands on raw ingress above): the edge publishes `node.self`, `session_log`, and command results.
+- **telemetry**: as built, `og.v1.telemetry.<node>` IS the sample firehose: it carries each node's
+  samples and its raw self-logs, not a separate control-plane lane. The control-plane split described
+  in this list (with the firehose on a raw ingress subject) is Design.
 
 Durable consumers track their own position; delivery is at-least-once with `Nats-Msg-Id` dedup plus double
 ack, which with the idempotent sinks (a datapoint on `(series, ts)`, an action transition on
 `(alarm, action, transition)`, the CDC idempotency key) gives exactly-once **outcomes**. This triple
 (`Nats-Msg-Id` dedup, double ack, idempotent sink) is the canonical exactly-once mechanism the other pages
 refer to. The edge stamps `ts`, so the system is ts-authoritative and needs no strict ordering on the wire.
+Today's delivery contract is weaker than this: node publishes are fire-and-forget core NATS (no publish
+ack, no `Nats-Msg-Id`) and the consumer acks once after multi-transaction writes, so delivery is
+at-least-once with a known duplicate risk until #430 lands (see #430 and #311).
 
 ## Subjects, accounts, and scope
 

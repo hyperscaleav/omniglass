@@ -14,9 +14,13 @@ the embedded services, what replicates, the coordination substrate, platform con
 availability, and multi-tenancy.
 
 :::note[Partial]
-Built today: the single Go binary with the `server` and `migrate` run modes, the multi-arch container
-image, and the Helm chart. Still `Design`: the embedded Postgres and NATS, the `node` and
-`worker` / `controller` modes, the CDC bridge, horizontal scale-out, and high availability. See
+Built today: the single Go binary (hand-written commands: `server`, `migrate`, `bootstrap`, `token`,
+`set-password`, `seed-dev`, and `node run`), the embedded NATS server (in-process `nats-server` with
+JetStream, `internal/cli/server.go`), the `node` run mode, the multi-arch container image, and the
+Helm chart. Still `Design`: embedded Postgres, the `worker` / `controller` modes, the CDC bridge,
+the two-lane data plane (the admission / trusted / persistence split below and in the diagram;
+today one stream and one serial consumer do confinement and persistence inline), horizontal
+scale-out, and high availability. See
 [implementation status](/architecture/status/).
 :::
 
@@ -62,10 +66,11 @@ datastore. The data and coordination architecture is identical at any size.
 
 ## Coordination: NATS moves, Postgres remembers
 
-The split is firm. **Postgres is the relational system of record** (entities, datapoints, events and
+The split is firm. **Postgres is the relational system of record** (entities, samples, events and
 alarms, audit, and the queries the cascade, fusion, views, and scope need). **NATS (JetStream) is the
 nervous system**: work distribution, the durable command queue, the telemetry buffer, and fan-out, plus
-**KV** (config, locks, leader-election) and an object store for internal artifacts.
+**KV** (config, locks, leader-election) and an object store for internal artifacts (the KV and object
+store are still Design; the built blob store is content-addressed in Postgres, `internal/blob`).
 
 The two meet through **change data capture**: Postgres tells us *what changed* (logical decoding of the
 WAL), and NATS carries the queue. A single **leader-elected CDC publisher** reads committed changes from a
@@ -78,12 +83,12 @@ migrations run exactly once.
 
 Service-to-service traffic rides **two lanes on the one JetStream bus**, by what is moving:
 
-- **Data lane (NATS-native).** Observed and calculated **datapoints** live on NATS. The edge and central
-  nodes publish observed datapoints to a **raw ingress** subject; an **admission consumer** owner-confines
-  them per publisher class and republishes to the **trusted** datapoints stream, which the rule engine
-  consumes directly from NATS (calc publishes derived datapoints onto the trusted stream as a trusted producer). A
-  **persistence consumer** batch-writes datapoints to the Postgres metric, state, and log tables as an async
-  **sink**. Datapoints do not pass through CDC: they are already on NATS, idempotent on `(series, ts)`, and
+- **Data lane (NATS-native).** Observed and calculated **samples** live on NATS. The edge and central
+  nodes publish observed samples to a **raw ingress** subject; an **admission consumer** owner-confines
+  them per publisher class and republishes to the **trusted** samples stream, which the rule engine
+  consumes directly from NATS (calc publishes derived samples onto the trusted stream as a trusted producer). A
+  **persistence consumer** batch-writes samples to the Postgres `metric`, `state`, `event`, and `log_line` tables as an async
+  **sink**. Samples do not pass through CDC: they are already on NATS, idempotent on `(series, ts)`, and
   the firehose, so rules never wait on Postgres. Postgres is the durable record, NATS is the live signal.
 - **Record and state lane (Postgres-first, CDC-out).** **Events, alarms, actions, and operator mutations**
   (config, ack, snooze, settings, manual commands) are **born in a Postgres transaction**: when an

@@ -12,22 +12,27 @@ commands, sessions, inbound demux, the task queue, reachability, and shipping
 telemetry. The declarative shape it executes lives in [templates](/architecture/templates/) and [collection](/architecture/collection/).
 
 :::note[Partial]
-Built today: `omniglass node` enrolls (a node is created server-side, its enrollment token minted at
+Built today: `omniglass node run` enrolls (a node is created server-side, its enrollment token minted at
 `POST /nodes/{name}:enroll` and exchanged for its NATS credential at `POST /nodes:claim`), connects
 outbound-only to the server's in-process NATS server, pulls its worklist over a `og.v1.worklist.<node>`
 request-reply (its enabled tasks plus a `config_generation`), and heartbeats on `og.v1.heartbeat.<node>`
 (the server stamps `last_heartbeat_at`). **Per-node subject isolation is enforced**: each node's NATS
-credential is permitted only its own `<node>` subjects, so a node cannot publish or pull as another. Still
-`Design`: running tasks (the probes), shipping telemetry (the JetStream `TelemetryBatch`), commands and the durable
-command queue, sessions and inbound demux, the reachability gate, config-generation-driven cache
-invalidation, `node.self` self-telemetry, and the `node.down` sweep. The credential is a shared secret
+credential is permitted only its own `<node>` subjects, so a node cannot publish or pull as another.
+Also built: running tasks (the probes, `internal/node/probe.go`), shipping telemetry (the JetStream
+`TelemetryBatch` ingested by `internal/bus/consumer.go`), and the raw self-log lane (ADR-0066:
+`internal/node/logs.go`, `GET /nodes/{name}/logs`, the console Self-logs panel). Still
+`Design`: commands and the durable
+command queue, sessions and inbound demux, the layered `_check` reachability gate, config-generation-driven cache
+invalidation, `node.self` self-telemetry, the `node.down` sweep, the JetStream publish-ack delivery
+contract (today the telemetry publish is fire-and-forget, #430), the tick scheduling and concurrency
+knobs, and `/components/{name}:apply`. The credential is a shared secret
 (the enrollment token doubles as the NATS password); the decentralized nkey/JWT model is deferred. See
 [implementation status](/architecture/status/) and [decision log](/architecture/decisions/) (ADR-0036).
 :::
 
 ## The node
 
-The node is the edge process (`omniglass --mode node`), one per site, or the
+The node is the edge process (`omniglass node run`), one per site, or the
 **server itself** for work with no site-local edge (see *Placement*). Its identity
 is **bound to `node.name`**; a compromised node cannot impersonate another (see
 [identity-access](/architecture/identity-access/) for the node auth path). It holds no
@@ -98,7 +103,7 @@ credential bound to `node.name`, [identity and access](/architecture/identity-ac
 server-to-node arrives as messages on subjects the node is permitted to consume. Three flows share that
 connection:
 
-- **Telemetry up** (node to server): the node **publishes** `Event` batches (`{samples, labels}` plus
+- **Telemetry up** (node to server): the node **publishes** `TelemetryBatch` batches (`{samples, labels}` plus
   the `(task, ts)` envelope, [below](#shipping-samples)) to a **JetStream raw ingress subject**;
   JetStream acknowledges each publish (at-least-once), and a `Nats-Msg-Id` lets the server dedup a replay
   (the admission consumer preserves it when it republishes to the trusted stream). The firehose from the edge.
@@ -361,7 +366,7 @@ L6 (TLS), and further L7 handshakes slot in by extending the check stack: one
 
 ## Shipping samples
 
-The node ships a native `Event`: `{ samples, labels }` plus an envelope
+The node ships a native `TelemetryBatch`: `{ samples, labels }` plus an envelope
 (`task`, batch `ts`), **published to the JetStream raw ingress subject** (protobuf-encoded
 message, the proto surviving as the NATS message schema), buffered with
 retry/backoff. On a parse or validation failure it also ships the **raw** wire bytes so the

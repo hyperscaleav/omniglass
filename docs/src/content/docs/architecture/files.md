@@ -15,7 +15,8 @@ Files let an operator keep the opaque bytes that go with an estate, a firmware i
 
 ## Two layers: the file handle and the blob
 
-- **`file`** is **indexable metadata**: name, content-type, size, `sha256`, tags. The searchable
+- **`file`** is **indexable metadata**: name, content-type, size, `sha256` (tags are deferred to
+  [#191](https://github.com/hyperscaleav/omniglass/issues/191); there is no `tags` column yet). The searchable
   handle an operator references and finds (a firmware image, a device config dump, a runbook doc,
   a screenshot, a packet capture). It owns no bytes; it points at a blob by hash.
 - **the blob store** holds the **bytes**, **content-addressed by `sha256`**. The hash is the key,
@@ -24,7 +25,8 @@ Files let an operator keep the opaque bytes that go with an estate, a firmware i
 Splitting them means search and inventory operations (list, filter, tag) never touch bytes, and
 the same blob can back many file handles.
 
-`file` tags reuse the `tag` **key** registry (the same tenant-wide governed vocabulary, so `category`
+`file` tags are deferred ([#191](https://github.com/hyperscaleav/omniglass/issues/191)); when they
+land they will reuse the `tag` **key** registry (the same tenant-wide governed vocabulary, so `category`
 means the same thing on a firmware image as on a component, [config and credentials](/architecture/variables/)),
 but bind as a **flat per-file set**: a file is not on the structural exclusive-arc, so there is no parent
 to cascade from. The vocabulary is shared; the cascade is not.
@@ -66,7 +68,7 @@ A blob is keyed by the hash of its bytes, not a UUID, which buys:
   stable across a backtest.
 
 So **rows reference a hash, never inline bytes.** Inline `bytea` would kill the hash-ref stability
-property and bloat the firehose row. Small structured values (a datapoint, its labels) stay inline
+property and bloat the firehose row. Small structured values (a sample, its labels) stay inline
 in the row's jsonb; **large or opaque payloads become a blob hash-ref** (a dedicated **indexed**
 `blob_sha256` column on the referencing row, so GC can probe it, not buried in jsonb): a big `log_line`
 body, and especially a **`collection.failed` event's raw** when the

@@ -11,8 +11,8 @@ The UI is where an operator actually does the work, so it is built as one render
 the concrete reusable primitives are the [design system](/contributing/design-system/).
 
 :::note[What shipped vs the model below]
-The first surfaces built are the **inventory tier** (Systems, Components, Locations) and the
-shell. These ship as **config-driven `ListView` pages over the typed CRUD client**, not as the
+The console now has roughly 22 live pages spanning inventory, catalog, values, and admin, plus the
+shell. These ship as **config-driven `ListShell` pages (with `FlatList` / `TreeList` bodies) over the typed CRUD client**, not as the
 `ViewResult` renderer described next: an inventory page is CRUD over a scoped resource, so it
 reads the resource directly and renders one configurable shell. The `ViewResult` / views model,
 the renderer library, and composable dashboards below remain the intended **read side** for the
@@ -36,7 +36,7 @@ The **dense-ops layout is an architectural pattern**, not a one-off page: list s
 shape (a summary of facets over the full set, then a keyboard chip filter, then a tree/list table,
 then a click-row detail blade plus a full detail page), and the facets drive the filter while the
 summary stays whole so click-to-filter is stable. The inventory tier realizes this pattern as the
-one config-driven `ListView` shell (with `FilterBar`, `Drawer`, `Donut`, and the faceted-filter
+one config-driven `ListShell` (with `FlatList` / `TreeList` bodies, `FilterBar`, `Drawer`, `Donut`, and the faceted-filter
 engine); the concrete shipped primitives live in the [design system](/contributing/design-system/),
 and the pattern is the model the analytical surfaces will reuse.
 
@@ -103,8 +103,9 @@ Which high-frequency surfaces move from polling to the SSE relay, and what laten
 CRUD forms over the typed resource API, one per primitive (components, templates, types, tags,
 rules, config, groups, schedules, severity levels, and the IAM resources). **Types** is the
 first of these to span several registries rather than one per primitive: a segmented tab per
-kind (location, system, component, secret), each tab its own directory over that registry, CRUD
-on the three writable kinds, and a read-only view of the fourth ([implementation
+kind (location and secret; the system and component kinds moved to Standards and Products), each
+tab its own directory over that registry, CRUD on the location kind, and a read-only view of
+secret ([implementation
 status](/architecture/status/#build-progress)). Editing a setting is editing
 **[config](/architecture/variables/)**, an audited mutation, not a separate prop store
 ([audit](/architecture/audit/)). The standout is the **rule-authoring
@@ -143,8 +144,9 @@ The IA has two layers, deliberately decoupled:
    stable however the menu is later reorganized. There are no taxonomy-nested routes and no redirects
    to maintain.
 2. **The sidebar groups those flat routes into clusters for browsing**: Home, Dashboards, Alarms,
-   Inventory (locations, systems, components, nodes), Values (variables, secrets, config), Catalog
-   (templates, types, tags, rules), Explore, Learn, Admin (users, roles, groups, audit, and a soon
+   Inventory (locations, systems, components, nodes), Values (variables, secrets, config, files), Catalog
+   (templates, types, standards, properties, event types, command types, tags, vendors, drivers,
+   capabilities, products, rules), Explore, Learn, Admin (users, roles, groups, audit, and the
    Settings leaf). Grouping is pure presentation: a cluster is not a destination and carries no route
    of its own. It can be rearranged, and is user-customizable, without touching a single route.
 
@@ -158,15 +160,13 @@ platform Settings (preferences: severity scales, schedules, retention, defaults)
 
 **Inventory holds the estate entities**: locations, systems, components, and **nodes**, the collection
 daemons that gather datapoints. A node is a monitored, scope-controlled entity like any other estate
-member (gated on `node:read` plus ABAC scope once its backend lands; an ungated **soon** stub until
-then), so it stays in Inventory rather than Admin. **Interfaces and tasks are not nav items**: an
+member (live, gated on `node:read` plus ABAC scope), so it stays in Inventory rather than Admin. **Interfaces and tasks are not nav items**: an
 interface is a panel on a component (its device endpoints), and a task is a panel on a node (its
 collection assignments), each a facet of its owning entity's detail page rather than a directory of
 its own.
 
 Admin is the renamed Settings group: it holds the platform-administration surfaces (Users, Roles,
-Groups, Audit) plus the Settings leaf itself, dimmed **soon** until the platform-preferences page
-ships.
+Groups, Audit) plus the live Settings leaf, the platform-preferences page.
 
 **Home is distinct from Dashboards.** Dashboards monitor the *fleet* (datapoint views over the
 inventory). Home monitors the *monitor*: the operator and admin situation room for config lifecycle

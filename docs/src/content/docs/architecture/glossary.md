@@ -3,9 +3,15 @@ title: Glossary
 description: "The authoritative glossary: every official term in the architecture, defined once."
 sidebar:
   badge:
-    text: Design
-    variant: caution
+    text: Partial
+    variant: note
 ---
+
+:::caution[Known to lag the build]
+This glossary is known to lag the build; a term-by-term reconciliation is tracked under
+issue #434 (the corpus restructure epic). Until then, where an entry disagrees with the code
+or a per-subsystem page, the code and the per-subsystem pages win.
+:::
 
 This is the **authoritative glossary**: every official term in the architecture, defined once. The other pages introduce these terms in **bold** as the story reaches them; this is where you look any of them up.
 

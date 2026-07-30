@@ -7,7 +7,7 @@ sidebar:
     variant: caution
 ---
 
-AI in Omniglass is a **capability that spans from assistive to operational**, governed exactly like any other actor: at the assistive end it enriches and explains, at the operational end it proposes and acts. Today an AI tool authenticates via **OAuth as a `human` or `service` principal** and acts with exactly that principal's grants, so it reaches the estate through the same seams every caller uses, never a private lane ([identity and access](/architecture/identity-access/)).
+AI in Omniglass is a **capability that spans from assistive to operational**, governed exactly like any other actor: at the assistive end it enriches and explains, at the operational end it proposes and acts. Today an AI tool authenticates with a **bearer token or password as a `human` or `service` principal** (OAuth/OIDC is deferred, [ADR-0004](/architecture/decisions/#adr-0004-credentials-ship-bearer-only)) and acts with exactly that principal's grants, so it reaches the estate through the same seams every caller uses, never a private lane ([identity and access](/architecture/identity-access/)).
 
 ## The capability spectrum
 
