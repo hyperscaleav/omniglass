@@ -45,7 +45,7 @@ func (s *Server) startTelemetryConsumer() error {
 	defer cancel()
 	stream, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name:      telemetryStream,
-		Subjects:  []string{collection.TelemetryWildcard},
+		Subjects:  []string{collection.TelemetryWildcard, collection.APITelemetrySubject},
 		Retention: jetstream.WorkQueuePolicy,
 	})
 	if err != nil {
@@ -76,14 +76,41 @@ func (s *Server) startTelemetryConsumer() error {
 // terminates the message so it does not loop forever.
 func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	ctx := context.Background()
+
+	var ev ogv1.TelemetryBatch
+	if err := proto.Unmarshal(msg.Data(), &ev); err != nil {
+		_ = msg.Term() // undecodable: it will never succeed, stop redelivery
+		return
+	}
+
+	// TRUST DECIDED BY SUBJECT, never by which fields are populated. The API lane
+	// carries an owner the route already authorized; the node lane's owner is the
+	// server's to resolve from the task's interface.
+	if msg.Subject() == collection.APITelemetrySubject {
+		bind, ok := apiBinding(&ev)
+		if !ok {
+			_ = msg.Term() // malformed owner: it will never resolve, stop redelivery
+			return
+		}
+		if err := s.land(ctx, &ev, bind); err != nil {
+			s.nakOrTerm(msg)
+			return
+		}
+		_ = msg.Ack()
+		return
+	}
+
 	// The node published only its own telemetry subject (per-node grant), so the
 	// node extracted from the subject is trusted, the same trust the heartbeat sink
 	// relies on.
 	node := collection.NodeFromSubject(msg.Subject())
 
-	var ev ogv1.TelemetryBatch
-	if err := proto.Unmarshal(msg.Data(), &ev); err != nil {
-		_ = msg.Term() // undecodable: it will never succeed, stop redelivery
+	// A node does not get to assert its own owner. Populating owner on this lane is a
+	// protocol error, not something to quietly ignore: ignoring it would leave a
+	// field that looks authoritative and is not, so say so and stop redelivery.
+	if ev.GetOwner() != nil {
+		slog.Warn("node-lane batch asserted an owner, dropped", "node", node)
+		_ = msg.Term()
 		return
 	}
 
@@ -116,6 +143,33 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 		return
 	}
 	_ = msg.Ack()
+}
+
+// apiBinding builds the binding for a batch that arrived on the API push lane. The
+// route already authorized the caller against this owner, so both the samples and
+// the log lines land on it: unlike the node lane, a push has one owner, not two.
+//
+// It returns false for a batch whose owner is missing or not addressable, which the
+// caller terminates rather than redelivers: a malformed owner will never resolve.
+// Only component owners are accepted for now, because deriveSamples still hardcodes
+// owner_kind=component downstream; widening to system and location is #422, and
+// rejecting here beats writing a sample to the wrong arc.
+func apiBinding(ev *ogv1.TelemetryBatch) (ingestBinding, bool) {
+	o := ev.GetOwner()
+	if o == nil || o.GetKind() == "" || o.GetRef() == "" {
+		return ingestBinding{}, false
+	}
+	if o.GetKind() != "component" {
+		slog.Warn("push batch owner kind not yet supported, dropped",
+			"kind", o.GetKind(), "ref", o.GetRef())
+		return ingestBinding{}, false
+	}
+	owner := storage.TaskOwner{Component: o.GetRef()}
+	return ingestBinding{
+		LogOwnerKind: o.GetKind(),
+		LogOwnerID:   o.GetRef(),
+		SampleOwner:  &owner,
+	}, true
 }
 
 // ingestBinding is the resolved ownership for one batch: where its log lines land
@@ -316,10 +370,16 @@ func logLineWrites(ev *ogv1.TelemetryBatch, ownerKind, ownerID string) []storage
 		case ev.GetTs() != nil:
 			ts = ev.GetTs().AsTime()
 		}
+		// A line's own source wins, else the batch's (a push declares it once for the
+		// batch; a node's self-logs set it per line).
+		source := l.GetSource()
+		if source == "" {
+			source = ev.GetSource()
+		}
 		out = append(out, storage.LogLineWrite{
 			OwnerKind:     ownerKind,
 			OwnerID:       ownerID,
-			Source:        l.GetSource(),
+			Source:        source,
 			Severity:      l.GetSeverity(),
 			Facility:      l.GetFacility(),
 			Message:       l.GetMessage(),
@@ -343,7 +403,20 @@ func deriveSamples(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collect
 	var metrics []storage.MetricSampleWrite
 	var states []storage.StateSampleWrite
 	var events []storage.EventWrite
+	// The wire value wins where the batch supplies one, else fall back to what the
+	// task's interface implies. The node lane sets neither (its interface name IS the
+	// instance discriminator and its interface type IS the source), so it is
+	// unchanged; a push has no interface, so it must be able to say both.
+	batchSource := ev.GetSource()
 	for _, dp := range ev.GetSamples() {
+		instance := dp.GetInstance()
+		if instance == "" {
+			instance = owner.InterfaceName
+		}
+		source := batchSource
+		if source == "" {
+			source = owner.InterfaceType
+		}
 		kind, ok := reg.Allows(dp.GetName())
 		if !ok {
 			continue // reject-not-project: unregistered name
@@ -358,9 +431,9 @@ func deriveSamples(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collect
 				OwnerKind: "component",
 				OwnerID:   owner.Component,
 				Key:       dp.GetName(),
-				Instance:  owner.InterfaceName,
+				Instance:  instance,
 				Value:     val,
-				Source:    owner.InterfaceType,
+				Source:    source,
 				TS:        sampleTime(ev, dp),
 			})
 		case "state":
@@ -372,9 +445,9 @@ func deriveSamples(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collect
 				OwnerKind: "component",
 				OwnerID:   owner.Component,
 				Key:       dp.GetName(),
-				Instance:  owner.InterfaceName,
+				Instance:  instance,
 				Value:     val,
-				Source:    owner.InterfaceType,
+				Source:    source,
 				TS:        sampleTime(ev, dp),
 			})
 		case "event":
@@ -389,11 +462,11 @@ func deriveSamples(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collect
 				OwnerKind:  "component",
 				OwnerID:    owner.Component,
 				Key:        dp.GetName(),
-				Instance:   owner.InterfaceName,
+				Instance:   instance,
 				Origin:     "caught",
 				Message:    msg,
 				Attributes: attrs,
-				Source:     owner.InterfaceType,
+				Source:     source,
 				TS:         sampleTime(ev, dp),
 			})
 		}

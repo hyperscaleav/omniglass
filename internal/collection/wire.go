@@ -20,6 +20,18 @@ const (
 	// TelemetryWildcard is the server-side JetStream stream subject: every node's
 	// telemetry publish (single-token node wildcard), mirroring WorklistWildcard.
 	TelemetryWildcard = subjectPrefix + "telemetry.*"
+	// APITelemetrySubject is the trusted push lane: the API publishes a batch here
+	// after it has authorized the caller against the declared owner, so the consumer
+	// believes that owner. Only the server's own credential can publish here (a node
+	// grant is an explicit allow-list of its three own subjects).
+	//
+	// It is deliberately NOT a token under TelemetryWildcard. That wildcard is
+	// single-token and a node's grant covers og.v1.telemetry.<its-own-name>, so a
+	// node named "api" (or whatever literal we reserved there) would be handed the
+	// trusted subject and could publish a forged, pre-authorized owner. Putting the
+	// lane in its own segment makes that structurally impossible rather than
+	// dependent on nobody choosing an awkward node name.
+	APITelemetrySubject = subjectPrefix + "api.telemetry"
 )
 
 // WorklistSubject is where a node requests its worklist (request-reply).
