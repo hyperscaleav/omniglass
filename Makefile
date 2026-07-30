@@ -46,7 +46,7 @@ gen: gen-proto
 # a NATS message, not a gRPC service, so no protoc-gen-go-grpc. Output is committed
 # and reviewed like code; keep protoc + plugin pinned so the bytes are stable.
 gen-proto:
-	PATH="$(shell go env GOPATH)/bin:$$PATH" protoc --go_out=. --go_opt=paths=source_relative proto/og/v1/event.proto
+	PATH="$(shell go env GOPATH)/bin:$$PATH" protoc --go_out=. --go_opt=paths=source_relative proto/og/v1/telemetry.proto
 
 # Regenerate just the typed SPA client from the committed OpenAPI. Requires node.
 gen-web:

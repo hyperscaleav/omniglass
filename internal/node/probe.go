@@ -58,7 +58,7 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 		// content hash over the interface). The ingest-side latest-value guard is
 		// the net for a node restart.
 		dps = appendVerdict(dps, task.ID, verdicts)
-		ev := buildEvent(task.ID, node, dps)
+		ev := buildBatch(task.ID, node, dps)
 		b, err := proto.Marshal(ev)
 		if err != nil {
 			return fmt.Errorf("node: marshal telemetry event: %w", err)
@@ -170,11 +170,11 @@ func parseICMPTask(task collection.TaskSpec) (collection.ICMPTask, error) {
 	return collection.ICMPTask{Target: p.Target, Count: p.Count, Timeout: timeout}, nil
 }
 
-// buildEvent maps produced samples to a telemetry Event. Pure: no I/O. The
+// buildBatch maps produced samples to a telemetry Event. Pure: no I/O. The
 // numeric probe values ride double_value; the per-sample labels are carried
 // but not persisted in this checkpoint.
-func buildEvent(taskID, node string, dps []collection.Sample) *ogv1.Event {
-	ev := &ogv1.Event{
+func buildBatch(taskID, node string, dps []collection.Sample) *ogv1.TelemetryBatch {
+	ev := &ogv1.TelemetryBatch{
 		TaskId: taskID,
 		NodeId: node,
 		Ts:     timestamppb.New(time.Now().UTC()),

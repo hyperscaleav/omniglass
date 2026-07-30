@@ -48,7 +48,7 @@ func TestBuildEvent(t *testing.T) {
 		{Name: collection.SignalTCPOpen, Value: 1, Labels: map[string]string{collection.ReasonLabel: "responded"}},
 		{Name: collection.SignalTCPConnectTime, Value: 3.5},
 	}
-	ev := buildEvent("t1", "node-a", dps)
+	ev := buildBatch("t1", "node-a", dps)
 	if ev.GetTaskId() != "t1" || ev.GetNodeId() != "node-a" {
 		t.Fatalf("event ids = %q/%q, want t1/node-a", ev.GetTaskId(), ev.GetNodeId())
 	}
@@ -68,7 +68,7 @@ func TestBuildEventText(t *testing.T) {
 		{Name: collection.SignalTCPOpen, Value: 1},
 		{Name: collection.SignalInterfaceReachable, Text: collection.VerdictUp, IsText: true},
 	}
-	ev := buildEvent("t1", "node-a", dps)
+	ev := buildBatch("t1", "node-a", dps)
 	verdict := ev.GetSamples()[1]
 	if verdict.GetName() != collection.SignalInterfaceReachable || verdict.GetStringValue() != "up" {
 		t.Fatalf("verdict sample = %+v, want interface.reachable=up on string_value", verdict)

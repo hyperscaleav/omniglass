@@ -45,9 +45,9 @@ func TestSelfLogEventMapping(t *testing.T) {
 		message:  "task skipped",
 		attrs:    map[string]any{"source": "collection", "facility": "node", "task": "t-icmp", "node": "site-a"},
 	}}
-	ev := selfLogEvent("site-a", recs)
+	ev := selfLogBatch("site-a", recs)
 	if ev == nil || len(ev.GetLogs()) != 1 {
-		t.Fatalf("selfLogEvent = %+v, want one log line", ev)
+		t.Fatalf("selfLogBatch = %+v, want one log line", ev)
 	}
 	l := ev.GetLogs()[0]
 	if ev.GetNodeId() != "site-a" {
@@ -74,10 +74,10 @@ func TestSelfLogEventMapping(t *testing.T) {
 // TestSelfLogEventDefaultsAndEmpty proves source defaults to "node" when unset and
 // that an empty record set ships nothing.
 func TestSelfLogEventDefaultsAndEmpty(t *testing.T) {
-	if ev := selfLogEvent("site-a", nil); ev != nil {
-		t.Fatalf("selfLogEvent(nil) = %+v, want nil (nothing to ship)", ev)
+	if ev := selfLogBatch("site-a", nil); ev != nil {
+		t.Fatalf("selfLogBatch(nil) = %+v, want nil (nothing to ship)", ev)
 	}
-	ev := selfLogEvent("site-a", []capturedLog{{severity: "info", message: "connected to bus", attrs: map[string]any{"url": "nats://x"}}})
+	ev := selfLogBatch("site-a", []capturedLog{{severity: "info", message: "connected to bus", attrs: map[string]any{"url": "nats://x"}}})
 	l := ev.GetLogs()[0]
 	if l.GetSource() != "node" {
 		t.Fatalf("source = %q, want default node", l.GetSource())

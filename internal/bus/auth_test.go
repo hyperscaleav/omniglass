@@ -32,16 +32,16 @@ func (f fakeStore) ResolveTaskOwner(context.Context, string, string) (storage.Ta
 func (f fakeStore) ListPropertyTypes(context.Context) ([]storage.PropertyType, error) {
 	return nil, nil
 }
-func (f fakeStore) InsertMetricSamples(context.Context, []storage.MetricSampleEvent) error {
+func (f fakeStore) InsertMetricSamples(context.Context, []storage.MetricSampleWrite) error {
 	return nil
 }
-func (f fakeStore) InsertStateSamples(context.Context, []storage.StateSampleEvent) error {
+func (f fakeStore) InsertStateSamples(context.Context, []storage.StateSampleWrite) error {
 	return nil
 }
 func (f fakeStore) LatestState(context.Context, string, string, string) (*storage.StateSample, error) {
 	return nil, nil
 }
-func (f fakeStore) InsertEvents(context.Context, []storage.EventOccurrence) error {
+func (f fakeStore) InsertEvents(context.Context, []storage.EventWrite) error {
 	return nil
 }
 func (f fakeStore) InsertLogLines(context.Context, []storage.LogLineWrite) error {

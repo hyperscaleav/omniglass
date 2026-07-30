@@ -9,12 +9,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// StateSampleEvent is one observed state verdict to persist. OwnerKind picks
+// StateSampleWrite is one observed state verdict to persist. OwnerKind picks
 // the arc; OwnerID is the estate address (component/system/location/node name);
 // Instance discriminates many verdicts of one key on one owner (the interface
 // name for interface.reachable). Value is the categorical text (up/down), the
-// mirror of MetricSampleEvent but with a value domain, not a number.
-type StateSampleEvent struct {
+// mirror of MetricSampleWrite but with a value domain, not a number.
+type StateSampleWrite struct {
 	OwnerKind string
 	OwnerID   string
 	Key       string
@@ -39,7 +39,7 @@ type StateSample struct {
 // sets exactly its owner arc column (the CHECK enforces the rest) and provenance
 // observed. Callers apply reject-not-project (collection.Registry) and the
 // transition-only guard before calling; this is the durable write.
-func (p *PG) InsertStateSamples(ctx context.Context, evs []StateSampleEvent) error {
+func (p *PG) InsertStateSamples(ctx context.Context, evs []StateSampleWrite) error {
 	if len(evs) == 0 {
 		return nil
 	}

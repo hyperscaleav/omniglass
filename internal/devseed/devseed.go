@@ -686,18 +686,18 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string) e
 // name. Only canonical property_type names are used (reject-not-project).
 func seedReachSamples(ctx context.Context, gw storage.Gateway, iface string, flapped bool, rttMs, connMs float64, now time.Time) error {
 	recovered := now.Add(-30 * time.Second)
-	states := []storage.StateSampleEvent{}
+	states := []storage.StateSampleWrite{}
 	if flapped {
 		states = append(states,
-			storage.StateSampleEvent{OwnerKind: "component", OwnerID: reachComponent, Key: "interface.reachable", Instance: iface, Value: "up", Source: "reachability", TS: now.Add(-2 * time.Hour)},
-			storage.StateSampleEvent{OwnerKind: "component", OwnerID: reachComponent, Key: "interface.reachable", Instance: iface, Value: "down", Source: "reachability", TS: now.Add(-6 * time.Minute)},
+			storage.StateSampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "interface.reachable", Instance: iface, Value: "up", Source: "reachability", TS: now.Add(-2 * time.Hour)},
+			storage.StateSampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "interface.reachable", Instance: iface, Value: "down", Source: "reachability", TS: now.Add(-6 * time.Minute)},
 		)
 	}
-	states = append(states, storage.StateSampleEvent{OwnerKind: "component", OwnerID: reachComponent, Key: "interface.reachable", Instance: iface, Value: "up", Source: "reachability", TS: recovered})
+	states = append(states, storage.StateSampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "interface.reachable", Instance: iface, Value: "up", Source: "reachability", TS: recovered})
 	if err := gw.InsertStateSamples(ctx, states); err != nil {
 		return fmt.Errorf("devseed: insert %s state samples: %w", iface, err)
 	}
-	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleEvent{
+	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
 		{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp.reachable", Instance: iface, Value: 1, Source: "icmp", TS: recovered},
 		{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp.rtt_avg", Instance: iface, Value: rttMs, Source: "icmp", TS: recovered},
 		{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp.open", Instance: iface, Value: 1, Source: "tcp", TS: recovered},
@@ -749,9 +749,9 @@ func seedEvents(ctx context.Context, gw storage.Gateway) error {
 		return nil
 	}
 	now := time.Now().UTC()
-	evs := make([]storage.EventOccurrence, 0, len(exampleEvents))
+	evs := make([]storage.EventWrite, 0, len(exampleEvents))
 	for _, e := range exampleEvents {
-		evs = append(evs, storage.EventOccurrence{
+		evs = append(evs, storage.EventWrite{
 			OwnerKind:  "component",
 			OwnerID:    eventComponent,
 			Key:        "call.started",

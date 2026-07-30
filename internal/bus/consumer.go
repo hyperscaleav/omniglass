@@ -81,7 +81,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	// relies on.
 	node := collection.NodeFromSubject(msg.Subject())
 
-	var ev ogv1.Event
+	var ev ogv1.TelemetryBatch
 	if err := proto.Unmarshal(msg.Data(), &ev); err != nil {
 		_ = msg.Term() // undecodable: it will never succeed, stop redelivery
 		return
@@ -190,7 +190,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 // provenance observed, the metric's number and the state's string encoded as the
 // jsonb value the cache stores. Pure: no I/O. Events are occurrences, not values,
 // so they never enter the value cache.
-func latestUpserts(metrics []storage.MetricSampleEvent, states []storage.StateSampleEvent) []storage.PropertyUpsert {
+func latestUpserts(metrics []storage.MetricSampleWrite, states []storage.StateSampleWrite) []storage.PropertyUpsert {
 	ups := make([]storage.PropertyUpsert, 0, len(metrics)+len(states))
 	for _, m := range metrics {
 		v, err := json.Marshal(m.Value)
@@ -251,11 +251,11 @@ func (s *Server) nakOrTerm(msg jetstream.Msg) {
 // identical in-flight duplicates could both read an older latest and both
 // insert. Keep dispatch serial, or move the transition check into the insert (a
 // conditional write) before parallelizing.
-func (s *Server) dedupeStates(ctx context.Context, states []storage.StateSampleEvent) ([]storage.StateSampleEvent, error) {
+func (s *Server) dedupeStates(ctx context.Context, states []storage.StateSampleWrite) ([]storage.StateSampleWrite, error) {
 	if len(states) == 0 {
 		return nil, nil
 	}
-	fresh := make([]storage.StateSampleEvent, 0, len(states))
+	fresh := make([]storage.StateSampleWrite, 0, len(states))
 	for _, ev := range states {
 		latest, err := s.store.LatestState(ctx, ev.OwnerID, ev.Key, ev.Instance)
 		if err != nil {
@@ -274,7 +274,7 @@ func (s *Server) dedupeStates(ctx context.Context, states []storage.StateSampleE
 // I/O and no registry (a log line is untyped by design). Each line's own ts wins
 // when set, else the batch ts; empty severity/facility/correlation stay "" and the
 // storage layer maps them to NULL.
-func logLineWrites(ev *ogv1.Event, node string) []storage.LogLineWrite {
+func logLineWrites(ev *ogv1.TelemetryBatch, node string) []storage.LogLineWrite {
 	logs := ev.GetLogs()
 	if len(logs) == 0 {
 		return nil
@@ -314,10 +314,10 @@ func logLineWrites(ev *ogv1.Event, node string) []storage.LogLineWrite {
 // event slice. The owner is stamped identically for all three from the task's
 // interface: owner_kind=component, source=interface type, instance=interface name;
 // provenance is observed (the insert path fixes that).
-func deriveSamples(ev *ogv1.Event, owner storage.TaskOwner, reg collection.Registry) ([]storage.MetricSampleEvent, []storage.StateSampleEvent, []storage.EventOccurrence) {
-	var metrics []storage.MetricSampleEvent
-	var states []storage.StateSampleEvent
-	var events []storage.EventOccurrence
+func deriveSamples(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collection.Registry) ([]storage.MetricSampleWrite, []storage.StateSampleWrite, []storage.EventWrite) {
+	var metrics []storage.MetricSampleWrite
+	var states []storage.StateSampleWrite
+	var events []storage.EventWrite
 	for _, dp := range ev.GetSamples() {
 		kind, ok := reg.Allows(dp.GetName())
 		if !ok {
@@ -329,7 +329,7 @@ func deriveSamples(ev *ogv1.Event, owner storage.TaskOwner, reg collection.Regis
 			if !ok {
 				continue
 			}
-			metrics = append(metrics, storage.MetricSampleEvent{
+			metrics = append(metrics, storage.MetricSampleWrite{
 				OwnerKind: "component",
 				OwnerID:   owner.Component,
 				Key:       dp.GetName(),
@@ -343,7 +343,7 @@ func deriveSamples(ev *ogv1.Event, owner storage.TaskOwner, reg collection.Regis
 			if !ok {
 				continue
 			}
-			states = append(states, storage.StateSampleEvent{
+			states = append(states, storage.StateSampleWrite{
 				OwnerKind: "component",
 				OwnerID:   owner.Component,
 				Key:       dp.GetName(),
@@ -360,7 +360,7 @@ func deriveSamples(ev *ogv1.Event, owner storage.TaskOwner, reg collection.Regis
 			// A component published this occurrence natively (an xAPI event, an SNMP
 			// trap): it is caught, the platform did not derive it. Raw log lines are a
 			// separate ingest lane, not this path (ADR-0066).
-			events = append(events, storage.EventOccurrence{
+			events = append(events, storage.EventWrite{
 				OwnerKind:  "component",
 				OwnerID:    owner.Component,
 				Key:        dp.GetName(),
@@ -416,7 +416,7 @@ func logValue(dp *ogv1.Sample) (string, []byte, bool) {
 
 // sampleTime resolves the timestamp for one sample: its own ts if set, else
 // the event batch ts, else zero (the insert path then defaults to now).
-func sampleTime(ev *ogv1.Event, dp *ogv1.Sample) time.Time {
+func sampleTime(ev *ogv1.TelemetryBatch, dp *ogv1.Sample) time.Time {
 	if dp.GetTs() != nil {
 		return dp.GetTs().AsTime()
 	}

@@ -137,7 +137,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 
 	// NEGATIVE (b) CONFINEMENT: node-a publishes an Event for t-b, which belongs to
 	// node-b (owner disp-2). The consumer must drop it (orphan): disp-2 gets no row.
-	publishEvent(t, ncA, "node-a", &ogv1.Event{
+	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId:  "t-b",
 		NodeId:  "node-a",
 		Samples: []*ogv1.Sample{{Name: "tcp.open", Value: &ogv1.Sample_DoubleValue{DoubleValue: 1}}},
@@ -145,7 +145,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 
 	// NEGATIVE (a) REJECT-NOT-PROJECT: node-a publishes for its own t-a but with an
 	// unregistered sample name; that name must not be written.
-	publishEvent(t, ncA, "node-a", &ogv1.Event{
+	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId:  "t-a",
 		NodeId:  "node-a",
 		Samples: []*ogv1.Sample{{Name: "bogus.metric", Value: &ogv1.Sample_DoubleValue{DoubleValue: 9}}},
@@ -155,7 +155,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	// ordered per subject and the consumer processes sequentially, so once the
 	// watermark is visible the two negatives have already been handled (and
 	// dropped). connect_time=42 is distinctive from any real dial.
-	publishEvent(t, ncA, "node-a", &ogv1.Event{
+	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId:  "t-a",
 		NodeId:  "node-a",
 		Samples: []*ogv1.Sample{{Name: "tcp.connect_time", Value: &ogv1.Sample_DoubleValue{DoubleValue: 42}}},
@@ -182,7 +182,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	// node-a publishes interface.reachable=up for its own t-a. The registry kind is
 	// state, so it lands in state (not metric), owned disp-1 and
 	// instanced by the interface (disp-1-tcp).
-	publishEvent(t, ncA, "node-a", &ogv1.Event{
+	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId:  "t-a",
 		NodeId:  "node-a",
 		Samples: []*ogv1.Sample{{Name: "interface.reachable", Value: &ogv1.Sample_StringValue{StringValue: "up"}}},
@@ -192,7 +192,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	// CONFINEMENT (state path): node-a publishes interface.reachable=up for t-b,
 	// which belongs to node-b (owner disp-2). The same fence that drops a foreign
 	// metric drops a foreign state: disp-2 gets no verdict.
-	publishEvent(t, ncA, "node-a", &ogv1.Event{
+	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId:  "t-b",
 		NodeId:  "node-a",
 		Samples: []*ogv1.Sample{{Name: "interface.reachable", Value: &ogv1.Sample_StringValue{StringValue: "up"}}},
@@ -201,12 +201,12 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	// TRANSITION-ONLY (ingest guard): a repeated identical up must NOT add a second
 	// row (the latest-value guard skips it); only a flip to down writes. The first
 	// up is already committed (waitState above), so the guard sees it deterministically.
-	publishEvent(t, ncA, "node-a", &ogv1.Event{
+	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId:  "t-a",
 		NodeId:  "node-a",
 		Samples: []*ogv1.Sample{{Name: "interface.reachable", Value: &ogv1.Sample_StringValue{StringValue: "up"}}},
 	})
-	publishEvent(t, ncA, "node-a", &ogv1.Event{
+	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId:  "t-a",
 		NodeId:  "node-a",
 		Samples: []*ogv1.Sample{{Name: "interface.reachable", Value: &ogv1.Sample_StringValue{StringValue: "down"}}},
@@ -243,7 +243,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	// call.started, a seeded event_type) and it lands as a caught event on its
 	// component, routed by the event registry under the same owner confinement and
 	// reject-not-project as a metric or state. Raw logs are a separate lane, not this.
-	publishEvent(t, ncA, "node-a", &ogv1.Event{
+	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId: "t-a", NodeId: "node-a",
 		Samples: []*ogv1.Sample{{Name: "call.started", Value: &ogv1.Sample_StringValue{StringValue: "call started"}}},
 	})
@@ -254,7 +254,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	// RAW LOG LANE (ADR-0066): node-a ships its own self-log as a LogLine on the
 	// telemetry Event (no task, no registry name, no sample). It lands on log_line
 	// owner-bound to the node, the separate raw ingest lane, never the event table.
-	publishEvent(t, ncA, "node-a", &ogv1.Event{
+	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		NodeId: "node-a",
 		Logs: []*ogv1.LogLine{{
 			Message:    "tcp probe on disp-1 timed out after 3 retries",
@@ -324,7 +324,7 @@ func waitNodeLog(t *testing.T, ctx context.Context, gw storage.Gateway, node str
 	}
 }
 
-func publishEvent(t *testing.T, nc *nats.Conn, node string, ev *ogv1.Event) {
+func publishEvent(t *testing.T, nc *nats.Conn, node string, ev *ogv1.TelemetryBatch) {
 	t.Helper()
 	b, err := proto.Marshal(ev)
 	if err != nil {

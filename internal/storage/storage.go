@@ -325,7 +325,7 @@ type Gateway interface {
 
 	// The observed-metric sink. reject-not-project is applied by the caller
 	// (collection.Registry) before the write.
-	InsertMetricSamples(ctx context.Context, evs []MetricSampleEvent) error
+	InsertMetricSamples(ctx context.Context, evs []MetricSampleWrite) error
 	LatestMetric(ctx context.Context, componentName, key string) (*MetricSample, error)
 	// LatestMetricInstance is the instance-scoped LatestMetric: the reachability
 	// layer signals are per-interface, so each interface resolves its own latest.
@@ -336,14 +336,14 @@ type Gateway interface {
 	// guard are applied by the caller before the write. LatestState backs the
 	// ingest-side transition guard; StateTransitions is the ordered flip series
 	// the availability strip reads.
-	InsertStateSamples(ctx context.Context, evs []StateSampleEvent) error
+	InsertStateSamples(ctx context.Context, evs []StateSampleWrite) error
 	LatestState(ctx context.Context, componentName, key, instance string) (*StateSample, error)
 	StateTransitions(ctx context.Context, componentName, key, instance string, since time.Time) ([]StateSample, error)
 
 	// The observed-log sink: the mirror of the metric and state sinks for log-kind
 	// occurrences. reject-not-project and owner-confinement are applied by the caller
 	// before the write. ListComponentEvents backs the component event log panel.
-	InsertEvents(ctx context.Context, evs []EventOccurrence) error
+	InsertEvents(ctx context.Context, evs []EventWrite) error
 	ListComponentEvents(ctx context.Context, componentName string, since time.Time, limit int) ([]Event, error)
 
 	// The raw-log lane (ADR-0066): log lines are untyped arrival, not events, so

@@ -23,7 +23,7 @@ func TestDeriveSamples(t *testing.T) {
 		{Name: "tcp.connect_time", Kind: &metric},
 	}, nil)
 	owner := storage.TaskOwner{Component: "disp-1", InterfaceName: "disp-1-tcp", InterfaceType: "tcp"}
-	ev := &ogv1.Event{
+	ev := &ogv1.TelemetryBatch{
 		TaskId: "t1",
 		NodeId: "node-a",
 		Samples: []*ogv1.Sample{
@@ -58,7 +58,7 @@ func TestDeriveSamplesRoutesByKind(t *testing.T) {
 		{Name: "interface.reachable", Kind: &state},
 	}, []storage.EventType{{Name: "some.log"}})
 	owner := storage.TaskOwner{Component: "disp-1", InterfaceName: "disp-1-tcp", InterfaceType: "tcp"}
-	ev := &ogv1.Event{Samples: []*ogv1.Sample{
+	ev := &ogv1.TelemetryBatch{Samples: []*ogv1.Sample{
 		{Name: "tcp.open", Value: &ogv1.Sample_DoubleValue{DoubleValue: 1}},
 		{Name: "interface.reachable", Value: &ogv1.Sample_StringValue{StringValue: "up"}},
 		{Name: "some.log", Value: &ogv1.Sample_StringValue{StringValue: "line"}},

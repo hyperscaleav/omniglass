@@ -150,7 +150,7 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 	if _, err := gw.SetProperty(ctx, "", "component", "bar-1", "serial_number", "", []byte(`"SN-1"`), all); err != nil {
 		t.Fatalf("value: %v", err)
 	}
-	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleEvent{{
+	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{{
 		OwnerKind: "component", OwnerID: "bar-1", Key: "tcp.open", Value: 1, Source: "test"}}); err != nil {
 		t.Fatalf("sample: %v", err)
 	}
