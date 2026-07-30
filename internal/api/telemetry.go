@@ -28,6 +28,11 @@ import (
 
 // pushBatchLimit bounds how many items one batch may carry, so a single request
 // cannot pin the registry snapshot or the publish path for an unbounded time.
+//
+// The encoded SIZE needs no guard of its own: Huma already caps the request body at
+// 1 MiB (a larger body is a 413 before this handler runs), and protobuf encodes more
+// compactly than the JSON it came from, so a batch that passed that cap cannot
+// exceed NATS's 1 MiB default max payload.
 const pushBatchLimit = 1000
 
 // TelemetryPublisher publishes an authorized batch onto the API telemetry lane. The

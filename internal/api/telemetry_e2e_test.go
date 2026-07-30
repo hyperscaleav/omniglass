@@ -164,6 +164,23 @@ func TestTelemetryPushAPI(t *testing.T) {
 		"samples": []map[string]any{{"name": "video.input", "text": "hdmi2"}},
 	}, http.StatusUnprocessableEntity)
 
+	// An oversized body is refused BEFORE the handler by Huma's 1 MiB request cap
+	// (413), which is also what keeps a batch from ever exceeding NATS's 1 MiB max
+	// payload: protobuf encodes more compactly than the JSON it came from, so no
+	// separate encoded-size guard is needed. Pinned so that reasoning stays true.
+	big := make([]map[string]any, 0, 200)
+	long := ""
+	for i := 0; i < 6000; i++ {
+		long += "x"
+	}
+	for i := 0; i < 200; i++ {
+		big = append(big, map[string]any{"message": long})
+	}
+	c.do(ownerTok, http.MethodPost, "/telemetry:push", map[string]any{
+		"owner": map[string]any{"kind": "component", "ref": "bar-1"},
+		"logs":  big,
+	}, http.StatusRequestEntityTooLarge)
+
 	// SCOPE IS THE FENCE that makes a caller-declared owner trustworthy. A viewer
 	// scoped to another component cannot push to bar-1, and learns nothing about
 	// whether it exists (404, not 403).
