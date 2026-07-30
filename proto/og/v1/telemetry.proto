@@ -1,9 +1,14 @@
-// Native Omniglass telemetry wire format. A node ships a collected batch as an
-// Event (protobuf) over JetStream to og.v1.telemetry.<node>; the server's ingest
-// consumer decodes it, binds the owner from the task's interface, and writes the
-// typed samples. This is the platform's own wire (not OTLP): it fits the property
-// taxonomy directly. Checkpoint 3 carries ONLY the Event and Sample messages;
-// there is no gRPC service (the Event is a NATS message, not an RPC).
+// Native Omniglass telemetry wire format. A node ships a collected batch as a
+// TelemetryBatch (protobuf) over JetStream to og.v1.telemetry.<node>; the server's
+// ingest consumer decodes it, binds the owner from the task's interface, and writes
+// the typed samples. This is the platform's own wire (not OTLP): it fits the property
+// taxonomy directly. There is no gRPC service (a batch is a NATS message, not an RPC).
+//
+// The batch is deliberately NOT called an Event. An event in this platform is a
+// semantic occurrence (event_type-registered, with an origin, see ADR-0066); a batch
+// is the envelope that carries samples and raw log lines, and will carry natively
+// caught events too. Naming the envelope after one of its passengers is what the
+// rename in #424 corrected.
 
 syntax = "proto3";
 
@@ -13,12 +18,12 @@ option go_package = "github.com/hyperscaleav/omniglass/proto/og/v1;ogv1";
 
 import "google/protobuf/timestamp.proto";
 
-// Event is one batch of measurements a task collected, already normalized to the
-// platform's property-name vocabulary. The node stamps NO component identity:
-// the server binds the owner at ingest from the task's interface (task_id ->
-// interface -> component). The node's only identity assertion is the subject (its
-// own name, carried as node_id) plus the task_id.
-message Event {
+// TelemetryBatch is one batch a task collected, already normalized to the platform's
+// property-name vocabulary. The node stamps NO component identity: the server binds
+// the owner at ingest from the task's interface (task_id -> interface -> component).
+// The node's only identity assertion is the subject (its own name, carried as
+// node_id) plus the task_id.
+message TelemetryBatch {
   // task_id is the identity of the task that produced this batch. The server
   // resolves the owner (and confines the node to its own tasks) from it.
   string task_id = 1;
@@ -27,8 +32,7 @@ message Event {
   // run"; the authoritative node identity is the publishing subject.
   string node_id = 2;
 
-  // ts is the task-side timestamp for the batch. Per-sample Sample.ts overrides
-  // this when set.
+  // ts is the batch-side timestamp. Per-sample Sample.ts overrides this when set.
   google.protobuf.Timestamp ts = 3;
 
   // labels are batch-level dimensional metadata common to every sample. Not
@@ -40,7 +44,7 @@ message Event {
   repeated Sample samples = 5;
 
   // raw is the original wire payload, preserved verbatim for replay. Empty for
-  // the inline tcp probe (no protocol payload). Raw-Event persistence is deferred
+  // the inline tcp probe (no protocol payload). Raw-batch persistence is deferred
   // to a later checkpoint.
   bytes raw = 6;
 
@@ -67,7 +71,7 @@ message Sample {
     bytes json_value = 5;
   }
 
-  // ts is the per-sample timestamp; defaults to Event.ts when unset.
+  // ts is the per-sample timestamp; defaults to the batch ts when unset.
   google.protobuf.Timestamp ts = 6;
 
   // labels are sample-specific dimensional metadata (e.g. the reason). Not

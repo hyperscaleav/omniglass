@@ -125,12 +125,12 @@ func severityOf(l slog.Level) string {
 	}
 }
 
-// selfLogEvent maps captured node records to a telemetry Event carrying only log
+// selfLogBatch maps captured node records to a telemetry Event carrying only log
 // lines (no samples, no task): the node's self-logs on the raw ingest lane. Pure:
 // no I/O. The reserved "source" and "facility" attrs are lifted into the LogLine
 // columns (source defaults to "node"); the rest ride the attributes JSON. Returns
 // nil when there is nothing to ship.
-func selfLogEvent(node string, recs []capturedLog) *ogv1.Event {
+func selfLogBatch(node string, recs []capturedLog) *ogv1.TelemetryBatch {
 	if len(recs) == 0 {
 		return nil
 	}
@@ -163,5 +163,5 @@ func selfLogEvent(node string, recs []capturedLog) *ogv1.Event {
 			Ts:         timestamppb.New(r.ts),
 		})
 	}
-	return &ogv1.Event{NodeId: node, Logs: logs}
+	return &ogv1.TelemetryBatch{NodeId: node, Logs: logs}
 }

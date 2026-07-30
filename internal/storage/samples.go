@@ -9,10 +9,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// MetricSampleEvent is one observed metric to persist. OwnerKind picks the
+// MetricSampleWrite is one observed metric to persist. OwnerKind picks the
 // arc; OwnerID is the estate address (component/system/location/node name).
 // Instance discriminates many values of one key on one owner (default "").
-type MetricSampleEvent struct {
+type MetricSampleWrite struct {
 	OwnerKind string
 	OwnerID   string
 	Key       string
@@ -57,7 +57,7 @@ func ownerColumn(kind string) (string, error) {
 // row sets exactly its owner arc column (the CHECK enforces the rest) and
 // provenance observed. Callers apply reject-not-project (collection.Registry)
 // before calling; this is the durable write.
-func (p *PG) InsertMetricSamples(ctx context.Context, evs []MetricSampleEvent) error {
+func (p *PG) InsertMetricSamples(ctx context.Context, evs []MetricSampleWrite) error {
 	if len(evs) == 0 {
 		return nil
 	}

@@ -348,7 +348,7 @@ func TestDeleteNode(t *testing.T) {
 	}
 	// A component-owned sample (owner arc = component, node_id null): it must
 	// survive the node's deletion.
-	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleEvent{
+	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
 		{OwnerKind: "component", OwnerID: "dsp-1", Key: "tcp.open", Instance: "tcp", Value: 1, Source: "tcp", TS: time.Now().UTC()},
 	}); err != nil {
 		t.Fatalf("insert component sample: %v", err)

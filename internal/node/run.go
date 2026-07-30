@@ -150,7 +150,7 @@ func pullWorklist(nc *nats.Conn, name string) (collection.WorklistReply, error) 
 // own failure, since emitting from the drain path would feed the buffer it just
 // emptied; a publish outage is visible as a gap on the lane and in the heartbeat.
 func publishSelfLogs(nc *nats.Conn, name string, sink *logSink) {
-	ev := selfLogEvent(name, sink.drain())
+	ev := selfLogBatch(name, sink.drain())
 	if ev == nil {
 		return
 	}

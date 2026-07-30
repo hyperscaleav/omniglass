@@ -34,7 +34,7 @@ func TestInsertMetricSamples(t *testing.T) {
 	}
 
 	now := time.Now().UTC()
-	err = gw.InsertMetricSamples(ctx, []storage.MetricSampleEvent{
+	err = gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp.open", Value: 1, Source: "tcp", TS: now},
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp.connect_time", Value: 3.2, Source: "tcp", TS: now},
 	})
@@ -51,7 +51,7 @@ func TestInsertMetricSamples(t *testing.T) {
 	}
 
 	// An owner component that does not exist violates the component FK.
-	err = gw.InsertMetricSamples(ctx, []storage.MetricSampleEvent{
+	err = gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
 		{OwnerKind: "component", OwnerID: "ghost", Key: "tcp.open", Value: 0, Source: "tcp", TS: now},
 	})
 	if err == nil {

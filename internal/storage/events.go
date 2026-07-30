@@ -6,12 +6,14 @@ import (
 	"time"
 )
 
-// EventOccurrence is one occurrence to persist. It shares the owner-arc shape of a
+// EventWrite is one occurrence to persist. It shares the owner-arc shape of a
 // sample (OwnerKind picks the arc column, OwnerID is the estate address). Key is
 // the event_type name. Origin is how the occurrence arrived (caught/caused/derived/
-// scheduled); empty defaults to caught (the ingest-promoted path). Message carries a
-// log's text; Attributes carries its structured payload (json), nil when absent.
-type EventOccurrence struct {
+// scheduled); empty defaults to caught (the natively-published path). Message is the
+// occurrence's human-readable line; Attributes carries its structured payload (json),
+// nil when absent. It is NOT a log line: raw log text lands on the log_line lane
+// instead (ADR-0066), and only a derivation rule turns one into an event.
+type EventWrite struct {
 	OwnerKind  string
 	OwnerID    string
 	Key        string
@@ -42,7 +44,7 @@ type Event struct {
 // exactly its owner arc column (the CHECK enforces the rest) and provenance
 // observed. Callers apply reject-not-project (collection.Registry) before calling;
 // this is the durable write. Mirrors InsertMetricSamples.
-func (p *PG) InsertEvents(ctx context.Context, evs []EventOccurrence) error {
+func (p *PG) InsertEvents(ctx context.Context, evs []EventWrite) error {
 	if len(evs) == 0 {
 		return nil
 	}

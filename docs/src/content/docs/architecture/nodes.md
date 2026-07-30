@@ -18,7 +18,7 @@ outbound-only to the server's in-process NATS server, pulls its worklist over a 
 request-reply (its enabled tasks plus a `config_generation`), and heartbeats on `og.v1.heartbeat.<node>`
 (the server stamps `last_heartbeat_at`). **Per-node subject isolation is enforced**: each node's NATS
 credential is permitted only its own `<node>` subjects, so a node cannot publish or pull as another. Still
-`Design`: running tasks (the probes), shipping telemetry (the JetStream `Event`), commands and the durable
+`Design`: running tasks (the probes), shipping telemetry (the JetStream `TelemetryBatch`), commands and the durable
 command queue, sessions and inbound demux, the reachability gate, config-generation-driven cache
 invalidation, `node.self` self-telemetry, and the `node.down` sweep. The credential is a shared secret
 (the enrollment token doubles as the NATS password); the decentralized nkey/JWT model is deferred. See

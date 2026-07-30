@@ -844,7 +844,7 @@ below from the project's history. From here it grows one slice at a time.
 ### ADR-0037: Telemetry is a protobuf Event over JetStream with an inline owner-confining consumer
 
 - **Date:** 2026-07-07 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [datapoints](/architecture/properties/)
-- **Decision:** A node ships each collected batch as a protobuf `Event` (proto3, `proto/og/v1/event.proto`,
+- **Decision:** A node ships each collected batch as a protobuf `Event` (proto3, `proto/og/v1/event.proto`, since renamed to `TelemetryBatch` in `proto/og/v1/telemetry.proto`, #424,
   `Event` + `Datapoint` messages only, no gRPC service) published to `og.v1.telemetry.<node>`. This is
   omniglass's first protobuf; the wire is generated with `protoc` + `protoc-gen-go` via a `gen-proto` stage on
   `make gen`, and the generated `event.pb.go` is committed. The server hosts a JetStream stream
