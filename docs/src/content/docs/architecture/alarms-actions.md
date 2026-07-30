@@ -32,7 +32,9 @@ See [implementation status](/architecture/status/).
 **Metaphor: a morning alarm, not a pop-up.** A pop-up *alert* appears and is gone
 (that is a `notify` action). An **alarm** goes off when its condition is met and
 **stays high until it is interacted with**. The `alarm` row **holds its current
-state directly** (`status`, `severity`, `opened_at`, `resolved_at`, `acked_by`); it
+state directly** (`status`, `severity`, `opened_at`, `resolved_at`, `acked_by` in the
+target design; the built columns today are `severity`, `message`, `raised_at`, and
+`cleared_at`, per the status note above); it
 is **not** event-sourced. It is **one incident, a new row per open**, keyed by
 `(event_rule, owner)` (the exclusive-arc owner, so a system- or location-owned sample
 yields a system/location-owned alarm), the ITSM correlation anchor ([samples](/architecture/properties/)).
@@ -56,8 +58,14 @@ Transitions, by who drives them:
 The full timeline assembles by `alarm_id` across events + audit; the alarm row is
 never reconstructed from them.
 
-Alarms are **terminal upstream**: they never write samples, so they cannot feed
-back into the sample layer (see *Cycle safety*).
+An alarm write is **not sample-silent**: raising or clearing one recomputes
+[health](/architecture/health/) in the same transaction, and the rollup records the
+verdict transition as a **calculated-provenance `state` sample**
+(`provenance='calculated'`, `source_rule='health-rollup'`). Cycle safety therefore
+rests on **provenance, not topology**: a consequence write always names its
+producing rule, and a rule never routes on its own consequences
+([ADR-0069](/architecture/decisions/#adr-0069-cycle-safety-is-provenance-based-not-topology-based),
+see *Cycle safety*).
 
 ## The `event_rule`
 
@@ -235,8 +243,13 @@ graph at all. That leaves a single possible loop, the **data-mediated control lo
 (an action commands a device, the device's new state arrives as a sample, which
 opens an alarm, which fires the action again), closed with three rules:
 
-1. **Alarms are terminal upstream** (they never write samples), so detection cannot
-   feed itself directly.
+1. **Consequence writes are provenance-labeled, and a rule never routes on its own
+   consequences.** An alarm transition does write a sample (the health rollup's
+   calculated `state` row, `source_rule='health-rollup'`), so detection safety is not
+   a topology rule; it is that every consequence write carries
+   `provenance='calculated'` with its producing rule named, and the routing layer
+   refuses to trigger a rule off its own output
+   ([ADR-0069](/architecture/decisions/#adr-0069-cycle-safety-is-provenance-based-not-topology-based)).
 2. **ack / snooze transitions do not match `action_rule`s** (only open / resolve do),
    which breaks the `action -> alarm(ack) -> action` loop.
 3. **The control loop is lineage-guarded at dispatch.** Before an `action_rule` runs
@@ -260,9 +273,10 @@ and the CDC publisher re-emits both into the record-lane message header. So "car
 NATS headers" is really header (data lane) -> PG column -> header (record lane): the walk
 is unbroken because each hop copies the pair forward.
 
-So no edge can close a loop: events come only from data, alarms are terminal toward
-samples, the response layer cannot author events, operator transitions never
-re-trigger, and the one real-world control loop is lineage-bounded.
+So no edge can close a loop: events come only from data, consequence samples carry
+their producer's lineage and never re-route to it, the response layer cannot author
+events, operator transitions never re-trigger, and the one real-world control loop is
+lineage-bounded.
 
 ### Correlation id: the trace of a causal chain
 
@@ -314,7 +328,8 @@ list.
 ## Namespacing
 
 Event rules, actions, and severity levels carry the same **`official` boolean**
-and `UpsertOfficial` as the rest of the registries. `official: true` rows ship
+discipline as the rest of the registries, seeded through each registry's own
+authoritative upsert (`UpsertPropertyType` and its siblings). `official: true` rows ship
 vetted; `official: false` rows are operator-authored and central to component templates (the
 concrete way to notify or to run a command against a given device class).
 
@@ -324,10 +339,10 @@ concrete way to notify or to run a command against a given device class).
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `alarm` | **id**, event_rule, owner arc, **status, severity, opened_at, resolved_at, acked_by** | a stateful entity, **one incident, new row per open**; holds current state directly (not event-sourced); the ITSM anchor. History = events + audit by `id` |
-| `action` | id, **steps (ordered: notify/command/wait/branch)**, status, current_step | a stateful entity; delivery and step state; driven by events/alarms |
+| `alarm` | **id**, event_rule, owner arc, **status, severity, opened_at, resolved_at, acked_by** | the **target design shape**; the built row is `id, severity, message, raised_at, cleared_at, component_id` (component-local, no owner arc, no `event_rule` or ack columns yet). A stateful entity, **one incident, new row per open**; holds current state directly (not event-sourced); the ITSM anchor. History = events + audit by `id` |
+| `action` | id, **steps (ordered: notify/command/wait/branch)**, status, current_step | **still Design** (no `action` table exists today); a stateful entity; delivery and step state; driven by events/alarms |
 
-A command is **not a table**: it is a `component_template_version.spec` declaration (the interface `commands` block); a command instance is an `action` row with `kind=command`. The `event_rule` / `action_rule` config rows live with the [rule families](/architecture/calculations/).
+A command **is two real tables**: the `command_type` registry (the catalog of what a component can be told) and the `command` invocation row with its computed settlement; see [commands](/architecture/commands/). The `event_rule` / `action_rule` config rows live with the [rule families](/architecture/calculations/).
 
 ## Model-keyed command cascade
 

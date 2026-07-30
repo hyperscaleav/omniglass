@@ -23,9 +23,10 @@ results), and the ingest consumer **routes by the `property_type` kind** (metric
 lines are their own untyped ingest lane (`log_line`, built), and a rule derives a typed `event` from one
 ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events), superseding the
 log-kind sink of [ADR-0046](/architecture/decisions/#adr-0046-the-event-log-kind-sink)).
-Calculated provenance, fusion, and the live NATS data-lane are still design. See
-[ADR-0033](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer)
-and [ADR-0034](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state).
+Calculated provenance, fusion, and the live NATS data-lane are still design. The wire shape is the
+protobuf `TelemetryBatch` message. See
+[ADR-0037](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer)
+and [ADR-0038](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state).
 :::
 
 This is the heart of the authoritative value model: what a **property** is, its **samples** and its **current value**, the two axes that define it, how we know a value (provenance), and how values reconcile, diverge, and read back. The physical layout (tables, partitioning, the lineage CHECK, tiering) lives in storage; the spine is [the architecture overview](/architecture/). Events, calc rules, and the response layer get their own pages: [events](/architecture/events/), [calculations](/architecture/calculations/), and [alarms and actions](/architecture/alarms-actions/).
@@ -53,13 +54,21 @@ none.
 
 ### Ownership: the exclusive-arc
 
-A sample attaches to a **structural entity**, not only a component. The owner is the **exclusive-arc**: an `owner_kind` enum plus the matching typed FK (`component_id` / `system_id` / `location_id` / `node_id`, or none for the singleton **`global`** estate root) with a CHECK that exactly the column matching `owner_kind` is set. The same arc owns `event` rows, and is the design for `alarm` (component-local today). This makes **system-, location-, node-, and global-level samples first-class** (`health` is a `state` owned by a component, a system, or a location today, and estate-wide availability will be owned by `global`), the fix for Zabbix's inability to put state on a group of hosts. See Ownership on the spine for the full pattern and the storage DDL.
+A sample attaches to a **structural entity**, not only a component. The owner is the **exclusive-arc**: an `owner_kind` enum (`component` / `system` / `location` / `node`) plus the matching typed FK with a CHECK that exactly the column matching `owner_kind` is set. There is **no platform or estate-root arm on a sample**; an estate-wide series is a design question, not a built arm. The same arc owns `event` rows, and is the design for `alarm` (component-local today). This makes **system-, location-, and node-level samples first-class** (`health` is a `state` owned by a component, a system, or a location today), the fix for Zabbix's inability to put state on a group of hosts. See Ownership on the spine for the full pattern and the storage DDL.
 
 ### The instance dimension: many values of one key on one owner
 
 One owner can hold several distinct values of the *same* canonical key: three fan speeds on a switch, per-port counters, per-channel audio levels. The canonical registry deliberately holds **one** `property_type` per measurement (`fan.speed`, not `fan.speed.intake`), so the discriminator lives outside the key, as an `instance text NOT NULL DEFAULT ''` column on both sample tables. Series identity is therefore **`(owner, property_type, instance, provenance)`**: each instance is its own series, while a singleton (`instance = ''`) is the default. Aggregation stays clean (group by `key`, ignore `instance`); per-instance trends stay distinct.
 
-The instance rides the pipeline as a reserved **`instance` label** on the collected sample: the collection extract spec authors it as a `key[instance]` suffix (`fan.speed[intake]=<oid>`, `fan.speed[exhaust]=<oid2>`), the parser strips the bracket into the label so `registryAllows` / `kindFor` still match the bare canonical key, and the derive step reads `instance` into the column. Calc folds **every** instance of an input key into the reduce: a rule reading `fan.speed` from a component gets one candidate per fan, so `worst` / `average` / `count` / Expr aggregate across all of them (a singleton key yields one candidate). An input filter can select one instance (`instance == "intake"`). Recompute needs no instance granularity: a calc consumer reacting to a `fan.speed` sample on the stream recomputes over the current state of every instance for `(owner, key)`, so two fan changes in close succession converge on one correct recompute. Calc **outputs** stay aggregate (`instance = ''`); per-instance outputs (one health per fan, a group-by) are a separate capability, not a silent gap, output owners default to the singleton.
+**Built today, `instance` is stamped server-side**: the ingest consumer sets every observed sample's
+(and cache row's) `instance` to the **observing interface's name**, so two interfaces reporting one
+key on one owner stay distinct series. The authored form is still Design for the extractor engine,
+with the instance-identity decision pending as an ADR under
+[#430](https://github.com/hyperscaleav/omniglass/issues/430): the instance would ride the pipeline as
+a reserved **`instance` label** on the collected sample, the collection extract spec authoring it as a
+`key[instance]` suffix (`fan.speed[intake]=<oid>`, `fan.speed[exhaust]=<oid2>`), the parser stripping
+the bracket into the label so `registryAllows` / `kindFor` still match the bare canonical key, and the
+derive step reading `instance` into the column. Calc folds **every** instance of an input key into the reduce: a rule reading `fan.speed` from a component gets one candidate per fan, so `worst` / `average` / `count` / Expr aggregate across all of them (a singleton key yields one candidate). An input filter can select one instance (`instance == "intake"`). Recompute needs no instance granularity: a calc consumer reacting to a `fan.speed` sample on the stream recomputes over the current state of every instance for `(owner, key)`, so two fan changes in close succession converge on one correct recompute. Calc **outputs** stay aggregate (`instance = ''`); per-instance outputs (one health per fan, a group-by) are a separate capability, not a silent gap, output owners default to the singleton.
 
 ### The has-a-value-now razor (sample vs event)
 
@@ -83,17 +92,17 @@ Kind is set by the key, provenance by the row, and the two never depend on each 
 
 A sample and an event are different shapes (a sample has a value; an event is an occurrence), so each gets a registry named for what it holds. The event half is [`event_type`](/architecture/events/); the sample half is `property_type`. We do **not** force them into one universal registry, that would be the false unification the rest of this model avoids.
 
-**`property_type`** describes every sample key: `(name, scope, template_id?, kind, value_type, unit, precision, fusion_policy, validation)`, with the **`scope`** (`template` / `org` / `official`) deciding where the name is unique (see [Key scope](#key-scope-template-org-official)). One registry across the metric and state sample kinds (log occurrences graduated to typed [events](/architecture/events/), ADR-0063). The kind is decided by the key, not at runtime: the compiler bakes each key's kind into the edge unit, so a value routes to the right table with no runtime lookup, the same way at every scope. `fusion_policy` is the key's read-time **default** for reducing multiple perspectives, a hint rather than a mandate (see [Fusion](#fusion)). A key names a **measurement, never its owner** (`temperature`, not `room.temperature`), with snake_case segments in a dot hierarchy and the **canonical unit** in the `unit` field (`fan.speed` + `unit: rpm`, not `fan_rpm`); the ship-with official set lives in `internal/registry/defaults.yaml`. Adding or naming one: the `canonical-sample` skill.
+**`property_type`** describes every sample key: `(name, official, kind, data_type, unit, precision, fusion_policy, validation)`, with the name globally unique and the **`official`** boolean deciding authority (the richer `scope` / `template_id` ladder is future design, see [Key scope](#key-scope-template-org-official)). One registry across the metric and state sample kinds (log occurrences graduated to typed [events](/architecture/events/), ADR-0063). The kind is decided by the key, not at runtime: the compiler bakes each key's kind into the edge unit, so a value routes to the right table with no runtime lookup, the same way at every scope. `fusion_policy` is the key's read-time **default** for reducing multiple perspectives, a hint rather than a mandate (see [Fusion](#fusion)). A key names a **measurement, never its owner** (`temperature`, not `room.temperature`), with snake_case segments in a dot hierarchy and the **canonical unit** in the `unit` field (`fan.speed` + `unit: rpm`, not `fan_rpm`); the ship-with official set lives in `internal/seed/properties.yaml`.
 
 The naming convention is consistent: a `_type` registry defines what a thing *is*, named for the thing (`property_type`, `event_type`, like `location_type`, `interface_type`). `property_type` spans the three sample kinds, and events get their own registry because an event is a different shape.
 
-**Property naming is owner-agnostic.** A key names a *measurement*, never its owner: `temperature` is a Celsius reading whether a codec's thermals or a room's ambient sensor produced it, and the owner (component / system / location / node / global) plus a template's labels and the function that collected it give it context. So there is no `system.` / `device.` / `room.` prefix; keys group by measurement domain (`cpu.utilization`, `power.state`, `video.input`, `audio.level`, `network.icmp.rtt`). This is the normalization the product hinges on: one canonical path means one comparable signal across every vendor, which is what makes cross-fleet dashboards and AI useful. The official set is seeded from `internal/registry/defaults.yaml` following OpenTelemetry semantic conventions for the IT leaves (`cpu.utilization`, `memory.usage`; semconv's own `system.` prefix is dropped to avoid colliding with the `system` entity type) and the [OpenAV minimum-device-functionality guidelines](https://github.com/OpenAVCloud/specifications/blob/main/min-device-functionality/OAVC-AV-Device-Minimum-Functionality-Guidelines.md) for AV signals. A template declares its samples at **template** scope, or references an **org** or **official** key: the distro mints **official** keys, the deployment mints **org** keys, and a template mints its own **template**-scoped keys (the Zabbix model, where two templates can both declare an `input` with no collision).
+**Property naming is owner-agnostic.** A key names a *measurement*, never its owner: `temperature` is a Celsius reading whether a codec's thermals or a room's ambient sensor produced it, and the owner (component / system / location / node / global) plus a template's labels and the function that collected it give it context. So there is no `system.` / `device.` / `room.` prefix; keys group by measurement domain (`cpu.utilization`, `power.state`, `video.input`, `audio.level`, `network.icmp.rtt`). This is the normalization the product hinges on: one canonical path means one comparable signal across every vendor, which is what makes cross-fleet dashboards and AI useful. The official set is seeded from `internal/seed/properties.yaml`; today it is the eleven types the built collection vertical uses (`icmp.reachable`, `icmp.rtt_avg`, `tcp.open`, `tcp.connect_time`, `interface.reachable`, `health`, `video.input`, `serial_number`, `mac_address`, `firmware_version`, `model_number`), with the broader OpenTelemetry-semconv-aligned IT leaves and the [OpenAV minimum-device-functionality guidelines](https://github.com/OpenAVCloud/specifications/blob/main/min-device-functionality/OAVC-AV-Device-Minimum-Functionality-Guidelines.md) set still to come. A template declares its samples at **template** scope, or references an **org** or **official** key: the distro mints **official** keys, the deployment mints **org** keys, and a template mints its own **template**-scoped keys (the Zabbix model, where two templates can both declare an `input` with no collision).
 
 ### One identity, three shapes
 
 `property_type` is **one registry, not three**. A key's **kind** is intrinsic and fixed (one key is one kind, forever), so identity, [scope](#key-scope-template-org-official), and the promotion ladder live on one row, and `(scope, name)` is unique across all kinds: a name is a metric or a state, never both. What differs by kind is the **shape** the row carries:
 
-- **metric**: `value_type` (float), a **unit** and optional **precision**, and a numeric range (`validation: {min,max}`). The full numeric shape.
+- **metric**: `data_type` (float), a **unit** and optional **precision**, and a numeric range (`validation: {min,max}`). The full numeric shape.
 - **state**: a **value domain**, the allowed set (`validation: {values:[...]}`); no unit, no precision.
 - **log**: almost nothing. There is **no `log_type`** worth the name: a log's "type" is its **key namespace** (`log.system`, `log.os`, `log.app.<name>`, the hardware / service families), plus a level. You never give it a unit, a domain, or fusion.
 
@@ -126,7 +135,7 @@ Conversion happens only at the two edges and in expressions; the rows in between
 **Display precision is part of the type.** Alongside the unit (and, like the unit, only on a metric), a
 `property_type` carries an optional **`precision`** (significant digits to render), a presentation default the same way the canonical unit is:
 a temperature shows `21.5`, a utilization `90%`, a link `1.2 Gbps`. It governs **rendering only**. The
-stored `value_type` (float8) keeps full precision, `precision` never truncates a stored value, and the
+stored `data_type` (float8) keeps full precision, `precision` never truncates a stored value, and the
 [UI](/architecture/ui/) or a locale can override the default. (Dropping noise at *ingest* is a separate
 collection-time rounding, not the type's display precision.)
 
@@ -134,7 +143,10 @@ collection-time rounding, not the type's display precision.)
 
 ## Key scope: template, org, official
 
-A sample key carries a **`scope`**, the axis that decides where its name is unique and where its trust comes from. Three layers:
+**This section is future design.** The built discriminator is the **`official` boolean**: a key's
+name is globally unique, `official: true` rows are the seeded canonical set, and `official: false`
+rows are operator-authored. The three-layer `scope` ladder below (with its `template_id` identity) is
+the target model it would grow into. In that design a sample key carries a **`scope`**, the axis that decides where its name is unique and where its trust comes from. Three layers:
 
 | scope | identity (uniqueness) | trust | who defines it |
 |---|---|---|---|
@@ -142,7 +154,7 @@ A sample key carries a **`scope`**, the axis that decides where its name is uniq
 | **org** | `name`, unique within the deployment | local custom canonical | the org / operator |
 | **official** | `name`, globally | shipped with the distro | the distro |
 
-`official` is just `scope == official` (the prior pass's `official` boolean folds into this enum as its top value). **Conflicts are impossible** at template scope because a template-scoped key is identified by `(template_id, name)`: two templates can both declare an `input` sample with no collision (the Zabbix model). Trust still comes from **distribution**, not a label: an official key is trusted because it is **in the release**, the same `video.input` across every vendor, not spoofable. An org key is a deployment's own custom canonical, authoritative within that one database (per-database isolation makes it unambiguous, one database is one tenant). A template key is local to the template that minted it.
+In the ladder, `official` would become just `scope == official` (the built `official` boolean would fold into the enum as its top value; that fold has not happened). **Conflicts are impossible** at template scope because a template-scoped key is identified by `(template_id, name)`: two templates can both declare an `input` sample with no collision (the Zabbix model). Trust still comes from **distribution**, not a label: an official key is trusted because it is **in the release**, the same `video.input` across every vendor, not spoofable. An org key is a deployment's own custom canonical, authoritative within that one database (per-database isolation makes it unambiguous, one database is one tenant). A template key is local to the template that minted it.
 
 **Every sample is typed by a registry row, just at some scope.** The sample -> `property_type` FK is **non-null**: template-scoped keys ARE `property_type` rows (`scope=template`, with a `template_id`), not inline-only shapes, so there is no nullable type FK and no dual identity. Kind, unit, and validation live on the type row at **every** scope, so the edge compiler bakes the kind and routes to the right table (metric / state / log) the same way for all three layers. Series identity is `(owner, property_type, instance, provenance)`.
 
@@ -166,7 +178,7 @@ A value of any provenance is still a metric/state/log (the kind is fixed by the 
 
 A separate **`source`** column records *which sensor or path* produced an observed value (`codec.cec` vs `display.lan` vs `control.system`). Source is distinct from provenance: provenance is *how we know* (observed), source is *which sensor told us*. Three sensors reporting one display's power are three observed rows on one key, differing only in source. This is what makes multi-source corroboration and [fusion](#fusion) possible.
 
-**Trace columns, orthogonal to lineage.** Each sample table also carries a nullable **`correlation_id`** and an optional **`caused_by_event_id`**. These are **trace** columns, not lineage: they record *what causal thread this row belongs to*, not *what immutable record produced this value*, so they sit outside the mutually-exclusive lineage CHECK and never count toward it (a row may carry both its on-row `source_rule` lineage and a `correlation_id` with no conflict). An action's command **propagates the originating `correlation_id`** onto the adaptive-poll's observed sample, so the `event_rule` that fires off that observed value **inherits** the same id, and the cycle-guard walk crosses the command -> device -> observed-sample round trip on a real carried id rather than an assumed lineage. See [alarms and actions](/architecture/alarms-actions/) for the cycle-safety mechanic.
+**Trace columns, orthogonal to lineage.** The trace columns live on `event` (`correlation_id` and `source_event_id`, the causation parent) and on `log_line` (`correlation_id`); the sample tables carry none today. The design extends them to samples: a nullable `correlation_id` (and a causation parent) recording *what causal thread this row belongs to*, not *what immutable record produced this value*, sitting outside the mutually-exclusive lineage CHECK (a row may carry both its on-row `source_rule` lineage and a `correlation_id` with no conflict). An action's command would **propagate the originating `correlation_id`** onto the adaptive-poll's observed sample, so the `event_rule` that fires off that observed value **inherits** the same id, and the cycle-guard walk crosses the command -> device -> observed-sample round trip on a real carried id rather than an assumed lineage. See [alarms and actions](/architecture/alarms-actions/) for the cycle-safety mechanic.
 
 ### observed: from a component, via an edge parse
 
@@ -225,8 +237,11 @@ here never adds a row to `metric` / `state`. Three provenances are cached; one i
 - **observed** (built), **calculated**, and **intended** are producer values carrying the value's
   own `ts`, so the cache keeps the latest per series. The firehose upserts `observed`; a
   [command](/architecture/commands/) opens `intended`; the calc engine will write `calculated`.
-- **declared** is never cached. It is config, resolved live from the [cascade](/architecture/variables/)
-  on read, so it is always current and never stale.
+- **declared** is not a producer value. A declared value an operator sets is a row in this same
+  `property` value store at `provenance='declared'` (the table's default); what resolves **live** on
+  read is the contract-default coalesce in `EffectiveProperties` (the instance's own declared row,
+  else its classifier contract's default), so the effective declared answer is never a stale producer
+  cache entry.
 
 **The write is a derived, non-gating sink.** The append-only sample stays the source of truth;
 after it lands, the ingest consumer upserts the current value per series as a **separate write whose
@@ -311,18 +326,18 @@ The two kinds are two physical tables only because they index and retain differe
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `metric` | id, ts, **owner_kind, component_id/system_id/location_id/node_id**, key, **instance**, **value float8**, provenance, source, **source_rule, source_rule_version, event_id**, **correlation_id?, caused_by_event_id?** | the firehose; BRIN on ts; numeric aggregation. `instance` (`''` default) discriminates many values of one canonical key on one owner. `correlation_id` / `caused_by_event_id` are nullable trace cols, outside the lineage CHECK |
-| `state` | id, ts, owner arc, key, instance, **value text/jsonb**, provenance, source, + same lineage and trace cols | sparse, transition-only; time-in-state and dwell. [Config](/architecture/variables/) is keyed to one as its observed side |
+| `metric` | id, ts, **owner_kind, component_id/system_id/location_id/node_id**, property_type_id, **instance**, **value float8**, provenance, source, **source_rule, source_rule_version, event_id** | the firehose; BRIN on ts; numeric aggregation. `instance` (`''` default) discriminates many values of one canonical key on one owner. Trace columns (`correlation_id` and a causation parent) live on `event` / `log_line` today; extending them to samples is design |
+| `state` | id, ts, owner arc, property_type_id, instance, **value text/jsonb**, provenance, source, + the same lineage cols | sparse, transition-only; time-in-state and dwell. [Config](/architecture/variables/) is keyed to one as its observed side |
 
 Raw log lines are **not** in this set: `log_line` is its own lane, not a sample table, and its columns are different in kind (no property name, no provenance, no lineage CHECK): `id, ts`, the owner arc, `instance, source, severity, facility, message, attributes jsonb, labels jsonb, correlation_id`, with `severity` / `facility` indexed as the retention and routing axes ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)).
 
-Common sample columns (both kind-tables): `ts`, the **owner arc** (`owner_kind` plus `component_id` / `system_id` / `location_id` / `node_id`), `key, provenance, source`, the on-row lineage `source_rule, source_rule_version, event_id`, and the nullable trace columns `correlation_id, caused_by_event_id` (outside the lineage CHECK); only the value column differs (float8 / text-jsonb). A `sample` view UNIONs the common columns for "all samples for owner X".
+Common sample columns (both kind-tables): `ts`, the **owner arc** (`owner_kind` plus `component_id` / `system_id` / `location_id` / `node_id`), `property_type_id, instance, provenance, source`, and the on-row lineage `source_rule, source_rule_version, event_id`; only the value column differs (float8 / text-jsonb). A `sample` view UNIONing the common columns for "all samples for owner X" is design (no view exists yet).
 
 The key registry that types these tables is `property_type` (one registry across the metric and state kinds), detailed at [the property_type registry](#the-property_type-registry):
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `property_type` | name, **scope** (template/org/official), **template_id?**, kind (metric/state), value_type, unit, **precision**, **fusion_policy**, validation (jsonb) | the key registry across the sample kinds (log occurrences moved to the [`event_type`](/architecture/events/) registry, ADR-0063); `scope` decides where the name is unique (`(template_id, name)` at template scope, `name` at org/official); referenced by templates, which also mint their own template-scoped rows. `unit` is the **canonical** unit, a row in the `unit` registry below; `precision` is a display hint (significant digits), not a storage truncation. Both apply to **metrics**; a **state** or **log** has neither |
+| `property_type` | name, **official** (bool), kind (metric/state), data_type, unit, **precision**, **fusion_policy**, validation (jsonb) | the key registry across the sample kinds (log occurrences moved to the [`event_type`](/architecture/events/) registry, ADR-0063); the name is globally unique and `official` decides authority (the template/org/official `scope` ladder with `template_id` is future design). `unit` is the **canonical** unit, a row in the `unit` registry below; `precision` is a display hint (significant digits), not a storage truncation. Both apply to **metrics**; a **state** has neither |
 | `unit` | name, **family** (temperature/data-size/bitrate/...), **canonical** (bool), **to_canonical**, **from_canonical** (affine factor+offset, or Expr), **scope** (official/org) | the unit registry: one canonical unit per family plus alternates each carrying its conversion transforms; the `property_type.unit` canonical unit references it, and `convert(value, "<unit>")` resolves same-family targets through it |
 
 ## The pipeline, end to end

@@ -86,6 +86,8 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0050](#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain) | 2026-07-21 | Accepted | Health is **recorded as a transition** and **recomputed at the write**, never on read. An **`alarm`** is component-local and names the **capabilities** it degrades; a component satisfies a role only when it provides every required capability and none of them is degraded; a role below its **quorum** is impaired and contributes its **`impact`** (`outage` / `degraded` / `none`); a system takes the worst of its roles, a location the worst of its systems. The verdict domain is **`healthy` / `degraded` / `outage`** and the judgement is a **pure package** (`internal/health`), unit-tested with no database. The recorded carrier is **`state_datapoint`**, already transition-only, so the history is edges and only edges; **compute-on-read** (no history) and **write-through-on-read** (the edge timestamped when somebody looked) are both rejected. A **read never writes**, and it computes the verdict it serves from the same rows it shows, so a report cannot contradict its own evidence. PR8 of the estate-model shift, closing epic [#266](https://github.com/hyperscaleav/omniglass/issues/266) |
 | [ADR-0054](#adr-0054-the-shell-owns-a-panels-action-rail-the-body-registers-and-never-draws) | 2026-07-21 | Accepted | A panel's action bar is **declared, not laid out**: a blade body binds through `lib/blades`, a Drawer form body through `lib/formactions`, and `BladeStack` / `Drawer` draw the result through the one `PanelFooter` rail. The opt-in `DrawerFooter` helper is deleted. A convention a body must remember can be forgotten, and was, by two forms for months while it was copied into six new pages around them |
 | [ADR-0057](#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier) | 2026-07-21 | Accepted | The cascade's least-specific **binding** tier is renamed `global` to **`platform`** on both axes (same rung, no precedence change); a **`default`** is off the axis entirely, a column on a type declaration rather than a tier; there is **no root location**; a write at the tier needs its own **`platform:<action>`** permission. **Breaking:** a secret sealed at the old tier can no longer be decrypted (the AEAD binds the owner kind) |
+| [ADR-0068](#adr-0068-the-api-error-model-is-the-stock-rfc-9457-shape) | 2026-07-30 | Accepted | The API error model is Huma's stock RFC 9457 problem+json (`ErrorModel` with `ErrorDetail` `{location, message, value}`); the custom `code` plus `violations` envelope sketched on the API page is retired |
+| [ADR-0069](#adr-0069-cycle-safety-is-provenance-based-not-topology-based) | 2026-07-30 | Accepted | Cycle safety is provenance-based: consequence writes carry `provenance='calculated'` with a `source_rule` naming the producer, and rules never route on their own consequences; supersedes the "alarms are terminal upstream and never write samples" premise |
 
 ## Entries
 
@@ -2375,3 +2377,37 @@ minimal busy/free plus booked-by by default and make the full subject opt-in; th
 (Microsoft 365 Graph first, Google Workspace second, Teams and Zoom Rooms scheduling as a later layer);
 and recurrence (expand a series to instances versus store the series) with the sync window. Nothing here
 is built. This ADR records the target so the booking slice ([#412](https://github.com/hyperscaleav/omniglass/issues/412)) inherits a decided model.
+
+### ADR-0068: The API error model is the stock RFC 9457 shape
+
+- **Date:** 2026-07-30 | **Status:** Accepted | **Pages:** [API](/architecture/api/)
+- **Decision:** the API's error model is Huma's stock RFC 9457 `application/problem+json` shape: the
+  `ErrorModel` (`title`, `status`, `detail`), carrying for validation an `errors` array of `ErrorDetail`
+  entries, each `{location, message, value}`. The custom envelope sketched on the API page (a stable
+  machine `code` plus a `violations` array of `{field, message}`) is retired.
+- **Context:** the custom envelope was designed before any route existed. Today 141 routes serve the
+  stock model, and the generated SPA client and the CLI already render it uniformly. A bespoke envelope
+  would be cost without a driving consumer: no caller keys on an error `code`, and Huma's `ErrorDetail`
+  already names the failing field through `location`.
+- **Reversible:** additive. If a consumer ever needs a stable machine code, it can be added as an
+  extension field on the stock model without breaking the shape.
+
+### ADR-0069: Cycle safety is provenance-based, not topology-based
+
+- **Date:** 2026-07-30 | **Status:** Accepted | **Pages:** [alarms and actions](/architecture/alarms-actions/), [health](/architecture/health/)
+- **Decision:** the guarantee that automation cannot feed back into itself rests on **provenance**, not
+  on a topological "alarms are terminal upstream and never write samples" rule. A consequence write
+  carries `provenance='calculated'` with a `source_rule` naming its producer (today: the health
+  rollup's `state` sample, `source_rule='health-rollup'`, written on alarm raise and clear), and rules
+  must never route on their own consequences: the routing layer refuses to re-trigger a rule off a
+  sample whose `source_rule` is that rule.
+- **Context:** the alarms page argued cycle safety from the premise that alarms never write samples.
+  The build falsified it: raising or clearing an alarm recomputes health in the same transaction
+  (`internal/storage/alarms.go`), and the rollup records the verdict transition as a
+  calculated-provenance `state` row (`internal/storage/health.go`). That write is correct, it is the
+  recorded-transition model of
+  [ADR-0050](#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain);
+  the premise was too strong. The real invariant is lineage-based and survives future consequence
+  writers (calculations, action side effects) that a topology rule would forbid.
+- **Supersedes** the terminal-upstream cycle-safety argument on
+  [alarms and actions](/architecture/alarms-actions/); the page now derives safety from provenance.
