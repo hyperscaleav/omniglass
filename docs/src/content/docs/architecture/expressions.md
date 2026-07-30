@@ -36,7 +36,7 @@ straightforward native path over reaching for the engine at all.
 Stored values are always in their `property_type`'s **canonical unit**, so an operator who
 wants to author against a non-canonical unit converts at the expression. **`convert(value,
 "<unit>")`** is the stdlib function for this: the **source unit is inferred** from the bound
-datapoint's canonical unit, and the **target** is a registered unit that must be in the
+property's canonical unit, and the **target** is a registered unit that must be in the
 **same family** (a compile error otherwise, since units only convert within one dimension).
 The conversion itself comes from the [unit registry](/architecture/properties/#units-one-canonical-unit-per-key): the target's
 `to_canonical` and `from_canonical` transforms, **affine** (a factor plus offset) for the
@@ -51,9 +51,9 @@ data-driven and general, available wherever expressions run, including `event_ru
 
 | Site | Leaf | What it evaluates |
 |---|---|---|
-| extractor | `value` | reshape a located raw value into the typed datapoint value |
+| extractor | `value` | reshape a located raw value into the typed sample value |
 | step | `when` | the explicit branch guard (a false guard skips the step and dependents) |
-| `event_rule` | `fire_criteria`, `clear_criteria` | open/close an alarm-paired event off a datapoint change |
+| `event_rule` | `fire_criteria`, `clear_criteria` | open/close an alarm-paired event off a sample change |
 | `calc_rule` | `reduce` (escape), `filter` | the named reducers (`worst` / `majority` / `average`, plus windowed `time_in_state` for SLIs) and the Expr escape, with per-input filters |
 | rule | `scope` | which instances a rule fires for (the Expr scope escape) |
 | views / list | `filter` | the structured-query predicate operators compose |
@@ -65,11 +65,13 @@ write a list filter and a rule scope. One language across the surface.
 ## In-scope bindings
 
 Within a function run the engine environment exposes the documented namespaces: `$var:<key>`
-(config/secret through the cascade), `$dp.<key>` (datapoints, emitted and readable for
-branching), `$steps.<id>.*` (ephemeral scratch), `$event` (a listen payload), and the
+(config/secret through the cascade), `$prop.<key>` (properties, emitted and readable for
+branching; this designed namespace was `$dp.<key>`, renamed with the ADR-0065 vocabulary before
+any engine exists to bind it), `$steps.<id>.*` (ephemeral scratch), `$event` (a listen payload),
+and the
 extractor-local inputs a step prepares for its `value` leaf (`raw`, `groups`, `node`,
 `item`). Rule and view contexts bind their own documented environments (the candidate
-entity, the datapoint, the resource row).
+entity, the property, the resource row).
 
 ## Safety
 
@@ -77,4 +79,4 @@ Expressions are **sandboxed**: no I/O, no network, no unbounded loops, bounded e
 Operator-supplied configuration values are bound as **data in the environment**, never spliced
 into expression text, so a hostile value is evaluated literally and never executed. Secret
 fields rendered into a request are masked at interpolation time and never surface in a log
-line, error string, or datapoint label.
+line, error string, or property label.

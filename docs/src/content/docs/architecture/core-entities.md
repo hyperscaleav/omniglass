@@ -22,7 +22,7 @@ values while the new contract's defaults take over. Each of the three
 carries an **optional classifier** that declares what its instances expose: a component points at its
 **`product`**, a system conforms to a **`standard`**, a location is typed by its **`location_type`**
 (the `component_type` registry retired,
-[ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property); the
+[ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value); the
 `system_type` registry was promoted to `standard`,
 [ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)). The
 **exclusive-arc** owner columns are now real, carrying the sample sinks, the **`event`** log sink
@@ -32,7 +32,9 @@ component, system, and location each own a recorded **[health](/architecture/hea
 same arc. A system also declares the **roles** it needs filled, staffed by components whose **resolved
 capabilities** cover what the role requires, each role carrying the **impact** an impaired one has on the
 system (see [System roles](#system-roles-the-slots-a-system-needs-filled) below). Still `Design`: template
-pinning, `system_member` composition, operational mode, decommission / purge, and the **`alarm` arc** (an
+pinning, `system_member` composition, operational mode, decommission / purge, the singleton **`global`**
+estate owner (every built arc CHECK admits exactly `component | system | location | node`, and the
+cascade's least-specific tier is `platform`), and the **`alarm` arc** (an
 alarm is component-local today, so a system- or location-owned alarm is not yet a thing).
 See [implementation status](/architecture/status/).
 :::
@@ -65,7 +67,7 @@ Three nouns describe what you operate, plus the edge process that collects for t
   placement constraint: empty means unconstrained, a non-empty set is enforced on create and move,
   and the four shipped types carry it seeded (`campus={root}`, `building={root,campus}`,
   `floor={building,campus}`, `room={floor,building,campus}`).
-- A **node** is the edge process (`omniglass --mode node`) that pulls work, reaches components over
+- A **node** is the edge process (`omniglass node run`) that pulls work, reaches components over
   interfaces, and ships results ([nodes](/architecture/nodes/)). It is structural because it is a
   first-class **owner**: a node owns its own self-health telemetry and can carry a node-owned alarm.
 
@@ -86,8 +88,10 @@ system -> c2
 system -> c3
 ```
 
-Above the four sits the singleton **`global`** estate owner: the top owner above every location where
-estate-wide health and KPIs roll up. One per deployment, no FK. It is an **owner**, nothing else: it is
+Above the four, the design places a singleton **`global`** estate owner: the top owner above every location where
+estate-wide health and KPIs roll up. One per deployment, no FK. It is still `Design`: no built table
+carries a `global` arm today (every arc CHECK admits exactly `component | system | location | node`).
+It is an **owner**, nothing else: it is
 not a location (the location tree is a forest of N unparented tops with no root) and it is not the
 [cascade](/architecture/cascade/)'s least-specific binding tier, which is **`platform`**
 ([ADR-0057](/architecture/decisions/#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier)).
@@ -155,18 +159,21 @@ every system that conforms, until that system overrides one. See the
 A classifier does not only classify, it **declares what its instances expose**. Three tables carry that
 declaration, one per classifier, all the same shape: **`product_property`** (a component's), **`standard_property`**
 (a system's), and **`location_type_property`** (a location's). Each is one row per declared property
-(`<classifier>_id`, `property_type_name` referencing the [`property_type` catalog](/architecture/variables/), an
-optional `default_value` in jsonb, and a `required` flag), unique per `(classifier, property)`. Type and
+(`<classifier>_id`, a **`property_type_id`** FK referencing the [`property_type` catalog](/architecture/variables/),
+an optional `default_value` in jsonb, and a `required` flag), unique per `(classifier, property)`; the API
+body carries `property_type_name`, resolved to the FK at the edge. Type and
 validation are deliberately **not** repeated here: they live on the property, which stays the single
 source for what a name means.
 
 The value lives in **`property`**, which carries the **same owner exclusive-arc** as the sample
 sinks and `event` (`owner_kind` plus `component_id` / `system_id` / `location_id` / `node_id`, one-set
-CHECK), plus the property name, an `instance` discriminator, a **`provenance`**, and the jsonb `value`.
+CHECK), plus the **`property_type_id`** FK, an `instance` discriminator, a **`provenance`**, and the jsonb
+`value`.
 Provenance is what makes the fold work: the same table holds a value an operator **declared**, a value a
 device **observed**, a value a rule **calculated**, and a value config **intended**, and only the
-provenance says which. Today the write path fills `provenance=declared`; the other three provenances are
-seats for the producers that come later.
+provenance says which. The declared write path fills `provenance=declared`; ingest upserts `observed`
+and the command pillar upserts `intended` latest values into the same table, leaving only `calculated`
+without a producer.
 
 The read is **`EffectiveProperties(ownerKind, ownerID)`**, one query with two arms:
 
@@ -196,7 +203,7 @@ is a non-disclosing 404, not a silent success.
 
 This pair replaces the retired `field_definition` / `field_value` feature: a "field" was always a property
 with **declared** provenance, and the catalog it hung off is now the classifier's contract
-([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property)). See
+([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)). See
 the [Properties guide](/guides/admin/properties/) for the operator surface.
 
 ### System roles: the slots a system needs filled
@@ -307,15 +314,18 @@ up the tree
 Not everything the binary ships with is the same **kind** of thing, and conflating the two kinds is what
 makes seeded defaults painful. Omniglass splits them:
 
-- **Example content** (a `standard`, a `location_type`) is created by **forking an in-code template**. The
+- **Example content** (a `standard`, a `location_type`) is created by **forking an in-code template**
+  (the fork mechanism itself is tracked as
+  [#317](https://github.com/hyperscaleav/omniglass/issues/317); today the shipped boot seeds stand in). The
   fork is **one-time, with no inheritance**: nothing in an estate points back at the template, so the
   template can be improved in any release without touching a single tenant. What lands is an ordinary
   **operator-owned** row (`official: false`), freely editable and deletable, and the boot seed installs it
   **only if absent** (`ON CONFLICT DO NOTHING`). Re-seeding never reasserts over an edit; if it did, an
   operator's rename of "Huddle Room" would silently revert on the next restart. The **roles** a shipped
   standard declares ride the same lane, so retuning a seeded role's quorum survives the next boot.
-- **Canonical vocabulary** (the [`property` catalog](/architecture/variables/), and later `command` and
-  `event_type`) is the shared namespace a driver maps onto, so it must stay identical install to install.
+- **Canonical vocabulary** (the [`property_type` catalog](/architecture/variables/), plus the
+  `event_type` and `command_type` registries, all seeded today) is the shared namespace a driver maps
+  onto, so it must stay identical install to install.
   It seeds as `official: true` through an **authoritative upsert** (`ON CONFLICT DO UPDATE`), read-only in
   the API, so a release can correct it. The classification catalogs (`vendor`, `driver`, `capability`,
   `product`) sit on that same authoritative path today.
@@ -377,14 +387,16 @@ the **exclusive-arc**. Every sample table, plus `event`, `property`, `alarm`, an
 carries:
 
 - an **`owner_kind`** enum, plus
-- the **matching typed FK** (`component_id` / `system_id` / `location_id` / `node_id`, or none for the
-  singleton `global`), plus
-- a **CHECK** that exactly the column matching `owner_kind` is set (or all null for `global`).
+- the **matching typed FK** (`component_id` / `system_id` / `location_id` / `node_id`), plus
+- a **CHECK** that exactly the column matching `owner_kind` is set.
 
-This makes **system-, location-, node-, and global-level samples first-class** (e.g. `health` is a
-`state` owned by a system, estate-wide availability is owned by `global`, and a node's
+Every built CHECK admits exactly `component | system | location | node`; the singleton `global` owner
+(an all-null arm, none of the four set) is still `Design`.
+
+This makes **system-, location-, and node-level samples first-class** (e.g. `health` is a
+`state` owned by a system, and a node's
 self-health is owned by the node), the fix for a monitoring tool that can only put state on a single
-host. It is also what carries a recorded [health](/architecture/health/) verdict: a component, a system,
+host; estate-wide samples owned by `global` are the designed extension. It is also what carries a recorded [health](/architecture/health/) verdict: a component, a system,
 and a location each own their own transition series under the same `health` key, and the **owner** is what
 gives a reading its level. The same arc owns the `event` rows a sample produces, and is the design for
 `alarm` (component-local today), so a system-owned sample will yield a system-owned alarm. The full
@@ -401,13 +413,17 @@ component that publishes an event natively (an xAPI event, an SNMP trap) routes 
 **`message`** (its text, from `string_value`) and optional structured **`attributes`** (jsonb, from
 `json_value`). Raw log lines are a **separate ingest lane**, not events
 ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)): the `log_line`
-table, and the derivation that turns a log line into an event, are a later slice.
+table is **built**, read back through `GET /components/{name}/logs` and `GET /nodes/{name}/logs`; only
+the derivation that turns a log line into an event is a later slice.
 
 An `event` row carries the **identical owner exclusive-arc** as a sample (`owner_kind` plus the
 matching `component_id` / `system_id` / `location_id` / `node_id`, under the same CHECK that exactly one
 is set) and the **same provenance** vocabulary (`observed` / `calculated` / `intended` / `declared`,
 default `observed`), so a log occurrence is owned, addressed, and confined exactly like the value
-samples beside it: the **same** owner-confinement and reject-not-project gates apply at ingest. This
+samples beside it: the **same** owner-confinement and reject-not-project gates apply at ingest. Each
+row also names its occurrence key through a NOT NULL **`event_type_id`** FK into the `event_type`
+registry, and carries the lineage columns **`source_event_id`**, **`source_log_line_id`**, and
+**`derived_by_rule_id`**, so a derived occurrence names what produced it. This
 is why the ownership pattern above already named `event` alongside the sample tables; it is the same
 arc, now with a built sink on it.
 
@@ -509,9 +525,10 @@ The cascade is **not** "delete everything below", because containers do not own 
 - a **component** (leaf) decommissions as above;
 - a **system** delete **unbinds its members** (the `system_member` rows) but **does not delete the
   components**; they become standalone, re-homeable;
-- a **location** delete is **refused by the API while occupied** (it returns what is placed there); the
-  console offers re-homing before the delete (move the systems and components, then delete the empty
-  location);
+- a **location** delete is **refused by the API while occupied**; today the occupancy check counts only
+  child locations (`parent_id` children), while a system or component still placed there surfaces as the
+  generic referenced error rather than a placement inventory; the console offers re-homing before the
+  delete (move the systems and components, then delete the empty location);
 - a **node** delete **re-places its tasks** (to the server or another node, or surfaces the components as
   uncollected) and revokes the node credential ([identity and access](/architecture/identity-access/));
   `node.*` history is retained.

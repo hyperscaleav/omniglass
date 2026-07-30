@@ -16,21 +16,21 @@ protobuf `Command` on the wire, the device acknowledgement), and the `event_rule
 :::
 
 A **command** is the "do" half of the telemetry model, the third of the triad alongside a
-[datapoint](/architecture/properties/) (**know**) and an [event](/architecture/events/) (**happen**).
-Where a datapoint records what a device reports and an event records what happened, a command
+[property](/architecture/properties/) (**know**) and an [event](/architecture/events/) (**happen**).
+Where a property's samples record what a device reports and an event records what happened, a command
 records what a component was **told**. Its registry is `command_type`, the driver-owned catalog of
 what a component can be told, the twin of `property_type` and `event_type`.
 
 ## The command_type registry
 
 `command_type` describes every command: `(name, display_name, params_schema, settle_window_seconds,
-target_property_type, official)`. Two facts are the driver's, not the abstract signal's:
+target_property_type_id, official)`. Two facts are the driver's, not the abstract signal's:
 
 - **`settle_window_seconds`** is how long the device physically takes to actuate. The driver knows
   a projector warms up in twenty seconds and a matrix switch flips in one; the settle window is
   that fact, so a difference from the reported value is not called drift until the device has been
   given time to act.
-- **`target_property_type`** is the property a **settleable** command sets (`set_input` targets
+- **`target_property_type_id`** is the uuid FK to the property a **settleable** command sets (`set_input` targets
   `video.input`). A command with no target is **fire-and-forget** (`reboot`): it records the
   invocation and a caused event, with no value to settle.
 
@@ -45,7 +45,7 @@ Issuing a command is one transaction that writes three things, which is where th
 meet:
 
 1. the **`command`** row (the invocation: owner, command_type, params, actor), over the same
-   [exclusive owner arc](/architecture/properties/#ownership-the-exclusive-arc) as every datapoint
+   [exclusive owner arc](/architecture/properties/#ownership-the-exclusive-arc) as every sample
    and event;
 2. a **caused `event`** ([`origin=caused`](/architecture/events/#events-caught-caused-derived-scheduled),
    typed `command.issued`), the lineage record that a command happened; and
@@ -83,7 +83,7 @@ The physical layout (the owner arc, the caused-event lineage, partitioning) live
 | `command_type` | name, params_schema (jsonb), **settle_window_seconds**, **target_property_type_id?**, official | the do registry; the settle window and target property are driver facts |
 | `command` | id, ts, owner arc, command_type_id, instance, params (jsonb), actor, **caused_event_id** | the invocation log; `caused_event_id` points at the event the command recorded |
 
-Related: [datapoints](/architecture/properties/) (the intended value a command opens),
+Related: [properties](/architecture/properties/) (the intended value a command opens),
 [events](/architecture/events/) (the caused event it records), [config, secrets, and
 variables](/architecture/variables/) (the reconciliation read settlement closes), and
 [alarms and actions](/architecture/alarms-actions/) (where a reconcile policy issues a command).
