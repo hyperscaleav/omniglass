@@ -38,6 +38,10 @@ type options struct {
 	// the server URL to reach both the API and the bus.
 	natsURL     string
 	settingsSvc *settings.Service
+	// telemetryPub publishes an authorized push batch onto the ingest lane. Nil when
+	// the handler runs without a bus, and the push route then answers 503 rather
+	// than pretending to accept telemetry nothing will ever consume.
+	telemetryPub TelemetryPublisher
 }
 
 // Option configures NewHandler.
@@ -48,6 +52,13 @@ func WithSecureCookies(b bool) Option { return func(o *options) { o.secureCookie
 
 // WithNatsURL sets the advertised NATS URL returned by the node-claim exchange.
 func WithNatsURL(u string) Option { return func(o *options) { o.natsURL = u } }
+
+// WithTelemetryPublisher supplies the bus seam the push-ingest route publishes
+// through. Without it the route is unavailable, so a handler built for a test or a
+// bus-less deployment cannot silently accept telemetry into a void.
+func WithTelemetryPublisher(p TelemetryPublisher) Option {
+	return func(o *options) { o.telemetryPub = p }
+}
 
 // WithSettingsService supplies the settings engine service that backs the
 // settings routes. When unset, NewHandler builds a code-defaults-only service so
@@ -261,6 +272,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerReconciliationRoutes(api, a, gw)
 	registerEventRoutes(api, a, gw)
 	registerLogRoutes(api, a, gw)
+	registerTelemetryRoutes(api, a, gw, o.telemetryPub)
 	registerEventTypeRoutes(api, a, gw)
 	registerCommandTypeRoutes(api, a, gw)
 	registerCommandRoutes(api, a, gw)

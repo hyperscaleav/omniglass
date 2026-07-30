@@ -11,9 +11,11 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"google.golang.org/protobuf/proto"
 )
 
 // Config configures the embedded NATS server. Port -1 binds an ephemeral port
@@ -185,4 +187,20 @@ func (s *Server) cleanupStoreDir() {
 		_ = os.RemoveAll(s.ownStoreDir)
 		s.ownStoreDir = ""
 	}
+}
+
+// PublishTelemetry puts an already-authorized batch on the API telemetry lane. It
+// satisfies the API's TelemetryPublisher seam, so the HTTP handler never holds a
+// NATS connection of its own. Publishing uses the server's internal credential, the
+// only one whose grant reaches this subject, which is what makes the consumer's
+// "believe the owner on this subject" rule safe.
+func (s *Server) PublishTelemetry(ctx context.Context, b *ogv1.TelemetryBatch) error {
+	raw, err := proto.Marshal(b)
+	if err != nil {
+		return fmt.Errorf("bus: marshal telemetry batch: %w", err)
+	}
+	if err := s.nc.Publish(collection.APITelemetrySubject, raw); err != nil {
+		return fmt.Errorf("bus: publish telemetry: %w", err)
+	}
+	return s.nc.FlushWithContext(ctx)
 }
