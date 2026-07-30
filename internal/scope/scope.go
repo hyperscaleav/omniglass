@@ -147,11 +147,17 @@ func applicableKinds(resource string) map[string]bool {
 		return map[string]bool{"system": true}
 	case "component", "interface", "task":
 		return map[string]bool{"component": true}
-	case "secret", "variable", "field":
+	case "secret", "variable", "field", "telemetry":
 		// A secret, variable, or field value is owned on the exclusive arc
 		// (location, system, or component), so a grant scoped to any of those
 		// tiers can contain the owner: the gateway's inScopeTree walk resolves
 		// the specific owner within it.
+		//
+		// Pushed telemetry is the same shape: a batch is owned by an estate entity
+		// on that arc, so a grant at any arc tier can contain its owner. This is
+		// what fences POST /telemetry:push, and it matters that the fence resolves
+		// from telemetry:push rather than component:read, since a principal often
+		// holds a wide read and a narrow write.
 		return map[string]bool{"location": true, "system": true, "component": true}
 	default:
 		return map[string]bool{}

@@ -3983,6 +3983,34 @@ Example:
 omniglass task list
 ```
 
+## `omniglass telemetry`
+
+Commands for the telemetry resource
+
+### `omniglass telemetry push`
+
+Push telemetry for an owner
+
+```
+omniglass telemetry push [flags]
+```
+
+Accepts samples and raw log lines for one owner and publishes them onto the ingest lane. The registry decides where each sample lands (metric, state, or a caught event); an unregistered name is rejected and reported in the response rather than silently dropped. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--logs` | string | (none) | Raw untyped log lines. No registry gate |
+| `--owner` | string | (none) |  |
+| `--samples` | string | (none) | Registry-resolved observations. The registry decides which table each lands in |
+| `--source` | string | (none) | Who observed this batch (recorded as the provenance source on every row) |
+| `--ts` | string | (none) | Batch timestamp; a per-item timestamp overrides it |
+
+Example:
+
+```sh
+omniglass telemetry push --owner owner
+```
+
 ## `omniglass token`
 
 Mint an additional bearer token for an existing principal (direct DB)

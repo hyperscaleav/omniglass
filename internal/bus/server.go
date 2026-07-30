@@ -11,9 +11,11 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"google.golang.org/protobuf/proto"
 )
 
 // Config configures the embedded NATS server. Port -1 binds an ephemeral port
@@ -185,4 +187,34 @@ func (s *Server) cleanupStoreDir() {
 		_ = os.RemoveAll(s.ownStoreDir)
 		s.ownStoreDir = ""
 	}
+}
+
+// publishFlushTimeout bounds the post-publish flush (see PublishTelemetry).
+const publishFlushTimeout = 5 * time.Second
+
+// PublishTelemetry puts an already-authorized batch on the API telemetry lane. It
+// satisfies the API's TelemetryPublisher seam, so the HTTP handler never holds a
+// NATS connection of its own. Publishing uses the server's internal credential, the
+// only one whose grant reaches this subject, which is what makes the consumer's
+// "believe the owner on this subject" rule safe.
+func (s *Server) PublishTelemetry(ctx context.Context, b *ogv1.TelemetryBatch) error {
+	raw, err := proto.Marshal(b)
+	if err != nil {
+		return fmt.Errorf("bus: marshal telemetry batch: %w", err)
+	}
+	if err := s.nc.Publish(collection.APITelemetrySubject, raw); err != nil {
+		return fmt.Errorf("bus: publish telemetry: %w", err)
+	}
+	// Flush so a 202 means the broker actually has the batch, not merely that we
+	// queued it locally (an unflushed publish is lost silently if the connection
+	// drops). The flush gets its own bound rather than inheriting the caller's
+	// context: FlushWithContext REQUIRES a deadline, and an HTTP request context has
+	// none, so passing it straight through fails every publish. WithTimeout also
+	// keeps a shorter caller deadline if there is one.
+	ctx, cancel := context.WithTimeout(ctx, publishFlushTimeout)
+	defer cancel()
+	if err := s.nc.FlushWithContext(ctx); err != nil {
+		return fmt.Errorf("bus: flush telemetry publish: %w", err)
+	}
+	return nil
 }

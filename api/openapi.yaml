@@ -1,5 +1,18 @@
 components:
   schemas:
+    AcceptedStruct:
+      additionalProperties: false
+      properties:
+        logs:
+          format: int64
+          type: integer
+        samples:
+          format: int64
+          type: integer
+      required:
+        - samples
+        - logs
+      type: object
     AddMemberInputBody:
       additionalProperties: false
       properties:
@@ -3085,6 +3098,22 @@ components:
         - node
         - logs
       type: object
+    OwnerStruct:
+      additionalProperties: false
+      properties:
+        kind:
+          description: "The owner arc. Only component today; system and location arrive with #422"
+          enum:
+            - component
+          type: string
+        ref:
+          description: The owning entity, by name or id
+          minLength: 1
+          type: string
+      required:
+        - kind
+        - ref
+      type: object
     PlatformBindingInputBody:
       additionalProperties: false
       properties:
@@ -3286,6 +3315,121 @@ components:
         - name
         - data_type
         - official
+      type: object
+    PushInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/PushInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        logs:
+          description: Raw untyped log lines. No registry gate
+          items:
+            $ref: "#/components/schemas/PushLog"
+          type:
+            - array
+            - "null"
+        owner:
+          $ref: "#/components/schemas/OwnerStruct"
+        samples:
+          description: Registry-resolved observations. The registry decides which table each lands in
+          items:
+            $ref: "#/components/schemas/PushSample"
+          type:
+            - array
+            - "null"
+        source:
+          description: Who observed this batch (recorded as the provenance source on every row)
+          type: string
+        ts:
+          description: Batch timestamp; a per-item timestamp overrides it
+          format: date-time
+          type: string
+      required:
+        - owner
+      type: object
+    PushLog:
+      additionalProperties: false
+      properties:
+        correlation_id:
+          description: Threads related lines and their derived events
+          type: string
+        facility:
+          description: The line's facility, when classified
+          type: string
+        message:
+          description: The raw log text
+          minLength: 1
+          type: string
+        severity:
+          description: The line's severity, when classified
+          type: string
+        source:
+          description: The channel the line arrived on; falls back to the batch source
+          type: string
+        ts:
+          description: When the line arrived; defaults to the batch timestamp
+          format: date-time
+          type: string
+      required:
+        - message
+      type: object
+    PushOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/PushOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        accepted:
+          $ref: "#/components/schemas/AcceptedStruct"
+        rejected:
+          description: Names dropped by reject-not-project. Reported synchronously so a caller learns about a typo
+          items:
+            $ref: "#/components/schemas/PushRejection"
+          type:
+            - array
+            - "null"
+      required:
+        - accepted
+      type: object
+    PushRejection:
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        reason:
+          type: string
+      required:
+        - name
+        - reason
+      type: object
+    PushSample:
+      additionalProperties: false
+      properties:
+        instance:
+          description: Discriminates many values of one name on one owner (three fan speeds, per-port counters)
+          type: string
+        name:
+          description: The canonical property name, or a registered event_type name
+          minLength: 1
+          type: string
+        number:
+          description: The value for a metric-kind property
+          format: double
+          type: number
+        text:
+          description: The value for a state-kind property, or the message for an event_type
+          type: string
+      required:
+        - name
       type: object
     RaiseAlarmInputBody:
       additionalProperties: false
@@ -10496,6 +10640,31 @@ paths:
           description: Error
       summary: Get a task
       x-omniglass-permission: task:read
+  /telemetry:push:
+    post:
+      description: Accepts samples and raw log lines for one owner and publishes them onto the ingest lane. The registry decides where each sample lands (metric, state, or a caught event); an unregistered name is rejected and reported in the response rather than silently dropped. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.
+      operationId: push-telemetry
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushInputBody"
+        required: true
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PushOutputBody"
+          description: Accepted
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Push telemetry for an owner
+      x-omniglass-permission: telemetry:push
   /variables:
     get:
       description: Lists every variable. Requires an all-scope read. Gated by variable:read.

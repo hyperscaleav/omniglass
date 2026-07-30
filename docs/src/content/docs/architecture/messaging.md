@@ -64,6 +64,14 @@ Subjects are hierarchical and **scope is expressed in them**, not bolted on:
 
 - **Tenant = one NATS account.** Per-account isolation (messaging) is the same boundary as the
   per-database isolation (storage): no shared subjects, no shared rows ([identity and access](/architecture/identity-access/)).
+- **The API telemetry lane (`og.v1.api.telemetry`) is trusted by subject.** A first-party push
+  (`POST /telemetry:push`) is authorized at the route, so the API publishes as a **trusted server
+  producer** with no admission pass, and the ingest consumer believes the owner the batch carries
+  **because of the subject it arrived on**, never because the field is populated. A batch on
+  `og.v1.telemetry.*` that asserts an owner is dropped. Only the server's own credential can reach
+  this subject: a node's grant is an explicit allow-list of its own three subjects, and the lane
+  deliberately sits **outside** the single-token `og.v1.telemetry.*` wildcard, so a node named for
+  whatever literal we might reserve there cannot be handed it.
 - **Subject permissions gate the subject string; the admission consumer gates the owner.** A node may
   publish and subscribe only the subjects for its placement; the grant is **mechanically derived from
   placement**, a coarse transport gate, not a second copy of the ABAC model. But a datapoint's owner lives
