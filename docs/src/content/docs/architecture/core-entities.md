@@ -44,13 +44,13 @@ See [implementation status](/architecture/status/).
 Three nouns describe what you operate, plus the edge process that collects for them.
 
 - A **component** is a deployed device, app, or service: a display, a codec, a DSP, a control
-  processor, a cloud UCC service. It owns samples, pins a `component_template_version`, and points
+  processor, a cloud UCC service. It owns samples, points at the `product` it is, and points
   at the **`product`** it is, which is where its shape comes from (its vendor, its driver, the
   capabilities it provides, and the properties it declares). The pointer is optional: a productless
   component is legal, it simply carries no contract.
 - A **system** is a set of components that work together to do one job. A meeting room is a system.
   So is a classroom, a video wall, a broadcast chain. The word is deliberately universal: a system
-  is the unit you actually care about, whatever shape it takes. It pins a `system_template_version`,
+  is the unit you actually care about, whatever shape it takes. It **conforms to** a `standard`,
   is located at a location, and **conforms to a `standard`**, the blueprint it is built against. The
   pointer is optional, mirroring `component.product_id`: a one-off system conforms to no standard and
   simply carries no contract.
@@ -98,8 +98,8 @@ not a location (the location tree is a forest of N unparented tops with no root)
 
 | Entity | What it is | Key columns |
 |---|---|---|
-| `component` | a deployed instance (`dsp-boardroom-3`) | name (unique), **parent_id** (self-ref tree), display_name; pins a `component_template_version`; carries **`product_id`** (optional, `on delete restrict`), the source of its shape |
-| `system` | a composition of components / subsystems (the service tree) | name (unique), **parent_id** (self-ref tree), display_name; pins a `system_template_version`; carries `location_id`; carries **`standard_id`** (optional), the blueprint it conforms to |
+| `component` | a deployed instance (`dsp-boardroom-3`) | name (unique), **parent_id** (self-ref tree), display_name; points at its `product`; carries **`product_id`** (optional, `on delete restrict`), the source of its shape |
+| `system` | a composition of components / subsystems (the service tree) | name (unique), **parent_id** (self-ref tree), display_name; conforms to its `standard_template_version`; carries `location_id`; carries **`standard_id`** (optional), the blueprint it conforms to |
 | `location` | a place tree | name (unique), type, **parent_id** (self-ref tree), display_name; no template (the `location_type` is the only shape-definer) |
 | `node` | the edge process | name (the identity); carries labels, last_heartbeat_at, and its bound credential ([identity and access](/architecture/identity-access/)) |
 
@@ -456,7 +456,7 @@ is_primary)`, described under [membership](#membership-what-a-role-attaches-to).
 the role onto that same row and pinned it to a frozen template BOM; what shipped keeps the row to the
 binding alone and lets `system_role_assignment` carry the role, so a member can exist without one.
 
-A `system_template_member` declares, per role, a **requirement** (the canonical samples and commands a
+A [system role](#system-roles-the-slots-a-system-needs-filled) declares, per slot, a **requirement** (the capabilities a
 member must provide) plus its `health_role`; any component whose template meets the requirement can fill
 the role, validated on assignment. Detailed on [templates](/architecture/templates/).
 
@@ -464,7 +464,7 @@ the role, validated on assignment. Detailed on [templates](/architecture/templat
 `system_member` is **built** as the plain binding above; the **frozen template BOM** on it is still
 `Design`. The **built** slot is
 [`system_role`](#system-roles-the-slots-a-system-needs-filled), declared on a standard or a system rather
-than frozen into a `system_template_version`, requiring a **capability** set rather than canonical
+than frozen into a versioned shape, requiring a **capability** set rather than canonical
 samples and commands, and assigned through `system_role_assignment`. Its **`impact`** also replaces the
 `health_role` tag above: `required` / `redundant` / `informational` are expressed by quorum plus impact,
 with no fourth vocabulary

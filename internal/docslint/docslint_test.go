@@ -46,6 +46,11 @@ func TestBannedPatternsStaySane(t *testing.T) {
 		"the current value cache", "source_event_id", "omniglass node run",
 		"ListShell", "FlatList", "TreeList", "UpsertPropertyType",
 		"value_type on the variable", // a live column, distinct from the retired data-type usage
+		// ADR-0071 redefines "template" rather than retiring the word, so the prose
+		// form must stay legal: an operator really does start from a template.
+		"system templates you can import",
+		"a component template to clone",
+		"start from a template",
 	}
 	for _, s := range current {
 		for _, term := range Banned {

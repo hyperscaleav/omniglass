@@ -92,7 +92,7 @@ Each piece of a config item has one home, joined by the canonical key:
 | Piece | What it holds | Lives in |
 |---|---|---|
 | signal definition | key, kind, value domain, unit | `property_type` (the registry) |
-| get / set binding | how this device class reads and writes the signal | the **component_template** version |
+| get / set binding | how this device class reads and writes the signal | the component's **product** |
 | declared value | the intent (`HDMI1`), plus the per-item `reconcile` policy | the **config table** (cascaded) |
 | observed value | what the device reports (`HDMI2`) | `state` rows (observed) |
 | drift | declared ≠ observed | **computed on read**, not stored |
@@ -139,7 +139,7 @@ onto whichever display fills that role; the display's own template declared noth
 reconcile then *just happen*, no per-device authoring.
 
 :::caution[Open question]
-Resolving a value scoped to a role slot (the `system_template_member` where `health_role` already
+Resolving a value scoped to a role slot (the [system role](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled) where quorum already
 lives) may need a new cascade level between system and component, alongside the per-item get/set
 binding shape on the template.
 :::

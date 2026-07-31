@@ -129,7 +129,7 @@ state -> variable: linked_state (observed side)
 ```
 
 The structural and template entities (`component` / `system` / `location` and the `*_template` /
-`*_template_version` / `system_template_member` / `system_member` families) relate as shown on
+`product` / `standard` / `system_role` / `system_member` families) relate as shown on
 [core entities](/architecture/core-entities/) and [templates](/architecture/templates/); the
 collection entities (`interface_type` / `interface` / `task`) on
 [collection](/architecture/collection/#storage).

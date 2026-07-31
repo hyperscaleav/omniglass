@@ -42,7 +42,7 @@ What the cascade is for, in operator terms:
   chain: deployment beats template bindings; deepest location wins)*
 - **Composition tightens the part.** My "Standard Huddle Room" template polls codecs
   every 30s, tighter than the 60s the codec's own template binds, and every codec
-  placed in a huddle room picks that up. *(system_template beats component_template)*
+  placed in a huddle room picks that up. *(the system's standard beats the component's product)*
 - **"Why did it get this?"** RM204 polls every 5 minutes and I don't know why; the
   resolve view shows it is the "Old-firmware Room Kits" group (weight 450) shadowing
   the template's 30s. *(the effective-config resolve view)*
@@ -57,8 +57,8 @@ Broad decision to specific deployment; most-specific (deepest) wins:
 
 ```text
 platform              the install-wide binding
-component_template    the leaf entity's template bindings
-system_template       the leaf's owning-system template bindings
+product               the leaf component's product bindings
+standard              the owning system's standard bindings
 location tree         earth -> luna -> port-lovell             (deepest wins)
 system tree           parent system -> subsystem -> ...        (deepest wins)
 component tree        chassis -> card -> ...                   (deepest wins, = the leaf)
@@ -242,8 +242,8 @@ RM204 - cascade precedence            most-specific (highest) wins
  320   location: HQ Building              -              -            -
  310   location: HQ Campus  (a top)       -              vault-A      -
  250   group: PCI-scope                   -              vault-C      -
- 200   system_template: Std Huddle Room   -              -            -
- 100   component_template: Room Kit Pro   30s            -            -
+ 200   standard: Std Huddle Room          -              -            -
+ 100   product: Room Kit Pro              30s            -            -
    0   platform  (admin, install-wide)    60s            -            -
 ==============================================================================
  effective:  poll_interval = 5min    (group 450; shadowed template 30s, platform 60s)
