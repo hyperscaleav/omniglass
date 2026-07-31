@@ -547,6 +547,6 @@ The connection registry, the declared connections, and the node's units of work;
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `interface_type` | name, **built**, direction (in/out), param_schema (jsonb) | the protocol-and-style registry (`ssh`, `http`, `snmp`, `mqtt`, `webhook`, ...); generates the template config schema |
+| `interface_type` | name, **built**, direction (in/out), param_schema (jsonb) | the **transport** registry (`ssh`, `http`, `snmp`, `mqtt`, `webhook`, ...); generates the template config schema. Decided to become a **code** registry, one package per transport, retiring this table and its FK ([ADR-0073](/architecture/decisions/#adr-0073-a-driver-consumes-transports-a-transport-is-code-not-a-row)); still a table today |
 | `interface` | **id** (surrogate), **name derived from interface_type** (unique per component, never hand-typed), **component** (nullable: set = pre-bound, null = shared/match-key), params (jsonb), **node_name** (placement, `ON DELETE CASCADE` so a node purge drops its interfaces) | the connection, the **authored** primitive ([nodes](/architecture/nodes/)) |
 | `task` | **id = content hash**, display_name, **interface** (`ON DELETE CASCADE`), **mode (poll/listen)**, spec (jsonb), enabled | a **derived** unit of collection work: created with its interface, read-only (no operator CRUD). **No node column**, placement **projects from the interface**. Parsing to samples is the **edge function**, not the task's job |
