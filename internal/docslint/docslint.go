@@ -216,7 +216,10 @@ func ScanVocabulary() ([]Finding, error) {
 // A destination is an address, not prose, and an ADR anchor slug is the ADR's
 // own immutable historical title, so citing one must never trip the lint that
 // retired the term the title contains.
-var linkTarget = regexp.MustCompile(`\]\([^)]*\)`)
+// The inner alternation tolerates one level of nested parentheses, which real
+// URLs do carry (a wiki link ending in "(disambiguation)"). A naive [^)]* stops
+// at the first inner ")" and leaves a dangling tail that can look like prose.
+var linkTarget = regexp.MustCompile(`\]\((?:[^()]|\([^()]*\))*\)`)
 
 // retiringProse marks prose that names a retired term in order to RETIRE it,
 // which is the one context where writing the dead word is the correct thing to
@@ -239,17 +242,22 @@ var retiringProse = regexp.MustCompile(`(?i)\b(retire[ds]?|retirement|was|were|o
 const retirementWindow = 30
 
 // nearRetirementMarker reports whether a retirement word sits within
-// retirementWindow characters of the match at [start, end).
+// retirementWindow CHARACTERS of the match at byte offsets [start, end).
+//
+// The window is counted in runes, not bytes, so a multi-byte character near the
+// boundary cannot split mid-rune and hand the matcher invalid UTF-8. The docs
+// carry plenty of them (curly quotes, arrows), so this is a live concern rather
+// than a theoretical one.
 func nearRetirementMarker(prose string, start, end int) bool {
-	lo := start - retirementWindow
-	if lo < 0 {
-		lo = 0
+	before := []rune(prose[:start])
+	if len(before) > retirementWindow {
+		before = before[len(before)-retirementWindow:]
 	}
-	hi := end + retirementWindow
-	if hi > len(prose) {
-		hi = len(prose)
+	after := []rune(prose[end:])
+	if len(after) > retirementWindow {
+		after = after[:retirementWindow]
 	}
-	return retiringProse.MatchString(prose[lo:hi])
+	return retiringProse.MatchString(string(before)) || retiringProse.MatchString(string(after))
 }
 
 // scanLine returns one message per banned term found in a single line of docs

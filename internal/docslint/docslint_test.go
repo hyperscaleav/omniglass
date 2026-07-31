@@ -1,6 +1,7 @@
 package docslint
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -175,4 +176,49 @@ func TestOperatorStrings(t *testing.T) {
 		t.Fatal(err)
 	}
 	report(t, "operator-string vocabulary", findings, true)
+}
+
+// TestOperatorStringPathsResolve guards the failure mode that makes
+// TestOperatorStrings meaningless: it reports zero findings both when the text
+// is clean and when it read nothing at all. A reviewer read the ../../ prefixes
+// as repo-relative and called the lint dead; the prefixes are right (a Go test
+// runs with its package directory as the working directory, which is the same
+// convention DocsRoot has always used) but nothing proved it. Now something does.
+func TestOperatorStringPathsResolve(t *testing.T) {
+	if len(operatorStrings) == 0 {
+		t.Fatal("operatorStrings is empty, so ScanOperatorStrings can never find anything")
+	}
+	for _, p := range operatorStrings {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("operator-string path does not resolve from the package directory: %s (%v)", p, err)
+		}
+	}
+}
+
+// TestNearRetirementMarkerIsRuneSafe pins the window against multi-byte text:
+// byte slicing at start-30 could split a rune and hand the matcher invalid UTF-8.
+func TestNearRetirementMarkerIsRuneSafe(t *testing.T) {
+	// Curly quotes and arrows are three bytes each, so a byte window would cut
+	// through one of them here.
+	line := "the “shape” arrow → ✓ marker sits here, and the `field_definition` registry stores it"
+	if got := scanLine(line); len(got) == 0 {
+		t.Errorf("multi-byte line did not fire: %q", line)
+	}
+	near := "“retired” → the `field_definition` contract"
+	if got := scanLine(near); len(got) != 0 {
+		t.Errorf("multi-byte retirement prose fired: %q -> %v", near, got)
+	}
+}
+
+// TestLinkTargetHandlesNestedParens pins the stripper against a URL carrying
+// parentheses, which a naive [^)]* truncates, leaving a tail that reads as prose.
+func TestLinkTargetHandlesNestedParens(t *testing.T) {
+	line := "see [the fold](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)"
+	if got := scanLine(line); len(got) != 0 {
+		t.Errorf("plain link target fired: %v", got)
+	}
+	nested := "see [a note](https://example.test/x_(property_value)_y) for context"
+	if got := scanLine(nested); len(got) != 0 {
+		t.Errorf("nested-paren link target fired: %v", got)
+	}
 }
