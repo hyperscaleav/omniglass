@@ -97,6 +97,11 @@ template tables), [collection](/architecture/collection/#storage) (interfaces an
   node arm; the `platform` kind sets all three FKs null). `alarm` carries **no arc**: a single NOT
   NULL `component_id`, component-local by design today.
   The full pattern is on [core entities](/architecture/core-entities/#ownership-the-exclusive-arc).
+- **A write struct takes the `Write` suffix; the bare noun is the row.** `MetricSampleWrite` is what a
+  caller hands the gateway, `MetricSample` is what comes back, and the same holds for `StateSampleWrite`,
+  `EventWrite`, and `LogLineWrite`. A carrier is likewise named for what it carries rather than for one of
+  its passengers, which is why the telemetry wire message is a `TelemetryBatch`
+  ([ADR-0072](/architecture/decisions/#adr-0072-an-envelope-is-not-named-after-its-passengers-and-an-insert-struct-takes-the-write-suffix)).
 - **Keys**: samples and events use a surrogate id plus `ts`; the key registry `property_type` is
   name-unique with the **`official` boolean** deciding authority (the template / org / official
   `scope` ladder is future design); structural entities are name-keyed; a `task` is **content-addressed**

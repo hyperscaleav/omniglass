@@ -98,6 +98,21 @@ var Banned = []BannedTerm{
 		Origin:      "ADR-0047",
 	},
 
+	// The naming rules of ADR-0072. Scoped tightly: a bare \bEvent\b would collide
+	// with the live event table, event_type, event_rule, and EventWrite, which are
+	// all current vocabulary. Only the retired identifiers are named.
+	{
+		Pattern:     regexp.MustCompile(`\b(MetricSampleEvent|StateSampleEvent|EventOccurrence)\b`),
+		Replacement: "MetricSampleWrite, StateSampleWrite, or EventWrite",
+		Origin:      "ADR-0072",
+	},
+	{
+		// The proto message and its old file, not the word "event".
+		Pattern:     regexp.MustCompile("(?i)protobuf `?Event`?|og/v1/event\\.proto|event\\.pb\\.go"),
+		Replacement: "TelemetryBatch (proto/og/v1/telemetry.proto)",
+		Origin:      "ADR-0072",
+	},
+
 	// The template retirement (ADR-0071). Scoped to the snake_case IDENTIFIERS and
 	// their _version rows on purpose: the word "template" is not retired, it is
 	// redefined. A clonable example is exactly what an operator means by "start
