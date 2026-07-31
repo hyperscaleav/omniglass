@@ -98,6 +98,22 @@ var Banned = []BannedTerm{
 		Origin:      "ADR-0047",
 	},
 
+	// The template retirement (ADR-0071). Scoped to the snake_case IDENTIFIERS and
+	// their _version rows on purpose: the word "template" is not retired, it is
+	// redefined. A clonable example is exactly what an operator means by "start
+	// from a template", so prose like "system templates you can import" is correct
+	// and must not trip the lint. What died is the versioned shape an instance pins.
+	{
+		Pattern:     regexp.MustCompile(`\bcomponent_template(_version)?\b`),
+		Replacement: "product (the device shape) with its product_property contract",
+		Origin:      "ADR-0071",
+	},
+	{
+		Pattern:     regexp.MustCompile(`\bsystem_template(_version|_member)?\b`),
+		Replacement: "standard (the composition shape) and system_role (the slots)",
+		Origin:      "ADR-0071",
+	},
+
 	// The ADR-0063 name foundation: the registry takes the _type suffix, the
 	// bare noun holds the data.
 	{
