@@ -38,6 +38,15 @@ type BannedTerm struct {
 // Banned is the denylist. Order is presentation only.
 var Banned = []BannedTerm{
 	{
+		// Split out of the generic datapoint entry below and placed BEFORE it,
+		// because first-match-wins and the generic replacement is wrong here: a
+		// log_datapoint did not become a property or a sample, it was retired
+		// into a different lane entirely (ADR-0066).
+		Pattern:     regexp.MustCompile(`(?i)log_datapoints?`),
+		Replacement: "log_line (the raw ingest lane) or event (the derived occurrence)",
+		Origin:      "ADR-0066",
+	},
+	{
 		// The datapoint noun family: datapoint, datapoints, datapoint_type,
 		// metric_datapoint, state_datapoint.
 		Pattern:     regexp.MustCompile(`(?i)[a-z_]*datapoint[a-z_]*`),
@@ -64,6 +73,44 @@ var Banned = []BannedTerm{
 		Replacement: "the per-registry upserts (UpsertPropertyType and siblings)",
 		Origin:      "internal/storage/registries.go",
 	},
+
+	// The estate-model wave. Each of these was retired by an ADR that shipped
+	// without its denylist entry, which is why the terms survived in the docs
+	// long enough for the 2026-07-30 audit to find them.
+	{
+		Pattern:     regexp.MustCompile(`\bcomponent_type\b`),
+		Replacement: "product (the shape a component points at)",
+		Origin:      "ADR-0047",
+	},
+	{
+		Pattern:     regexp.MustCompile(`\bsystem_type\b`),
+		Replacement: "standard",
+		Origin:      "ADR-0048",
+	},
+	{
+		Pattern:     regexp.MustCompile(`\bfield_definition\b`),
+		Replacement: "product_property (the declared-property contract)",
+		Origin:      "ADR-0047",
+	},
+	{
+		Pattern:     regexp.MustCompile(`\bfield_value\b`),
+		Replacement: "property (the value store)",
+		Origin:      "ADR-0047",
+	},
+
+	// The ADR-0063 name foundation: the registry takes the _type suffix, the
+	// bare noun holds the data.
+	{
+		Pattern:     regexp.MustCompile(`\bproperty_value\b`),
+		Replacement: "property (the latest-value store)",
+		Origin:      "ADR-0063",
+	},
+	{
+		// Safe against property_type_id, which does not contain property_id.
+		Pattern:     regexp.MustCompile(`\bproperty_id\b`),
+		Replacement: "property_type_id",
+		Origin:      "ADR-0063",
+	},
 }
 
 // vocabularyAllowed lists files (relative to DocsRoot) exempt from the
@@ -74,6 +121,49 @@ var vocabularyAllowed = map[string]bool{
 	filepath.Join("architecture", "decisions.md"): true,
 	filepath.Join("architecture", "status.mdx"):   true,
 	filepath.Join("reference", "cli", "index.md"): true,
+}
+
+// operatorStrings are the non-docs files whose text reaches an OPERATOR: seed
+// descriptions are upserted into registries at every boot and render verbatim
+// on catalog pages and in API payloads, the console nav labels and hints are
+// read on every page, and the README is the first thing a reader of the public
+// repo sees. The docs lint cannot see any of them (DocsRoot is the content
+// tree), which is how "intended datapoint" survived on a live console page
+// through a whole vocabulary migration.
+//
+// Deliberately a short explicit list rather than a tree walk: the goal is the
+// text an operator reads, not every identifier in the codebase. Renaming
+// internal identifiers is a code change with its own ripple, not a lint.
+var operatorStrings = []string{
+	filepath.Join("..", "..", "internal", "seed", "event_types.yaml"),
+	filepath.Join("..", "..", "internal", "seed", "properties.yaml"),
+	filepath.Join("..", "..", "internal", "seed", "command_types.yaml"),
+	filepath.Join("..", "..", "internal", "seed", "interface_types.yaml"),
+	filepath.Join("..", "..", "internal", "seed", "roles.yaml"),
+	filepath.Join("..", "..", "web", "src", "lib", "nav.ts"),
+	filepath.Join("..", "..", "README.md"),
+}
+
+// ScanOperatorStrings applies the same denylist to the operator-visible text
+// outside the docs tree. Reported separately from ScanVocabulary so a failure
+// says which surface drifted.
+func ScanOperatorStrings() ([]Finding, error) {
+	var findings []Finding
+	for _, path := range operatorStrings {
+		b, err := os.ReadFile(path)
+		if os.IsNotExist(err) {
+			continue // a seed file that has not been added yet is not a lint failure
+		}
+		if err != nil {
+			return nil, err
+		}
+		for i, line := range strings.Split(string(b), "\n") {
+			for _, text := range scanLine(line) {
+				findings = append(findings, Finding{File: filepath.Base(path), Line: i + 1, Text: text})
+			}
+		}
+	}
+	return findings, nil
 }
 
 // Finding is one lint hit.
@@ -113,19 +203,83 @@ func ScanVocabulary() ([]Finding, error) {
 			return nil
 		}
 		for i, line := range strings.Split(content, "\n") {
-			for _, term := range Banned {
-				if m := term.Pattern.FindString(line); m != "" {
-					findings = append(findings, Finding{
-						File: rel,
-						Line: i + 1,
-						Text: m + " is retired (" + term.Origin + "); write " + term.Replacement,
-					})
-				}
+			for _, text := range scanLine(line) {
+				findings = append(findings, Finding{File: rel, Line: i + 1, Text: text})
 			}
 		}
 		return nil
 	})
 	return findings, err
+}
+
+// linkTarget matches a markdown link destination: the (...) of [text](dest).
+// A destination is an address, not prose, and an ADR anchor slug is the ADR's
+// own immutable historical title, so citing one must never trip the lint that
+// retired the term the title contains.
+// The inner alternation tolerates one level of nested parentheses, which real
+// URLs do carry (a wiki link ending in "(disambiguation)"). A naive [^)]* stops
+// at the first inner ")" and leaves a dangling tail that can look like prose.
+var linkTarget = regexp.MustCompile(`\]\((?:[^()]|\([^()]*\))*\)`)
+
+// retiringProse marks prose that names a retired term in order to RETIRE it,
+// which is the one context where writing the dead word is the correct thing to
+// do. Without this the denylist fires on the very sentences that teach the
+// rename, and the cheapest way to green the build becomes deleting the
+// explanation.
+var retiringProse = regexp.MustCompile(`(?i)\b(retire[ds]?|retirement|was|were|old|former(ly)?|replaces?d?|supersed(e|es|ed)|no longer|instead of|renamed)\b`)
+
+// retirementWindow is how far either side of a banned term the retirement
+// marker must sit for the exemption to apply. Scoped rather than whole-line on
+// purpose: a long line can easily mention some unrelated thing that "was
+// replaced" while still making a current-tense claim about the retired term,
+// and a whole-line escape would wave that through. Wide enough for the real
+// phrasings ("the `component_type` registry retired with the product catalog"),
+// narrow enough that a clause about something else does not license it. Every
+// real phrasing in the corpus puts the marker within ~25 characters ("the
+// `component_type` registry retired with...", "replaces the old `component_type`",
+// "was `property_value`, built"), so 30 fits them all while a mention two
+// clauses away does not reach.
+const retirementWindow = 30
+
+// nearRetirementMarker reports whether a retirement word sits within
+// retirementWindow CHARACTERS of the match at byte offsets [start, end).
+//
+// The window is counted in runes, not bytes, so a multi-byte character near the
+// boundary cannot split mid-rune and hand the matcher invalid UTF-8. The docs
+// carry plenty of them (curly quotes, arrows), so this is a live concern rather
+// than a theoretical one.
+func nearRetirementMarker(prose string, start, end int) bool {
+	before := []rune(prose[:start])
+	if len(before) > retirementWindow {
+		before = before[len(before)-retirementWindow:]
+	}
+	after := []rune(prose[end:])
+	if len(after) > retirementWindow {
+		after = after[:retirementWindow]
+	}
+	return retiringProse.MatchString(string(before)) || retiringProse.MatchString(string(after))
+}
+
+// scanLine returns one message per banned term found in a single line of docs
+// prose, after the link-target and retirement-prose exemptions. Pure: no I/O,
+// which is what makes the exemptions testable without a corpus.
+//
+// First match wins: the entries are ordered specific-before-generic, so a
+// log_datapoint line reports the log_line lane rather than also reporting the
+// generic datapoint entry, whose replacement text is wrong for it.
+func scanLine(line string) []string {
+	prose := linkTarget.ReplaceAllString(line, "")
+	for _, term := range Banned {
+		loc := term.Pattern.FindStringIndex(prose)
+		if loc == nil {
+			continue
+		}
+		if nearRetirementMarker(prose, loc[0], loc[1]) {
+			continue // named in order to retire it
+		}
+		return []string{prose[loc[0]:loc[1]] + " is retired (" + term.Origin + "); write " + term.Replacement}
+	}
+	return nil
 }
 
 var (

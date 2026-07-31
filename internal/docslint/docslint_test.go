@@ -1,6 +1,7 @@
 package docslint
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -69,4 +70,155 @@ func report(t *testing.T, name string, findings []Finding, enforce bool) {
 		return
 	}
 	t.Logf("WARN (not yet enforced, #437): %d %s finding(s):%s", len(findings), name, b.String())
+}
+
+// TestScanLineSkipsLinkTargets pins scanner fix 1. Six of the eight
+// property_value hits in the corpus are the ADR-0047 anchor slug
+// (#adr-0047-the-fields-fold-product_property-and-property_value), cited from
+// six pages. That slug is an immutable historical ADR title: citing it is
+// correct, and a lint that fires on it would make the corpus unfixable without
+// breaking its own cross-references.
+func TestScanLineSkipsLinkTargets(t *testing.T) {
+	cases := []struct {
+		name string
+		line string
+		want int
+	}{
+		{
+			"the ADR-0047 anchor slug is a link target, not prose",
+			"see [the fields fold](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)",
+			0,
+		},
+		{
+			"a bare markdown target is skipped too",
+			"[x](#adr-0063-property_value-was-the-store)",
+			0,
+		},
+		{
+			"but the same term in prose still fires",
+			"the `property_value` table holds the latest value",
+			1,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := len(scanLine(c.line)); got != c.want {
+				t.Fatalf("scanLine(%q) = %d findings, want %d", c.line, got, c.want)
+			}
+		})
+	}
+}
+
+// TestScanLineAllowsRetirementProse pins scanner fix 2. Every remaining hit for
+// component_type, system_type, field_definition, and field_value is prose that
+// names the term precisely in order to retire it. Without this escape, adding
+// those entries turns `make test` red on the sentences that do the teaching,
+// which would push authors toward deleting the explanation instead of keeping it.
+func TestScanLineAllowsRetirementProse(t *testing.T) {
+	retiring := []string{
+		"(the `component_type` registry retired with the product catalog)",
+		"replaces the old `component_type`-as-shape notion",
+		"was `property_value`, built",
+		"Replaces the retired `field_definition`",
+		"`system_type` is superseded by the standard",
+		"the former `field_value` store",
+	}
+	for _, line := range retiring {
+		if got := scanLine(line); len(got) != 0 {
+			t.Errorf("retirement prose fired the lint: %q -> %v", line, got)
+		}
+	}
+	// The escape must be narrow: a nearby retirement word does not license an
+	// unrelated current-tense claim later on the same line.
+	live := "the `field_definition` registry stores the contract"
+	if got := scanLine(live); len(got) == 0 {
+		t.Errorf("current-tense claim did not fire: %q", live)
+	}
+}
+
+// TestScanLineFirstMatchWins pins scanner fix 3: a log_datapoint line must
+// report its own entry (which points at the log_line lane) and not also the
+// generic *datapoint* entry, whose replacement text is wrong for it.
+func TestScanLineFirstMatchWins(t *testing.T) {
+	got := scanLine("the `log_datapoint` table holds a component's own words")
+	if len(got) != 1 {
+		t.Fatalf("got %d findings, want exactly 1: %v", len(got), got)
+	}
+	if !strings.Contains(got[0], "log_line") {
+		t.Fatalf("finding %q does not point at the log_line lane", got[0])
+	}
+}
+
+// TestScanLineEscapeIsProximityScoped pins that the retirement escape is scoped
+// to the neighbourhood of the match, not the whole line. A long line can mention
+// some unrelated thing that "was replaced" while still making a current-tense
+// claim about a retired term, and a whole-line escape waved exactly that through.
+func TestScanLineEscapeIsProximityScoped(t *testing.T) {
+	drift := "The `field_definition` registry stores the contract, unlike the old alarm model which was replaced."
+	if got := scanLine(drift); len(got) == 0 {
+		t.Errorf("a distant retirement word exempted current-tense drift: %q", drift)
+	}
+	near := "the `field_definition` registry retired with the fields fold"
+	if got := scanLine(near); len(got) != 0 {
+		t.Errorf("an adjacent retirement marker failed to exempt: %q -> %v", near, got)
+	}
+}
+
+// TestOperatorStrings enforces the denylist on the text an operator actually
+// reads outside the docs tree. This is the lint that would have caught "the
+// lineage cause of that intended datapoint" sitting in a seeded event_type
+// description, upserted at every boot and rendered verbatim on the Event Types
+// console page and in the API payload, right through a vocabulary migration
+// that renamed the noun everywhere else.
+func TestOperatorStrings(t *testing.T) {
+	findings, err := ScanOperatorStrings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	report(t, "operator-string vocabulary", findings, true)
+}
+
+// TestOperatorStringPathsResolve guards the failure mode that makes
+// TestOperatorStrings meaningless: it reports zero findings both when the text
+// is clean and when it read nothing at all. A reviewer read the ../../ prefixes
+// as repo-relative and called the lint dead; the prefixes are right (a Go test
+// runs with its package directory as the working directory, which is the same
+// convention DocsRoot has always used) but nothing proved it. Now something does.
+func TestOperatorStringPathsResolve(t *testing.T) {
+	if len(operatorStrings) == 0 {
+		t.Fatal("operatorStrings is empty, so ScanOperatorStrings can never find anything")
+	}
+	for _, p := range operatorStrings {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("operator-string path does not resolve from the package directory: %s (%v)", p, err)
+		}
+	}
+}
+
+// TestNearRetirementMarkerIsRuneSafe pins the window against multi-byte text:
+// byte slicing at start-30 could split a rune and hand the matcher invalid UTF-8.
+func TestNearRetirementMarkerIsRuneSafe(t *testing.T) {
+	// Curly quotes and arrows are three bytes each, so a byte window would cut
+	// through one of them here.
+	line := "the “shape” arrow → ✓ marker sits here, and the `field_definition` registry stores it"
+	if got := scanLine(line); len(got) == 0 {
+		t.Errorf("multi-byte line did not fire: %q", line)
+	}
+	near := "“retired” → the `field_definition` contract"
+	if got := scanLine(near); len(got) != 0 {
+		t.Errorf("multi-byte retirement prose fired: %q -> %v", near, got)
+	}
+}
+
+// TestLinkTargetHandlesNestedParens pins the stripper against a URL carrying
+// parentheses, which a naive [^)]* truncates, leaving a tail that reads as prose.
+func TestLinkTargetHandlesNestedParens(t *testing.T) {
+	line := "see [the fold](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)"
+	if got := scanLine(line); len(got) != 0 {
+		t.Errorf("plain link target fired: %v", got)
+	}
+	nested := "see [a note](https://example.test/x_(property_value)_y) for context"
+	if got := scanLine(nested); len(got) != 0 {
+		t.Errorf("nested-paren link target fired: %v", got)
+	}
 }
