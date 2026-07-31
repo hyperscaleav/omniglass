@@ -142,6 +142,23 @@ var Banned = []BannedTerm{
 		Replacement: "property_type_id",
 		Origin:      "ADR-0063",
 	},
+	{
+		// ADR-0067 sourced calendars through an "interface_type is a driver"
+		// clause, which a table invites: any string fits, so a vendor API name
+		// lands where a transport belongs. ADR-0073 retracts it and makes the
+		// transport a code registry. Matches the claim, not the two nouns.
+		Pattern:     regexp.MustCompile(`(?i)interface_type[^a-zA-Z0-9]{1,6}(?:is|as)[^a-zA-Z0-9]{1,6}a[^a-zA-Z0-9]{1,6}driver`),
+		Replacement: "a transport plus a driver (a driver consumes transports, it is never one)",
+		Origin:      "ADR-0073",
+	},
+	{
+		// interface_type was described as the "protocol-and-style registry"
+		// before ADR-0039 named it the transport; the phrase reads as though the
+		// registry owns protocol handling, which is the driver's job.
+		Pattern:     regexp.MustCompile(`(?i)protocol-and-style registry`),
+		Replacement: "transport registry",
+		Origin:      "ADR-0073",
+	},
 }
 
 // vocabularyAllowed lists files (relative to DocsRoot) exempt from the

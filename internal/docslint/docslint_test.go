@@ -227,3 +227,27 @@ func TestLinkTargetHandlesNestedParens(t *testing.T) {
 		t.Errorf("nested-paren link target fired: %v", got)
 	}
 }
+
+// TestADR0073EntriesFire proves the two ADR-0073 denylist entries match the
+// prose they were written to retire: the real clause from ADR-0067 and the real
+// phrase that described interface_type before it was named the transport.
+func TestADR0073EntriesFire(t *testing.T) {
+	cases := []struct{ name, line, wantOrigin string }{
+		{"adr-0067 clause", "exposing a `calendar` **interface whose `interface_type` is a driver** (`graph-calendar`)", "ADR-0073"},
+		{"as-a variant", "an interface_type as a driver is the wrong seam", "ADR-0073"},
+		{"stale registry phrase", "the protocol-and-style registry (`ssh`, `http`, `snmp`)", "ADR-0073"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var hit bool
+			for _, b := range Banned {
+				if b.Origin == c.wantOrigin && b.Pattern.MatchString(c.line) {
+					hit = true
+				}
+			}
+			if !hit {
+				t.Fatalf("no %s entry matched: %q", c.wantOrigin, c.line)
+			}
+		})
+	}
+}
