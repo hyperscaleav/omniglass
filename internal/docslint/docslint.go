@@ -123,6 +123,49 @@ var vocabularyAllowed = map[string]bool{
 	filepath.Join("reference", "cli", "index.md"): true,
 }
 
+// operatorStrings are the non-docs files whose text reaches an OPERATOR: seed
+// descriptions are upserted into registries at every boot and render verbatim
+// on catalog pages and in API payloads, the console nav labels and hints are
+// read on every page, and the README is the first thing a reader of the public
+// repo sees. The docs lint cannot see any of them (DocsRoot is the content
+// tree), which is how "intended datapoint" survived on a live console page
+// through a whole vocabulary migration.
+//
+// Deliberately a short explicit list rather than a tree walk: the goal is the
+// text an operator reads, not every identifier in the codebase. Renaming
+// internal identifiers is a code change with its own ripple, not a lint.
+var operatorStrings = []string{
+	filepath.Join("..", "..", "internal", "seed", "event_types.yaml"),
+	filepath.Join("..", "..", "internal", "seed", "properties.yaml"),
+	filepath.Join("..", "..", "internal", "seed", "command_types.yaml"),
+	filepath.Join("..", "..", "internal", "seed", "interface_types.yaml"),
+	filepath.Join("..", "..", "internal", "seed", "roles.yaml"),
+	filepath.Join("..", "..", "web", "src", "lib", "nav.ts"),
+	filepath.Join("..", "..", "README.md"),
+}
+
+// ScanOperatorStrings applies the same denylist to the operator-visible text
+// outside the docs tree. Reported separately from ScanVocabulary so a failure
+// says which surface drifted.
+func ScanOperatorStrings() ([]Finding, error) {
+	var findings []Finding
+	for _, path := range operatorStrings {
+		b, err := os.ReadFile(path)
+		if os.IsNotExist(err) {
+			continue // a seed file that has not been added yet is not a lint failure
+		}
+		if err != nil {
+			return nil, err
+		}
+		for i, line := range strings.Split(string(b), "\n") {
+			for _, text := range scanLine(line) {
+				findings = append(findings, Finding{File: filepath.Base(path), Line: i + 1, Text: text})
+			}
+		}
+	}
+	return findings, nil
+}
+
 // Finding is one lint hit.
 type Finding struct {
 	File string // path relative to DocsRoot

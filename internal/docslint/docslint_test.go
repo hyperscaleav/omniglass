@@ -162,3 +162,17 @@ func TestScanLineEscapeIsProximityScoped(t *testing.T) {
 		t.Errorf("an adjacent retirement marker failed to exempt: %q -> %v", near, got)
 	}
 }
+
+// TestOperatorStrings enforces the denylist on the text an operator actually
+// reads outside the docs tree. This is the lint that would have caught "the
+// lineage cause of that intended datapoint" sitting in a seeded event_type
+// description, upserted at every boot and rendered verbatim on the Event Types
+// console page and in the API payload, right through a vocabulary migration
+// that renamed the noun everywhere else.
+func TestOperatorStrings(t *testing.T) {
+	findings, err := ScanOperatorStrings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	report(t, "operator-string vocabulary", findings, true)
+}

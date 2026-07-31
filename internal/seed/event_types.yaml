@@ -14,4 +14,4 @@ event_types:
     description: >-
       A command was issued to a component (the caused event a command records). It
       opens the intended value the command sets and is the lineage cause of that
-      intended datapoint.
+      intended value.
