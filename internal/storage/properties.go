@@ -96,6 +96,18 @@ func (p *PG) CreatePropertyType(ctx context.Context, actorID string, spec Proper
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// Cross-registry uniqueness, the mirror of the check in CreateEventType: a name
+	// in both registries resolves to nothing at ingest, so refuse it here where the
+	// operator can still choose a different one.
+	var clash bool
+	if err := tx.QueryRow(ctx,
+		`select exists (select 1 from event_type where name = $1)`, spec.Name).Scan(&clash); err != nil {
+		return nil, fmt.Errorf("storage: check event_type clash for %q: %w", spec.Name, err)
+	}
+	if clash {
+		return nil, ErrPropertyTypeExists
+	}
+
 	if _, err := tx.Exec(ctx,
 		`insert into property_type (name, display_name, kind, data_type, unit, precision, validation, description, official)
 		 values ($1, $2, $3, $4, $5, $6, $7, $8, false)`,

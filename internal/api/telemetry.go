@@ -87,6 +87,29 @@ type pushOutput struct {
 	}
 }
 
+// kindMismatch reports whether a pushed sample's value shape disagrees with the
+// kind its name resolved to, and what to send instead. It mirrors the consumer's
+// extractors exactly (numericValue takes int or double; stringValue and logValue
+// take a string), so the route rejects precisely what the sink would have dropped
+// and nothing more. Pure: no I/O.
+func kindMismatch(kind string, s pushSample) (reason string, bad bool) {
+	switch kind {
+	case "metric":
+		if s.Number == nil {
+			return "\"" + s.Name + "\" is a metric property: send number, not text", true
+		}
+	case "state":
+		if s.Text == nil {
+			return "\"" + s.Name + "\" is a state property: send text, not number", true
+		}
+	case "event":
+		if s.Text == nil {
+			return "\"" + s.Name + "\" is an event type: send text (the message), not number", true
+		}
+	}
+	return "", false
+}
+
 // registerTelemetryRoutes wires the push-ingest write surface.
 func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway, pub TelemetryPublisher) {
 	huma.Register(api, a.gated(huma.Operation{
@@ -154,23 +177,35 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		}
 
 		for _, s := range in.Body.Samples {
-			if _, ok := reg.Allows(s.Name); !ok {
+			kind, ok := reg.Allows(s.Name)
+			if !ok {
 				out.Body.Rejected = append(out.Body.Rejected, pushRejection{
 					Name: s.Name, Reason: "unregistered property or event type name",
 				})
 				continue
 			}
-			sample := &ogv1.Sample{Name: s.Name, Instance: s.Instance}
-			switch {
-			case s.Number != nil:
-				sample.Value = &ogv1.Sample_DoubleValue{DoubleValue: *s.Number}
-			case s.Text != nil:
-				sample.Value = &ogv1.Sample_StringValue{StringValue: *s.Text}
-			default:
+			if s.Number == nil && s.Text == nil {
 				out.Body.Rejected = append(out.Body.Rejected, pushRejection{
 					Name: s.Name, Reason: "no value: set number or text",
 				})
 				continue
+			}
+			// The registry says which value shape the sink will accept, so check it
+			// HERE rather than letting the consumer discover it. Without this the
+			// name resolves, the batch is accepted with an empty rejected list, and
+			// the sample then dies silently in the consumer's value extraction: the
+			// exact mistake a human makes by hand, and the one case the synchronous
+			// rejection report used to miss. The reason names the shape to send,
+			// because "invalid value" is not actionable.
+			if reason, bad := kindMismatch(kind, s); bad {
+				out.Body.Rejected = append(out.Body.Rejected, pushRejection{Name: s.Name, Reason: reason})
+				continue
+			}
+			sample := &ogv1.Sample{Name: s.Name, Instance: s.Instance}
+			if s.Number != nil {
+				sample.Value = &ogv1.Sample_DoubleValue{DoubleValue: *s.Number}
+			} else {
+				sample.Value = &ogv1.Sample_StringValue{StringValue: *s.Text}
 			}
 			batch.Samples = append(batch.Samples, sample)
 		}
