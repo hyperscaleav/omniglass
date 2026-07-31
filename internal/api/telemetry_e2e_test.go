@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -141,6 +142,47 @@ func TestTelemetryPushAPI(t *testing.T) {
 		t.Fatalf("latest audio.level: %v", err)
 	} else if m != nil {
 		t.Fatalf("reject-not-project failed: audio.level landed as %+v", m)
+	}
+
+	// KIND MISMATCH is reported, not silently dropped. The name resolves, so the
+	// old check (name only) passed it, returned 202 with an empty rejected list,
+	// and the batch then died in the consumer's numericValue/stringValue. That is
+	// precisely the mistake a human makes by hand, and it was the one case the
+	// synchronous-rejection report missed.
+	out = c.do(ownerTok, http.MethodPost, "/telemetry:push", map[string]any{
+		"owner": map[string]any{"kind": "component", "ref": "bar-1"},
+		"samples": []map[string]any{
+			{"name": "video.input", "number": 3},     // state property, sent a number
+			{"name": "icmp.rtt_avg", "text": "fast"}, // metric property, sent text
+			{"name": "call.started", "number": 1},    // event type, sent a number
+			{"name": "icmp.rtt_avg", "number": 9.5},  // correct, must still land
+		},
+	}, http.StatusAccepted)
+	var mismatch pushResp
+	if err := json.Unmarshal(out, &mismatch); err != nil {
+		t.Fatalf("decode mismatch response: %v", err)
+	}
+	if mismatch.Accepted.Samples != 1 {
+		t.Fatalf("accepted = %d, want only the correctly-typed sample", mismatch.Accepted.Samples)
+	}
+	if len(mismatch.Rejected) != 3 {
+		t.Fatalf("rejected = %+v, want all three mismatches reported", mismatch.Rejected)
+	}
+	// The reason has to be actionable: it must name the kind the caller should
+	// have sent, not merely say "invalid".
+	for _, r := range mismatch.Rejected {
+		switch r.Name {
+		case "video.input", "call.started":
+			if !strings.Contains(r.Reason, "text") {
+				t.Errorf("%s rejection %q does not tell the caller to send text", r.Name, r.Reason)
+			}
+		case "icmp.rtt_avg":
+			if !strings.Contains(r.Reason, "number") {
+				t.Errorf("%s rejection %q does not tell the caller to send a number", r.Name, r.Reason)
+			}
+		default:
+			t.Errorf("unexpected rejection %+v", r)
+		}
 	}
 
 	// A batch of nothing but rejects publishes nothing, and says so.
