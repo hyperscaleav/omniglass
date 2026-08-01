@@ -7,6 +7,8 @@ sidebar:
     variant: note
 ---
 
+import SchemaTable from '../../../components/SchemaTable.astro';
+
 :::note[Partial: the record and reconcile half is built; actuation is deferred]
 The `command_type` registry, the `command` invocation log, and computed settlement are built
 ([ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables)).
@@ -78,10 +80,29 @@ is stored, only judged on read.
 The physical layout (the owner arc, the caused-event lineage, partitioning) lives on
 [storage](/architecture/storage/).
 
-| Table | Key columns | Notes |
-|---|---|---|
-| `command_type` | name, params_schema (jsonb), **settle_window_seconds**, **target_property_type_id?**, official | the do registry; the settle window and target property are driver facts |
-| `command` | id, ts, owner arc, command_type_id, instance, params (jsonb), actor, **caused_event_id** | the invocation log; `caused_event_id` points at the event the command recorded |
+`command_type` is the do registry; the settle window and the target property are driver facts.
+
+<SchemaTable
+  table="command_type"
+  notes={{
+    params_schema: 'The JSON Schema an invocation&#39;s params must satisfy',
+    settle_window_seconds: 'How long settlement watches for the observed value to agree',
+    target_property_type_id: 'The property the command intends to change, when it targets one',
+    official: 'Shipped-canonical versus org-local; seed-owned rows are read-only',
+  }}
+/>
+
+`command` is the invocation log; `caused_event_id` points at the event the command recorded.
+
+<SchemaTable
+  table="command"
+  notes={{
+    command_type_id: 'What the component was told to do',
+    params: 'The invocation arguments, validated against the registry schema',
+    actor: 'Who told it',
+    caused_event_id: 'The recorded event this invocation caused',
+  }}
+/>
 
 Related: [properties](/architecture/properties/) (the intended value a command opens),
 [events](/architecture/events/) (the caused event it records), [config, secrets, and
