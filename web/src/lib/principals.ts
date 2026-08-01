@@ -89,7 +89,7 @@ export async function updatePrincipal(id: string, body: UpdatePrincipal): Promis
   return data as Principal;
 }
 
-export type ScopeKind = "all" | "location" | "system" | "component" | "group";
+export type ScopeKind = "all" | "location" | "system" | "component";
 
 export type CreateGrant = { role: string; scope_kind: ScopeKind; scope_id?: string; scope_op?: "subtree" | "subtree_excl_root" | "self" };
 
