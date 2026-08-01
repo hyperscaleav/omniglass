@@ -108,6 +108,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0071](#adr-0071-a-template-is-a-clonable-example-not-a-versioned-shape-an-instance-pins) | 2026-07-31 | Accepted | A template is an example configuration an operator **clones**: creating from one is a one-time fork with no inheritance and no back-pointer, so templates stay **upgrade-safe because nothing remains connected to them**. The versioned-shape model retires (`component_template`, `system_template`, `*_version`, channels, the frozen BOM, instance pinning); a component's shape is its `product`, a system's is its `standard`, and a system **conforms** to that standard with live inheritance. Reverses ADR-0045's deferral and ADR-0049's "templates stay `Design`" |
 | [ADR-0072](#adr-0072-an-envelope-is-not-named-after-its-passengers-and-an-insert-struct-takes-the-write-suffix) | 2026-07-31 | Accepted | Two naming rules: a carrier is named for what it carries, never a passenger (the telemetry wire message is `TelemetryBatch`, since it carries samples, log lines, and later events), and a storage insert struct takes the **`Write`** suffix paired with the bare read struct (`MetricSampleWrite` / `MetricSample`), the pattern `LogLineWrite` set. Retires `MetricSampleEvent`, `StateSampleEvent`, `EventOccurrence`, and the proto `Event` |
 | [ADR-0073](#adr-0073-a-driver-consumes-transports-a-transport-is-code-not-a-row) | 2026-07-31 | Accepted | a driver consumes transports; a transport is code, not a row |
+| [ADR-0074](#adr-0074-an-approved-definition-rolls-up-to-one-pr-slices-cascade-on-an-integration-branch) | 2026-08-01 | Accepted | loop-executed work rolls up to one PR per approved definition; slices cascade through per-slice gates on an integration branch |
 
 ## Entries
 
@@ -2544,3 +2545,19 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   sourcing clause only; the booking entity and its arc ownership stand).
 - **Enables:** the [collect layer epic](https://github.com/hyperscaleav/omniglass/issues/489), whose slices were
   unauthorized without it. Nothing in this entry is built; it is a decision, and the code lands in that epic.
+
+### ADR-0074: An approved definition rolls up to one PR; slices cascade on an integration branch
+
+- **Date:** 2026-08-01 | **Status:** Accepted | **Pages:** [slice workflow](/contributing/slice-workflow/), [feature loops](/contributing/feature-loops/)
+- **Decision:** For loop-executed work (a body of slices defined and approved as one Epic or Feature issue), the
+  PR granularity moves from one-slice-per-PR to **one-PR-per-approved-definition**: sub-issue slices are built
+  test-first on cascade branches (or serial commits) merged into one integration branch, each passing the
+  per-slice gates before merging inward, and the definition ships as a single rollup PR whose ship-review covers
+  the whole diff. The slice lifecycle inside each sub-issue is unchanged, and merge to `main` remains the
+  architect's call. Hand-driven single slices keep the original one-slice-per-PR shape.
+- **Context:** Long agent loops ship several related slices per body of work. Per-slice PRs would put the
+  architect back in the approval loop once per slice (the touchpoint cost the loop exists to remove), while
+  letting unreviewed slices land on `main` would gut the ship gate. The cascade keeps every per-slice gate and
+  gives the architect one reviewable boundary: approve the prose definition at the front, merge one rollup PR at
+  the end. The [feature loops](/contributing/feature-loops/) page is the contract; built for the
+  [AI-driven feature loops epic](https://github.com/hyperscaleav/omniglass/issues/488).

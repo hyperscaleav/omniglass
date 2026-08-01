@@ -63,9 +63,10 @@ Each is a gate; a red one blocks the ship.
    the feature. The seed stays idempotent: a re-run of `make dev` changes nothing. `n/a` when the
    slice adds no new entity. This is the dev-only example estate, never the boot seed
    (`internal/seed`, ship-with reference data that also runs in production).
-7. **Review.** A reviewer pass over the diff (`code-review` or `cavecrew-reviewer`), findings
-   addressed. Add a `security-review` lens if the slice touches authz, secrets, the edge, or an
-   invariant. Verify behavior to the outcome line, not just call sites.
+7. **Review.** A reviewer pass over the diff (`/adversarial-review` for loop-built slices and
+   any diff wanting the anti-pattern sweep; `code-review` or `cavecrew-reviewer` otherwise),
+   findings addressed. Add a `security-review` lens if the slice touches authz, secrets, the
+   edge, or an invariant. Verify behavior to the outcome line, not just call sites.
 8. **Scope honesty.** Every thin cut is documented; every deferral is a filed issue.
 9. **Evidence in the PR.** Paste the *actual* fresh test output (the tail of `make test`, plus
    web tests if touched) into the PR body, not a "they pass" claim. For any operator-facing
@@ -79,7 +80,9 @@ Each is a gate; a red one blocks the ship.
    overrides for a machine with no logged-in browser. Otherwise commit them
    under `.github/screenshots/` and embed by **immutable commit SHA**
    (`https://raw.githubusercontent.com/<owner>/<repo>/<sha>/.github/screenshots/...`), so the
-   link survives the branch being deleted on squash-merge.
+   link survives the branch being deleted on squash-merge. A headless or remote session (no
+   logged-in browser, e.g. an unattended loop run) defaults to this committed path rather
+   than `gh image`.
 
    **Docs screenshots are a generated resource.** The images embedded *on the docs pages*
    (not the PR body) are declared in each page's `screenshots` frontmatter and captured by
@@ -98,6 +101,11 @@ Each is a gate; a red one blocks the ship.
    impersonation, carries the real actor via the request context). A new privileged write with no
    audit row, or an auth event that is silently unlogged, is a red gate. Reads are not audited
    (except secret decrypts, which always are).
+11. **Generate first.** Scan the diff for hand-written artifacts that restate a fact the code
+   already knows: a table of routes, columns, env vars, or seeded rows; a copied schema; an
+   asset a generator could emit. Each is either replaced by a generated render in this PR or
+   has a filed issue named in the ship-review's Docs line. Hand-written narrative is fine;
+   hand-written facts are the drift class the 2026-07-30 audit proved out.
 
 ## The ship-review (emit this, in chat and as the PR body)
 

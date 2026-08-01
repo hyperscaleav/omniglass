@@ -37,6 +37,15 @@ two layers, both in the app: a `<resource>:<action>` permission checked on **eve
 and ABAC **scope** injected by the Storage Gateway on **every** applicable query. These are
 invariants, not conventions; see [identity and access](docs/src/content/docs/architecture/identity-access.md) and [storage](docs/src/content/docs/architecture/storage.md).
 
+## Generate first
+
+Anywhere a fact can be generated from code, generate it; hand-write only narrative. A
+hand-written artifact that restates a fact the code already knows (a table of routes,
+columns, env vars, or seeded rows; a copied schema; an asset a generator could emit) is
+drift waiting to happen; the repo's generated artifacts are the only ones that have never
+drifted. Such an artifact is either replaced by a generated render in the same PR or has a
+filed issue; `/ship-slice` checks this.
+
 ## Design for testability
 
 Small, single-purpose functions, each with a full set of tests. Prefer pure functions:
@@ -65,7 +74,9 @@ any merge. The environment risk is the point of the primitive.
 ## Workflow
 
 PR-only. Branch from `origin/main`, do the work in a git worktree under
-`.claude/worktrees/` (gitignored), push, open a PR. Never commit to `main`.
+`.claude/worktrees/` (gitignored), push, open a PR. Never commit to `main`. A body of
+work executed as a feature loop rolls its slices up into one PR per approved definition
+instead of one per slice ([docs/contributing/feature-loops.md](docs/src/content/docs/contributing/feature-loops.md), ADR-0074).
 
 ```bash
 git fetch origin main

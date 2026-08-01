@@ -132,6 +132,7 @@ export default defineConfig({
             { label: 'Primitive first', slug: 'contributing/primitive-first' },
             { label: 'Design system', slug: 'contributing/design-system' },
             { label: 'Slice workflow', slug: 'contributing/slice-workflow' },
+            { label: 'Feature loops', slug: 'contributing/feature-loops' },
             { label: 'Release and CI', slug: 'contributing/release-ci' },
             { label: 'Labels', slug: 'contributing/labels' },
           ],

@@ -5,7 +5,11 @@ description: "How a feature ships: one vertical slice per PR, through a fixed li
 
 A feature is **one vertical slice**: a thin cut through the whole stack (schema to API to docs)
 that delivers a user-observable outcome, not a horizontal layer. Each slice is one PR, built
-through a fixed lifecycle so quality is a process, not a hope.
+through a fixed lifecycle so quality is a process, not a hope. When several related slices ship
+as one approved body of work through an agent loop, the PR granularity changes (one rollup PR
+per approved definition) while this lifecycle holds inside each slice: see
+[feature loops](/contributing/feature-loops/) and
+[ADR-0074](/architecture/decisions/#adr-0074-an-approved-definition-rolls-up-to-one-pr-slices-cascade-on-an-integration-branch).
 
 ## The lifecycle
 
