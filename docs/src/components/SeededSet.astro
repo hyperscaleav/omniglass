@@ -1,0 +1,105 @@
+---
+// One shipped-set claim rendered from the generated seed facts
+// (docs/src/generated/seed.json, written by make gen via cmd/seedgen). The
+// guides used to enumerate these sets in prose and undercount them (the audit
+// found two of eleven property types missing); this component renders the set
+// the binary actually seeds, so the claim cannot drift.
+//
+// Usage: <SeededSet kind="property_types" />, kind one of the seed.json keys.
+import seed from '../generated/seed.json';
+
+interface Props {
+  kind: string;
+}
+
+const { kind } = Astro.props;
+const rows = seed[kind];
+if (!rows) {
+  throw new Error(`SeededSet: unknown kind "${kind}" (not a key of docs/src/generated/seed.json)`);
+}
+---
+
+{
+  kind === 'roles' ? (
+    <div class="seeded-set">
+      {rows.map((r) => (
+        <details>
+          <summary>
+            <strong>{r.display_name}</strong> (<code>{r.id}</code>
+            {r.inherits?.length ? <> inherits {r.inherits.join(', ')}</> : null}): {r.description}
+          </summary>
+          <p>Effective permissions ({r.effective.length}):</p>
+          <ul>{r.effective.map((p) => <li><code>{p}</code></li>)}</ul>
+        </details>
+      ))}
+    </div>
+  ) : kind === 'secret_types' ? (
+    <table class="seeded-set">
+      <thead><tr><th>Type</th><th>Fields</th><th>Admin-sensitive default</th></tr></thead>
+      <tbody>
+        {rows.map((s) => (
+          <tr>
+            <td><code>{s.id}</code> ({s.display_name})</td>
+            <td>{s.fields.map((f) => (<span><code>{f.name}</code>{f.secret ? ' (secret)' : ''} </span>))}</td>
+            <td>{s.default_admin_sensitive ? 'yes' : 'no'}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  ) : kind === 'standards' ? (
+    <table class="seeded-set">
+      <thead><tr><th>Standard</th><th>Roles it staffs</th></tr></thead>
+      <tbody>
+        {rows.map((s) => (
+          <tr>
+            <td><code>{s.id}</code> ({s.display_name})</td>
+            <td>
+              {(s.roles ?? []).map((r) => (
+                <span><code>{r.name}</code> (quorum {r.quorum}{r.capabilities?.length ? `, needs ${r.capabilities.join(' + ')}` : ''}) </span>
+              ))}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  ) : kind === 'location_types' ? (
+    <table class="seeded-set">
+      <thead><tr><th>Type</th><th>Allowed parents</th></tr></thead>
+      <tbody>
+        {rows.map((lt) => (
+          <tr>
+            <td><code>{lt.id}</code> ({lt.display_name})</td>
+            <td>{lt.allowed_parent_types?.length ? lt.allowed_parent_types.join(', ') : '(top level)'}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  ) : kind === 'property_types' ? (
+    <table class="seeded-set">
+      <thead><tr><th>Name</th><th>Kind</th><th>Type</th><th>Unit</th><th>Description</th></tr></thead>
+      <tbody>
+        {rows.map((p) => (
+          <tr>
+            <td><code>{p.name}</code></td>
+            <td>{p.kind ?? ''}</td>
+            <td>{p.data_type}</td>
+            <td>{p.unit ?? ''}</td>
+            <td>{p.description ?? p.display_name}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  ) : (
+    <table class="seeded-set">
+      <thead><tr><th>Name</th><th>Description</th></tr></thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr>
+            <td><code>{r.name ?? r.id}</code>{r.built === false ? ' (declared, not built)' : ''}</td>
+            <td>{r.description ?? r.display_name ?? ''}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}

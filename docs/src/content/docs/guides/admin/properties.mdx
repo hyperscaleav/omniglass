@@ -3,6 +3,8 @@ title: Properties
 description: "The Properties catalog and the values behind it: the canonical typed names, the contract a product, standard, or location type declares, and the value a component, system, or location sets."
 ---
 
+import SeededSet from '../../../../components/SeededSet.astro';
+
 **Catalog > Properties** (with `property_type:read`, covered by every viewer's `*:read` floor) is the
 estate's **signal catalog**: one directory of the typed names that identify what is tracked. A
 **property** is a name plus a data type (and an optional label, unit, and validation), identified by
@@ -41,13 +43,16 @@ every reader; the write gates decide who may change it.
   `enum` on a state, or `minimum` / `maximum` on a number), shown read-only on the blade. Editing
   the schema in the console is a follow-up; set it through the API for now.
 - An **official** (seed-owned) property is always read-only: no Edit, no Delete, and the blade marks
-  it "Seed-owned, read-only." The baseline ships the reachability properties (`icmp.reachable`,
-  `interface.reachable`, and the round-trip and connect-time metrics) and a starter set of device
-  attributes (`serial_number`, `mac_address`, `firmware_version`, `model_number`), so the shared
-  vocabulary is the same from install to install. This catalog is the deliberate **exception** to the
-  operator-owned rule that shipped [standards](/guides/admin/standards/) and location types follow: a
-  property name is the vocabulary a driver maps onto, so a release has to be able to correct it
+  it "Seed-owned, read-only." The shared vocabulary is the same from install to install. This
+  catalog is the deliberate **exception** to the operator-owned rule that shipped
+  [standards](/guides/admin/standards/) and location types follow: a property name is the vocabulary
+  a driver maps onto, so a release has to be able to correct it
   ([the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs)).
+
+  The baseline ships this catalog, rendered from the seed itself (`make gen`) so the list cannot
+  drift from the binary:
+
+  <SeededSet kind="property_types" />
 - A **duplicate** name is refused (409), and an attempt to change an official property is refused
   too: the catalog has exactly one entry per name.
 

@@ -39,6 +39,7 @@ gen: gen-proto
 	go run ./cmd/cligen
 	go run ./cmd/docsgen
 	go run ./cmd/erdgen
+	go run ./cmd/seedgen
 	cd web && npm install && npm run gen:api
 
 # Regenerate the protobuf telemetry wire (proto/og/v1/telemetry.pb.go) from its
