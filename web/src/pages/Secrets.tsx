@@ -19,7 +19,6 @@ import {
   updateSecret,
   deleteSecret,
 } from "../lib/secrets";
-import { SYSTEMS_KEY, listSystems } from "../lib/systems";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { COMPONENTS_KEY, listComponents } from "../lib/components";
 import { useMe, can, canAtPlatform, platformTierGap, platformAuthorityHint } from "../lib/auth";
@@ -28,11 +27,11 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Secrets: the shared-credential directory on the FlatList surface. A secret is a
 // typed, encrypted-at-rest value owned at one scope (platform, or a location /
-// system / component) and resolved down the cascade; this page is the admin
+// component; the system band is retired, ADR-0052) and resolved down the cascade; this page is the admin
 // directory (create, inspect masked, delete). A secret reaches a component by
 // being sourced into a field; this directory manages the cells themselves.
 
-const OWNER_KINDS: OwnerKind[] = ["platform", "location", "system", "component"];
+const OWNER_KINDS: OwnerKind[] = ["platform", "location", "component"];
 
 function ownerLabel(s: Secret): string {
   if (s.owner_kind === "platform") return "Platform";
@@ -233,7 +232,6 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
   const qc = useQueryClient();
   const me = useMe();
   const types = useQuery(() => ({ queryKey: SECRET_TYPES_KEY, queryFn: listSecretTypes }));
-  const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
 
@@ -261,13 +259,12 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
   // The fields the operator fills (lifecycle-origin fields are set by the secret's
   // own machinery, never at creation).
   const operatorFields = createMemo(() => (shape()?.fields ?? []).filter((f) => f.origin !== "lifecycle"));
-  // The owner picker is a tree: locations, systems, and components all nest by
+  // The owner picker is a tree: locations and components nest by
   // parent_id, so the dropdown indents each candidate to its tier (the shared
   // TreeSelect, same as the location/parent pickers).
   const ownerTree = createMemo<TreeNode[]>(() => {
     switch (ownerKind()) {
       case "location": return (locations.data ?? []).map((l) => ({ id: l.name, value: l.name, label: l.display_name || l.name, parentId: l.parent }));
-      case "system": return (systems.data ?? []).map((s) => ({ id: s.name, value: s.name, label: s.display_name || s.name, parentId: s.parent }));
       case "component": return (components.data ?? []).map((c) => ({ id: c.name, value: c.name, label: c.display_name || c.name, parentId: c.parent }));
       default: return [];
     }
@@ -318,7 +315,7 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
       <div class="grid grid-cols-2 gap-3">
         <FieldRow
           label="Scope"
-          info="The estate scope this secret attaches to. It cascades down onto the components below it: platform, or a location, system, or component."
+          info="The estate scope this secret attaches to. It cascades down onto the components below it: platform, or a location or component (a secret has no system band, ADR-0052)."
           docHref="https://docs.omniglass.hyperscaleav.com/architecture/variables/"
           hint={tierGap().length > 0 ? platformAuthorityHint("A secret", tierGap()) : undefined}
         >

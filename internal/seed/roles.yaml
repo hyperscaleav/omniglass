@@ -23,8 +23,6 @@ roles:
     permissions:
       - "component:create,update"
       - "interface:create,update"
-      - "rule:create,update"
-      - "config:create,update"
       - "secret:read,reveal,create,update"
       - "variable:create,update"
       - "property_type:create,update"
@@ -35,7 +33,6 @@ roles:
       # operator writes and deliberately outside the viewer read floor. An
       # integration that only reports data can be granted this alone.
       - "telemetry:push"
-      - "alarm:ack,snooze,resolve"
       # files are shared knowledge (not in the sensitive-resource set), so the
       # viewer floor reads ordinary ones; operators upload and delete them. A
       # sensitive file needs the admin tier, which operator does not hold.
@@ -77,7 +74,6 @@ roles:
       # their directory the same way.
       - "principal:read:admin"
       - "principal:purge:admin"
-      - "credential:*"
       # secret:> (not secret:*) so admin reaches the admin-sensitive tier
       # (secret:reveal:admin etc.) a two-token wildcard cannot; an admin-sensitive
       # secret is thus admin/owner-only, while operators hold the two-token actions
@@ -98,7 +94,6 @@ roles:
       - "principal_grant:*"
       - "principal_group:*"
       - "principal_group:read:admin"
-      - "role:*"
       - "node:*"
       - "role:read:admin"
       - "audit:read:admin"
@@ -116,10 +111,6 @@ roles:
       # the type-registry one.
       - "standard:create,update,delete"
       - "tag:*"
-      - "unit:create"
-      - "event_type:create"
-      - "severity_level:create"
-      - "source:create"
   - id: owner
     display_name: Owner
     description: >-

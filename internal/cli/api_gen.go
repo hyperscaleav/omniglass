@@ -588,6 +588,7 @@ func generatedCommands() []*cobra.Command {
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
 					var fCapabilities string
+					var fDedupKey string
 					var fMessage string
 					var fSeverity string
 					cmd := &cobra.Command{
@@ -602,6 +603,9 @@ func generatedCommands() []*cobra.Command {
 							if cmd.Flags().Changed("capabilities") {
 								body["capabilities"] = jsonOrString(fCapabilities)
 							}
+							if cmd.Flags().Changed("dedup-key") {
+								body["dedup_key"] = fDedupKey
+							}
 							if cmd.Flags().Changed("message") {
 								body["message"] = fMessage
 							}
@@ -612,6 +616,7 @@ func generatedCommands() []*cobra.Command {
 						},
 					}
 					cmd.Flags().StringVar(&fCapabilities, "capabilities", "", "The capabilities this condition degrades; a role requiring one of them can no longer be filled by this component")
+					cmd.Flags().StringVar(&fDedupKey, "dedup-key", "", "The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate")
 					cmd.Flags().StringVar(&fMessage, "message", "", "What is wrong, for the operator reading it later")
 					cmd.Flags().StringVar(&fSeverity, "severity", "", "How bad it is; critical puts the component itself in outage")
 					_ = cmd.MarkFlagRequired("severity")
@@ -2739,7 +2744,7 @@ func generatedCommands() []*cobra.Command {
 					cmd.Flags().StringVar(&fRole, "role", "", "A role id (viewer, operator, admin, owner, or a custom role)")
 					_ = cmd.MarkFlagRequired("role")
 					cmd.Flags().StringVar(&fScopeId, "scope-id", "", "The scope root id; omit for the all scope")
-					cmd.Flags().StringVar(&fScopeKind, "scope-kind", "", "The scope kind; 'all' confers the whole estate")
+					cmd.Flags().StringVar(&fScopeKind, "scope-kind", "", "The scope kind; 'all' confers the whole estate (group-as-scope is unbuilt and not offered)")
 					_ = cmd.MarkFlagRequired("scope-kind")
 					cmd.Flags().StringVar(&fScopeOp, "scope-op", "", "How the scope root matches the tree: subtree (root + descendants, the default), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Moot for the all scope.")
 					return cmd
@@ -3135,7 +3140,7 @@ func generatedCommands() []*cobra.Command {
 					cmd.Flags().StringVar(&fRole, "role", "", "A role id (viewer, operator, admin, owner, or a custom role)")
 					_ = cmd.MarkFlagRequired("role")
 					cmd.Flags().StringVar(&fScopeId, "scope-id", "", "The scope root id; omit for the all scope")
-					cmd.Flags().StringVar(&fScopeKind, "scope-kind", "", "The scope kind; 'all' confers the whole estate")
+					cmd.Flags().StringVar(&fScopeKind, "scope-kind", "", "The scope kind; 'all' confers the whole estate (group-as-scope is unbuilt and not offered)")
 					_ = cmd.MarkFlagRequired("scope-kind")
 					cmd.Flags().StringVar(&fScopeOp, "scope-op", "", "How the scope root matches the tree; moot for the all scope")
 					return cmd
@@ -3766,7 +3771,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fName, "name", "", "The cascade key; unique per owner")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fOwner, "owner", "", "The owning entity's name; omit for a platform secret")
-				cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "Which tier owns this secret")
+				cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "Which tier owns this secret (the system band is retired, ADR-0052)")
 				_ = cmd.MarkFlagRequired("owner-kind")
 				cmd.Flags().StringVar(&fSecretType, "secret-type", "", "A secret_type id")
 				_ = cmd.MarkFlagRequired("secret-type")

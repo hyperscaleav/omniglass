@@ -314,10 +314,6 @@ config: {
     id: uuid {constraint: primary_key}
     principal_id: uuid {constraint: foreign_key}
   }
-  platform_setting: {
-    shape: sql_table
-    key: text {constraint: primary_key}
-  }
   secret: {
     shape: sql_table
     id: uuid {constraint: primary_key}

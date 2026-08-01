@@ -51,7 +51,7 @@ export async function listSecrets(): Promise<Secret[]> {
   return (data?.secrets ?? []) as Secret[];
 }
 
-export type OwnerKind = "platform" | "location" | "system" | "component";
+export type OwnerKind = "platform" | "location" | "component";
 
 export type CreateSecret = {
   name: string;

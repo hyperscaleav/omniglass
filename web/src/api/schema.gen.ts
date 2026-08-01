@@ -3160,6 +3160,8 @@ export interface components {
              */
             cleared_at?: string;
             component: string;
+            /** @description The condition identity: one open alarm per (component, dedup_key) */
+            dedup_key: string;
             id: string;
             message: string;
             /** Format: date-time */
@@ -3506,10 +3508,10 @@ export interface components {
             /** @description The scope root id; omit for the all scope */
             scope_id?: string;
             /**
-             * @description The scope kind; 'all' confers the whole estate
+             * @description The scope kind; 'all' confers the whole estate (group-as-scope is unbuilt and not offered)
              * @enum {string}
              */
-            scope_kind: "all" | "location" | "system" | "component" | "group";
+            scope_kind: "all" | "location" | "system" | "component";
             /**
              * @description How the scope root matches the tree: subtree (root + descendants, the default), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Moot for the all scope.
              * @enum {string}
@@ -3528,10 +3530,10 @@ export interface components {
             /** @description The scope root id; omit for the all scope */
             scope_id?: string;
             /**
-             * @description The scope kind; 'all' confers the whole estate
+             * @description The scope kind; 'all' confers the whole estate (group-as-scope is unbuilt and not offered)
              * @enum {string}
              */
-            scope_kind: "all" | "location" | "system" | "component" | "group";
+            scope_kind: "all" | "location" | "system" | "component";
             /**
              * @description How the scope root matches the tree; moot for the all scope
              * @enum {string}
@@ -3725,10 +3727,10 @@ export interface components {
             /** @description The owning entity's name; omit for a platform secret */
             owner?: string;
             /**
-             * @description Which tier owns this secret
+             * @description Which tier owns this secret (the system band is retired, ADR-0052)
              * @enum {string}
              */
-            owner_kind: "platform" | "location" | "system" | "component";
+            owner_kind: "platform" | "location" | "component";
             /** @description A secret_type id */
             secret_type: string;
         };
@@ -4976,6 +4978,8 @@ export interface components {
             readonly $schema?: string;
             /** @description The capabilities this condition degrades; a role requiring one of them can no longer be filled by this component */
             capabilities?: string[] | null;
+            /** @description The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate */
+            dedup_key?: string;
             /** @description What is wrong, for the operator reading it later */
             message?: string;
             /**

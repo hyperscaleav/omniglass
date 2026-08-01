@@ -55,6 +55,9 @@ components:
           type: string
         component:
           type: string
+        dedup_key:
+          description: "The condition identity: one open alarm per (component, dedup_key)"
+          type: string
         id:
           type: string
         message:
@@ -71,6 +74,7 @@ components:
         - severity
         - message
         - capabilities
+        - dedup_key
         - raised_at
         - active
       type: object
@@ -664,13 +668,12 @@ components:
           description: The scope root id; omit for the all scope
           type: string
         scope_kind:
-          description: The scope kind; 'all' confers the whole estate
+          description: The scope kind; 'all' confers the whole estate (group-as-scope is unbuilt and not offered)
           enum:
             - all
             - location
             - system
             - component
-            - group
           type: string
         scope_op:
           description: "How the scope root matches the tree: subtree (root + descendants, the default), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Moot for the all scope."
@@ -701,13 +704,12 @@ components:
           description: The scope root id; omit for the all scope
           type: string
         scope_kind:
-          description: The scope kind; 'all' confers the whole estate
+          description: The scope kind; 'all' confers the whole estate (group-as-scope is unbuilt and not offered)
           enum:
             - all
             - location
             - system
             - component
-            - group
           type: string
         scope_op:
           description: How the scope root matches the tree; moot for the all scope
@@ -1052,11 +1054,10 @@ components:
           description: The owning entity's name; omit for a platform secret
           type: string
         owner_kind:
-          description: Which tier owns this secret
+          description: Which tier owns this secret (the system band is retired, ADR-0052)
           enum:
             - platform
             - location
-            - system
             - component
           type: string
         secret_type:
@@ -3448,6 +3449,9 @@ components:
           type:
             - array
             - "null"
+        dedup_key:
+          description: The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate
+          type: string
         message:
           description: What is wrong, for the operator reading it later
           type: string

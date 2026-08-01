@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -187,4 +188,60 @@ func scopedListSQL(tbl scopeTable, cols string, all bool) string {
 		select ` + cols + ` from ` + string(tbl) + `
 		where id in (select id from sub) or id = any($2::uuid[])
 		order by name`
+}
+
+// The arc-scope primitive: the exclusive-arc counterpart of scopedListSQL for
+// rows owned on the component / system / location arc (secret, variable, the
+// pushed-telemetry owner check). It injects the read scope into the query
+// itself, one round trip regardless of row count, replicating inScopeTree's
+// semantics per tier: an owner is in scope when it IS a self root, when it sits
+// at or under an inclusive subtree root of its own tier, or when it sits
+// strictly under an excluded root (subtree_excl_root: the boundary row is out,
+// its descendants are in). A platform-owned row (all arc columns NULL) never
+// matches the arc predicate; the caller gates platform rows on read.All.
+
+// arcScopeArgs returns the three shared bind values for the arc CTEs and
+// predicate, in order: inclusive subtree roots (roots minus excluded), excluded
+// roots, and self roots, each filtered to well-formed uuids.
+func arcScopeArgs(set scope.Set) (inclusive, excluded, selfIDs []string) {
+	roots := uuidRoots(set.IDs)
+	excluded = uuidRoots(set.ExcludeRootIDs)
+	return subtractRoots(roots, excluded), excluded, uuidRoots(set.SelfIDs)
+}
+
+// arcScopeCTEs builds the six recursive descendant expansions (an inclusive
+// walk and a strict-descendants-of-excluded walk per tier), binding inclusive
+// roots as $incl and excluded roots as $excl (1-based arg positions).
+func arcScopeCTEs(incl, excl int) string {
+	one := func(tbl scopeTable, name string) string {
+		t := string(tbl)
+		return name + `_sub(id) as (
+			select id from ` + t + ` where id = any($` + strconv.Itoa(incl) + `::uuid[])
+			union all
+			select t.id from ` + t + ` t join ` + name + `_sub on t.parent_id = ` + name + `_sub.id
+		) cycle id set is_cycle using path,
+		` + name + `_exc(id) as (
+			select id from ` + t + ` where parent_id = any($` + strconv.Itoa(excl) + `::uuid[])
+			union all
+			select t.id from ` + t + ` t join ` + name + `_exc on t.parent_id = ` + name + `_exc.id
+		) cycle id set is_cycle using path`
+	}
+	return `with recursive ` +
+		one(componentTable, "comp") + `,
+		` + one(systemTable, "sys") + `,
+		` + one(locationTable, "loc")
+}
+
+// arcScopePredicate is the WHERE fragment over an aliased owner arc, binding
+// self roots as $self. The alias is the row's table alias (e.g. "s").
+func arcScopePredicate(alias string, self int) string {
+	arm := func(col, name string) string {
+		c := alias + `.` + col
+		return `(` + c + ` is not null and (` + c + ` = any($` + strconv.Itoa(self) + `::uuid[])
+			or ` + c + ` in (select id from ` + name + `_sub)
+			or ` + c + ` in (select id from ` + name + `_exc)))`
+	}
+	return `(` + arm("component_id", "comp") + `
+		or ` + arm("system_id", "sys") + `
+		or ` + arm("location_id", "loc") + `)`
 }

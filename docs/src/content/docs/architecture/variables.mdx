@@ -149,7 +149,7 @@ binding shape on the template.
 ## secret: a typed, encrypted cascaded value
 
 A **secret** is an access secret: a typed value, encrypted at rest, owned on the exclusive arc
-(`platform | location | system | component`) and resolved most-specific-wins down the cascade like config
+(`platform | location | component`; secrets have no system band, ADR-0052) and resolved most-specific-wins down the cascade like config
 and variables, but sealed so its value never sits in the clear. Its first slice is **built**
 ([ADR-0017](/architecture/decisions/#adr-0017-credential-is-renamed-secret-the-cascade-is-the-reuse-mechanism)):
 the typed cell, the crypto, the cascade resolver, and the operator surfaces. A **sensitivity ladder** is
@@ -455,7 +455,7 @@ exclusive-arc scope either way.
   }}
 />
 
-`secret` (**Built**) is the encrypted cell and the `$sec:` cascade key; scope is the exclusive arc.
+`secret` (**Built**) is the encrypted cell and the `$sec:` cascade key; scope is the exclusive arc without its system arm (ADR-0052).
 Read masked through a **scope-filtered** directory; decrypted only through the audited `:reveal` /
 `:copy` path. Visibility is placement scope plus the per-secret `admin_sensitive` flag (admin-only
 when set); `secret` is off the `*:read` floor

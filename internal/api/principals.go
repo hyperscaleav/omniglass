@@ -120,7 +120,7 @@ type createGrantInput struct {
 	ID   string `path:"id" doc:"The principal, addressed by its uuid or a human username"`
 	Body struct {
 		Role      string `json:"role" minLength:"1" doc:"A role id (viewer, operator, admin, owner, or a custom role)"`
-		ScopeKind string `json:"scope_kind" enum:"all,location,system,component,group" doc:"The scope kind; 'all' confers the whole estate"`
+		ScopeKind string `json:"scope_kind" enum:"all,location,system,component" doc:"The scope kind; 'all' confers the whole estate (group-as-scope is unbuilt and not offered)"`
 		ScopeID   string `json:"scope_id,omitempty" doc:"The scope root id; omit for the all scope"`
 		ScopeOp   string `json:"scope_op,omitempty" enum:"subtree,subtree_excl_root,self" doc:"How the scope root matches the tree: subtree (root + descendants, the default), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Moot for the all scope."`
 	}

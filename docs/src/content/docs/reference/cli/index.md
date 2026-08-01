@@ -483,6 +483,7 @@ Records a condition on this component and the capabilities it degrades, then rec
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--capabilities` | string | (none) | The capabilities this condition degrades; a role requiring one of them can no longer be filled by this component |
+| `--dedup-key` | string | (none) | The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate |
 | `--message` | string | (none) | What is wrong, for the operator reading it later |
 | `--severity` | string | (none) | How bad it is; critical puts the component itself in outage |
 
@@ -2153,7 +2154,7 @@ Assigns a role at a scope to a principal. Gated by principal_grant:create (all-s
 |---|---|---|---|
 | `--role` | string | (none) | A role id (viewer, operator, admin, owner, or a custom role) |
 | `--scope-id` | string | (none) | The scope root id; omit for the all scope |
-| `--scope-kind` | string | (none) | The scope kind; 'all' confers the whole estate |
+| `--scope-kind` | string | (none) | The scope kind; 'all' confers the whole estate (group-as-scope is unbuilt and not offered) |
 | `--scope-op` | string | (none) | How the scope root matches the tree: subtree (root + descendants, the default), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Moot for the all scope. |
 
 Example:
@@ -2462,7 +2463,7 @@ Assigns a role at a scope to a group; its members inherit it. Gated by principal
 |---|---|---|---|
 | `--role` | string | (none) | A role id (viewer, operator, admin, owner, or a custom role) |
 | `--scope-id` | string | (none) | The scope root id; omit for the all scope |
-| `--scope-kind` | string | (none) | The scope kind; 'all' confers the whole estate |
+| `--scope-kind` | string | (none) | The scope kind; 'all' confers the whole estate (group-as-scope is unbuilt and not offered) |
 | `--scope-op` | string | (none) | How the scope root matches the tree; moot for the all scope |
 
 Example:
@@ -2914,7 +2915,7 @@ Seals a secret at an owner scope. Fields are validated and encrypted against the
 | `--fields` | string | (none) | The operator field map, validated against the type shape |
 | `--name` | string | (none) | The cascade key; unique per owner |
 | `--owner` | string | (none) | The owning entity's name; omit for a platform secret |
-| `--owner-kind` | string | (none) | Which tier owns this secret |
+| `--owner-kind` | string | (none) | Which tier owns this secret (the system band is retired, ADR-0052) |
 | `--secret-type` | string | (none) | A secret_type id |
 
 Example:

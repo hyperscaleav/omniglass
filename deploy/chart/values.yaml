@@ -6,6 +6,10 @@ image:
 
 server:
   replicas: 1
+  # Session cookies are marked Secure (https-only) by default: every documented
+  # chart deployment is TLS-fronted at the edge. Set false only for a
+  # plaintext-http deployment.
+  secureCookies: true
   resources:
     requests:
       cpu: 25m

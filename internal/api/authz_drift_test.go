@@ -17,16 +17,13 @@ import (
 // be removed so the grant is exercised, and the drift test below fails until it is.
 // A NEW entry here is a decision to ship a grant ahead of its enforcement.
 var aheadOfRoutes = map[string]string{
-	// operator day-two capabilities whose subsystems have no HTTP surface yet.
-	"rule:create,update":       "no rule routes yet (event engine)",
-	"config:create,update":     "no config routes yet (settings engine)",
-	"alarm:ack,snooze,resolve": "no alarm routes yet (alarm engine)",
-	// admin management capabilities whose registries/routes have not landed.
-	"credential:*":          "no credential routes yet (credential management)",
-	"role:*":                "no two-token role routes yet (custom-role editing is a later slice; role:read:admin is the only routed role capability, granted explicitly)",
-	"unit:create":           "no unit routes yet (unit registry)",
-	"severity_level:create": "no severity_level routes yet (severity registry)",
-	"source:create":         "no source routes yet (source registry)",
+	// Deliberately empty since #463 reversed the ship-ahead policy: a grant
+	// lands in roles.yaml in the same slice as the first route that enforces
+	// it, never before. (The retired entries granted rule/config/alarm/
+	// credential/role/unit/severity_level/source capabilities that gated
+	// nothing and leaked into the grant-picker tooltips and the profile
+	// permission list.) A NEW entry here is an explicit decision to violate
+	// that policy and must say why.
 }
 
 // TestSeedGrantsResolveToUniverse keeps the seed roles honest against the routed

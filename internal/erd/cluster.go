@@ -31,7 +31,7 @@ var Subsystems = []Cluster{
 		"node", "task",
 	}},
 	{Name: "config", Tables: []string{
-		"platform_setting", "setting_override", "variable",
+		"setting_override", "variable",
 		"secret", "secret_type", "credential",
 	}},
 	{Name: "content", Tables: []string{
