@@ -1,0 +1,38 @@
+---
+// The env-var reference rendered from the generated registry facts
+// (docs/src/generated/config.json, written by make gen via cmd/configgen).
+// Complete by construction: config.Get refuses a variable the registry does
+// not declare, so a variable cannot exist without appearing here.
+//
+// Usage: <ConfigVars scope="server" />, or scopes={['server','node']}.
+import config from '../generated/config.json';
+
+interface Props {
+  scope?: string;
+  scopes?: string[];
+}
+
+const { scope, scopes } = Astro.props;
+const want = scopes ?? (scope ? [scope] : ['server']);
+const rows = config.vars.filter((v) => want.includes(v.scope));
+if (!rows.length) {
+  throw new Error(`ConfigVars: no vars in scope(s) ${want.join(', ')}`);
+}
+---
+
+<table class="config-vars">
+  <thead>
+    <tr><th>Variable</th><th>Default</th><th>Purpose</th></tr>
+  </thead>
+  <tbody>
+    {
+      rows.map((v) => (
+        <tr>
+          <td><code>{v.key}</code></td>
+          <td>{v.default ?? '(none)'}</td>
+          <td>{v.doc}</td>
+        </tr>
+      ))
+    }
+  </tbody>
+</table>

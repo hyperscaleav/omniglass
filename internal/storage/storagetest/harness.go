@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/config"
 	"github.com/hyperscaleav/omniglass/internal/migrate"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/jackc/pgx/v5"
@@ -71,7 +72,7 @@ func ensureContainer() {
 		// migrates a fresh, isolated database per test on it exactly as it does on
 		// the container. Unset (the default), the harness starts an ephemeral
 		// testcontainer, so nothing changes for a normal `make test` with Docker.
-		if dsn := os.Getenv("OMNIGLASS_TEST_ADMIN_DSN"); dsn != "" {
+		if dsn := config.Get("OMNIGLASS_TEST_ADMIN_DSN"); dsn != "" {
 			adminDSN = dsn
 			return
 		}

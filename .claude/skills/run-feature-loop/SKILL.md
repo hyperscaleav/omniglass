@@ -17,6 +17,12 @@ skill is the run-book. The loop never merges to `main`; merge is the architect's
    loop: post nothing, branch nothing, ask instead. Approval covers what the definition
    states, not what it leaves open.
 3. `origin/main` is fetched and the working tree is clean.
+4. **The environment actually runs the gates.** Do not trust a "Docker unreachable"
+   warning without trying `service docker start` (or `dockerd` directly) first. If the
+   egress policy blocks Docker Hub's CDN, pull required images through a mirror and retag
+   (`docker pull mirror.gcr.io/library/postgres:18 && docker tag ... postgres:18`; same
+   for `testcontainers/ryuk`). A gate that cannot run locally is named in the ship-review
+   with CI as the stated proof, never silently skipped.
 
 ## Setup
 
@@ -36,7 +42,13 @@ skill is the run-book. The loop never merges to `main`; merge is the architect's
    work serial commits directly on the integration branch when slices run one at a time
    (either way every commit references its sub-issue, `(#NNN)`).
 2. Build test-first: the failing test, then the code, committing each green increment.
-3. Gates before the slice merges inward, every one green:
+3. **Gate hygiene:** each gate is its own invocation from the repo root, `&&`-chained to
+   the commit; never fold gates into a compound line with `;` (a wrong-cwd `go test`
+   prints FAIL while the commit proceeds; this shipped twice in the pilot before the rule
+   existed). A page converted from `.md` to `.mdx` is scanned for brace or angle tokens
+   outside code spans before the build (in MDX they compile to JSX and fail at render
+   with an opaque ReferenceError).
+4. Gates before the slice merges inward, every one green:
    - `make test-short` (and the full affected packages fresh where the slice touches the
      DB path);
    - the docs lint suite (`go test ./internal/docslint/ -count=1`);
@@ -44,7 +56,7 @@ skill is the run-book. The loop never merges to `main`; merge is the architect's
      for the rollup);
    - an `/adversarial-review` pass over the slice diff, findings fixed or refuted with
      evidence.
-4. Merge inward and **close the sub-issue** with the commit named in the closing comment.
+5. Merge inward and **close the sub-issue** with the commit named in the closing comment.
    The sub-issue list is the status; update nothing else.
 
 ## Stopping

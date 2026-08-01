@@ -7,6 +7,8 @@ sidebar:
     variant: note
 ---
 
+import SchemaTable from '../../../components/SchemaTable.astro';
+
 :::note[Partial: the event_type registry and the richer occurrence are built]
 [ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables) confirms the separation this page describes. The **`event_type` registry** is built: list, get, and custom-type create/update/delete over `/event-types`, seeded official types (`call.started`, `command.issued`), operator-extensible, official rows read-only, mirroring the `property_type` catalog. The **`event`** occurrence now carries **`origin`** (caught/caused/derived/scheduled) plus the ADR-0066 lineage columns (`source_event_id`, `source_log_line_id`, `derived_by_rule_id`) and the `correlation_id` trace, and two producers are built. The **native caught path**: a component that publishes an event (an xAPI event, an SNMP trap) has its registered `event_type` name route it to the event sink with `origin=caught`, under the same owner-confinement and reject-not-project as a metric or state. The **`caused`** origin: a [command](/architecture/commands/) records a caused `command.issued` event on issue (#396). Raw log lines are a **separate ingest lane**, not events ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)): the `log_line` table, its per-component and per-node reads, and the first **producer** are built. A node ships its own operational log lines (connected to the bus, worklist pulled, a task skipped) off the telemetry ingest lane as untyped `LogLine`s; the ingest consumer lands them in `log_line` owner-bound to the node (a console **Self-logs** panel on the node blade, beside the component Logs one). The lineage columns are in place (a derived event will carry `source_log_line_id` and `derived_by_rule_id`), while the **derivation rules** that turn a log line into a registered event are directional, along with the `event_rule` engine and the `derived`/`scheduled` producers, the alarm edge, and the CDC publisher.
 :::
@@ -38,9 +40,36 @@ The `event` row is the semantic-occurrence log; `event_type` is its key registry
 
 An event is **born in a Postgres transaction**, on the record lane. When an `event_rule` fires, the consumer writes the `event` row and its paired alarm transition to PG in one transaction (the alarm edge is serialized per `(event_rule, owner)`); the event is the durable record, the alarm is the stateful edge. The event is **not** published directly from the rule (no dual-write): a leader-elected CDC publisher (logical decoding of the WAL) fans the committed change out to JetStream, where the `action_rule` consumers react. Postgres is the system of record; JetStream carries the committed event onward. This is the opposite lane from samples, which live on NATS and sink to PG asynchronously (see [samples](/architecture/properties/)).
 
-| Table | Key columns | Notes |
-|---|---|---|
-| `event` | id, ts, **event_type_id** (NOT NULL FK to `event_type`), **origin** (caught/caused/derived/scheduled), owner arc, **instance**, **message**, **attributes** (jsonb), **provenance**, **source**, correlation_id, the lineage columns **`source_event_id`** / **`source_log_line_id`** / **`derived_by_rule_id`** (all nullable) | the semantic-occurrence log; there is no `alarm_id` column today, the event-carries-its-alarm edge is design direction. The lineage (ADR-0066) names what produced the event: `source_event_id` the parent event, `source_log_line_id` the raw log line a rule derived it from, `derived_by_rule_id` the rule (a natively-caught event has none), while the flat `correlation_id` threads the causal chain. A schedule fire is an event with `origin=scheduled` (no separate schedule table) |
-| `event_type` | name, display_name, **payload_schema (jsonb)**, **official** | the event-key registry; what a derivation rule targets when turning a raw log line (in the separate `log_line` lane) into a registered event. The built column is the `official` boolean (shipped-canonical versus org-local); the `scope` ladder (template / org / official) is future design, shared with `property_type` |
+The `event` row is the semantic-occurrence log. There is no `alarm_id` column today; the
+event-carries-its-alarm edge is design direction. The **lineage** columns
+([ADR-0066](/architecture/decisions/#adr-0066-a-raw-log-ingest-lane-and-the-event-lineage-columns)) name what
+produced the event, while the flat `correlation_id` threads the causal chain. A schedule fire is an
+event with `origin=scheduled`; there is no separate schedule table.
+
+<SchemaTable
+  table="event"
+  notes={{
+    event_type_id: 'The registered key this occurrence asserts',
+    origin: 'How the event arrived: caught, caused, derived, or scheduled',
+    instance: 'The sub-entity the occurrence is about, when the owner is not enough',
+    source_event_id: 'Lineage: the parent event, when one event caused another',
+    source_log_line_id: 'Lineage: the raw log line a derivation rule promoted',
+    derived_by_rule_id: 'Lineage: the rule that did the deriving; a natively-caught event has none',
+    correlation_id: 'Threads the causal chain flat, across lineage hops',
+  }}
+/>
+
+`event_type` is the event-key registry: what a derivation rule targets when turning a raw log line
+(in the separate `log_line` lane) into a registered event. The built governance column is the
+`official` boolean (shipped-canonical versus org-local); the `scope` ladder (template / org /
+official) is future design, shared with `property_type`.
+
+<SchemaTable
+  table="event_type"
+  notes={{
+    payload_schema: 'The JSON Schema an occurrence of this key promises its attributes satisfy',
+    official: 'Shipped-canonical versus org-local; seed-owned rows are read-only',
+  }}
+/>
 
 Related: [calculations](/architecture/calculations/) (the `event_rule` that produces events), [alarms and actions](/architecture/alarms-actions/) (alarms and the response layer), [samples](/architecture/properties/) (the data events read), and [the glossary](/architecture/glossary/).

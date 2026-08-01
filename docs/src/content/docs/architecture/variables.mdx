@@ -7,6 +7,8 @@ sidebar:
     variant: note
 ---
 
+import SchemaTable from '../../../components/SchemaTable.astro';
+
 :::caution[Direction: ADR-0063 makes the value store a provenance-keyed cache]
 The store is now named `property` per [ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables) (was `property_value`, built). The **observed** latest-value cache and the **reconciliation** read are now built: the ingest sink upserts the newest observed value per `(owner, property_type, instance, provenance)` series, and a per-component reconciliation read pivots want/told/is with **drift computed on read**, `declared` resolved live from the cascade (never a cache row). Still directional: `intended` is stored for command settlement, whose writer is the command pillar.
 :::
@@ -442,14 +444,47 @@ is its own `secret_type` + `secret` pair (it carries encryption and a masked rea
 one table with a discriminator or stays separate is still open; they share the cascade and the
 exclusive-arc scope either way.
 
-| Table | Key columns | Notes |
-|---|---|---|
-| `secret_type` | id, **official**, schema (per-field `{name, type, secret, origin}`) | **Built.** The secret **shape** registry (`snmp-community`, `basic-auth` seeded); `official` marks shipped-canonical versus org-local, like the sample and role registries |
-| `secret` | (name, **owner arc**), secret_type, **`admin_sensitive`**, **value** (secret fields as `{ciphertext, nonce, wrapped_dek, key_id}` envelopes, non-secret fields plaintext) | **Built.** The encrypted cell and the `$sec:` cascade key; scope is the exclusive arc (platform/location/system/component). Read masked through a **scope-filtered** directory; decrypted only through the audited `:reveal` / `:copy` path. Visibility is placement scope plus the per-secret `admin_sensitive` flag (admin-only when set); `secret` is off the `*:read` floor ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)) |
-| `variable` | (name, **owner arc**), **value_type** (`string`/`int`/`float`/`bool`/`json`), **value** (jsonb) | **Built.** The plaintext variable cell and the `$var:` cascade key; scope is the exclusive arc. Typed inline (no `variable_type` registry: the value is validated against `value_type` in the app), no observed side. The **config** cell (declared/observed/reconcile) is a separate, deferred member |
-| `property_type` | uuid **id** (PK), **name** (UNIQUE, the renameable handle), **official**, **data_type** (`string`/`int`/`float`/`bool`/`json`), nullable **kind** (`metric`/`state`), display_name, unit, **validation** (JSON Schema) | **Built.** The primitive-agnostic **catalog** of typed names, the single source for what a name means whoever produces it; seed-owned `official` rows are read-only. Value tables key by the **`property_type_id`** uuid FK, so the catalog governs the vocabulary without owning the values and a name stays renameable ([ADR-0043](/architecture/decisions/#adr-0043-the-property-catalog)) |
-| `product_property` / `standard_property` / `location_type_property` | (**classifier**, **property**), **default_value** (jsonb), **required** | **Built.** The classifier's declared-property **contract**, one table per classifier and all the same shape: which catalog properties every instance of that product, standard, or location type exposes, with an optional default and a required flag, unique per pair. `data_type` and `validation` are **not** repeated here, they stay on `property_type`. Replaces the retired `field_definition`. A driver access/mode column is deferred; a `node` has no classifier by design |
-| `property` | (**owner arc**, property_type_id, **instance**, **provenance**), **value** (jsonb), **ts** (the value's own time) | **Built for `declared` on all four owner kinds, plus the `observed` and `intended` cache rows.** The value store, on the **same exclusive arc** as the sample sinks and `event`; the series key is `unique nulls not distinct`, since the arc leaves three owner columns NULL. The effective read is **contract-default-or-override** plus the off-contract set (`is_set` marks the override, `value_id` carries the row id so the UI can clear it), resolved by one owner-generic query and ABAC-scoped on **every** arc, read and write. Replaces the retired `field_value`. Ingest upserts `observed` and the command pillar upserts `intended` latest values, keyed on the value's own `ts`; the `calculated` producer, macro-string values, and the cross-owner cascade are deferred |
-| `tag` | name, applies_to, propagates, allowed_values | **Built.** The **tenant-wide governed key vocabulary**; minting a key needs `tag:create` ([identity and access](/architecture/identity-access/)). No `_type`, no namespace; `allowed_values` is the optional value enum (empty = free text), enforced on the binding write; values bind via `tag_binding`. See [tags](/architecture/tags/) |
-| `tag_binding` | (tag, **owner arc**), value | **Built.** The `key: value` binding: **union on key, override on value** down the [cascade](/architecture/cascade/), owned on the exclusive arc (`platform / location / system / component / node`); setting a value is the owner's own `update` write. Binding via groups and a `template`-scoped binding are deferred |
+`secret_type` (**Built**) is the secret **shape** registry (`snmp-community`, `basic-auth` seeded);
+`official` marks shipped-canonical versus org-local, like the sample and role registries.
+
+<SchemaTable
+  table="secret_type"
+  notes={{
+    schema: 'The per-field shape: {name, type, secret, origin} per field',
+    official: 'Shipped-canonical versus org-local; seed-owned rows are read-only',
+  }}
+/>
+
+`secret` (**Built**) is the encrypted cell and the `$sec:` cascade key; scope is the exclusive arc.
+Read masked through a **scope-filtered** directory; decrypted only through the audited `:reveal` /
+`:copy` path. Visibility is placement scope plus the per-secret `admin_sensitive` flag (admin-only
+when set); `secret` is off the `*:read` floor
+([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)).
+
+<SchemaTable
+  table="secret"
+  notes={{
+    secret_type_id: 'The shape this cell instantiates',
+    admin_sensitive: 'Flips the secret to the admin tier regardless of placement',
+    value: 'Secret fields as {ciphertext, nonce, wrapped_dek, key_id} envelopes; non-secret fields plaintext',
+  }}
+/>
+
+`variable` (**Built**) is the plaintext variable cell and the `$var:` cascade key; scope is the
+exclusive arc. Typed inline (no `variable_type` registry: the value is validated against
+`value_type` in the app), no observed side. The **config** cell (declared/observed/reconcile) is a
+separate, deferred member.
+
+<SchemaTable
+  table="variable"
+  notes={{
+    value_type: 'string, int, float, bool, or json; the app validates value against it',
+    value: 'The cascade-resolved payload',
+  }}
+/>
+
+The other value-bearing tables this page leans on are rendered on their home pages, once each:
+**`property_type`**, the classifier contracts (**`product_property`** and siblings), and the
+**`property`** value store on [properties](/architecture/properties/); **`tag`** and
+**`tag_binding`** on [tags](/architecture/tags/).
 

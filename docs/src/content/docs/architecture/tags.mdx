@@ -7,6 +7,8 @@ sidebar:
     variant: note
 ---
 
+import SchemaTable from '../../../components/SchemaTable.astro';
+
 :::note[Partial]
 The first slice ([ADR-0021](/architecture/decisions/#adr-0021-tag-slice-1-a-governed-key-registry-with-entity-update-gated-bindings)) is
 **built**: the governed **`tag`** key registry, the per-entity **`tag_binding`** cell on the exclusive arc, and the
@@ -118,9 +120,31 @@ value) stay open. The enum is the first, most-asked-for slice; the rest is defer
 ## Storage
 
 The key vocabulary and the value cell; the physical layout (the owner arc, the cascade key) lives on
-[storage](/architecture/storage/).
+[storage](/architecture/storage/). Both tables are **built**. The column mechanics below render from the
+generated schema facts (`make gen`), so they cannot drift; the notes stay hand-written.
 
-| Table | Key columns | Notes |
-|---|---|---|
-| `tag` | name, applies_to, propagates, allowed_values | **Built.** The tenant-wide governed key vocabulary; minting a key needs `tag:create`. `applies_to` narrows a key to entity kinds (empty = universal); `propagates` toggles cascade versus flat per-entity binding; `allowed_values` is the value enum (empty = free text), enforced on the binding write |
-| `tag_binding` | (tag_id, **owner arc**), value | **Built.** The `key: value` binding at one owner on the exclusive arc (`platform / location / system / component / node`); resolves **union on key, override on value** down the [cascade](/architecture/cascade/). Setting a value is the owner's own `update` write, except at `platform`, which takes `tag:update` plus `platform:update` |
+The `tag` row is the tenant-wide governed key vocabulary; minting a key needs `tag:create`.
+
+<SchemaTable
+  table="tag"
+  notes={{
+    name: 'The governed key operators bind by',
+    applies_to: 'Narrows the key to entity kinds; empty is universal',
+    propagates: 'Toggles cascade versus flat per-entity binding',
+    allowed_values: 'The value enum; empty is free text, enforced on the binding write',
+  }}
+/>
+
+The `tag_binding` row is the `key: value` cell at one owner on the exclusive arc
+(`platform / location / system / component / node`); it resolves **union on key, override on value** down the
+[cascade](/architecture/cascade/). Setting a value is the owner's own `update` write, except at `platform`,
+which takes `tag:update` plus `platform:update`.
+
+<SchemaTable
+  table="tag_binding"
+  notes={{
+    tag_id: 'The key being bound',
+    owner_kind: 'Which arm of the exclusive owner arc holds the cell',
+    value: 'The bound value the cascade resolves',
+  }}
+/>

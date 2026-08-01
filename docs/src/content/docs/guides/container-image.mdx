@@ -3,6 +3,8 @@ title: "Container image"
 description: "The published Omniglass container image: what it contains, where it ships, and how to run it."
 ---
 
+import ConfigVars from '../../../components/ConfigVars.astro';
+
 Omniglass ships as a single container image. The operator console is compiled
 into the binary (`-tags web` plus `go:embed`), so one image is the whole app:
 every run mode (`server`, `node run`, `migrate`, `bootstrap`, `token`) is the same
@@ -54,19 +56,16 @@ arm64 hardware in the loop; this boot test is the substitute.
 
 ## Configuration
 
-The binary is configured by environment, BYO Postgres:
+The binary is configured by environment, BYO Postgres. The table renders from the declared
+environment registry (`make gen`), which the binary itself reads through, so a variable cannot
+exist without appearing here:
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `OMNIGLASS_DSN` | local dev DSN | Postgres connection string the Storage Gateway dials |
-| `DATABASE_URL` | (none) | conventional DSN fallback; `OMNIGLASS_DSN` wins when both are set |
-| `OMNIGLASS_ADDR` | `:8080` | HTTP listen address |
-| `OMNIGLASS_SECURE_COOKIES` | off | set `true` behind TLS to mark the session cookie `Secure` (https only) |
-| `OMNIGLASS_NATS_ADDR` | `127.0.0.1:4222` | listen address (host:port) of the embedded NATS server |
-| `OMNIGLASS_NATS_STORE_DIR` | temp dir | JetStream store directory |
-| `OMNIGLASS_NATS_URL` | `nats://127.0.0.1:4222` | bus URL the node-claim exchange advertises to nodes |
-| `OMNIGLASS_DATA_DIR` | `.omniglass` | local non-Postgres server state (notably the fallback secret key) |
-| `OMNIGLASS_SETTINGS_FILE` | (none) | optional operator settings file (JSON or YAML), the layer between code defaults and the DB override |
+<ConfigVars scope="server" />
+
+The node process reads its own small set (the CLI-scope variables surface through the
+[CLI reference](/reference/cli/) instead):
+
+<ConfigVars scope="node" />
 
 ## Running it
 

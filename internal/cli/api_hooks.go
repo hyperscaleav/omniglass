@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/hyperscaleav/omniglass/internal/cli/apiclient"
+	"github.com/hyperscaleav/omniglass/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -64,10 +64,10 @@ func clientFromCmd(cmd *cobra.Command) *apiclient.Client {
 // addClientFlags installs the shared connection flags on the root, so every
 // generated command inherits them. Defaults come from the environment.
 func addClientFlags(root *cobra.Command) {
-	server := os.Getenv("OMNIGLASS_SERVER")
+	server := config.Get("OMNIGLASS_SERVER")
 	if server == "" {
 		server = "http://localhost:8080"
 	}
 	root.PersistentFlags().String("server", server, "Omniglass server base URL (env OMNIGLASS_SERVER)")
-	root.PersistentFlags().String("token", os.Getenv("OMNIGLASS_TOKEN"), "bearer token (env OMNIGLASS_TOKEN)")
+	root.PersistentFlags().String("token", config.Get("OMNIGLASS_TOKEN"), "bearer token (env OMNIGLASS_TOKEN)")
 }

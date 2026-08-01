@@ -5492,7 +5492,7 @@ paths:
       summary: Set your own profile picture
   /auth/me:stopImpersonation:
     post:
-      description: Revokes the impersonation session presented by the request token, ending the view-as / act-as. Requires an impersonation token.
+      description: Revokes the impersonation session presented by the request token, ending the view-as / act-as. Requires authentication with an impersonation token; self-scoped (ends only the session the token names).
       operationId: stop-impersonation
       responses:
         "204":
@@ -6917,7 +6917,7 @@ paths:
       x-omniglass-permission: file:read
   /healthz:
     get:
-      description: Reports process health and the database leg, pinged through the Storage Gateway.
+      description: "Reports process health and the database leg, pinged through the Storage Gateway. Public: the liveness probe carries no operator data."
       operationId: get-healthz
       responses:
         "200":
@@ -8681,7 +8681,7 @@ paths:
       x-omniglass-permission: principal:impersonate
   /principals/{id}:purge:
     post:
-      description: Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge (admin-sensitive, all-scope), and the principal must be archived first.
+      description: Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.
       operationId: purge-principal
       parameters:
         - description: The principal, addressed by its uuid or a human username

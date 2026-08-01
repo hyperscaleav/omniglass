@@ -1,6 +1,8 @@
 // Package config reads the single binary's runtime configuration from the
-// environment. It is the only place env vars are read, so the rest of the
-// code takes a typed Config and stays testable without poking at os.Getenv.
+// environment. Every environment variable the binary reads is declared in the
+// Registry here and read through Get (an unregistered read panics), so the
+// rest of the code takes a typed Config and stays testable, and the generated
+// env-var reference can never omit a variable.
 //
 // Configuration is intentionally minimal for the walking skeleton: the
 // database DSN and the HTTP listen address. Later slices add their own keys
@@ -74,18 +76,18 @@ type Config struct {
 func Load() Config {
 	return Config{
 		DSN:           resolveDSN(),
-		Addr:          firstNonEmpty(os.Getenv("OMNIGLASS_ADDR"), DefaultAddr),
-		SecureCookies: os.Getenv("OMNIGLASS_SECURE_COOKIES") == "true",
-		NatsAddr:      firstNonEmpty(os.Getenv("OMNIGLASS_NATS_ADDR"), DefaultNatsAddr),
-		NatsStoreDir:  firstNonEmpty(os.Getenv("OMNIGLASS_NATS_STORE_DIR"), filepath.Join(os.TempDir(), "omniglass-nats")),
-		NatsURL:       firstNonEmpty(os.Getenv("OMNIGLASS_NATS_URL"), DefaultNatsURL),
-		DataDir:       firstNonEmpty(os.Getenv("OMNIGLASS_DATA_DIR"), DefaultDataDir),
-		SettingsFile:  firstNonEmpty(os.Getenv("OMNIGLASS_SETTINGS_FILE"), DefaultSettingsFile),
+		Addr:          firstNonEmpty(Get("OMNIGLASS_ADDR"), DefaultAddr),
+		SecureCookies: Get("OMNIGLASS_SECURE_COOKIES") == "true",
+		NatsAddr:      firstNonEmpty(Get("OMNIGLASS_NATS_ADDR"), DefaultNatsAddr),
+		NatsStoreDir:  firstNonEmpty(Get("OMNIGLASS_NATS_STORE_DIR"), filepath.Join(os.TempDir(), "omniglass-nats")),
+		NatsURL:       firstNonEmpty(Get("OMNIGLASS_NATS_URL"), DefaultNatsURL),
+		DataDir:       firstNonEmpty(Get("OMNIGLASS_DATA_DIR"), DefaultDataDir),
+		SettingsFile:  firstNonEmpty(Get("OMNIGLASS_SETTINGS_FILE"), DefaultSettingsFile),
 	}
 }
 
 func resolveDSN() string {
-	return firstNonEmpty(os.Getenv("OMNIGLASS_DSN"), os.Getenv("DATABASE_URL"), DefaultDSN)
+	return firstNonEmpty(Get("OMNIGLASS_DSN"), Get("DATABASE_URL"), DefaultDSN)
 }
 
 // firstNonEmpty returns the first non-empty string, or "" if all are empty.

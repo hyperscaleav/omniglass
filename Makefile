@@ -29,15 +29,18 @@ image:
 # Regenerate the derived artifacts from the Huma API (the source of truth): the
 # OpenAPI 3.1 document (server-less, into api/openapi.{json,yaml}), the cobra
 # command tree (internal/cli/api_gen.go), the CLI reference page (from that
-# command tree, into docs/), the protobuf telemetry wire, and the typed SPA
-# client (web/src/api/schema.gen.ts). The spec is the seam every downstream
-# client is generated from. Run after any API change; the results are committed
-# and reviewed like code.
+# command tree, into docs/), the protobuf telemetry wire, the typed SPA
+# client (web/src/api/schema.gen.ts), and the schema facts the docs render
+# storage tables from (docs/src/generated/schema.json, via erdgen). The spec is
+# the seam every downstream client is generated from. Run after any API change;
+# the results are committed and reviewed like code.
 gen: gen-proto
 	go run ./cmd/openapigen
 	go run ./cmd/cligen
 	go run ./cmd/docsgen
 	go run ./cmd/erdgen
+	go run ./cmd/seedgen
+	go run ./cmd/configgen
 	cd web && npm install && npm run gen:api
 
 # Regenerate the protobuf telemetry wire (proto/og/v1/telemetry.pb.go) from its

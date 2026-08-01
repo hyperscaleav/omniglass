@@ -277,7 +277,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "stop-impersonation",
 					Short:   "Stop the current impersonation session",
-					Long:    "Revokes the impersonation session presented by the request token, ending the view-as / act-as. Requires an impersonation token.",
+					Long:    "Revokes the impersonation session presented by the request token, ending the view-as / act-as. Requires authentication with an impersonation token; self-scoped (ends only the session the token names).",
 					Example: "  omniglass auth stop-impersonation",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1653,7 +1653,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := &cobra.Command{
 				Use:     "healthz",
 				Short:   "Liveness and database-reachability probe",
-				Long:    "Reports process health and the database leg, pinged through the Storage Gateway.",
+				Long:    "Reports process health and the database leg, pinged through the Storage Gateway. Public: the liveness probe carries no operator data.",
 				Example: "  omniglass healthz",
 				Args:    cobra.ExactArgs(0),
 				RunE: func(cmd *cobra.Command, args []string) error {
@@ -2830,7 +2830,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "purge <id>",
 					Short:   "Purge a principal",
-					Long:    "Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge (admin-sensitive, all-scope), and the principal must be archived first.",
+					Long:    "Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.",
 					Example: "  omniglass principal purge <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {

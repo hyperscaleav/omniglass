@@ -7,6 +7,8 @@ sidebar:
     variant: note
 ---
 
+import SchemaTable from '../../../components/SchemaTable.astro';
+
 Alarms and actions are how Omniglass turns a detected condition into a held incident and then into a response, so an operator gets paged, a ticket opens, or a device gets fixed without anyone watching a dashboard. An **alarm** detects a condition and holds it; an **action** does
 something about it. A simple action is a single step (a `notify`); a multi-step action is a
 **flow** (it branches, waits, and runs steps in parallel). Both alarm and action are **stateful
@@ -337,10 +339,25 @@ concrete way to notify or to run a command against a given device class).
 
 `alarm` and `action` are **stateful entities that hold their current state directly** (not event-sourced); the physical layout (the owner arc, partitioning) lives on [storage](/architecture/storage/).
 
-| Table | Key columns | Notes |
-|---|---|---|
-| `alarm` | **id**, event_rule, owner arc, **status, severity, opened_at, resolved_at, acked_by** | the **target design shape**; the built row is `id, severity, message, raised_at, cleared_at, component_id` (component-local, no owner arc, no `event_rule` or ack columns yet). A stateful entity, **one incident, new row per open**; holds current state directly (not event-sourced); the ITSM anchor. History = events + audit by `id` |
-| `action` | id, **steps (ordered: notify/command/wait/branch)**, status, current_step | **still Design** (no `action` table exists today); a stateful entity; delivery and step state; driven by events/alarms |
+The built `alarm` row below is component-local: no owner arc, no `event_rule`, and no ack columns
+yet. The **target design shape** adds `event_rule`, the owner arc, `status`, `opened_at`,
+`resolved_at`, and `acked_by`. Either way it is a stateful entity, **one incident, new row per
+open**, holding current state directly (not event-sourced); the ITSM anchor. History = events plus
+audit by `id`.
+
+<SchemaTable
+  table="alarm"
+  notes={{
+    severity: 'How bad; the rollup and the console sort on it',
+    raised_at: 'When the incident opened',
+    cleared_at: 'NULL while open; the one-open discipline keys on it',
+    component_id: 'The component the incident is about (the thin-cut owner)',
+  }}
+/>
+
+`action` is **still Design** (no `action` table exists today): a stateful entity carrying delivery
+and step state (`id`, ordered `steps` of notify/command/wait/branch, `status`, `current_step`),
+driven by events and alarms.
 
 A command **is two real tables**: the `command_type` registry (the catalog of what a component can be told) and the `command` invocation row with its computed settlement; see [commands](/architecture/commands/). The `event_rule` / `action_rule` config rows live with the [rule families](/architecture/calculations/).
 

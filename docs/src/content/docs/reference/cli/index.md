@@ -225,7 +225,7 @@ Stop the current impersonation session
 omniglass auth stop-impersonation
 ```
 
-Revokes the impersonation session presented by the request token, ending the view-as / act-as. Requires an impersonation token.
+Revokes the impersonation session presented by the request token, ending the view-as / act-as. Requires authentication with an impersonation token; self-scoped (ends only the session the token names).
 
 Example:
 
@@ -1296,7 +1296,7 @@ Liveness and database-reachability probe
 omniglass healthz
 ```
 
-Reports process health and the database leg, pinged through the Storage Gateway.
+Reports process health and the database leg, pinged through the Storage Gateway. Public: the liveness probe carries no operator data.
 
 Example:
 
@@ -2228,7 +2228,7 @@ Purge a principal
 omniglass principal purge <id>
 ```
 
-Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge (admin-sensitive, all-scope), and the principal must be archived first.
+Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.
 
 Example:
 

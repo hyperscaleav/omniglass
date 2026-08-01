@@ -12,6 +12,8 @@ screenshots:
         selector: "role=button[name=/edit/i]"
 ---
 
+import SeededSet from '../../../../components/SeededSet.astro';
+
 Access is a **grant**: a role at a scope. You assign a grant to a [user](/guides/admin/users/)
 directly, or to a **group** the user belongs to; the scope decides which slice of the estate the
 grant reaches. This page is the three parts of that: the **roles** you can assign, the **groups**
@@ -39,6 +41,11 @@ dimmed, listed one per line in alphabetical order. Held is resolved the same way
 admin-sensitive permission like `audit:read:admin` is tinted for its `:admin` tier. It is a teaching surface: it
 renders the real seeded roles against the real routed capabilities, not a static table. Custom-role creation and
 editing are coming; today the built-in roles are read-only.
+
+The same matrix, rendered here from the seed itself (`make gen`) with inheritance, wildcards, and
+the read floor resolved exactly as the authorizer resolves them at runtime:
+
+<SeededSet kind="roles" />
 
 ## Groups
 

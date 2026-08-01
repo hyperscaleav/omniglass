@@ -7,6 +7,8 @@ sidebar:
     variant: note
 ---
 
+import SchemaTable from '../../../components/SchemaTable.astro';
+
 :::note[Partial]
 The first slice ([ADR-0029](/architecture/decisions/#adr-0029-files-slice-1-a-content-addressed-blob-store-and-a-tenant-wide-file-handle), [epic #242](https://github.com/hyperscaleav/omniglass/issues/242), [#244](https://github.com/hyperscaleav/omniglass/issues/244)) is **built**: the content-addressed **`blob`** store as a Storage Gateway primitive (default **pgblobs** backend, dedup on the hash), the **`file`** handle CRUD over the API, generated CLI, and typed client, and the Files operator directory. Access is two layers with no new machinery: the **`file:<action>`** permission plus a per-file **`sensitive`** flag reusing the secret sensitivity tier. Deferred to later slices: **attaching** a file to entities and types ([the many-to-many relation](https://github.com/hyperscaleav/omniglass/issues/242)), async mark-sweep **GC** of aged or event-referenced blobs (a file delete already frees its own blob synchronously when no other handle references it), the **S3** and **disk** backends behind the same seam, **tags-on-files** ([#191](https://github.com/hyperscaleav/omniglass/issues/191)), and search/filter beyond the basic list. The general **resource-classification + clearance** lattice that will subsume the binary `sensitive` flag is [its own epic (#243)](https://github.com/hyperscaleav/omniglass/issues/243).
 :::
@@ -138,8 +140,27 @@ re-deriving over the window cannot reference a collected blob).
 
 The handle and the content-addressed bytes; the physical layout (the gateway, GC) is above and on [storage](/architecture/storage/).
 
-| Table | Key columns | Notes |
-|---|---|---|
-| `file` | id, name, content_type, size, **sha256**, sensitive, (later tags) | **Partial.** Searchable metadata handle; points at a blob by hash. Tenant-wide (no placement arc); `sensitive` lifts the row to the `:admin` tier (defaults false). Tags-on-files is [#191](https://github.com/hyperscaleav/omniglass/issues/191) |
-| `blob` | **sha256**, bytes / storage_ref, size | **Partial.** Content-addressed bytes; dedup on the hash. Default pgblobs (inline `bytea`); S3 / disk behind the same `blob.Store` seam. Content type lives on the file, not here (content-addressing is about the bytes). A file delete frees its unreferenced blob synchronously (dedup-aware); async mark-sweep GC of aged/event-referenced blobs is deferred |
+`file` (**Partial**) is the searchable metadata handle; it points at a blob by hash. Tenant-wide (no
+placement arc); `sensitive` lifts the row to the `:admin` tier and defaults false. Tags-on-files is
+[#191](https://github.com/hyperscaleav/omniglass/issues/191).
+
+<SchemaTable
+  table="file"
+  notes={{
+    sha256: 'The content address of the bytes this handle names',
+    sensitive: 'Lifts the row to the :admin tier',
+  }}
+/>
+
+`blob` (**Partial**) is the content-addressed bytes: dedup on the hash, default pgblobs (inline
+`bytea`), S3 / disk behind the same `blob.Store` seam. Content type lives on the file, not here,
+because content-addressing is about the bytes. A file delete frees its unreferenced blob synchronously
+(dedup-aware); async mark-sweep GC of aged or event-referenced blobs is deferred.
+
+<SchemaTable
+  table="blob"
+  notes={{
+    sha256: 'The content address; dedup key across every referencing file',
+  }}
+/>
 

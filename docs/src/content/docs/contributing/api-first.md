@@ -24,7 +24,9 @@ it runs `make gen` and fails the PR on any diff in the committed generated artif
 | `cd web && npm run gen:api` | `openapi.json` | `web/src/api/schema.gen.ts` | typed `openapi-fetch` SPA client |
 | `cmd/cligen` | `openapi.json` | `internal/cli/api_gen.go` (cobra) | the CLI, patched via `api_hooks.go` |
 | `cmd/docsgen` | the live cobra tree | `docs/src/content/docs/reference/cli/index.md` | the published CLI reference |
-| `cmd/erdgen` | the embedded migrations, applied to a throwaway Postgres and introspected | the D2 region of `docs/src/content/docs/architecture/data-model.md` | the published ERD |
+| `cmd/erdgen` | the embedded migrations, applied to a throwaway Postgres and introspected | the D2 region of `docs/src/content/docs/architecture/data-model.md` and the schema facts `docs/src/generated/schema.json` | the published ERD and every docs storage table |
+| `cmd/seedgen` | the twelve embedded seed YAMLs, parsed in-process (no database) | `docs/src/generated/seed.json`, roles carrying effective permissions | the docs' shipped-set claims |
+| `cmd/configgen` | the declarative env registry in `internal/config` | `docs/src/generated/config.json` | the deployment guides' env tables |
 | `gen-proto` | `proto/og/v1/*.proto` | committed `*.pb.go` | the NATS `TelemetryBatch` telemetry message |
 
 Two more stages are planned but have **no generator yet**: an MCP tool catalog for AI agents

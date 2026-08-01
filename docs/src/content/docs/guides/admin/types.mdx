@@ -3,6 +3,8 @@ title: Types
 description: "The Types catalog: a segmented tab per kind across the location and secret type registries, each tab its own directory, with CRUD and a property contract on the writable kind."
 ---
 
+import SeededSet from '../../../../components/SeededSet.astro';
+
 **Catalog > Types** (with `type:read`, covered by every viewer's `*:read` floor) is a
 **segmented tab control** over the classifier registries that shape the estate:
 **Location** and **Secret**, one tab per `location_type` and `secret_type`. Two kinds have
@@ -26,12 +28,14 @@ rows also carry an **icon** glyph key.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `type:update`) edits
   the display name, the icon, and the allowed parents; the kind and id are fixed. **Delete** (with
   `type:delete`) removes the row, behind a confirm.
-- **The four shipped location types are yours to change.** `campus`, `building`, `floor`, and `room`
-  arrive as ordinary **operator-owned** rows (origin **custom**, not official), so rename them,
-  re-parent them, or delete the ones your estate does not use. They are forked from a template in the
-  code, once, with no inheritance, and the boot seed installs them **only if absent**, so a restart
-  never reverts your edits. See
+- **The shipped location types are yours to change.** They arrive as ordinary **operator-owned**
+  rows (origin **custom**, not official), so rename them, re-parent them, or delete the ones your
+  estate does not use. They are forked from a template in the code, once, with no inheritance, and
+  the boot seed installs them **only if absent**, so a restart never reverts your edits. See
   [the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs).
+  The shipped set, rendered from the seed itself:
+
+  <SeededSet kind="location_types" />
 - An **official** (seed-owned) row, where one exists, is read-only: no Edit, no Delete, and the blade
   marks it "Seed-owned, read-only." That treatment is reserved for the **canonical vocabulary** a
   release must be able to correct, above all the [property catalog](/guides/admin/properties/), not for
