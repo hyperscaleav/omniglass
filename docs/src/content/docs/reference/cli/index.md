@@ -2153,7 +2153,7 @@ Assigns a role at a scope to a principal. Gated by principal_grant:create (all-s
 |---|---|---|---|
 | `--role` | string | (none) | A role id (viewer, operator, admin, owner, or a custom role) |
 | `--scope-id` | string | (none) | The scope root id; omit for the all scope |
-| `--scope-kind` | string | (none) | The scope kind; 'all' confers the whole estate |
+| `--scope-kind` | string | (none) | The scope kind; 'all' confers the whole estate (group-as-scope is unbuilt and not offered) |
 | `--scope-op` | string | (none) | How the scope root matches the tree: subtree (root + descendants, the default), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Moot for the all scope. |
 
 Example:
@@ -2462,7 +2462,7 @@ Assigns a role at a scope to a group; its members inherit it. Gated by principal
 |---|---|---|---|
 | `--role` | string | (none) | A role id (viewer, operator, admin, owner, or a custom role) |
 | `--scope-id` | string | (none) | The scope root id; omit for the all scope |
-| `--scope-kind` | string | (none) | The scope kind; 'all' confers the whole estate |
+| `--scope-kind` | string | (none) | The scope kind; 'all' confers the whole estate (group-as-scope is unbuilt and not offered) |
 | `--scope-op` | string | (none) | How the scope root matches the tree; moot for the all scope |
 
 Example:

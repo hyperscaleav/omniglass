@@ -664,13 +664,12 @@ components:
           description: The scope root id; omit for the all scope
           type: string
         scope_kind:
-          description: The scope kind; 'all' confers the whole estate
+          description: The scope kind; 'all' confers the whole estate (group-as-scope is unbuilt and not offered)
           enum:
             - all
             - location
             - system
             - component
-            - group
           type: string
         scope_op:
           description: "How the scope root matches the tree: subtree (root + descendants, the default), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Moot for the all scope."
@@ -701,13 +700,12 @@ components:
           description: The scope root id; omit for the all scope
           type: string
         scope_kind:
-          description: The scope kind; 'all' confers the whole estate
+          description: The scope kind; 'all' confers the whole estate (group-as-scope is unbuilt and not offered)
           enum:
             - all
             - location
             - system
             - component
-            - group
           type: string
         scope_op:
           description: How the scope root matches the tree; moot for the all scope

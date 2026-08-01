@@ -2739,7 +2739,7 @@ func generatedCommands() []*cobra.Command {
 					cmd.Flags().StringVar(&fRole, "role", "", "A role id (viewer, operator, admin, owner, or a custom role)")
 					_ = cmd.MarkFlagRequired("role")
 					cmd.Flags().StringVar(&fScopeId, "scope-id", "", "The scope root id; omit for the all scope")
-					cmd.Flags().StringVar(&fScopeKind, "scope-kind", "", "The scope kind; 'all' confers the whole estate")
+					cmd.Flags().StringVar(&fScopeKind, "scope-kind", "", "The scope kind; 'all' confers the whole estate (group-as-scope is unbuilt and not offered)")
 					_ = cmd.MarkFlagRequired("scope-kind")
 					cmd.Flags().StringVar(&fScopeOp, "scope-op", "", "How the scope root matches the tree: subtree (root + descendants, the default), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Moot for the all scope.")
 					return cmd
@@ -3135,7 +3135,7 @@ func generatedCommands() []*cobra.Command {
 					cmd.Flags().StringVar(&fRole, "role", "", "A role id (viewer, operator, admin, owner, or a custom role)")
 					_ = cmd.MarkFlagRequired("role")
 					cmd.Flags().StringVar(&fScopeId, "scope-id", "", "The scope root id; omit for the all scope")
-					cmd.Flags().StringVar(&fScopeKind, "scope-kind", "", "The scope kind; 'all' confers the whole estate")
+					cmd.Flags().StringVar(&fScopeKind, "scope-kind", "", "The scope kind; 'all' confers the whole estate (group-as-scope is unbuilt and not offered)")
 					_ = cmd.MarkFlagRequired("scope-kind")
 					cmd.Flags().StringVar(&fScopeOp, "scope-op", "", "How the scope root matches the tree; moot for the all scope")
 					return cmd

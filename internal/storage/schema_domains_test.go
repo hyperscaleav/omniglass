@@ -84,3 +84,34 @@ func TestRoleConstraintNamesCorrected(t *testing.T) {
 		t.Errorf("role NOT NULL constraint names = %v, want role_name_not_null and role_id_not_null, no digit-suffixed artifact", names)
 	}
 }
+
+// TestGrantGroupScopeKindRefusedBySchema pins #461: scope_kind='group' (a
+// group as the scope TARGET) is unbuilt and refused by every code path, so
+// the schema refuses it too; a future gateway bug cannot mint a grant no
+// resolver honors. The grant SUBJECT (group_id, a group holding a grant)
+// stays.
+func TestGrantGroupScopeKindRefusedBySchema(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+
+	var principalID, roleID string
+	if err := conn.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&principalID); err != nil {
+		t.Fatalf("principal: %v", err)
+	}
+	if err := conn.QueryRow(ctx, `
+		insert into role (name, official, permissions, inherits)
+		values ('t-role', false, '{}'::text[], '{}') returning id`).Scan(&roleID); err != nil {
+		t.Fatalf("role: %v", err)
+	}
+	_, err = conn.Exec(ctx, `
+		insert into principal_grant (principal_id, role_id, scope_kind, scope_id)
+		values ($1, $2, 'group', '00000000-0000-0000-0000-000000000000')`, principalID, roleID)
+	if err == nil || !strings.Contains(err.Error(), "principal_grant_scope_kind_check") {
+		t.Errorf("group-scoped grant insert error = %v, want principal_grant_scope_kind_check violation", err)
+	}
+}

@@ -2009,7 +2009,7 @@
     "checks": [
      {
       "name": "principal_grant_scope_kind_check",
-      "expr": "CHECK ((scope_kind = ANY (ARRAY['all'::text, 'location'::text, 'system'::text, 'component'::text, 'group'::text])))"
+      "expr": "CHECK ((scope_kind = ANY (ARRAY['all'::text, 'location'::text, 'system'::text, 'component'::text])))"
      },
      {
       "name": "principal_grant_scope_op_check",
