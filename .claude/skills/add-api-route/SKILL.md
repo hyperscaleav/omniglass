@@ -16,7 +16,7 @@ code paths named here over architecture prose; api.md carries known drift.
 - Paths are AIP-style: `/components`, `/components/{name}`, and custom methods as
   `:verb` suffixes (real examples: `/tags/{name}:values`, `/tags/{name}:setPlatform`,
   `.../{name}:listTags` in `internal/api/tags.go`).
-- `gated(...)` (`internal/api/auth.go:264`) is the only door: it joins the tokens into
+- `gated(...)` (`internal/api/auth.go`) is the only door: it joins the tokens into
   the permission, records it in the permission registry, stamps
   `x-omniglass-permission` on the operation, and prepends the `authn` and `require`
   middlewares. A write that lands at the platform tier adds `platformGated(...)` for its
@@ -34,24 +34,24 @@ Pick the read pattern deliberately:
 
 - **Scoped list/get on a tree entity:** use the scoped-CRUD primitive, one
   `<entity>Config` plus `scopedList` / `scopedGet` / `scopedDelete`
-  (`internal/storage/components.go:113` is the exemplar). Scope is injected by the
+  (`ListComponents` in `internal/storage/components.go` is the exemplar). Scope is injected by the
   primitive; do not hand-roll the query.
 - **All-scope admin directory:** refuse early without an all read
   (`ListVariables` in `internal/storage/variables.go`: `if !read.All { return nil,
   ErrVariableForbidden }`), then query without per-row filtering.
-- **Anti-exemplar, do not copy:** `ListSecrets` (`internal/storage/secrets.go:258`)
+- **Anti-exemplar, do not copy:** `ListSecrets` (`internal/storage/secrets.go`)
   selects every row unscoped and filters per row in Go, violating the scope-injection
   invariant; #431 tracks the fix.
 
 Mutations run in one transaction: begin, validate, write, **`writeAuditRes(ctx, tx,
 actorID, verb, resource, resourceID, old, new)` in that same transaction**
-(`internal/storage/locations.go:554`; `CreateComponent` in
+(`internal/storage/locations.go`; `CreateComponent` in
 `internal/storage/components.go` is the exemplar), then commit. A committed privileged
 change without its audit row is a red gate (ship-slice gate 10). Auth events on the
-no-transaction path go through `WriteAuthEvent` (`internal/storage/audit.go:82`).
+no-transaction path go through `WriteAuthEvent` (`internal/storage/audit.go`).
 
 A **new Gateway method** ripples: declare it on the `Gateway` interface
-(`internal/storage/storage.go:28`), implement it on `PG`, and add the
+(`internal/storage/storage.go`), implement it on `PG`, and add the
 `UnimplementedGateway` stub (`internal/storage/unimplemented.go`), or dependent packages
 fail to compile. Not-found wraps `pgx.ErrNoRows`.
 
@@ -70,11 +70,10 @@ them current with behavior and free of retired vocabulary.
 
 ## The gen ripple
 
-After the Go changes, run `make gen` and commit everything it touches:
-`api/openapi.json` + `api/openapi.yaml`, `internal/cli/api_gen.go`,
-`docs/src/content/docs/reference/cli/index.md`,
-`docs/src/content/docs/architecture/data-model.md`, `web/src/api/`, `proto/og/v1/`.
-CI (`gen-drift.yml`) fails the PR on any stale artifact, using pinned protoc versions;
+After the Go changes, run `make gen` and commit everything it touches; the authoritative
+artifact list and the pinned protoc versions live in `.github/workflows/gen-drift.yml`
+(OpenAPI, the generated cobra tree, the CLI reference, the ERD, the typed SPA client, the
+proto wire). CI fails the PR on any stale artifact;
 regenerate with the same pins (the SessionStart env check warns on a mismatch).
 
 Docs follow the surfaces (ship-slice gate 4): a route change lands in

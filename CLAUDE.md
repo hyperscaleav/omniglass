@@ -74,7 +74,9 @@ any merge. The environment risk is the point of the primitive.
 ## Workflow
 
 PR-only. Branch from `origin/main`, do the work in a git worktree under
-`.claude/worktrees/` (gitignored), push, open a PR. Never commit to `main`.
+`.claude/worktrees/` (gitignored), push, open a PR. Never commit to `main`. A body of
+work executed as a feature loop rolls its slices up into one PR per approved definition
+instead of one per slice ([docs/contributing/feature-loops.md](docs/src/content/docs/contributing/feature-loops.md), ADR-0074).
 
 ```bash
 git fetch origin main
