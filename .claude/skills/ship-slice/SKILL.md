@@ -63,9 +63,10 @@ Each is a gate; a red one blocks the ship.
    the feature. The seed stays idempotent: a re-run of `make dev` changes nothing. `n/a` when the
    slice adds no new entity. This is the dev-only example estate, never the boot seed
    (`internal/seed`, ship-with reference data that also runs in production).
-7. **Review.** A reviewer pass over the diff (`code-review` or `cavecrew-reviewer`), findings
-   addressed. Add a `security-review` lens if the slice touches authz, secrets, the edge, or an
-   invariant. Verify behavior to the outcome line, not just call sites.
+7. **Review.** A reviewer pass over the diff (`/adversarial-review` for loop-built slices and
+   any diff wanting the anti-pattern sweep; `code-review` or `cavecrew-reviewer` otherwise),
+   findings addressed. Add a `security-review` lens if the slice touches authz, secrets, the
+   edge, or an invariant. Verify behavior to the outcome line, not just call sites.
 8. **Scope honesty.** Every thin cut is documented; every deferral is a filed issue.
 9. **Evidence in the PR.** Paste the *actual* fresh test output (the tail of `make test`, plus
    web tests if touched) into the PR body, not a "they pass" claim. For any operator-facing
