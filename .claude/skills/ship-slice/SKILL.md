@@ -79,7 +79,9 @@ Each is a gate; a red one blocks the ship.
    overrides for a machine with no logged-in browser. Otherwise commit them
    under `.github/screenshots/` and embed by **immutable commit SHA**
    (`https://raw.githubusercontent.com/<owner>/<repo>/<sha>/.github/screenshots/...`), so the
-   link survives the branch being deleted on squash-merge.
+   link survives the branch being deleted on squash-merge. A headless or remote session (no
+   logged-in browser, e.g. an unattended loop run) defaults to this committed path rather
+   than `gh image`.
 
    **Docs screenshots are a generated resource.** The images embedded *on the docs pages*
    (not the PR body) are declared in each page's `screenshots` frontmatter and captured by
