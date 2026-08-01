@@ -2980,7 +2980,7 @@
     "checks": [
      {
       "name": "metric_lineage_check",
-      "expr": "CHECK ((((provenance = 'observed'::text) AND (event_id IS NULL)) OR ((provenance = 'calculated'::text) AND (source_rule IS NOT NULL) AND (event_id IS NULL)) OR ((provenance = 'intended'::text) AND (event_id IS NOT NULL) AND (source_rule IS NULL)) OR ((provenance = 'declared'::text) AND (source_rule IS NULL) AND (event_id IS NULL))))"
+      "expr": "CHECK ((((provenance = 'observed'::text) AND (event_id IS NULL)) OR ((provenance = 'calculated'::text) AND (source_rule IS NOT NULL) AND (event_id IS NULL)) OR ((provenance = 'intended'::text) AND (event_id IS NOT NULL) AND (source_rule IS NULL))))"
      },
      {
       "name": "metric_owner_arc_check",
@@ -2992,7 +2992,7 @@
      },
      {
       "name": "metric_provenance_check",
-      "expr": "CHECK ((provenance = ANY (ARRAY['observed'::text, 'calculated'::text, 'intended'::text, 'declared'::text])))"
+      "expr": "CHECK ((provenance = ANY (ARRAY['observed'::text, 'calculated'::text, 'intended'::text])))"
      }
     ]
    },
@@ -3289,7 +3289,7 @@
     "checks": [
      {
       "name": "state_lineage_check",
-      "expr": "CHECK ((((provenance = 'observed'::text) AND (event_id IS NULL)) OR ((provenance = 'calculated'::text) AND (source_rule IS NOT NULL) AND (event_id IS NULL)) OR ((provenance = 'intended'::text) AND (event_id IS NOT NULL) AND (source_rule IS NULL)) OR ((provenance = 'declared'::text) AND (source_rule IS NULL) AND (event_id IS NULL))))"
+      "expr": "CHECK ((((provenance = 'observed'::text) AND (event_id IS NULL)) OR ((provenance = 'calculated'::text) AND (source_rule IS NOT NULL) AND (event_id IS NULL)) OR ((provenance = 'intended'::text) AND (event_id IS NOT NULL) AND (source_rule IS NULL))))"
      },
      {
       "name": "state_owner_arc_check",
@@ -3301,7 +3301,7 @@
      },
      {
       "name": "state_provenance_check",
-      "expr": "CHECK ((provenance = ANY (ARRAY['observed'::text, 'calculated'::text, 'intended'::text, 'declared'::text])))"
+      "expr": "CHECK ((provenance = ANY (ARRAY['observed'::text, 'calculated'::text, 'intended'::text])))"
      }
     ]
    }
