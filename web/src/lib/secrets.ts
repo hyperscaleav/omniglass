@@ -21,6 +21,9 @@ export type SecretTypeField = {
 
 export type SecretType = {
   id: string;
+  // The kebab handle, the operator-facing address (ADR-0062): pickers post and
+  // look up by name, never the uuid.
+  name: string;
   display_name: string;
   official: boolean;
   fields: SecretTypeField[];

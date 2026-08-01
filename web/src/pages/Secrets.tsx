@@ -255,7 +255,8 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
     if (!ownerKinds().includes(ownerKind())) setOwnerKind(ownerKinds()[0]);
   });
 
-  const shape = createMemo(() => (types.data ?? []).find((t) => t.id === typeId()));
+  // typeId holds the kebab handle (ADR-0062: the name is the address the API resolves).
+  const shape = createMemo(() => (types.data ?? []).find((t) => t.name === typeId()));
   // The fields the operator fills (lifecycle-origin fields are set by the secret's
   // own machinery, never at creation).
   const operatorFields = createMemo(() => (shape()?.fields ?? []).filter((f) => f.origin !== "lifecycle"));
@@ -309,7 +310,7 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
       <FieldRow label="Type">
         <select class="select select-bordered w-full" value={typeId()} onChange={(e) => { setTypeId(e.currentTarget.value); setFields({}); }}>
           <option value="" disabled>Choose a type…</option>
-          <For each={types.data}>{(t) => <option value={t.id}>{t.display_name}</option>}</For>
+          <For each={types.data}>{(t) => <option value={t.name}>{t.display_name}</option>}</For>
         </select>
       </FieldRow>
       <div class="grid grid-cols-2 gap-3">

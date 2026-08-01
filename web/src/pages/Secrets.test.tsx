@@ -8,6 +8,7 @@ import { LOCATIONS_KEY } from "../lib/locations";
 import { SYSTEMS_KEY } from "../lib/systems";
 import { COMPONENTS_KEY } from "../lib/components";
 import { ME_KEY, type Me } from "../lib/auth";
+import { uuidFor } from "../lib/testids";
 
 // A secret at the `platform` tier is install-wide, so the server gates the write on
 // `platform:<action>` on top of `secret:<action>`. The console must gate the same
@@ -17,7 +18,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 // capability it is missing rather than earn a 403. Same treatment as the Settings
 // page, which meets the same paired gate.
 const types: SecretType[] = [
-  { id: "snmp-community", display_name: "SNMP community", official: true, fields: [{ name: "community", type: "string", secret: true, origin: "operator" }] },
+  { id: uuidFor("snmp-community"), name: "snmp-community", display_name: "SNMP community", official: true, fields: [{ name: "community", type: "string", secret: true, origin: "operator" }] },
 ];
 
 const seed: Secret[] = [
@@ -59,6 +60,30 @@ const scopeOptions = () =>
 
 describe("Secrets page platform-tier authority", () => {
   afterEach(() => vi.restoreAllMocks());
+
+  it("posts the type handle, never the uuid, when creating a secret (#467)", async () => {
+    const calls: { url: string; body: unknown }[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const req = input as Request;
+      calls.push({ url: req.url, body: req.body ? await req.clone().json() : undefined });
+      return new Response(JSON.stringify({}), { status: 201, headers: { "content-type": "application/json" } });
+    }));
+    mount(owner);
+    expect(await screen.findByText("poll_community")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /new secret/i }));
+    const typeSelect = screen.getByLabelText("Type") as HTMLSelectElement;
+    fireEvent.change(typeSelect, { target: { value: typeSelect.options[1]?.value ?? typeSelect.options[0].value } });
+    fireEvent.input(screen.getByLabelText("Name"), { target: { value: "poll" } });
+    fireEvent.input(screen.getByLabelText(/community/i), { target: { value: "s3cr3t" } });
+    const submitBtn = screen.getByRole("button", { name: /create secret/i });
+    expect(submitBtn).not.toBeDisabled();
+    fireEvent.click(submitBtn);
+    await waitFor(() => {
+      const post = calls.find((c) => c.url.includes("/secrets"));
+      if (!post) throw new Error("no create call yet");
+      expect((post.body as { secret_type: string }).secret_type).toBe("snmp-community");
+    });
+  });
 
   it("offers the Platform scope to a principal that holds the install-wide permission", async () => {
     mount(owner);
