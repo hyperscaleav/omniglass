@@ -78,6 +78,8 @@ spec:
                 secretKeyRef:
                   name: {{ include "omniglass.fullname" . }}-dsn
                   key: dsn
+            - name: OMNIGLASS_SECURE_COOKIES
+              value: {{ .Values.server.secureCookies | quote }}
           readinessProbe:
             httpGet:
               path: /api/v1/healthz

@@ -77,6 +77,7 @@ instead, to avoid concurrent migrators.
 | `postgres.image` / `user` / `password` / `database` | `postgres:18` / `omniglass` x3 | bundled Postgres settings |
 | `postgres.resources` | small requests/limits | bound the throwaway DB |
 | `externalDsn` | empty | required when `postgres.enabled` is false |
+| `server.secureCookies` | `true` | marks session cookies `Secure` (https-only); set `false` only for a plaintext-http deployment |
 | `nameOverride` | empty | override the chart name in resource names |
 | `fullnameOverride` | empty | override resource names outright; default release-named resources keep preview service DNS predictable (e.g. `og-pr-42`) |
 
