@@ -260,46 +260,41 @@ func (p *PG) ListSecrets(ctx context.Context, read scope.Set, canAdmin bool) ([]
 	if err != nil {
 		return nil, err
 	}
-	rows, err := p.pool.Query(ctx, `
-		select `+secretColsQualified("s")+`,
+	// Scope is injected into the query (the doctrine invariant): the all scope
+	// takes every row, a rooted scope takes the arc predicate over the three
+	// per-tier descendant expansions, and a platform row rides only with all.
+	// Admin sensitivity filters in the same query; one round trip either way.
+	sel := `
+		select ` + secretColsQualified("s") + `,
 		       coalesce(c.name, sy.name, l.name, '') as owner_name
 		from secret s
 		left join component c on s.component_id = c.id
 		left join system    sy on s.system_id   = sy.id
 		left join location  l on s.location_id  = l.id
-		order by s.name`)
+		where (not s.admin_sensitive or $1)`
+	var rows pgx.Rows
+	if read.All {
+		rows, err = p.pool.Query(ctx, sel+` order by s.name`, canAdmin)
+	} else {
+		inclusive, excluded, selfIDs := arcScopeArgs(read)
+		rows, err = p.pool.Query(ctx,
+			arcScopeCTEs(2, 3)+sel+` and `+arcScopePredicate("s", 4)+` order by s.name`,
+			canAdmin, inclusive, excluded, selfIDs)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("storage: list secrets: %w", err)
 	}
-	var all []Secret
+	defer rows.Close()
+	var out []Secret
 	for rows.Next() {
 		s, name, err := scanSecretListRow(rows, shapes)
 		if err != nil {
-			rows.Close()
 			return nil, err
 		}
 		s.OwnerName = name
-		all = append(all, *s)
+		out = append(out, *s)
 	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	out := make([]Secret, 0, len(all))
-	for i := range all {
-		s := &all[i]
-		if s.AdminSensitive && !canAdmin {
-			continue // an admin-sensitive secret is invisible without the admin tier
-		}
-		in, err := p.secretOwnerInScope(ctx, p.pool, s.OwnerKind, s.OwnerID, read)
-		if err != nil {
-			return nil, err
-		}
-		if in {
-			out = append(out, *s)
-		}
-	}
-	return out, nil
+	return out, rows.Err()
 }
 
 // DeleteSecret removes a secret by id, audited. The owner must be within the

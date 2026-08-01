@@ -39,9 +39,12 @@ Pick the read pattern deliberately:
 - **All-scope admin directory:** refuse early without an all read
   (`ListVariables` in `internal/storage/variables.go`: `if !read.All { return nil,
   ErrVariableForbidden }`), then query without per-row filtering.
-- **Anti-exemplar, do not copy:** `ListSecrets` (`internal/storage/secrets.go`)
-  selects every row unscoped and filters per row in Go, violating the scope-injection
-  invariant; #431 tracks the fix.
+- **Scoped list over the exclusive owner arc** (a row owned at platform / location /
+  system / component): use the arc-scope primitive, `arcScopeCTEs` plus
+  `arcScopePredicate` (`internal/storage/scopetree.go`); `ListSecrets` in
+  `internal/storage/secrets.go` is the exemplar. One query regardless of row count;
+  platform rows ride only with the all scope. Never filter scope per row in Go after
+  an unscoped select (the retired `unscoped-gateway-list` anti-pattern, fixed in #458).
 
 Mutations run in one transaction: begin, validate, write, **`writeAuditRes(ctx, tx,
 actorID, verb, resource, resourceID, old, new)` in that same transaction**
