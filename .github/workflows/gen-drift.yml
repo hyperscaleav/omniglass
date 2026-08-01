@@ -66,4 +66,5 @@ jobs:
             docs/src/content/docs/architecture/data-model.md \
             web/src/api/ \
             proto/og/v1/ \
+            docs/src/generated/ \
           || { echo '::error::generated artifacts are stale; run `make gen` and commit the result'; exit 1; }

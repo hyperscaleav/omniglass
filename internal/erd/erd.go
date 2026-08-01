@@ -15,13 +15,33 @@ import (
 )
 
 // Column is one column of a table. Only primary-key and foreign-key columns are
-// rendered (the relational skeleton); the rest are introspected but omitted to
-// keep a 40-plus-table diagram legible.
+// rendered in the ERD (the relational skeleton); the full detail feeds the
+// generated facts artifact (FactsJSON), which is why nullability and defaults
+// are introspected even though the diagram omits them.
 type Column struct {
+	Name     string
+	Type     string
+	PK       bool
+	FK       bool
+	Nullable bool
+	// Default is the column's default expression as the catalog prints it
+	// (pg_catalog form, e.g. "true" or "'{}'::text[]"), empty when none.
+	Default string
+}
+
+// Check is one CHECK constraint on a table, with the expression as
+// pg_get_constraintdef prints it.
+type Check struct {
 	Name string
-	Type string
-	PK   bool
-	FK   bool
+	Expr string
+}
+
+// Unique is one unique index on a table (primary keys excluded), with the full
+// definition as pg_get_indexdef prints it, which preserves partial-index
+// predicates like the tag_binding per-owner keys.
+type Unique struct {
+	Name       string
+	Definition string
 }
 
 // ForeignKey is one foreign-key edge: Column on the owning table references
@@ -32,11 +52,14 @@ type ForeignKey struct {
 	RefColumn string
 }
 
-// Table is one relation with its columns and outbound foreign keys.
+// Table is one relation with its columns, outbound foreign keys, CHECK
+// constraints, and unique indexes.
 type Table struct {
 	Name    string
 	Columns []Column
 	FKs     []ForeignKey
+	Checks  []Check
+	Uniques []Unique
 }
 
 // Schema is the whole introspected public schema.
@@ -194,6 +217,14 @@ func Introspect(ctx context.Context, db querier) (Schema, error) {
 	if err != nil {
 		return Schema{}, err
 	}
+	checks, err := queryChecks(ctx, db)
+	if err != nil {
+		return Schema{}, err
+	}
+	uniques, err := queryUniques(ctx, db)
+	if err != nil {
+		return Schema{}, err
+	}
 
 	names, err := queryTables(ctx, db)
 	if err != nil {
@@ -201,9 +232,66 @@ func Introspect(ctx context.Context, db querier) (Schema, error) {
 	}
 	s := Schema{Tables: make([]Table, 0, len(names))}
 	for _, n := range names {
-		s.Tables = append(s.Tables, Table{Name: n, Columns: cols[n], FKs: fks[n]})
+		s.Tables = append(s.Tables, Table{
+			Name: n, Columns: cols[n], FKs: fks[n],
+			Checks: checks[n], Uniques: uniques[n],
+		})
 	}
 	return s, nil
+}
+
+// queryChecks returns each table's CHECK constraints, name-ordered, with the
+// expression as the catalog prints it. pg_constraint (contype 'c') is the
+// source rather than information_schema, which on some versions pads the set
+// with synthesized NOT NULL checks.
+func queryChecks(ctx context.Context, db querier) (map[string][]Check, error) {
+	rows, err := db.Query(ctx, `
+		SELECT rel.relname, con.conname, pg_get_constraintdef(con.oid)
+		FROM pg_constraint con
+		JOIN pg_class rel ON rel.oid = con.conrelid
+		JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+		WHERE con.contype = 'c' AND nsp.nspname = 'public'
+		ORDER BY rel.relname, con.conname`)
+	if err != nil {
+		return nil, fmt.Errorf("erd: query checks: %w", err)
+	}
+	defer rows.Close()
+	out := map[string][]Check{}
+	for rows.Next() {
+		var tbl, name, expr string
+		if err := rows.Scan(&tbl, &name, &expr); err != nil {
+			return nil, err
+		}
+		out[tbl] = append(out[tbl], Check{Name: name, Expr: expr})
+	}
+	return out, rows.Err()
+}
+
+// queryUniques returns each table's unique indexes (primary keys excluded),
+// name-ordered, with the full pg_get_indexdef definition so partial-index
+// predicates survive.
+func queryUniques(ctx context.Context, db querier) (map[string][]Unique, error) {
+	rows, err := db.Query(ctx, `
+		SELECT t.relname, ic.relname, pg_get_indexdef(i.indexrelid)
+		FROM pg_index i
+		JOIN pg_class t ON t.oid = i.indrelid
+		JOIN pg_class ic ON ic.oid = i.indexrelid
+		JOIN pg_namespace n ON n.oid = t.relnamespace
+		WHERE i.indisunique AND NOT i.indisprimary AND n.nspname = 'public'
+		ORDER BY t.relname, ic.relname`)
+	if err != nil {
+		return nil, fmt.Errorf("erd: query uniques: %w", err)
+	}
+	defer rows.Close()
+	out := map[string][]Unique{}
+	for rows.Next() {
+		var tbl, name, def string
+		if err := rows.Scan(&tbl, &name, &def); err != nil {
+			return nil, err
+		}
+		out[tbl] = append(out[tbl], Unique{Name: name, Definition: def})
+	}
+	return out, rows.Err()
 }
 
 func queryTables(ctx context.Context, db querier) ([]string, error) {
@@ -233,7 +321,8 @@ func queryTables(ctx context.Context, db querier) ([]string, error) {
 // name.
 func queryColumns(ctx context.Context, db querier) (map[string][]Column, error) {
 	rows, err := db.Query(ctx, `
-		SELECT table_name, column_name, data_type
+		SELECT table_name, column_name, data_type,
+		       is_nullable = 'YES', coalesce(column_default, '')
 		FROM information_schema.columns
 		WHERE table_schema = 'public'
 		ORDER BY table_name, ordinal_position`)
@@ -243,11 +332,12 @@ func queryColumns(ctx context.Context, db querier) (map[string][]Column, error) 
 	defer rows.Close()
 	out := map[string][]Column{}
 	for rows.Next() {
-		var tbl, name, typ string
-		if err := rows.Scan(&tbl, &name, &typ); err != nil {
+		var tbl, name, typ, def string
+		var nullable bool
+		if err := rows.Scan(&tbl, &name, &typ, &nullable, &def); err != nil {
 			return nil, err
 		}
-		out[tbl] = append(out[tbl], Column{Name: name, Type: typ})
+		out[tbl] = append(out[tbl], Column{Name: name, Type: typ, Nullable: nullable, Default: def})
 	}
 	return out, rows.Err()
 }

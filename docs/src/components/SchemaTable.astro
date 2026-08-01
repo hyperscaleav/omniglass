@@ -1,0 +1,97 @@
+---
+// One storage table rendered from the generated schema facts
+// (docs/src/generated/schema.json, written by make gen via cmd/erdgen). The
+// mechanical columns (name, type, constraints) come from the artifact and can
+// never drift from the migrated schema; the Notes column stays hand-written
+// via the `notes` prop, because the narrative is the pedagogy.
+//
+// Usage (from an .mdx page):
+//   <SchemaTable table="tag" notes={{ name: 'The governed key…' }} />
+import schema from '../generated/schema.json';
+
+interface Props {
+  /** Table name as it exists in the schema (e.g. "tag_binding"). */
+  table: string;
+  /** Hand-written per-column notes, keyed by column name. */
+  notes?: Record<string, string>;
+}
+
+const { table, notes = {} } = Astro.props;
+
+let found = null;
+let subsystem = '';
+for (const [sub, tables] of Object.entries(schema.subsystems)) {
+  if (table in tables) {
+    found = tables[table];
+    subsystem = sub;
+    break;
+  }
+}
+if (!found) {
+  // Fail the build, not the reader: a page naming a dropped table is drift.
+  throw new Error(
+    `SchemaTable: table "${table}" not in docs/src/generated/schema.json (run make gen, or the table was renamed)`,
+  );
+}
+
+const hasNotes = Object.keys(notes).length > 0;
+
+const constraint = (c) => {
+  const parts = [];
+  if (c.pk) parts.push('PK');
+  if (c.fk_target) parts.push(`FK → ${c.fk_target}`);
+  else if (c.fk) parts.push('FK');
+  if (!c.nullable && !c.pk) parts.push('not null');
+  if (c.default) parts.push(`default ${c.default}`);
+  return parts.join(', ');
+};
+---
+
+<table class="schema-table">
+  <caption>
+    <code>{table}</code> ({subsystem}): generated from the migrated schema by <code>make gen</code>
+  </caption>
+  <thead>
+    <tr>
+      <th>Column</th>
+      <th>Type</th>
+      <th>Constraints</th>
+      {hasNotes && <th>Notes</th>}
+    </tr>
+  </thead>
+  <tbody>
+    {
+      found.columns.map((c) => (
+        <tr>
+          <td>
+            <code>{c.name}</code>
+          </td>
+          <td>{c.type}</td>
+          <td>{constraint(c)}</td>
+          {hasNotes && <td set:html={notes[c.name] ?? ''} />}
+        </tr>
+      ))
+    }
+  </tbody>
+</table>
+{
+  (found.checks?.length || found.uniques?.length) ? (
+    <details class="schema-table-constraints">
+      <summary>
+        CHECK constraints and unique indexes on <code>{table}</code>
+      </summary>
+      <ul>
+        {(found.checks ?? []).map((ck) => (
+          <li>
+            <code>{ck.name}</code>: <code>{ck.expr}</code>
+          </li>
+        ))}
+        {(found.uniques ?? []).map((u) => (
+          <li>
+            <code>{u.name}</code>: <code>{u.definition}</code>
+          </li>
+        ))}
+      </ul>
+    </details>
+  ) : null
+}
