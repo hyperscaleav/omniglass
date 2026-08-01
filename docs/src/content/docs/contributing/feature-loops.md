@@ -23,7 +23,12 @@ No sub-issues exist yet and no branch exists yet.
 on the definition issue. This is the existing hard gate (no branch until the issue exists
 and its scope is approved), paid once per body of work instead of once per conversation.
 Approval covers everything the definition states; it does not cover what the definition
-leaves open, which stays on the issue as a question.
+leaves open, which stays on the issue as a question. An in-session approval (the architect
+directing a live session) is valid; the loop records it as a comment on the definition
+issue the same day, so the paper trail never depends on a chat transcript. A loop may also
+**adopt a pre-existing sub-issue breakdown** (one built by another session) instead of
+creating its own; adoption carries a verification step, the breakdown must add up to the
+approved definition and no more, and any mismatch goes back to the architect.
 
 **Loop.** On approval the loop creates the sub-issues under the parent and opens one
 **integration branch** for the definition. Each sub-issue is one slice, built test-first
