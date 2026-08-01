@@ -28,7 +28,11 @@ export const ROOT_PLACEMENT = "root";
 // are present only on location; fields only on secret (read-only display).
 export type TypeRow = {
   kind: TypeKind;
+  // The uuid, the stable handle that survives a rename; name is the kebab
+  // handle the rest of the estate stores and compares (ADR-0062), so
+  // allowed_parent_types members are names and joins go through name.
   id: string;
+  name: string;
   display_name: string;
   official: boolean;
   icon?: string;
@@ -50,6 +54,7 @@ export async function listTypes(): Promise<TypeRow[]> {
   const locationRows: TypeRow[] = (locationRes.data?.location_types ?? []).map((t) => ({
     kind: "location" as const,
     id: t.id,
+    name: t.name,
     display_name: t.display_name,
     official: t.official,
     icon: t.icon,
@@ -59,6 +64,7 @@ export async function listTypes(): Promise<TypeRow[]> {
   const secretRows: TypeRow[] = (secretRes.data?.secret_types ?? []).map((t) => ({
     kind: "secret" as const,
     id: t.id,
+    name: t.name,
     display_name: t.display_name,
     official: t.official,
     fields: (t.fields ?? []) as SecretTypeField[],

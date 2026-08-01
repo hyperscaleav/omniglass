@@ -16,9 +16,9 @@ import { ME_KEY, type Me } from "../lib/auth";
 // is the standard it conforms to, which has its own page. Data is seeded into the
 // query cache so no server is needed.
 const seed: TypeRow[] = [
-  { kind: "location", id: "campus", display_name: "Campus", official: true, icon: "map-pin" },
-  { kind: "location", id: "wing", display_name: "Wing", official: false, icon: "map-pin", allowed_parent_types: ["campus", "root"] },
-  { kind: "secret", id: "oauth2-client", display_name: "OAuth2 Client", official: false, fields: [] },
+  { kind: "location", id: "campus", name: "campus", display_name: "Campus", official: true, icon: "map-pin" },
+  { kind: "location", id: "wing", name: "wing", display_name: "Wing", official: false, icon: "map-pin", allowed_parent_types: ["campus", "root"] },
+  { kind: "secret", id: "oauth2-client", name: "oauth2-client", display_name: "OAuth2 Client", official: false, fields: [] },
 ];
 
 // The location type contract shown on the wing blade, plus the catalog the editor

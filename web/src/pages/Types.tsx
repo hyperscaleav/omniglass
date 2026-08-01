@@ -257,7 +257,7 @@ function TypeBladeBody(p: { id: string }): JSX.Element {
                       <For each={r().allowed_parent_types}>
                         {(pid) => (
                           <span class="badge badge-outline badge-sm">
-                            {pid === ROOT_PLACEMENT ? "Root" : locationTypeOptions().find((t) => t.id === pid)?.display_name ?? pid}
+                            {pid === ROOT_PLACEMENT ? "Root" : locationTypeOptions().find((t) => t.name === pid)?.display_name ?? pid}
                           </span>
                         )}
                       </For>
@@ -401,9 +401,9 @@ function AllowedParentsPicker(p: { options: TypeRow[]; value: string[]; onChange
       <For each={p.options}>
         {(t) => (
           <label class="flex items-center gap-2 text-sm">
-            <input type="checkbox" class="checkbox checkbox-sm" checked={p.value.includes(t.id)} onChange={() => toggle(t.id)} />
+            <input type="checkbox" class="checkbox checkbox-sm" checked={p.value.includes(t.name)} onChange={() => toggle(t.name)} />
             <span>{t.display_name}</span>
-            <span class="font-data text-xs text-base-content/40">{t.id}</span>
+            <span class="font-data text-xs text-base-content/40">{t.name}</span>
           </label>
         )}
       </For>

@@ -16,16 +16,20 @@ export type Location = {
 export const LOCATIONS_KEY = ["locations"] as const;
 
 // A location_type registry row: the type picker on the location form lists these
-// (value = id, label = display_name), so a location is classified by a known type
+// (value = name, label = display_name), so a location is classified by a known type
 // rather than a free-typed string.
 export type LocationType = {
+  // The uuid, the stable handle that survives a rename. Everything a location
+  // stores or the API echoes back (location.location_type, allowed_parent_types)
+  // is the kebab name, so console joins go through name, not id (ADR-0062).
   id: string;
+  name: string;
   display_name: string;
   // A glyph key (kebab, e.g. "building") resolved to an SVG for the tree's leading
   // icon; resolveIcon falls back to map-pin for an unknown key.
   icon: string;
   official: boolean;
-  // The placement constraint: a set of location_type ids and/or the reserved
+  // The placement constraint: a set of location_type names and/or the reserved
   // "root" sentinel (lib/types.ts's ROOT_PLACEMENT) this type may be placed
   // under. Empty means unconstrained. Drives the reparent picker's candidate
   // filter on the location detail form.
