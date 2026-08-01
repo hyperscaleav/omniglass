@@ -98,6 +98,11 @@ Each is a gate; a red one blocks the ship.
    impersonation, carries the real actor via the request context). A new privileged write with no
    audit row, or an auth event that is silently unlogged, is a red gate. Reads are not audited
    (except secret decrypts, which always are).
+11. **Generate first.** Scan the diff for hand-written artifacts that restate a fact the code
+   already knows: a table of routes, columns, env vars, or seeded rows; a copied schema; an
+   asset a generator could emit. Each is either replaced by a generated render in this PR or
+   has a filed issue named in the ship-review's Docs line. Hand-written narrative is fine;
+   hand-written facts are the drift class the 2026-07-30 audit proved out.
 
 ## The ship-review (emit this, in chat and as the PR body)
 
