@@ -3,6 +3,8 @@ title: "Deploying with Helm"
 description: "The Omniglass Helm chart: install, values, and the bundled-Postgres preview mode versus BYO-Postgres production."
 ---
 
+import ConfigVars from '../../../components/ConfigVars.astro';
+
 The chart at `deploy/chart/` is the deploy primitive: one chart serves both
 disposable per-PR previews and production. It runs the
 [container image](/guides/container-image/); the live
@@ -77,6 +79,15 @@ instead, to avoid concurrent migrators.
 | `externalDsn` | empty | required when `postgres.enabled` is false |
 | `nameOverride` | empty | override the chart name in resource names |
 | `fullnameOverride` | empty | override resource names outright; default release-named resources keep preview service DNS predictable (e.g. `og-pr-42`) |
+
+## Server environment
+
+Anything the chart's values do not cover reaches the server as plain environment (via
+`extraEnv`-style values or a Secret). The full server surface renders from the declared
+environment registry (`make gen`); behind edge TLS, set `OMNIGLASS_SECURE_COOKIES=true` and point
+`OMNIGLASS_SECRET_KEY_FILE` at a mounted key:
+
+<ConfigVars scope="server" />
 
 ## Exposure
 

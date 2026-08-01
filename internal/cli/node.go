@@ -2,9 +2,9 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/config"
 	"github.com/hyperscaleav/omniglass/internal/node"
 	"github.com/spf13/cobra"
 )
@@ -32,13 +32,13 @@ func newNodeRunCmd() *cobra.Command {
 		Short: "Run the edge node: claim, pull the worklist, and heartbeat over NATS",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if serverURL == "" {
-				serverURL = os.Getenv("OMNIGLASS_SERVER")
+				serverURL = config.Get("OMNIGLASS_SERVER")
 			}
 			if name == "" {
-				name = os.Getenv("OMNIGLASS_NODE_NAME")
+				name = config.Get("OMNIGLASS_NODE_NAME")
 			}
 			if token == "" {
-				token = os.Getenv("OMNIGLASS_NODE_TOKEN")
+				token = config.Get("OMNIGLASS_NODE_TOKEN")
 			}
 			if serverURL == "" || name == "" || token == "" {
 				return fmt.Errorf("node: --server, --name, and --token are required (or set OMNIGLASS_SERVER / OMNIGLASS_NODE_NAME / OMNIGLASS_NODE_TOKEN)")

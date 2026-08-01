@@ -45,7 +45,7 @@ func runServer(ctx context.Context, _ string) error {
 	}
 	log.Info("migrations applied")
 
-	kek, source, err := secret.LoadKEK(os.Getenv, c.DataDir, func(msg string) { log.Warn(msg) })
+	kek, source, err := secret.LoadKEK(config.Get, c.DataDir, func(msg string) { log.Warn(msg) })
 	if err != nil {
 		return err
 	}
