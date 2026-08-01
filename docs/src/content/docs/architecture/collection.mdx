@@ -7,6 +7,8 @@ sidebar:
     variant: note
 ---
 
+import SchemaTable from '../../../components/SchemaTable.astro';
+
 :::note[Partial]
 The first collection path is live end to end: an edge node runs real **reachability probes** against a
 component's interfaces (each an **API named by the protocol it speaks** and typed by its **transport**: `tcp`,
@@ -545,8 +547,42 @@ onboarding win: it auto-creates the entities and sets their identity, so you nev
 
 The connection registry, the declared connections, and the node's units of work; the physical layout lives on [storage](/architecture/storage/).
 
-| Table | Key columns | Notes |
-|---|---|---|
-| `interface_type` | name, **built**, direction (in/out), param_schema (jsonb) | the **transport** registry (`ssh`, `http`, `snmp`, `mqtt`, `webhook`, ...); generates the template config schema. Decided to become a **code** registry, one package per transport, retiring this table and its FK ([ADR-0073](/architecture/decisions/#adr-0073-a-driver-consumes-transports-a-transport-is-code-not-a-row)); still a table today |
-| `interface` | **id** (surrogate), **name derived from interface_type** (unique per component, never hand-typed), **component** (nullable: set = pre-bound, null = shared/match-key), params (jsonb), **node_name** (placement, `ON DELETE CASCADE` so a node purge drops its interfaces) | the connection, the **authored** primitive ([nodes](/architecture/nodes/)) |
-| `task` | **id = content hash**, display_name, **interface** (`ON DELETE CASCADE`), **mode (poll/listen)**, spec (jsonb), enabled | a **derived** unit of collection work: created with its interface, read-only (no operator CRUD). **No node column**, placement **projects from the interface**. Parsing to samples is the **edge function**, not the task's job |
+`interface_type` is the **transport** registry, decided to become a **code** registry (one package
+per transport), retiring this table and its FK
+([ADR-0073](/architecture/decisions/#adr-0073-a-driver-consumes-transports-a-transport-is-code-not-a-row));
+still a table today.
+
+<SchemaTable
+  table="interface_type"
+  notes={{
+    built: 'Whether the transport ships in the binary today',
+    param_schema: 'Generates the authoring config schema',
+  }}
+/>
+
+`interface` is the connection, the **authored** primitive ([nodes](/architecture/nodes/)): its name
+derives from the interface type (unique per component, never hand-typed), a set `component_id` means
+pre-bound while NULL means shared/match-key, and placement cascades from the node so a node purge
+drops its interfaces.
+
+<SchemaTable
+  table="interface"
+  notes={{
+    component_id: 'Set: pre-bound to the component; NULL: shared, resolved by match key',
+    node_name: 'Placement; ON DELETE CASCADE so a purged node takes its interfaces',
+    params: 'The transport parameters the authoring schema validated',
+  }}
+/>
+
+`task` is a **derived** unit of collection work: created with its interface, read-only (no operator
+CRUD), its id a content hash. There is **no node column**; placement **projects from the
+interface**. Parsing to samples is the **edge function**, not the task's job.
+
+<SchemaTable
+  table="task"
+  notes={{
+    id: 'The content hash of (interface, mode, spec); same inputs, same task',
+    mode: 'poll or listen',
+    spec: 'What to collect; the edge function parses the result into samples',
+  }}
+/>
