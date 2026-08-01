@@ -3,6 +3,8 @@ title: Standards
 description: "The Standards catalog: the blueprint a system conforms to, its variants, the properties it declares, and the roles a conforming system must staff; shipped standards are yours to edit, not read-only seed content."
 ---
 
+import SeededSet from '../../../../components/SeededSet.astro';
+
 **Catalog > Standards** (`/standards`, with `standard:read`, covered by every viewer's `*:read` floor)
 is the directory of **standards**: the blueprints your systems are built against. A **Huddle Room**, a
 **Classroom**, an **Auditorium** are standards; the meeting room on the third floor is a
@@ -35,11 +37,12 @@ The same operations are `omniglass standard list/get/create/update/delete` from 
 
 ## The shipped standards are yours
 
-Omniglass ships a starter set (Meeting Room, Huddle Room, Classroom, Auditorium, Digital Signage,
-Control Room), and unlike a seeded [vendor](/guides/admin/vendors/) or
+Omniglass ships a starter set, and unlike a seeded [vendor](/guides/admin/vendors/) or
 [product](/guides/admin/products/) those rows are **not official and not read-only**. They arrive as
 ordinary **operator-owned** rows: rename them, re-parent them, add to their contract, delete the ones
-you do not run.
+you do not run. The shipped set, rendered from the seed itself:
+
+<SeededSet kind="standards" />
 
 This is deliberate. A standard is **forked from a template that lives in the code**, once, with **no
 inheritance**: nothing in your estate points back at that template afterwards. So Omniglass can improve
