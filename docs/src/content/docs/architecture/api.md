@@ -190,25 +190,14 @@ every convention above at once: standard methods by primary key, the first `:ver
 non-disclosing 404, a declared permission per route, and injected scope per query. They ship in the AIP
 shape the [Shape](#shape-resources-and-verb-methods) section describes.
 
-| Method | Path | Permission |
-|---|---|---|
-| GET | `/nodes` | `node:read` |
-| GET | `/nodes/{name}` | `node:read` |
-| POST | `/nodes` | `node:create` |
-| PATCH | `/nodes/{name}` | `node:update` |
-| DELETE | `/nodes/{name}` | `node:delete` |
-| POST | `/nodes/{name}:enroll` | `node:enroll` |
-| POST | `/nodes:claim` | none (public) |
-| GET | `/interfaces` | `interface:read` |
-| GET | `/interfaces/{id}` | `interface:read` |
-| POST | `/interfaces` | `interface:create` |
-| PATCH | `/interfaces/{id}` | `interface:update` |
-| DELETE | `/interfaces/{id}` | `interface:delete` |
-| GET | `/tasks` | `task:read` |
-| GET | `/tasks/{id}` | `task:read` |
-| GET | `/components/{name}/reachability` | `component:read` |
-| GET | `/components/{name}/reconciliation` | `component:read` |
-| GET | `/components/{name}/events` | `component:read` |
+The routes themselves live in the [generated API reference](/reference/api/), rendered from the
+OpenAPI document on every build, with each operation's description naming its permission gate
+verbatim (a guard test enforces exactly that, alongside the spec-contract test that every gated
+operation carries its `x-omniglass-permission` stamp and `POST /nodes:claim` stays the deliberate,
+justified public write). The collection surface is the standard family per resource (`/nodes`,
+`/interfaces`, `/tasks`, each with list/get and the mutating verbs its permission set gates) plus
+the `:verb` custom methods and the per-component reads (`reachability`, `reconciliation`,
+`events`), all `component:read`-gated.
 
 **The node custom methods are the day-one enrollment handshake.** `POST /nodes/{name}:enroll` mints (or
 re-mints) the node's enrollment token and returns it **once**; the server stores only its hash and never

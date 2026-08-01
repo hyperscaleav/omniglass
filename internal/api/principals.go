@@ -394,7 +394,7 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Path:          "/principals/{id}:purge",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Purge a principal",
-		Description:   "Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge (admin-sensitive, all-scope), and the principal must be archived first.",
+		Description:   "Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.",
 	}, "principal", "purge", "admin"), func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
 		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
 		if rerr != nil {

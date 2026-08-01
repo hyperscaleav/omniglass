@@ -259,7 +259,7 @@ export interface paths {
         put?: never;
         /**
          * Stop the current impersonation session
-         * @description Revokes the impersonation session presented by the request token, ending the view-as / act-as. Requires an impersonation token.
+         * @description Revokes the impersonation session presented by the request token, ending the view-as / act-as. Requires authentication with an impersonation token; self-scoped (ends only the session the token names).
          */
         post: operations["stop-impersonation"];
         delete?: never;
@@ -1017,7 +1017,7 @@ export interface paths {
         };
         /**
          * Liveness and database-reachability probe
-         * @description Reports process health and the database leg, pinged through the Storage Gateway.
+         * @description Reports process health and the database leg, pinged through the Storage Gateway. Public: the liveness probe carries no operator data.
          */
         get: operations["get-healthz"];
         put?: never;
@@ -1939,7 +1939,7 @@ export interface paths {
         put?: never;
         /**
          * Purge a principal
-         * @description Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge (admin-sensitive, all-scope), and the principal must be archived first.
+         * @description Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.
          */
         post: operations["purge-principal"];
         delete?: never;

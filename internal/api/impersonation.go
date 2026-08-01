@@ -123,7 +123,7 @@ func registerImpersonationRoutes(api huma.API, a *authenticator, gw storage.Gate
 		Path:          "/auth/me:stopImpersonation",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Stop the current impersonation session",
-		Description:   "Revokes the impersonation session presented by the request token, ending the view-as / act-as. Requires an impersonation token.",
+		Description:   "Revokes the impersonation session presented by the request token, ending the view-as / act-as. Requires authentication with an impersonation token; self-scoped (ends only the session the token names).",
 		Errors:        []int{http.StatusForbidden},
 		Middlewares:   huma.Middlewares{a.authn},
 	}, func(ctx context.Context, _ *struct{}) (*struct{}, error) {

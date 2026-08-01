@@ -114,7 +114,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 		Method:      http.MethodGet,
 		Path:        "/healthz",
 		Summary:     "Liveness and database-reachability probe",
-		Description: "Reports process health and the database leg, pinged through the Storage Gateway.",
+		Description: "Reports process health and the database leg, pinged through the Storage Gateway. Public: the liveness probe carries no operator data.",
 	}, func(ctx context.Context, _ *struct{}) (*healthOutput, error) {
 		out := &healthOutput{}
 		if err := gw.Ping(ctx); err != nil {
