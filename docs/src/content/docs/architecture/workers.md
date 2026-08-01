@@ -49,7 +49,8 @@ group scale horizontally with no leader: JetStream hands each message to exactly
 adding instances just adds throughput. Alongside the consumers, a **node-liveness sweep** runs on its
 own ticker. Unlike a consumer it is a *poll*, not a drain: a down node produces no message, so it is
 found by scanning heartbeat freshness, raising and resolving the node-owned `node.down` alarm
-idempotently (the one-open index). There is no separate projector either: current values live in the
+idempotently (the one-open partial unique index on `(component_id, dedup_key)`, shipped by
+[ADR-0075](/architecture/decisions/#adr-0075-an-alarms-condition-identity-is-a-raiser-supplied-dedup-key)). There is no separate projector either: current values live in the
 `property` latest-value cache table (ADR-0065; see [storage](/architecture/storage/)), and
 `alarm` / `action` hold their state directly.
 
@@ -91,10 +92,14 @@ This is the axis that decides almost everything else about a subsystem.
   - **Order-sensitive.** JetStream does not promise strict ordering (the server is ts-authoritative)
     and competing consumers can hand same-key messages to different members, so a stateful subsystem
     must either be idempotent and tolerate reorder (an as-of conflict rule) or serialize per state
-    key. The alarm transition is serialized per `(event_rule, owner)`: that ordered write lands in
-    the same PG transaction as the event record.
+    key. The alarm transition serializes per condition: today the condition identity is the
+    raiser-supplied `dedup_key`
+    ([ADR-0075](/architecture/decisions/#adr-0075-an-alarms-condition-identity-is-a-raiser-supplied-dedup-key));
+    the `event_rule` keying joins alongside when the rule engine lands, and its ordered write will
+    land in the same PG transaction as the event record.
   - Write pattern: **guarded conditional upsert** (`INSERT ... ON CONFLICT` / `UPDATE ... WHERE`),
-    with a **partial unique index** as the concurrency-correctness backstop.
+    with a **partial unique index** as the concurrency-correctness backstop (built for alarms:
+    `alarm_open_condition_key`, one open row per `(component, dedup_key)`).
   - **Backtest is harder**: it must process each entity's series in order.
 
 ## Lineage the engine stamps

@@ -25,10 +25,14 @@ import (
 // is active; clearing keeps the row, so the record of what was wrong and when
 // survives the fix.
 type Alarm struct {
-	ID           string
-	ComponentID  string
-	Severity     string
-	Message      string
+	ID          string
+	ComponentID string
+	Severity    string
+	Message     string
+	// DedupKey names WHICH condition this incident is about (ADR-0075): the
+	// one-open invariant is per (component, dedup_key), enforced by the partial
+	// unique index while the row is open.
+	DedupKey     string
 	RaisedAt     time.Time
 	ClearedAt    *time.Time
 	Capabilities []string
@@ -40,8 +44,11 @@ func (a Alarm) Active() bool { return a.ClearedAt == nil }
 // AlarmSpec is the raise input. Capabilities is what the condition takes away;
 // an alarm naming none is a note on the component that never reaches a system.
 type AlarmSpec struct {
-	Severity     string
-	Message      string
+	Severity string
+	Message  string
+	// DedupKey is the condition identity (required): a re-raise of the same key
+	// on the same component returns the existing open alarm, never a duplicate.
+	DedupKey     string
 	Capabilities []string
 }
 
@@ -58,14 +65,14 @@ var (
 // violation surfacing as a 500.
 var alarmSeverities = map[string]bool{"info": true, "warning": true, "critical": true}
 
-const alarmCols = `a.id, a.component_id, a.severity, a.message, a.raised_at, a.cleared_at,
+const alarmCols = `a.id, a.component_id, a.severity, a.message, a.dedup_key, a.raised_at, a.cleared_at,
 	coalesce(array_agg(cap.name order by cap.name)
 	         filter (where cap.name is not null), '{}')`
 
 func scanAlarm(row pgx.Row) (*Alarm, error) {
 	var a Alarm
 	if err := row.Scan(&a.ID, &a.ComponentID, &a.Severity, &a.Message,
-		&a.RaisedAt, &a.ClearedAt, &a.Capabilities); err != nil {
+		&a.DedupKey, &a.RaisedAt, &a.ClearedAt, &a.Capabilities); err != nil {
 		return nil, err
 	}
 	return &a, nil
@@ -90,12 +97,40 @@ func (p *PG) RaiseAlarm(ctx context.Context, actorID, componentName string, spec
 		return nil, err
 	}
 
-	a := Alarm{ComponentID: componentName, Severity: spec.Severity, Message: spec.Message}
-	if err := tx.QueryRow(ctx, `
-		insert into alarm (component_id, severity, message)
-		values ((select id from component where name = $1), $2, $3)
-		returning id, raised_at`,
-		componentName, spec.Severity, spec.Message).Scan(&a.ID, &a.RaisedAt); err != nil {
+	if spec.DedupKey == "" {
+		// The message is the condition identity when the raiser supplies no
+		// explicit key (ADR-0075): the same condition text re-raised is the
+		// same condition. A raise with neither key nor message has no known
+		// identity, and the insert below mints a unique placeholder so it
+		// dedups with nothing, exactly the pre-key behavior.
+		spec.DedupKey = spec.Message
+	}
+	// The guarded conditional insert (ADR-0075): the partial unique index
+	// carries the one-open-per-condition invariant, and a losing raise reads
+	// the existing open incident back instead of minting a duplicate. The
+	// no-op path writes no audit row and recomputes nothing: nothing changed.
+	a := Alarm{ComponentID: componentName, Severity: spec.Severity, Message: spec.Message, DedupKey: spec.DedupKey}
+	err = tx.QueryRow(ctx, `
+		insert into alarm (component_id, severity, message, dedup_key)
+		values ((select id from component where name = $1), $2, $3, coalesce(nullif($4, ''), gen_random_uuid()::text))
+		on conflict (component_id, dedup_key) where cleared_at is null do nothing
+		returning id, raised_at, dedup_key`,
+		componentName, spec.Severity, spec.Message, spec.DedupKey).Scan(&a.ID, &a.RaisedAt, &a.DedupKey)
+	if errors.Is(err, pgx.ErrNoRows) {
+		existing, gerr := scanAlarm(tx.QueryRow(ctx, `
+			select `+alarmCols+`
+			from alarm a
+			left join alarm_capability ac on ac.alarm_id = a.id
+			left join capability cap on cap.id = ac.capability_id
+			where a.component_id = (select id from component where name = $1)
+			  and a.dedup_key = $2 and a.cleared_at is null
+			group by a.id`, componentName, spec.DedupKey))
+		if gerr != nil {
+			return nil, fmt.Errorf("storage: read existing open alarm on %q: %w", componentName, gerr)
+		}
+		return existing, nil
+	}
+	if err != nil {
 		return nil, fmt.Errorf("storage: insert alarm on %q: %w", componentName, err)
 	}
 	if len(spec.Capabilities) > 0 {

@@ -3160,6 +3160,8 @@ export interface components {
              */
             cleared_at?: string;
             component: string;
+            /** @description The condition identity: one open alarm per (component, dedup_key) */
+            dedup_key: string;
             id: string;
             message: string;
             /** Format: date-time */
@@ -4976,6 +4978,8 @@ export interface components {
             readonly $schema?: string;
             /** @description The capabilities this condition degrades; a role requiring one of them can no longer be filled by this component */
             capabilities?: string[] | null;
+            /** @description The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate */
+            dedup_key?: string;
             /** @description What is wrong, for the operator reading it later */
             message?: string;
             /**

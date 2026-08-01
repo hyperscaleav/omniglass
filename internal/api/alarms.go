@@ -27,6 +27,7 @@ type alarmBody struct {
 	Severity     string     `json:"severity" doc:"info, warning, or critical"`
 	Message      string     `json:"message"`
 	Capabilities []string   `json:"capabilities" doc:"The capabilities this alarm degrades; empty means it reaches no role"`
+	DedupKey     string     `json:"dedup_key" doc:"The condition identity: one open alarm per (component, dedup_key)"`
 	RaisedAt     time.Time  `json:"raised_at"`
 	ClearedAt    *time.Time `json:"cleared_at,omitempty" doc:"Null while the alarm is active"`
 	Active       bool       `json:"active"`
@@ -43,6 +44,7 @@ func toAlarmBody(a *storage.Alarm) alarmBody {
 		Severity:     a.Severity,
 		Message:      a.Message,
 		Capabilities: caps,
+		DedupKey:     a.DedupKey,
 		RaisedAt:     a.RaisedAt,
 		ClearedAt:    a.ClearedAt,
 		Active:       a.Active(),
@@ -67,6 +69,7 @@ type raiseAlarmInput struct {
 		Severity     string   `json:"severity" enum:"info,warning,critical" doc:"How bad it is; critical puts the component itself in outage"`
 		Message      string   `json:"message,omitempty" doc:"What is wrong, for the operator reading it later"`
 		Capabilities []string `json:"capabilities,omitempty" doc:"The capabilities this condition degrades; a role requiring one of them can no longer be filled by this component"`
+		DedupKey     string   `json:"dedup_key,omitempty" doc:"The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate"`
 	}
 }
 
@@ -118,6 +121,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		alarm, err := gw.RaiseAlarm(ctx, actorID(ctx), in.Name, storage.AlarmSpec{
 			Severity:     in.Body.Severity,
 			Message:      in.Body.Message,
+			DedupKey:     in.Body.DedupKey,
 			Capabilities: in.Body.Capabilities,
 		})
 		if err != nil {

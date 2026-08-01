@@ -55,6 +55,9 @@ components:
           type: string
         component:
           type: string
+        dedup_key:
+          description: "The condition identity: one open alarm per (component, dedup_key)"
+          type: string
         id:
           type: string
         message:
@@ -71,6 +74,7 @@ components:
         - severity
         - message
         - capabilities
+        - dedup_key
         - raised_at
         - active
       type: object
@@ -3445,6 +3449,9 @@ components:
           type:
             - array
             - "null"
+        dedup_key:
+          description: The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate
+          type: string
         message:
           description: What is wrong, for the operator reading it later
           type: string

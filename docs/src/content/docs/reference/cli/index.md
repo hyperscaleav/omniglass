@@ -483,6 +483,7 @@ Records a condition on this component and the capabilities it degrades, then rec
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--capabilities` | string | (none) | The capabilities this condition degrades; a role requiring one of them can no longer be filled by this component |
+| `--dedup-key` | string | (none) | The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate |
 | `--message` | string | (none) | What is wrong, for the operator reading it later |
 | `--severity` | string | (none) | How bad it is; critical puts the component itself in outage |
 

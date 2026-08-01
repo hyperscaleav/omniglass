@@ -349,8 +349,9 @@ audit by `id`.
   table="alarm"
   notes={{
     severity: 'How bad; the rollup and the console sort on it',
+    dedup_key: 'The condition identity (ADR-0075): one open alarm per (component, dedup_key), enforced by the partial unique index while open',
     raised_at: 'When the incident opened',
-    cleared_at: 'NULL while open; the one-open discipline keys on it',
+    cleared_at: 'NULL while open; the one-open index keys on it',
     component_id: 'The component the incident is about (the thin-cut owner)',
   }}
 />

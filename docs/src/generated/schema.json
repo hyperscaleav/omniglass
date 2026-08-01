@@ -2368,12 +2368,23 @@
       "nullable": false,
       "fk": true,
       "fk_target": "component.id"
+     },
+     {
+      "name": "dedup_key",
+      "type": "text",
+      "nullable": false
      }
     ],
     "checks": [
      {
       "name": "alarm_severity_check",
       "expr": "CHECK ((severity = ANY (ARRAY['info'::text, 'warning'::text, 'critical'::text])))"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "alarm_open_condition_key",
+      "definition": "CREATE UNIQUE INDEX alarm_open_condition_key ON public.alarm USING btree (component_id, dedup_key) WHERE (cleared_at IS NULL)"
      }
     ]
    },

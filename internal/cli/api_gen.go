@@ -588,6 +588,7 @@ func generatedCommands() []*cobra.Command {
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
 					var fCapabilities string
+					var fDedupKey string
 					var fMessage string
 					var fSeverity string
 					cmd := &cobra.Command{
@@ -602,6 +603,9 @@ func generatedCommands() []*cobra.Command {
 							if cmd.Flags().Changed("capabilities") {
 								body["capabilities"] = jsonOrString(fCapabilities)
 							}
+							if cmd.Flags().Changed("dedup-key") {
+								body["dedup_key"] = fDedupKey
+							}
 							if cmd.Flags().Changed("message") {
 								body["message"] = fMessage
 							}
@@ -612,6 +616,7 @@ func generatedCommands() []*cobra.Command {
 						},
 					}
 					cmd.Flags().StringVar(&fCapabilities, "capabilities", "", "The capabilities this condition degrades; a role requiring one of them can no longer be filled by this component")
+					cmd.Flags().StringVar(&fDedupKey, "dedup-key", "", "The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate")
 					cmd.Flags().StringVar(&fMessage, "message", "", "What is wrong, for the operator reading it later")
 					cmd.Flags().StringVar(&fSeverity, "severity", "", "How bad it is; critical puts the component itself in outage")
 					_ = cmd.MarkFlagRequired("severity")
