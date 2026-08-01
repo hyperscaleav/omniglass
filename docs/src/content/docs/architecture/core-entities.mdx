@@ -7,6 +7,8 @@ sidebar:
     variant: note
 ---
 
+import SchemaTable from '../../../components/SchemaTable.astro';
+
 Core entities are the things an operator actually manages, the component, system, location, and node, and giving each its own identity is what lets every sample, event, alarm, and config name exactly one of them as its owner. This page covers the structural entities, how they
 nest, and how everything else names one of them as owner. The shapes these entities pin are [templates](/architecture/templates/); the data they own is
 [samples](/architecture/properties/); the physical tables are [storage](/architecture/storage/).
@@ -96,12 +98,48 @@ not a location (the location tree is a forest of N unparented tops with no root)
 [cascade](/architecture/cascade/)'s least-specific binding tier, which is **`platform`**
 ([ADR-0057](/architecture/decisions/#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier)).
 
-| Entity | What it is | Key columns |
-|---|---|---|
-| `component` | a deployed instance (`dsp-boardroom-3`) | name (unique), **parent_id** (self-ref tree), display_name; points at its `product`; carries **`product_id`** (optional, `on delete restrict`), the source of its shape |
-| `system` | a composition of components / subsystems (the service tree) | name (unique), **parent_id** (self-ref tree), display_name; conforms to its `standard_template_version`; carries `location_id`; carries **`standard_id`** (optional), the blueprint it conforms to |
-| `location` | a place tree | name (unique), type, **parent_id** (self-ref tree), display_name; no template (the `location_type` is the only shape-definer) |
-| `node` | the edge process | name (the identity); carries labels, last_heartbeat_at, and its bound credential ([identity and access](/architecture/identity-access/)) |
+| Entity | What it is |
+|---|---|
+| `component` | a deployed instance (`dsp-boardroom-3`); points at its `product`, the source of its shape |
+| `system` | a composition of components / subsystems (the service tree); conforms to its `standard` |
+| `location` | a place tree; no template (the `location_type` is the only shape-definer) |
+| `node` | the edge process; its name is the identity, bound to a credential ([identity and access](/architecture/identity-access/)) |
+
+The column mechanics render from the generated schema facts:
+
+<SchemaTable
+  table="component"
+  notes={{
+    name: 'The unique operator-facing address (ADR-0062)',
+    parent_id: 'The self-referencing tree',
+    product_id: 'Optional pointer at the shape source; on delete restrict',
+  }}
+/>
+
+<SchemaTable
+  table="system"
+  notes={{
+    parent_id: 'The self-referencing service tree',
+    location_id: 'Where the service lives',
+    standard_id: 'Optional pointer at the blueprint the system conforms to',
+  }}
+/>
+
+<SchemaTable
+  table="location"
+  notes={{
+    parent_id: 'The self-referencing place tree; the forest has N unparented tops',
+    type: 'The location_type, the only shape-definer a location has',
+  }}
+/>
+
+<SchemaTable
+  table="node"
+  notes={{
+    name: 'The identity the node enrolls and heartbeats under',
+    last_heartbeat_at: 'Liveness, stamped by the heartbeat lane',
+  }}
+/>
 
 ### Catalog reference data: vendor, driver, capability
 
@@ -219,15 +257,28 @@ nothing crosses between them. The storage methods are deliberately `ListSystemRo
 `DeleteSystemRole` so they cannot be mistaken for RBAC's `ListRoles` / `UpsertRole`.
 :::
 
-Five tables carry it:
+Five tables carry it. `system_member` is the **membership** binding a role attaches to, many-valued
+and cascading from both ends; `system_role` is the slot itself, on the same arc `property` uses
+(one-set CHECK, `unique nulls not distinct` over the arc plus name); `system_role_capability` is
+what the role requires, **conjunctive** (a component must provide **every** listed capability);
+`component_capability` is the component's **own** capability facts, layered over its product's; and
+`system_role_assignment` is who fills the role here.
 
-| Table | Key columns | Notes |
-|---|---|---|
-| `system_member` | (`system_id`, `component_id`, **`is_primary`**) | **membership**: the binding a role attaches to, many-valued, cascading from both ends |
-| `system_role` | `owner_kind` + `standard_id` / `system_id` (the arc), `name`, `display_name`, **`quorum`**, **`impact`** | the slot itself; the arc is the one `property` uses, with a one-set CHECK and a `unique nulls not distinct` key over the arc plus name |
-| `system_role_capability` | (`role_id`, `capability_id`) | what the role requires, **conjunctive**: a component must provide **every** listed capability |
-| `component_capability` | (`component_id`, `capability_id`, **`present`**) | the component's **own** capability facts, layered over its product's |
-| `system_role_assignment` | (`system_id`, `role_id`, `component_id`) | who fills the role here; the component FK is **`on delete restrict`** |
+<SchemaTable table="system_member" notes={{ is_primary: 'The one membership that carries the system band in the cascade' }} />
+
+<SchemaTable
+  table="system_role"
+  notes={{
+    quorum: 'How many fillers the slot wants before health degrades',
+    impact: 'What a broken filler does to the rollup',
+  }}
+/>
+
+<SchemaTable table="system_role_capability" />
+
+<SchemaTable table="component_capability" notes={{ present: 'The component&#39;s own fact, layered over its product&#39;s claim' }} />
+
+<SchemaTable table="system_role_assignment" notes={{ component_id: 'The filler; on delete restrict so a staffed component cannot vanish' }} />
 
 ### Membership: what a role attaches to
 

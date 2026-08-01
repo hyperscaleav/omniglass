@@ -7,6 +7,8 @@ sidebar:
     variant: note
 ---
 
+import SchemaTable from '../../../components/SchemaTable.astro';
+
 :::caution[Direction: mid-migration to ADR-0063]
 Named per [ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables) (built): the `property_type` registry, the `property` **current-value cache**, and the vocabulary this page now uses, a **property** is the signal, a **sample** is one timestamped observation of it (a row in `metric` / `state`), and the **current value** is the latest sample per series. The cache is built for the observed producer (the ingest sink upserts a per-series `property` row with an out-of-order guard, so the current value is one lookup), and a **reconciliation** read pivots want (declared, resolved live from the cascade) / told (intended) / is (observed) with drift computed on read. The `intended` producer is built (a [command](/architecture/commands/) opens an intended value on issue, #396); still directional: the `calculated` producer (the calc engine). The `log` kind graduated out of `property_type` (#395), so `property_type.kind` is `{metric, state}`. A raw log line is **not** an event either: per [ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events) it lands on its own untyped lane (`log_line`, built) and a derivation rule may later produce an `event` from it. The `log`-as-a-kind and NATS-data-lane sections below are the superseded design.
 :::
@@ -332,10 +334,28 @@ Current value (latest per owner / key / **instance** / **provenance**, reduced a
 
 The two kinds are two physical tables only because they index and retain differently; the [physical layout, partitioning, and the lineage CHECK](/architecture/storage/) live on storage.
 
-| Table | Key columns | Notes |
-|---|---|---|
-| `metric` | id, ts, **owner_kind, component_id/system_id/location_id/node_id**, property_type_id, **instance**, **value float8**, provenance, source, **source_rule, source_rule_version, event_id** | the firehose; BRIN on ts; numeric aggregation. `instance` (`''` default) discriminates many values of one canonical key on one owner. Trace columns (`correlation_id` and a causation parent) live on `event` / `log_line` today; extending them to samples is design |
-| `state` | id, ts, owner arc, property_type_id, instance, **value text/jsonb**, provenance, source, + the same lineage cols | sparse, transition-only; time-in-state and dwell. [Config](/architecture/variables/) is keyed to one as its observed side |
+`metric` is the firehose (BRIN on ts, numeric aggregation); `state` is sparse and transition-only
+(time-in-state and dwell), the table [config](/architecture/variables/) keys its observed side to.
+Trace columns (`correlation_id` and a causation parent) live on `event` / `log_line` today;
+extending them to samples is design.
+
+<SchemaTable
+  table="metric"
+  notes={{
+    property_type_id: 'The canonical key this sample is a value of',
+    instance: 'Discriminates many values of one key on one owner; empty string is the default series',
+    value: 'The numeric payload; aggregation happens here',
+    provenance: 'Who asserted it: observed, intended, calculated',
+  }}
+/>
+
+<SchemaTable
+  table="state"
+  notes={{
+    instance: 'Same series discrimination as metric',
+    value: 'The categorical payload; transitions only, no steady-state rows',
+  }}
+/>
 
 Raw log lines are **not** in this set: `log_line` is its own lane, not a sample table, and its columns are different in kind (no property name, no provenance, no lineage CHECK): `id, ts`, the owner arc, `instance, source, severity, facility, message, attributes jsonb, labels jsonb, correlation_id`, with `severity` / `facility` indexed as the retention and routing axes ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)).
 
@@ -343,10 +363,25 @@ Common sample columns (both kind-tables): `ts`, the **owner arc** (`owner_kind` 
 
 The key registry that types these tables is `property_type` (one registry across the metric and state kinds), detailed at [the property_type registry](#the-property_type-registry):
 
-| Table | Key columns | Notes |
-|---|---|---|
-| `property_type` | name, **official** (bool), kind (metric/state), data_type, unit, **precision**, **fusion_policy**, validation (jsonb) | the key registry across the sample kinds (log occurrences moved to the [`event_type`](/architecture/events/) registry, ADR-0063); the name is globally unique and `official` decides authority (the template/org/official `scope` ladder with `template_id` is future design). `unit` is the **canonical** unit, a row in the `unit` registry below; `precision` is a display hint (significant digits), not a storage truncation. Both apply to **metrics**; a **state** has neither |
-| `unit` | name, **family** (temperature/data-size/bitrate/...), **canonical** (bool), **to_canonical**, **from_canonical** (affine factor+offset, or Expr), **scope** (official/org) | the unit registry: one canonical unit per family plus alternates each carrying its conversion transforms; the `property_type.unit` canonical unit references it, and `convert(value, "<unit>")` resolves same-family targets through it |
+`property_type` is the key registry across the sample kinds (log occurrences moved to the
+[`event_type`](/architecture/events/) registry, ADR-0063). The name is globally unique and
+`official` decides authority; the template/org/official `scope` ladder with `template_id` is future
+design.
+
+<SchemaTable
+  table="property_type"
+  notes={{
+    official: 'Shipped-canonical versus org-local; seed-owned rows are read-only',
+    kind: 'Which sample sink values of this key land in: metric or state',
+    unit: 'The canonical unit label; metrics only, a state has none',
+    validation: 'JSON Schema the value must satisfy',
+  }}
+/>
+
+The **`unit` registry is still Design** (no table exists today): one canonical unit per family
+(temperature, data-size, bitrate, ...) plus alternates each carrying affine or Expr conversion
+transforms, so `property_type.unit` references a canonical row and `convert(value, "<unit>")`
+resolves same-family targets through it. `precision` as a display hint rides the same future slice.
 
 ## The pipeline, end to end
 

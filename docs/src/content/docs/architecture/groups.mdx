@@ -7,6 +7,8 @@ sidebar:
     variant: note
 ---
 
+import SchemaTable from '../../../components/SchemaTable.astro';
+
 :::note[Implementation status]
 Built end to end: the **principal** kind of group (`principal_group` plus membership,
 group-targeted grants via `principal_grant.group_id`, the effective-grant union in the loader,
@@ -37,9 +39,18 @@ A group:
 - is also the unit of **access control**: a visibility / permission scope (see
   [identity and access](/architecture/identity-access/)).
 
-| Table | Key columns | Notes |
-|---|---|---|
-| `group` | id, kind (component/system/location/principal), membership (static list or dynamic filter), **weight** | cascade band and access scope ([cascade](/architecture/cascade/), [identity and access](/architecture/identity-access/)) |
+The general `group` table is **still Design**: id, kind (component/system/location/principal),
+static-list or dynamic-filter membership, and the **weight** that places it on the cascade's
+specificity scale ([cascade](/architecture/cascade/),
+[identity and access](/architecture/identity-access/)).
+
+What is **built** is the principal arm: `principal_group` and its membership, a **grant subject**
+(grants attach to the group and reach its members), not an access scope
+(`scope_kind='group'` is refused today).
+
+<SchemaTable table="principal_group" />
+
+<SchemaTable table="principal_group_member" />
 
 ## Placement: one specificity scale
 
