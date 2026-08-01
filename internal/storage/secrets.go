@@ -56,7 +56,7 @@ type Secret struct {
 	Name         string
 	SecretType   string
 	SecretTypeID string
-	OwnerKind    string  // platform | component | system | location
+	OwnerKind    string  // platform | component | location (the system band is retired, ADR-0052)
 	OwnerID      *string // the owning entity id; nil for the platform singleton
 	OwnerName    string  // the owning entity's name (empty for platform), for display
 	Fields       []ResolvedField
@@ -574,12 +574,6 @@ func (p *PG) resolveSecretOwner(ctx context.Context, q querier, kind string, nam
 		c, err = scopedByName(ctx, q, componentConfig, *name)
 		if c != nil {
 			id = c.ID
-		}
-	case "system":
-		var s *System
-		s, err = scopedByName(ctx, q, systemConfig, *name)
-		if s != nil {
-			id = s.ID
 		}
 	case "location":
 		var l *Location

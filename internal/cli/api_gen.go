@@ -3766,7 +3766,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fName, "name", "", "The cascade key; unique per owner")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fOwner, "owner", "", "The owning entity's name; omit for a platform secret")
-				cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "Which tier owns this secret")
+				cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "Which tier owns this secret (the system band is retired, ADR-0052)")
 				_ = cmd.MarkFlagRequired("owner-kind")
 				cmd.Flags().StringVar(&fSecretType, "secret-type", "", "A secret_type id")
 				_ = cmd.MarkFlagRequired("secret-type")

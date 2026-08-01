@@ -89,4 +89,8 @@ func TestListSecretsScopedDirectoryAPI(t *testing.T) {
 			t.Errorf("owner directory missing %s (got %v)", want, got)
 		}
 	}
+
+	// ADR-0052 (#459): the system band is retired; the enum refuses it at
+	// validation, so a system-owned secret cannot be created at all.
+	c.do(ownerTok, http.MethodPost, "/secrets", secretReq("dead", "system", "any", "x"), http.StatusUnprocessableEntity)
 }

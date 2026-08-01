@@ -85,7 +85,7 @@ type createSecretInput struct {
 	Body struct {
 		Name           string            `json:"name" minLength:"1" doc:"The cascade key; unique per owner"`
 		SecretType     string            `json:"secret_type" minLength:"1" doc:"A secret_type id"`
-		OwnerKind      string            `json:"owner_kind" enum:"platform,location,system,component" doc:"Which tier owns this secret"`
+		OwnerKind      string            `json:"owner_kind" enum:"platform,location,component" doc:"Which tier owns this secret (the system band is retired, ADR-0052)"`
 		Owner          *string           `json:"owner,omitempty" doc:"The owning entity's name; omit for a platform secret"`
 		AdminSensitive *bool             `json:"admin_sensitive,omitempty" doc:"Admin-only visibility; omit to use the type default. Setting true requires the admin tier"`
 		Fields         map[string]string `json:"fields" doc:"The operator field map, validated against the type shape"`

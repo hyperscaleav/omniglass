@@ -3725,10 +3725,10 @@ export interface components {
             /** @description The owning entity's name; omit for a platform secret */
             owner?: string;
             /**
-             * @description Which tier owns this secret
+             * @description Which tier owns this secret (the system band is retired, ADR-0052)
              * @enum {string}
              */
-            owner_kind: "platform" | "location" | "system" | "component";
+            owner_kind: "platform" | "location" | "component";
             /** @description A secret_type id */
             secret_type: string;
         };

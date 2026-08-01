@@ -3,6 +3,7 @@ package storage_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/secret"
@@ -132,8 +133,11 @@ func TestSecretsDoNotInheritFromASystem(t *testing.T) {
 	if err := f.gw.AddMember(ctx, "", "room-a", "roamer", f.all); err != nil {
 		t.Fatalf("add member: %v", err)
 	}
-	if err := f.setSecret(ctx, "system", "room-a", "admin-password", "hunter2"); err != nil {
-		t.Fatalf("set system secret: %v", err)
+	// Since #459 finished ADR-0052 the guarantee is enforced a layer earlier: a
+	// system-owned secret cannot even be created, so nothing system-owned can
+	// ever reach a member through the cascade.
+	if err := f.setSecret(ctx, "system", "room-a", "admin-password", "hunter2"); !errors.Is(err, storage.ErrSecretOwnerNotFound) {
+		t.Fatalf("set system secret = %v, want ErrSecretOwnerNotFound (the system band is retired)", err)
 	}
 	names, err := f.gw.ResolveSecrets(ctx, f.compID(t, ctx, "roamer"), f.all, true)
 	if err != nil {

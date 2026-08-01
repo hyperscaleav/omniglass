@@ -794,7 +794,7 @@
      },
      {
       "name": "secret_owner_kind_check",
-      "expr": "CHECK ((owner_kind = ANY (ARRAY['platform'::text, 'component'::text, 'system'::text, 'location'::text])))"
+      "expr": "CHECK ((owner_kind = ANY (ARRAY['platform'::text, 'component'::text, 'location'::text])))"
      }
     ],
     "uniques": [

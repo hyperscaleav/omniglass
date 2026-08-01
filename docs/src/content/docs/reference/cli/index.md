@@ -2914,7 +2914,7 @@ Seals a secret at an owner scope. Fields are validated and encrypted against the
 | `--fields` | string | (none) | The operator field map, validated against the type shape |
 | `--name` | string | (none) | The cascade key; unique per owner |
 | `--owner` | string | (none) | The owning entity's name; omit for a platform secret |
-| `--owner-kind` | string | (none) | Which tier owns this secret |
+| `--owner-kind` | string | (none) | Which tier owns this secret (the system band is retired, ADR-0052) |
 | `--secret-type` | string | (none) | A secret_type id |
 
 Example:

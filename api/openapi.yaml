@@ -1052,11 +1052,10 @@ components:
           description: The owning entity's name; omit for a platform secret
           type: string
         owner_kind:
-          description: Which tier owns this secret
+          description: Which tier owns this secret (the system band is retired, ADR-0052)
           enum:
             - platform
             - location
-            - system
             - component
           type: string
         secret_type:

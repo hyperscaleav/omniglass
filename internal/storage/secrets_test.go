@@ -220,10 +220,10 @@ func TestSecretCascadeResolve(t *testing.T) {
 	mustSecret(t, gw, "poll", "platform", nil, "platform-val")
 	mustSecret(t, gw, "poll", "location", strptr("campus"), "campus-val")
 	mustSecret(t, gw, "poll", "location", strptr("room"), "room-val")
-	// Bound on the system and deliberately NOT expected below: a secret is
-	// device-facing, so the cascade carries no system band. The room a component
-	// serves is the wrong owner for a credential the device itself answers with.
-	mustSecret(t, gw, "poll", "system", strptr("sys"), "sys-val")
+	// The system band is gone entirely (#459 finished ADR-0052): a system-owned
+	// secret can no longer be created at all, so there is nothing to keep out of
+	// the resolve below; the refusal itself is pinned in
+	// TestSecretSystemBandRetired.
 	mustSecret(t, gw, "poll", "component", strptr("codec-1"), "comp-val")
 
 	resolved, err := gw.ResolveSecrets(ctx, comp.ID, all, true)
@@ -268,9 +268,6 @@ func TestSecretCascadeResolve(t *testing.T) {
 		t.Errorf("winner after comp removed = %s, want location (the system band is gone)", winner.OwnerKind)
 	}
 
-	// Removing the system-owned secret changes nothing, since it never competed.
-	list, _ = gw.ListSecrets(ctx, all, true)
-	deleteByOwner(t, gw, list, "system")
 	resolved, err = gw.ResolveSecrets(ctx, comp.ID, all, true)
 	if err != nil {
 		t.Fatalf("resolve 3: %v", err)

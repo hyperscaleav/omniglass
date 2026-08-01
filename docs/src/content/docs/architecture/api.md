@@ -293,7 +293,7 @@ as admin (via `secret:>`, which alone reaches the admin-sensitive `:admin` tier)
 - `GET /secrets` lists the secrets the caller may see (`{secrets: [secret]}`), each row filtered by its
   owner's placement against the caller's read scope, with admin-sensitive secrets visible only to the
   admin tier (`secret:read`).
-- `POST /secrets` creates one from `{name, secret_type, owner_kind: platform|location|system|component,
+- `POST /secrets` creates one from `{name, secret_type, owner_kind: platform|location|component (the system band is retired, ADR-0052),
   owner?, fields}` (201, `secret:create`); a `platform` secret needs an all-scope grant **and**
   `platform:create` (the install-wide tier permission below). `PATCH` and `DELETE` on a secret that sits at
   the tier likewise take `platform:update` / `platform:delete`.
