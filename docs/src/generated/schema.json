@@ -693,28 +693,6 @@
      }
     ]
    },
-   "platform_setting": {
-    "columns": [
-     {
-      "name": "key",
-      "type": "text",
-      "nullable": false,
-      "pk": true
-     },
-     {
-      "name": "value",
-      "type": "jsonb",
-      "nullable": false,
-      "default": "'{}'::jsonb"
-     },
-     {
-      "name": "updated_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     }
-    ]
-   },
    "secret": {
     "columns": [
      {

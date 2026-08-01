@@ -24,8 +24,12 @@ func TestMigrateRoundTrip(t *testing.T) {
 	defer conn.Close(ctx)
 
 	want := []string{
-		"platform_setting",
 		"principal", "human", "service", "credential", "role", "principal_grant", "audit_log",
+	}
+	// platform_setting was a decoy with zero readers and writers (settings live
+	// in setting_override); #462 dropped it, so it must not exist after up.
+	if tableExists(t, ctx, conn, "platform_setting") {
+		t.Error("platform_setting exists after migrate up; #462 dropped the dead table")
 	}
 	for _, name := range want {
 		if !tableExists(t, ctx, conn, name) {
