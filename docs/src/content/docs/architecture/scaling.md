@@ -80,33 +80,22 @@ Postgres-backed), not the object store.
 :::
 
 :::design[Target design, tracked in #430]
-The two meet through **change data capture**: Postgres tells us *what changed* (logical decoding of the
-WAL), and NATS carries the queue. A single **leader-elected CDC publisher** reads committed changes from a
-replication slot and publishes them to JetStream (an idempotency key per change yields exactly-once
-outcomes downstream). **Postgres is never a message bus**; it only emits its changes. The replication
-**slot and publication are ensured idempotently in the boot phase, not a migration**, since dbmate
-migrations run exactly once.
+The two meet through **change data capture**: Postgres tells us *what changed*, and NATS carries the
+queue. A single **leader-elected CDC publisher** bridges committed Postgres changes onto JetStream;
+**Postgres is never a message bus**, it only emits its changes. The mechanism (logical decoding of
+the WAL, the per-change idempotency key, the boot-phase replication slot) is described once, on
+[messaging](/architecture/messaging/#two-lanes-one-bus).
 :::
 
 :::design[Target design, tracked in #430]
 
 ### Inter-service communication
 
-Service-to-service traffic rides **two lanes on the one JetStream bus**, by what is moving:
-
-- **Data lane (NATS-native).** Observed and calculated **samples** live on NATS. The edge and central
-  nodes publish observed samples to a **raw ingress** subject; an **admission consumer** owner-confines
-  them per publisher class and republishes to the **trusted** samples stream, which the rule engine
-  consumes directly from NATS (calc publishes derived samples onto the trusted stream as a trusted producer). A
-  **persistence consumer** batch-writes samples to the Postgres `metric`, `state`, `event`, and `log_line` tables as an async
-  **sink**. Samples do not pass through CDC: they are already on NATS, idempotent on `(series, ts)`, and
-  the firehose, so rules never wait on Postgres. Postgres is the durable record, NATS is the live signal.
-- **Record and state lane (Postgres-first, CDC-out).** **Events, alarms, actions, and operator mutations**
-  (config, ack, snooze, settings, manual commands) are **born in a Postgres transaction**: when an
-  `event_rule` fires, the consumer writes the event record and the alarm transition (serialized per
-  `(event_rule, owner)`) in one transaction, and the API writes config, ack, and settings the same way. The
-  leader-elected CDC publisher then fans those committed changes out to JetStream, where `action_rule`,
-  reconcile, and projection consumers react. **No dual-write**: born in the commit, CDC fans out.
+Service-to-service traffic rides **two lanes on the one JetStream bus**, by what is moving: the
+NATS-native **data lane** for samples, and the Postgres-first, CDC-out **record and state lane** for
+events, alarms, actions, and operator mutations. The lane model (the admission consumer, the trusted
+stream, the persistence consumer, the CDC publisher, and the ingest paths) is described once, on
+[messaging](/architecture/messaging/#two-lanes-one-bus); here is how the pieces deploy:
 
 ```d2
 direction: down

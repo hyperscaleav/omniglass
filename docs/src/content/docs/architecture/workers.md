@@ -28,17 +28,17 @@ so the configurable concurrency pool and exactly-once outcomes are Design. It is
 several consumers rather than separate loops:
 
 :::design[Target design, tracked in #430; the clock is #419]
-- **the admission consumer**: owner-confines raw-ingress samples (node and webhook) against the
-  publisher's placement, preserving `Nats-Msg-Id`, and republishes to the **trusted** samples stream,
-  so the rule engine and persistence read only confined points (system mode, [messaging](/architecture/messaging/));
+- **the admission consumer**: the owner-confinement gate at the head of the data lane, a worker
+  running in system mode; the mechanism is described once, on
+  [messaging](/architecture/messaging/#two-lanes-one-bus);
 - **the rule engine** (sample consumers): consume arriving samples from the **trusted**
   JetStream samples stream, apply `calc_rule`s and `event_rule`s, publish derived samples back
   onto the trusted stream (a trusted producer, no admission pass), and write events and alarm transitions
   to Postgres in one transaction;
 - **the action sender** ([alarms and actions](/architecture/alarms-actions/)): consumes
   action work fanned out by CDC, sends at-least-once, advances action step state (PG-first, CDC-out);
-- **the persistence consumer**: a batch sink that consumes the **trusted** samples stream and writes
-  samples to the Postgres metric/state/log tables asynchronously, so rules never wait on PG;
+- **the persistence consumer**: the data lane's batch sink into the Postgres sample tables, async so
+  rules never wait on PG ([messaging](/architecture/messaging/#two-lanes-one-bus));
 - **the clock** ([time](/architecture/time/)): fires schedules and armed timers (a leader-elected
   singleton, below);
 - **reconcile**: the desired-state loop (below).
@@ -62,8 +62,8 @@ idempotently (the one-open partial unique index on `(component_id, dedup_key)`, 
 ## Consumer groups versus singletons
 
 Most of the machinery is competing consumers, but two pieces must run as exactly one active instance:
-the **CDC publisher** (logical decoding of the WAL, fanning committed events, alarms, actions, and
-operator mutations out to JetStream) and the **clock** (firing schedules and armed timers). These are
+the **CDC publisher** (the record lane's bridge from Postgres commits onto JetStream, described once
+on [messaging](/architecture/messaging/#two-lanes-one-bus)) and the **clock** (firing schedules and armed timers). These are
 **leader-elected singletons** via a **NATS KV CAS lock**: each candidate races to compare-and-set a
 KV key, the winner holds the lease, and on its death the lease expires and another candidate takes
 over. Same pattern for both, no separate election service and no SKIP-LOCKED row claim. A singleton

@@ -11,9 +11,14 @@ sidebar:
 Built today: the embedded nats-server with JetStream (`internal/bus/server.go`), per-node subject
 isolation with the auth callback, one `OG_TELEMETRY` stream on the node subjects (`og.v1.telemetry.*`) and the API push subject (`og.v1.api.telemetry`), with the single
 durable `og-telemetry-worker` consumer writing straight to Postgres, and the worklist and heartbeat
-request-reply lanes. The design fences below mark the parts of this page that are target design, each
-naming its tracker.
+request-reply lanes. The two-lane split below is target design; today there is **one stream and one
+serial consumer doing admission (owner confinement) and persistence inline**. The design fences below
+mark the parts of this page that are target design, each naming its tracker.
 :::
+
+This page is the **one home of the two-lane data plane**: the admission / trusted / persistence
+split, the CDC publisher, and the ingest-path enumeration are described here and only named, with a
+link, everywhere else.
 
 Omniglass has **two typed contracts**. The [public API](/architecture/api/) is the north face (HTTP and
 OpenAPI: operators, the SPA, the CLI, integrations, MCP). This is its sibling: the **internal and edge
@@ -38,19 +43,53 @@ Internal traffic splits by what is moving:
   trusted stream**, no admission pass: calc output (owner from the validated `calc_rule` scope) and the
   action layer's intended write (owner from the command target) are already inside the trust boundary. The
   rule engine consumes the trusted stream directly, and a **persistence consumer** batch-writes it to
-  Postgres as an async sink. Confinement is at **consume time, ahead of evaluation**, because the rule
+  the Postgres `metric`, `state`, `event`, and `log_line` tables as an async sink, idempotent on
+  `(series, ts)` so a redelivery lands the same row. The sink never gates the rule engine: a slow or
+  paused persistence consumer holds up only the durable record, never the live signal, so rules never
+  wait on Postgres (Postgres is the durable record, NATS is the live signal). Confinement is at
+  **consume time, ahead of evaluation**, because the rule
   engine reacts live: a forged owner must be dropped before it can open an alarm, not just before it is
   persisted. The admission consumer itself runs in **system mode** (its owner lookup is a system-mode
   gateway read; a dropped sample is logged as a discovery candidate,
   [identity and access](/architecture/identity-access/)). Samples do not go through CDC, they are
-  already on the bus, idempotent on `(series, ts)`.
-- **Record / state lane (Postgres-first, CDC-out): events, alarms, actions, operator mutations.** Born in
-  a Postgres transaction (a firing `event_rule` writes the event plus the alarm transition atomically; the
-  API writes config, ack, settings). A **leader-elected CDC publisher** (logical decoding of the WAL)
-  publishes those committed changes to JetStream, where `action_rule`, reconcile, and projection consumers
-  react. No dual-write: born in the commit, the bridge fans it out.
+  already on the bus.
+- **Record / state lane (Postgres-first, CDC-out): events, alarms, actions, operator mutations**
+  (config, ack, snooze, settings, manual commands). Born in a Postgres transaction: a firing
+  `event_rule` writes the event plus the alarm transition atomically (the alarm transition is
+  serialized per `(event_rule, owner)`), and the API writes config, ack, and settings the same way. A
+  **leader-elected CDC publisher** (exactly one active, failing over on the NATS KV lock,
+  [workers](/architecture/workers/)) reads committed changes from a replication slot by **logical
+  decoding of the WAL** and publishes each to JetStream, where `action_rule`, reconcile, and
+  projection consumers react. Delivery is at-least-once with an **idempotency key per change**, so a
+  consumer that sees a change twice is a no-op and outcomes stay exactly-once downstream. **No
+  dual-write**, no row-lock single-fire worklist, and no `LISTEN`/`NOTIFY` fan-out: the change is
+  committed once and the bridge fans it out. **Postgres is never a message bus**; it only emits its
+  changes. The replication **slot and publication are ensured in the idempotent boot phase** (the
+  same phase that upserts ship-with reference data; boot creates them if absent and leaves them
+  untouched if present), never a run-once dbmate migration, so a fresh database and an existing one
+  converge to the same state.
 
 :::
+
+## The three ingest paths
+
+Three ingest paths exist today, and this list is the enumeration's one home:
+
+- **The node bus path.** A node publishes a `TelemetryBatch` on its own subject
+  (`og.v1.telemetry.<node>`), and the server binds each sample's owner from the task's interface
+  ([collection](/architecture/collection/)).
+- **The API push path.** `POST /telemetry:push` is the first-party HTTP ingest write: a scoped
+  caller declares the owner and the route's scope check is the fence. The API publishes the batch
+  onto the bus (`og.v1.api.telemetry`, trusted by subject, below) rather than writing Postgres
+  directly, so pushed records are visible to the same stream consumers and land in history the same
+  way ([API](/architecture/api/)).
+- **The raw log path.** A raw log line rides either transport in the same batch but lands on its own
+  untyped lane, `log_line`: no property name, no registry gate
+  ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)).
+
+The two transports meet at one `land()` write path, so neither can drift from the other's semantics;
+the mechanics of `land()` (reject-not-project, the transition-only state guard, the current-value
+derive) belong to [samples](/architecture/properties/).
 
 ## Streams and consumers
 
@@ -81,6 +120,79 @@ The edge stamps `ts`, so the system is ts-authoritative and needs no strict orde
 Today's delivery contract is weaker than the target: node publishes are fire-and-forget core NATS (no publish
 ack, no `Nats-Msg-Id`) and the consumer acks once after multi-transaction writes, so delivery is
 at-least-once with a known duplicate risk until #430 lands (see #430 and #311).
+
+:::design[Target design, tracked in #430]
+
+## The pipeline, end to end
+
+```d2
+direction: down
+classes: {
+  node: { style.border-radius: 8 }
+  key: { style: { border-radius: 8; bold: true } }
+  group: { style.border-radius: 8 }
+}
+edge: "Edge (node)" {
+  class: group
+  task: "task\npoll · listen\nstateless / stateful" { class: node }
+  fn: "function\nextract → key → normalize" { class: node }
+  task -> fn
+}
+raw: "raw ingress\nnode · webhook (untrusted)" { class: node }
+admit: "admission consumer\nowner-confine per class\n(system mode)" { class: node }
+ds: "JetStream\ntrusted samples stream" { class: node; shape: queue }
+failed: "collection.failed\n(carries raw)" { class: node }
+calc: "calc_rule consumer\ncross-key · system-level" { class: node }
+erule: "event_rule consumer\nfire_criteria (+ optional clear_criteria)" { class: node }
+persist: "persistence consumer\nbatch sink (async)" { class: node }
+tables: "metric · state · log\nsample tables" { class: node; shape: cylinder }
+sched: "schedule + timer\n(leader-elected clock)" { class: node }
+pg: "event · alarm\n(PG)" { class: node; shape: cylinder }
+alarm: "alarm\none incident · new row per open\n(event_rule, owner)" { class: node }
+cdc: "JetStream\nrecord/state lane" { class: node; shape: queue }
+actions: "action_rule consumer\nnotify · command\nremediate-verify-escalate" { class: node }
+itsm: "ITSM (action target)" { class: node }
+operator: operator { class: node }
+config: "config\ndeclared (spec)" { class: node }
+audit: audit_log { class: key }
+divergence: divergence { class: node; shape: hexagon }
+edge.fn -> raw: "observed · lineage on row\n(source_rule)"
+edge.fn -> failed: "parse / validation fail" { style.stroke-dash: 4 }
+raw -> admit
+admit -> ds: "confined"
+ds -> calc
+calc -> ds: "calculated · trusted producer\n(direct, no admission)"
+ds -> erule
+ds -> persist
+persist -> tables: "durable copy"
+sched -> erule: "origin=scheduled"
+erule -> pg: "PG-first: event + alarm in one tx"
+pg -> alarm: "alarm transition"
+pg -> cdc: "CDC (logical decoding)\nleader-elected publisher" { style.stroke-width: 3 }
+cdc -> actions
+actions -> ds: "command's effect · provenance=intended\n(trusted, direct)" { style.stroke-dash: 4 }
+actions -> itsm: "ITSM: open->ticket · update->comment · resolve->close" { style.stroke-dash: 4 }
+actions -> edge.task: "command + adaptive poll" { style.stroke-dash: 4 }
+operator -> config: "declares (PG-first)"
+config -- tables: "links · drift" { style.stroke-dash: 4 }
+operator -> audit: "audit" { style.stroke-dash: 4 }
+cdc -- divergence: "disagree(A,B): drift / conflict" { style.stroke-dash: 4 }
+```
+
+The two lanes, drawn end to end. On the data lane, the edge parses payloads into observed samples
+and publishes them to raw ingress; the admission consumer republishes confined points to the trusted
+stream; the `event_rule` consumer evaluates live off the trusted stream while the persistence
+consumer sinks the durable copy; calc output and a command's intended write enter the trusted stream
+directly. On the record lane, an `event_rule` fire writes the event and alarm transition to PG in
+one transaction and the CDC publisher fans the commit onto JetStream, where `action_rule` consumers
+react; a command's intended sample then re-enters the data lane on the device round trip. The teal
+node is `audit_log`, the ground-truth record of operator writes (including config changes); observed
+and calculated samples carry `source_rule` on the row, and intended points at the command `event`
+via `event_id`. The raw payload is not stored: a parse or validation failure rides a
+`collection.failed` event. [config](/architecture/variables/) holds declared intent (PG-first),
+keyed to a state sample as its observed side.
+
+:::
 
 ## Subjects, accounts, and scope
 

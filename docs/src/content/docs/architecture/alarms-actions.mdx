@@ -44,7 +44,7 @@ row is the live state.
 The alarm is **PG-first**: the firing `event_rule` consumer writes the stateful alarm
 row in the **same Postgres transaction** as the event, with the alarm transition
 **serialized per `(event_rule, owner)`** so an incident never double-opens. A
-leader-elected CDC publisher (logical decoding of the WAL) then publishes the committed
+[CDC publisher](/architecture/messaging/) then publishes the committed
 open / resolve transition to JetStream, where `action_rule` consumers react. Born in the
 commit, fanned out by CDC: there is no dual-write, and Postgres is never a message bus.
 

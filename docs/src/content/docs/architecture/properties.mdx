@@ -41,7 +41,11 @@ and [ADR-0038](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-b
 This is the heart of the authoritative value model: what a **property** is, its **samples** and its **current value**, the two axes that define it, how we know a value (provenance), and how values reconcile, diverge, and read back. The physical layout (tables, partitioning, the lineage CHECK, tiering) lives in storage; the spine is [the architecture overview](/architecture/). Events, calc rules, and the response layer get their own pages: [events](/architecture/events/), [calculations](/architecture/calculations/), and [alarms and actions](/architecture/alarms-actions/).
 
 :::design[The two-lane data plane, tracked in #430]
-Samples are the **data lane**: observed and calculated samples are NATS-native, published to a JetStream stream and consumed live by the rule engine, with a persistence consumer batch-writing them to the PG tables as an async sink. Samples are the firehose and never wait on Postgres. Events, alarms, and actions are the **record/state lane**: born in a PG transaction and fanned out by change-data-capture (CDC). The two lanes share one bus (JetStream); this page is home for the data lane, and points at [events](/architecture/events/) and [alarms and actions](/architecture/alarms-actions/) for the record lane.
+Samples are the **data lane**: NATS-native, consumed live by the rule engine, with the persistence
+consumer batch-writing the durable copy as an async sink. Events, alarms, and actions are the
+**record/state lane**: Postgres-first, CDC-out. The two-lane model, both consumers, and the ingest
+paths are described once, on [messaging](/architecture/messaging/#two-lanes-one-bus); this page owns
+what a sample *is* and how it lands.
 :::
 
 ## Property, sample, current value
@@ -296,7 +300,7 @@ gated on the command's settle window (pending inside it, settled on a match past
 Distinguished by a property of the table, not a naming suffix.
 
 - **Raw payload: not stored.** Samples are emitted at the edge, so the verbatim wire payload is **not persisted** (no `telemetry` table). Raw surfaces only on a **`collection.failed`** event when a parse or validation rejects (diagnosis, and the one backfill-after-fix case) and via a **dev raw-mode** tap; the sample is authoritative, its lineage is `source_rule` + version. The opt-in `raw_sample` policy ([collection](/architecture/collection/)) can retain raw for a bounded, sampled, short-lived window, off by default, still not a telemetry table.
-- **Live on NATS, durable in PG.** The live sample is the message on the JetStream `samples` stream; the durable copy in the `metric` / `state` tables is written by a **persistence consumer** that batch-writes off the stream as an **async sink**, idempotent on series identity. The sink never gates the rule engine: rules read samples from NATS, and a slow or paused persistence consumer holds up only the durable record, not the live signal. Samples are the firehose, so they reach Postgres through the sink and **do not go through CDC**, unlike the record/state lane (events, alarms, actions), which is born in a PG transaction and fanned out by CDC.
+- **Live on NATS, durable in PG.** The live sample is the message on the JetStream `samples` stream; the durable copy in the `metric` / `state` tables is the **persistence consumer**'s async sink write, idempotent on series identity, and samples **do not go through CDC** ([messaging](/architecture/messaging/#two-lanes-one-bus)).
 - **Ground truth, logs** (immutable, append-only, the actor's own record): **`log_line`** (a component's or node's words, its own untyped lane, not a sample kind), **`audit_log`** (an operator), **`session_log`** (connection lifecycle, node-reported), **`internal_log`** (platform self-narration), and the **`collection_log`** / **`node_log`** companions. Each named for what it is. There is no separate rule-execution table: a derived row *is* the evidence of its rule's run, carrying `source_rule` + `source_rule_version` on the row itself.
 - **Derived** (produced by rules, reconstructable in principle from ground truth): **`metric`**, **`state`**, **event**, **alarm**, **action**.
 
@@ -396,65 +400,7 @@ resolves same-family targets through it. `precision` as a display hint rides the
 table exists today.
 :::
 
-:::design[The two-lane data plane, tracked in #430]
-
-## The pipeline, end to end
-
-```d2
-direction: down
-classes: {
-  node: { style.border-radius: 8 }
-  key: { style: { border-radius: 8; bold: true } }
-  group: { style.border-radius: 8 }
-}
-edge: "Edge (node)" {
-  class: group
-  task: "task\npoll · listen\nstateless / stateful" { class: node }
-  fn: "function\nextract → key → normalize" { class: node }
-  task -> fn
-}
-raw: "raw ingress\nnode · webhook (untrusted)" { class: node }
-admit: "admission consumer\nowner-confine per class\n(system mode)" { class: node }
-ds: "JetStream\ntrusted samples stream" { class: node; shape: queue }
-failed: "collection.failed\n(carries raw)" { class: node }
-calc: "calc_rule consumer\ncross-key · system-level" { class: node }
-erule: "event_rule consumer\nfire_criteria (+ optional clear_criteria)" { class: node }
-persist: "persistence consumer\nbatch sink (async)" { class: node }
-tables: "metric · state · log\nsample tables" { class: node; shape: cylinder }
-sched: "schedule + timer\n(leader-elected clock)" { class: node }
-pg: "event · alarm\n(PG)" { class: node; shape: cylinder }
-alarm: "alarm\none incident · new row per open\n(event_rule, owner)" { class: node }
-cdc: "JetStream\nrecord/state lane" { class: node; shape: queue }
-actions: "action_rule consumer\nnotify · command\nremediate-verify-escalate" { class: node }
-itsm: "ITSM (action target)" { class: node }
-operator: operator { class: node }
-config: "config\ndeclared (spec)" { class: node }
-audit: audit_log { class: key }
-divergence: divergence { class: node; shape: hexagon }
-edge.fn -> raw: "observed · lineage on row\n(source_rule)"
-edge.fn -> failed: "parse / validation fail" { style.stroke-dash: 4 }
-raw -> admit
-admit -> ds: "confined"
-ds -> calc
-calc -> ds: "calculated · trusted producer\n(direct, no admission)"
-ds -> erule
-ds -> persist
-persist -> tables: "durable copy"
-sched -> erule: "origin=scheduled"
-erule -> pg: "PG-first: event + alarm in one tx"
-pg -> alarm: "alarm transition"
-pg -> cdc: "CDC (logical decoding)\nleader-elected publisher" { style.stroke-width: 3 }
-cdc -> actions
-actions -> ds: "command's effect · provenance=intended\n(trusted, direct)" { style.stroke-dash: 4 }
-actions -> itsm: "ITSM: open->ticket · update->comment · resolve->close" { style.stroke-dash: 4 }
-actions -> edge.task: "command + adaptive poll" { style.stroke-dash: 4 }
-operator -> config: "declares (PG-first)"
-config -- tables: "links · drift" { style.stroke-dash: 4 }
-operator -> audit: "audit" { style.stroke-dash: 4 }
-cdc -- divergence: "disagree(A,B): drift / conflict" { style.stroke-dash: 4 }
-```
-
-Two lanes, one bus. The **data lane** is the JetStream **trusted** `samples` stream. Untrusted publishers (the edge node, an external webhook) land on a **raw ingress** subject; an **admission consumer** owner-confines each sample against the publisher's placement (or the webhook interface's declared owner) and re-publishes only confined points to the trusted stream, so a forged owner is dropped before the live `event_rule` can act on it ([identity and access](/architecture/identity-access/)). **Trusted server producers** (calc output, a command's intended write) publish to the trusted stream directly, no admission pass. The `event_rule` consumer evaluates against the trusted stream live, and a **persistence consumer** batch-writes the two sample tables (`metric`, `state`) as an async sink (samples never go through CDC). The **record/state lane** is PG-first: an `event_rule` fire writes the event and alarm transition to PG in one transaction, and a leader-elected **CDC publisher** (logical decoding of the WAL) fans those committed changes onto JetStream, where `action_rule` consumers react. A command's intended sample re-enters the data lane (the device round trip). The teal node is `audit_log`, the ground-truth record of operator writes (including config changes); observed and calculated carry `source_rule` on the row, intended points at the command `event` (via `event_id`). The raw payload is not stored: a parse or validation failure rides a `collection.failed` event. [config](/architecture/variables/) holds declared intent (PG-first), keyed to a state sample as its observed side.
-:::
+The end-to-end pipeline diagram, both lanes on one bus, lives on
+[messaging](/architecture/messaging/#the-pipeline-end-to-end).
 
 Related: [events](/architecture/events/) (the event family and `event_type`), [calculations](/architecture/calculations/) (calc rules and the rule families), [config and credentials](/architecture/variables/) (declared config, drift, reconcile), [collection](/architecture/collection/) (how telemetry arrives), [alarms and actions](/architecture/alarms-actions/) (alarm lifecycle, actions), and [the glossary](/architecture/glossary/) (every term defined once).

@@ -31,12 +31,16 @@ record/state/intent lane** (config, ack/snooze, settings, manual commands) are w
 through the Storage Gateway.
 
 :::design[Target design, tracked in #430]
-**The sample tables are an async SINK**: a NATS **persistence consumer** batch-writes samples off the
-data lane ([samples](/architecture/properties/)), idempotent on `(series, ts)`, so the rule engine
-never waits on a sample reaching Postgres. Committed changes on the record lane (including the `event`
-and `alarm` rows an `event_rule` consumer commits in one transaction) are fanned out by a
-leader-elected **CDC publisher** (logical decoding of the WAL) to JetStream; there is no dual-write,
-the change is born in the commit and CDC carries it.
+**The sample tables are an async SINK**: the NATS **persistence consumer** batch-writes samples off
+the data lane into `metric` / `state`, idempotent on `(series, ts)`
+([#430](https://github.com/hyperscaleav/omniglass/issues/430) stage 3), so a redelivery lands the
+same row, the firehose never blocks on the database, and the rule engine never waits on a sample
+reaching Postgres. Raw log lines ride the same ingest path into `log_line` but are keyed on nothing
+(an untyped arrival has no series), so their at-least-once story is the lane's own, not this one's.
+Every other row (the `event` and `alarm` rows an `event_rule` consumer commits in one transaction,
+and every operator mutation) is born in a Postgres transaction and fanned outward by the **CDC
+publisher**. The two-lane model, both consumers, and the CDC mechanism are described once, on
+[messaging](/architecture/messaging/#two-lanes-one-bus).
 :::
 
 The column schemas live
@@ -139,41 +143,6 @@ The structural and template entities (`component` / `system` / `location` and th
 [core entities](/architecture/core-entities/) and [templates](/architecture/templates/); the
 collection entities (`interface_type` / `interface` / `task`) on
 [collection](/architecture/collection/#storage).
-
-:::design[Target design, tracked in #430]
-
-## Two lanes land in Postgres differently
-
-Every row in Postgres arrives on one of two lanes, and the lane decides how the row is written and
-how the rest of the platform learns it changed.
-
-- **The data lane (a sink).** Observed and calculated samples live on the JetStream data lane.
-  The rule engine consumes them directly off NATS; Postgres is the durable record, not the live
-  signal. The **persistence consumer** is a durable JetStream consumer that batch-writes the
-  `metric` / `state` tables as an async sink, idempotent on
-  `(series, ts)` ([#430](https://github.com/hyperscaleav/omniglass/issues/430) stage 3), so a
-  redelivery lands the same row and the firehose never blocks on the database.
-  Raw log lines ride the same ingest path into `log_line`, but keyed on nothing (an untyped arrival has
-  no series), so their at-least-once story is the lane's own, not this one's.
-  Samples do **not** flow through CDC: they are already on NATS.
-- **The record/state/intent lane (PG-first, CDC-out).** Events, alarms, actions, and operator
-  mutations (config, ack/snooze, settings, manual commands) are born in a **Postgres transaction**.
-  When an `event_rule` consumer fires, it writes the `event` row and the `alarm` transition in one
-  transaction (the alarm transition is serialized per `(event_rule, owner)`); the API writes config,
-  acks, and settings the same way. There is no row-lock single-fire worklist and no
-  `LISTEN`/`NOTIFY` fan-out: the change is committed once, and the **CDC publisher** carries it
-  outward.
-
-The CDC publisher is **leader-elected** (exactly one active, fail over on death) via a NATS KV
-CAS lock, the same singleton pattern the clock uses ([time](/architecture/time/)). It reads the WAL
-by logical decoding and publishes each committed change to JetStream, where `action_rule`,
-reconcile, and projection consumers react. The replication **slot** and **publication** it reads are
-**ensured in the idempotent boot phase** (the same phase that upserts ship-with reference data),
-**not** a run-once migration: boot creates them if absent and leaves them untouched if present, so a
-fresh database and an existing one converge to the same state. Delivery is at-least-once with an
-idempotency key per change, so a consumer that sees a change twice is a no-op.
-
-:::
 
 ## Ground-truth records
 
@@ -314,8 +283,8 @@ tenant, paired one-to-one with one NATS account, [samples](/architecture/propert
 is no tenant context to set. Every read and write lands here. Scope arrives as an **explicit per-call
 `scope.Set` argument**: the request path passes the caller's action-scoped set, and seed and system
 callers pass an all-scope set. The named three-mode contract (scoped / node / system) that identity
-and access describes is the Design formalization of that convention, not a built mode switch. The CDC
-publisher reads committed changes by **logical decoding of the WAL**, a
+and access describes is the Design formalization of that convention, not a built mode switch. The
+[CDC publisher](/architecture/messaging/#two-lanes-one-bus) reads committed changes from the WAL, a
 replication-protocol stream beneath the table surface; that is how it learns of a change without
 re-querying, not a second application path around the Gateway. Because every
 application read and write goes through the Gateway, the physical backend is swappable beneath it:
