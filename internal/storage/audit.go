@@ -18,6 +18,13 @@ type AuditEntry struct {
 	Verb          string
 	Resource      string
 	ResourceID    string
+	// Old and New are the row images writeAuditRes recorded (raw JSON), the
+	// "to what?" half of the trail. Nil when the write had no image on that
+	// side: a create has no old, a delete no new. Callers pass them through
+	// verbatim; the write side owns redaction (sealed material never lands
+	// here, see auditSecret and the credential writes).
+	Old []byte
+	New []byte
 }
 
 // AuditFilter bounds a ListAuditLog read. Limit caps the rows (a sane default is
@@ -49,7 +56,7 @@ func (p *PG) ListAuditLog(ctx context.Context, f AuditFilter) ([]AuditEntry, err
 		select a.id, to_char(a.ts, 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
 		       coalesce(a.actor_principal_id::text, ''), coalesce(ah.username, a.actor_username, ''),
 		       coalesce(a.real_actor_principal_id::text, ''), coalesce(rh.username, a.real_actor_username, ''),
-		       a.verb, a.resource, coalesce(a.resource_id, '')
+		       a.verb, a.resource, coalesce(a.resource_id, ''), a.old, a.new
 		from audit_log a
 		left join human ah on ah.principal_id = a.actor_principal_id
 		left join human rh on rh.principal_id = a.real_actor_principal_id
@@ -66,7 +73,7 @@ func (p *PG) ListAuditLog(ctx context.Context, f AuditFilter) ([]AuditEntry, err
 	var out []AuditEntry
 	for rows.Next() {
 		var e AuditEntry
-		if err := rows.Scan(&e.ID, &e.TS, &e.ActorID, &e.ActorName, &e.RealActorID, &e.RealActorName, &e.Verb, &e.Resource, &e.ResourceID); err != nil {
+		if err := rows.Scan(&e.ID, &e.TS, &e.ActorID, &e.ActorName, &e.RealActorID, &e.RealActorName, &e.Verb, &e.Resource, &e.ResourceID, &e.Old, &e.New); err != nil {
 			return nil, fmt.Errorf("storage: scan audit row: %w", err)
 		}
 		out = append(out, e)

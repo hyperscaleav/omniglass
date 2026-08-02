@@ -8,7 +8,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"strings"
+
 	"github.com/hyperscaleav/omniglass/internal/api"
+	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
@@ -138,5 +142,94 @@ func TestAuditLogAPI(t *testing.T) {
 	impersonated := list(ownerTok, "")
 	if !has(impersonated, func(e auditEvent) bool { return e.RealActorName == "root" && e.ActorName == "alice" }) {
 		t.Fatalf("no impersonated event with real_actor=root, actor=alice in the audit log")
+	}
+}
+
+type auditDiffEvent struct {
+	Verb       string         `json:"verb"`
+	Resource   string         `json:"resource"`
+	ResourceID string         `json:"resource_id"`
+	Old        map[string]any `json:"old"`
+	New        map[string]any `json:"new"`
+}
+
+// TestAuditDiffRoundTrip pins the second half of "who changed this, and to
+// what?": the audit read carries the old/new images every estate mutation has
+// always written (#473). A node create/update round-trips through GET
+// /audit-log as a one-sided create image plus a full before/after pair, and a
+// secret create's audit body carries metadata only, never the sealed field
+// material (the redaction the write side promises).
+func TestAuditDiffRoundTrip(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	prov := secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))
+	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(prov))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+	ownerTok := bootstrapOwnerTok(t, ctx, gw)
+
+	c.do(ownerTok, http.MethodPost, "/nodes", map[string]any{"name": "probe-1", "display_name": "Probe"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPatch, "/nodes/probe-1", map[string]any{"display_name": "Probe One"}, http.StatusOK)
+	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
+		Name: "comm", SecretType: "snmp-community", OwnerKind: "platform",
+		Fields: map[string]string{"community": "hunter2-sealed-material"},
+	}, scope.Set{All: true}, true); err != nil {
+		t.Fatalf("create secret: %v", err)
+	}
+
+	list := func(query string) []auditDiffEvent {
+		t.Helper()
+		var out struct {
+			Events []auditDiffEvent `json:"events"`
+		}
+		if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/audit-log"+query, nil, http.StatusOK), &out); err != nil {
+			t.Fatalf("decode audit-log: %v", err)
+		}
+		return out.Events
+	}
+
+	var created, updated *auditDiffEvent
+	for _, e := range list("?resource=node") {
+		switch e.Verb {
+		case "create":
+			created = &e
+		case "update":
+			updated = &e
+		}
+	}
+	if created == nil || updated == nil {
+		t.Fatal("node create/update events not found")
+	}
+	if created.Old != nil {
+		t.Errorf("node create carries an old image: %v", created.Old)
+	}
+	if created.New == nil || created.New["Name"] != "probe-1" {
+		t.Errorf("node create new image missing or wrong: %v", created.New)
+	}
+	if updated.Old == nil || updated.New == nil {
+		t.Fatalf("node update must carry both images, got old=%v new=%v", updated.Old, updated.New)
+	}
+	if updated.Old["DisplayName"] != "Probe" || updated.New["DisplayName"] != "Probe One" {
+		t.Errorf("node update diff wrong: old=%v new=%v", updated.Old["DisplayName"], updated.New["DisplayName"])
+	}
+
+	secrets := list("?resource=secret")
+	if len(secrets) == 0 {
+		t.Fatal("secret create event not found")
+	}
+	raw, _ := json.Marshal(secrets[0])
+	if strings.Contains(string(raw), "hunter2") || strings.Contains(string(raw), "fields") {
+		t.Errorf("secret audit body leaks sealed material: %s", raw)
+	}
+	if secrets[0].New == nil || secrets[0].New["name"] != "comm" {
+		t.Errorf("secret audit new image missing metadata: %v", secrets[0].New)
 	}
 }

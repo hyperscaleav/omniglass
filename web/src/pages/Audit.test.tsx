@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, fireEvent, waitFor } from "@solidjs/testing-library";
+import { render, fireEvent, screen, waitFor } from "@solidjs/testing-library";
 import Audit from "./Audit";
 import { AUDIT_PAGE, type AuditEvent } from "../lib/audit";
 
@@ -10,8 +10,8 @@ import { AUDIT_PAGE, type AuditEvent } from "../lib/audit";
 // exactly as a user would without a server.
 const seed: AuditEvent[] = [
   { id: "1", ts: "2026-07-07T10:02:00Z", actor: "u-alice", actor_name: "alice", verb: "login", resource: "auth" },
-  { id: "2", ts: "2026-07-07T10:01:00Z", actor: "u-alice", actor_name: "alice", real_actor: "u-root", real_actor_name: "root", verb: "update", resource: "principal", resource_id: "u-alice" },
-  { id: "3", ts: "2026-07-07T10:00:00Z", actor: "u-bob", actor_name: "bob", verb: "delete", resource: "component", resource_id: "cmp_9f2" },
+  { id: "2", ts: "2026-07-07T10:01:00Z", actor: "u-alice", actor_name: "alice", real_actor: "u-root", real_actor_name: "root", verb: "update", resource: "principal", resource_id: "u-alice", old: { display_name: "Alice" }, new: { display_name: "Alice Cooper" } },
+  { id: "3", ts: "2026-07-07T10:00:00Z", actor: "u-bob", actor_name: "bob", verb: "delete", resource: "component", resource_id: "cmp_9f2", old: { name: "encoder" } },
 ];
 
 const beforeParams: (string | null)[] = [];
@@ -84,5 +84,34 @@ describe("Audit page", () => {
     fireEvent.click(btn());
     // The load-older page asks for events strictly older than the oldest loaded row.
     await waitFor(() => expect(beforeParams).toContain(oldestTs));
+  });
+});
+
+// The drawer answers the second half of "who changed this, and to what?"
+// (#473): a row opens into the field-level before/after diff over the images
+// the write recorded.
+describe("Audit drawer (#473)", () => {
+  it("opens a row into a drawer with the field-level before/after diff", async () => {
+    const { findByText } = render(() => <Audit />);
+    // The drawer portals to document.body, so the assertions use screen.
+    fireEvent.click(await findByText("update"));
+    expect(await screen.findByText("Change")).toBeTruthy();
+    expect(screen.getByText("display_name")).toBeTruthy();
+    expect(screen.getByText("Alice")).toBeTruthy();
+    expect(screen.getByText("Alice Cooper")).toBeTruthy();
+  });
+
+  it("a delete renders only the Before side, After reads (none)", async () => {
+    const { findByText } = render(() => <Audit />);
+    fireEvent.click(await findByText("delete"));
+    expect(await screen.findByText("Change")).toBeTruthy();
+    expect(screen.getByText("encoder")).toBeTruthy();
+    expect(screen.getByText("(none)")).toBeTruthy();
+  });
+
+  it("an event that recorded no images says so instead of an empty table", async () => {
+    const { findByText } = render(() => <Audit />);
+    fireEvent.click(await findByText("login"));
+    expect(await screen.findByText(/recorded no row images/)).toBeTruthy();
   });
 });

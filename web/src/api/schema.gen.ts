@@ -3173,6 +3173,10 @@ export interface components {
             actor?: string;
             actor_name?: string;
             id: string;
+            /** @description The row image after the write, absent on a delete */
+            new?: unknown;
+            /** @description The row image before the write, absent on a create */
+            old?: unknown;
             real_actor?: string;
             real_actor_name?: string;
             resource: string;

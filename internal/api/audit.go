@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -30,12 +31,33 @@ type auditEventBody struct {
 	Verb          string `json:"verb"`
 	Resource      string `json:"resource"`
 	ResourceID    string `json:"resource_id,omitempty"`
+	// The row images the write recorded: the "to what?" half of the trail. A
+	// create carries only new, a delete only old, an update both. The write
+	// side owns redaction (sealed secret material and credential hashes are
+	// never written), so the read passes them through verbatim.
+	Old any `json:"old,omitempty" doc:"The row image before the write, absent on a create"`
+	New any `json:"new,omitempty" doc:"The row image after the write, absent on a delete"`
 }
 
 type auditListOutput struct {
 	Body struct {
 		Events []auditEventBody `json:"events"`
 	}
+}
+
+// auditImage decodes a stored jsonb image for the wire, or nil when the write
+// had no image on that side (SQL NULL scans as a nil slice).
+func auditImage(raw []byte) any {
+	if len(raw) == 0 {
+		return nil
+	}
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		// A malformed image should never happen (the write marshaled it); fall
+		// back to the raw text rather than dropping the evidence.
+		return string(raw)
+	}
+	return v
 }
 
 func registerAuditRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
@@ -58,6 +80,7 @@ func registerAuditRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 				Actor: e.ActorID, ActorName: e.ActorName,
 				RealActor: e.RealActorID, RealActorName: e.RealActorName,
 				Verb: e.Verb, Resource: e.Resource, ResourceID: e.ResourceID,
+				Old: auditImage(e.Old), New: auditImage(e.New),
 			})
 		}
 		return out, nil

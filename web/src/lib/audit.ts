@@ -14,6 +14,11 @@ export type AuditEvent = {
   verb: string;
   resource: string;
   resource_id?: string;
+  // The row images the write recorded (#473): a create carries only new, a
+  // delete only old, an update both; auth events carry neither. The server
+  // owns redaction, so whatever arrives here is safe to render.
+  old?: unknown;
+  new?: unknown;
 };
 
 export const AUDIT_KEY = ["audit-log"] as const;
