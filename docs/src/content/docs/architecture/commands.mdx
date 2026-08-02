@@ -12,9 +12,14 @@ import SchemaTable from '../../../components/SchemaTable.astro';
 :::note[Partial: the record and reconcile half is built; actuation is deferred]
 The `command_type` registry, the `command` invocation log, and computed settlement are built
 ([ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables)).
+#396 is the do primitive's record-and-reconcile half.
+:::
+
+:::design[The actuation path, tracked in #393; the `derived` producers are the `event_rule` (ADR-0050)]
 Still directional: the outbound **actuation** path (the physical push to a driver or node, the
 protobuf `Command` on the wire, the device acknowledgement), and the `event_rule`-driven
-`derived` producers. #396 is the do primitive's record-and-reconcile half.
+`derived` producers. A command issued today is recorded, opens its intended value, and settles
+against the observed value; nothing yet carries the invocation to the device.
 :::
 
 A **command** is the "do" half of the telemetry model, the third of the triad alongside a

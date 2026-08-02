@@ -61,16 +61,21 @@ panel and the list a Tags column and per-key filter facet, the same shape as the
 The node pulls a **worklist**: the tasks and commands resolved for the
 components **placed on it**, over a NATS request-reply config pull. It **heartbeats**
 separately, on its own subject (see [the protocol](#the-node-server-protocol)), so the
-server tracks liveness independently of the pull. The server, not the template, decides placement (next), and
+server tracks liveness independently of the pull.
+
+:::design[Target design: the cascade-resolved worklist, tracked in #489]
+The server, not the template, decides placement (next), and
 resolves the cascade (config / `$var:` values, effective `interval`, credentials)
 before handing the node concrete work. The node never sees a template; it sees
 materialized, resolved task and command instances.
+:::
 
 The full wire contract, the channels, the command queue, delivery, buffering, credentials, and
 enrollment, is **[the node-server protocol](#the-node-server-protocol)** below.
 
 ### Config propagation (declared change to running node)
 
+:::design[Target design: config propagation to a running node (`:apply` and the generation-driven cache), tracked in #489]
 An interface's connection config (endpoint, snmp community, http auth header) is a
 **projection** of the component's declared config through its template. The node
 re-pulls the worklist (tasks) every tick, but **caches interface config for its
@@ -94,6 +99,7 @@ The generation moves at **operator-config pace, not telemetry pace**: it is a
 read-side aggregate over interface config, and the high-volume sample-write
 path never touches `interface.updated_at`. A no-op re-apply (identical rendered
 config) does not advance it, so nodes are never woken for nothing.
+:::
 
 ## The node-server protocol
 
@@ -103,6 +109,7 @@ credential bound to `node.name`, [identity and access](/architecture/identity-ac
 server-to-node arrives as messages on subjects the node is permitted to consume. Three flows share that
 connection:
 
+:::design[The full node NATS contract, per ADR-0036; delivery guarantees are #430]
 - **Telemetry up** (node to server): the node **publishes** `TelemetryBatch` batches (`{samples, labels}` plus
   the `(task, ts)` envelope, [below](#shipping-samples)) to a **JetStream raw ingress subject**;
   JetStream acknowledges each publish (at-least-once), and a `Nats-Msg-Id` lets the server dedup a replay
@@ -141,9 +148,11 @@ server-side** (an `event_rule` over samples, or an `event` a rule derived from a
 [events](/architecture/events/)). The edge produces samples (including log lines) and command status;
 the server derives the events. "We do not re-raise the same event next poll" is the **alarm** model's job
 (one stateful open alarm, fire and clear), not a delivery concern.
+:::
 
 ### Buffering and retention are cascade settings
 
+:::design[Target design: the edge buffer, tracked in #430; retention is #417]
 When the server is unreachable the node **buffers in memory**, bounded; the buffer is **not durable at
 the edge** (the edge is a worker, the durable side is the server). Both the **buffer** (size, shed
 policy) and **retention** are **cascade-resolved** ([cascade](/architecture/cascade/)) with an
@@ -151,14 +160,17 @@ policy) and **retention** are **cascade-resolved** ([cascade](/architecture/casc
 longer retention, tuned like any other setting rather than per-node flags. When the buffer fills the node
 **sheds oldest metrics first and surfaces it** as a `node.buffer` sample (depth, drops), so shedding
 is visible, never silent.
+:::
 
 ### Credentials at the edge
 
+:::design[Target design: credentials at the edge, tracked in #489]
 The worklist materialization resolves credentials server-side, so **device secrets travel to the node**
 (over TLS). They are held **decrypt-on-use**: in memory, or encrypted at rest in a scratch dir with the
 key from the [`SecretProvider`](/architecture/variables/), **never persisted in plaintext**, scoped to
 the node's placement, and re-fetched on the config-generation bump. A field node is physically less
 trusted, so a secret never lands on edge disk in the clear.
+:::
 
 ### Enrollment
 
@@ -166,12 +178,16 @@ Day one, a node is **created server-side first** (its `node.name` and properties
 **per-node enrollment token**; the token is handed to the edge deployment, and the node **claims its
 identity** on first connect (the token is exchanged for its **NATS credential**, a per-node JWT signed for
 its nkey, scoped to the subjects its placement allows, [identity and access](/architecture/identity-access/)).
+
+:::design[Fleet auto-enrollment over a `discovery_rule`, tracked in #489]
 Later, a **shared enrollment token** plus a **`discovery_rule`** can auto-enroll a fleet: the node's **own
 properties** (stable facts, selected ENV) derive its name, editable server-side after deploy, so a rollout
 mints no per-node token.
+:::
 
 ## Placement (ETL, cascaded)
 
+:::design[Target design: cascaded placement, tracked in #489]
 Collection follows **ETL**: extract **and transform** (including the extractor's Expr
 transform) default to the **edge**, then the shaped samples are **loaded** to the
 server, where resolve / bind / calc / evaluate default to **central**. Placement is a **cascaded property** ([cascade](/architecture/cascade/)), not a
@@ -180,9 +196,11 @@ cloud APIs, SaaS pollers, and inbound webhooks from external sources. A listener
 endpoint lives where placement puts it: the on-site node for LAN devices (lower
 latency, survives a WAN outage), the server for cloud sources, which is why a
 registered callback URL resolves to the placed listener's address, not a hardcode.
+:::
 
 ## Running tasks
 
+:::design[Target design: edge normalization (locate + Expr) and the listen mode, tracked in #489]
 For each task the node runs the protocol over the interface's connection,
 then **normalizes at the edge**: it applies the locate + Expr extraction
 ([collection](/architecture/collection/)) to produce samples and stamps labels (cascading
@@ -198,6 +216,7 @@ is a **stateful interface transport**, not a third task type:
   a stateful interface).
 
 Both assemble the same telemetry payload (below).
+:::
 
 The built interface types (poll protocols and listeners), their per-task params, and the fixed
 samples each emits are the collection **type catalog**: see
@@ -207,6 +226,7 @@ catalog (reachability gating, sessions, the task queue, tick scheduling).
 
 ## Sessions
 
+::::design[Target design: sessions and the session pool, tracked in #489]
 A stateful interface (`ssh`, `mqtt`, anything held open) becomes a **session** at
 runtime: one connection keyed by `(node, interface)`, shared by every task and
 command under it, so the handshake and auth are paid once and reused. A session pool
@@ -238,9 +258,11 @@ auth rejected, dropped, timeout). The **data event owns parse health**: a parse
 failure (connected, got bytes, the extraction did not match) emits a `collection.failed`
 event carrying the `raw` (the caused `event` + the `action` row for commands), and surfaces
 as a collection-health sample so it is alertable. A command timeout can touch both.
+::::
 
 ## Inbound handling on a shared connection
 
+:::design[Target design: the ordered matcher set, tracked in #489]
 When one connection carries heterogeneous inbound frames (a session with pollers + a
 stream, or one webhook taking many payload types), an arriving frame is **not**
 self-evidently the response to the last command. Frames route through an **ordered
@@ -257,9 +279,11 @@ matcher set**:
   the matched frame; otherwise ordered content-matching is the fallback;
 - an **unmatched** frame lands as `raw` (orphan, logged), so a
   missing matcher is a fixable gap that surfaces rather than failing silently.
+:::
 
 ## The component task queue
 
+::::design[Target design: the component task queue, tracked in #489; the durable command queue is ADR-0036]
 The node's work is the **component task queue** (distinct from the central
 **rule engine** that consumes samples off NATS and does derivation; see
 [workers](/architecture/workers/)). It
@@ -293,13 +317,17 @@ The node-side queue is **not** durable: the edge is a stateless worker, and dura
 **server-side** (the JetStream command queue, and the cascade-configurable telemetry buffer). On reconnect
 the node re-pulls its worklist, resumes its durable consumer on the command queue, and replays its unacked
 telemetry publishes (idempotent on `(series, ts)`). See [the node-server protocol](#the-node-server-protocol).
+::::
 
 ## Implicit reachability
 
 Any interface with a host address gets reachability for free: the node pings the
 host and checks the declared port(s) are listening, continuously and out of band.
 Smart default, **bypassable per interface** (endpoints that drop ICMP or have no port
-to check opt out or override the probe). The results come back as `reachable` /
+to check opt out or override the probe).
+
+:::design[Target design: the layered availability gate, tracked in #489]
+The results come back as `reachable` /
 `port_open` **samples** usable in rules and dashboards, and they feed the
 smart-wait gate from the node's local copy, so the connection detector and the
 dashboard signal are the same always-on probe.
@@ -363,13 +391,17 @@ with the host on the task, no interface endpoint) *are* the check and run ungate
 A down interface's gate samples all ship in **one** batched call. L5 (socket),
 L6 (TLS), and further L7 handshakes slot in by extending the check stack: one
 `append` in `ifaceChecks`, gated by its own `_check` param.
+:::
 
 ## Shipping samples
 
 The node ships a native `TelemetryBatch`: `{ samples, labels }` plus an envelope
 (`task`, batch `ts`), **published to the JetStream raw ingress subject** (protobuf-encoded
-message, the proto surviving as the NATS message schema), buffered with
-retry/backoff. On a parse or validation failure it also ships the **raw** wire bytes so the
+message, the proto surviving as the NATS message schema).
+
+:::design[Target design: the edge retry buffer, raw on failure, and the OTLP adapter, tracked in #430]
+The publish is **buffered with
+retry/backoff**. On a parse or validation failure the node also ships the **raw** wire bytes so the
 server can emit a `collection.failed` event; on success raw is omitted (there is no telemetry
 table), unless a **dev raw-mode** is on. An **OTLP adapter** at the edge accepts OTLP from
 third-party tools and translates to the native shape.
@@ -399,9 +431,11 @@ is dropped before evaluation, not at the durable write. On a parse or
 validation failure it emits a `collection.failed` event carrying the raw; on success there is
 no raw to store. The server does not re-derive observed samples; only calc and event rules
 derive. The node's job ends at the ship.
+:::
 
 ## Tick scheduling, concurrency, and self-observability
 
+::::design[Target design: the tick scheduler, `node.self`, and the `node.down` sweep, tracked in #489 and #430; the seeded node rules are the `event_rule` (ADR-0050)]
 A tick groups the worklist **by interface** and runs in three phases: the L3 ping
 pre-pass (batched per host), then the per-interface gate-verdict pre-pass, then
 the poll phase. The two gate pre-passes run at a **high fixed concurrency**
@@ -461,4 +495,5 @@ implicitly on the next clean tick. This works because the trigger engine is
 owner-general: `Evaluate` opens and resolves alarms for the sample's actual
 owner (component, system, location, or node), which also unlocks system- and
 location-owned alarms.
+::::
 

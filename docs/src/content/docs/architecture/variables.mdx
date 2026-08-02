@@ -69,6 +69,7 @@ config is not `node`-owned). The three are not three subsystems; they are three 
 
 ## config: declared device state, keyed to a signal
 
+::::design[The `config` member, tracked in #153]
 A **config** item is the **declared side of a canonical signal**. `video.input` is one key with two
 sides: the **observed** value the device reports (a `state`, provenance=observed) and the
 **declared** value you set. They share the **key** but not the **storage**: the declared value lives
@@ -145,6 +146,7 @@ Resolving a value scoped to a role slot (the [system role](/architecture/core-en
 lives) may need a new cascade level between system and component, alongside the per-item get/set
 binding shape on the template.
 :::
+::::
 
 ## secret: a typed, encrypted cascaded value
 
@@ -216,6 +218,7 @@ and works the operational secrets in its subtree. Concretely:
   (`secret:reveal`) are open to **operators** in scope; **delete** stays admin-and-owner. `admin` holds
   `secret:>` (reaching the `:admin` tier a two-token `secret:*` cannot); `owner`'s `>` covers everything.
 
+:::design[The secret lifecycle and validity health, tracked in #153; rotation flows are ADR-0050, the timer #419]
 **Lifecycle is a later slice.** The first slice is the typed encrypted cell and its cascade; the
 lifecycle a plain config never carries (refresh, rotation, expiry) is **deferred**, each behavior a
 template-declared use of functions, time, and flows rather than a new subsystem:
@@ -233,6 +236,7 @@ works: **intrinsic expiry** (an `oauth2` token, a `tls_cert` `notAfter`) warns p
 **observed-use failure** flips it unhealthy after N consecutive auth failures consumers report. Both
 surface through the ordinary sample-to-alarm pipeline, so a secret gets a health story without
 being a device signal.
+:::
 
 **Shared versus per-device is just scope.** A fleet-wide SNMP community is a secret set high in the
 cascade; a unique-per-device secret is the same shape set at component scope. No shared-versus-unique
@@ -310,6 +314,7 @@ store hold a value a device **observed**, a rule **calculated**, config **intend
 **declared**; only provenance separates them. A "field" was only ever the declared case, which is why it
 folded here rather than staying its own table.
 
+:::design[Target design: the cross-owner cascade (#291), the `calculated` producer (#430), interpolation and sources (#296), file typing (#242), and the driver column (#489)]
 What the design intends, and this slice does **not** yet do:
 
 - **The cross-owner cascade** (`product -> location -> system -> component`, deepest-wins). Today a value
@@ -332,6 +337,7 @@ What the design intends, and this slice does **not** yet do:
 - **A driver access/mode column** on the contract (whether a driver can get, set, or only declare a
   property), which lands with the driver slice. The three classifier contracts themselves are built; a
   **node** still has no classifier to declare one, by design.
+:::
 
 The Properties panel can set, re-set, and **clear** a value: the effective read returns the
 `property` id (`value_id`) alongside the literal, so each override row offers a **revert** control
@@ -393,6 +399,7 @@ either way; the question is how much normalization a key places on its values.
   consumer slice for both); config is read by key like a sample. Secrets are **masked** in every
   read and surface in the clear only through the audited reveal; a variable is plaintext.
 
+:::design[The `config` member's observed-side worker, tracked in #153]
 The observed side of config is maintained by one **event-driven worker** (the one-worker-plus-stages
 model): when a `state` lands whose `(owner, key)` a config item is keyed to, it refreshes
 that item's cached observed value, reverse-indexed so "is this sample a config's observed side?" is
@@ -415,9 +422,11 @@ declared -- observed: "disagree = drift" { style.stroke-dash: 4 }
 declared -> command: reconcile: enforce (set fn)
 command -> device
 ```
+:::
 
 ## How this changes provenance
 
+:::design[The `config` member, tracked in #153]
 Modeling declared state as **config** (and access secrets as **secrets**) keeps **declared** out of the
 sample provenances. Samples carry three ([observed, calculated,
 intended](/architecture/properties/#provenance-how-we-know-a-value)); declared intent lives in config,
@@ -427,6 +436,7 @@ it. What moved is the *declared* value, out of the sample tables and into config
 cascade. There is no separate property or vault store; config, secrets, and variables are one
 resolution model, and the spec-and-status loop gets a real home instead of overloading sample
 provenance with operator intent.
+:::
 
 ## Storage
 

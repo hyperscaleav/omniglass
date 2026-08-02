@@ -25,12 +25,14 @@ dashboards), which are not built yet. The realized inventory shell and its primi
 
 ## The renderer contract: ViewResult and the views BFF
 
+:::design[Target design: the ViewResult contract, tracked in #434]
 The whole console rests on one contract. **All UI reads go through [views](/architecture/views/)**
 (the read-side BFF), CRUD for writes; the operator never queries raw tables. Every view returns a
 uniform **`ViewResult`** (`{columns, rows}`), and the SPA renders any view through **one renderer per
 view**: adding a view does not add a bespoke renderer. This is what decouples the render layer from any
 specific query and keeps the read contract uniform whether a page is coded or a dashboard widget is
 configured.
+:::
 
 The **dense-ops layout is an architectural pattern**, not a one-off page: list surfaces follow one
 shape (a summary of facets over the full set, then a keyboard chip filter, then a tree/list table,
@@ -42,6 +44,7 @@ and the pattern is the model the analytical surfaces will reuse.
 
 ## One renderer library, two composition modes
 
+::::design[Target design: the renderer library and composable dashboards, tracked in #434]
 The factoring avoids both "every screen is hand-coded" and "everything must be a dashboard":
 
 - **Renderer library** (coded once): `stat`, `table`, `status-grid`, `timeline`, `heatmap`,
@@ -74,18 +77,24 @@ The factoring avoids both "every screen is hand-coded" and "everything must be a
 The contract underneath both: **all UI reads go through [views](/architecture/views/)**, CRUD
 for writes. The renderer library serves coded pages and dashboard widgets identically; the only
 difference is whether the composition is code or config.
+::::
 
 ## Coded pages and dashboards share one view layer
 
+:::design[Target design: default views behind coded pages, tracked in #434]
 Coded pages give the complete operator console; composable dashboards are the customization layer on
 top (a grid editor, widget config, and the view-binding UI), and the view layer is what makes them
 cheap. A built-in page **queries a default view, not a raw resource** (the Alarms page reads the
 `firing-now` view, not `GET /alarms` directly), so the read contract is uniform and the same view
 backs a dashboard widget unchanged.
+:::
 
 ## Live updates: polling by default
 
-Live data is **query polling** (a refetch interval; slow-changing config uses a long stale time). A
+Live data is **query polling** (a refetch interval; slow-changing config uses a long stale time).
+
+::::design[Views and the SSE live relay, tracked in #434; the unit registry is #430]
+A
 read can also **stream over the view layer (a server-side SSE relay)** where latency or fan-out
 earns it, the same earn-it-with-a-profile discipline. Presentation that depends on config (a severity
 level's id to its label and color) resolves client-side from the config view. A sample
@@ -97,6 +106,7 @@ while one operator sees Celsius and another Fahrenheit.
 :::caution[Open question]
 Which high-frequency surfaces move from polling to the SSE relay, and what latency earns it.
 :::
+::::
 
 ## Configuration UIs
 
@@ -107,7 +117,10 @@ kind (location and secret; the system and component kinds moved to Standards and
 tab its own directory over that registry, CRUD on the location kind, and a read-only view of
 secret ([build log](/architecture/build-log/)). Editing a setting is editing
 **[config](/architecture/variables/)**, an audited mutation, not a separate prop store
-([audit](/architecture/audit/)). The standout is the **rule-authoring
+([audit](/architecture/audit/)).
+
+:::design[The rule-authoring surface (ADR-0050); the expression editor is #434, the AI seam ADR-0001]
+The standout is the **rule-authoring
 page**:
 
 - an **Expr editor** for the predicate or condition, with the prepared-input contract surfaced
@@ -117,9 +130,11 @@ page**:
 - the **AI-suggestion seam** ([AI](/architecture/ai/)): AI may propose a rule pre-filled with
   provenance; the operator edits and approves, and approval is the ordinary audited create. AI never
   saves a rule itself.
+:::
 
 ## Exploration UIs
 
+:::design[Target design: the exploration surfaces over views, tracked in #434]
 Coded pages with rich interaction, all reading through views:
 
 - **The cascade resolve view** (the standout): "why did this value win", rendered from the
@@ -132,6 +147,7 @@ Coded pages with rich interaction, all reading through views:
 - **Inventory and topology**: the location / system / component trees, navigable, with
   [health](/architecture/health/) (`status-grid`) at each level.
 - **Event exploration**: query the event log by entity / time / category, with the audit trail.
+:::
 
 ## Information architecture
 
@@ -167,11 +183,13 @@ its own.
 Admin is the renamed Settings group: it holds the platform-administration surfaces (Users, Roles,
 Groups, Audit) plus the live Settings leaf, the platform-preferences page.
 
+:::design[The Home situation room and the Dashboards tier, tracked in #434]
 **Home is distinct from Dashboards.** Dashboards monitor the *fleet* (property views over the
 inventory). Home monitors the *monitor*: the operator and admin situation room for config lifecycle
 (stale or out-of-date templates), control-plane health (rules failing to evaluate, samples
 dropped with no matching rule), and proactive suggestions. A dashboard cannot model that, so Home
 earns its own slot; "Overview" is the name of the default dashboard, not the landing.
+:::
 
 The theme is **dark-first** (the NOC aesthetic) on the brand palette (teal `#21CAB9`, navy
 `#080c16`), semantic tokens only, no hardcoded colors in components.

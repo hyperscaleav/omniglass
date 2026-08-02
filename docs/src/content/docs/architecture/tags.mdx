@@ -71,9 +71,12 @@ Two fields on the key shape how its bindings behave:
   scoping rules, so a key means the same thing wherever it is legal.
 - **`propagates`** says whether a bound value cascades. A **propagating** key (the default) resolves down the
   [cascade](/architecture/cascade/), reaching everything beneath the binding. A **non-propagating** key binds as
-  a **flat per-entity set**: it resolves only from a binding on the entity itself, never from an ancestor. That flat
-  case is the shape a [file](/architecture/files/) needs (a file is not on the structural arc, so it has no parent to
-  cascade from); the same key model serves both, toggled by this one field.
+  a **flat per-entity set**: it resolves only from a binding on the entity itself, never from an ancestor.
+
+:::design[Binding onto a file, tracked in #191]
+That flat case is the shape a [file](/architecture/files/) needs (a file is not on the structural arc, so it has
+no parent to cascade from); the same key model serves both, toggled by this one field.
+:::
 
 ## Values resolve union-on-key, override-on-value
 

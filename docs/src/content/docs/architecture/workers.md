@@ -49,11 +49,15 @@ group scale horizontally with no leader: JetStream hands each message to exactly
 adding instances just adds throughput.
 :::
 
+:::design[The node-liveness sweep, tracked in #419]
 Alongside the consumers, a **node-liveness sweep** runs on its
 own ticker. Unlike a consumer it is a *poll*, not a drain: a down node produces no message, so it is
 found by scanning heartbeat freshness, raising and resolving the node-owned `node.down` alarm
-idempotently (the one-open partial unique index on `(component_id, dedup_key)`, shipped by
-[ADR-0075](/architecture/decisions/#adr-0075-an-alarms-condition-identity-is-a-raiser-supplied-dedup-key)). There is no separate projector either: current values live in the
+idempotently over the one-open dedup primitive
+([ADR-0075](/architecture/decisions/#adr-0075-an-alarms-condition-identity-is-a-raiser-supplied-dedup-key), which is built; nodes already publish the heartbeat the sweep will read, and the sweep itself is not).
+:::
+
+There is no separate projector: current values live in the
 `property` latest-value cache table (ADR-0065; see [storage](/architecture/storage/)), and
 `alarm` / `action` hold their state directly.
 

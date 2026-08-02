@@ -41,8 +41,11 @@ the effective document is always complete. It is the **fall-through**, not the b
 **Override levels** are rows in Postgres, the identity cascade:
 
 2. **`platform`**: the install-wide admin override. **Slice-0.**
+
+:::design[The group and user override rungs, tracked in #270]
 3. **`group`**: per user-group override. **Fast-follow.**
 4. **`user`**: per-user override. **Fast-follow.**
+:::
 
 ### Most-specific wins
 
@@ -297,10 +300,12 @@ enforced. The pure engine, the override table, the Gateway methods, the API (rea
 effective read, PATCH / DELETE / `:restoreDefaults`), the two permissions, the two seeded `profile` namespaces,
 `ui.theme` wired end to end, and the Admin settings page.
 
+:::design[The fast-follow rungs and platform-domain namespaces, tracked in #270]
 **Fast-follow (not this slice):** the group and user override rungs and the Profile preferences tab (editable,
 user-scoped Gateway reads), the `settings:lock` permission split for group-admins, `platform`-domain namespaces
 (`retention`, `integrations`) with their features, a GitOps read-only mode (a setting that locks the page to
 file-only editing), and live file reload (SIGHUP) instead of restart-to-reload.
+:::
 
 ## Slice-1 boundary
 
@@ -313,8 +318,10 @@ embedded `defaults.yaml` and the hand-kept namespace slice retired); the typed e
 key / type / enum); and the generated client constraint artifact (`web/src/api/settings.schema.gen.ts`) driving
 schema-derived inline form validation with Save blocked on an invalid field.
 
+:::design[The declarative operator-file machinery and the cascade rungs, tracked in #270]
 **Deferred (future slices, tracked on [#270](https://github.com/hyperscaleav/omniglass/issues/270)):** the
 declarative operator-file machinery (a generated JSONSchema for the operator `settings.json`, validation of the
 **file** layer at boot, and letting the file layer take precedence over the database, the GitOps-wins /
 read-only lever); operator-open namespaces (a typed map with a `Default()` method); and the group and user
 cascade rungs, all unchanged by slice-1.
+:::
