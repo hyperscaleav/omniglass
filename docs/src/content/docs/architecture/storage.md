@@ -14,15 +14,11 @@ patterns every other leaf's entities land on, not a per-table column dump.
 Built today: the Storage Gateway as the only door to the database, dbmate migrations (run-once,
 embedded, idempotent), the per-action scope predicate and the in-transaction `audit_log` write, and the
 shared scoped-tree and scoped-CRUD primitives. Scope arrives at the gateway as an explicit per-call
-`scope.Set` argument; seed and system callers pass an all-scope set. Still `Design`: the CDC publisher
-and persistence consumer, the data-lane / record-lane split, the **idempotent sample sink** (there is no
-`series` column and no uniqueness key on `metric` / `state` today, so redelivery can duplicate;
-[#430](https://github.com/hyperscaleav/omniglass/issues/430) stage 3), the ground-truth `*_log` tables
-beyond `log_line` and `audit_log` (`session_log`, `internal_log`, `collection_log`, `node_log`), every
-SQL **view** (the schema holds zero views today), the `raw_sample` buffer, the named three-query-mode
-gateway contract, embedded Postgres in the single binary (today Postgres is BYO), partitioning and
-tiering, and the go-jet typed query builder. The `property` current-value cache is built, a table
-upserted from the sink, not the metric-view once sketched here
+`scope.Set` argument; seed and system callers pass an all-scope set. Today `metric` / `state` carry no
+`series` column and no uniqueness key, so redelivery can duplicate
+([#430](https://github.com/hyperscaleav/omniglass/issues/430) stage 3). The design fences below mark
+the parts of this page that are target design, each naming its tracker. The `property` current-value
+cache is built, a table upserted from the sink, not the metric-view once sketched here
 ([properties](/architecture/properties/#the-current-value-cache)).
 See [implementation status](/architecture/status/).
 :::
@@ -31,14 +27,19 @@ Postgres is the **relational system of record**: it holds the entities, events, 
 audit, config, and the platform settings store. It is the record/state/intent lane. It is **never a
 message bus**: the live signal travels on NATS JetStream, and Postgres earns its place as the durable
 record. Two writes paths land here, and only one is the request path. **Operator mutations and the
-record/state/intent lane** (config, ack/snooze, settings, manual commands, plus the `event` and
-`alarm` rows an `event_rule` consumer commits in one transaction) are written synchronously through
-the Storage Gateway. **The sample tables are an async SINK**: a NATS **persistence consumer**
-batch-writes samples off the data lane ([samples](/architecture/properties/)), idempotent on
-`(series, ts)` in the target contract (the idempotency key is still Design, per the status note), so
-the rule engine never waits on a sample reaching Postgres. Committed changes on
-the record lane are fanned out by a leader-elected **CDC publisher** (logical decoding of the WAL) to
-JetStream; there is no dual-write, the change is born in the commit and CDC carries it. The column schemas live
+record/state/intent lane** (config, ack/snooze, settings, manual commands) are written synchronously
+through the Storage Gateway.
+
+:::design[Target design, tracked in #430]
+**The sample tables are an async SINK**: a NATS **persistence consumer** batch-writes samples off the
+data lane ([samples](/architecture/properties/)), idempotent on `(series, ts)`, so the rule engine
+never waits on a sample reaching Postgres. Committed changes on the record lane (including the `event`
+and `alarm` rows an `event_rule` consumer commits in one transaction) are fanned out by a
+leader-elected **CDC publisher** (logical decoding of the WAL) to JetStream; there is no dual-write,
+the change is born in the commit and CDC carries it.
+:::
+
+The column schemas live
 with each owning feature: [samples](/architecture/properties/#the-sample-tables) (the three
 kind-tables), [events](/architecture/events/#storage) (the `event` row), [alarms and
 actions](/architecture/alarms-actions/#storage) (`alarm` / `action`),
@@ -68,7 +69,7 @@ template tables), [collection](/architecture/collection/#storage) (interfaces an
 - **Three storage shapes.** **Ground-truth records** are append-only and immutable, each named for
   what it is: `log_line` (the raw log lane, not a sample), `audit_log` (operator actions), and the standing
   `*_log` ground-truth logs (`session_log`, `internal_log`, plus the `collection_log` /
-  `node_log` companions; these four are still Design, only `log_line` and `audit_log` exist today). There is **no `telemetry` table**: samples are published to the
+  `node_log` companions; [ground-truth records](#ground-truth-records) below). There is **no `telemetry` table**: samples are published to the
   JetStream data lane, not synchronously inserted, so the raw payload is not persisted in steady
   state; the persistence consumer sinks the typed sample, and raw appears only on a
   `collection.failed` event or a dev raw-mode tap ([samples](/architecture/properties/)). A
@@ -139,6 +140,8 @@ The structural and template entities (`component` / `system` / `location` and th
 collection entities (`interface_type` / `interface` / `task`) on
 [collection](/architecture/collection/#storage).
 
+:::design[Target design, tracked in #430]
+
 ## Two lanes land in Postgres differently
 
 Every row in Postgres arrives on one of two lanes, and the lane decides how the row is written and
@@ -148,8 +151,7 @@ how the rest of the platform learns it changed.
   The rule engine consumes them directly off NATS; Postgres is the durable record, not the live
   signal. The **persistence consumer** is a durable JetStream consumer that batch-writes the
   `metric` / `state` tables as an async sink, idempotent on
-  `(series, ts)` in the target contract (still Design: today's tables carry no `series` column and no
-  uniqueness key, [#430](https://github.com/hyperscaleav/omniglass/issues/430) stage 3), so a
+  `(series, ts)` ([#430](https://github.com/hyperscaleav/omniglass/issues/430) stage 3), so a
   redelivery lands the same row and the firehose never blocks on the database.
   Raw log lines ride the same ingest path into `log_line`, but keyed on nothing (an untyped arrival has
   no series), so their at-least-once story is the lane's own, not this one's.
@@ -171,24 +173,28 @@ reconcile, and projection consumers react. The replication **slot** and **public
 fresh database and an existing one converge to the same state. Delivery is at-least-once with an
 idempotency key per change, so a consumer that sees a change twice is a no-op.
 
+:::
+
 ## Ground-truth records
 
 The immutable, append-only records, each named for what it is. They are the lineage targets and what
 a backtest reads; none is derived. The detailed columns of `audit_log` live on
 [audit](/architecture/audit/), `session_log` on [nodes](/architecture/nodes/#sessions); the rest is a
-compact list here because storage is their natural architectural home. Of these, only `log_line` and
-`audit_log` exist today; the other four are still Design (the status note above):
+compact list here because storage is their natural architectural home:
 
 - **`log_line`** (a component's or node's own words, the untyped raw ingest lane, not a sample,
   [ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events));
 - **`audit_log`** (operator actions: actor, verb, resource, `old -> new`; the lineage target for
-  operator writes; secret decrypts always recorded, [audit](/architecture/audit/));
-- **`session_log`** (Design: connection-lifecycle transitions, node-reported; the connection log,
+  operator writes; secret decrypts always recorded, [audit](/architecture/audit/)).
+
+:::design[Target design, tracked in #430]
+- **`session_log`** (connection-lifecycle transitions, node-reported; the connection log,
   [nodes](/architecture/nodes/#sessions));
-- **`internal_log`** (Design: platform self-narration: startup / reconcile / migration / node-reg /
+- **`internal_log`** (platform self-narration: startup / reconcile / migration / node-reg /
   config-sync, [workers](/architecture/workers/));
-- the **`collection_log`** / **`node_log`** companions (Design: the cheap per-run execution record
+- the **`collection_log`** / **`node_log`** companions (the cheap per-run execution record
   and the node's operational narration).
+:::
 
 There is **no separate rule-execution table**: a derived row *is* the evidence of its rule's run,
 carrying its lineage on the row (below).
@@ -219,20 +225,24 @@ the one the CHECK enforces. This is one of three layers: the CHECK enforces *whi
 The **trace columns live beside the lineage pointers, but not on the sample tables**: `event` carries
 `correlation_id` and `source_event_id` (the causation parent, plus
 `source_log_line_id` and `derived_by_rule_id`), and `log_line` carries `correlation_id`; `metric` and
-`state` carry no trace columns today. These are orthogonal to the lineage CHECK. The designed
-carriage, causation riding **NATS message headers** across the command -> device -> observed-sample
-round trip and landing on the sample row so the cycle guard walks a real id
-([samples](/architecture/properties/), [alarms and actions](/architecture/alarms-actions/)), is still
-Design along with the persistence consumer itself.
+`state` carry no trace columns today. These are orthogonal to the lineage CHECK.
+
+:::design[Target design, tracked in #430]
+The designed carriage: causation rides **NATS message headers** across the command -> device ->
+observed-sample round trip and lands on the sample row, so the cycle guard walks a real id
+([samples](/architecture/properties/), [alarms and actions](/architecture/alarms-actions/)).
+:::
 
 ## Current value and projections: views by default
 
 `alarm` and `action` are **stateful entities** that hold their own current state in a real table
 (not event-sourced). Everything else that is "current state" is a **read model**, and the default is
 a **plain SQL view** (always-correct, never stale, zero maintenance). A worker-maintained table is a
-**measured optimization**, earned only when a read profile shows a view too slow. This section is the
-target model: **the schema holds zero SQL views today** (the shipped current-value read is the
-`property` cache table, per the status note), so the read models below are still Design.
+**measured optimization**, earned only when a read profile shows a view too slow. **The schema holds
+zero SQL views today**; the shipped current-value read is the `property` cache table (the status note
+above).
+
+::::design[Target design, tracked in #430]
 
 | Read model | Of | Shape | Notes |
 |---|---|---|---|
@@ -258,6 +268,10 @@ If `current_value` is ever materialized, is it one wide table or a table per kin
 key, instance, provenance)?
 :::
 
+::::
+
+::::design[Target design: partitioning is tracked in #420, retention in #417, and the `raw_sample` buffer in #430]
+
 ## Partitioning and retention
 
 - **Append-only tables are range-partitioned by `ts`** (native declarative partitioning;
@@ -271,7 +285,7 @@ key, instance, provenance)?
   `event.source_log_line_id` null rather than deleting the event (`on delete set null`). The per-table defaults are **cascade-resolved**
   ([cascade](/architecture/cascade/)) with an install-wide `platform` binding, so a class or entity can
   hold longer or shorter without changing the whole install.
-- **The `raw_sample` buffer** (still Design; the opt-in raw-retention policy, [collection](/architecture/collection/))
+- **The `raw_sample` buffer** (the opt-in raw-retention policy, [collection](/architecture/collection/))
   is range-partitioned by `ts` and cold-tierable like the metric partitions, on a short retention. It
   is bounded, sampled, and short-lived; it is not a telemetry table.
 - **Views are not partitioned** (bounded by fleet size, not time) and are computed from the
@@ -285,6 +299,8 @@ tuned against real volume.
 :::caution[Open question]
 The append-only id type under partitioning: bigint identity versus uuid v7.
 :::
+
+::::
 
 ## The Storage Gateway and tiering
 
@@ -305,24 +321,36 @@ re-querying, not a second application path around the Gateway. Because every
 application read and write goes through the Gateway, the physical backend is swappable beneath it:
 
 - **default**: Postgres for everything (samples, ground-truth records, views, registries). Postgres
-  is **BYO today**; embedding a real Postgres in the single binary (the same code path either way) is
-  still Design. The data lane's persistence consumer and the record lane's CDC publisher both
-  target this one backend.
-- **tiering**: the firehose does not stay in hot Postgres forever. Aged
-  `metric` / `log_line` partitions tier out to a **columnar or object
-  store** (Parquet on S3-compatible, or an embedded columnar engine) behind the same gateway, so
-  historical queries fan across hot and cold with no model change. The cold tier is partitioned by
-  `ts`.
+  is **BYO today**.
 - **blobs**: opaque bytes (a firmware image, a config dump, a capture, and later a large `log_line`
   body or a `collection.failed` raw payload) live in the content-addressed [blob store](/architecture/files/),
-  a `blob.Store` seam behind the same gateway. The default **pgblobs** backend holds bytes inline in Postgres;
-  an S3-compatible or disk backend swaps in with no model change, since a row references a blob by its `sha256`,
-  never inline bytes.
+  a `blob.Store` seam behind the same gateway. The default **pgblobs** backend holds bytes inline in
+  Postgres, and a row references a blob by its `sha256`, never inline bytes.
+
+:::design[Embedded Postgres, tracked in #19]
+Embedded Postgres in the single binary (the same code path either way) replaces BYO for the
+all-in-one run mode; the data lane's persistence consumer and the record lane's CDC publisher (#430)
+target this one backend either way.
+:::
+
+::::design[The cold tier, tracked in #434]
+**tiering**: the firehose does not stay in hot Postgres forever. Aged `metric` / `log_line`
+partitions tier out to a **columnar or object store** (Parquet on S3-compatible, or an embedded
+columnar engine) behind the same gateway, so historical queries fan across hot and cold with no model
+change. The cold tier is partitioned by `ts`.
 
 :::caution[Open question]
 Which cold engine backs the tier, what triggers tier-out (age versus a partition-detach hook), how
 queries federate across hot and cold, and whether projections ever tier.
 :::
+::::
+
+:::design[Alternate blob backends, tracked in #248]
+An S3-compatible or disk blob backend swaps in beneath the same `blob.Store` seam with no model
+change, since rows reference blobs by `sha256`.
+:::
+
+:::design[Target design, tracked in #434]
 
 ## Query construction: typed, parameterized, generated
 
@@ -345,3 +373,5 @@ carve-out is the high-volume sample insert (the persistence consumer), which may
 throughput, still inside the gateway. It runs in all-visibility **system mode**, not per-row scoped: its
 safety rests on the typed column targets plus the upstream **admission consumer** having already confined
 owners ([identity and access](/architecture/identity-access/)), not on a per-write scope predicate.
+
+:::

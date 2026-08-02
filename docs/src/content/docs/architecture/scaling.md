@@ -17,10 +17,8 @@ availability, and multi-tenancy.
 Built today: the single Go binary (hand-written commands: `server`, `migrate`, `bootstrap`, `token`,
 `set-password`, `seed-dev`, and `node run`), the embedded NATS server (in-process `nats-server` with
 JetStream, `internal/cli/server.go`), the `node` run mode, the multi-arch container image, and the
-Helm chart. Still `Design`: embedded Postgres, the `worker` / `controller` modes, the CDC bridge,
-the two-lane data plane (the admission / trusted / persistence split below and in the diagram;
-today one stream and one serial consumer do confinement and persistence inline), horizontal
-scale-out, and high availability. See
+Helm chart. Today one stream and one serial consumer do confinement and persistence inline; the
+design fences below mark the parts of this page that are target design, each naming its tracker. See
 [implementation status](/architecture/status/).
 :::
 
@@ -41,10 +39,13 @@ talk over NATS and the gateway rather than in-process calls that would need unta
 
 - **server**: the public HTTP API ([API](/architecture/api/)) and the views read path; it serves the
   **SPA embedded in the binary** (`go:embed`), so the web UI is not a separate service. Stateless.
+:::design[Target design, tracked in #57]
 - **worker**: the **JetStream consumers** (rule engine, reconcile, notify, [workers](/architecture/workers/)).
   Stateless competing consumers; add replicas for throughput.
 - **controller**: the leader-elected **singletons** (the clock and the CDC publisher, below). A role, not
   necessarily its own pod.
+:::
+
 - **node**: collection; at the edge it runs **at the sites** (outside the cluster) and connects back, with
   a central `node` for cloud-API and SaaS sources (`placement: central`, [nodes](/architecture/nodes/)).
 
@@ -55,6 +56,7 @@ zero external setup**:
 
 - **NATS + JetStream, embedded as a library** (`nats-server` in-process, file-backed). The app is always a
   NATS client; embedded versus external is a config flag, not a code path.
+:::design[Embedded Postgres, tracked in #19]
 - **PostgreSQL, embedded as a managed subprocess** ([embedded-postgres](https://github.com/fergusstrange/embedded-postgres)):
   a **real** Postgres, so logical decoding (the CDC bridge below), JSONB, partitioning, and the
   exclusive-arc CHECK constraints behave identically to at-scale. Pinned to **Postgres 18.3.0 or newer**
@@ -63,21 +65,30 @@ zero external setup**:
 
 So "single binary" is the binary orchestrating a real Postgres and NATS for you, not a different
 datastore. The data and coordination architecture is identical at any size.
+:::
 
 ## Coordination: NATS moves, Postgres remembers
 
 The split is firm. **Postgres is the relational system of record** (entities, samples, events and
 alarms, audit, and the queries the cascade, fusion, views, and scope need). **NATS (JetStream) is the
-nervous system**: work distribution, the durable command queue, the telemetry buffer, and fan-out, plus
-**KV** (config, locks, leader-election) and an object store for internal artifacts (the KV and object
-store are still Design; the built blob store is content-addressed in Postgres, `internal/blob`).
+nervous system**: work distribution, the durable command queue, the telemetry buffer, and fan-out.
 
+:::design[Target design, tracked in #434]
+JetStream **KV** (config, locks, leader-election) and an **object store** for internal artifacts ride
+the same substrate; user files stay on the content-addressed blob store (built: `internal/blob`,
+Postgres-backed), not the object store.
+:::
+
+:::design[Target design, tracked in #430]
 The two meet through **change data capture**: Postgres tells us *what changed* (logical decoding of the
 WAL), and NATS carries the queue. A single **leader-elected CDC publisher** reads committed changes from a
 replication slot and publishes them to JetStream (an idempotency key per change yields exactly-once
 outcomes downstream). **Postgres is never a message bus**; it only emits its changes. The replication
 **slot and publication are ensured idempotently in the boot phase, not a migration**, since dbmate
 migrations run exactly once.
+:::
+
+:::design[Target design, tracked in #430]
 
 ### Inter-service communication
 
@@ -137,6 +148,10 @@ binary.nats -- binary.clk: "KV: config · locks · leader-elect" { style.stroke-
 binary.nats -- ext: "swap embedded for BYO" { style.stroke-dash: 4 }
 ```
 
+:::
+
+:::design[Target design, tracked in #57]
+
 ## Horizontal scale: what replicates
 
 - **server** is **stateless**: replicate it behind a load balancer; state lives in Postgres.
@@ -147,6 +162,8 @@ binary.nats -- ext: "swap embedded for BYO" { style.stroke-dash: 4 }
   nodes ([nodes](/architecture/nodes/)).
 - **singletons** (the clock and the CDC publisher) are **leader-elected via a NATS KV lock**: exactly one
   active, the rest stand by and take over on failure. One mechanism, no separate election service.
+
+:::
 
 ## Platform configuration
 
@@ -183,6 +200,8 @@ rungs, and the `platform`-domain settings (`retention`, CDC routing, integration
 fast-follow.
 :::
 
+:::design[Target design, tracked in #57]
+
 ## Vertical scale and high availability
 
 Replicas are the **HA** story: the server and worker tiers have no single point of failure (any replica
@@ -191,6 +210,8 @@ database's concern (CNPG, a managed cluster), NATS HA is the JetStream cluster's
 WAN outage on its own** (the bounded buffer plus the durable command queue, [nodes](/architecture/nodes/)).
 Vertical scale is the simple first lever (a bigger Postgres, more worker CPU); horizontal removes the
 ceiling.
+
+:::
 
 ## Multi-tenancy: per database, per account, per deployment
 

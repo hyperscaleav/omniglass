@@ -12,11 +12,9 @@ import SchemaTable from '../../../components/SchemaTable.astro';
 :::note[Implementation status]
 Built end to end: the **principal** kind of group (`principal_group` plus membership,
 group-targeted grants via `principal_grant.group_id`, the effective-grant union in the loader,
-`/principal-groups` CRUD gated by `principal_group:*`, and the console Groups pages). Everything
-else on this page (entity groups, dynamic membership filters, weights, cascade bindings,
-group-as-scope) is still Design. Note the distinction: the built group is a grant **subject**
-(members inherit the grants targeted at the group), while group as a **scope**
-(`scope_kind=group`) is refused today with a 422.
+`/principal-groups` CRUD gated by `principal_group:*`, and the console Groups pages). Note the
+distinction: the built group is a grant **subject** (members inherit the grants targeted at the
+group), while group as a **scope** (`scope_kind=group`) is refused today with a 422.
 :::
 
 A group lets an operator gather entities that the structural trees keep apart, so you can configure or grant access to "all AV displays" or "everything in this pilot" by attribute or by hand. A **group** is a named set of entities that cuts
@@ -27,6 +25,7 @@ an anonymous predicate never could.
 
 ## What a group is
 
+:::design[The general group table, tracked in #10]
 A group:
 
 - is **component / system / location / principal** kind (matching the structural levels, plus
@@ -39,10 +38,11 @@ A group:
 - is also the unit of **access control**: a visibility / permission scope (see
   [identity and access](/architecture/identity-access/)).
 
-The general `group` table is **still Design**: id, kind (component/system/location/principal),
+The general `group` table carries the id, the kind (component/system/location/principal), the
 static-list or dynamic-filter membership, and the **weight** that places it on the cascade's
 specificity scale ([cascade](/architecture/cascade/),
 [identity and access](/architecture/identity-access/)).
+:::
 
 What is **built** is the principal arm: `principal_group` and its membership, a **grant subject**
 (grants attach to the group and reach its members), not an access scope
@@ -52,6 +52,7 @@ What is **built** is the principal arm: `principal_group` and its membership, a 
 
 <SchemaTable table="principal_group_member" />
 
+:::design[Entity groups on the cascade: weights, dynamic membership, and group-as-scope, tracked in #10]
 ## Placement: one specificity scale
 
 Structural layers auto-derive a specificity from position, weight-free, and the operator never tunes
@@ -99,3 +100,4 @@ In operator terms, the same user stories the cascade serves, the group-specific 
 - **A hand-picked set no filter can name.** I drop the 5 executive briefing rooms into a static "Exec
   Rooms" group for premium escalation, and grant the exec-support team visibility to that same group.
   *(static membership; groups double as the access scope)*
+:::

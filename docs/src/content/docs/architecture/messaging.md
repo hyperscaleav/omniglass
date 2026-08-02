@@ -11,8 +11,8 @@ sidebar:
 Built today: the embedded nats-server with JetStream (`internal/bus/server.go`), per-node subject
 isolation with the auth callback, one `OG_TELEMETRY` stream on the node subjects (`og.v1.telemetry.*`) and the API push subject (`og.v1.api.telemetry`), with the single
 durable `og-telemetry-worker` consumer writing straight to Postgres, and the worklist and heartbeat
-request-reply lanes. Still Design: the raw/trusted two-lane split and the admission republish, CDC,
-KV, distributed locks and leader election, the object store, per-tenant accounts, and the SSE relay.
+request-reply lanes. The design fences below mark the parts of this page that are target design, each
+naming its tracker.
 :::
 
 Omniglass has **two typed contracts**. The [public API](/architecture/api/) is the north face (HTTP and
@@ -20,6 +20,8 @@ OpenAPI: operators, the SPA, the CLI, integrations, MCP). This is its sibling: t
 transport**, a **NATS subject contract** over JetStream. Service-to-service traffic, the edge, and the
 live UI ride it. **Postgres stays the system of record; NATS moves.** The deployment topology and the
 inter-service diagram are on [scaling](/architecture/scaling/).
+
+:::design[Target design, tracked in #430]
 
 ## Two lanes, one bus
 
@@ -48,11 +50,16 @@ Internal traffic splits by what is moving:
   publishes those committed changes to JetStream, where `action_rule`, reconcile, and projection consumers
   react. No dual-write: born in the commit, the bridge fans it out.
 
+:::
+
 ## Streams and consumers
 
 As built today there is **one stream**, `OG_TELEMETRY`, bound to the node subjects (`og.v1.telemetry.*`) and the API push subject (`og.v1.api.telemetry`), consumed by the single
-durable `og-telemetry-worker`; the set below is the target topology, not the current one.
+durable `og-telemetry-worker`; `og.v1.telemetry.<node>` is the sample firehose itself, carrying each
+node's samples and its raw self-logs, not a separate control-plane lane. The set below is the target
+topology, not the current one.
 
+:::design[Target design, tracked in #430]
 - **samples** (data lane): untrusted publishers (node, external webhook) publish to a **raw ingress**
   subject; the **admission consumer** owner-confines per publisher class and re-publishes to the **trusted**
   samples stream that the rule engine, calc, and the persistence consumer read. Trusted server producers
@@ -62,16 +69,16 @@ durable `og-telemetry-worker`; the set below is the target topology, not the cur
 - **records** (events, alarms, actions): published by the CDC publisher from Postgres commits; consumed by
   `action_rule`, reconcile, and projection consumers.
 - **commands**: a durable, per-node **command queue** the edge holds a consumer on ([nodes](/architecture/nodes/)).
-- **telemetry**: as built, `og.v1.telemetry.<node>` IS the sample firehose: it carries each node's
-  samples and its raw self-logs, not a separate control-plane lane. The control-plane split described
-  in this list (with the firehose on a raw ingress subject) is Design.
 
 Durable consumers track their own position; delivery is at-least-once with `Nats-Msg-Id` dedup plus double
 ack, which with the idempotent sinks (a sample on `(series, ts)`, an action transition on
 `(alarm, action, transition)`, the CDC idempotency key) gives exactly-once **outcomes**. This triple
 (`Nats-Msg-Id` dedup, double ack, idempotent sink) is the canonical exactly-once mechanism the other pages
-refer to. The edge stamps `ts`, so the system is ts-authoritative and needs no strict ordering on the wire.
-Today's delivery contract is weaker than this: node publishes are fire-and-forget core NATS (no publish
+refer to.
+:::
+
+The edge stamps `ts`, so the system is ts-authoritative and needs no strict ordering on the wire.
+Today's delivery contract is weaker than the target: node publishes are fire-and-forget core NATS (no publish
 ack, no `Nats-Msg-Id`) and the consumer acks once after multi-transaction writes, so delivery is
 at-least-once with a known duplicate risk until #430 lands (see #430 and #311).
 
@@ -79,8 +86,11 @@ at-least-once with a known duplicate risk until #430 lands (see #430 and #311).
 
 Subjects are hierarchical and **scope is expressed in them**, not bolted on:
 
+:::design[Target design, tracked in #434]
 - **Tenant = one NATS account.** Per-account isolation (messaging) is the same boundary as the
   per-database isolation (storage): no shared subjects, no shared rows ([identity and access](/architecture/identity-access/)).
+:::
+
 - **The API telemetry lane (`og.v1.api.telemetry`) is trusted by subject.** A first-party push
   (`POST /telemetry:push`) is authorized at the route, so the API publishes as a **trusted server
   producer** with no admission pass, and the ingest consumer believes the owner the batch carries
@@ -89,19 +99,25 @@ Subjects are hierarchical and **scope is expressed in them**, not bolted on:
   this subject: a node's grant is an explicit allow-list of its own three subjects, and the lane
   deliberately sits **outside** the single-token `og.v1.telemetry.*` wildcard, so a node named for
   whatever literal we might reserve there cannot be handed it.
-- **Subject permissions gate the subject string; the admission consumer gates the owner.** A node may
+- **Subject permissions gate the subject string.** A node may
   publish and subscribe only the subjects for its placement; the grant is **mechanically derived from
-  placement**, a coarse transport gate, not a second copy of the ABAC model. But a sample's owner lives
-  in the **payload** (a multi-owner function resolves owner from labels), which subject permissions cannot
-  see, so the **admission consumer** (above) is the authoritative owner fence, and authorization stays
-  authoritative in the [Storage Gateway](/architecture/storage/). **Operators never connect to the bus**,
-  so there is no operator subject-permission model to keep in sync (see the live UI relay below).
+  placement**, a coarse transport gate, not a second copy of the ABAC model. **Operators never connect
+  to the bus**, so there is no operator subject-permission model to keep in sync (see the live UI
+  relay below).
+
+:::design[Target design, tracked in #430]
+A sample's owner lives in the **payload** (a multi-owner function resolves owner from labels), which
+subject permissions cannot see, so the **admission consumer** (above) is the authoritative owner
+fence, and authorization stays authoritative in the [Storage Gateway](/architecture/storage/).
+:::
 
 ## Request-reply: service to service
 
 Synchronous internal calls use **NATS request-reply**: an in-process call in single-binary mode, a
 request over the bus when modes are split across pods. The public API never uses request-reply (it is
 HTTP); request-reply is the east-west wire only.
+
+:::design[Target design, tracked in #434]
 
 ## KV and object store
 
@@ -110,6 +126,10 @@ HTTP); request-reply is the east-west wire only.
   invalidation, [identity and access](/architecture/identity-access/)).
 - **Object store** holds internal artifacts (a compiled per-node runtime unit, for example). User files
   stay on the content-addressed [blob store](/architecture/files/), not here.
+
+:::
+
+:::design[Target design, tracked in #434]
 
 ## The live UI relay
 
@@ -133,6 +153,8 @@ live path introduces **no second authorization model**:
 - **Where it shines:** a live fleet tile, the alarm console, and the **template-debug / dev-tap** surface,
   where an operator watches samples arrive in real time as a template runs (the learning-tool "render
   the real engine against live data" surface, [the learning tool](/contributing/learning-tool/)).
+
+:::
 
 Related: [API](/architecture/api/) (the public HTTP contract), [scaling](/architecture/scaling/) (the
 deployment topology and the diagram), [nodes](/architecture/nodes/) (the edge as a NATS client),

@@ -14,9 +14,7 @@ Built today: the `audit_log` row written in the same transaction as every entity
 resolved actor, verb, resource, and `old -> new` diff; the secret-decrypt audit (distinct `reveal` and
 `copy` verbs); the auth-event lane; and the `GET /audit-log` read, which returns the `old`/`new` images,
 with the console Admin > Audit page rendering each row's field-level before/after diff in a drawer.
-Still `Design`: the read-audit toggle, retention partitioning, the backtest / reconcile consumers, and
-the alarm ack / snooze projection (no such surface exists yet). See
-[implementation status](/architecture/status/).
+See [implementation status](/architecture/status/).
 :::
 
 ## The model
@@ -33,17 +31,24 @@ the alarm ack / snooze projection (no such surface exists yet). See
 - **An AI-accepted suggestion is one row.** An AI tool acts via OAuth as a `human` or `service`
   principal, so the actor is **that principal**, attributed and audited like any caller; the AI-sourced
   marking rides alongside the row ([AI](/architecture/ai/)).
+
+:::design[The backtest and reconcile consumers, tracked in #434]
 - **Ground truth a backtest reads.** Operator-driven transitions and config changes are not
   recomputable from collected data, so the audit log is what a rule backtest reads for them: alarm ack and
   snooze ([alarms and actions](/architecture/alarms-actions/)), and every config change a
   reconcile consumes.
+:::
 
 ## Reads
 
 - **Secret decrypts are always audited and never filterable.** Every read of secret material
   emits an `audit_log` (a credential decrypt), and that subset cannot be filtered away.
-- **Other reads are not audited at the storage layer.** Optional read-audit is config-driven at
-  the API layer (per-resource opt-in or a verbosity setting), off by default.
+- **Other reads are not audited at the storage layer.**
+
+:::design[The read-audit toggle, tracked in #434]
+Optional read-audit is config-driven at the API layer (per-resource opt-in or a verbosity setting),
+off by default.
+:::
 
 :::caution[Open question]
 The read-audit granularity: per-resource opt-in versus a global verbosity setting.
@@ -74,16 +79,23 @@ impersonated principal and `real_actor_principal_id` the admin behind it, and bo
 
 ## Retention and integrity
 
-Audit carries the **longest retention** of any ground-truth log (compliance); the retention
-partitioning itself is still Design, per the status note above. It is append-only by construction.
+Audit carries the **longest retention** of any ground-truth log (compliance). It is append-only by
+construction.
+
+:::design[Retention partitioning, tracked in #434]
+Retention is enforced by time-partitioning `audit_log`: aging out a window drops a partition, never a
+row-by-row delete.
+:::
 
 :::caution[Open question]
 Tamper-evidence (a hash-chain or signed audit) for high-assurance deployments.
 :::
 
+:::design[The backtest, reconcile, and alarm-projection consumers, tracked in #434]
 ## Who consumes it
 
 - **Backtest**: a rule backtest reads operator transitions and config changes from here, since they are not recomputable.
 - **Reconcile**: config changes arrive as `audit_log` rows, so reconcile reacts to them.
 - **The alarm projection**: ack and snooze come from audit.
+:::
 

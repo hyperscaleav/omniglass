@@ -53,12 +53,7 @@ Storage Gateway across locations, systems, and components, and **principal group
 **inherit** the group's grants through the grant-loader union, gated by `principal_group`, and **profile
 pictures** (a human's avatar: self-managed via `POST /auth/me:setAvatar` / `:removeAvatar`, admin-managed via
 `POST /principals/{id}:setAvatar` gated `principal:set-avatar`, normalized server-side to a 256x256 JPEG and
-stored base64 on the human row). Still `Design`:
-OIDC / SAML auth, the node / NATS path, the permission cache, custom-role management, the tenant-policy
-lever, the **cross-tier scope cascade** (a location scope covering the systems and components beneath it:
-today each estate entity is scoped by its own tier, and only `secret` / `variable` / `interface` / `task`
-resolve through their owner), and the **`group` scope kind** (a grant with `scope_kind=group` is refused
-with a 422 today). The per-slice breakdown is on [implementation status](/architecture/status/).
+stored base64 on the human row). The per-slice breakdown is on [implementation status](/architecture/status/).
 
 Where the build currently differs from the present-tense design below (each logged in the
 [decision log](/architecture/decisions/)):
@@ -218,6 +213,7 @@ viewer  <-  operator  <-  admin  <-  owner
 
 The console **Roles view** (`GET /roles`, gated `role:read:admin`) lists these read-only with each role's display name, description, inheritance, and **effective permissions**, so an operator sees exactly what a role grants before assigning it. The role blade shows permissions as a **net** view: the response carries the **permission universe** (every capability the route surface enforces, see [the permission universe](#the-permission-universe-published-per-route)) plus, per role, the **held** subset (resolved server-side by the same `rbac.Set.Allows` matcher as the effective set, so wildcards, the `:read` floor, and the `>` tail are honoured). The blade renders the universe one-per-line, lexicographically, with a `Held / Missing / All` toggle, so an operator reads not only what a role holds but what it is missing. Custom-role editing is a later slice.
 
+:::design[Custom-role management, tracked in #434]
 ### Custom roles
 
 Operators create `official: false` roles via the IAM API with a chosen permission set, optionally inheriting from `viewer` (or any other role). Inheritance rules:
@@ -226,6 +222,7 @@ Operators create `official: false` roles via the IAM API with a chosen permissio
 - An `official: false` role may inherit from any role.
 
 Because of the no-override rule, `inherits: [viewer]` is unambiguous (every id resolves to exactly one role).
+:::
 
 ### Permission format
 
@@ -277,6 +274,7 @@ So the same role applied at different scopes composes naturally; mixing roles (e
 
 ### Scopes
 
+:::design[The cross-tier scope expansion and the group scope kind, tracked in #10]
 | scope_kind | scope_id | expansion |
 |---|---|---|
 | `all` | null | every entity in the database |
@@ -284,12 +282,15 @@ So the same role applied at different scopes composes naturally; mixing roles (e
 | `system` | system id | subtree(S): S + its components + descendants |
 | `component` | component id | exactly `{ C }` |
 | `group` | group id | members(G) at resolution time (dynamic groups re-resolve) |
+:::
+
+Today each estate entity is scoped by its own tier: a `location` scope contains locations only, a
+`system` scope systems only, and so on (only `secret` / `variable` / `interface` / `task` resolve
+through their owning entity's tier), and a `group` scope is refused with a 422.
 
 `expand` realizes a scope to a **bound id set** the gateway injects as a parameterized `owner IN (...)` predicate (or a closure-table join for deep trees), never string-built. The structural-tree walk carries a cycle guard, and the set is **fleet-size-bounded** (entities), so it stays an indexed membership filter.
 
 `scope_kind` is enumerated (`all`, `location`, `system`, `component`, `group`); adding a new kind requires a schema change (CHECK constraint) and a new case in the gateway's `expand` function. `scope_id` is operator data.
-
-**Build status:** the table above is the target model. Today the **cross-tier expansion is not built**: a `location` scope contains locations only, a `system` scope systems only, and so on, each estate entity scoped by its own tier (only `secret` / `variable` / `interface` / `task` resolve through their owning entity's tier), and a `group` scope is refused with a 422. Both are still Design, per the status note at the top.
 
 :::caution[Open question]
 Whether a scope may mix include and exclude (e.g. "all except group X").
@@ -493,6 +494,7 @@ policy shape (deny rules over resource + action + subject / scope conditions), t
 whether it is deny-only or can also force-allow.
 :::
 
+:::design[The permission cache, tracked in #434]
 ## Caching strategy
 
 The hot path must not hit the DB for RBAC. Three layers, in-process, no persisted "effective permissions" projection (which would invite the stale-join class of cache-coherence bug; the grant and role caches below still carry a bounded staleness, the contract for which is stated at the end):
@@ -504,6 +506,7 @@ The hot path must not hit the DB for RBAC. Three layers, in-process, no persiste
 The DB is the source of truth; caches are derived views with explicit invalidation events. The principal/permission cache, config, and distributed locks live in **NATS KV** (not Postgres `LISTEN/NOTIFY`): a committed change to `role` / `principal` / `principal_grant` reaches NATS through the leader-elected CDC publisher, which updates the KV keys those watches observe. The same KV contract holds whether the design runs single-binary (embedded NATS) or against an external NATS cluster at scale.
 
 **Staleness contract.** Both the handler `canDo` and the gateway predicate read the **same** cached grants, so the gateway backstops a *forgotten* check, not a *stale* one: a revoked-but-not-yet-invalidated grant authorizes at both layers. The grant cache therefore carries a **bounded max-staleness**, a TTL floor independent of CDC invalidation, so a CDC-publisher outage or failover cannot extend the revoke-lag window unbounded. For **high-sensitivity mutations** (IAM changes and deletes of IAM objects) the gateway **re-resolves grants in the transaction** against source-of-truth, trading a round trip for zero revoke-lag; that round trip is off the read and firehose **hot path** (which never hits the DB for RBAC). Other control-plane mutations (`:ack`, `:command`, a config `PATCH`) take the cached path and so accept a **bounded revoke-lag** (the TTL floor above): documented and bounded, not closed. An open SSE session **re-checks on every grant-cache invalidation** for its principal (next section's relay) and closes if `:read` is lost. The freshness asymmetry is deliberate: grant membership (the **subject** side) is cached and is the binding staleness constraint, while group membership (the **object** side) is resolved live in-query, so it can only tighten, never loosen, a stale grant.
+:::
 
 ## The /auth/me contract
 
@@ -563,6 +566,7 @@ permission-on-every-route invariant, and a bare `<img src>` cannot carry a beare
 could not authenticate it. The typed client fetches the JSON (a session cookie or a bearer both work) and
 builds the data URL.
 
+:::design[The nkey/JWT node identity and placement-derived subject grants, per ADR-0036]
 ## The node path
 
 Nodes do not use general role x scope. A node authenticates with a per-tenant **NATS JWT/nkey** credential bound to its `node.name` and is authorized only to **its own assignments**: publish telemetry, heartbeat, consume the commands addressed to it. It is an identity-scoped narrow path, and the scope is carried by **NATS subject permissions**, not a route authorizer:
@@ -572,6 +576,7 @@ Nodes do not use general role x scope. A node authenticates with a per-tenant **
 - A node's published samples are owner-bound at **stream-consume time, ahead of any evaluation**, by the **admission consumer** at the head of the data lane: for a node it checks the payload owner against the node's placement-derived `visible_set`; for a central webhook, against the interface's declared owner (the per-class confinement is specified in [messaging](/architecture/messaging/)). It re-publishes only confined samples to the trusted stream the rule engine, calc, and persistence sink consume; an owner outside the set is an orphan / discovery candidate, never an authoritative sample (see [collection](/architecture/collection/)). The fence cannot live only at the durable write, because the rule engine consumes the stream **live**: a forged owner must be caught **before** it can open an alarm or fire an action. **Trusted server-internal producers** (calc, the action layer's intended write) publish to the trusted stream directly, no admission pass. The admission consumer itself runs in **system mode** (its owner lookup is a system-mode gateway read); the persistence sink is then a trusted **system mode** `COPY` relying on confined owners upstream, with no per-row scope predicate of its own.
 
 A `node` credential whose subject permissions do not cover a subject is rejected by NATS at publish/subscribe time; a non-`node` principal cannot hold a node account's subject grants.
+:::
 
 ## One model, never duplicated
 

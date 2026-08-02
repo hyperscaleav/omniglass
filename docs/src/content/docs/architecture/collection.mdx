@@ -44,8 +44,8 @@ there are no operator create/update/delete task routes, only `GET /tasks` and `G
 join the interface), and a **node purge cascades** its interfaces and their derived tasks. Both surfaces carry
 the two authorization layers, with **scope cascading through the owning component** (the interface and its derived
 task inherit the component's read/action scope, so an out-of-scope component's interface or task is a
-non-disclosing 404, reusing the component tier with no new scope kind). The full function/DAG authoring model below (multi-step, cross-interface, branching) is still design;
-what is built is the reach gate over four transports (`tcp`/`ssh`/`http` open the port, `icmp` pings). The
+non-disclosing 404, reusing the component tier with no new scope kind). What is built is the reach gate
+over four transports (`tcp`/`ssh`/`http` open the port, `icmp` pings). The
 protocol **drivers** that collect a normalized menu of samples and functions over a transport are the next
 slices. See
 [ADR-0037](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer),
@@ -53,6 +53,8 @@ slices. See
 [ADR-0039](/architecture/decisions/#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver),
 and [ADR-0040](/architecture/decisions/#adr-0040-the-task-is-derived-read-only-plumbing-projected-from-its-interface).
 :::
+
+:::design[The template authoring model, tracked in #434]
 
 Collection is built from **functions**. A versioned `ComponentTemplate` declares how to reach a
 class of device (its interfaces) and a set of **functions**, each a discrete unit of device logic
@@ -91,6 +93,7 @@ ComponentTemplate (apiVersion, kind, metadata.labels)
 A **function** is the device-level unit. The platform-level workflow that *responds* to data,
 the thing that opens tickets, notifies, and orchestrates, is a [flow](/architecture/alarms-actions/);
 a flow can call a function, but the two live at different layers.
+:::
 
 ## Interfaces: the device's APIs, declared once
 
@@ -137,6 +140,8 @@ interfaces:
   inbound ones to the declared envelope, so a step sees structured content, not wire bytes.
 - **Node placement is not declared here.** It is server-assigned from the component's location.
 
+:::design[Functions: a trigger plus a step DAG, tracked in #434]
+
 ## Functions: a trigger plus a step DAG
 
 A top-level `functions` array. Each **function** is one trigger and a DAG of steps, from trivial
@@ -156,6 +161,7 @@ A `command` function takes typed `args` and is the imperative path: it is how th
 on a device, and how a reconcile pushes a declared config back (the **set** function, see [config](/architecture/variables/)).
 A function has exactly one trigger. `triggers` is modeled as a list to admit the multi-trigger
 case, a scheduled function that is also command-invocable for a targeted refetch.
+:::
 
 ### Two axes: task mode and interface transport
 
@@ -326,6 +332,8 @@ impersonate another interface; shared-interface ingress should scope on
 are preferred for high-trust sources. A listener also runs node-hosted for
 LAN-local sources, with idempotency/dedup and form-encoded bodies.
 
+:::design[The step DAG and extractors, tracked in #434]
+
 ## Steps: the DAG
 
 A step is a typed **operation**: a `kind` (the operation it performs) that runs on a referenced
@@ -392,6 +400,9 @@ fusion) lives on the [`property_type`](/architecture/properties/#the-property_ty
 validation resolves every key to a reachable scope (template keys self-resolve; referenced org/official
 keys must exist); an unresolved key is reject-not-project at ingest, so a template never silently
 collects a measurement no scope knows.
+:::
+
+:::design[Template inputs, tracked in #434]
 
 ## Inputs: the template's typed parameters
 
@@ -417,6 +428,7 @@ and are overridable per component. So `$var:` lives at the **binding layer** (ap
 defaults), not scattered through the template body, and the template stays reusable with any
 value of the right shape. Each input `type` is a `variable_type`, so per-field secrecy comes
 from the shape.
+:::
 
 ## Execution: parse at the edge
 

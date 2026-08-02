@@ -121,9 +121,14 @@ Absence of data is two conditions, and the why matters:
   condition (a fresh device, a property_type never reported), detected by "no observations
   exist," not by a watchdog. Gray, not actionable.
 
-The built current-value shape is the `property` cache row, `CachedValue{Value, TS, Provenance}`;
-the `freshness (fresh | stale)` quality on it is still design, staleness marked on the current
-value with the last value preserved. **[Health](/architecture/health/) treats them
+The built current-value shape is the `property` cache row, `CachedValue{Value, TS, Provenance}`.
+
+:::design[The `freshness` quality on the current value, tracked in #430]
+The cache row carries a `freshness (fresh | stale)` quality: staleness marked on the current
+value with the last value preserved.
+:::
+
+**[Health](/architecture/health/) treats them
 differently**: a *stale required member* defaults to `unknown` (lost visibility, so the system
 rolls to `unknown`, [health](/architecture/health/)), an *unknown member* is gray and does not down the system. Whether stale means "last value still valid" (a
 slow config signal) or "lost visibility, alarm" (a liveness signal) is **per-property-type

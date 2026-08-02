@@ -20,12 +20,7 @@ credentials; the Expr and Go-template machinery in
 Built today: the **alarm as a held row**, raised on a **component** by a caller, carrying a `severity`
 (`info` / `warning` / `critical`), a message, a `raised_at`, and a nullable `cleared_at` (clearing keeps
 the row), plus the **capabilities it degrades**, which is how it reaches a system's
-[health](/architecture/health/). Still `Design`: everything that **produces and routes** one, so the
-`event_rule` lifecycle (fire / clear criteria, `for` sustain, the `(event_rule, owner)` key, ack and
-snooze), the **exclusive-arc owner** (an alarm is component-local today, so there is no system- or
-location-owned alarm), the severity-level registry, the CDC publish, and the whole `action_rule` and
-action / flow tier
-([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).
+[health](/architecture/health/).
 See [implementation status](/architecture/status/).
 :::
 
@@ -37,7 +32,10 @@ See [implementation status](/architecture/status/).
 state directly** (`status`, `severity`, `opened_at`, `resolved_at`, `acked_by` in the
 target design; the built columns today are `severity`, `message`, `raised_at`, and
 `cleared_at`, per the status note above); it
-is **not** event-sourced. It is **one incident, a new row per open**, keyed by
+is **not** event-sourced.
+
+:::design[Target design (ADR-0050)]
+It is **one incident, a new row per open**, keyed by
 `(event_rule, owner)` (the exclusive-arc owner, so a system- or location-owned sample
 yields a system/location-owned alarm), the ITSM correlation anchor ([samples](/architecture/properties/)).
 The open and resolve **events** carry the `alarm_id` and are the edge log; the alarm
@@ -59,6 +57,7 @@ Transitions, by who drives them:
 
 The full timeline assembles by `alarm_id` across events + audit; the alarm row is
 never reconstructed from them.
+:::
 
 An alarm write is **not sample-silent**: raising or clearing one recomputes
 [health](/architecture/health/) in the same transaction, and the rollup records the
@@ -68,6 +67,8 @@ rests on **provenance, not topology**: a consequence write always names its
 producing rule, and a rule never routes on its own consequences
 ([ADR-0069](/architecture/decisions/#adr-0069-cycle-safety-is-provenance-based-not-topology-based),
 see *Cycle safety*).
+
+:::design[The `event_rule` (ADR-0050)]
 
 ## The `event_rule`
 
@@ -117,6 +118,9 @@ whichever arc owns its sample, the same machinery yields **component-level** and
 system-owned alarm for a condition only the system cares about (a display on input 2
 is fine for the display but wrong for the room), which is how system health sees what
 no single component can.
+:::
+
+::::design[The severity-level registry (ADR-0050)]
 
 ## Severity: a registry of named levels
 
@@ -147,6 +151,10 @@ Whether a severity level is purely a label, color, and order, or also carries po
 default ack-timeout per level.
 :::
 
+::::
+
+:::design[The `action` entity (ADR-0050)]
+
 ## The action (a stateful entity)
 
 What an `action_rule` raises and runs. Like an alarm it is **stateful** and holds
@@ -160,6 +168,9 @@ its own state directly (status, current step, delivery), not event-sourced:
   branches), exactly like an alarm's lifecycle.
 
 The `action` row carries identity, kind, config, and current status.
+:::
+
+:::design[The `action_rule` (ADR-0050)]
 
 ## The `action_rule` (decoupled subscription)
 
@@ -186,6 +197,9 @@ The **source is polymorphic** but guarded (see *Cycle safety*): an alarm transit
 the declarative runbook step-list. Bodies are **Go templates** and sink auth is a
 **credential reference**, both per [expressions](/architecture/expressions/) and
 credentials.
+:::
+
+:::design[Storm and dependency suppression (ADR-0050)]
 
 ## Storm and dependency suppression
 
@@ -213,6 +227,9 @@ room-level cause as a single system-owned alarm; dependency suppression mutes th
 child endpoint alarms whose parent (the room or switch) is down; action-level grouping
 coalesces whatever child alarms remain into one dispatch. The operator sees the cause,
 not 20 symptoms.
+:::
+
+::::design[Action durability and egress (ADR-0050)]
 
 ## Durability and egress
 
@@ -234,6 +251,10 @@ The dead-letter surface and the operator retry of failed actions.
 The observed-use auth-failure feedback from actions into credential health (paired with the
 credential-health model in [config and credentials](/architecture/variables/)).
 :::
+
+::::
+
+:::design[Cycle safety in the action layer (ADR-0069)]
 
 ## Cycle safety in the action layer
 
@@ -301,6 +322,9 @@ the returned sample inherits the id.
 
 It is **not** a sample kind and **not** a stored span subsystem, just an id carried on
 the chain and queryable. No new tables, no tracing backend.
+:::
+
+:::design[Flows (ADR-0050)]
 
 ## Flows: the multi-step action
 
@@ -326,6 +350,9 @@ drag-and-drop editor edits flows.
 single `notify` or `command` is the simple case, and a multi-step **flow** is the same step list
 grown past one over the same engine. Nothing in the design distinguishes them but the length of the
 list.
+:::
+
+:::design[Registry namespacing for rules, actions, and severity levels (ADR-0050)]
 
 ## Namespacing
 
@@ -334,6 +361,7 @@ discipline as the rest of the registries, seeded through each registry's own
 authoritative upsert (`UpsertPropertyType` and its siblings). `official: true` rows ship
 vetted; `official: false` rows are operator-authored and central to component templates (the
 concrete way to notify or to run a command against a given device class).
+:::
 
 ## Storage
 
@@ -356,9 +384,11 @@ audit by `id`.
   }}
 />
 
-`action` is **still Design** (no `action` table exists today): a stateful entity carrying delivery
-and step state (`id`, ordered `steps` of notify/command/wait/branch, `status`, `current_step`),
-driven by events and alarms.
+:::design[The `action` entity (ADR-0050)]
+`action` is a stateful entity carrying delivery and step state (`id`, ordered `steps` of
+notify/command/wait/branch, `status`, `current_step`), driven by events and alarms. No `action`
+table exists today.
+:::
 
 A command **is two real tables**: the `command_type` registry (the catalog of what a component can be told) and the `command` invocation row with its computed settlement; see [commands](/architecture/commands/). The `event_rule` / `action_rule` config rows live with the [rule families](/architecture/calculations/).
 
