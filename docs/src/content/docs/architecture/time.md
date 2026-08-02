@@ -7,6 +7,8 @@ sidebar:
     variant: caution
 ---
 
+::::design[Target design: the time primitive, tracked in #419]
+
 Time lets an operator alarm on things that produce no event of their own, "10 minutes elapsed", "it is 8am Monday", "the data stopped", by turning the passage of time into events the rest of the pipeline consumes.
 
 ## Why time needs a primitive
@@ -171,3 +173,4 @@ The recurring trigger config and the clock singleton's pending-fire working set;
 |---|---|---|
 | `schedule` | id, rrule/cron, **tz (IANA)**, target, enabled | config: a recurring trigger |
 | `timer` | id, **fire_at (timestamptz)**, kind (schedule-tick / for-sustain / runbook-wait / watchdog), ref, payload | the clock singleton's pending-fire **working-set** (the durable PG working set, mutable, scanned for due rows and the fire realized on its lane: a record-lane fire born in PG and CDC-fanned to JetStream, a watchdog's staleness onto the data lane), not a history log; fires are logged on the entity they produce |
+::::

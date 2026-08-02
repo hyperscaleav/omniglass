@@ -7,6 +7,8 @@ sidebar:
     variant: caution
 ---
 
+:::design[Target design: the calc rule family, tracked in #434]
+
 Parsing a raw payload into samples is the **edge function** ([collection](/architecture/collection/)), not a server-side rule: a function extracts, keys, and normalizes on the node and emits resolved samples. The rules that run server-side over the typed samples are two derivation families plus a subscription, and this page is the home of the calc family.
 
 The rule families run as **JetStream consumers on the data lane**: confined samples arrive on the NATS **trusted** `samples` stream (an admission consumer owner-confines raw ingress first, [messaging](/architecture/messaging/)), and the calc and event families consume them directly from NATS (rules never wait on Postgres). A calc consumer reads samples and **publishes** its derived samples back onto the trusted stream directly, as a trusted server producer (no admission pass; the calc owner comes from the validated `calc_rule` scope); an event consumer reads samples and, on fire, writes the event and alarm transition to Postgres in one transaction (the record lane), which CDC then publishes. The two lanes share the one JetStream bus; see [samples](/architecture/properties/) for the data lane and [events](/architecture/events/) for the record lane.
@@ -42,3 +44,4 @@ The three rule families share one config shape, versioned so a backtest can pin 
 | `calc_rule` / `event_rule` / `action_rule` | **(id, version)**, scope, spec (jsonb: Expr + params) | config, named for function; versioned so a backtest can pin the rule version. `calc_rule` = cross-key/system-level derivation; `event_rule` = fire_criteria + optional clear_criteria ([events](/architecture/events/), [alarms and actions](/architecture/alarms-actions/)); `action_rule` = a subscription (an Expr predicate over events). Parsing is the edge function, not a rule; `discovery_rule` rounds out the family |
 
 Related: [samples](/architecture/properties/) (the data model calc reads and writes), [events](/architecture/events/) (the `event_rule`), [alarms and actions](/architecture/alarms-actions/) (the `action_rule` and the response layer), and [the glossary](/architecture/glossary/).
+:::

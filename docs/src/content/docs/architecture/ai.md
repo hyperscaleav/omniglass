@@ -7,7 +7,13 @@ sidebar:
     variant: caution
 ---
 
-AI in Omniglass is a **capability that spans from assistive to operational**, governed exactly like any other actor: at the assistive end it enriches and explains, at the operational end it proposes and acts. Today an AI tool authenticates with a **bearer token or password as a `human` or `service` principal** (OAuth/OIDC is deferred, [ADR-0004](/architecture/decisions/#adr-0004-credentials-ship-bearer-only)) and acts with exactly that principal's grants, so it reaches the estate through the same seams every caller uses, never a private lane ([identity and access](/architecture/identity-access/)).
+:::note[Built today]
+An AI tool authenticates with a **bearer token or password as a `human` or `service` principal** (OAuth/OIDC is deferred, [ADR-0004](/architecture/decisions/#adr-0004-credentials-ship-bearer-only)) and acts with exactly that principal's grants, so it reaches the estate through the same seams every caller uses, never a private lane ([identity and access](/architecture/identity-access/)). Everything below this note is the target design.
+:::
+
+:::design[Target design (ADR-0001): AI as a governed capability]
+
+AI in Omniglass is a **capability that spans from assistive to operational**, governed exactly like any other actor: at the assistive end it enriches and explains, at the operational end it proposes and acts.
 
 ## The capability spectrum
 
@@ -38,3 +44,4 @@ Every AI-produced output, an enrichment, a calculated value, a configuration cha
 ## Human-in-the-loop gating
 
 Mutating AI actions can require **operator sign-off**: the AI surfaces a proposed change, an operator approves it, then it executes, and the approval lands in the audit trail. Read and diagnostic actions run within the acting principal's scope without a gate. This is a **policy on AI-sourced mutations**, not a separate authorization model: the AI never exceeds the grants of the principal it acts as, and the gate is an extra confirmation on top of that boundary.
+:::
