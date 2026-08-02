@@ -32,9 +32,10 @@ export type CreateCommandType = {
   target_property_type?: string;
 };
 
-export async function createCommandType(body: CreateCommandType): Promise<void> {
-  const { error } = await api.POST("/command-types", { body });
+export async function createCommandType(body: CreateCommandType): Promise<CommandTypeRow> {
+  const { data, error } = await api.POST("/command-types", { body });
   if (error) throw error;
+  return data as CommandTypeRow;
 }
 
 export type UpdateCommandType = {

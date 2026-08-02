@@ -65,7 +65,7 @@ export default function CommandTypes(): JSX.Element {
           rowId: (r) => r.name,
           blades: { registry: { command_type: commandTypeBlade }, rootKind: "command_type" },
           create: canCreate()
-            ? { label: "New command type", can: canCreate, body: (ctx) => <CreateCommandTypeForm onCreated={ctx.close} /> }
+            ? { label: "New command type", can: canCreate, body: (ctx) => <CreateCommandTypeForm onCreated={ctx.select} /> }
             : undefined,
         }}
       />
@@ -183,7 +183,7 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
 
 // CreateCommandTypeForm: register a custom command type. Only the name is required; a
 // target property and a settle window make it settleable.
-export function CreateCommandTypeForm(p: { onCreated: (name: string) => void }): JSX.Element {
+export function CreateCommandTypeForm(p: { onCreated: (r: CommandTypeRow) => void }): JSX.Element {
   const qc = useQueryClient();
   const [name, setName] = createSignal("");
   const [displayName, setDisplayName] = createSignal("");
@@ -205,7 +205,7 @@ export function CreateCommandTypeForm(p: { onCreated: (name: string) => void }):
     setBusy(true);
     setFormErr(null);
     try {
-      await createCommandType({
+      const created = await createCommandType({
         name: name().trim(),
         display_name: displayName().trim() || undefined,
         description: description().trim() || undefined,
@@ -213,7 +213,7 @@ export function CreateCommandTypeForm(p: { onCreated: (name: string) => void }):
         settle_window_seconds: Number(settle()) || 0,
       });
       await qc.invalidateQueries({ queryKey: COMMAND_TYPES_KEY });
-      p.onCreated(name().trim());
+      p.onCreated(created);
     } catch (er) {
       setFormErr(describeError(er));
     } finally {

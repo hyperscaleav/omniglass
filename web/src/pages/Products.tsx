@@ -84,7 +84,7 @@ export default function Products() {
         rowId: (p) => p.name,
         blades: { registry: { product: productBlade }, rootKind: "product" },
         create: can(me.data, "product", "create")
-          ? { label: "New product", can: () => can(me.data, "product", "create"), body: (ctx) => <CreateProductForm onCreated={ctx.close} /> }
+          ? { label: "New product", can: () => can(me.data, "product", "create"), body: (ctx) => <CreateProductForm onCreated={ctx.select} /> }
           : undefined,
       }}
     />
@@ -253,7 +253,7 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
 // CreateProductForm: pick the kebab name (the operator-facing address; the
 // uuid is the database's to mint), set the display name and kind; vendor,
 // driver, and capabilities are optional.
-export function CreateProductForm(p: { onCreated: (id: string) => void }): JSX.Element {
+export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.Element {
   const qc = useQueryClient();
   const [id, setId] = createSignal("");
   const [displayName, setDisplayName] = createSignal("");
@@ -276,7 +276,7 @@ export function CreateProductForm(p: { onCreated: (id: string) => void }): JSX.E
     setBusy(true);
     setFormErr(null);
     try {
-      await createProduct({
+      const created = await createProduct({
         name: id().trim(),
         display_name: displayName().trim(),
         kind: kind(),
@@ -285,7 +285,7 @@ export function CreateProductForm(p: { onCreated: (id: string) => void }): JSX.E
         capabilities: capabilities().length ? capabilities() : undefined,
       });
       await qc.invalidateQueries({ queryKey: PRODUCTS_KEY });
-      p.onCreated(id().trim());
+      p.onCreated(created);
     } catch (er) {
       setFormErr(describeError(er));
     } finally {

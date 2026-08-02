@@ -61,7 +61,7 @@ export default function Capabilities() {
         rowId: (c) => c.name,
         blades: { registry: { capability: capabilityBlade }, rootKind: "capability" },
         create: can(me.data, "capability", "create")
-          ? { label: "New capability", can: () => can(me.data, "capability", "create"), body: (ctx) => <CreateCapabilityForm onCreated={ctx.close} /> }
+          ? { label: "New capability", can: () => can(me.data, "capability", "create"), body: (ctx) => <CreateCapabilityForm onCreated={ctx.select} /> }
           : undefined,
       }}
     />
@@ -172,7 +172,7 @@ function CapabilityBladeBody(p: { id: string }): JSX.Element {
 
 // CreateCapabilityForm: pick the kebab name (the operator-facing address; the
 // uuid is the database's to mint) and set the display name.
-export function CreateCapabilityForm(p: { onCreated: (id: string) => void }): JSX.Element {
+export function CreateCapabilityForm(p: { onCreated: (c: Capability) => void }): JSX.Element {
   const qc = useQueryClient();
   const [id, setId] = createSignal("");
   const [displayName, setDisplayName] = createSignal("");
@@ -191,12 +191,12 @@ export function CreateCapabilityForm(p: { onCreated: (id: string) => void }): JS
     setBusy(true);
     setFormErr(null);
     try {
-      await createCapability({
+      const created = await createCapability({
         name: id().trim(),
         display_name: displayName().trim(),
       });
       await qc.invalidateQueries({ queryKey: CAPABILITIES_KEY });
-      p.onCreated(id().trim());
+      p.onCreated(created);
     } catch (er) {
       setFormErr(describeError(er));
     } finally {

@@ -87,7 +87,7 @@ export default function Vendors() {
         rowId: (m) => m.name,
         blades: { registry: { vendor: vendorBlade }, rootKind: "vendor" },
         create: can(me.data, "vendor", "create")
-          ? { label: "New vendor", can: () => can(me.data, "vendor", "create"), body: (ctx) => <CreateVendorForm onCreated={ctx.close} /> }
+          ? { label: "New vendor", can: () => can(me.data, "vendor", "create"), body: (ctx) => <CreateVendorForm onCreated={ctx.select} /> }
           : undefined,
       }}
     />
@@ -262,7 +262,7 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
 // CreateVendorForm: pick the kebab name (the operator-facing address; the uuid
 // is the database's to mint), set the display name and kind; icon, support
 // phone, and website are optional.
-export function CreateVendorForm(p: { onCreated: (id: string) => void }): JSX.Element {
+export function CreateVendorForm(p: { onCreated: (v: Vendor) => void }): JSX.Element {
   const qc = useQueryClient();
   const [id, setId] = createSignal("");
   const [displayName, setDisplayName] = createSignal("");
@@ -285,7 +285,7 @@ export function CreateVendorForm(p: { onCreated: (id: string) => void }): JSX.El
     setBusy(true);
     setFormErr(null);
     try {
-      await createVendor({
+      const created = await createVendor({
         name: id().trim(),
         display_name: displayName().trim(),
         kind: kind(),
@@ -294,7 +294,7 @@ export function CreateVendorForm(p: { onCreated: (id: string) => void }): JSX.El
         website: website().trim() || undefined,
       });
       await qc.invalidateQueries({ queryKey: VENDORS_KEY });
-      p.onCreated(id().trim());
+      p.onCreated(created);
     } catch (er) {
       setFormErr(describeError(er));
     } finally {

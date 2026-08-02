@@ -85,7 +85,7 @@ export default function Secrets() {
         rowId: (s) => s.id,
         blades: { registry: { secret: secretBlade }, rootKind: "secret" },
         create: can(me.data, "secret", "create")
-          ? { label: "New secret", can: () => can(me.data, "secret", "create"), body: (ctx) => <CreateSecretForm onCreated={ctx.close} /> }
+          ? { label: "New secret", can: () => can(me.data, "secret", "create"), body: (ctx) => <CreateSecretForm onCreated={ctx.select} /> }
           : undefined,
       }}
     />
@@ -228,7 +228,7 @@ function SecretBladeBody(p: { id: string }): JSX.Element {
 
 // CreateSecretForm: pick a type and a scope, then fill the type's operator
 // fields. Secret fields use a password input; the values are sealed server-side.
-function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
+function CreateSecretForm(p: { onCreated: (s: Secret) => void }): JSX.Element {
   const qc = useQueryClient();
   const me = useMe();
   const types = useQuery(() => ({ queryKey: SECRET_TYPES_KEY, queryFn: listSecretTypes }));
@@ -283,7 +283,7 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
     setBusy(true);
     setFormErr(null);
     try {
-      await createSecret({
+      const created = await createSecret({
         name: name().trim(),
         secret_type: typeId(),
         owner_kind: ownerKind(),
@@ -291,7 +291,7 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
         fields: fields(),
       });
       await qc.invalidateQueries({ queryKey: SECRETS_KEY });
-      p.onCreated();
+      p.onCreated(created);
     } catch (er) {
       setFormErr(describeError(er));
     } finally {

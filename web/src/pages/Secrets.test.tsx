@@ -130,3 +130,34 @@ describe("Secrets page platform-tier authority", () => {
     expect(within(blade).queryByText(/platform:update/)).not.toBeInTheDocument();
   });
 });
+
+// A successful create lands the operator on the new row (#471). Secrets keys
+// its rows by uuid, so the page must hand the API-returned row (not the typed
+// name) to the blade opener.
+describe("Secrets create lands on the new row (#471)", () => {
+  it("opens the created secret's blade after a successful create", async () => {
+    const created: Secret = { id: uuidFor("s-new"), name: "door_code", secret_type: "snmp-community", owner_kind: "platform", fields: [] };
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes("/secrets")) {
+        return new Response(JSON.stringify(created), { status: 201, headers: { "content-type": "application/json" } });
+      }
+      // The post-create invalidation refetch sees the new row.
+      return new Response(JSON.stringify({ secrets: [...seed, created] }), { status: 200, headers: { "content-type": "application/json" } });
+    }));
+    mount(owner);
+    expect(await screen.findByText("poll_community")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /new secret/i }));
+    const typeSelect = screen.getByLabelText("Type") as HTMLSelectElement;
+    fireEvent.change(typeSelect, { target: { value: "snmp-community" } });
+    fireEvent.input(screen.getByLabelText("Name"), { target: { value: "door_code" } });
+    fireEvent.input(screen.getByLabelText(/community/i), { target: { value: "s3cr3t" } });
+    fireEvent.click(screen.getByRole("button", { name: /create secret/i }));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    expect(within(blade).getByText("door_code")).toBeInTheDocument();
+  });
+});

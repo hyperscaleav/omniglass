@@ -115,7 +115,7 @@ export default function Types() {
                 rowId: (r) => `${r.kind}:${r.name}`,
                 blades: { registry: { type: typeBlade }, rootKind: "type" },
                 create: canCreate()
-                  ? { label: "New type", can: canCreate, body: (ctx) => <CreateTypeForm kind={k} onCreated={ctx.close} /> }
+                  ? { label: "New type", can: canCreate, body: (ctx) => <CreateTypeForm kind={k} onCreated={ctx.select} /> }
                   : undefined,
               }}
             />
@@ -312,7 +312,7 @@ function TypeBladeBody(p: { id: string }): JSX.Element {
 // the active kind (the tab decides the kind; secret_type has no write routes
 // this slice, so it never opens this form). A location type also gets an icon
 // glyph key.
-export function CreateTypeForm(p: { kind: TypeKind; onCreated: (id: string) => void }): JSX.Element {
+export function CreateTypeForm(p: { kind: TypeKind; onCreated: (t: TypeRow) => void }): JSX.Element {
   const qc = useQueryClient();
   const types = useQuery(() => ({ queryKey: TYPES_KEY, queryFn: listTypes }));
   const locationTypeOptions = () => (types.data ?? []).filter((r) => r.kind === "location");
@@ -335,13 +335,13 @@ export function CreateTypeForm(p: { kind: TypeKind; onCreated: (id: string) => v
     setBusy(true);
     setFormErr(null);
     try {
-      await createType(p.kind, {
+      const created = await createType(p.kind, {
         name: id().trim(),
         display_name: displayName().trim(),
         ...(p.kind === "location" ? { icon: icon().trim() || "map-pin", allowed_parent_types: allowedParents() } : {}),
       });
       await qc.invalidateQueries({ queryKey: TYPES_KEY });
-      p.onCreated(id().trim());
+      p.onCreated(created);
     } catch (er) {
       setFormErr(describeError(er));
     } finally {

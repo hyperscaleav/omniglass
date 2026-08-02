@@ -42,9 +42,10 @@ export type CreateProperty = {
   validation?: unknown;
 };
 
-export async function createProperty(body: CreateProperty): Promise<void> {
-  const { error } = await api.POST("/property-types", { body });
+export async function createProperty(body: CreateProperty): Promise<PropertyRow> {
+  const { data, error } = await api.POST("/property-types", { body });
   if (error) throw error;
+  return data as PropertyRow;
 }
 
 export type UpdateProperty = {

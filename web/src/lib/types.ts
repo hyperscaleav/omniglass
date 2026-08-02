@@ -81,12 +81,13 @@ export type CreateType = {
   allowed_parent_types?: string[];
 };
 
-export async function createType(kind: TypeKind, body: CreateType): Promise<void> {
+export async function createType(kind: TypeKind, body: CreateType): Promise<TypeRow> {
   switch (kind) {
     case "location": {
-      const { error } = await api.POST("/location-types", { body });
+      const { data, error } = await api.POST("/location-types", { body });
       if (error) throw error;
-      return;
+      const t = data!;
+      return { kind: "location", id: t.id, name: t.name, display_name: t.display_name, official: t.official, icon: t.icon, allowed_parent_types: t.allowed_parent_types ?? [] };
     }
     case "secret":
       throw new Error("secret types are read-only");

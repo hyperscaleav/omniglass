@@ -62,7 +62,7 @@ export default function Drivers() {
         rowId: (d) => d.name,
         blades: { registry: { driver: driverBlade }, rootKind: "driver" },
         create: can(me.data, "driver", "create")
-          ? { label: "New driver", can: () => can(me.data, "driver", "create"), body: (ctx) => <CreateDriverForm onCreated={ctx.close} /> }
+          ? { label: "New driver", can: () => can(me.data, "driver", "create"), body: (ctx) => <CreateDriverForm onCreated={ctx.select} /> }
           : undefined,
       }}
     />
@@ -185,7 +185,7 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
 
 // CreateDriverForm: pick the kebab name (the operator-facing address; the uuid
 // is the database's to mint) and set the display name; version is optional.
-export function CreateDriverForm(p: { onCreated: (id: string) => void }): JSX.Element {
+export function CreateDriverForm(p: { onCreated: (d: Driver) => void }): JSX.Element {
   const qc = useQueryClient();
   const [id, setId] = createSignal("");
   const [displayName, setDisplayName] = createSignal("");
@@ -205,13 +205,13 @@ export function CreateDriverForm(p: { onCreated: (id: string) => void }): JSX.El
     setBusy(true);
     setFormErr(null);
     try {
-      await createDriver({
+      const created = await createDriver({
         name: id().trim(),
         display_name: displayName().trim(),
         version: version().trim() || undefined,
       });
       await qc.invalidateQueries({ queryKey: DRIVERS_KEY });
-      p.onCreated(id().trim());
+      p.onCreated(created);
     } catch (er) {
       setFormErr(describeError(er));
     } finally {

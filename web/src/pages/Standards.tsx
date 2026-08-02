@@ -76,7 +76,7 @@ export default function Standards() {
         rowId: (s) => s.name,
         blades: { registry: { standard: standardBlade }, rootKind: "standard" },
         create: can(me.data, "standard", "create")
-          ? { label: "New standard", can: () => can(me.data, "standard", "create"), body: (ctx) => <CreateStandardForm onCreated={ctx.close} /> }
+          ? { label: "New standard", can: () => can(me.data, "standard", "create"), body: (ctx) => <CreateStandardForm onCreated={ctx.select} /> }
           : undefined,
       }}
     />
@@ -200,7 +200,7 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
 // CreateStandardForm: pick the kebab name (the operator-facing address; the
 // uuid is the database's to mint), set the display name; the parent standard
 // is optional (a variant of an existing one).
-export function CreateStandardForm(p: { onCreated: (id: string) => void }): JSX.Element {
+export function CreateStandardForm(p: { onCreated: (s: Standard) => void }): JSX.Element {
   const qc = useQueryClient();
   const [id, setId] = createSignal("");
   const [displayName, setDisplayName] = createSignal("");
@@ -220,13 +220,13 @@ export function CreateStandardForm(p: { onCreated: (id: string) => void }): JSX.
     setBusy(true);
     setFormErr(null);
     try {
-      await createStandard({
+      const created = await createStandard({
         name: id().trim(),
         display_name: displayName().trim(),
         parent_standard_id: parentId() || undefined,
       });
       await qc.invalidateQueries({ queryKey: STANDARDS_KEY });
-      p.onCreated(id().trim());
+      p.onCreated(created);
     } catch (er) {
       setFormErr(describeError(er));
     } finally {

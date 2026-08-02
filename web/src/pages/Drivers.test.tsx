@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, fireEvent, screen, within } from "@solidjs/testing-library";
+import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Drivers from "./Drivers";
 import { DRIVERS_KEY, type Driver } from "../lib/drivers";
@@ -45,5 +45,36 @@ describe("Drivers addressing honesty (#469)", () => {
     fireEvent.keyDown(input, { key: "Enter" });
     expect(screen.getByText("Generic SNMP")).toBeInTheDocument();
     expect(screen.queryByText("Acme Driver")).toBeNull();
+  });
+});
+
+// A successful create lands the operator on the new row (#471): FlatList's
+// create ctx exposes select for exactly this, but every catalog page wired
+// onCreated to close, silently discarding the created row.
+describe("Drivers create lands on the new row (#471)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("opens the created driver's blade after a successful create", async () => {
+    const created = { id: uuidFor("drv-custom-x"), name: "custom-x", display_name: "Custom X", official: false };
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes("/drivers")) {
+        return new Response(JSON.stringify(created), { status: 201, headers: { "Content-Type": "application/json" } });
+      }
+      // The post-create invalidation refetch sees the new row.
+      return new Response(JSON.stringify({ drivers: [...seed, created] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    mount();
+    fireEvent.click(await screen.findByRole("button", { name: /new driver/i }));
+    fireEvent.input(screen.getByPlaceholderText("snmp-generic"), { target: { value: "custom-x" } });
+    fireEvent.input(screen.getByPlaceholderText("Generic SNMP"), { target: { value: "Custom X" } });
+    fireEvent.click(screen.getByRole("button", { name: /create driver/i }));
+    const blade = await waitFor(() => {
+      const el = document.querySelector("aside[data-blade]");
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    // The handle shows in both the blade title and its Name row.
+    expect(within(blade).getAllByText("custom-x").length).toBeGreaterThan(0);
   });
 });

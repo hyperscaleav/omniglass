@@ -57,7 +57,7 @@ export default function EventTypes(): JSX.Element {
           rowId: (r) => r.name,
           blades: { registry: { event_type: eventTypeBlade }, rootKind: "event_type" },
           create: canCreate()
-            ? { label: "New event type", can: canCreate, body: (ctx) => <CreateEventTypeForm onCreated={ctx.close} /> }
+            ? { label: "New event type", can: canCreate, body: (ctx) => <CreateEventTypeForm onCreated={ctx.select} /> }
             : undefined,
         }}
       />
@@ -170,7 +170,7 @@ function EventTypeBladeBody(p: { name: string }): JSX.Element {
 }
 
 // CreateEventTypeForm: register a custom event type. Only the name is required.
-export function CreateEventTypeForm(p: { onCreated: (name: string) => void }): JSX.Element {
+export function CreateEventTypeForm(p: { onCreated: (r: EventTypeRow) => void }): JSX.Element {
   const qc = useQueryClient();
   const [name, setName] = createSignal("");
   const [displayName, setDisplayName] = createSignal("");
@@ -190,13 +190,13 @@ export function CreateEventTypeForm(p: { onCreated: (name: string) => void }): J
     setBusy(true);
     setFormErr(null);
     try {
-      await createEventType({
+      const created = await createEventType({
         name: name().trim(),
         display_name: displayName().trim() || undefined,
         description: description().trim() || undefined,
       });
       await qc.invalidateQueries({ queryKey: EVENT_TYPES_KEY });
-      p.onCreated(name().trim());
+      p.onCreated(created);
     } catch (er) {
       setFormErr(describeError(er));
     } finally {
