@@ -62,17 +62,33 @@ export function accountableLabel(e: AuditEvent): string {
   return e.real_actor_name || e.real_actor || actorLabel(e);
 }
 
+// Some resources carry their operator-facing handle under a resource-specific
+// key rather than a name field: a tag binding is read by its tag key, a
+// property by its property type, an assignment or grant by its role, an alarm
+// or capability fact by the component it sits on, a command by its type.
+// Casing follows the writer (Go structs marshal field names, map projections
+// lowercase).
+const RESOURCE_LABEL_KEYS: Record<string, string[]> = {
+  tag_binding: ["key"],
+  property: ["PropertyTypeName", "property_type_name"],
+  alarm: ["component", "Component"],
+  command: ["command_type"],
+  system_role_assignment: ["role"],
+  component_capability: ["component"],
+  principal_grant: ["Role", "role"],
+};
+
 // resourceLabel resolves the friendly handle an operator reads for a row's
 // resource (ADR-0062: the uuid is identity, the name is the address). The
 // trail stores resource_id as the stable form, which for uuid-keyed resources
 // is opaque; the row's own images almost always carry the handle, so prefer
-// it and fall back to the raw id. Image field casing varies by writer (Go
-// structs marshal Name, map projections name, principals username).
+// the resource-specific key, then the generic name keys, then the raw id.
 export function resourceLabel(e: AuditEvent): string {
+  const keys = [...(RESOURCE_LABEL_KEYS[e.resource] ?? []), "name", "Name", "username", "Username"];
   for (const img of [e.new, e.old]) {
     if (typeof img !== "object" || img === null) continue;
     const o = img as Record<string, unknown>;
-    for (const k of ["name", "Name", "username", "Username"]) {
+    for (const k of keys) {
       if (typeof o[k] === "string" && o[k]) return o[k] as string;
     }
   }

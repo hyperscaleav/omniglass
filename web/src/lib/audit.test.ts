@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { auditFilterKeys, actorLabel, accountableLabel, type AuditEvent } from "./audit";
+import { auditFilterKeys, actorLabel, accountableLabel, resourceLabel, type AuditEvent } from "./audit";
 import { buildPredicate, type Chip } from "./predicate";
 
 // The audit facets are the console's shared faceted search applied to the trail:
@@ -55,5 +55,43 @@ describe("auditFilterKeys", () => {
     const hit = (term: string) => imp.filter(buildPredicate(auditFilterKeys, [{ key: "who", op: "contains", values: [term] }])).map((e) => e.id);
     expect(hit("root")).toEqual(["imp"]); // the impersonator
     expect(hit("alice")).toEqual(["imp"]); // the assumed identity
+  });
+});
+
+// The trail stores resource_id in its stable form (a uuid for uuid-keyed
+// resources); the console labels every row with the friendly handle an
+// operator reads (ADR-0062), resolved from the row's own images. Each
+// resource kind carries its handle under its own key, so the resolver knows
+// them per resource before falling back to the generic name keys and then
+// the raw id.
+const labelEv = (resource: string, img: Record<string, unknown>, resource_id = "00000000-0000-4000-8000-000000000001"): AuditEvent =>
+  ({ id: "1", ts: "", verb: "set", resource, resource_id, new: img });
+
+describe("resourceLabel", () => {
+  it("labels a tag binding by its tag key", () => {
+    expect(resourceLabel(labelEv("tag_binding", { key: "environment", owner_kind: "location", owner_id: "u-1", value: "prod" }))).toBe("environment");
+  });
+
+  it("labels a property by its property type name", () => {
+    expect(resourceLabel(labelEv("property", { PropertyTypeName: "site.timezone", OwnerKind: "location", OwnerID: "u-1" }))).toBe("site.timezone");
+  });
+
+  it("labels an alarm by the component it is raised on", () => {
+    expect(resourceLabel(labelEv("alarm", { component: "disp-1", cleared_at: "now" }))).toBe("disp-1");
+  });
+
+  it("labels a role assignment by the role, a grant by its role", () => {
+    expect(resourceLabel(labelEv("system_role_assignment", { system: "boardroom", role: "camera", component: "cam-1" }))).toBe("camera");
+    expect(resourceLabel(labelEv("principal_grant", { Role: "admin", ScopeKind: "all" }))).toBe("admin");
+  });
+
+  it("labels a component capability by its component and a command by its type", () => {
+    expect(resourceLabel(labelEv("component_capability", { component: "disp-1", capability: "u-cap", present: true }))).toBe("disp-1");
+    expect(resourceLabel(labelEv("command", { command_type: "reboot", owner: "u-1" }))).toBe("reboot");
+  });
+
+  it("still prefers the generic name keys and falls back to the raw id", () => {
+    expect(resourceLabel(labelEv("driver", { Name: "snmp-generic" }))).toBe("snmp-generic");
+    expect(resourceLabel(labelEv("credential", {}, "u-alice"))).toBe("u-alice");
   });
 });
