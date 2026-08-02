@@ -7,7 +7,7 @@ sidebar:
     variant: caution
 ---
 
-:::design[Target design: the expression engine, tracked in #434]
+:::design[Target design: the expression engine, tracked in #524]
 
 Expressions let an operator reshape and judge collected values in plain text wherever the platform needs a small computation, and there is exactly one language to learn for all of them. Omniglass evaluates these small operator-authored expressions in many places: an extractor's
 `value` leaf, a step's `when` guard, an `event_rule`'s fire/clear

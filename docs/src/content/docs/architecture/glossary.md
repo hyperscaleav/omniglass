@@ -111,7 +111,7 @@ Every term below is committed architecture that nothing in the code implements y
 | **correlation_id (sample) / source_event_id** | Nullable trace columns on the sample tables, orthogonal to the exclusive-lineage CHECK (not lineage pointers), letting the cycle-guard walk cross a command -> device -> observed round trip. Today the trace pair (`correlation_id`, `source_event_id`) lives on the `event` table only; a sample carries `event_id` lineage but no trace columns. See [samples](/architecture/properties/). |
 :::
 
-:::design[The edge function, tracked in #434]
+:::design[The edge function, tracked in #489]
 | Term | Definition |
 |---|---|
 | **function** | A trigger plus a DAG of steps, declared by a collection template; the unit of edge collection. Triggered by a schedule (poll), incoming data (listen), or a command. See [collection](/architecture/collection/). |
@@ -151,7 +151,7 @@ Every term below is committed architecture that nothing in the code implements y
 | **global** | The singleton estate **owner**: the top owner above every location where estate-wide health and KPIs roll up. One per deployment, no FK (an all-null owner arm). Ownership only, **not** a cascade tier (that is `platform`) and not a location (the location tree has N unparented tops and no root). |
 :::
 
-:::design[Operational mode and the delete cascade, tracked in #434]
+:::design[Operational mode and the delete cascade, tracked in #528]
 | Term | Definition |
 |---|---|
 | **operational mode** | A cascade-resolved entity state: **active** / **maintenance** / **disabled**. Maintenance keeps collecting but suppresses consequences (no action dispatch, no drift enforce, no health rollup impact, no SLA count); disabled is the same suppression but also stops collecting (the Zabbix host-disable). Maintenance is windowed and audited. See [core entities](/architecture/core-entities/). |

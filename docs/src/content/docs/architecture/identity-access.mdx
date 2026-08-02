@@ -213,7 +213,7 @@ viewer  <-  operator  <-  admin  <-  owner
 
 The console **Roles view** (`GET /roles`, gated `role:read:admin`) lists these read-only with each role's display name, description, inheritance, and **effective permissions**, so an operator sees exactly what a role grants before assigning it. The role blade shows permissions as a **net** view: the response carries the **permission universe** (every capability the route surface enforces, see [the permission universe](#the-permission-universe-published-per-route)) plus, per role, the **held** subset (resolved server-side by the same `rbac.Set.Allows` matcher as the effective set, so wildcards, the `:read` floor, and the `>` tail are honoured). The blade renders the universe one-per-line, lexicographically, with a `Held / Missing / All` toggle, so an operator reads not only what a role holds but what it is missing. Custom-role editing is a later slice.
 
-:::design[Custom-role management, tracked in #434]
+:::design[Custom-role management, tracked in #527]
 ### Custom roles
 
 Operators create `official: false` roles via the IAM API with a chosen permission set, optionally inheriting from `viewer` (or any other role). Inheritance rules:
@@ -494,7 +494,7 @@ policy shape (deny rules over resource + action + subject / scope conditions), t
 whether it is deny-only or can also force-allow.
 :::
 
-:::design[The permission cache, tracked in #434]
+:::design[The permission cache, tracked in #527]
 ## Caching strategy
 
 The hot path must not hit the DB for RBAC. Three layers, in-process, no persisted "effective permissions" projection (which would invite the stale-join class of cache-coherence bug; the grant and role caches below still carry a bounded staleness, the contract for which is stated at the end):
