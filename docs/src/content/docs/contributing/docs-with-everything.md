@@ -72,6 +72,32 @@ Forward-looking intent that is not yet a slice lives in a GitHub epic and is ind
 keeps the published design describing what exists: a built capability never sits behind a `Design` badge,
 and a divergence is never silent.
 
+## The design fence
+
+A badge is page-granular, and a page is not one thing: most architecture pages mix built
+behavior with target design. The **design fence** marks the unbuilt part structurally, at
+the section where it lives, instead of a hand-written "still design" sentence at the top
+that rots when a slice ships:
+
+```markdown
+:::design[Target design, tracked in #434]
+The prose in here describes something that does not exist yet.
+:::
+```
+
+The fence renders as a visually distinct aside (dashed, purple, labeled), and its label
+**must name the issue or ADR that tracks the gap**; a fence with neither fails the docs
+build, so unbuilt prose always has an owner. To nest a normal aside inside a fence, give
+the fence more colons (`::::design` around a `:::note`), which is remark-directive's
+nesting rule.
+
+The fence is also the boundary the [docs lint suite](#the-rule) keys on
+(`internal/docslint`, the `Regions` split): the **vocabulary lint runs everywhere**,
+fenced or not, because future design must still be written in current nouns, while the
+**existence lints** (routes, permissions, tables, commands; #429) run only outside a
+fence, where prose claims to describe something that exists. Building a fenced section
+means **deleting the fence in the same PR**, exactly like moving the badge.
+
 ## Screenshots are generated, not pasted
 
 Screenshots embedded on a docs page are a **generated resource**, treated like the OpenAPI

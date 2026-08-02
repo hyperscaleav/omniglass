@@ -139,3 +139,25 @@
   border-color: #5aa86c;
   color: #246b38;
 }
+
+/* The design fence (:::design): prose inside is target design, not built
+   behavior (#434). Dashed outline with no heavy fill so it reads as
+   "blueprint" against the solid note/caution asides, purple to match the
+   Design badge family. Colors ride Starlight's own aside tokens, which flip
+   with the light/dark toggle. */
+aside.design-fence {
+  border: 2px dashed var(--sl-color-purple);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-top: 1.25rem;
+  background: transparent;
+}
+aside.design-fence .design-fence-title {
+  margin-top: 0;
+  font-weight: 600;
+  color: var(--sl-color-purple-high);
+}
+aside.design-fence .design-fence-title::before {
+  content: '\25A7  ';
+  color: var(--sl-color-purple);
+}

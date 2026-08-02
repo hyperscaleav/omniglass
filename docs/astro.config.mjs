@@ -6,15 +6,17 @@ import d2 from 'astro-d2';
 import { defineConfig } from 'astro/config';
 import remarkDirective from 'remark-directive';
 import starlightOpenAPI, { openAPISidebarGroups } from 'starlight-openapi';
+import { remarkDesignFence } from './src/plugins/remark-design-fence.mjs';
 import { remarkScreenshots } from './src/plugins/remark-screenshots.mjs';
 
 export default defineConfig({
   site: 'https://docs.omniglass.hyperscaleav.com',
-  // remark-directive parses `::screenshot{#id}`; remarkScreenshots renders it
-  // into a figure from the page's screenshots frontmatter (the single source the
-  // capture generator reads too).
+  // remark-directive parses `::screenshot{#id}` and the `:::design` container;
+  // remarkScreenshots renders the former into a figure from the page's
+  // screenshots frontmatter, remarkDesignFence renders the latter into the
+  // target-design aside the docs lint suite keys on.
   markdown: {
-    remarkPlugins: [remarkDirective, remarkScreenshots],
+    remarkPlugins: [remarkDirective, remarkScreenshots, remarkDesignFence],
   },
   // The monolithic "the console" guide was split into per-flow operator pages.
   // Keep its old URL alive for external links and bookmarks.
