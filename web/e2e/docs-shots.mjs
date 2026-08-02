@@ -21,6 +21,13 @@ const CONTENT = 'docs/src/content/docs';
 // Output dir is overridable so the freshness gate can capture into a temp dir and
 // diff it against the committed images (see docs-shots-diff.mjs).
 const OUT = process.env.DOCS_SHOTS_OUT ?? 'docs/public/screenshots';
+// Optional egress proxy for the browser, for capture hosts whose network cannot
+// reach the web fonts directly (a sandboxed or air-gapped runner). The console
+// under test stays direct: the OG_E2E_BASE host is always bypassed. Rendering
+// with the real fonts matters because the freshness gate compares rasters; a
+// fallback-font capture diffs every text pixel. Unset (the default, including
+// CI) means no proxy, exactly the old behavior.
+const PROXY = process.env.DOCS_SHOTS_PROXY ?? '';
 
 async function walk(dir) {
   const files = [];
@@ -57,7 +64,9 @@ for (const s of specs) {
 }
 
 await mkdir(OUT, { recursive: true });
-const browser = await chromium.launch();
+const browser = await chromium.launch(
+  PROXY ? { proxy: { server: PROXY, bypass: new URL(BASE).hostname } } : {},
+);
 
 for (const spec of specs) {
   const ctx = await browser.newContext({

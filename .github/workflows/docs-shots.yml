@@ -53,3 +53,14 @@ jobs:
         run: cd web && npm ci
       - name: Recapture and compare against the committed screenshots
         run: make docs-shots-check
+      # On drift, publish this job's own recapture. CI is the canonical raster
+      # environment (fonts, freetype, the pinned browser image all pinned by the
+      # runner); a contributor whose machine rasterizes differently (a sandboxed
+      # or air-gapped host) adopts these PNGs instead of fighting a sub-percent
+      # environmental diff their capture can never close.
+      - name: Upload the recaptured screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-shots-recapture
+          path: .docs-shots-tmp/
