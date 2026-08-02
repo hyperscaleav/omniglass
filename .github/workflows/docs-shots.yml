@@ -64,3 +64,6 @@ jobs:
         with:
           name: docs-shots-recapture
           path: .docs-shots-tmp/
+          # The recapture dir is dot-prefixed (gitignored working dir), and v4
+          # skips hidden paths by default, which uploads nothing.
+          include-hidden-files: true
