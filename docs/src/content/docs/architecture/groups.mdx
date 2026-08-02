@@ -55,22 +55,18 @@ What is **built** is the principal arm: `principal_group` and its membership, a 
 :::design[Entity groups on the cascade: weights, dynamic membership, and group-as-scope, tracked in #10]
 ## Placement: one specificity scale
 
-Structural layers auto-derive a specificity from position, weight-free, and the operator never tunes
-it: `platform` lowest, then the templates, then the location / system / component trees by depth, then
-the entity's own **instance** at the ceiling. A **group's weight is its specificity on that same
-scale**, so a group sits wherever its weight lands relative to the structural bands: a high weight
-beats deployment (a must-apply override), a low weight loses to it (a default that deployment
-overrides). The instance ceiling beats any group; equal specificity breaks by creation order. A typed
-group applies at its own level: a component-group to components directly; a system-group reaches a
-component **through the system layer** of its cascade.
+A group is placed on the cascade's one specificity scale by its **weight**, the only weights in the
+system: a high weight sits above deployment (a must-apply override), a low weight below it (a default
+that deployment overrides). The scale itself, the segmented precedence key behind it, and the worked
+example are stated once, on
+[cascade](/architecture/cascade/#groups-overlay-the-cascade-placed-by-weight).
 
 ## Multiple membership
 
-An entity belongs to a flat **set** of groups. Collect all their bindings and fold by specificity
-(weight): highest wins for variables and tag-values; rules accumulate, with weight resolving any
-add-vs-suppress conflict; equal weights break by creation order. There is no second precedence axis.
-So however many groups an entity is in, the group band collapses to one weighted list on the shared
-scale, fully predictable, and the [resolve view](/architecture/cascade/) names the winner.
+An entity belongs to a flat **set** of groups; there is no second precedence axis. However many groups
+an entity is in, their bindings fold by weight on that one shared scale
+([cascade](/architecture/cascade/#groups-overlay-the-cascade-placed-by-weight)), and the
+[resolve view](/architecture/cascade/#the-resolve-view) names the winner.
 
 ## No nesting
 
@@ -81,10 +77,9 @@ question, gated on that case actually biting.
 
 ## Types are not layers
 
-A `_type` (device/app, AV-System, room) is a classification attribute, resolved by a **group** filter
-(`type == X`), never a tree position. The tree is structural; attributes are groups. This is the bridge
-from the structural [cascade](/architecture/cascade/) to type-based policy: instead of a type layer in
-the tree, you author a dynamic group filtered on type and place it by weight.
+A `_type` (device/app, AV-System, room) is a classification attribute, never a tree position: instead
+of a type layer in the tree, you author a dynamic group filtered on type (`type == X`) and place it by
+weight ([cascade](/architecture/cascade/#groups-overlay-the-cascade-placed-by-weight)).
 
 ## What groups are for
 

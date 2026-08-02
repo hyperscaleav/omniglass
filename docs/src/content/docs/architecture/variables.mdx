@@ -149,8 +149,8 @@ binding shape on the template.
 ## secret: a typed, encrypted cascaded value
 
 A **secret** is an access secret: a typed value, encrypted at rest, owned on the exclusive arc
-(`platform | location | component`; secrets have no system band, ADR-0052) and resolved most-specific-wins down the cascade like config
-and variables, but sealed so its value never sits in the clear. Its first slice is **built**
+(`platform | location | component`; secrets have no system band, ADR-0052) and resolved down the
+[cascade](/architecture/cascade/) like config and variables, but sealed so its value never sits in the clear. Its first slice is **built**
 ([ADR-0017](/architecture/decisions/#adr-0017-credential-is-renamed-secret-the-cascade-is-the-reuse-mechanism)):
 the typed cell, the crypto, the cascade resolver, and the operator surfaces. A **sensitivity ladder** is
 not a flag any value carries; a secret is its own primitive because it is stored encrypted and read back
@@ -255,9 +255,9 @@ the **`$var:` consumer** and the **secret-flagged** variable. These divergences 
 
 A **variable** is the leftover, and the most familiar: a value you splice into behavior that is **not**
 a device signal and carries no lifecycle, like a poll interval, a base URL, an environment label, or a
-tuning constant. These are Zabbix-style **macros**, resolved `platform → template → instance` down the
-same cascade and interpolated as `$var:<name>` into functions, interface definitions, and rule
-scopes.
+tuning constant. These are Zabbix-style **macros**, resolved down the same
+[cascade](/architecture/cascade/) and interpolated as `$var:<name>` into functions, interface
+definitions, and rule scopes.
 
 - **Names are org-specific config keys, not canonical signals** (the one place the
   "operator-defined, not curated" namespace genuinely applies). There is no registry authority and no
@@ -364,12 +364,11 @@ existing key instead of coining a near-duplicate.
 
 **Values bind down the cascade.** A `tag_binding` sets a value for a key at any scope
 (`platform | template | location | system | component`) and through [groups](/architecture/groups/),
-exactly like config and variables. Keys **union** (an entity surfaces every tag bound at or above it);
-values **override** most-specific-wins. A [template](/architecture/templates/) binds its own tags onto
-its component (`category: audio-dsp`). Because resolution is cascaded, you tag a location once and every
-system and component beneath it inherits it, which is what makes tags a practical scoping dimension: a
-high-weight [group](/architecture/groups/) can key a rule-set off `compliance: pci`, an action can read
-a `maintenance_window`.
+exactly like config and variables; the [tags](/architecture/tags/) page owns the combinator and the
+[cascade](/architecture/cascade/) the precedence. A [template](/architecture/templates/) binds its own
+tags onto its component (`category: audio-dsp`), and an inherited tag is a practical scoping dimension:
+a high-weight [group](/architecture/groups/) can key a rule-set off `compliance: pci`, an action can
+read a `maintenance_window`.
 
 :::caution[Open question]
 Value-domain normalization. Key normalization is settled (the governed registry plus the `tag:create`
@@ -383,13 +382,10 @@ either way; the question is how much normalization a key places on its values.
 
 ## What's shared
 
-- **The cascade.** Config, secrets, and variables resolve most-specific-wins down
-  `platform → … → component`, with a template-scoped value as a shipped baseline; **tags** resolve down
-  the same cascade with a union-on-key, override-on-value combinator. One resolver
-  ([cascade](/architecture/cascade/)).
-- **The exclusive-arc scope.** Each value is owned at exactly one scope: the same exclusive-arc
-  ownership as samples, plus a `template`-scoped binding the sample arc lacks (and config is
-  not `node`-owned).
+- **The cascade.** One resolver serves all four kinds, and the structural chain, the precedence key,
+  and the fall-through to a declaration default are stated once, on
+  [cascade](/architecture/cascade/); tags ride it with their own union-on-key, override-on-value
+  combinator ([tags](/architecture/tags/)).
 - **Typing.** A secret takes a structured `secret_type` shape registry (per-field secrecy and origin);
   a variable types inline against its `value_type` (a scalar, validated in the app, no registry); config
   instead borrows the `property_type`'s domain, because its key *is* a signal.

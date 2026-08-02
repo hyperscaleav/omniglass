@@ -293,11 +293,11 @@ The reverse is deliberately **not** symmetric: giving up a role does not end mem
 is still in the room. A member carrying no role at all is ordinary and useful, and it is how the power
 conditioner, the rack shelf, and the spare on the shelf are accounted for.
 
-**`is_primary`** marks which membership answers a question asked *without a system in hand*. It is a
-**default for context-free callers, not a resolution rule**: anything that names a system resolves against
-that system. A component's first membership takes the default with nobody asking, so a component in exactly
-one system, which is nearly all of them, never meets the concept. A partial unique index makes a second
-primary impossible rather than merely unlikely.
+**`is_primary`** marks which membership seeds the
+[cascade](/architecture/cascade/#structural-multi-membership-a-component-in-n-systems) for a caller
+*without a system in hand*, a default and never a rule that overrides a caller who named a system (the
+cascade page owns that contract). A component's first membership takes the default with nobody asking,
+and a partial unique index makes a second primary impossible rather than merely unlikely.
 
 Membership **cascades from both ends**, since a binding is meaningless once either side is gone. It
 deliberately does not restrict the component the way `system_role_assignment` does: that restrict is load-bearing,
@@ -387,8 +387,8 @@ standard's default moves every conforming system that has not overridden it.
 
 `component`, `system`, and `location` are each a **variable-depth tree**: a `parent_id` self-reference
 that nests to arbitrary depth (campus -> building -> floor -> room; parent system -> subsystem; chassis
--> card). The trees are the structural backbone of the [cascade](/architecture/cascade/): resolution
-runs over an entity's containment path and the **deepest node wins**, weight-free, pure depth.
+-> card). The trees are the structural backbone of the [cascade](/architecture/cascade/), which
+resolves over an entity's containment path; the precedence rules are stated once, there.
 
 ```d2
 direction: right
@@ -406,10 +406,6 @@ system -> system: parent (tree)
 location -> location: parent (tree)
 ```
 
-A non-leaf node in a tree (a chassis, a floor, a parent system) contributes its **instance**
-bindings down the cascade, not its template: a chassis hands a card its chassis-wide credential while
-the card keeps its own template ([cascade](/architecture/cascade/)).
-
 ### Sub-components and sub-systems
 
 The `parent_id` self-reference is **same-kind nesting**: a **system may have a parent system**
@@ -418,11 +414,10 @@ variable-depth `parent_id` trees. A chassis with line cards is a parent componen
 components; a building-wide AV system composed of room subsystems is a parent system over child
 systems.
 
-This nesting feeds two mechanisms. It feeds the **cascade**, where the **deeper node wins** down the
-component and system trees (a sub-system's bindings override its parent's, a sub-component's override
-the chassis'). And it feeds the **health rollup**: a **sub-system's health rolls into its parent
-system**, and a **sub-component's into its parent component**, the same role-aware composition that
-runs up the rest of the tree.
+This nesting feeds two mechanisms: the [cascade](/architecture/cascade/), where the deeper node wins,
+and the **health rollup**, where a **sub-system's health rolls into its parent system** and a
+**sub-component's into its parent component**, the same role-aware composition that runs up the rest
+of the tree.
 
 The **practical starting depth is 3 levels** (parent / child / grandchild) for both trees, a guidance
 default, **not a hard cap**: the `parent_id` trees support arbitrary depth, and we revisit the
@@ -491,11 +486,10 @@ A shared device legitimately belongs to more than one system, and
 [`system_member`](#membership-what-a-role-attaches-to) says so directly: it is many-valued, and a rack DSP
 serving three rooms holds three memberships.
 
-What stays single-valued is **which system chain feeds the cascade**, because the resolver ranks candidates
-by band and then depth with no tiebreaker after that, so a many-valued seed would resolve
-nondeterministically. That is the job `is_primary` does, and only for callers with no system in hand. The
-genuine "config differs per system" case is answered by **per-system effective views** on demand, not by
-merging chains into the resolution ([cascade](/architecture/cascade/)).
+What stays single-valued is **which system chain seeds the cascade**. Why the seed must be
+single-valued, how `is_primary` picks it for context-free callers, and the per-system effective views
+that answer the genuine "config differs per system" case are stated once, on
+[cascade](/architecture/cascade/#structural-multi-membership-a-component-in-n-systems).
 
 :::note[Superseded]
 This page previously said a truly shared device **skips the system layer**, which was the best available
