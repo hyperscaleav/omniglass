@@ -169,6 +169,13 @@ func (p *PG) UpdateVendor(ctx context.Context, actorID, id string, patch VendorP
 	if err := guardTypeMutable(ctx, tx, "vendor", id); err != nil {
 		return nil, err
 	}
+	before, err := registryAuditImage(ctx, tx, "vendor", id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrTypeNotFound
+		}
+		return nil, fmt.Errorf("storage: audit image vendor %q: %w", id, err)
+	}
 	m, err := scanVendor(tx.QueryRow(ctx, `
 		update vendor set
 			display_name  = coalesce($2, display_name),
@@ -181,9 +188,16 @@ func (p *PG) UpdateVendor(ctx context.Context, actorID, id string, patch VendorP
 		returning `+vendorCols,
 		id, patch.DisplayName, patch.Kind, patch.Icon, patch.SupportPhone, patch.Website))
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrTypeNotFound
+		}
 		return nil, fmt.Errorf("storage: update vendor %q: %w", id, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "vendor", id, nil, m); err != nil {
+	after, err := registryAuditImage(ctx, tx, "vendor", id)
+	if err != nil {
+		return nil, fmt.Errorf("storage: audit image vendor %q: %w", id, err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "update", "vendor", id, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -205,10 +219,17 @@ func (p *PG) DeleteVendor(ctx context.Context, actorID, id string) error {
 	if err := guardTypeMutable(ctx, tx, "vendor", id); err != nil {
 		return err
 	}
+	before, err := registryAuditImage(ctx, tx, "vendor", id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrTypeNotFound
+		}
+		return fmt.Errorf("storage: audit image vendor %q: %w", id, err)
+	}
 	if _, err := tx.Exec(ctx, `delete from vendor where `+registryRefCol(id)+` = $1`, id); err != nil {
 		return fmt.Errorf("storage: delete vendor %q: %w", id, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "vendor", id, map[string]string{"id": id}, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "vendor", id, before, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

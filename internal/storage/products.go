@@ -402,6 +402,10 @@ func (p *PG) UpdateProduct(ctx context.Context, actorID, id string, patch Produc
 	if err := guardTypeMutable(ctx, tx, "product", id); err != nil {
 		return nil, err
 	}
+	before, err := productAuditImage(ctx, tx, id)
+	if err != nil {
+		return nil, err
+	}
 	// A patch's references arrive as handles or uuids; the columns store uuids, so
 	// resolve each before the update (an unset one stays nil and is left unchanged).
 	resolved := Product{VendorID: patch.VendorID, DriverID: patch.DriverID, ParentProductID: patch.ParentProductID}
@@ -420,6 +424,9 @@ func (p *PG) UpdateProduct(ctx context.Context, actorID, id string, patch Produc
 		returning `+productCols,
 		id, patch.DisplayName, resolved.VendorID, resolved.DriverID, patch.Kind, resolved.ParentProductID))
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrTypeNotFound
+		}
 		return nil, mapProductWriteErr(err)
 	}
 	if patch.Capabilities != nil {
@@ -440,13 +447,36 @@ func (p *PG) UpdateProduct(ctx context.Context, actorID, id string, patch Produc
 		return nil, err
 	}
 	m.Capabilities = caps
-	if err := writeAuditRes(ctx, tx, actorID, "update", "product", id, nil, m); err != nil {
+	after, err := productAuditImage(ctx, tx, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "update", "product", id, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit update product: %w", err)
 	}
 	return m, nil
+}
+
+// productAuditImage is registryAuditImage plus the product's capability-name
+// set, which lives in a join table the row image alone would hide: replacing
+// the set is exactly the kind of change the trail exists to show.
+func productAuditImage(ctx context.Context, tx pgx.Tx, ref string) (map[string]any, error) {
+	img, err := registryAuditImage(ctx, tx, "product", ref)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrTypeNotFound
+		}
+		return nil, fmt.Errorf("storage: audit image product %q: %w", ref, err)
+	}
+	caps, err := loadProductCapabilities(ctx, tx, ref)
+	if err != nil {
+		return nil, err
+	}
+	img["capabilities"] = caps
+	return img, nil
 }
 
 // DeleteProduct removes a custom product (its capability rows cascade), refusing
@@ -462,6 +492,10 @@ func (p *PG) DeleteProduct(ctx context.Context, actorID, id string) error {
 	if err := guardTypeMutable(ctx, tx, "product", id); err != nil {
 		return err
 	}
+	before, err := productAuditImage(ctx, tx, id)
+	if err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, `delete from product where `+registryRefCol(id)+` = $1`, id); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
@@ -469,7 +503,7 @@ func (p *PG) DeleteProduct(ctx context.Context, actorID, id string) error {
 		}
 		return fmt.Errorf("storage: delete product %q: %w", id, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "product", id, map[string]string{"id": id}, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "product", id, before, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

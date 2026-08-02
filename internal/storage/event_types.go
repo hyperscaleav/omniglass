@@ -192,6 +192,13 @@ func (p *PG) UpdateEventType(ctx context.Context, actorID, name string, patch Ev
 	if err := guardEventTypeMutable(ctx, tx, name); err != nil {
 		return nil, err
 	}
+	before, err := registryAuditImage(ctx, tx, "event_type", name)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrEventTypeNotFound
+		}
+		return nil, fmt.Errorf("storage: audit image event_type %q: %w", name, err)
+	}
 	if _, err := tx.Exec(ctx, `
 		update event_type set
 			display_name   = coalesce($2, display_name),
@@ -205,9 +212,16 @@ func (p *PG) UpdateEventType(ctx context.Context, actorID, name string, patch Ev
 	if err := tx.QueryRow(ctx,
 		`select id, name, coalesce(display_name, ''), description, payload_schema, official from event_type where name = $1`,
 		name).Scan(&et.ID, &et.Name, &et.DisplayName, &et.Description, &et.PayloadSchema, &et.Official); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrEventTypeNotFound
+		}
 		return nil, fmt.Errorf("storage: reload event type %q: %w", name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "event_type", name, nil, et); err != nil {
+	after, err := registryAuditImage(ctx, tx, "event_type", name)
+	if err != nil {
+		return nil, fmt.Errorf("storage: audit image event_type %q: %w", name, err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "update", "event_type", name, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -228,10 +242,17 @@ func (p *PG) DeleteEventType(ctx context.Context, actorID, name string) error {
 	if err := guardEventTypeMutable(ctx, tx, name); err != nil {
 		return err
 	}
+	before, err := registryAuditImage(ctx, tx, "event_type", name)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrEventTypeNotFound
+		}
+		return fmt.Errorf("storage: audit image event_type %q: %w", name, err)
+	}
 	if _, err := tx.Exec(ctx, `delete from event_type where name = $1`, name); err != nil {
 		return fmt.Errorf("storage: delete event type %q: %w", name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "event_type", name, map[string]string{"name": name}, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "event_type", name, before, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

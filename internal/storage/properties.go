@@ -141,6 +141,13 @@ func (p *PG) UpdatePropertyType(ctx context.Context, actorID, name string, patch
 	if err := guardPropertyMutable(ctx, tx, name); err != nil {
 		return nil, err
 	}
+	before, err := registryAuditImage(ctx, tx, "property_type", name)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrPropertyTypeNotFound
+		}
+		return nil, fmt.Errorf("storage: audit image property_type %q: %w", name, err)
+	}
 	if _, err := tx.Exec(ctx, `
 		update property_type set
 			display_name = coalesce($2, display_name),
@@ -153,9 +160,16 @@ func (p *PG) UpdatePropertyType(ctx context.Context, actorID, name string, patch
 	}
 	prop, err := scanPropertyType(tx.QueryRow(ctx, `select `+propertyCols+` from property_type where name = $1`, name))
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrPropertyTypeNotFound
+		}
 		return nil, fmt.Errorf("storage: reload property %q: %w", name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "property_type", name, nil, prop); err != nil {
+	after, err := registryAuditImage(ctx, tx, "property_type", name)
+	if err != nil {
+		return nil, fmt.Errorf("storage: audit image property_type %q: %w", name, err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "update", "property_type", name, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -176,10 +190,17 @@ func (p *PG) DeletePropertyType(ctx context.Context, actorID, name string) error
 	if err := guardPropertyMutable(ctx, tx, name); err != nil {
 		return err
 	}
+	before, err := registryAuditImage(ctx, tx, "property_type", name)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrPropertyTypeNotFound
+		}
+		return fmt.Errorf("storage: audit image property_type %q: %w", name, err)
+	}
 	if _, err := tx.Exec(ctx, `delete from property_type where name = $1`, name); err != nil {
 		return fmt.Errorf("storage: delete property %q: %w", name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "property_type", name, map[string]string{"name": name}, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "property_type", name, before, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

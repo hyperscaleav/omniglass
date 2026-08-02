@@ -35,8 +35,10 @@ after a rename. A row whose images carry no handle (an older registry delete) fa
 Pick a row to open its **detail drawer**: who acted (and, for an impersonated action, who was behind
 it), when, and the **field-level before/after diff** of the change itself. Changed fields highlight
 both sides, an added field only its After, a removed one only its Before, and unchanged fields dim. A
-create shows only After values and a delete only Before; some registry deletes recorded only the row
-id before this shipped, so an old row can read one-sided. Auth events (sign-ins, password changes)
+create shows only After values and a delete only Before. Registry mutations record the full row on
+both sides (an update carries the row as it stood and as it became, a delete the whole row it
+removed); rows written before that shipped carried only an id, so an old row can still read
+one-sided. Auth events (sign-ins, password changes)
 record no row images at all, and the drawer says so. Sealed material never appears: a secret's audit
 row carries its metadata only, and password changes record that the credential changed, never a value.
 

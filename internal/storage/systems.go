@@ -242,6 +242,13 @@ func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch Stand
 	if err := guardTypeMutable(ctx, tx, "standard", id); err != nil {
 		return nil, err
 	}
+	before, err := registryAuditImage(ctx, tx, "standard", id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrTypeNotFound
+		}
+		return nil, fmt.Errorf("storage: audit image standard %q: %w", id, err)
+	}
 	st, err := scanStandard(tx.QueryRow(ctx, `
 		update standard set
 			display_name       = coalesce($2, display_name),
@@ -251,9 +258,16 @@ func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch Stand
 		returning `+standardCols,
 		id, patch.DisplayName, patch.ParentStandardID))
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrTypeNotFound
+		}
 		return nil, mapStandardWriteErr(err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "standard", id, nil, st); err != nil {
+	after, err := registryAuditImage(ctx, tx, "standard", id)
+	if err != nil {
+		return nil, fmt.Errorf("storage: audit image standard %q: %w", id, err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "update", "standard", id, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
