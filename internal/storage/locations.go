@@ -279,6 +279,13 @@ func (p *PG) UpdateLocationType(ctx context.Context, actorID, id string, patch L
 	if err := guardTypeMutable(ctx, tx, "location_type", id); err != nil {
 		return nil, err
 	}
+	before, err := registryAuditImage(ctx, tx, "location_type", id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrTypeNotFound
+		}
+		return nil, fmt.Errorf("storage: audit image location_type %q: %w", id, err)
+	}
 	var allowed *[]string
 	if patch.AllowedParentTypes != nil {
 		v := normalizeAllowedParentTypes(*patch.AllowedParentTypes)
@@ -294,10 +301,17 @@ func (p *PG) UpdateLocationType(ctx context.Context, actorID, id string, patch L
 		returning id, name, official, display_name, icon, allowed_parent_types`,
 		id, patch.DisplayName, patch.Icon, allowed).
 		Scan(&lt.ID, &lt.Name, &lt.Official, &lt.DisplayName, &lt.Icon, &lt.AllowedParentTypes); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrTypeNotFound
+		}
 		return nil, fmt.Errorf("storage: update location_type %q: %w", id, err)
 	}
 	lt.AllowedParentTypes = normalizeAllowedParentTypes(lt.AllowedParentTypes)
-	if err := writeAuditRes(ctx, tx, actorID, "update", "location_type", id, nil, lt); err != nil {
+	after, err := registryAuditImage(ctx, tx, "location_type", id)
+	if err != nil {
+		return nil, fmt.Errorf("storage: audit image location_type %q: %w", id, err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "update", "location_type", id, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {

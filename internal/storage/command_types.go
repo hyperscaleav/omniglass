@@ -210,6 +210,13 @@ func (p *PG) UpdateCommandType(ctx context.Context, actorID, name string, patch 
 	if err := guardCommandTypeMutable(ctx, tx, name); err != nil {
 		return nil, err
 	}
+	before, err := registryAuditImage(ctx, tx, "command_type", name)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrCommandTypeNotFound
+		}
+		return nil, fmt.Errorf("storage: audit image command_type %q: %w", name, err)
+	}
 	// The target is resolved and replaced only when the patch sets it.
 	var target *string
 	if patch.TargetPropertyType != nil {
@@ -232,9 +239,16 @@ func (p *PG) UpdateCommandType(ctx context.Context, actorID, name string, patch 
 	}
 	ct, err := scanCommandType(tx.QueryRow(ctx, `select `+commandTypeCols+` from command_type where name = $1`, name))
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrCommandTypeNotFound
+		}
 		return nil, fmt.Errorf("storage: reload command type %q: %w", name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "command_type", name, nil, ct); err != nil {
+	after, err := registryAuditImage(ctx, tx, "command_type", name)
+	if err != nil {
+		return nil, fmt.Errorf("storage: audit image command_type %q: %w", name, err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "update", "command_type", name, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -254,10 +268,17 @@ func (p *PG) DeleteCommandType(ctx context.Context, actorID, name string) error 
 	if err := guardCommandTypeMutable(ctx, tx, name); err != nil {
 		return err
 	}
+	before, err := registryAuditImage(ctx, tx, "command_type", name)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrCommandTypeNotFound
+		}
+		return fmt.Errorf("storage: audit image command_type %q: %w", name, err)
+	}
 	if _, err := tx.Exec(ctx, `delete from command_type where name = $1`, name); err != nil {
 		return fmt.Errorf("storage: delete command type %q: %w", name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "command_type", name, map[string]string{"name": name}, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "command_type", name, before, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

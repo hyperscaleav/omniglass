@@ -135,6 +135,13 @@ func (p *PG) UpdateDriver(ctx context.Context, actorID, id string, patch DriverP
 	if err := guardTypeMutable(ctx, tx, "driver", id); err != nil {
 		return nil, err
 	}
+	before, err := registryAuditImage(ctx, tx, "driver", id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrTypeNotFound
+		}
+		return nil, fmt.Errorf("storage: audit image driver %q: %w", id, err)
+	}
 	d, err := scanDriver(tx.QueryRow(ctx, `
 		update driver set
 			display_name = coalesce($2, display_name),
@@ -144,9 +151,16 @@ func (p *PG) UpdateDriver(ctx context.Context, actorID, id string, patch DriverP
 		returning `+driverCols,
 		id, patch.DisplayName, patch.Version))
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrTypeNotFound
+		}
 		return nil, fmt.Errorf("storage: update driver %q: %w", id, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "driver", id, nil, d); err != nil {
+	after, err := registryAuditImage(ctx, tx, "driver", id)
+	if err != nil {
+		return nil, fmt.Errorf("storage: audit image driver %q: %w", id, err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "update", "driver", id, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -168,10 +182,17 @@ func (p *PG) DeleteDriver(ctx context.Context, actorID, id string) error {
 	if err := guardTypeMutable(ctx, tx, "driver", id); err != nil {
 		return err
 	}
+	before, err := registryAuditImage(ctx, tx, "driver", id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrTypeNotFound
+		}
+		return fmt.Errorf("storage: audit image driver %q: %w", id, err)
+	}
 	if _, err := tx.Exec(ctx, `delete from driver where `+registryRefCol(id)+` = $1`, id); err != nil {
 		return fmt.Errorf("storage: delete driver %q: %w", id, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "driver", id, map[string]string{"id": id}, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "driver", id, before, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

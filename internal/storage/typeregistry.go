@@ -24,6 +24,23 @@ var (
 	ErrTypeInUse    = errors.New("storage: type is referenced by existing rows")
 )
 
+// registryAuditImage loads a registry row as a column-keyed map for an audit
+// image (#228): an update records (before, after) in the same shape and a
+// delete records the whole row it removed, so reference-data history is
+// complete and the console's field diff lines up key for key. row_to_json
+// keeps the helper table-agnostic; every table name is a compile-time
+// constant at its call site and registryRefCol is the sanctioned dynamic
+// fragment. A missing row surfaces pgx.ErrNoRows for the caller to map to
+// its own not-found sentinel (the guard has usually run, so this is the
+// deleted-between-guard-and-write race).
+func registryAuditImage(ctx context.Context, tx pgx.Tx, table, ref string) (map[string]any, error) {
+	var img map[string]any
+	if err := tx.QueryRow(ctx, `select row_to_json(t) from `+table+` t where `+registryRefCol(ref)+` = $1`, ref).Scan(&img); err != nil {
+		return nil, err
+	}
+	return img, nil
+}
+
 // typeRef names the parent table and column that reference a type id, for the
 // delete-in-use guard (e.g. {"location", "location_type"}).
 type typeRef struct {
@@ -103,10 +120,17 @@ func deleteTypeRow(ctx context.Context, p *PG, table, resource string, ref typeR
 	if n > 0 {
 		return ErrTypeInUse
 	}
+	before, err := registryAuditImage(ctx, tx, table, uid)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrTypeNotFound
+		}
+		return fmt.Errorf("storage: audit image %s %q: %w", table, id, err)
+	}
 	if _, err := tx.Exec(ctx, `delete from `+table+` where id = $1`, uid); err != nil {
 		return fmt.Errorf("storage: delete %s %q: %w", table, id, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", resource, id, map[string]string{"id": id}, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", resource, id, before, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
