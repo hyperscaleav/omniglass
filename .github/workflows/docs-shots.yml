@@ -40,6 +40,11 @@ jobs:
 
   freshness:
     runs-on: ubuntu-latest
+    # contents:write only so the failure path below can publish its recapture
+    # to the throwaway ci/docs-shots-recapture ref; fork PRs still get a
+    # read-only token, so this widens nothing for outside contributors.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -67,3 +72,15 @@ jobs:
           # The recapture dir is dot-prefixed (gitignored working dir), and v4
           # skips hidden paths by default, which uploads nothing.
           include-hidden-files: true
+      # The same recapture as a force-pushed throwaway ref, for environments
+      # whose egress can reach git but not the artifact storage (a sandboxed
+      # agent session). Fetch with:
+      #   git fetch origin ci/docs-shots-recapture
+      - name: Publish the recapture to the ci ref
+        if: failure()
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@users.noreply.github.com
+          git add -f .docs-shots-tmp
+          git commit -m "ci: docs-shots recapture for ${{ github.sha }} [skip ci]"
+          git push -f origin HEAD:refs/heads/ci/docs-shots-recapture
