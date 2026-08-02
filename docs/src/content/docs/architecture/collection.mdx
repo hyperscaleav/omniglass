@@ -285,7 +285,7 @@ its commands as a one-shot `exec`.
 
 ### Listeners and their config
 
-This whole listener section is Design: no webhook route exists today.
+:::design[Server-hosted listeners, tracked in #489]
 
 A **listener** is inbound: rather than us polling, **we wait for pushed data**
 (`mode: listen`). That data can arrive several ways, a webhook POST, an
@@ -331,6 +331,8 @@ impersonate another interface; shared-interface ingress should scope on
 `event.labels.interface`, and per-component interfaces (server-assigned owner)
 are preferred for high-trust sources. A listener also runs node-hosted for
 LAN-local sources, with idempotency/dedup and form-encoded bodies.
+
+:::
 
 :::design[The step DAG and extractors, tracked in #434]
 

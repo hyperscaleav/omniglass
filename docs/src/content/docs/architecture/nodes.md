@@ -25,7 +25,7 @@ Also built: running tasks (the probes, `internal/node/probe.go`), shipping telem
 command queue, sessions and inbound demux, the layered `_check` reachability gate, config-generation-driven cache
 invalidation, `node.self` self-telemetry, the `node.down` sweep, the JetStream publish-ack delivery
 contract (today the telemetry publish is fire-and-forget, #430), the tick scheduling and concurrency
-knobs, and `/components/{name}:apply`. The credential is a shared secret
+knobs, and config apply (the `:apply` flow). The credential is a shared secret
 (the enrollment token doubles as the NATS password); the decentralized nkey/JWT model is deferred. See
 [implementation status](/architecture/status/) and [decision log](/architecture/decisions/) (ADR-0036).
 :::
