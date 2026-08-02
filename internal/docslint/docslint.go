@@ -190,6 +190,12 @@ var operatorStrings = []string{
 	filepath.Join("..", "..", "internal", "seed", "roles.yaml"),
 	filepath.Join("..", "..", "web", "src", "lib", "nav.ts"),
 	filepath.Join("..", "..", "README.md"),
+	// The generated OpenAPI document carries every Huma operation and field
+	// description (#451): the doc: tags flow to the spec, the CLI reference,
+	// and the SPA types, so a retired noun here reaches operators through
+	// three surfaces at once. Scanning the generated spec rather than the Go
+	// source follows whatever produces the description.
+	filepath.Join("..", "..", "api", "openapi.json"),
 }
 
 // ScanOperatorStrings applies the same denylist to the operator-visible text

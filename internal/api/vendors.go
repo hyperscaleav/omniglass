@@ -10,7 +10,7 @@ import (
 )
 
 // vendorBody is the wire shape of a vendor registry row. The registry lists
-// alphabetically by display_name, like component_type.
+// alphabetically by display_name, like the product catalog.
 type vendorBody struct {
 	ID           string `json:"id" doc:"The vendor's uuid, the stable handle that survives a rename"`
 	Name         string `json:"name" doc:"The kebab handle an operator reads and types; renameable"`
