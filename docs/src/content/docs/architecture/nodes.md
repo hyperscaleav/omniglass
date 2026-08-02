@@ -23,7 +23,7 @@ Also built: running tasks (the probes, `internal/node/probe.go`), shipping telem
 `internal/node/logs.go`, `GET /nodes/{name}/logs`, the console Self-logs panel). Still
 `Design`: commands and the durable
 command queue, sessions and inbound demux, the layered `_check` reachability gate, config-generation-driven cache
-invalidation, `node.self` self-telemetry, the `node.down` sweep, the JetStream publish-ack delivery
+invalidation, node self-telemetry, the node-down sweep, the JetStream publish-ack delivery
 contract (today the telemetry publish is fire-and-forget, #430), the tick scheduling and concurrency
 knobs, and config apply (the `:apply` flow). The credential is a shared secret
 (the enrollment token doubles as the NATS password); the decentralized nkey/JWT model is deferred. See
@@ -117,7 +117,7 @@ connection:
 - **Control down** (server to node): the node holds a **durable JetStream consumer** on its
   **command queue** (commands to run) and subscribes to **worklist-change signals** (the config-generation
   bump, so the node re-pulls). Subjects the node may consume are scoped by its placement (next).
-- **Control up** (node to server): heartbeat (liveness, feeding the `node.down` sweep), command-execution
+- **Control up** (node to server): heartbeat (liveness, feeding the node-down sweep), command-execution
   results (the `action`-row status), `session_log` transitions, and the `:report` self-telemetry, each
   published on its own subject rather than a separate HTTP path.
 
@@ -435,7 +435,7 @@ derive. The node's job ends at the ship.
 
 ## Tick scheduling, concurrency, and self-observability
 
-::::design[Target design: the tick scheduler, `node.self`, and the `node.down` sweep, tracked in #489 and #430; the seeded node rules are the `event_rule` (ADR-0050)]
+::::design[Target design: the tick scheduler, `node.self`, and the node-down sweep, tracked in #489 and #430; the seeded node rules are the `event_rule` (ADR-0050)]
 A tick groups the worklist **by interface** and runs in three phases: the L3 ping
 pre-pass (batched per host), then the per-interface gate-verdict pre-pass, then
 the poll phase. The two gate pre-passes run at a **high fixed concurrency**

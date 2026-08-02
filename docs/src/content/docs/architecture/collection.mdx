@@ -198,26 +198,32 @@ The poll types and listeners in the `interface_type` registry and the operator c
 The node translates each stored task + interface into a poller the collection engine runs; how the
 node *executes* these (tick scheduling, reachability gating, the task queue) is [nodes](/architecture/nodes/).
 
-Built today: the `icmp` and `tcp` probes, with `ssh` and `http` probing as tcp-connect; the
-`snmp`, `telnet`, and `raw-tcp` rows and the rich `ssh`/`http` configs below are Design.
-
 ### Poll protocols and their config
+
+Built today: the `icmp` and `tcp` probes (with `ssh` and `http` probing as tcp-connect). A
+probe's config rides the interface's `params` JSON, unmarshalled on the node:
+
+| interface type | shape | config (`interface.params`) | samples |
+|---|---|---|---|
+| `icmp` | inline probe | `target` (host or IP), `count`, `timeout` | `icmp.reachable`, `icmp.rtt_avg` (fixed) |
+| `tcp` | inline probe | `target` (`host:port`), `timeout` | `tcp.open`, `tcp.connect_time` (fixed) |
+
+:::design[The remaining transports and their per-task spec, tracked in #489]
 
 | interface type | shape | host/target | per-task params | samples |
 |---|---|---|---|---|
-| `icmp` | inline probe | `task.params.target` | `count`, `timeout` | `icmp.reachable`, `icmp.rtt_avg` (fixed) |
-| `tcp` | inline probe | `task.params.target` (`host:port`) | `timeout` | `tcp.open`, `tcp.connect_time` (fixed) |
 | `snmp` | held connection | `interface.endpoint` (`host[:port]`, port defaults 161) | `task.params.oids` (comma-separated `name=oid`); `interface.params.version` (default `2c`), `interface.params.community` | one sample per OID, `name` = the sample key |
 | `http` | held connection | `interface.endpoint` (base URL) | `task.params.path` (joined onto the base URL), `method` (default `GET`), `timeout` (default `5s`), `body`, `extract` (comma-separated `name=json:<dot.path>`); `interface.params.header_*` (request headers, prefix stripped) | `http.reachable`, `http.status_code`, `http.response_time` (fixed) + one per `extract` entry |
 | `raw-tcp` | held connection | `interface.endpoint` (`host:port`) | `task.params.command` (sent verbatim + line ending), `timeout`, `extract` (comma-separated `name=re:<pattern>`); `interface.params.line_ending` (default `\r\n`), `read_delim` (default `\n`), `connect_timeout`, `read_timeout` | `rawtcp.reachable`, `rawtcp.response_time` (fixed) + one per `extract` entry |
 | `telnet` | held connection | `interface.endpoint` (`host:port`) | as `raw-tcp`, plus `interface.params.username`/`password` (drive the default `login:` / `Password:` chain; `login_expect`/`password_expect` override the prompts) | `telnet.reachable`, `telnet.response_time` (fixed) + one per `extract` entry |
 | `ssh` | held connection | `interface.endpoint` (`host:port`) | as `raw-tcp` (the command runs as a one-shot `exec`), plus `interface.params.username` and `password` and/or `private_key` (inline PEM) | `ssh.reachable`, `ssh.response_time` (fixed) + one per `extract` entry |
 
-`icmp`/`tcp` are inline probes (the target rides the task); `snmp`, `http`, and
-the text transports (`raw-tcp`/`telnet`/`ssh`) are held connections, so the
-connection (host/port/version/community for snmp, base URL + headers for http,
-address + framing + auth for the text family) lives on the interface and the task
-names what to read.
+:::
+
+`icmp`/`tcp` are inline probes whose config (target, timeout) rides the interface's
+`params`. In the design model above, `snmp`, `http`, and the text transports
+(`raw-tcp`/`telnet`/`ssh`) are held connections: the connection lives on the
+interface and the task names what to read.
 
 The ship-with registry seeds the 11 real `property_type` rows
 (`internal/seed/properties.yaml`), including the probe built-ins the node emits today
@@ -227,6 +233,8 @@ bytes; the wider per-transport name set (`udp.open`, `snmp.reachable`, the http 
 `<proto>.reachable`/`<proto>.response_time` for the text family) is Design. They are
 owner-agnostic measurements like any other: unregistered,
 reject-not-project would drop them at ingest.
+
+:::design[The held-connection transports in detail, tracked in #489]
 
 For `snmp`, each OID is carried in its **native SNMP type**: numeric OIDs as
 numbers, string OIDs (OctetString / IPAddress / OID) as text, so a string-valued
@@ -282,6 +290,8 @@ listener runtime. A held session (the stateful transport) carries the same text
 family over a persistent connection, with multi-line prompt-expect beyond the first
 delimiter, command echo handling, and Q-SYS-style frame/checksum framing; ssh runs
 its commands as a one-shot `exec`.
+
+:::
 
 ### Listeners and their config
 
