@@ -17,6 +17,59 @@ import (
 // without an allow-list to maintain.
 var invocation = regexp.MustCompile("(?m)(?:^|`)omniglass ((?:[a-z][a-z0-9-]*)(?:[ \t]+[a-z][a-zA-Z0-9-]*)*)")
 
+// invocationTail captures the whole documented invocation through its flags
+// and argument values (up to the closing backtick or end of line), for the
+// flag check: the word-only regex above stops at the first non-lowercase
+// token, which is exactly why a wrong --flag was invisible (#449).
+var invocationTail = regexp.MustCompile("(?m)(?:^|`)omniglass ([^`\n]+)")
+
+// commandWord is a command-path token, camelCase verbs included (setTag,
+// removeTag); the first token that is not one ends the command words and
+// starts arguments and flags.
+var commandWord = regexp.MustCompile(`^[a-z][a-zA-Z0-9-]*$`)
+
+// checkFlags validates every --flag in a documented invocation against the
+// resolved command's flag set, inherited persistent flags included. A tail
+// whose command words do not resolve is checkInvocation's finding, not ours.
+func checkFlags(idx map[string]*cobra.Command, tail string) error {
+	tokens := strings.Fields(tail)
+	var words []string
+	for _, t := range tokens {
+		if !commandWord.MatchString(t) {
+			break
+		}
+		words = append(words, t)
+	}
+	var cmd *cobra.Command
+	for k := len(words); k > 0; k-- {
+		if c, ok := idx[strings.Join(words[:k], " ")]; ok {
+			cmd = c
+			break
+		}
+	}
+	if cmd == nil {
+		return nil
+	}
+	for _, t := range tokens {
+		if !strings.HasPrefix(t, "--") {
+			continue
+		}
+		name := strings.TrimPrefix(t, "--")
+		if i := strings.IndexByte(name, '='); i >= 0 {
+			name = name[:i]
+		}
+		if name == "" || !flagNameShape.MatchString(name) {
+			continue // a literal placeholder like --<flag> is not a claim
+		}
+		if cmd.Flags().Lookup(name) == nil && cmd.InheritedFlags().Lookup(name) == nil {
+			return fmt.Errorf("%q: command %q has no --%s flag", "omniglass "+tail, cmd.CommandPath(), name)
+		}
+	}
+	return nil
+}
+
+var flagNameShape = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+
 // commandIndex maps every resolvable command path to its cobra command, so a
 // documented invocation can be checked against the shape of what it resolved
 // to, not just whether some prefix of it resolves.
@@ -109,36 +162,78 @@ func TestCheckInvocationRejectsDoubledSegments(t *testing.T) {
 // Renaming a command is the moment this matters most, since the guides are the
 // one surface a regeneration does not fix.
 //
-// Architecture pages are excluded deliberately: `status.mdx` and the decision log
-// are historical records of what shipped when, and a command named there was true
-// at the time. Rewriting them to match today would falsify the record.
+// The walk spans the guides, architecture, and contributing trees (#449):
+// commands are taught outside guides/ too. Three files are excluded as
+// historical records (the decision log, the build log, and the status page's
+// legend quoting them): a command named there was true at the time, and
+// rewriting them to match today would falsify the record. The generated CLI
+// reference is excluded because it cannot drift.
+var docsCommandExcluded = map[string]bool{
+	"decisions.md": true,
+	"build-log.md": true,
+	"status.mdx":   true,
+}
+
 func TestDocsOnlyNameRealCommands(t *testing.T) {
 	idx := commandIndex(Root("test"))
 
-	root := filepath.Join("..", "..", "docs", "src", "content", "docs", "guides")
+	base := filepath.Join("..", "..", "docs", "src", "content", "docs")
 	var bad []string
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return err
-		}
-		if ext := filepath.Ext(path); ext != ".md" && ext != ".mdx" {
-			return nil
-		}
-		b, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		for _, m := range invocation.FindAllStringSubmatch(string(b), -1) {
-			if err := checkInvocation(idx, strings.Fields(m[1])); err != nil {
-				bad = append(bad, filepath.Base(path)+": "+err.Error())
+	for _, tree := range []string{"guides", "architecture", "contributing"} {
+		err := filepath.Walk(filepath.Join(base, tree), func(path string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() {
+				return err
 			}
+			if ext := filepath.Ext(path); ext != ".md" && ext != ".mdx" {
+				return nil
+			}
+			if docsCommandExcluded[filepath.Base(path)] {
+				return nil
+			}
+			b, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			for _, m := range invocation.FindAllStringSubmatch(string(b), -1) {
+				if err := checkInvocation(idx, strings.Fields(m[1])); err != nil {
+					bad = append(bad, filepath.Base(path)+": "+err.Error())
+				}
+			}
+			for _, m := range invocationTail.FindAllStringSubmatch(string(b), -1) {
+				if err := checkFlags(idx, m[1]); err != nil {
+					bad = append(bad, filepath.Base(path)+": "+err.Error())
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walk %s: %v", tree, err)
 		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("walk guides: %v", err)
 	}
 	if len(bad) > 0 {
 		t.Errorf("%d documented command(s) do not check out:\n  %s", len(bad), strings.Join(bad, "\n  "))
+	}
+}
+
+// TestCheckFlagsValidatesDocumentedFlags pins the flag check: a real flag and
+// an inherited persistent flag pass, a phantom flag fires, =value forms parse,
+// and an unresolvable command is not this check's finding.
+func TestCheckFlagsValidatesDocumentedFlags(t *testing.T) {
+	idx := commandIndex(Root("test"))
+
+	if err := checkFlags(idx, "component setTag codec-1 --key environment --value dev"); err != nil {
+		t.Errorf("real flags on a camelCase verb rejected: %v", err)
+	}
+	if err := checkFlags(idx, "location list --turbo"); err == nil {
+		t.Error("phantom flag accepted; want a rejection")
+	}
+	if err := checkFlags(idx, "location list --server https://x"); err != nil {
+		t.Errorf("persistent flag rejected: %v", err)
+	}
+	if err := checkFlags(idx, "location create hq --display-name=\"HQ\""); err != nil {
+		t.Errorf("=value form rejected: %v", err)
+	}
+	if err := checkFlags(idx, "nonexistent-noun list --whatever"); err != nil {
+		t.Errorf("unresolvable command is checkInvocation's finding, not ours: %v", err)
 	}
 }
