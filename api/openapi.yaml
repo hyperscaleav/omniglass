@@ -253,9 +253,11 @@ components:
           readOnly: true
           type: string
         name:
+          description: The node name the enrollment was minted for
           minLength: 1
           type: string
         token:
+          description: The one-time enrollment token from node create, exchanged here for the node's NATS credential
           minLength: 1
           type: string
       required:
@@ -498,6 +500,7 @@ components:
           readOnly: true
           type: string
         display_name:
+          description: What an operator reads in pickers and lists
           minLength: 1
           type: string
         name:
@@ -551,6 +554,7 @@ components:
           readOnly: true
           type: string
         display_name:
+          description: What an operator reads; the technical name is the address
           type: string
         location:
           description: Location name this component is placed at
@@ -584,6 +588,7 @@ components:
           readOnly: true
           type: string
         display_name:
+          description: What an operator reads in pickers and lists
           minLength: 1
           type: string
         name:
@@ -591,6 +596,7 @@ components:
           minLength: 1
           type: string
         version:
+          description: A free-form version string, e.g. 1.0.0
           type: string
       required:
         - name
@@ -733,9 +739,11 @@ components:
           readOnly: true
           type: string
         description:
+          description: Free-form notes on what the group is for
           maxLength: 1000
           type: string
         display_name:
+          description: What an operator reads in lists
           maxLength: 200
           type: string
         name:
@@ -783,9 +791,10 @@ components:
           readOnly: true
           type: string
         display_name:
+          description: What an operator reads; the technical name is the address
           type: string
         location_type:
-          description: A location_type id (campus, building, ...)
+          description: The location_type, by name or uuid (campus, building, ...)
           minLength: 1
           type: string
         name:
@@ -812,13 +821,14 @@ components:
           readOnly: true
           type: string
         allowed_parent_types:
-          description: location_type ids and/or the reserved root sentinel this type may be placed under; empty means unconstrained
+          description: location_type names and/or the reserved root sentinel this type may be placed under; empty means unconstrained
           items:
             type: string
           type:
             - array
             - "null"
         display_name:
+          description: What an operator reads in pickers and lists
           minLength: 1
           type: string
         icon:
@@ -895,6 +905,7 @@ components:
           readOnly: true
           type: string
         description:
+          description: Free-form operator notes about the node
           type: string
         display_name:
           description: Operator label; falls back to the name when empty
@@ -920,9 +931,11 @@ components:
           readOnly: true
           type: string
         display_name:
+          description: What an operator reads in lists; falls back to the username
           maxLength: 200
           type: string
         email:
+          description: Contact email for the account
           format: email
           maxLength: 320
           type: string
@@ -951,18 +964,22 @@ components:
           readOnly: true
           type: string
         capabilities:
+          description: Capability names the product provides (the default set its components inherit)
           items:
             type: string
           type:
             - array
             - "null"
         display_name:
+          description: What an operator reads in pickers and lists
           minLength: 1
           type: string
         driver_id:
+          description: The driver that talks to it, by handle or uuid
           type: string
         kind:
           default: device
+          description: What class of thing the product is
           enum:
             - device
             - app
@@ -1081,6 +1098,7 @@ components:
           readOnly: true
           type: string
         display_name:
+          description: What an operator reads in pickers and lists
           minLength: 1
           type: string
         name:
@@ -1105,6 +1123,7 @@ components:
           readOnly: true
           type: string
         display_name:
+          description: What an operator reads; the technical name is the address
           type: string
         location:
           description: Location name this system is placed at
@@ -1119,7 +1138,7 @@ components:
           description: Parent system name; omit for a root system
           type: string
         standard_id:
-          description: A standard id; omit for a one-off system that conforms to none
+          description: The standard it conforms to, by handle or uuid; omit for a one-off system
           type: string
       required:
         - name
@@ -1211,12 +1230,15 @@ components:
           readOnly: true
           type: string
         display_name:
+          description: What an operator reads in pickers and lists
           minLength: 1
           type: string
         icon:
+          description: A glyph key, e.g. crestron-logo
           type: string
         kind:
           default: manufacturer
+          description: The role the organization plays
           enum:
             - manufacturer
             - integrator
@@ -1227,8 +1249,10 @@ components:
           minLength: 1
           type: string
         support_phone:
+          description: The vendor's support line
           type: string
         website:
+          description: The vendor's website (http or https)
           type: string
       required:
         - name
@@ -2961,8 +2985,10 @@ components:
           readOnly: true
           type: string
         password:
+          description: The account password; exchanged for a session cookie, never stored
           type: string
         username:
+          description: The sign-in username
           type: string
       required:
         - username
@@ -3336,6 +3362,7 @@ components:
             - "null"
         owner:
           $ref: "#/components/schemas/OwnerStruct"
+          description: The entity every row in the batch lands under
         samples:
           description: Registry-resolved observations. The registry decides which table each lands in
           items:
@@ -4678,6 +4705,7 @@ components:
           readOnly: true
           type: string
         display_name:
+          description: A new operator-facing label
           type: string
       type: object
     UpdateCommandTypeInputBody:
@@ -4717,6 +4745,7 @@ components:
           readOnly: true
           type: string
         display_name:
+          description: A new operator-facing label
           type: string
         location:
           description: Relocates the component to this location name. An empty string clears its placement.
@@ -4745,8 +4774,10 @@ components:
           readOnly: true
           type: string
         display_name:
+          description: A new operator-facing label
           type: string
         version:
+          description: A new version string, e.g. 1.0.1
           type: string
       type: object
     UpdateEventTypeInputBody:
@@ -4820,8 +4851,10 @@ components:
           readOnly: true
           type: string
         display_name:
+          description: A new operator-facing label
           type: string
         location_type:
+          description: "Re-types the location: a location_type, by name or uuid"
           type: string
         name:
           description: A new globally unique technical name (rename)
@@ -4849,8 +4882,10 @@ components:
             type: string
           type: array
         display_name:
+          description: A new operator-facing label
           type: string
         icon:
+          description: A new glyph key; the console falls back to map-pin when empty
           type: string
       type: object
     UpdateMeInputBody:
@@ -4879,8 +4914,10 @@ components:
           readOnly: true
           type: string
         description:
+          description: New free-form operator notes
           type: string
         display_name:
+          description: A new operator-facing label
           type: string
         location:
           description: Set the node's location by name or id, or "" to clear it
@@ -4922,14 +4959,18 @@ components:
           readOnly: true
           type: string
         capabilities:
+          description: Replaces the capability-name set; omit to leave unchanged
           items:
             type: string
           type: array
         display_name:
+          description: A new operator-facing label
           type: string
         driver_id:
+          description: A new driver, by handle or uuid
           type: string
         kind:
+          description: A new product class
           enum:
             - device
             - app
@@ -4937,8 +4978,10 @@ components:
             - vm
           type: string
         parent_product_id:
+          description: A new parent product, by handle or uuid
           type: string
         vendor_id:
+          description: A new vendor, by handle or uuid
           type: string
       type: object
     UpdatePropertyInputBody:
@@ -4992,8 +5035,10 @@ components:
           readOnly: true
           type: string
         display_name:
+          description: A new operator-facing label
           type: string
         parent_standard_id:
+          description: A new variant parent, by handle or uuid
           type: string
       type: object
     UpdateSystemInputBody:
@@ -5007,6 +5052,7 @@ components:
           readOnly: true
           type: string
         display_name:
+          description: A new operator-facing label
           type: string
         location:
           description: Relocates the system to this location name. An empty string clears its placement.
@@ -5021,6 +5067,7 @@ components:
           description: Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system.
           type: string
         standard_id:
+          description: A new standard, by handle or uuid; "" clears it (a one-off system)
           type: string
       type: object
     UpdateTagInputBody:
@@ -5077,18 +5124,23 @@ components:
           readOnly: true
           type: string
         display_name:
+          description: A new operator-facing label
           type: string
         icon:
+          description: A new glyph key
           type: string
         kind:
+          description: A new organization role
           enum:
             - manufacturer
             - integrator
             - developer
           type: string
         support_phone:
+          description: A new support line
           type: string
         website:
+          description: A new website (http or https)
           type: string
       type: object
     VariableBody:

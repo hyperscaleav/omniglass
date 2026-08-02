@@ -86,24 +86,24 @@ type productPathInput struct {
 type createProductInput struct {
 	Body struct {
 		Name            string   `json:"name" minLength:"1" doc:"The globally unique kebab handle; renameable"`
-		DisplayName     string   `json:"display_name" minLength:"1"`
+		DisplayName     string   `json:"display_name" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		VendorID        string   `json:"vendor_id,omitempty" doc:"The vendor, by handle or uuid"`
-		DriverID        string   `json:"driver_id,omitempty"`
-		Kind            string   `json:"kind,omitempty" enum:"device,app,service,vm" default:"device"`
+		DriverID        string   `json:"driver_id,omitempty" doc:"The driver that talks to it, by handle or uuid"`
+		Kind            string   `json:"kind,omitempty" enum:"device,app,service,vm" default:"device" doc:"What class of thing the product is"`
 		ParentProductID string   `json:"parent_product_id,omitempty" doc:"The parent product, by handle or uuid"`
-		Capabilities    []string `json:"capabilities,omitempty"`
+		Capabilities    []string `json:"capabilities,omitempty" doc:"Capability names the product provides (the default set its components inherit)"`
 	}
 }
 
 type updateProductInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		DisplayName     *string   `json:"display_name,omitempty"`
-		VendorID        *string   `json:"vendor_id,omitempty"`
-		DriverID        *string   `json:"driver_id,omitempty"`
-		Kind            *string   `json:"kind,omitempty" enum:"device,app,service,vm"`
-		ParentProductID *string   `json:"parent_product_id,omitempty"`
-		Capabilities    *[]string `json:"capabilities,omitempty"`
+		DisplayName     *string   `json:"display_name,omitempty" doc:"A new operator-facing label"`
+		VendorID        *string   `json:"vendor_id,omitempty" doc:"A new vendor, by handle or uuid"`
+		DriverID        *string   `json:"driver_id,omitempty" doc:"A new driver, by handle or uuid"`
+		Kind            *string   `json:"kind,omitempty" enum:"device,app,service,vm" doc:"A new product class"`
+		ParentProductID *string   `json:"parent_product_id,omitempty" doc:"A new parent product, by handle or uuid"`
+		Capabilities    *[]string `json:"capabilities,omitempty" doc:"Replaces the capability-name set; omit to leave unchanged"`
 	}
 }
 

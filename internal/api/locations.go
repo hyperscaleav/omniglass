@@ -64,17 +64,17 @@ type locationTypePathInput struct {
 type createLocationTypeInput struct {
 	Body struct {
 		Name               string   `json:"name" minLength:"1" doc:"The globally unique kebab handle (e.g. wing); \"root\" is reserved"`
-		DisplayName        string   `json:"display_name" minLength:"1"`
+		DisplayName        string   `json:"display_name" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		Icon               string   `json:"icon,omitempty" doc:"A glyph key; the console falls back to map-pin when empty"`
-		AllowedParentTypes []string `json:"allowed_parent_types,omitempty" doc:"location_type ids and/or the reserved root sentinel this type may be placed under; empty means unconstrained"`
+		AllowedParentTypes []string `json:"allowed_parent_types,omitempty" doc:"location_type names and/or the reserved root sentinel this type may be placed under; empty means unconstrained"`
 	}
 }
 
 type updateLocationTypeInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		DisplayName        *string   `json:"display_name,omitempty"`
-		Icon               *string   `json:"icon,omitempty"`
+		DisplayName        *string   `json:"display_name,omitempty" doc:"A new operator-facing label"`
+		Icon               *string   `json:"icon,omitempty" doc:"A new glyph key; the console falls back to map-pin when empty"`
 		AllowedParentTypes *[]string `json:"allowed_parent_types,omitempty" doc:"Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained"`
 	}
 }
@@ -94,8 +94,8 @@ type locationPathInput struct {
 type createLocationInput struct {
 	Body struct {
 		Name         string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Globally unique name (the address; lowercase letters, digits, hyphens)"`
-		DisplayName  string  `json:"display_name,omitempty"`
-		LocationType string  `json:"location_type" minLength:"1" doc:"A location_type id (campus, building, ...)"`
+		DisplayName  string  `json:"display_name,omitempty" doc:"What an operator reads; the technical name is the address"`
+		LocationType string  `json:"location_type" minLength:"1" doc:"The location_type, by name or uuid (campus, building, ...)"`
 		Parent       *string `json:"parent,omitempty" doc:"Parent location name; omit for a root location"`
 	}
 }
@@ -104,8 +104,8 @@ type updateLocationInput struct {
 	Name string `path:"name"`
 	Body struct {
 		Name         *string `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"A new globally unique technical name (rename)"`
-		DisplayName  *string `json:"display_name,omitempty"`
-		LocationType *string `json:"location_type,omitempty"`
+		DisplayName  *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
+		LocationType *string `json:"location_type,omitempty" doc:"Re-types the location: a location_type, by name or uuid"`
 		Parent       *string `json:"parent,omitempty" doc:"Re-parents the location (a tree move) to this location name, cycle-guarded and placement-validated. Moving to root is not supported via update this slice."`
 	}
 }

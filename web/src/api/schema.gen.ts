@@ -3265,7 +3265,9 @@ export interface components {
              * @example /api/v1/schemas/ClaimNodeInputBody.json
              */
             readonly $schema?: string;
+            /** @description The node name the enrollment was minted for */
             name: string;
+            /** @description The one-time enrollment token from node create, exchanged here for the node's NATS credential */
             token: string;
         };
         ClaimOutputBody: {
@@ -3406,6 +3408,7 @@ export interface components {
              * @example /api/v1/schemas/CreateCapabilityInputBody.json
              */
             readonly $schema?: string;
+            /** @description What an operator reads in pickers and lists */
             display_name: string;
             /** @description The globally unique kebab handle; renameable */
             name: string;
@@ -3440,6 +3443,7 @@ export interface components {
              * @example /api/v1/schemas/CreateComponentInputBody.json
              */
             readonly $schema?: string;
+            /** @description What an operator reads; the technical name is the address */
             display_name?: string;
             /** @description Location name this component is placed at */
             location?: string;
@@ -3459,9 +3463,11 @@ export interface components {
              * @example /api/v1/schemas/CreateDriverInputBody.json
              */
             readonly $schema?: string;
+            /** @description What an operator reads in pickers and lists */
             display_name: string;
             /** @description The globally unique kebab handle; renameable */
             name: string;
+            /** @description A free-form version string, e.g. 1.0.0 */
             version?: string;
         };
         CreateEventTypeInputBody: {
@@ -3547,7 +3553,9 @@ export interface components {
              * @example /api/v1/schemas/CreateGroupInputBody.json
              */
             readonly $schema?: string;
+            /** @description Free-form notes on what the group is for */
             description?: string;
+            /** @description What an operator reads in lists */
             display_name?: string;
             /** @description Unique group name (lowercase letters, digits, and . _ -) */
             name: string;
@@ -3575,8 +3583,9 @@ export interface components {
              * @example /api/v1/schemas/CreateLocationInputBody.json
              */
             readonly $schema?: string;
+            /** @description What an operator reads; the technical name is the address */
             display_name?: string;
-            /** @description A location_type id (campus, building, ...) */
+            /** @description The location_type, by name or uuid (campus, building, ...) */
             location_type: string;
             /** @description Globally unique name (the address; lowercase letters, digits, hyphens) */
             name: string;
@@ -3590,8 +3599,9 @@ export interface components {
              * @example /api/v1/schemas/CreateLocationTypeInputBody.json
              */
             readonly $schema?: string;
-            /** @description location_type ids and/or the reserved root sentinel this type may be placed under; empty means unconstrained */
+            /** @description location_type names and/or the reserved root sentinel this type may be placed under; empty means unconstrained */
             allowed_parent_types?: string[] | null;
+            /** @description What an operator reads in pickers and lists */
             display_name: string;
             /** @description A glyph key; the console falls back to map-pin when empty */
             icon?: string;
@@ -3636,6 +3646,7 @@ export interface components {
              * @example /api/v1/schemas/CreateNodeInputBody.json
              */
             readonly $schema?: string;
+            /** @description Free-form operator notes about the node */
             description?: string;
             /** @description Operator label; falls back to the name when empty */
             display_name?: string;
@@ -3651,8 +3662,12 @@ export interface components {
              * @example /api/v1/schemas/CreatePrincipalInputBody.json
              */
             readonly $schema?: string;
+            /** @description What an operator reads in lists; falls back to the username */
             display_name?: string;
-            /** Format: email */
+            /**
+             * Format: email
+             * @description Contact email for the account
+             */
             email?: string;
             /** @description Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in */
             password?: string;
@@ -3666,10 +3681,14 @@ export interface components {
              * @example /api/v1/schemas/CreateProductInputBody.json
              */
             readonly $schema?: string;
+            /** @description Capability names the product provides (the default set its components inherit) */
             capabilities?: string[] | null;
+            /** @description What an operator reads in pickers and lists */
             display_name: string;
+            /** @description The driver that talks to it, by handle or uuid */
             driver_id?: string;
             /**
+             * @description What class of thing the product is
              * @default device
              * @enum {string}
              */
@@ -3741,6 +3760,7 @@ export interface components {
              * @example /api/v1/schemas/CreateStandardInputBody.json
              */
             readonly $schema?: string;
+            /** @description What an operator reads in pickers and lists */
             display_name: string;
             /** @description The globally unique kebab handle; renameable */
             name: string;
@@ -3754,6 +3774,7 @@ export interface components {
              * @example /api/v1/schemas/CreateSystemInputBody.json
              */
             readonly $schema?: string;
+            /** @description What an operator reads; the technical name is the address */
             display_name?: string;
             /** @description Location name this system is placed at */
             location?: string;
@@ -3761,7 +3782,7 @@ export interface components {
             name: string;
             /** @description Parent system name; omit for a root system */
             parent?: string;
-            /** @description A standard id; omit for a one-off system that conforms to none */
+            /** @description The standard it conforms to, by handle or uuid; omit for a one-off system */
             standard_id?: string;
         };
         CreateTagInputBody: {
@@ -3811,16 +3832,21 @@ export interface components {
              * @example /api/v1/schemas/CreateVendorInputBody.json
              */
             readonly $schema?: string;
+            /** @description What an operator reads in pickers and lists */
             display_name: string;
+            /** @description A glyph key, e.g. crestron-logo */
             icon?: string;
             /**
+             * @description The role the organization plays
              * @default manufacturer
              * @enum {string}
              */
             kind: "manufacturer" | "integrator" | "developer";
             /** @description The globally unique kebab handle; renameable */
             name: string;
+            /** @description The vendor's support line */
             support_phone?: string;
+            /** @description The vendor's website (http or https) */
             website?: string;
         };
         DownloadFileOutputBody: {
@@ -4727,7 +4753,9 @@ export interface components {
              * @example /api/v1/schemas/LoginInputBody.json
              */
             readonly $schema?: string;
+            /** @description The account password; exchanged for a session cookie, never stored */
             password: string;
+            /** @description The sign-in username */
             username: string;
         };
         LogsOutputBody: {
@@ -4913,6 +4941,7 @@ export interface components {
             readonly $schema?: string;
             /** @description Raw untyped log lines. No registry gate */
             logs?: components["schemas"]["PushLog"][] | null;
+            /** @description The entity every row in the batch lands under */
             owner: components["schemas"]["OwnerStruct"];
             /** @description Registry-resolved observations. The registry decides which table each lands in */
             samples?: components["schemas"]["PushSample"][] | null;
@@ -5658,6 +5687,7 @@ export interface components {
              * @example /api/v1/schemas/UpdateCapabilityInputBody.json
              */
             readonly $schema?: string;
+            /** @description A new operator-facing label */
             display_name?: string;
         };
         UpdateCommandTypeInputBody: {
@@ -5688,6 +5718,7 @@ export interface components {
              * @example /api/v1/schemas/UpdateComponentInputBody.json
              */
             readonly $schema?: string;
+            /** @description A new operator-facing label */
             display_name?: string;
             /** @description Relocates the component to this location name. An empty string clears its placement. */
             location?: string;
@@ -5705,7 +5736,9 @@ export interface components {
              * @example /api/v1/schemas/UpdateDriverInputBody.json
              */
             readonly $schema?: string;
+            /** @description A new operator-facing label */
             display_name?: string;
+            /** @description A new version string, e.g. 1.0.1 */
             version?: string;
         };
         UpdateEventTypeInputBody: {
@@ -5755,7 +5788,9 @@ export interface components {
              * @example /api/v1/schemas/UpdateLocationInputBody.json
              */
             readonly $schema?: string;
+            /** @description A new operator-facing label */
             display_name?: string;
+            /** @description Re-types the location: a location_type, by name or uuid */
             location_type?: string;
             /** @description A new globally unique technical name (rename) */
             name?: string;
@@ -5771,7 +5806,9 @@ export interface components {
             readonly $schema?: string;
             /** @description Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained */
             allowed_parent_types?: string[];
+            /** @description A new operator-facing label */
             display_name?: string;
+            /** @description A new glyph key; the console falls back to map-pin when empty */
             icon?: string;
         };
         UpdateMeInputBody: {
@@ -5791,7 +5828,9 @@ export interface components {
              * @example /api/v1/schemas/UpdateNodeInputBody.json
              */
             readonly $schema?: string;
+            /** @description New free-form operator notes */
             description?: string;
+            /** @description A new operator-facing label */
             display_name?: string;
             /** @description Set the node's location by name or id, or "" to clear it */
             location?: string;
@@ -5817,12 +5856,20 @@ export interface components {
              * @example /api/v1/schemas/UpdateProductInputBody.json
              */
             readonly $schema?: string;
+            /** @description Replaces the capability-name set; omit to leave unchanged */
             capabilities?: string[];
+            /** @description A new operator-facing label */
             display_name?: string;
+            /** @description A new driver, by handle or uuid */
             driver_id?: string;
-            /** @enum {string} */
+            /**
+             * @description A new product class
+             * @enum {string}
+             */
             kind?: "device" | "app" | "service" | "vm";
+            /** @description A new parent product, by handle or uuid */
             parent_product_id?: string;
+            /** @description A new vendor, by handle or uuid */
             vendor_id?: string;
         };
         UpdatePropertyInputBody: {
@@ -5860,7 +5907,9 @@ export interface components {
              * @example /api/v1/schemas/UpdateStandardInputBody.json
              */
             readonly $schema?: string;
+            /** @description A new operator-facing label */
             display_name?: string;
+            /** @description A new variant parent, by handle or uuid */
             parent_standard_id?: string;
         };
         UpdateSystemInputBody: {
@@ -5870,6 +5919,7 @@ export interface components {
              * @example /api/v1/schemas/UpdateSystemInputBody.json
              */
             readonly $schema?: string;
+            /** @description A new operator-facing label */
             display_name?: string;
             /** @description Relocates the system to this location name. An empty string clears its placement. */
             location?: string;
@@ -5877,6 +5927,7 @@ export interface components {
             name?: string;
             /** @description Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system. */
             parent?: string;
+            /** @description A new standard, by handle or uuid; "" clears it (a one-off system) */
             standard_id?: string;
         };
         UpdateTagInputBody: {
@@ -5910,11 +5961,18 @@ export interface components {
              * @example /api/v1/schemas/UpdateVendorInputBody.json
              */
             readonly $schema?: string;
+            /** @description A new operator-facing label */
             display_name?: string;
+            /** @description A new glyph key */
             icon?: string;
-            /** @enum {string} */
+            /**
+             * @description A new organization role
+             * @enum {string}
+             */
             kind?: "manufacturer" | "integrator" | "developer";
+            /** @description A new support line */
             support_phone?: string;
+            /** @description A new website (http or https) */
             website?: string;
         };
         VariableBody: {

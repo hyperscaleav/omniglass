@@ -165,9 +165,9 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fPassword, "password", "", "")
+				cmd.Flags().StringVar(&fPassword, "password", "", "The account password; exchanged for a session cookie, never stored")
 				_ = cmd.MarkFlagRequired("password")
-				cmd.Flags().StringVar(&fUsername, "username", "", "")
+				cmd.Flags().StringVar(&fUsername, "username", "", "The sign-in username")
 				_ = cmd.MarkFlagRequired("username")
 				return cmd
 			}()
@@ -341,7 +341,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads in pickers and lists")
 				_ = cmd.MarkFlagRequired("display-name")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique kebab handle; renameable")
 				_ = cmd.MarkFlagRequired("name")
@@ -418,7 +418,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
 				return cmd
 			}()
 			return cmd
@@ -842,7 +842,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads; the technical name is the address")
 				cmd.Flags().StringVar(&fLocation, "location", "", "Location name this component is placed at")
 				cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address; lowercase letters, digits, hyphens)")
 				_ = cmd.MarkFlagRequired("name")
@@ -1275,7 +1275,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
 				cmd.Flags().StringVar(&fLocation, "location", "", "Relocates the component to this location name. An empty string clears its placement.")
 				cmd.Flags().StringVar(&fName, "name", "", "A new globally unique technical name (rename)")
 				cmd.Flags().StringVar(&fParent, "parent", "", "Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component.")
@@ -1317,11 +1317,11 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads in pickers and lists")
 				_ = cmd.MarkFlagRequired("display-name")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique kebab handle; renameable")
 				_ = cmd.MarkFlagRequired("name")
-				cmd.Flags().StringVar(&fVersion, "version", "", "")
+				cmd.Flags().StringVar(&fVersion, "version", "", "A free-form version string, e.g. 1.0.0")
 				return cmd
 			}()
 			return cmd
@@ -1399,8 +1399,8 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
-				cmd.Flags().StringVar(&fVersion, "version", "", "")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
+				cmd.Flags().StringVar(&fVersion, "version", "", "A new version string, e.g. 1.0.1")
 				return cmd
 			}()
 			return cmd
@@ -1854,8 +1854,8 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
-				cmd.Flags().StringVar(&fLocationType, "location-type", "", "A location_type id (campus, building, ...)")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads; the technical name is the address")
+				cmd.Flags().StringVar(&fLocationType, "location-type", "", "The location_type, by name or uuid (campus, building, ...)")
 				_ = cmd.MarkFlagRequired("location-type")
 				cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address; lowercase letters, digits, hyphens)")
 				_ = cmd.MarkFlagRequired("name")
@@ -2105,8 +2105,8 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
-				cmd.Flags().StringVar(&fLocationType, "location-type", "", "")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
+				cmd.Flags().StringVar(&fLocationType, "location-type", "", "Re-types the location: a location_type, by name or uuid")
 				cmd.Flags().StringVar(&fName, "name", "", "A new globally unique technical name (rename)")
 				cmd.Flags().StringVar(&fParent, "parent", "", "Re-parents the location (a tree move) to this location name, cycle-guarded and placement-validated. Moving to root is not supported via update this slice.")
 				return cmd
@@ -2150,8 +2150,8 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fAllowedParentTypes, "allowed-parent-types", "", "location_type ids and/or the reserved root sentinel this type may be placed under; empty means unconstrained")
-				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+				cmd.Flags().StringVar(&fAllowedParentTypes, "allowed-parent-types", "", "location_type names and/or the reserved root sentinel this type may be placed under; empty means unconstrained")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads in pickers and lists")
 				_ = cmd.MarkFlagRequired("display-name")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A glyph key; the console falls back to map-pin when empty")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique kebab handle (e.g. wing); \"root\" is reserved")
@@ -2290,8 +2290,8 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fAllowedParentTypes, "allowed-parent-types", "", "Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained")
-				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
-				cmd.Flags().StringVar(&fIcon, "icon", "", "")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
+				cmd.Flags().StringVar(&fIcon, "icon", "", "A new glyph key; the console falls back to map-pin when empty")
 				return cmd
 			}()
 			return cmd
@@ -2325,9 +2325,9 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fName, "name", "", "")
+				cmd.Flags().StringVar(&fName, "name", "", "The node name the enrollment was minted for")
 				_ = cmd.MarkFlagRequired("name")
-				cmd.Flags().StringVar(&fToken, "token", "", "")
+				cmd.Flags().StringVar(&fToken, "token", "", "The one-time enrollment token from node create, exchanged here for the node's NATS credential")
 				_ = cmd.MarkFlagRequired("token")
 				return cmd
 			}()
@@ -2363,7 +2363,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fDescription, "description", "", "")
+				cmd.Flags().StringVar(&fDescription, "description", "", "Free-form operator notes about the node")
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "Operator label; falls back to the name when empty")
 				cmd.Flags().StringVar(&fLocation, "location", "", "Optional location the node sits in, by name or id (descriptive placement, not scope)")
 				cmd.Flags().StringVar(&fName, "name", "", "Globally unique node name (also its NATS subject token, so no dots or whitespace)")
@@ -2561,8 +2561,8 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fDescription, "description", "", "")
-				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+				cmd.Flags().StringVar(&fDescription, "description", "", "New free-form operator notes")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
 				cmd.Flags().StringVar(&fLocation, "location", "", "Set the node's location by name or id, or \"\" to clear it")
 				return cmd
 			}()
@@ -2646,8 +2646,8 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
-				cmd.Flags().StringVar(&fEmail, "email", "", "")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads in lists; falls back to the username")
+				cmd.Flags().StringVar(&fEmail, "email", "", "Contact email for the account")
 				cmd.Flags().StringVar(&fPassword, "password", "", "Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in")
 				cmd.Flags().StringVar(&fUsername, "username", "", "Unique sign-in name (lowercase letters, digits, and . _ -)")
 				_ = cmd.MarkFlagRequired("username")
@@ -3060,8 +3060,8 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fDescription, "description", "", "")
-				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+				cmd.Flags().StringVar(&fDescription, "description", "", "Free-form notes on what the group is for")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads in lists")
 				cmd.Flags().StringVar(&fName, "name", "", "Unique group name (lowercase letters, digits, and . _ -)")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
@@ -3347,11 +3347,11 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fCapabilities, "capabilities", "", "")
-				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+				cmd.Flags().StringVar(&fCapabilities, "capabilities", "", "Capability names the product provides (the default set its components inherit)")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads in pickers and lists")
 				_ = cmd.MarkFlagRequired("display-name")
-				cmd.Flags().StringVar(&fDriverId, "driver-id", "", "")
-				cmd.Flags().StringVar(&fKind, "kind", "", "")
+				cmd.Flags().StringVar(&fDriverId, "driver-id", "", "The driver that talks to it, by handle or uuid")
+				cmd.Flags().StringVar(&fKind, "kind", "", "What class of thing the product is")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique kebab handle; renameable")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParentProductId, "parent-product-id", "", "The parent product, by handle or uuid")
@@ -3518,12 +3518,12 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fCapabilities, "capabilities", "", "")
-				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
-				cmd.Flags().StringVar(&fDriverId, "driver-id", "", "")
-				cmd.Flags().StringVar(&fKind, "kind", "", "")
-				cmd.Flags().StringVar(&fParentProductId, "parent-product-id", "", "")
-				cmd.Flags().StringVar(&fVendorId, "vendor-id", "", "")
+				cmd.Flags().StringVar(&fCapabilities, "capabilities", "", "Replaces the capability-name set; omit to leave unchanged")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
+				cmd.Flags().StringVar(&fDriverId, "driver-id", "", "A new driver, by handle or uuid")
+				cmd.Flags().StringVar(&fKind, "kind", "", "A new product class")
+				cmd.Flags().StringVar(&fParentProductId, "parent-product-id", "", "A new parent product, by handle or uuid")
+				cmd.Flags().StringVar(&fVendorId, "vendor-id", "", "A new vendor, by handle or uuid")
 				return cmd
 			}()
 			return cmd
@@ -4075,7 +4075,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads in pickers and lists")
 				_ = cmd.MarkFlagRequired("display-name")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique kebab handle; renameable")
 				_ = cmd.MarkFlagRequired("name")
@@ -4305,8 +4305,8 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
-				cmd.Flags().StringVar(&fParentStandardId, "parent-standard-id", "", "")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
+				cmd.Flags().StringVar(&fParentStandardId, "parent-standard-id", "", "A new variant parent, by handle or uuid")
 				return cmd
 			}()
 			return cmd
@@ -4376,12 +4376,12 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads; the technical name is the address")
 				cmd.Flags().StringVar(&fLocation, "location", "", "Location name this system is placed at")
 				cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address; lowercase letters, digits, hyphens)")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParent, "parent", "", "Parent system name; omit for a root system")
-				cmd.Flags().StringVar(&fStandardId, "standard-id", "", "A standard id; omit for a one-off system that conforms to none")
+				cmd.Flags().StringVar(&fStandardId, "standard-id", "", "The standard it conforms to, by handle or uuid; omit for a one-off system")
 				return cmd
 			}()
 			return cmd
@@ -4826,11 +4826,11 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
 				cmd.Flags().StringVar(&fLocation, "location", "", "Relocates the system to this location name. An empty string clears its placement.")
 				cmd.Flags().StringVar(&fName, "name", "", "A new globally unique technical name (rename)")
 				cmd.Flags().StringVar(&fParent, "parent", "", "Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system.")
-				cmd.Flags().StringVar(&fStandardId, "standard-id", "", "")
+				cmd.Flags().StringVar(&fStandardId, "standard-id", "", "A new standard, by handle or uuid; \"\" clears it (a one-off system)")
 				return cmd
 			}()
 			return cmd
@@ -5089,7 +5089,7 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fLogs, "logs", "", "Raw untyped log lines. No registry gate")
-				cmd.Flags().StringVar(&fOwner, "owner", "", "")
+				cmd.Flags().StringVar(&fOwner, "owner", "", "The entity every row in the batch lands under")
 				_ = cmd.MarkFlagRequired("owner")
 				cmd.Flags().StringVar(&fSamples, "samples", "", "Registry-resolved observations. The registry decides which table each lands in")
 				cmd.Flags().StringVar(&fSource, "source", "", "Who observed this batch (recorded as the provenance source on every row)")
@@ -5255,14 +5255,14 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads in pickers and lists")
 				_ = cmd.MarkFlagRequired("display-name")
-				cmd.Flags().StringVar(&fIcon, "icon", "", "")
-				cmd.Flags().StringVar(&fKind, "kind", "", "")
+				cmd.Flags().StringVar(&fIcon, "icon", "", "A glyph key, e.g. crestron-logo")
+				cmd.Flags().StringVar(&fKind, "kind", "", "The role the organization plays")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique kebab handle; renameable")
 				_ = cmd.MarkFlagRequired("name")
-				cmd.Flags().StringVar(&fSupportPhone, "support-phone", "", "")
-				cmd.Flags().StringVar(&fWebsite, "website", "", "")
+				cmd.Flags().StringVar(&fSupportPhone, "support-phone", "", "The vendor's support line")
+				cmd.Flags().StringVar(&fWebsite, "website", "", "The vendor's website (http or https)")
 				return cmd
 			}()
 			return cmd
@@ -5352,11 +5352,11 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "")
-				cmd.Flags().StringVar(&fIcon, "icon", "", "")
-				cmd.Flags().StringVar(&fKind, "kind", "", "")
-				cmd.Flags().StringVar(&fSupportPhone, "support-phone", "", "")
-				cmd.Flags().StringVar(&fWebsite, "website", "", "")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
+				cmd.Flags().StringVar(&fIcon, "icon", "", "A new glyph key")
+				cmd.Flags().StringVar(&fKind, "kind", "", "A new organization role")
+				cmd.Flags().StringVar(&fSupportPhone, "support-phone", "", "A new support line")
+				cmd.Flags().StringVar(&fWebsite, "website", "", "A new website (http or https)")
 				return cmd
 			}()
 			return cmd

@@ -50,7 +50,7 @@ type componentPathInput struct {
 type createComponentInput struct {
 	Body struct {
 		Name        string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Globally unique name (the address; lowercase letters, digits, hyphens)"`
-		DisplayName string  `json:"display_name,omitempty"`
+		DisplayName string  `json:"display_name,omitempty" doc:"What an operator reads; the technical name is the address"`
 		Parent      *string `json:"parent,omitempty" doc:"Parent component name; omit for a root component"`
 		System      *string `json:"system,omitempty" doc:"Primary system name this component belongs to"`
 		Location    *string `json:"location,omitempty" doc:"Location name this component is placed at"`
@@ -62,7 +62,7 @@ type updateComponentInput struct {
 	Name string `path:"name"`
 	Body struct {
 		Name        *string `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"A new globally unique technical name (rename)"`
-		DisplayName *string `json:"display_name,omitempty"`
+		DisplayName *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
 		// The placement and classification fields take the house three-state
 		// convention: an omitted field is unchanged, an explicit empty string
 		// clears, and a name sets. So they are pointers passed straight through
