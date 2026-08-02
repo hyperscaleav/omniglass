@@ -39,7 +39,7 @@ new class appends one. Entries are never silently deleted; a fixed class is mark
 - **Fix:** every route carries its `<resource>:<action>` gate at registration; the
   permission resolves against the seeded role matrix.
 
-## uuid-as-address (live in fixed surfaces; #432 tracks the console regression)
+## uuid-as-address (retired 2026-08-02 by the #432 console slices #466/#467/#469/#470; watch for regressions)
 
 - **Cue:** an operator-facing surface (console cell, filter, delete confirm, CLI output)
   rendering or matching a uuid where ADR-0062 says the `name` is the operator address;

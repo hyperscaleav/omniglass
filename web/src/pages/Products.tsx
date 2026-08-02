@@ -27,7 +27,7 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // reads and types); official (seed-owned) rows are read-only,
 // same as the Types catalog's official rows: no Edit pencil, no Delete. A
 // product carries a kind (device/app/service/vm), an optional vendor and driver
-// (picked from those registries), and a set of capability ids it exposes.
+// (picked from those registries), and a set of capability names it exposes.
 
 const PRODUCT_KINDS: ProductKind[] = ["device", "app", "service", "vm"];
 
@@ -41,15 +41,16 @@ function kindBadge(kind: string): JSX.Element {
   return <span class="badge badge-ghost badge-sm">{kind}</span>;
 }
 
-function refCell(id?: string): JSX.Element {
-  return <span class="font-data text-xs text-base-content/60">{id || "—"}</span>;
+// refCell prints a reference's kebab handle (never the uuid; ADR-0062).
+function refCell(handle?: string): JSX.Element {
+  return <span class="font-data text-xs text-base-content/60">{handle || "—"}</span>;
 }
 
 const columns: FlatColumn<Product>[] = [
   { key: "name", label: "Name", sortVal: (p) => p.name, cell: (p) => <span class="font-data font-semibold">{p.name}</span> },
   { key: "display_name", label: "Display name", sortVal: (p) => p.display_name, cell: (p) => <span>{p.display_name}</span> },
-  { key: "vendor", label: "Vendor", width: "150px", sortVal: (p) => p.vendor_id ?? "", cell: (p) => refCell(p.vendor_id) },
-  { key: "driver", label: "Driver", width: "150px", sortVal: (p) => p.driver_id ?? "", cell: (p) => refCell(p.driver_id) },
+  { key: "vendor", label: "Vendor", width: "150px", sortVal: (p) => p.vendor ?? "", cell: (p) => refCell(p.vendor) },
+  { key: "driver", label: "Driver", width: "150px", sortVal: (p) => p.driver ?? "", cell: (p) => refCell(p.driver) },
   { key: "kind", label: "Kind", width: "110px", sortVal: (p) => p.kind, cell: (p) => kindBadge(p.kind) },
   { key: "official", label: "Origin", width: "100px", sortVal: (p) => String(p.official), cell: (p) => officialBadge(p.official) },
 ];
@@ -72,7 +73,7 @@ export default function Products() {
         filterKeys: [
           { key: "name", type: "string", hint: "substring", get: (p) => `${p.name} ${p.display_name}`, values: () => [] },
           { key: "kind", type: "string", hint: "exact", get: (p) => p.kind, values: () => PRODUCT_KINDS },
-          { key: "vendor", type: "string", hint: "exact", get: (p) => p.vendor_id ?? "", values: () => [] },
+          { key: "vendor", type: "string", hint: "exact", get: (p) => p.vendor ?? "", values: () => [] },
           { key: "official", type: "string", hint: "exact", get: (p) => (p.official ? "official" : "custom"), values: () => ["official", "custom"] },
         ],
         filterPlaceholder: "filter products by name…",
@@ -126,8 +127,8 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
     const r = row();
     setDisplayName(r?.display_name ?? "");
     setKind(r?.kind ?? "device");
-    setVendorId(r?.vendor_id ?? "");
-    setDriverId(r?.driver_id ?? "");
+    setVendorId(r?.vendor ?? "");
+    setDriverId(r?.driver ?? "");
     setCapabilities(r?.capabilities ?? []);
     setErr(null);
   }));
@@ -210,7 +211,7 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
             <span class="eyebrow">Vendor</span>
             <Show
               when={edit.editing()}
-              fallback={<div class="input input-bordered flex items-center text-sm font-data">{r().vendor_id || "—"}</div>}
+              fallback={<div class="input input-bordered flex items-center text-sm font-data">{r().vendor || "—"}</div>}
             >
               <VendorSelect value={vendorId()} onChange={setVendorId} />
             </Show>
@@ -219,7 +220,7 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
             <span class="eyebrow">Driver</span>
             <Show
               when={edit.editing()}
-              fallback={<div class="input input-bordered flex items-center text-sm font-data">{r().driver_id || "—"}</div>}
+              fallback={<div class="input input-bordered flex items-center text-sm font-data">{r().driver || "—"}</div>}
             >
               <DriverSelect value={driverId()} onChange={setDriverId} />
             </Show>
@@ -327,7 +328,8 @@ export function CreateProductForm(p: { onCreated: (id: string) => void }): JSX.E
 }
 
 // VendorSelect: a vendor picker over the vendor registry, with a "None" option
-// (a product need not name a vendor). Stores the vendor id.
+// (a product need not name a vendor). Stores the vendor's kebab handle (the
+// write path resolves either form).
 function VendorSelect(p: { value: string; onChange: (v: string) => void }): JSX.Element {
   const vendors = useQuery(() => ({ queryKey: VENDORS_KEY, queryFn: listVendors }));
   const options = createMemo(() =>
@@ -336,13 +338,13 @@ function VendorSelect(p: { value: string; onChange: (v: string) => void }): JSX.
   return (
     <select class="select select-bordered w-full" value={p.value} onChange={(e) => p.onChange(e.currentTarget.value)}>
       <option value="">None</option>
-      <For each={options()}>{(v) => <option value={v.id}>{v.display_name}</option>}</For>
+      <For each={options()}>{(v) => <option value={v.name}>{v.display_name}</option>}</For>
     </select>
   );
 }
 
 // DriverSelect: a driver picker over the driver registry, with a "None" option.
-// Stores the driver id.
+// Stores the driver's kebab handle (the write path resolves either form).
 function DriverSelect(p: { value: string; onChange: (v: string) => void }): JSX.Element {
   const drivers = useQuery(() => ({ queryKey: DRIVERS_KEY, queryFn: listDrivers }));
   const options = createMemo(() =>
@@ -351,13 +353,14 @@ function DriverSelect(p: { value: string; onChange: (v: string) => void }): JSX.
   return (
     <select class="select select-bordered w-full" value={p.value} onChange={(e) => p.onChange(e.currentTarget.value)}>
       <option value="">None</option>
-      <For each={options()}>{(d) => <option value={d.id}>{d.display_name}</option>}</For>
+      <For each={options()}>{(d) => <option value={d.name}>{d.display_name}</option>}</For>
     </select>
   );
 }
 
 // CapabilitiesPicker: a checkbox per capability in the registry, the set of
-// capability ids a product exposes. Mirrors Types.tsx's AllowedParentsPicker.
+// capability NAMES a product exposes (product.capabilities carries names, so
+// the picker joins on the name). Mirrors Types.tsx's AllowedParentsPicker.
 // Each option is its own <label> (not nested inside another one), so a click on
 // it only ever toggles that option's own checkbox.
 function CapabilitiesPicker(p: { value: string[]; onChange: (v: string[]) => void }): JSX.Element {
@@ -365,8 +368,8 @@ function CapabilitiesPicker(p: { value: string[]; onChange: (v: string[]) => voi
   const options = createMemo(() =>
     [...(caps.data ?? [])].sort((a: Capability, b: Capability) => a.display_name.localeCompare(b.display_name)),
   );
-  function toggle(id: string) {
-    p.onChange(p.value.includes(id) ? p.value.filter((x) => x !== id) : [...p.value, id]);
+  function toggle(name: string) {
+    p.onChange(p.value.includes(name) ? p.value.filter((x) => x !== name) : [...p.value, name]);
   }
   return (
     <div class="flex flex-col gap-1.5 rounded-box border border-base-300 p-2.5">
@@ -374,9 +377,9 @@ function CapabilitiesPicker(p: { value: string[]; onChange: (v: string[]) => voi
         <For each={options()}>
           {(c) => (
             <label class="flex items-center gap-2 text-sm">
-              <input type="checkbox" class="checkbox checkbox-sm" checked={p.value.includes(c.id)} onChange={() => toggle(c.id)} />
+              <input type="checkbox" class="checkbox checkbox-sm" checked={p.value.includes(c.name)} onChange={() => toggle(c.name)} />
               <span>{c.display_name}</span>
-              <span class="font-data text-xs text-base-content/40">{c.id}</span>
+              <span class="font-data text-xs text-base-content/40">{c.name}</span>
             </label>
           )}
         </For>

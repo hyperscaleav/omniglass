@@ -16,17 +16,19 @@ import { uuidFor } from "../lib/testids";
 // Data is seeded into the query cache so no server is needed; the vendor,
 // driver, and capability registries the pickers read are seeded too, so the
 // create form stays network-free.
+// Wire truth (api/products.go): vendor/driver/parent arrive as BOTH the kebab
+// handle (vendor) and the uuid (vendor_id); capabilities is a list of NAMES.
 const seed: Product[] = [
-  { id: uuidFor("prod-crestron-tsw-1070"), name: "crestron-tsw-1070", display_name: "Crestron TSW-1070", kind: "device", vendor_id: "crestron", driver_id: "crestron-ct", capabilities: ["touchscreen"], official: true },
-  { id: uuidFor("prod-acme-panel"), name: "acme-panel", display_name: "Acme Panel", kind: "device", vendor_id: "acme-av", capabilities: [], official: false },
+  { id: uuidFor("prod-crestron-tsw-1070"), name: "crestron-tsw-1070", display_name: "Crestron TSW-1070", kind: "device", vendor: "crestron", vendor_id: uuidFor("ven-crestron"), driver: "crestron-ct", driver_id: uuidFor("drv-crestron-ct"), capabilities: ["touchscreen"], official: true },
+  { id: uuidFor("prod-acme-panel"), name: "acme-panel", display_name: "Acme Panel", kind: "device", vendor: "acme-av", vendor_id: uuidFor("ven-acme-av"), capabilities: ["touchscreen"], official: false },
 ];
 
 const vendors: Vendor[] = [
-  { id: "u-crestron", name: "crestron", display_name: "Crestron", kind: "manufacturer", official: true },
-  { id: "u-acme-av", name: "acme-av", display_name: "Acme AV", kind: "integrator", official: false },
+  { id: uuidFor("ven-crestron"), name: "crestron", display_name: "Crestron", kind: "manufacturer", official: true },
+  { id: uuidFor("ven-acme-av"), name: "acme-av", display_name: "Acme AV", kind: "integrator", official: false },
 ];
-const drivers: Driver[] = [{ id: "crestron-ct", name: "crestron-ct", display_name: "Crestron CT", official: true }];
-const capabilities: Capability[] = [{ id: "u-touchscreen", name: "touchscreen", display_name: "Touchscreen", official: true }];
+const drivers: Driver[] = [{ id: uuidFor("drv-crestron-ct"), name: "crestron-ct", display_name: "Crestron CT", official: true }];
+const capabilities: Capability[] = [{ id: uuidFor("cap-touchscreen"), name: "touchscreen", display_name: "Touchscreen", official: true }];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], grants: [] };
@@ -120,5 +122,53 @@ describe("Products addressing honesty (#469)", () => {
     fireEvent.keyDown(input, { key: "Enter" });
     expect(screen.getByText("Acme Panel")).toBeInTheDocument();
     expect(screen.queryByText("Crestron TSW-1070")).toBeNull();
+  });
+});
+
+// The reference cells and the capability picker join on what the wire carries:
+// vendor/driver cells show the kebab handle (not the uuid), and the picker
+// compares capability NAMES (product.capabilities is a list of names).
+describe("Products reference honesty (#470)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("renders the vendor and driver handles in the catalog cells, never uuids", async () => {
+    mount();
+    expect(await screen.findByText("Crestron TSW-1070")).toBeInTheDocument();
+    const row = screen.getByText("Crestron TSW-1070").closest("tr")!;
+    expect(within(row).getByText("crestron")).toBeInTheDocument();
+    expect(within(row).getByText("crestron-ct")).toBeInTheDocument();
+    // No uuid leaks into the row.
+    expect(within(row).queryByText(/00000000-0000-4000/)).toBeNull();
+  });
+
+  it("checks a product's current capabilities in the picker and can remove one", async () => {
+    let sent: unknown;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "PATCH" && req.url.includes("/products/acme-panel")) {
+        sent = JSON.parse(await req.clone().text());
+        return new Response(JSON.stringify({ ...seed[1], capabilities: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      // Post-save invalidation refetch; any list shape satisfies the parsers.
+      return new Response(JSON.stringify({ products: [], vendors: [], drivers: [], capabilities: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+
+    mount();
+    fireEvent.click(await screen.findByText("Acme Panel"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    // The seeded capability arrives CHECKED (the picker joins on the name the
+    // wire carries), and unchecking it actually removes it from the save body.
+    const box = within(blade).getByLabelText(/Touchscreen/) as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    fireEvent.click(box);
+    expect(box.checked).toBe(false);
+    fireEvent.click(within(blade).getByText("Save"));
+    await waitFor(() => expect(sent).toBeTruthy());
+    expect((sent as { capabilities: string[] }).capabilities).toEqual([]);
   });
 });
