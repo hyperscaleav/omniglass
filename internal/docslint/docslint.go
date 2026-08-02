@@ -431,7 +431,7 @@ func ScanCLIReference() ([]Finding, error) {
 	var findings []Finding
 	for i, line := range strings.Split(string(raw), "\n") {
 		if cliBlankFlag.MatchString(line) {
-			flag := line[2:strings.Index(line, "` |")+1]
+			flag := line[2 : strings.Index(line, "` |")+1]
 			findings = append(findings, Finding{File: rel, Line: i + 1, Text: "flag " + flag + " has an empty Description cell: add a doc tag to its Huma input field and re-run make gen"})
 		}
 	}

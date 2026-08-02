@@ -12,7 +12,8 @@ The audit log is how an operator answers "who changed this, and to what?" withou
 :::note[Partial]
 Built today: the `audit_log` row written in the same transaction as every entity mutation, carrying the
 resolved actor, verb, resource, and `old -> new` diff; the secret-decrypt audit (distinct `reveal` and
-`copy` verbs); the auth-event lane; and the `GET /audit-log` read with the console Admin > Audit page.
+`copy` verbs); the auth-event lane; and the `GET /audit-log` read, which returns the `old`/`new` images,
+with the console Admin > Audit page rendering each row's field-level before/after diff in a drawer.
 Still `Design`: the read-audit toggle, retention partitioning, the backtest / reconcile consumers, and
 the alarm ack / snooze projection (no such surface exists yet). See
 [implementation status](/architecture/status/).
