@@ -216,7 +216,7 @@ require an **all-scope** grant, not a tree-scoped one.
 **named by its protocol**: its `name` derives from its `interface_type` and is unique **within its component**
 (so create takes a type, not a name, and a duplicate protocol on one component is a **409**). Creating an
 interface **derives its one poll task**, so the task surface is **read-only** (`GET /tasks`, `GET /tasks/{id}`):
-there are no task create, update, or delete routes and no `task:create` / `task:update` grants. A task references
+there are no task write routes and no task write grants. A task references
 its interface by `interface_id`, its id is **content-addressed** over its interface, mode, and spec, and it
 carries **no node column**: its placement **projects from the interface**. An interface belongs to a component
 (or is server-hosted, which needs an all-scoped grant), and a task belongs to an interface, so both inherit the
