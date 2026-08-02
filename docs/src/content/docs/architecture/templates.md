@@ -7,6 +7,8 @@ sidebar:
     variant: caution
 ---
 
+::::design[Target design, tracked in #317]
+
 A template is an **example configuration an operator clones**. It ships inside the binary as a menu,
 never as data: nothing is inserted until somebody picks one, and what they get is an ordinary row
 they then own outright.
@@ -98,3 +100,17 @@ row's own attributes is trivial to build. A template that also carries a **prope
 later **[system roles](/architecture/health/)**, would let "start from: huddle room" scaffold the
 slots a room needs filled as well as the row itself, which is most of the operator value. Tracked as
 the open question on [#317](https://github.com/hyperscaleav/omniglass/issues/317).
+
+## Trust: the signature and the capability manifest
+
+Two glossary terms cover the trust surface of a template catalog that accepts templates from
+outside the binary (the hosted / marketplace path):
+
+- **template signature / attestation**: an optional author signature on a template, verified on
+  import. It answers authenticity (who authored it), distinct from the content-hash integrity
+  check (that it is unaltered). The hosted / marketplace path verifies signatures regardless of
+  the self-host runtime stance.
+- **capability manifest**: a declaration on a template of which write-commands and credential
+  shapes it exercises, shown and approved when an operator forks it, so a device-mutating
+  template never gains powers the operator did not see at the moment of the fork.
+::::

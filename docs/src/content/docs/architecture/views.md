@@ -7,6 +7,8 @@ sidebar:
     variant: caution
 ---
 
+::::design[Target design: the ViewResult contract, tracked in #434]
+
 :::caution[Design: the ViewResult contract is entirely unbuilt]
 Nothing on this page is built: there is no `view` table, no `ViewResult` shape, no `/views/{id}:run`
 route, and no renderer library. Today's read side is typed CRUD `GET`s plus five hand-written composed
@@ -114,3 +116,4 @@ Related: [API](/architecture/api/) (the surface and `/views/{id}:run`), [UI](/ar
 renderer and the field-mapping), [identity and access](/architecture/identity-access/) (the scope a view
 runs in), [storage](/architecture/storage/) (materialize-when-earned), and
 [API first](/contributing/api-first/) (the doctrine).
+::::

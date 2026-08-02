@@ -20,11 +20,7 @@ Built today: the **`alarm`** table (component-local, with the capabilities it de
 history** that answers "since when". Two reads serve it (`GET /systems/{name}/health` and
 `GET /locations/{name}/health`) alongside the alarm write surface on a component. The console surface
 shipped too: **HealthPanel**, **HealthBadge**, and **HealthHistory**, plus the **AlarmsPanel**, on the
-component, system, and location details. Still `Design`: alarms
-raised by an [`event_rule`](/architecture/alarms-actions/) rather than by a caller, system- and
-location-owned alarms, the `unknown` verdict and its coverage reasons, the **`global`** estate top, and
-the whole **SLI / SLO / SLA** and **KPI** tier below
-([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).
+component, system, and location details.
 See [implementation status](/architecture/status/).
 :::
 
@@ -246,7 +242,9 @@ spare device nobody uses.
 A component's verdict is recorded on its own arc like any other, so a component that fills no role still
 carries an accurate history of what was wrong with it.
 
-## Still design: where alarms come from
+::::design[Target design (ADR-0050)]
+
+## Where alarms come from
 
 Today an alarm is written by an **operator or an API caller**. The full model has them produced by the
 detection tier: an [`event_rule`](/architecture/alarms-actions/) watches samples, fires an event, and an
@@ -307,6 +305,10 @@ The rollup ends at a location today. The design adds the singleton **`global`** 
 the estate-wide verdict leadership reads and the owner that estate-wide KPIs hang off. The same `health`
 key flows the whole way up: the **owner** gives a reading its level, so one key serves component, system,
 location, and global without cross-triggering.
+
+::::
+
+::::design[The SLI / SLO / SLA and KPI tier (ADR-0050)]
 
 ## SLI: indicator over a window
 
@@ -382,6 +384,8 @@ the precise reducers and windows are unsettled.
 The `occupancy.*` and `booking.*` canonical signals, and the occupancy-sensor and booking-system component
 templates that feed the utilization KPIs.
 :::
+
+::::
 
 ## Why this is the Zabbix service tree, done right
 

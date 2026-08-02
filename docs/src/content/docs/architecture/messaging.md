@@ -11,15 +11,22 @@ sidebar:
 Built today: the embedded nats-server with JetStream (`internal/bus/server.go`), per-node subject
 isolation with the auth callback, one `OG_TELEMETRY` stream on the node subjects (`og.v1.telemetry.*`) and the API push subject (`og.v1.api.telemetry`), with the single
 durable `og-telemetry-worker` consumer writing straight to Postgres, and the worklist and heartbeat
-request-reply lanes. Still Design: the raw/trusted two-lane split and the admission republish, CDC,
-KV, distributed locks and leader election, the object store, per-tenant accounts, and the SSE relay.
+request-reply lanes. The two-lane split below is target design; today there is **one stream and one
+serial consumer doing admission (owner confinement) and persistence inline**. The design fences below
+mark the parts of this page that are target design, each naming its tracker.
 :::
+
+This page is the **one home of the two-lane data plane**: the admission / trusted / persistence
+split, the CDC publisher, and the ingest-path enumeration are described here and only named, with a
+link, everywhere else.
 
 Omniglass has **two typed contracts**. The [public API](/architecture/api/) is the north face (HTTP and
 OpenAPI: operators, the SPA, the CLI, integrations, MCP). This is its sibling: the **internal and edge
 transport**, a **NATS subject contract** over JetStream. Service-to-service traffic, the edge, and the
 live UI ride it. **Postgres stays the system of record; NATS moves.** The deployment topology and the
 inter-service diagram are on [scaling](/architecture/scaling/).
+
+:::design[Target design, tracked in #430]
 
 ## Two lanes, one bus
 
@@ -36,23 +43,62 @@ Internal traffic splits by what is moving:
   trusted stream**, no admission pass: calc output (owner from the validated `calc_rule` scope) and the
   action layer's intended write (owner from the command target) are already inside the trust boundary. The
   rule engine consumes the trusted stream directly, and a **persistence consumer** batch-writes it to
-  Postgres as an async sink. Confinement is at **consume time, ahead of evaluation**, because the rule
+  the Postgres `metric`, `state`, `event`, and `log_line` tables as an async sink, idempotent on
+  `(series, ts)` so a redelivery lands the same row. The sink never gates the rule engine: a slow or
+  paused persistence consumer holds up only the durable record, never the live signal, so rules never
+  wait on Postgres (Postgres is the durable record, NATS is the live signal). Confinement is at
+  **consume time, ahead of evaluation**, because the rule
   engine reacts live: a forged owner must be dropped before it can open an alarm, not just before it is
   persisted. The admission consumer itself runs in **system mode** (its owner lookup is a system-mode
   gateway read; a dropped sample is logged as a discovery candidate,
   [identity and access](/architecture/identity-access/)). Samples do not go through CDC, they are
-  already on the bus, idempotent on `(series, ts)`.
-- **Record / state lane (Postgres-first, CDC-out): events, alarms, actions, operator mutations.** Born in
-  a Postgres transaction (a firing `event_rule` writes the event plus the alarm transition atomically; the
-  API writes config, ack, settings). A **leader-elected CDC publisher** (logical decoding of the WAL)
-  publishes those committed changes to JetStream, where `action_rule`, reconcile, and projection consumers
-  react. No dual-write: born in the commit, the bridge fans it out.
+  already on the bus.
+- **Record / state lane (Postgres-first, CDC-out): events, alarms, actions, operator mutations**
+  (config, ack, snooze, settings, manual commands). Born in a Postgres transaction: a firing
+  `event_rule` writes the event plus the alarm transition atomically (the alarm transition is
+  serialized per `(event_rule, owner)`), and the API writes config, ack, and settings the same way. A
+  **leader-elected CDC publisher** (exactly one active, failing over on the NATS KV lock,
+  [workers](/architecture/workers/)) reads committed changes from a replication slot by **logical
+  decoding of the WAL** and publishes each to JetStream, where `action_rule`, reconcile, and
+  projection consumers react. Delivery is at-least-once with an **idempotency key per change**, so a
+  consumer that sees a change twice is a no-op and outcomes stay exactly-once downstream. **No
+  dual-write**, no row-lock single-fire worklist, and no `LISTEN`/`NOTIFY` fan-out: the change is
+  committed once and the bridge fans it out. **Postgres is never a message bus**; it only emits its
+  changes. The replication **slot and publication are ensured in the idempotent boot phase** (the
+  same phase that upserts ship-with reference data; boot creates them if absent and leaves them
+  untouched if present), never a run-once dbmate migration, so a fresh database and an existing one
+  converge to the same state.
+
+:::
+
+## The three ingest paths
+
+Three ingest paths exist today, and this list is the enumeration's one home:
+
+- **The node bus path.** A node publishes a `TelemetryBatch` on its own subject
+  (`og.v1.telemetry.<node>`), and the server binds each sample's owner from the task's interface
+  ([collection](/architecture/collection/)).
+- **The API push path.** `POST /telemetry:push` is the first-party HTTP ingest write: a scoped
+  caller declares the owner and the route's scope check is the fence. The API publishes the batch
+  onto the bus (`og.v1.api.telemetry`, trusted by subject, below) rather than writing Postgres
+  directly, so pushed records are visible to the same stream consumers and land in history the same
+  way ([API](/architecture/api/)).
+- **The raw log path.** A raw log line rides either transport in the same batch but lands on its own
+  untyped lane, `log_line`: no property name, no registry gate
+  ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)).
+
+The two transports meet at one `land()` write path, so neither can drift from the other's semantics;
+the mechanics of `land()` (reject-not-project, the transition-only state guard, the current-value
+derive) belong to [samples](/architecture/properties/).
 
 ## Streams and consumers
 
 As built today there is **one stream**, `OG_TELEMETRY`, bound to the node subjects (`og.v1.telemetry.*`) and the API push subject (`og.v1.api.telemetry`), consumed by the single
-durable `og-telemetry-worker`; the set below is the target topology, not the current one.
+durable `og-telemetry-worker`; `og.v1.telemetry.<node>` is the sample firehose itself, carrying each
+node's samples and its raw self-logs, not a separate control-plane lane. The set below is the target
+topology, not the current one.
 
+:::design[Target design, tracked in #430]
 - **samples** (data lane): untrusted publishers (node, external webhook) publish to a **raw ingress**
   subject; the **admission consumer** owner-confines per publisher class and re-publishes to the **trusted**
   samples stream that the rule engine, calc, and the persistence consumer read. Trusted server producers
@@ -62,25 +108,101 @@ durable `og-telemetry-worker`; the set below is the target topology, not the cur
 - **records** (events, alarms, actions): published by the CDC publisher from Postgres commits; consumed by
   `action_rule`, reconcile, and projection consumers.
 - **commands**: a durable, per-node **command queue** the edge holds a consumer on ([nodes](/architecture/nodes/)).
-- **telemetry**: as built, `og.v1.telemetry.<node>` IS the sample firehose: it carries each node's
-  samples and its raw self-logs, not a separate control-plane lane. The control-plane split described
-  in this list (with the firehose on a raw ingress subject) is Design.
 
 Durable consumers track their own position; delivery is at-least-once with `Nats-Msg-Id` dedup plus double
 ack, which with the idempotent sinks (a sample on `(series, ts)`, an action transition on
 `(alarm, action, transition)`, the CDC idempotency key) gives exactly-once **outcomes**. This triple
 (`Nats-Msg-Id` dedup, double ack, idempotent sink) is the canonical exactly-once mechanism the other pages
-refer to. The edge stamps `ts`, so the system is ts-authoritative and needs no strict ordering on the wire.
-Today's delivery contract is weaker than this: node publishes are fire-and-forget core NATS (no publish
+refer to.
+:::
+
+The edge stamps `ts`, so the system is ts-authoritative and needs no strict ordering on the wire.
+Today's delivery contract is weaker than the target: node publishes are fire-and-forget core NATS (no publish
 ack, no `Nats-Msg-Id`) and the consumer acks once after multi-transaction writes, so delivery is
 at-least-once with a known duplicate risk until #430 lands (see #430 and #311).
+
+:::design[Target design, tracked in #430]
+
+## The pipeline, end to end
+
+```d2
+direction: down
+classes: {
+  node: { style.border-radius: 8 }
+  key: { style: { border-radius: 8; bold: true } }
+  group: { style.border-radius: 8 }
+}
+edge: "Edge (node)" {
+  class: group
+  task: "task\npoll · listen\nstateless / stateful" { class: node }
+  fn: "function\nextract → key → normalize" { class: node }
+  task -> fn
+}
+raw: "raw ingress\nnode · webhook (untrusted)" { class: node }
+admit: "admission consumer\nowner-confine per class\n(system mode)" { class: node }
+ds: "JetStream\ntrusted samples stream" { class: node; shape: queue }
+failed: "collection.failed\n(carries raw)" { class: node }
+calc: "calc_rule consumer\ncross-key · system-level" { class: node }
+erule: "event_rule consumer\nfire_criteria (+ optional clear_criteria)" { class: node }
+persist: "persistence consumer\nbatch sink (async)" { class: node }
+tables: "metric · state · log\nsample tables" { class: node; shape: cylinder }
+sched: "schedule + timer\n(leader-elected clock)" { class: node }
+pg: "event · alarm\n(PG)" { class: node; shape: cylinder }
+alarm: "alarm\none incident · new row per open\n(event_rule, owner)" { class: node }
+cdc: "JetStream\nrecord/state lane" { class: node; shape: queue }
+actions: "action_rule consumer\nnotify · command\nremediate-verify-escalate" { class: node }
+itsm: "ITSM (action target)" { class: node }
+operator: operator { class: node }
+config: "config\ndeclared (spec)" { class: node }
+audit: audit_log { class: key }
+divergence: divergence { class: node; shape: hexagon }
+edge.fn -> raw: "observed · lineage on row\n(source_rule)"
+edge.fn -> failed: "parse / validation fail" { style.stroke-dash: 4 }
+raw -> admit
+admit -> ds: "confined"
+ds -> calc
+calc -> ds: "calculated · trusted producer\n(direct, no admission)"
+ds -> erule
+ds -> persist
+persist -> tables: "durable copy"
+sched -> erule: "origin=scheduled"
+erule -> pg: "PG-first: event + alarm in one tx"
+pg -> alarm: "alarm transition"
+pg -> cdc: "CDC (logical decoding)\nleader-elected publisher" { style.stroke-width: 3 }
+cdc -> actions
+actions -> ds: "command's effect · provenance=intended\n(trusted, direct)" { style.stroke-dash: 4 }
+actions -> itsm: "ITSM: open->ticket · update->comment · resolve->close" { style.stroke-dash: 4 }
+actions -> edge.task: "command + adaptive poll" { style.stroke-dash: 4 }
+operator -> config: "declares (PG-first)"
+config -- tables: "links · drift" { style.stroke-dash: 4 }
+operator -> audit: "audit" { style.stroke-dash: 4 }
+cdc -- divergence: "disagree(A,B): drift / conflict" { style.stroke-dash: 4 }
+```
+
+The two lanes, drawn end to end. On the data lane, the edge parses payloads into observed samples
+and publishes them to raw ingress; the admission consumer republishes confined points to the trusted
+stream; the `event_rule` consumer evaluates live off the trusted stream while the persistence
+consumer sinks the durable copy; calc output and a command's intended write enter the trusted stream
+directly. On the record lane, an `event_rule` fire writes the event and alarm transition to PG in
+one transaction and the CDC publisher fans the commit onto JetStream, where `action_rule` consumers
+react; a command's intended sample then re-enters the data lane on the device round trip. The teal
+node is `audit_log`, the ground-truth record of operator writes (including config changes); observed
+and calculated samples carry `source_rule` on the row, and intended points at the command `event`
+via `event_id`. The raw payload is not stored: a parse or validation failure rides a
+`collection.failed` event. [config](/architecture/variables/) holds declared intent (PG-first),
+keyed to a state sample as its observed side.
+
+:::
 
 ## Subjects, accounts, and scope
 
 Subjects are hierarchical and **scope is expressed in them**, not bolted on:
 
+:::design[Target design, tracked in #434]
 - **Tenant = one NATS account.** Per-account isolation (messaging) is the same boundary as the
   per-database isolation (storage): no shared subjects, no shared rows ([identity and access](/architecture/identity-access/)).
+:::
+
 - **The API telemetry lane (`og.v1.api.telemetry`) is trusted by subject.** A first-party push
   (`POST /telemetry:push`) is authorized at the route, so the API publishes as a **trusted server
   producer** with no admission pass, and the ingest consumer believes the owner the batch carries
@@ -89,19 +211,25 @@ Subjects are hierarchical and **scope is expressed in them**, not bolted on:
   this subject: a node's grant is an explicit allow-list of its own three subjects, and the lane
   deliberately sits **outside** the single-token `og.v1.telemetry.*` wildcard, so a node named for
   whatever literal we might reserve there cannot be handed it.
-- **Subject permissions gate the subject string; the admission consumer gates the owner.** A node may
+- **Subject permissions gate the subject string.** A node may
   publish and subscribe only the subjects for its placement; the grant is **mechanically derived from
-  placement**, a coarse transport gate, not a second copy of the ABAC model. But a sample's owner lives
-  in the **payload** (a multi-owner function resolves owner from labels), which subject permissions cannot
-  see, so the **admission consumer** (above) is the authoritative owner fence, and authorization stays
-  authoritative in the [Storage Gateway](/architecture/storage/). **Operators never connect to the bus**,
-  so there is no operator subject-permission model to keep in sync (see the live UI relay below).
+  placement**, a coarse transport gate, not a second copy of the ABAC model. **Operators never connect
+  to the bus**, so there is no operator subject-permission model to keep in sync (see the live UI
+  relay below).
+
+:::design[Target design, tracked in #430]
+A sample's owner lives in the **payload** (a multi-owner function resolves owner from labels), which
+subject permissions cannot see, so the **admission consumer** (above) is the authoritative owner
+fence, and authorization stays authoritative in the [Storage Gateway](/architecture/storage/).
+:::
 
 ## Request-reply: service to service
 
 Synchronous internal calls use **NATS request-reply**: an in-process call in single-binary mode, a
 request over the bus when modes are split across pods. The public API never uses request-reply (it is
 HTTP); request-reply is the east-west wire only.
+
+:::design[Target design, tracked in #434]
 
 ## KV and object store
 
@@ -110,6 +238,10 @@ HTTP); request-reply is the east-west wire only.
   invalidation, [identity and access](/architecture/identity-access/)).
 - **Object store** holds internal artifacts (a compiled per-node runtime unit, for example). User files
   stay on the content-addressed [blob store](/architecture/files/), not here.
+
+:::
+
+:::design[Target design, tracked in #434]
 
 ## The live UI relay
 
@@ -133,6 +265,8 @@ live path introduces **no second authorization model**:
 - **Where it shines:** a live fleet tile, the alarm console, and the **template-debug / dev-tap** surface,
   where an operator watches samples arrive in real time as a template runs (the learning-tool "render
   the real engine against live data" surface, [the learning tool](/contributing/learning-tool/)).
+
+:::
 
 Related: [API](/architecture/api/) (the public HTTP contract), [scaling](/architecture/scaling/) (the
 deployment topology and the diagram), [nodes](/architecture/nodes/) (the edge as a NATS client),

@@ -24,7 +24,10 @@ per-capability breakdown and what is actually shipped live on
 [implementation status](/architecture/status/); undecided design points are flagged inline as
 `Open question` asides; how a call was made or reversed and where the build diverges lives in the
 [decision log](/architecture/decisions/); and the epics and the arc ahead are indexed on the
-[roadmap](/architecture/roadmap/). Every prose architecture page is also published as one machine-readable file at
+[roadmap](/architecture/roadmap/). Unbuilt prose inside a page sits in a marked **design fence**,
+and the pages that are *entirely* unbuilt live in the sidebar's own **Design sketches** group, a
+working queue that empties as subsystems land, so a page's place in the nav tells you whether any
+of it exists. Every prose architecture page is also published as one machine-readable file at
 [/llms-full.txt](/llms-full.txt) (with a curated index at [/llms.txt](/llms.txt)) for LLM tools (the interactive `.mdx` pages are not included).
 :::
 

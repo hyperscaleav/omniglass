@@ -66,7 +66,7 @@ var Banned = []BannedTerm{
 	{
 		Pattern:     regexp.MustCompile(`\bListView\b`),
 		Replacement: "ListShell with a FlatList or TreeList body",
-		Origin:      "the list-surface split (status.mdx)",
+		Origin:      "the list-surface split (build-log.md)",
 	},
 	{
 		Pattern:     regexp.MustCompile(`\bUpsertOfficial\b`),
@@ -167,7 +167,7 @@ var Banned = []BannedTerm{
 // generator's source.
 var vocabularyAllowed = map[string]bool{
 	filepath.Join("architecture", "decisions.md"): true,
-	filepath.Join("architecture", "status.mdx"):   true,
+	filepath.Join("architecture", "build-log.md"): true,
 	filepath.Join("reference", "cli", "index.md"): true,
 }
 

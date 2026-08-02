@@ -28,11 +28,7 @@ per-component reachability read, plus the type registries, the `/products` and `
 classifier-contract and instance-value property routes, the role declaration, resolution, and staffing
 routes, and the component alarm plus system and location [health](#health-the-verdict-and-why) reads. The
 node `:enroll` and `:claim` custom methods
-are the first `:verb` routes in the wild. Still `Design`:
-the AIP list conventions (`filter`, `order_by`, `page_size`, `page_token`, `fields`; today's one
-paginated route, `GET /audit-log`, pages backward with `before` plus `limit`), the expression `filter`
-language, idempotency keys, `ETag` / `If-Match` optimistic concurrency, long-running operations over the
-`action` row, the MCP surface, the SSE relay, and the NATS node contract. See
+are the first `:verb` routes in the wild. See
 [implementation status](/architecture/status/).
 :::
 
@@ -75,11 +71,15 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
 
 ## Lists: filter, order, page
 
-**This section is still Design.** No route implements these parameters yet: the built lists take a
-small fixed set of query params (`kind`, `resource`, `verb`, `system`, `include_archived`,
-`include_cleared`), and the one paginated route, `GET /audit-log`, pages backward with `before` plus
-`limit`. The target contract: a list takes `filter`, `order_by`, `page_size` (capped by a server
-maximum), `page_token`, and `fields`:
+The built lists take a small fixed set of query params (`kind`, `resource`, `verb`, `system`,
+`include_archived`, `include_cleared`), and the one paginated route, `GET /audit-log`, pages backward
+with `before` plus `limit`. **Every list runs through the scoped gateway**, so results are already
+scope-filtered: a list never returns a row outside the caller's visible set, and the page count is
+over visible rows only.
+
+:::design[The AIP list parameters, tracked in #434]
+The target contract: a list takes `filter`, `order_by`, `page_size` (capped by a server maximum),
+`page_token`, and `fields`:
 
 - **Cursor pagination, never offset.** A list returns a `next_page_token`; the client echoes it on the
   next call. The token is opaque and stable under concurrent inserts, where an offset would skip or
@@ -89,15 +89,18 @@ maximum), `page_token`, and `fields`:
 - **`filter`, `order_by`, and `fields` name fields, not raw SQL.** Every field resolves through the
   gateway's generated-column allow-list (an unknown field is a 400), and values are bound parameters, so
   none of the three can inject SQL ([storage](/architecture/storage/)).
-- **Every list runs through the scoped gateway**, so results are already scope-filtered: a list never
-  returns a row outside the caller's visible set, and the page count is over visible rows only. This
-  invariant holds today; the parameters above do not exist yet.
+:::
 
 ## Partial responses: field masks
 
-The `fields` read mask (a response subset, AIP-157) is **still Design**; the default, and today the only
-behavior, is the full resource. `PATCH` carries a **write mask implicitly**, and this part is built:
-only the fields present in the body change, so a partial update never clobbers an omitted field.
+:::design[The fields read mask, tracked in #434]
+The `fields` read mask (a response subset, AIP-157) selects the fields a read returns; the default is
+the full resource.
+:::
+
+Today the full resource is the only behavior. `PATCH` carries a **write mask implicitly**, and this
+part is built: only the fields present in the body change, so a partial update never clobbers an
+omitted field.
 
 :::caution[Open question]
 Field-mask depth: top-level fields only, or nested paths (`a.b.c`), and whether a list's `fields` and a
@@ -133,10 +136,8 @@ caller's read-scope** entirely: **404**, so the API never discloses that an enti
 caller's visible set. Out-of-read-scope is the only 404 case; a readable-but-not-actionable target is a
 403, never a 404.
 
+::::design[Idempotency keys and optimistic concurrency, tracked in #434]
 ## Idempotency and concurrency
-
-**Both mechanisms in this section are still Design** (listed in the status note above); no route
-accepts `Idempotency-Key` or `If-Match` today.
 
 - **`Idempotency-Key`** is accepted on `POST` and on state-changing custom methods. The server records
   the key with its **effect** (the created or changed resource) for a retention window; a retry with the
@@ -152,7 +153,9 @@ accepts `Idempotency-Key` or `If-Match` today.
 :::caution[Open question]
 The idempotency-key retention window, and whether it is uniform or per-method.
 :::
+::::
 
+:::design[Long-running operations over the action row, tracked in #434]
 ## Long-running operations: the action is the handle
 
 Some operations are not instantaneous: a `command` against a device, a reconcile `:enforce`, a
@@ -170,6 +173,7 @@ The HTTP method is the front door; the **dispatch is over NATS**. The command st
 the handle, poll `GET /actions/{id}`), but the work is carried on the internal NATS contract: the action
 fans out through [messaging](/architecture/messaging/) to the responsible consumer or node, and the result
 flows back the same way to advance the row. The caller sees one model, the transport is the bus.
+:::
 
 ## Writes are audited and scoped
 
@@ -665,6 +669,7 @@ so the whole surface stays under the authz middleware and generates a uniform cl
 A `file` body is `{id, name, content_type, size, sha256, sensitive, created_at}`; the `sha256` is the
 content address of the blob it points at, so two handles over identical bytes share one blob.
 
+:::design[Views and the SSE live relay, tracked in #434]
 ## Reads beyond one resource are views
 
 A single resource reads through its typed `GET`. Anything richer, a dashboard, an explorer, the cascade
@@ -677,6 +682,7 @@ stream** over the same scoped, permission-gated seam: the subscribe is **capabil
 message, filtering by `visible_set(P, read)` against each message's owner and pushing only visible deltas.
 The operator never connects to the bus,
 so the live path adds no second authorization model.
+:::
 
 ## Versioning and evolution
 
@@ -686,6 +692,7 @@ new major version, not a silent edit. Because the [OpenAPI 3.1 document is gener
 from the Go structs and the clients are generated from that, the contract cannot drift from the
 implementation: a drift check fails the PR if a route changed without regenerating.
 
+:::design[The MCP surface, tracked in #434]
 ## Also an MCP surface
 
 The same OpenAPI document that generates the typed SPA client and the CLI also generates an **MCP
@@ -700,7 +707,9 @@ reads), pagination and the problem+json errors shaped for a model to consume. Th
 the **authenticated `human` or `service` principal's** credential
 ([identity and access](/architecture/identity-access/)), so its reach is exactly that principal's grants,
 scoped and audited like any caller ([AI](/architecture/ai/)).
+:::
 
+:::design[The full node NATS contract, per ADR-0036]
 ## The node path is the NATS contract
 
 Nodes do **not** speak HTTP. The edge is a NATS client over the WAN: a node publishes telemetry to a
@@ -712,6 +721,7 @@ subjects, request-reply, stream and consumer definitions, JWT-scoped subject per
 [messaging](/architecture/messaging/) and on the [node](/architecture/nodes/) page; the same AIP spirit,
 error envelope, and idempotency described here carry across to it (the idempotency key per message, the
 problem-shaped reply on request-reply).
+:::
 
 ## Self-describing
 

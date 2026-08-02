@@ -10,9 +10,8 @@ sidebar:
 :::note[Implementation status]
 Built today: one durable JetStream work-queue consumer, `og-telemetry-worker`
 (`internal/bus/consumer.go`: explicit ack, MaxDeliver 5, bounded nak backoff, serial dispatch),
-which does owner confinement and persistence inline. Still Design: everything else on this page,
-the admission/persistence split, the clock, reconcile, backtest, the rule engine, the action
-sender, and CDC.
+which does owner confinement and persistence inline. The design fences below mark the parts of this
+page that are target design, each naming its tracker.
 :::
 
 Workers are how Omniglass does the steady background work, deriving samples, sending actions, firing timers, reconciling drift, on one machinery instead of a pile of bespoke loops, so the operator gets crash recovery and exactly-once outcomes for free everywhere.
@@ -28,17 +27,18 @@ on purpose because the state transition guard depends on it (`internal/bus/consu
 so the configurable concurrency pool and exactly-once outcomes are Design. It is instantiated over
 several consumers rather than separate loops:
 
-- **the admission consumer**: owner-confines raw-ingress samples (node and webhook) against the
-  publisher's placement, preserving `Nats-Msg-Id`, and republishes to the **trusted** samples stream,
-  so the rule engine and persistence read only confined points (system mode, [messaging](/architecture/messaging/));
+:::design[Target design, tracked in #430; the clock is #419]
+- **the admission consumer**: the owner-confinement gate at the head of the data lane, a worker
+  running in system mode; the mechanism is described once, on
+  [messaging](/architecture/messaging/#two-lanes-one-bus);
 - **the rule engine** (sample consumers): consume arriving samples from the **trusted**
   JetStream samples stream, apply `calc_rule`s and `event_rule`s, publish derived samples back
   onto the trusted stream (a trusted producer, no admission pass), and write events and alarm transitions
   to Postgres in one transaction;
 - **the action sender** ([alarms and actions](/architecture/alarms-actions/)): consumes
   action work fanned out by CDC, sends at-least-once, advances action step state (PG-first, CDC-out);
-- **the persistence consumer**: a batch sink that consumes the **trusted** samples stream and writes
-  samples to the Postgres metric/state/log tables asynchronously, so rules never wait on PG;
+- **the persistence consumer**: the data lane's batch sink into the Postgres sample tables, async so
+  rules never wait on PG ([messaging](/architecture/messaging/#two-lanes-one-bus));
 - **the clock** ([time](/architecture/time/)): fires schedules and armed timers (a leader-elected
   singleton, below);
 - **reconcile**: the desired-state loop (below).
@@ -46,23 +46,36 @@ several consumers rather than separate loops:
 Each consumer is the "produces new work, needs independent durability" exception applied: a
 subsystem that consumes the same message is **a stage, not a second loop**. Competing consumers in a
 group scale horizontally with no leader: JetStream hands each message to exactly one member, and
-adding instances just adds throughput. Alongside the consumers, a **node-liveness sweep** runs on its
+adding instances just adds throughput.
+:::
+
+:::design[The node-liveness sweep, tracked in #419]
+Alongside the consumers, a **node-liveness sweep** runs on its
 own ticker. Unlike a consumer it is a *poll*, not a drain: a down node produces no message, so it is
 found by scanning heartbeat freshness, raising and resolving the node-owned `node.down` alarm
-idempotently (the one-open partial unique index on `(component_id, dedup_key)`, shipped by
-[ADR-0075](/architecture/decisions/#adr-0075-an-alarms-condition-identity-is-a-raiser-supplied-dedup-key)). There is no separate projector either: current values live in the
+idempotently over the one-open dedup primitive
+([ADR-0075](/architecture/decisions/#adr-0075-an-alarms-condition-identity-is-a-raiser-supplied-dedup-key), which is built; nodes already publish the heartbeat the sweep will read, and the sweep itself is not).
+:::
+
+There is no separate projector: current values live in the
 `property` latest-value cache table (ADR-0065; see [storage](/architecture/storage/)), and
 `alarm` / `action` hold their state directly.
+
+:::design[Target design, tracked in #430 (the CDC publisher) and #419 (the clock)]
 
 ## Consumer groups versus singletons
 
 Most of the machinery is competing consumers, but two pieces must run as exactly one active instance:
-the **CDC publisher** (logical decoding of the WAL, fanning committed events, alarms, actions, and
-operator mutations out to JetStream) and the **clock** (firing schedules and armed timers). These are
+the **CDC publisher** (the record lane's bridge from Postgres commits onto JetStream, described once
+on [messaging](/architecture/messaging/#two-lanes-one-bus)) and the **clock** (firing schedules and armed timers). These are
 **leader-elected singletons** via a **NATS KV CAS lock**: each candidate races to compare-and-set a
 KV key, the winner holds the lease, and on its death the lease expires and another candidate takes
 over. Same pattern for both, no separate election service and no SKIP-LOCKED row claim. A singleton
 that produces work still publishes onto the bus, where the competing consumers scale it out.
+
+:::
+
+:::design[Target design, tracked in #430]
 
 ## Re-entry, not one mega-pass
 
@@ -75,7 +88,11 @@ committed change out to the action sender. So the rule engine never recurses unb
 transaction; a cross-producing stage hands off to the bus, which is also what makes it independently
 durable. Calc re-entry **terminates by write-on-change** (a recompute that lands the same value
 publishes nothing, the fixpoint) with a depth cap as a cyclic-rule backstop, carrying a rollup one hop
-per pass. **[Health](/architecture/health/) is the exception, and deliberately not a worker stage**: its
+per pass.
+
+:::
+
+**[Health](/architecture/health/) is the exception, and deliberately not a worker stage**: its
 rollup (component -> system -> location) runs **inside the write transaction** that changed it, because a
 verdict recomputed a hop later would record its transition at the wrong moment. Parsing into samples is **not** a
 worker stage; it happens at the edge ([collection](/architecture/collection/)).
@@ -102,6 +119,8 @@ This is the axis that decides almost everything else about a subsystem.
     `alarm_open_condition_key`, one open row per `(component, dedup_key)`).
   - **Backtest is harder**: it must process each entity's series in order.
 
+:::design[Target design, tracked in #430]
+
 ## Lineage the engine stamps
 
 Every derived sample carries its lineage **on the row** (a `provenance`, `source_rule` plus
@@ -109,6 +128,10 @@ version, and the one provenance pointer; see [storage](/architecture/storage/),
 [samples](/architecture/properties/)). There is no separate execution table: a derived row is itself
 the evidence of its rule's run, and a fan-out (one execution to N samples) stamps the same
 `source_rule` on each. The rule version is the hinge for backtest.
+
+:::
+
+:::design[Target design, tracked in #434]
 
 ## Backtest: re-run a changed rule over retained samples
 
@@ -133,6 +156,10 @@ for testing a rule change). **A backtest writes to a shadow, never live**: promo
 a separate, explicit, audited step. A prospective backtest is **windowed by default** (over the last 30
 days), with whole-history the explicit, heavier option.
 
+:::
+
+:::design[Target design, tracked in #434]
+
 ## Reconcile: the desired-state control loop
 
 Reconcile is another JetStream consumer: it projects **declared desired state** onto the things that
@@ -152,3 +179,5 @@ policy.
 
 Open: the reconcile cadence (continuous versus on-audit-change versus a periodic full sweep) and
 backoff on a flapping target.
+
+:::

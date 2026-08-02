@@ -7,6 +7,8 @@ sidebar:
     variant: caution
 ---
 
+::::design[Target design: the time primitive, tracked in #419]
+
 Time lets an operator alarm on things that produce no event of their own, "10 minutes elapsed", "it is 8am Monday", "the data stopped", by turning the passage of time into events the rest of the pipeline consumes.
 
 ## Why time needs a primitive
@@ -121,9 +123,14 @@ Absence of data is two conditions, and the why matters:
   condition (a fresh device, a property_type never reported), detected by "no observations
   exist," not by a watchdog. Gray, not actionable.
 
-The built current-value shape is the `property` cache row, `CachedValue{Value, TS, Provenance}`;
-the `freshness (fresh | stale)` quality on it is still design, staleness marked on the current
-value with the last value preserved. **[Health](/architecture/health/) treats them
+The built current-value shape is the `property` cache row, `CachedValue{Value, TS, Provenance}`.
+
+:::design[The `freshness` quality on the current value, tracked in #430]
+The cache row carries a `freshness (fresh | stale)` quality: staleness marked on the current
+value with the last value preserved.
+:::
+
+**[Health](/architecture/health/) treats them
 differently**: a *stale required member* defaults to `unknown` (lost visibility, so the system
 rolls to `unknown`, [health](/architecture/health/)), an *unknown member* is gray and does not down the system. Whether stale means "last value still valid" (a
 slow config signal) or "lost visibility, alarm" (a liveness signal) is **per-property-type
@@ -166,3 +173,4 @@ The recurring trigger config and the clock singleton's pending-fire working set;
 |---|---|---|
 | `schedule` | id, rrule/cron, **tz (IANA)**, target, enabled | config: a recurring trigger |
 | `timer` | id, **fire_at (timestamptz)**, kind (schedule-tick / for-sustain / runbook-wait / watchdog), ref, payload | the clock singleton's pending-fire **working-set** (the durable PG working set, mutable, scanned for due rows and the fire realized on its lane: a record-lane fire born in PG and CDC-fanned to JetStream, a watchdog's staleness onto the data lane), not a history log; fires are logged on the entity they produce |
+::::

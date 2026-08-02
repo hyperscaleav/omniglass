@@ -7,6 +7,8 @@ sidebar:
     variant: caution
 ---
 
+:::design[Target design: the expression engine, tracked in #434]
+
 Expressions let an operator reshape and judge collected values in plain text wherever the platform needs a small computation, and there is exactly one language to learn for all of them. Omniglass evaluates these small operator-authored expressions in many places: an extractor's
 `value` leaf, a step's `when` guard, an `event_rule`'s fire/clear
 criteria, a `calc_rule`'s reduce escape, a rule's `scope` predicate, a view/list `filter`,
@@ -73,6 +75,14 @@ extractor-local inputs a step prepares for its `value` leaf (`raw`, `groups`, `n
 `item`). Rule and view contexts bind their own documented environments (the candidate
 entity, the property, the resource row).
 
+## Divergence and `disagree(A, B)`
+
+**`disagree(A, B)`** is the condition operator that compares two provenances or sources of one
+key: config drift, reconcile conflict, and cross-source disagreement are all the one operator.
+Reading both sides as inputs (rather than writing a verdict back into either) is what keeps the
+pipeline's DAG acyclic. What it surfaces is **divergence**: any two provenances or sources of one
+key that disagree, the universal anomaly signal.
+
 ## Safety
 
 Expressions are **sandboxed**: no I/O, no network, no unbounded loops, bounded execution.
@@ -80,3 +90,4 @@ Operator-supplied configuration values are bound as **data in the environment**,
 into expression text, so a hostile value is evaluated literally and never executed. Secret
 fields rendered into a request are masked at interpolation time and never surface in a log
 line, error string, or property label.
+:::

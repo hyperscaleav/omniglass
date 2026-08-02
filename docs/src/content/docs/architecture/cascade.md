@@ -137,6 +137,7 @@ config by attribute or by a hand-picked set, cutting across the tree. The cascad
 groups (see [groups](/architecture/groups/) for the primitive); it consumes them by **weight** on the
 one specificity scale.
 
+:::design[Group placement by weight, tracked in #10]
 **One specificity scale.** Structural layers auto-derive a specificity from position, weight-free, the
 operator never tunes it: `platform` lowest, then the templates, then the location / system / component
 trees by depth, then the entity's own **instance** at the ceiling. A **group's weight is its
@@ -147,7 +148,13 @@ order. A typed group applies at its own level: a component-group to components d
 reaches a component **through the system layer** of its cascade.
 
 So however many groups an entity is in, the group band collapses to one weighted list on the shared
-scale, fully predictable, and the resolve view names the winner.
+scale, fully predictable, and the resolve view names the winner. For the additive rule combinator, the
+same weight also resolves an add-versus-suppress conflict between layers.
+
+A **`_type`** (device/app, AV-System, room) is not a cascade layer: it is a classification attribute,
+resolved by a [group](/architecture/groups/) filter (`type == X`) placed by weight, never a tree
+position. The tree is structural; attributes are groups.
+:::
 
 **The comparison key is segmented, not a single number.** Precedence is a lexicographic key
 `(segment_rank, depth, group_weight, creation_order)`, compared field by field in that order. The
@@ -159,10 +166,6 @@ many group weights stack: a deeper node or a heavier group raises a later field,
 `segment_rank`. The single specificity numbers shown elsewhere on this page (e.g. `0`, `100`, the `300s`,
 the `400s`) are a **presentation-only** flattening of that key for the resolve view, not the comparison
 key itself.
-
-A **`_type`** (device/app, AV-System, room) is not a cascade layer: it is a classification attribute,
-resolved by a [group](/architecture/groups/) filter (`type == X`) placed by weight, never a tree
-position. The tree is structural; attributes are groups.
 
 ## The registry is outside the cascade
 

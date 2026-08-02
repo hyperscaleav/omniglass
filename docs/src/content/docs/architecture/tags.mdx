@@ -69,29 +69,32 @@ Two fields on the key shape how its bindings behave:
   **universal** (the key applies everywhere); a non-empty set rejects a binding on any other kind at write time (a
   `rack_position` key that `applies_to: [location]` cannot be bound onto a component). The vocabulary carries its own
   scoping rules, so a key means the same thing wherever it is legal.
-- **`propagates`** says whether a bound value cascades. A **propagating** key (the default) resolves down the tree:
-  tag a location once and every system and component beneath it inherits the value. A **non-propagating** key binds as
-  a **flat per-entity set**: it resolves only from a binding on the entity itself, never from an ancestor. That flat
-  case is the shape a [file](/architecture/files/) needs (a file is not on the structural arc, so it has no parent to
-  cascade from); the same key model serves both, toggled by this one field.
+- **`propagates`** says whether a bound value cascades. A **propagating** key (the default) resolves down the
+  [cascade](/architecture/cascade/), reaching everything beneath the binding. A **non-propagating** key binds as
+  a **flat per-entity set**: it resolves only from a binding on the entity itself, never from an ancestor.
+
+:::design[Binding onto a file, tracked in #191]
+That flat case is the shape a [file](/architecture/files/) needs (a file is not on the structural arc, so it has
+no parent to cascade from); the same key model serves both, toggled by this one field.
+:::
 
 ## Values resolve union-on-key, override-on-value
 
-The effective tags for a component resolve down the structural cascade (`platform -> location tree -> system tree ->
-component tree`), the same walk the variable and secret resolvers use, but with a different combinator:
-
-- **Keys union.** An entity surfaces **every** key bound at or above it. Two different keys set at two different scopes
-  both appear; they do not compete.
-- **Values override.** For a **single** key set at several scopes, the **most-specific** binding wins (highest band,
-  then nearest depth), exactly like a variable. The shadowed candidates come back too, so the surface can teach the
-  override.
+An entity's effective tags resolve down the same [cascade](/architecture/cascade/) as every other operator-set
+value; the structural chain, the precedence key, and the fall-through rule are stated once, there. Tags differ from
+a variable or a secret only in the combinator: **keys union** (an entity surfaces **every** key bound at or above
+it; two different keys set at two different scopes both appear, they do not compete) and **values override** (for a
+**single** key set at several scopes, the most-specific binding wins, with the shadowed candidates returned so the
+surface can teach the override).
 
 A non-propagating key is admitted into the resolve only from the target entity itself, so its ancestor bindings never
 leak downward. The `GET /components/{name}/effective-tags` route returns the resolved set (winner plus shadowed
 candidates); `GET /components/{name}:listTags` (a custom method) returns only the bindings set **directly** on the
 component, and the writes are the `:setTag` / `:removeTag` custom methods. The system band resolves through
-`system_member` membership (the primary membership by default, `?system=` to ask as a specific system the component
-belongs to), so a shared device answers differently per system.
+`system_member` membership as the
+[cascade](/architecture/cascade/#structural-multi-membership-a-component-in-n-systems) defines (`?system=` asks as
+a specific system the component belongs to; otherwise the primary membership seeds the chain), so a shared device
+answers differently per system.
 
 **Systems and locations resolve too.** A component walks the full arc, but every entity has an effective set. A
 **location** resolves `platform` plus its own location tree. A **system** resolves `platform`, its own system tree, and

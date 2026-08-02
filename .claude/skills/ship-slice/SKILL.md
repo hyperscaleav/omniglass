@@ -28,7 +28,7 @@ Each is a gate; a red one blocks the ship.
    diff; scan the commit messages and the PR body).
 4. **Docs with everything, status, and decisions.** The teaching docs ship in this PR, and the
    architecture-of-record stays consistent. Three status surfaces move with the code, never
-   silently: the `status.mdx` build-progress entry is added; **each architecture page the slice
+   silently: the `build-log.md` entry is added; **each architecture page the slice
    advances has its status badge flipped to its new floor** (`Design` to `Partial` to `Built`); and
    if the build diverges from a page's present-tense design, the page carries an inline note **and**
    a [decision-log](/architecture/decisions/) entry (an ADR) lands in the same PR. A page that
@@ -131,7 +131,7 @@ Dev seed:  <new-entity example rows added to internal/devseed | n/a>
 
 Docs:      <what shipped; arch-of-record consistent | divergence note; lint: green;
             neighbor-check hits and how resolved | none>
-Status:    <pages advanced (page: Design->Partial); status.mdx entry; ADR-#### if diverged;
+Status:    <pages advanced (page: Design->Partial); build-log entry; ADR-#### if diverged;
             fences swept: <pages | n/a>>
 Review:    <reviewer findings + how addressed; security: n/a | note>
 
