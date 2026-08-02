@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "astro dev",
-    "build": "node scripts/check-design-fences.mjs && astro build",
+    "build": "node scripts/check-design-fences.mjs && node scripts/check-screenshots.mjs && astro build",
     "preview": "astro preview",
     "diagrams": "node scripts/gen-diagrams.mjs"
   },
