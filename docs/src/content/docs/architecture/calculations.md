@@ -7,7 +7,7 @@ sidebar:
     variant: caution
 ---
 
-:::design[Target design: the calc rule family, tracked in #434]
+:::design[Target design: the calc rule family, tracked in #525]
 
 Parsing a raw payload into samples is the **edge function** ([collection](/architecture/collection/)), not a server-side rule: a function extracts, keys, and normalizes on the node and emits resolved samples. The rules that run server-side over the typed samples are two derivation families plus a subscription, and this page is the home of the calc family.
 

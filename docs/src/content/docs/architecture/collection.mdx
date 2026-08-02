@@ -54,7 +54,7 @@ slices. See
 and [ADR-0040](/architecture/decisions/#adr-0040-the-task-is-derived-read-only-plumbing-projected-from-its-interface).
 :::
 
-:::design[The template authoring model, tracked in #434]
+:::design[The template authoring model, tracked in #489]
 
 Collection is built from **functions**. A versioned `ComponentTemplate` declares how to reach a
 class of device (its interfaces) and a set of **functions**, each a discrete unit of device logic
@@ -140,7 +140,7 @@ interfaces:
   inbound ones to the declared envelope, so a step sees structured content, not wire bytes.
 - **Node placement is not declared here.** It is server-assigned from the component's location.
 
-:::design[Functions: a trigger plus a step DAG, tracked in #434]
+:::design[Functions: a trigger plus a step DAG, tracked in #489]
 
 ## Functions: a trigger plus a step DAG
 
@@ -344,7 +344,7 @@ LAN-local sources, with idempotency/dedup and form-encoded bodies.
 
 :::
 
-:::design[The step DAG and extractors, tracked in #434]
+:::design[The step DAG and extractors, tracked in #489]
 
 ## Steps: the DAG
 
@@ -414,7 +414,7 @@ keys must exist); an unresolved key is reject-not-project at ingest, so a templa
 collects a measurement no scope knows.
 :::
 
-:::design[Template inputs, tracked in #434]
+:::design[Template inputs, tracked in #489]
 
 ## Inputs: the template's typed parameters
 

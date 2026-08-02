@@ -131,7 +131,7 @@ the evidence of its rule's run, and a fan-out (one execution to N samples) stamp
 
 :::
 
-:::design[Target design, tracked in #434]
+:::design[The backtest engine, tracked in #526]
 
 ## Backtest: re-run a changed rule over retained samples
 
@@ -158,7 +158,7 @@ days), with whole-history the explicit, heavier option.
 
 :::
 
-:::design[Target design, tracked in #434]
+:::design[The reconcile control loop, tracked in #526]
 
 ## Reconcile: the desired-state control loop
 

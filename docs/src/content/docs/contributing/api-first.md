@@ -102,7 +102,7 @@ The API is **self-describing**: the running server serves `GET /api/v1/openapi.j
 
 Writes go through resource CRUD (each emitting an `audit_log` row in the same transaction).
 
-:::design[Target design: the ViewResult contract, tracked in #434]
+:::design[Target design: the ViewResult contract, tracked in #523]
 
 **Reads beyond a single resource go through views**, and views are part of the public API:
 

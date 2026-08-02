@@ -25,7 +25,7 @@ dashboards), which are not built yet. The realized inventory shell and its primi
 
 ## The renderer contract: ViewResult and the views BFF
 
-:::design[Target design: the ViewResult contract, tracked in #434]
+:::design[Target design: the ViewResult contract, tracked in #523]
 The whole console rests on one contract. **All UI reads go through [views](/architecture/views/)**
 (the read-side BFF), CRUD for writes; the operator never queries raw tables. Every view returns a
 uniform **`ViewResult`** (`{columns, rows}`), and the SPA renders any view through **one renderer per
@@ -44,7 +44,7 @@ and the pattern is the model the analytical surfaces will reuse.
 
 ## One renderer library, two composition modes
 
-::::design[Target design: the renderer library and composable dashboards, tracked in #434]
+::::design[Target design: the renderer library and composable dashboards, tracked in #523]
 The factoring avoids both "every screen is hand-coded" and "everything must be a dashboard":
 
 - **Renderer library** (coded once): `stat`, `table`, `status-grid`, `timeline`, `heatmap`,
@@ -81,7 +81,7 @@ difference is whether the composition is code or config.
 
 ## Coded pages and dashboards share one view layer
 
-:::design[Target design: default views behind coded pages, tracked in #434]
+:::design[Target design: default views behind coded pages, tracked in #523]
 Coded pages give the complete operator console; composable dashboards are the customization layer on
 top (a grid editor, widget config, and the view-binding UI), and the view layer is what makes them
 cheap. A built-in page **queries a default view, not a raw resource** (the Alarms page reads the
@@ -93,7 +93,7 @@ backs a dashboard widget unchanged.
 
 Live data is **query polling** (a refetch interval; slow-changing config uses a long stale time).
 
-::::design[Views and the SSE live relay, tracked in #434; the unit registry is #430]
+::::design[Views and the SSE live relay, tracked in #523; the unit registry is #430]
 A
 read can also **stream over the view layer (a server-side SSE relay)** where latency or fan-out
 earns it, the same earn-it-with-a-profile discipline. Presentation that depends on config (a severity
@@ -119,7 +119,7 @@ secret ([build log](/architecture/build-log/)). Editing a setting is editing
 **[config](/architecture/variables/)**, an audited mutation, not a separate prop store
 ([audit](/architecture/audit/)).
 
-:::design[The rule-authoring surface (ADR-0050); the expression editor is #434, the AI seam ADR-0001]
+:::design[The rule-authoring surface (ADR-0050); the expression editor is #524, the AI seam ADR-0001]
 The standout is the **rule-authoring
 page**:
 
@@ -134,7 +134,7 @@ page**:
 
 ## Exploration UIs
 
-:::design[Target design: the exploration surfaces over views, tracked in #434]
+:::design[Target design: the exploration surfaces over views, tracked in #523]
 Coded pages with rich interaction, all reading through views:
 
 - **The cascade resolve view** (the standout): "why did this value win", rendered from the
@@ -183,7 +183,7 @@ its own.
 Admin is the renamed Settings group: it holds the platform-administration surfaces (Users, Roles,
 Groups, Audit) plus the live Settings leaf, the platform-preferences page.
 
-:::design[The Home situation room and the Dashboards tier, tracked in #434]
+:::design[The Home situation room and the Dashboards tier, tracked in #523]
 **Home is distinct from Dashboards.** Dashboards monitor the *fleet* (property views over the
 inventory). Home monitors the *monitor*: the operator and admin situation room for config lifecycle
 (stale or out-of-date templates), control-plane health (rules failing to evaluate, samples

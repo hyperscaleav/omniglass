@@ -7,7 +7,7 @@ sidebar:
     variant: caution
 ---
 
-::::design[Target design: the ViewResult contract, tracked in #434]
+::::design[Target design: the ViewResult contract, tracked in #523]
 
 :::caution[Design: the ViewResult contract is entirely unbuilt]
 Nothing on this page is built: there is no `view` table, no `ViewResult` shape, no `/views/{id}:run`

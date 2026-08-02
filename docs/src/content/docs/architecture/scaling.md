@@ -73,7 +73,7 @@ The split is firm. **Postgres is the relational system of record** (entities, sa
 alarms, audit, and the queries the cascade, fusion, views, and scope need). **NATS (JetStream) is the
 nervous system**: work distribution, the durable command queue, the telemetry buffer, and fan-out.
 
-:::design[Target design, tracked in #434]
+:::design[The JetStream KV and object store, tracked in #529]
 JetStream **KV** (config, locks, leader-election) and an **object store** for internal artifacts ride
 the same substrate; user files stay on the content-addressed blob store (built: `internal/blob`,
 Postgres-backed), not the object store.

@@ -32,7 +32,7 @@ See [implementation status](/architecture/status/).
   principal, so the actor is **that principal**, attributed and audited like any caller; the AI-sourced
   marking rides alongside the row ([AI](/architecture/ai/)).
 
-:::design[The backtest and reconcile consumers, tracked in #434]
+:::design[The backtest and reconcile consumers, tracked in #526]
 - **Ground truth a backtest reads.** Operator-driven transitions and config changes are not
   recomputable from collected data, so the audit log is what a rule backtest reads for them: alarm ack and
   snooze ([alarms and actions](/architecture/alarms-actions/)), and every config change a
@@ -45,7 +45,7 @@ See [implementation status](/architecture/status/).
   emits an `audit_log` (a credential decrypt), and that subset cannot be filtered away.
 - **Other reads are not audited at the storage layer.**
 
-:::design[The read-audit toggle, tracked in #434]
+:::design[The read-audit toggle, tracked in #526]
 Optional read-audit is config-driven at the API layer (per-resource opt-in or a verbosity setting),
 off by default.
 :::
@@ -82,7 +82,7 @@ impersonated principal and `real_actor_principal_id` the admin behind it, and bo
 Audit carries the **longest retention** of any ground-truth log (compliance). It is append-only by
 construction.
 
-:::design[Retention partitioning, tracked in #434]
+:::design[Retention partitioning, tracked in #526]
 Retention is enforced by time-partitioning `audit_log`: aging out a window drops a partition, never a
 row-by-row delete.
 :::
@@ -91,7 +91,7 @@ row-by-row delete.
 Tamper-evidence (a hash-chain or signed audit) for high-assurance deployments.
 :::
 
-:::design[The backtest, reconcile, and alarm-projection consumers, tracked in #434]
+:::design[The backtest, reconcile, and alarm-projection consumers, tracked in #526]
 ## Who consumes it
 
 - **Backtest**: a rule backtest reads operator transitions and config changes from here, since they are not recomputable.

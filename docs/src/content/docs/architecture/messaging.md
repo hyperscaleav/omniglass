@@ -198,7 +198,7 @@ keyed to a state sample as its observed side.
 
 Subjects are hierarchical and **scope is expressed in them**, not bolted on:
 
-:::design[Target design, tracked in #434]
+:::design[Per-tenant NATS accounts, tracked in #529]
 - **Tenant = one NATS account.** Per-account isolation (messaging) is the same boundary as the
   per-database isolation (storage): no shared subjects, no shared rows ([identity and access](/architecture/identity-access/)).
 :::
@@ -229,7 +229,7 @@ Synchronous internal calls use **NATS request-reply**: an in-process call in sin
 request over the bus when modes are split across pods. The public API never uses request-reply (it is
 HTTP); request-reply is the east-west wire only.
 
-:::design[Target design, tracked in #434]
+:::design[The JetStream KV and object store, tracked in #529]
 
 ## KV and object store
 
@@ -241,7 +241,7 @@ HTTP); request-reply is the east-west wire only.
 
 :::
 
-:::design[Target design, tracked in #434]
+:::design[The live UI relay, tracked in #523]
 
 ## The live UI relay
 

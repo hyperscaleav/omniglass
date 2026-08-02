@@ -302,7 +302,7 @@ all-in-one run mode; the data lane's persistence consumer and the record lane's 
 target this one backend either way.
 :::
 
-::::design[The cold tier, tracked in #434]
+::::design[The cold tier, tracked in #529]
 **tiering**: the firehose does not stay in hot Postgres forever. Aged `metric` / `log_line`
 partitions tier out to a **columnar or object store** (Parquet on S3-compatible, or an embedded
 columnar engine) behind the same gateway, so historical queries fan across hot and cold with no model
@@ -319,7 +319,7 @@ An S3-compatible or disk blob backend swaps in beneath the same `blob.Store` sea
 change, since rows reference blobs by `sha256`.
 :::
 
-:::design[Target design, tracked in #434]
+:::design[Typed, generated query construction, tracked in #529]
 
 ## Query construction: typed, parameterized, generated
 
