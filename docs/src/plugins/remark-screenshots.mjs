@@ -4,6 +4,11 @@
 // embed and the captured PNG cannot drift: a `#id` with no matching frontmatter
 // entry fails the build, and a renamed id breaks in both places at once.
 //
+// The build failure is enforced by scripts/check-screenshots.mjs, wired into
+// `pnpm build` (#519): the file.fail below reaches the dev overlay, but on a
+// .md page the content loader swallows it at build time (logged, page rendered
+// empty, exit zero), so the render path cannot be the gate.
+//
 // Requires remark-directive to run first (it parses the `::` syntax).
 import { visit } from 'unist-util-visit';
 
