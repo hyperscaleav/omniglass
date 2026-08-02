@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { listVendors, createVendor, updateVendor, deleteVendor } from "./vendors";
+import { uuidFor } from "./testids";
 
 // The data layer is the unit under test; fetch is the seam we fake, so these
 // assert the request shape and the response handling without a server.
@@ -16,8 +17,8 @@ describe("vendors data layer", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({
         vendors: [
-          { id: "u-crestron", name: "crestron", display_name: "Crestron", official: true, icon: "crestron-logo" },
-          { id: "u-acme", name: "acme", display_name: "Acme", official: false },
+          { id: uuidFor("u-crestron"), name: "crestron", display_name: "Crestron", official: true, icon: "crestron-logo" },
+          { id: uuidFor("u-acme"), name: "acme", display_name: "Acme", official: false },
         ],
       }),
     );
@@ -27,7 +28,7 @@ describe("vendors data layer", () => {
     expect(req.method).toBe("GET");
     expect(req.url).toContain("/api/v1/vendors");
     expect(rows).toHaveLength(2);
-    expect(rows[0]).toMatchObject({ id: "u-crestron", name: "crestron", display_name: "Crestron", official: true, icon: "crestron-logo" });
+    expect(rows[0]).toMatchObject({ id: uuidFor("u-crestron"), name: "crestron", display_name: "Crestron", official: true, icon: "crestron-logo" });
   });
 
   it("returns an empty list when the envelope has no vendors", async () => {
@@ -44,7 +45,7 @@ describe("vendors data layer", () => {
 
   it("creates a vendor via POST with the body", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ id: "u-acme", name: "acme", display_name: "Acme", official: false }, 201),
+      jsonResponse({ id: uuidFor("u-acme"), name: "acme", display_name: "Acme", official: false }, 201),
     );
     await createVendor({ name: "acme", display_name: "Acme", kind: "manufacturer", website: "https://acme.example" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -63,7 +64,7 @@ describe("vendors data layer", () => {
 
   it("updates a vendor via PATCH to the id path with the body", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ id: "u-acme", name: "acme", display_name: "Acme Corp", official: false }),
+      jsonResponse({ id: uuidFor("u-acme"), name: "acme", display_name: "Acme Corp", official: false }),
     );
     await updateVendor("acme", { display_name: "Acme Corp" });
     expect(fetchMock).toHaveBeenCalledTimes(1);

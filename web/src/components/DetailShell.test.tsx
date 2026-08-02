@@ -1,10 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, fireEvent, screen } from "@solidjs/testing-library";
 import { RelatedList, type RelatedItem } from "./DetailShell";
+import { uuidFor } from "../lib/testids";
 
 const items: RelatedItem[] = [
-  { id: "u-1", kind: "user", name: "alice", badge: "human" },
-  { id: "u-2", kind: "user", name: "ingest-bot", badge: "service" },
+  { id: uuidFor("u-1"), kind: "user", name: "alice", badge: "human" },
+  { id: uuidFor("u-2"), kind: "user", name: "ingest-bot", badge: "service" },
 ];
 
 describe("RelatedList", () => {
@@ -15,7 +16,7 @@ describe("RelatedList", () => {
     expect(screen.getByText("ingest-bot")).toBeTruthy();
     fireEvent.click(screen.getByText("alice"));
     expect(onOpen).toHaveBeenCalledTimes(1);
-    expect(onOpen.mock.calls[0][0].id).toBe("u-1");
+    expect(onOpen.mock.calls[0][0].id).toBe(uuidFor("u-1"));
   });
 
   it("shows the empty text when there are no items", () => {
@@ -29,7 +30,7 @@ describe("RelatedList", () => {
     const removes = screen.getAllByLabelText("Remove");
     fireEvent.click(removes[0]);
     expect(onRemove).toHaveBeenCalledTimes(1);
-    expect(onRemove.mock.calls[0][0].id).toBe("u-1");
+    expect(onRemove.mock.calls[0][0].id).toBe(uuidFor("u-1"));
   });
 
   it("adds via the picker when add is present", () => {

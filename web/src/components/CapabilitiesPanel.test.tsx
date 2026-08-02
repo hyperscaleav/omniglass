@@ -6,6 +6,7 @@ import { componentCapabilitiesKey } from "../lib/component_capabilities";
 import { CAPABILITIES_KEY, type Capability } from "../lib/capabilities";
 import { PRODUCTS_KEY, type Product } from "../lib/products";
 import { ME_KEY, type Me } from "../lib/auth";
+import { uuidFor } from "../lib/testids";
 
 // The panel shows what a component provides, resolved: its product's capabilities,
 // plus what it adds, minus what it suppresses. The API returns the resolved set
@@ -26,10 +27,10 @@ const product: Product = {
   official: true,
 };
 const catalog: Capability[] = [
-  { id: "touch-panel", name: "touch-panel", display_name: "Touch panel", official: true },
-  { id: "speaker", name: "speaker", display_name: "Speaker", official: true },
-  { id: "microphone", name: "microphone", display_name: "Microphone", official: true },
-  { id: "camera", name: "camera", display_name: "Camera", official: true },
+  { id: uuidFor("touch-panel"), name: "touch-panel", display_name: "Touch panel", official: true },
+  { id: uuidFor("speaker"), name: "speaker", display_name: "Speaker", official: true },
+  { id: uuidFor("microphone"), name: "microphone", display_name: "Microphone", official: true },
+  { id: uuidFor("camera"), name: "camera", display_name: "Camera", official: true },
 ];
 
 const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };

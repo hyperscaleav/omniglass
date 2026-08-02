@@ -73,10 +73,12 @@ export default function Locations() {
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
   const locationTypes = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
 
-  // type id -> icon key, from the registry; drives each tree node's leading glyph.
+  // type name -> icon key, from the registry; drives each tree node's leading
+  // glyph. Keyed by the kebab name because that is what a location's
+  // location_type carries (ADR-0062: the uuid never leaves the registry row).
   const typeIcon = createMemo(() => {
     const m = new Map<string, string>();
-    for (const t of locationTypes.data ?? []) m.set(t.id, t.icon);
+    for (const t of locationTypes.data ?? []) m.set(t.name, t.icon);
     return m;
   });
 
@@ -230,13 +232,13 @@ export default function Locations() {
     // between the two is still caught server-side (validatePlacement uses the
     // final, possibly-also-patched type) and surfaces through saveErr below,
     // exactly like every other placement violation this slice.
-    const allowedParentTypes = () => locationTypes.data?.find((t) => t.id === n().raw.location_type)?.allowed_parent_types ?? [];
+    const allowedParentTypes = () => locationTypes.data?.find((t) => t.name === n().raw.location_type)?.allowed_parent_types ?? [];
     const parentCandidates = createMemo(() => {
       const allowed = allowedParentTypes();
       const pool = allowed.length === 0 ? (locations.data ?? []) : (locations.data ?? []).filter((l) => allowed.includes(l.location_type));
       return pool.map((l) => ({ id: l.name, value: l.name, label: entityLabel(l), parentId: l.parent, rank: TYPE_RANK[l.location_type] ?? 9 }));
     });
-    const parentTypeLabel = (id: string) => (id === ROOT_PLACEMENT ? "Root" : locationTypes.data?.find((t) => t.id === id)?.display_name ?? id);
+    const parentTypeLabel = (nm: string) => (nm === ROOT_PLACEMENT ? "Root" : locationTypes.data?.find((t) => t.name === nm)?.display_name ?? nm);
     const parentHint = () =>
       allowedParentTypes().length
         ? `Restricted to: ${allowedParentTypes().map(parentTypeLabel).join(", ")}. Moving back to root is not supported here.`
@@ -337,9 +339,9 @@ export default function Locations() {
                 "Location type",
                 <select class="select select-bordered w-full" value={type()} onChange={(e) => setType(e.currentTarget.value)}>
                   <option value="" disabled>Select a type…</option>
-                  <For each={locationTypes.data}>{(t) => <option value={t.id}>{t.display_name}</option>}</For>
+                  <For each={locationTypes.data}>{(t) => <option value={t.name}>{t.display_name}</option>}</For>
                 </select>,
-                "A location_type id.",
+                "A location_type name.",
               )}
               {ctx.field(
                 "Technical name",
@@ -395,7 +397,7 @@ export default function Locations() {
                   items={parentCandidates()}
                   value={parentName()}
                   onChange={setParentName}
-                  excludeSubtreeOf={n().raw.id}
+                  excludeSubtreeOf={n().raw.name}
                   rootLabel={parent() ? undefined : "Root (current)"}
                 />
               </div>
@@ -518,9 +520,9 @@ export default function Locations() {
               "Location type",
               <select class="select select-bordered w-full" value={type()} onChange={(e) => setType(e.currentTarget.value)}>
                 <option value="" disabled>Select a type…</option>
-                <For each={locationTypes.data}>{(t) => <option value={t.id}>{t.display_name}</option>}</For>
+                <For each={locationTypes.data}>{(t) => <option value={t.name}>{t.display_name}</option>}</For>
               </select>,
-              "A location_type id.",
+              "A location_type name.",
             )}
           </div>
         </div>

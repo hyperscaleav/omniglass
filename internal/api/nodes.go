@@ -50,7 +50,7 @@ type createNodeInput struct {
 	Body struct {
 		Name        string  `json:"name" minLength:"1" doc:"Globally unique node name (also its NATS subject token, so no dots or whitespace)"`
 		DisplayName string  `json:"display_name,omitempty" doc:"Operator label; falls back to the name when empty"`
-		Description string  `json:"description,omitempty"`
+		Description string  `json:"description,omitempty" doc:"Free-form operator notes about the node"`
 		Location    *string `json:"location,omitempty" doc:"Optional location the node sits in, by name or id (descriptive placement, not scope)"`
 	}
 }
@@ -60,8 +60,8 @@ type createNodeInput struct {
 type updateNodeInput struct {
 	Name string `path:"name"`
 	Body struct {
-		DisplayName *string `json:"display_name,omitempty"`
-		Description *string `json:"description,omitempty"`
+		DisplayName *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
+		Description *string `json:"description,omitempty" doc:"New free-form operator notes"`
 		Location    *string `json:"location,omitempty" doc:"Set the node's location by name or id, or \"\" to clear it"`
 	}
 }
@@ -75,8 +75,8 @@ type enrollOutput struct {
 
 type claimNodeInput struct {
 	Body struct {
-		Name  string `json:"name" minLength:"1"`
-		Token string `json:"token" minLength:"1"`
+		Name  string `json:"name" minLength:"1" doc:"The node name the enrollment was minted for"`
+		Token string `json:"token" minLength:"1" doc:"The one-time enrollment token from node create, exchanged here for the node's NATS credential"`
 	}
 }
 

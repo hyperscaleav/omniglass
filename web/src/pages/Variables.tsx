@@ -73,7 +73,7 @@ export default function Variables() {
         rowId: (v) => v.id,
         blades: { registry: { variable: variableBlade }, rootKind: "variable" },
         create: can(me.data, "variable", "create")
-          ? { label: "New variable", can: () => can(me.data, "variable", "create"), body: (ctx) => <CreateVariableForm onCreated={ctx.close} /> }
+          ? { label: "New variable", can: () => can(me.data, "variable", "create"), body: (ctx) => <CreateVariableForm onCreated={ctx.select} /> }
           : undefined,
       }}
     />
@@ -240,7 +240,7 @@ export function ValueInput(p: { valueType: ValueType; value: string; onInput: (v
 // CreateVariableForm: name the key, pick a value type and an owner scope, then
 // enter the value. The value is parsed to its type client-side and validated
 // again server-side.
-function CreateVariableForm(p: { onCreated: () => void }): JSX.Element {
+function CreateVariableForm(p: { onCreated: (v: Variable) => void }): JSX.Element {
   const qc = useQueryClient();
   const me = useMe();
   const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
@@ -296,7 +296,7 @@ function CreateVariableForm(p: { onCreated: () => void }): JSX.Element {
       return;
     }
     try {
-      await createVariable({
+      const created = await createVariable({
         name: name().trim(),
         value_type: valueType(),
         owner_kind: ownerKind(),
@@ -304,7 +304,7 @@ function CreateVariableForm(p: { onCreated: () => void }): JSX.Element {
         value: parsed,
       });
       await qc.invalidateQueries({ queryKey: VARIABLES_KEY });
-      p.onCreated();
+      p.onCreated(created);
     } catch (er) {
       setFormErr(describeError(er));
     } finally {

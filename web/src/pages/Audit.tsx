@@ -1,7 +1,9 @@
-import { Show, createSignal, onMount } from "solid-js";
+import { For, Show, createSignal, onMount, type JSX } from "solid-js";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Button from "../components/Button";
+import KVStacked from "../components/KVStacked";
 import { type AuditEvent, AUDIT_PAGE, auditFilterKeys, listAuditLog, actorLabel, accountableLabel } from "../lib/audit";
+import { diffFields, type DiffRow } from "../lib/auditdiff";
 
 // Audit: the read-only audit trail, now a config over the shared FlatList (the flat
 // sibling of the inventory TreeList, both wearing ListShell's chrome). Every
@@ -46,6 +48,75 @@ const columns: FlatColumn<AuditEvent>[] = [
   { key: "id", label: "Id", cell: (e) => <span class="font-data text-[11px] text-base-content/40">{e.resource_id || ""}</span> },
 ];
 
+// The state-to-style vocabulary for a diff row: an added field tints the After
+// cell, a removed one the Before cell, a changed one both; unchanged rows dim.
+const diffCellClass = (row: DiffRow, side: "before" | "after"): string => {
+  if (row.state === "same") return "text-base-content/45";
+  if (row.state === "changed") return side === "before" ? "bg-error/10 text-error" : "bg-success/10 text-success";
+  if (row.state === "added") return side === "after" ? "bg-success/10 text-success" : "text-base-content/30";
+  return side === "before" ? "bg-error/10 text-error" : "text-base-content/30";
+};
+
+// AuditDetail is the drawer body: who did what and when, then the field-level
+// before/after diff over the row images the write recorded. An auth event (no
+// images) says so instead of rendering an empty table; a create renders only
+// After values and a delete only Before, so the one-sided registry writes
+// (#228) still read honestly.
+function AuditDetail(p: { e: AuditEvent }): JSX.Element {
+  const e = p.e;
+  const rows = diffFields(e.old, e.new);
+  return (
+    <div class="flex flex-col gap-4">
+      <div class="grid grid-cols-2 gap-3 text-sm">
+        <KVStacked label="When" value={<span class="tnum text-xs">{when(e.ts)}</span>} />
+        <KVStacked
+          label="Who"
+          value={
+            <span class="text-sm">
+              <span class="font-data">{accountableLabel(e)}</span>
+              <Show when={e.real_actor}>
+                <span class="ml-1.5 badge badge-soft badge-warning badge-xs">as {actorLabel(e)}</span>
+              </Show>
+            </span>
+          }
+        />
+        <KVStacked label="Action" value={<span class={`badge badge-sm ${verbClass(e.verb)} font-data`}>{e.verb}</span>} />
+        <KVStacked label="Resource" value={<span class="font-data text-xs">{e.resource}{e.resource_id ? ` ${e.resource_id}` : ""}</span>} />
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <span class="eyebrow">Change</span>
+        <Show
+          when={rows.length}
+          fallback={<span class="text-sm text-base-content/50">This event recorded no row images (auth events and credential changes carry none).</span>}
+        >
+          <div class="overflow-x-auto rounded-box border border-base-300">
+            <table class="table table-xs">
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>Before</th>
+                  <th>After</th>
+                </tr>
+              </thead>
+              <tbody>
+                <For each={rows}>
+                  {(r) => (
+                    <tr>
+                      <td class="font-data text-xs">{r.key}</td>
+                      <td class={`font-data text-xs ${diffCellClass(r, "before")}`}>{r.before ?? "(none)"}</td>
+                      <td class={`font-data text-xs ${diffCellClass(r, "after")}`}>{r.after ?? "(none)"}</td>
+                    </tr>
+                  )}
+                </For>
+              </tbody>
+            </table>
+          </div>
+        </Show>
+      </div>
+    </div>
+  );
+}
+
 export default function Audit() {
   const [rows, setRows] = createSignal<AuditEvent[]>([]);
   const [error, setError] = createSignal<unknown>(null);
@@ -86,6 +157,10 @@ export default function Audit() {
         filterPlaceholder: "filter by who, action, resource, id",
         columns,
         empty: "No events yet.",
+        detail: (e) => ({
+          title: <span class="font-data text-sm">{e.verb} {e.resource}{e.resource_id ? ` ${e.resource_id}` : ""}</span>,
+          body: <AuditDetail e={e} />,
+        }),
         footer: ({ shown, total, filtering }) => (
           <>
             <span>

@@ -73,7 +73,7 @@ export default function Properties(): JSX.Element {
           rowId: (r) => r.name,
           blades: { registry: { property: propertyBlade }, rootKind: "property" },
           create: canCreate()
-            ? { label: "New property", can: canCreate, body: (ctx) => <CreatePropertyForm onCreated={ctx.close} /> }
+            ? { label: "New property", can: canCreate, body: (ctx) => <CreatePropertyForm onCreated={ctx.select} /> }
             : undefined,
         }}
       />
@@ -198,7 +198,7 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
 
 // CreatePropertyForm: register a custom property. Name and data type are required; kind
 // (observed metric/state/log) is optional, omitted for a declared attribute property.
-export function CreatePropertyForm(p: { onCreated: (name: string) => void }): JSX.Element {
+export function CreatePropertyForm(p: { onCreated: (r: PropertyRow) => void }): JSX.Element {
   const qc = useQueryClient();
   const [name, setName] = createSignal("");
   const [dataType, setDataType] = createSignal<PropertyDataType>("string");
@@ -221,7 +221,7 @@ export function CreatePropertyForm(p: { onCreated: (name: string) => void }): JS
     setBusy(true);
     setFormErr(null);
     try {
-      await createProperty({
+      const created = await createProperty({
         name: name().trim(),
         data_type: dataType(),
         display_name: displayName().trim() || undefined,
@@ -230,7 +230,7 @@ export function CreatePropertyForm(p: { onCreated: (name: string) => void }): JS
         kind: kind() || undefined,
       });
       await qc.invalidateQueries({ queryKey: PROPERTIES_KEY });
-      p.onCreated(name().trim());
+      p.onCreated(created);
     } catch (er) {
       setFormErr(describeError(er));
     } finally {

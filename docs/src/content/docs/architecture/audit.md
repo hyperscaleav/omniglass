@@ -12,7 +12,8 @@ The audit log is how an operator answers "who changed this, and to what?" withou
 :::note[Partial]
 Built today: the `audit_log` row written in the same transaction as every entity mutation, carrying the
 resolved actor, verb, resource, and `old -> new` diff; the secret-decrypt audit (distinct `reveal` and
-`copy` verbs); the auth-event lane; and the `GET /audit-log` read with the console Admin > Audit page.
+`copy` verbs); the auth-event lane; and the `GET /audit-log` read, which returns the `old`/`new` images,
+with the console Admin > Audit page rendering each row's field-level before/after diff in a drawer.
 Still `Design`: the read-audit toggle, retention partitioning, the backtest / reconcile consumers, and
 the alarm ack / snooze projection (no such surface exists yet). See
 [implementation status](/architecture/status/).
@@ -53,7 +54,12 @@ The read-audit granularity: per-resource opt-in versus a global verbosity settin
 The read surface is `GET /audit-log`, gated by the admin-sensitive `audit:read:admin` (which a two-token
 wildcard cannot reach, so only admin and owner see the security trail). It returns rows newest first,
 filterable by `resource` and `verb`, and pages backward with a `before` timestamp plus a `limit`
-(default 100, capped at 500). The console renders it as the Admin > Audit page.
+(default 100, capped at 500). Each event also carries the `old` and `new` row images the write
+recorded, completing the "and to what?" half of the question: a create has only `new`, a delete only
+`old`, an update both, and auth events neither. Redaction is owned by the write side (sealed secret
+material and credential hashes are never written into an image), so the read passes the images
+through verbatim. The console renders the trail as the Admin > Audit page, where a row opens into a
+drawer with the field-level before/after diff.
 
 Beside the in-transaction estate lane there is a **second write lane for auth events**. Login and logout
 run on read / no-transaction paths, so they emit through a standalone non-transactional seam

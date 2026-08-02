@@ -2,21 +2,29 @@ import { api } from "../api/client";
 
 // The products data layer: thin typed wrappers over the generated client for the
 // product catalog (the model a component is an instance of, e.g. "Crestron
-// TSW-1070"). A product is addressed by its id (a kebab id, the create-only
-// address); official (seed-owned) rows are read-only past creation, refused
-// server-side on update/delete. A product carries a kind
-// (device/app/service/vm), an optional vendor and driver, an optional parent
-// product, and a set of capability ids it exposes.
+// TSW-1070"). A product is addressed by its kebab name (ADR-0062: the uuid is
+// identity, the name is what an operator reads and types); official
+// (seed-owned) rows are read-only past creation, refused server-side on
+// update/delete. A product carries a kind (device/app/service/vm), an optional
+// vendor and driver, an optional parent product, and a set of capability names
+// it exposes.
 
 export type ProductKind = "device" | "app" | "service" | "vm";
 
+// References arrive in both forms (api/products.go): vendor/driver/
+// parent_product are the kebab handles an operator reads, vendor_id/driver_id/
+// parent_product_id the uuids they resolve to. capabilities is a list of
+// capability NAMES.
 export type Product = {
   id: string;
   name: string;
   display_name: string;
   kind: ProductKind;
+  vendor?: string;
   vendor_id?: string;
+  driver?: string;
   driver_id?: string;
+  parent_product?: string;
   parent_product_id?: string;
   capabilities: string[];
   official: boolean;

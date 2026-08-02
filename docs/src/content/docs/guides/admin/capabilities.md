@@ -7,8 +7,11 @@ description: "The Capabilities catalog: the vocabulary of what a component can d
 `*:read` floor) is the directory of **capabilities**: the flat vocabulary of what a component can
 do, on the same flat-registry pattern as [Types](/guides/admin/types/) and [Tags](/guides/admin/tags/).
 A capability is a plain name of a function (a microphone, a display, a camera), not a device and
-not a measurement. Each row shows the **id**, the **display name**, and its **origin**
-(**official**, seed-owned, or **custom**).
+not a measurement. Each row shows the **name** (the operator-facing kebab handle, for example
+`microphone`), the **display name**, and its **origin** (**official**, seed-owned, or
+**custom**). A capability also carries an `id`, a uuid minted by the database, the internal
+address the handle resolves to ([ADR-0062](/architecture/decisions/)); the handle is what you
+type and read.
 
 A capability is the hinge between two halves of the estate model. On one side, a
 [product](/guides/admin/products/) declares the capabilities its instances provide, and a
@@ -17,12 +20,12 @@ A capability is the hinge between two halves of the estate model. On one side, a
 of them, and a component may fill the role only if it provides every one. Naming a capability once is
 what makes those two sides line up.
 
-- **New capability** (with `capability:create`, an admin permission) opens a create drawer: name
-  its **id** (a short identifier, unique tenant-wide, e.g. `microphone`) and give it a **display
+- **New capability** (with `capability:create`, an admin permission) opens a create drawer: give
+  it a **name** (the kebab handle, unique tenant-wide, e.g. `microphone`) and a **display
   name**.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `capability:update`)
-  edits the display name; the id is fixed. **Delete** (with `capability:delete`) removes the row,
-  behind a confirm.
+  edits the display name; the uuid `id` is database-minted and never edited. **Delete** (with
+  `capability:delete`) removes the row, behind a confirm.
 - An **official** (seed-owned) row is always read-only: no Edit, no Delete, and the blade marks it
   "Seed-owned, read-only." Omniglass ships a starter set of official capabilities (Microphone,
   Speaker, Display, Flat Panel Display, Camera, Codec, Touch Panel), upserted idempotently at boot

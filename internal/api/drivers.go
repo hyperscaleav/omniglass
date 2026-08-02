@@ -37,16 +37,16 @@ type driverPathInput struct {
 type createDriverInput struct {
 	Body struct {
 		Name        string `json:"name" minLength:"1" doc:"The globally unique kebab handle; renameable"`
-		DisplayName string `json:"display_name" minLength:"1"`
-		Version     string `json:"version,omitempty"`
+		DisplayName string `json:"display_name" minLength:"1" doc:"What an operator reads in pickers and lists"`
+		Version     string `json:"version,omitempty" doc:"A free-form version string, e.g. 1.0.0"`
 	}
 }
 
 type updateDriverInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		DisplayName *string `json:"display_name,omitempty"`
-		Version     *string `json:"version,omitempty"`
+		DisplayName *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
+		Version     *string `json:"version,omitempty" doc:"A new version string, e.g. 1.0.1"`
 	}
 }
 

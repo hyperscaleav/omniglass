@@ -170,7 +170,7 @@ docs-shots-check:
 	@tmp=.docs-shots-tmp; mkdir -p $$tmp; \
 	  DOCS_SHOTS_OUT=$$tmp bash docs/screenshots/capture.sh && \
 	  node web/e2e/docs-shots-diff.mjs $$tmp docs/public/screenshots; \
-	  rc=$$?; rm -f $$tmp/*.png; rmdir $$tmp 2>/dev/null || true; exit $$rc
+	  rc=$$?; if [ $$rc -eq 0 ]; then rm -f $$tmp/*.png; rmdir $$tmp 2>/dev/null || true; fi; exit $$rc
 
 # Structural gate for the screenshots (no browser, fully deterministic): every
 # `screenshots` frontmatter entry has a committed PNG, every PNG is declared, and

@@ -10,6 +10,7 @@ import { STANDARDS_KEY, type Standard } from "../lib/standards";
 import { ownerPropertiesKey, type EffectiveProperty } from "../lib/owner_properties";
 import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY, entityTagsKey } from "../lib/tags";
+import { uuidFor } from "../lib/testids";
 
 // The Systems page on the shared TreeList in the create-as-route model: New routes
 // to /systems/create (a draft accordion), Save hands off to /systems/<id> in edit;
@@ -18,10 +19,10 @@ import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 // detail's Properties panel resolves. Data is seeded into the query cache so no
 // server is needed; `>` grants every permission.
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const sys: System = { id: "s-1", name: "boardroom", display_name: "Boardroom", standard_id: "meeting-room", member_count: 2, effective_tags: {} };
+const sys: System = { id: uuidFor("s-1"), name: "boardroom", display_name: "Boardroom", standard: "meeting-room", standard_id: uuidFor("std-meeting-room"), member_count: 2, effective_tags: {} };
 const standards: Standard[] = [
-  { id: "meeting-room", name: "meeting-room", display_name: "Meeting room", official: true },
-  { id: "huddle-space", name: "huddle-space", display_name: "Huddle space", official: false },
+  { id: uuidFor("meeting-room"), name: "meeting-room", display_name: "Meeting room", official: true },
+  { id: uuidFor("huddle-space"), name: "huddle-space", display_name: "Huddle space", official: false },
 ];
 // The standard's contract, resolved against the system: one inherited default and
 // one value the system sets directly with nothing declaring it.

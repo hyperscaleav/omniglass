@@ -75,7 +75,7 @@ type standardPathInput struct {
 type createStandardInput struct {
 	Body struct {
 		Name             string `json:"name" minLength:"1" doc:"The globally unique kebab handle; renameable"`
-		DisplayName      string `json:"display_name" minLength:"1"`
+		DisplayName      string `json:"display_name" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		ParentStandardID string `json:"parent_standard_id,omitempty" doc:"A standard this one is a variant of, by handle or uuid"`
 	}
 }
@@ -83,8 +83,8 @@ type createStandardInput struct {
 type updateStandardInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		DisplayName      *string `json:"display_name,omitempty"`
-		ParentStandardID *string `json:"parent_standard_id,omitempty"`
+		DisplayName      *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
+		ParentStandardID *string `json:"parent_standard_id,omitempty" doc:"A new variant parent, by handle or uuid"`
 	}
 }
 
@@ -99,8 +99,8 @@ type systemPathInput struct {
 type createSystemInput struct {
 	Body struct {
 		Name        string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Globally unique name (the address; lowercase letters, digits, hyphens)"`
-		DisplayName string  `json:"display_name,omitempty"`
-		StandardID  string  `json:"standard_id,omitempty" doc:"A standard id; omit for a one-off system that conforms to none"`
+		DisplayName string  `json:"display_name,omitempty" doc:"What an operator reads; the technical name is the address"`
+		StandardID  string  `json:"standard_id,omitempty" doc:"The standard it conforms to, by handle or uuid; omit for a one-off system"`
 		Parent      *string `json:"parent,omitempty" doc:"Parent system name; omit for a root system"`
 		Location    *string `json:"location,omitempty" doc:"Location name this system is placed at"`
 	}
@@ -110,8 +110,8 @@ type updateSystemInput struct {
 	Name string `path:"name"`
 	Body struct {
 		Name        *string `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"A new globally unique technical name (rename)"`
-		DisplayName *string `json:"display_name,omitempty"`
-		StandardID  *string `json:"standard_id,omitempty"`
+		DisplayName *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
+		StandardID  *string `json:"standard_id,omitempty" doc:"A new standard, by handle or uuid; \"\" clears it (a one-off system)"`
 		// Placement fields, house three-state (omitted unchanged, "" clears, name
 		// sets), passed straight through. Parent is a cycle-guarded, scope-injected
 		// reparent within the system tree.

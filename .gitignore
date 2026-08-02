@@ -60,3 +60,4 @@ coverage.txt
 .infra-build.log
 .server.log
 **/node_modules.broken.bak/
+node_modules/

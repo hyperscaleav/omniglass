@@ -120,8 +120,8 @@ Verifies a human's password and sets an httpOnly session cookie. Public; a bad c
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--password` | string | (none) |  |
-| `--username` | string | (none) |  |
+| `--password` | string | (none) | The account password; exchanged for a session cookie, never stored |
+| `--username` | string | (none) | The sign-in username |
 
 Example:
 
@@ -284,7 +284,7 @@ Creates a custom (non-official) capability. Gated by capability:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) |  |
+| `--display-name` | string | (none) | What an operator reads in pickers and lists |
 | `--name` | string | (none) | The globally unique kebab handle; renameable |
 
 Example:
@@ -353,7 +353,7 @@ Patches a custom capability's display_name. Official capabilities are read-only 
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) |  |
+| `--display-name` | string | (none) | A new operator-facing label |
 
 Example:
 
@@ -644,7 +644,7 @@ Creates a component, optionally under a parent (a root needs an all-scoped grant
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) |  |
+| `--display-name` | string | (none) | What an operator reads; the technical name is the address |
 | `--location` | string | (none) | Location name this component is placed at |
 | `--name` | string | (none) | Globally unique name (the address; lowercase letters, digits, hyphens) |
 | `--parent` | string | (none) | Parent component name; omit for a root component |
@@ -994,7 +994,7 @@ Patches a component's technical name, display_name, product, location, or parent
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) |  |
+| `--display-name` | string | (none) | A new operator-facing label |
 | `--location` | string | (none) | Relocates the component to this location name. An empty string clears its placement. |
 | `--name` | string | (none) | A new globally unique technical name (rename) |
 | `--parent` | string | (none) | Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component. |
@@ -1022,9 +1022,9 @@ Creates a custom (non-official) driver. Gated by driver:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) |  |
+| `--display-name` | string | (none) | What an operator reads in pickers and lists |
 | `--name` | string | (none) | The globally unique kebab handle; renameable |
-| `--version` | string | (none) |  |
+| `--version` | string | (none) | A free-form version string, e.g. 1.0.0 |
 
 Example:
 
@@ -1092,8 +1092,8 @@ Patches a custom driver's display_name or version. Official drivers are read-onl
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) |  |
-| `--version` | string | (none) |  |
+| `--display-name` | string | (none) | A new operator-facing label |
+| `--version` | string | (none) | A new version string, e.g. 1.0.1 |
 
 Example:
 
@@ -1437,8 +1437,8 @@ Creates a location, optionally under a parent (a root needs an all-scoped grant)
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) |  |
-| `--location-type` | string | (none) | A location_type id (campus, building, ...) |
+| `--display-name` | string | (none) | What an operator reads; the technical name is the address |
+| `--location-type` | string | (none) | The location_type, by name or uuid (campus, building, ...) |
 | `--name` | string | (none) | Globally unique name (the address; lowercase letters, digits, hyphens) |
 | `--parent` | string | (none) | Parent location name; omit for a root location |
 
@@ -1641,8 +1641,8 @@ Patches a location's display_name, location_type, or parent (a move). Gated by l
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) |  |
-| `--location-type` | string | (none) |  |
+| `--display-name` | string | (none) | A new operator-facing label |
+| `--location-type` | string | (none) | Re-types the location: a location_type, by name or uuid |
 | `--name` | string | (none) | A new globally unique technical name (rename) |
 | `--parent` | string | (none) | Re-parents the location (a tree move) to this location name, cycle-guarded and placement-validated. Moving to root is not supported via update this slice. |
 
@@ -1668,8 +1668,8 @@ Creates a custom (non-official) location_type. Gated by type:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allowed-parent-types` | string | (none) | location_type ids and/or the reserved root sentinel this type may be placed under; empty means unconstrained |
-| `--display-name` | string | (none) |  |
+| `--allowed-parent-types` | string | (none) | location_type names and/or the reserved root sentinel this type may be placed under; empty means unconstrained |
+| `--display-name` | string | (none) | What an operator reads in pickers and lists |
 | `--icon` | string | (none) | A glyph key; the console falls back to map-pin when empty |
 | `--name` | string | (none) | The globally unique kebab handle (e.g. wing); "root" is reserved |
 
@@ -1781,8 +1781,8 @@ Patches a custom location_type's display_name or icon. Official types are read-o
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--allowed-parent-types` | string | (none) | Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained |
-| `--display-name` | string | (none) |  |
-| `--icon` | string | (none) |  |
+| `--display-name` | string | (none) | A new operator-facing label |
+| `--icon` | string | (none) | A new glyph key; the console falls back to map-pin when empty |
 
 Example:
 
@@ -1814,8 +1814,8 @@ The node-facing exchange: a node presents its enrollment token and receives its 
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | string | (none) |  |
-| `--token` | string | (none) |  |
+| `--name` | string | (none) | The node name the enrollment was minted for |
+| `--token` | string | (none) | The one-time enrollment token from node create, exchanged here for the node's NATS credential |
 
 Example:
 
@@ -1835,7 +1835,7 @@ Registers an edge node server-side (day-one enrollment: create, then :enroll to 
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--description` | string | (none) |  |
+| `--description` | string | (none) | Free-form operator notes about the node |
 | `--display-name` | string | (none) | Operator label; falls back to the name when empty |
 | `--location` | string | (none) | Optional location the node sits in, by name or id (descriptive placement, not scope) |
 | `--name` | string | (none) | Globally unique node name (also its NATS subject token, so no dots or whitespace) |
@@ -2015,8 +2015,8 @@ Patches a node's display name, description, and location (a nil field is unchang
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--description` | string | (none) |  |
-| `--display-name` | string | (none) |  |
+| `--description` | string | (none) | New free-form operator notes |
+| `--display-name` | string | (none) | A new operator-facing label |
 | `--location` | string | (none) | Set the node's location by name or id, or "" to clear it |
 
 Example:
@@ -2077,8 +2077,8 @@ Creates a human principal with an optional initial password. Gated by principal:
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) |  |
-| `--email` | string | (none) |  |
+| `--display-name` | string | (none) | What an operator reads in lists; falls back to the username |
+| `--email` | string | (none) | Contact email for the account |
 | `--password` | string | (none) | Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in |
 | `--username` | string | (none) | Unique sign-in name (lowercase letters, digits, and . _ -) |
 
@@ -2403,8 +2403,8 @@ Creates a principal group. Gated by principal_group:create (all-scope). A duplic
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--description` | string | (none) |  |
-| `--display-name` | string | (none) |  |
+| `--description` | string | (none) | Free-form notes on what the group is for |
+| `--display-name` | string | (none) | What an operator reads in lists |
 | `--name` | string | (none) | Unique group name (lowercase letters, digits, and . _ -) |
 
 Example:
@@ -2614,10 +2614,10 @@ Creates a custom (non-official) product and sets its capabilities. Gated by prod
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--capabilities` | string | (none) |  |
-| `--display-name` | string | (none) |  |
-| `--driver-id` | string | (none) |  |
-| `--kind` | string | (none) |  |
+| `--capabilities` | string | (none) | Capability names the product provides (the default set its components inherit) |
+| `--display-name` | string | (none) | What an operator reads in pickers and lists |
+| `--driver-id` | string | (none) | The driver that talks to it, by handle or uuid |
+| `--kind` | string | (none) | What class of thing the product is |
 | `--name` | string | (none) | The globally unique kebab handle; renameable |
 | `--parent-product-id` | string | (none) | The parent product, by handle or uuid |
 | `--vendor-id` | string | (none) | The vendor, by handle or uuid |
@@ -2745,12 +2745,12 @@ Patches a custom product's display_name, vendor, driver, kind, or parent, and re
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--capabilities` | string | (none) |  |
-| `--display-name` | string | (none) |  |
-| `--driver-id` | string | (none) |  |
-| `--kind` | string | (none) |  |
-| `--parent-product-id` | string | (none) |  |
-| `--vendor-id` | string | (none) |  |
+| `--capabilities` | string | (none) | Replaces the capability-name set; omit to leave unchanged |
+| `--display-name` | string | (none) | A new operator-facing label |
+| `--driver-id` | string | (none) | A new driver, by handle or uuid |
+| `--kind` | string | (none) | A new product class |
+| `--parent-product-id` | string | (none) | A new parent product, by handle or uuid |
+| `--vendor-id` | string | (none) | A new vendor, by handle or uuid |
 
 Example:
 
@@ -3204,7 +3204,7 @@ Creates a custom (non-official) standard, optionally as a variant of another. Ga
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) |  |
+| `--display-name` | string | (none) | What an operator reads in pickers and lists |
 | `--name` | string | (none) | The globally unique kebab handle; renameable |
 | `--parent-standard-id` | string | (none) | A standard this one is a variant of, by handle or uuid |
 
@@ -3390,8 +3390,8 @@ Patches a custom standard's display_name or parent. Official standards are read-
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) |  |
-| `--parent-standard-id` | string | (none) |  |
+| `--display-name` | string | (none) | A new operator-facing label |
+| `--parent-standard-id` | string | (none) | A new variant parent, by handle or uuid |
 
 Example:
 
@@ -3435,11 +3435,11 @@ Creates a system, optionally under a parent (a root needs an all-scoped grant) a
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) |  |
+| `--display-name` | string | (none) | What an operator reads; the technical name is the address |
 | `--location` | string | (none) | Location name this system is placed at |
 | `--name` | string | (none) | Globally unique name (the address; lowercase letters, digits, hyphens) |
 | `--parent` | string | (none) | Parent system name; omit for a root system |
-| `--standard-id` | string | (none) | A standard id; omit for a one-off system that conforms to none |
+| `--standard-id` | string | (none) | The standard it conforms to, by handle or uuid; omit for a one-off system |
 
 Example:
 
@@ -3803,11 +3803,11 @@ Patches a system's display_name, standard, location, or parent. The classificati
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) |  |
+| `--display-name` | string | (none) | A new operator-facing label |
 | `--location` | string | (none) | Relocates the system to this location name. An empty string clears its placement. |
 | `--name` | string | (none) | A new globally unique technical name (rename) |
 | `--parent` | string | (none) | Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system. |
-| `--standard-id` | string | (none) |  |
+| `--standard-id` | string | (none) | A new standard, by handle or uuid; "" clears it (a one-off system) |
 
 Example:
 
@@ -4001,7 +4001,7 @@ Accepts samples and raw log lines for one owner and publishes them onto the inge
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--logs` | string | (none) | Raw untyped log lines. No registry gate |
-| `--owner` | string | (none) |  |
+| `--owner` | string | (none) | The entity every row in the batch lands under |
 | `--samples` | string | (none) | Registry-resolved observations. The registry decides which table each lands in |
 | `--source` | string | (none) | Who observed this batch (recorded as the provenance source on every row) |
 | `--ts` | string | (none) | Batch timestamp; a per-item timestamp overrides it |
@@ -4123,12 +4123,12 @@ Creates a custom (non-official) vendor. Gated by vendor:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) |  |
-| `--icon` | string | (none) |  |
-| `--kind` | string | (none) |  |
+| `--display-name` | string | (none) | What an operator reads in pickers and lists |
+| `--icon` | string | (none) | A glyph key, e.g. crestron-logo |
+| `--kind` | string | (none) | The role the organization plays |
 | `--name` | string | (none) | The globally unique kebab handle; renameable |
-| `--support-phone` | string | (none) |  |
-| `--website` | string | (none) |  |
+| `--support-phone` | string | (none) | The vendor's support line |
+| `--website` | string | (none) | The vendor's website (http or https) |
 
 Example:
 
@@ -4196,11 +4196,11 @@ Patches a custom vendor's display_name, kind, icon, support_phone, or website. O
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) |  |
-| `--icon` | string | (none) |  |
-| `--kind` | string | (none) |  |
-| `--support-phone` | string | (none) |  |
-| `--website` | string | (none) |  |
+| `--display-name` | string | (none) | A new operator-facing label |
+| `--icon` | string | (none) | A new glyph key |
+| `--kind` | string | (none) | A new organization role |
+| `--support-phone` | string | (none) | A new support line |
+| `--website` | string | (none) | A new website (http or https) |
 
 Example:
 

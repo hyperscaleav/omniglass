@@ -17,9 +17,10 @@ import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Drivers: the driver registry (the driver picker on the product form), on the
-// flat FlatList surface. A driver is addressed by its id (a kebab id,
-// create-only); official (seed-owned) rows are read-only, same as the Types
-// catalog's official rows: no Edit pencil, no Delete.
+// flat FlatList surface. A driver is addressed by its kebab name (ADR-0062:
+// the uuid is identity, the name is what an operator reads and types);
+// official (seed-owned) rows are read-only, same as the Types catalog's
+// official rows: no Edit pencil, no Delete.
 
 function officialBadge(official: boolean): JSX.Element {
   return official
@@ -28,7 +29,7 @@ function officialBadge(official: boolean): JSX.Element {
 }
 
 const columns: FlatColumn<Driver>[] = [
-  { key: "id", label: "Id", sortVal: (d) => d.id, cell: (d) => <span class="font-data font-semibold">{d.id}</span> },
+  { key: "name", label: "Name", sortVal: (d) => d.name, cell: (d) => <span class="font-data font-semibold">{d.name}</span> },
   { key: "display_name", label: "Display name", sortVal: (d) => d.display_name, cell: (d) => <span>{d.display_name}</span> },
   { key: "version", label: "Version", width: "110px", sortVal: (d) => d.version ?? "", cell: (d) => <span class="font-data text-xs text-base-content/60">{d.version || "—"}</span> },
   { key: "official", label: "Origin", width: "100px", sortVal: (d) => String(d.official), cell: (d) => officialBadge(d.official) },
@@ -39,7 +40,7 @@ export default function Drivers() {
   const drivers = useQuery(() => ({ queryKey: DRIVERS_KEY, queryFn: listDrivers }));
 
   const rows = createMemo(() =>
-    [...(drivers.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name) || a.id.localeCompare(b.id)),
+    [...(drivers.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name) || a.name.localeCompare(b.name)),
   );
 
   return (
@@ -50,17 +51,18 @@ export default function Drivers() {
         loading: () => drivers.isPending,
         error: () => drivers.error,
         filterKeys: [
-          { key: "name", type: "string", hint: "substring", get: (d) => `${d.id} ${d.display_name}`, values: () => [] },
+          { key: "name", type: "string", hint: "substring", get: (d) => `${d.name} ${d.display_name}`, values: () => [] },
           { key: "official", type: "string", hint: "exact", get: (d) => (d.official ? "official" : "custom"), values: () => ["official", "custom"] },
         ],
-        filterPlaceholder: "filter drivers by id, name…",
+        filterPlaceholder: "filter drivers by name…",
         columns,
         empty: "No drivers yet.",
-        // Address a row by id: the write paths key on id, and it is globally unique.
-        rowId: (d) => d.id,
+        // Address a row by its kebab name: globally unique, and what the API
+        // and CLI accept (the write paths resolve either form).
+        rowId: (d) => d.name,
         blades: { registry: { driver: driverBlade }, rootKind: "driver" },
         create: can(me.data, "driver", "create")
-          ? { label: "New driver", can: () => can(me.data, "driver", "create"), body: (ctx) => <CreateDriverForm onCreated={ctx.close} /> }
+          ? { label: "New driver", can: () => can(me.data, "driver", "create"), body: (ctx) => <CreateDriverForm onCreated={ctx.select} /> }
           : undefined,
       }}
     />
@@ -77,12 +79,12 @@ export const driverBlade: BladeDef = {
 
 function useDriverRow(id: string): () => Driver | undefined {
   const drivers = useQuery(() => ({ queryKey: DRIVERS_KEY, queryFn: listDrivers }));
-  return () => (drivers.data ?? []).find((d) => d.id === id);
+  return () => (drivers.data ?? []).find((d) => d.name === id);
 }
 
 function DriverBladeTitle(p: { id: string }): JSX.Element {
   const row = useDriverRow(p.id);
-  return <span class="font-data">{row()?.id ?? p.id}</span>;
+  return <span class="font-data">{row()?.name ?? p.id}</span>;
 }
 
 function DriverBladeBody(p: { id: string }): JSX.Element {
@@ -106,10 +108,10 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
   async function removeDriver() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete driver "${r.id}"?`)) return;
+    if (!confirm(`Delete driver "${r.name}"?`)) return;
     setErr(null);
     try {
-      await deleteDriver(r.id);
+      await deleteDriver(r.name);
       blades.close();
       await qc.invalidateQueries({ queryKey: DRIVERS_KEY });
     } catch (e) {
@@ -122,7 +124,7 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
     if (!r) return;
     setErr(null);
     try {
-      await updateDriver(r.id, {
+      await updateDriver(r.name, {
         display_name: displayName(),
         version: version(),
       });
@@ -150,8 +152,9 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <KVStacked label="Id" value={<span class="font-data">{r().id}</span>} />
+            <KVStacked label="Name" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Origin" value={officialBadge(r().official)} />
+            <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
           <div class="flex flex-col gap-1.5">
             <span class="eyebrow">Display name</span>
@@ -180,9 +183,9 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
   );
 }
 
-// CreateDriverForm: name the id (a kebab id, immutable after creation) and set
-// the display name; version is optional.
-export function CreateDriverForm(p: { onCreated: (id: string) => void }): JSX.Element {
+// CreateDriverForm: pick the kebab name (the operator-facing address; the uuid
+// is the database's to mint) and set the display name; version is optional.
+export function CreateDriverForm(p: { onCreated: (d: Driver) => void }): JSX.Element {
   const qc = useQueryClient();
   const [id, setId] = createSignal("");
   const [displayName, setDisplayName] = createSignal("");
@@ -202,13 +205,13 @@ export function CreateDriverForm(p: { onCreated: (id: string) => void }): JSX.El
     setBusy(true);
     setFormErr(null);
     try {
-      await createDriver({
+      const created = await createDriver({
         name: id().trim(),
         display_name: displayName().trim(),
         version: version().trim() || undefined,
       });
       await qc.invalidateQueries({ queryKey: DRIVERS_KEY });
-      p.onCreated(id().trim());
+      p.onCreated(created);
     } catch (er) {
       setFormErr(describeError(er));
     } finally {
@@ -221,7 +224,7 @@ export function CreateDriverForm(p: { onCreated: (id: string) => void }): JSX.El
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Id" hint="A kebab id, e.g. snmp-generic.">
+      <Field label="Name" hint="A kebab name, e.g. snmp-generic.">
         <input class="input input-bordered w-full font-data" value={id()} placeholder="snmp-generic" onInput={(e) => setId(e.currentTarget.value)} />
       </Field>
       <Field label="Display name">

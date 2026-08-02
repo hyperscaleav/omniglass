@@ -7,6 +7,7 @@ import { LOCATIONS_KEY, LOCATION_TYPES_KEY, type Location, type LocationType } f
 import { ownerPropertiesKey, type EffectiveProperty } from "../lib/owner_properties";
 import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY, entityTagsKey } from "../lib/tags";
+import { uuidFor } from "../lib/testids";
 
 // The Locations page on the shared TreeList in the create-as-route model: New routes
 // to /locations/create (a draft accordion), Save hands off to /locations/<name> in
@@ -16,12 +17,19 @@ import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 // Data is seeded into the query cache so no server is needed; `>` grants every
 // permission.
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const hq: Location = { id: "l-hq", name: "hq", display_name: "HQ", location_type: "campus", effective_tags: {} };
-const lab: Location = { id: "l-lab", name: "lab", display_name: "Lab", location_type: "campus", effective_tags: {} };
-const hqB1: Location = { id: "l-b1", name: "hq-b1", display_name: "HQ B1", location_type: "building", parent: "hq", effective_tags: {} };
+const hq: Location = { id: uuidFor("l-hq"), name: "hq", display_name: "HQ", location_type: "campus", effective_tags: {} };
+const lab: Location = { id: uuidFor("l-lab"), name: "lab", display_name: "Lab", location_type: "campus", effective_tags: {} };
+const hqB1: Location = { id: uuidFor("l-b1"), name: "hq-b1", display_name: "HQ B1", location_type: "building", parent: "hq", effective_tags: {} };
+// Registry rows carry a uuid id and the kebab handle in name (ADR-0062); the
+// server stores and compares the handle everywhere a location references its
+// type, so a fixture with the handle in the id slot would hide a uuid-vs-name
+// join bug (that is how #466 shipped).
 const types: LocationType[] = [
-  { id: "campus", display_name: "Campus", icon: "landmark", official: true, allowed_parent_types: ["root"] },
-  { id: "building", display_name: "Building", icon: "building", official: true, allowed_parent_types: ["root", "campus"] },
+  { id: uuidFor("lt-campus"), name: "campus", display_name: "Campus", icon: "landmark", official: true, allowed_parent_types: ["root"] },
+  { id: uuidFor("lt-building"), name: "building", display_name: "Building", icon: "building", official: true, allowed_parent_types: ["root", "campus"] },
+  // Unconstrained: any parent. Exists so the self-exclusion test below cannot
+  // lean on the allowed-parents filter to hide the node's own subtree.
+  { id: uuidFor("lt-area"), name: "area", display_name: "Area", icon: "map-pin", official: false, allowed_parent_types: [] },
 ];
 // The campus type's contract, resolved against hq: one inherited default, plus one
 // value hq sets that no contract declares.
@@ -125,7 +133,7 @@ describe("Locations create-as-route", () => {
     // is [root, campus], so the real campus HQ must be offered as a candidate even
     // though b2 is currently root, not filtered out just because there is no current
     // parent to compare against.
-    const b2: Location = { id: "l-b2", name: "b2", display_name: "B2", location_type: "building", effective_tags: {} };
+    const b2: Location = { id: uuidFor("l-b2"), name: "b2", display_name: "B2", location_type: "building", effective_tags: {} };
     mount("/locations/b2", [b2]);
     await waitFor(() => expect(screen.getByText("Technical name")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
@@ -170,6 +178,58 @@ describe("Locations create-as-route", () => {
     expect(await screen.findByText(/may not be placed under/)).toBeTruthy();
     // Still in edit mode: the picker (not the read-only fact) is still on screen.
     expect(screen.getByLabelText("Parent")).toBeTruthy();
+  });
+
+  it("excludes the node's own subtree by the name the candidates are keyed on, not the uuid (#466)", async () => {
+    // area is unconstrained, so the candidate pool is every location; only
+    // subtree exclusion can keep area1 and its child out. The candidates are
+    // keyed by name, so passing the location's uuid to the exclusion silently
+    // turns it off and offers the node itself (a cycle the server must refuse).
+    const area1: Location = { id: uuidFor("l-area1"), name: "area1", display_name: "Area 1", location_type: "area", effective_tags: {} };
+    const area2: Location = { id: uuidFor("l-area2"), name: "area2", display_name: "Area 2", location_type: "area", parent: "area1", effective_tags: {} };
+    mount("/locations/area1", [area1, area2]);
+    await waitFor(() => expect(screen.getByText("Technical name")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    const select = (await screen.findByLabelText("Parent")) as HTMLSelectElement;
+    const optionLabels = Array.from(select.options).map((o) => o.textContent?.trim());
+    expect(optionLabels).toContain("HQ");
+    expect(optionLabels.some((l) => l?.includes("Area 1"))).toBe(false);
+    expect(optionLabels.some((l) => l?.includes("Area 2"))).toBe(false);
+  });
+
+  it("posts the location_type handle, never the uuid, on create (#466)", async () => {
+    let captured: unknown;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes("/locations")) {
+        captured = JSON.parse(await req.clone().text());
+        return new Response(JSON.stringify({ id: uuidFor("l-annex"), name: "annex", location_type: "campus" }), { status: 201, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
+    });
+    mount("/locations/create");
+    await waitFor(() => expect(screen.getByText("New location")).toBeTruthy());
+    fireEvent.input(screen.getByPlaceholderText("Conf Room 301"), { target: { value: "Annex" } });
+    const typeSelect = screen.getByText("Select a type…").closest("select") as HTMLSelectElement;
+    // Pick the first real option (index 0 is the disabled placeholder); the
+    // assertion below pins what its selection posts.
+    fireEvent.change(typeSelect, { target: { value: typeSelect.options[1].value } });
+    fireEvent.click(screen.getByText("Create location"));
+    await waitFor(() => expect(captured).toBeTruthy());
+    // The server resolves the kebab handle (storage joins location_type by
+    // name); a uuid here inserts NULL and the create 500s on a live install.
+    expect((captured as { location_type: string }).location_type).toBe("campus");
+  });
+
+  it("a campus row wears its type's landmark glyph, not the unknown-type fallback (#466)", async () => {
+    mount("/locations");
+    await waitFor(() => expect(screen.getByText("HQ")).toBeTruthy());
+    const row = screen.getByText("HQ").closest("tr")!;
+    // The Landmark glyph's pediment path; MapPin (the unknown-type fallback)
+    // draws a teardrop instead. The icon map joins the node's type (a name) to
+    // the registry, so a uuid-keyed map degrades every row to the fallback.
+    expect(row.querySelector('path[d="m12 2 9 5H3z"]')).toBeTruthy();
+    expect(row.querySelector('path[d^="M20 10c0 6-8 12"]')).toBeNull();
   });
 
   it("edit mode exposes an editable technical name with a check button", async () => {
@@ -272,7 +332,7 @@ describe("Locations list identity", () => {
   });
 
   it("shows the key once when the entity has no display name", async () => {
-    const bare: Location = { id: "l-bare", name: "hq-boardroom-nvx-tx", location_type: "campus", effective_tags: {} };
+    const bare: Location = { id: uuidFor("l-bare"), name: "hq-boardroom-nvx-tx", location_type: "campus", effective_tags: {} };
     mount("/locations", [bare]);
     await waitFor(() => expect(screen.getByText("hq-boardroom-nvx-tx")).toBeTruthy());
     // Rendered once, not duplicated as label-plus-key: the label IS the key, and

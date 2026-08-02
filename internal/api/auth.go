@@ -429,8 +429,8 @@ func (a *authenticator) statusHandler(ctx context.Context, _ *struct{}) (*authSt
 // loginInput is the body of POST /api/v1/auth/login.
 type loginInput struct {
 	Body struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
+		Username string `json:"username" doc:"The sign-in username"`
+		Password string `json:"password" doc:"The account password; exchanged for a session cookie, never stored"`
 	}
 }
 

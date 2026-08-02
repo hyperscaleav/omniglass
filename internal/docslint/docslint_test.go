@@ -251,3 +251,14 @@ func TestADR0073EntriesFire(t *testing.T) {
 		})
 	}
 }
+
+// TestCLIReferenceDescriptions fails on any generated CLI flag published with
+// an empty Description cell (#472): the blank traces to a missing `doc:` tag
+// on the Huma input field, which this gate makes non-recurring.
+func TestCLIReferenceDescriptions(t *testing.T) {
+	findings, err := ScanCLIReference()
+	if err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	report(t, "cli-reference-descriptions", findings, true)
+}

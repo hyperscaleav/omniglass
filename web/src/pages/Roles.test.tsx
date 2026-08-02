@@ -3,6 +3,7 @@ import { render, fireEvent, screen } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Roles from "./Roles";
 import { ROLES_KEY, type Role } from "../lib/principals";
+import { uuidFor } from "../lib/testids";
 
 // The Roles page is a config over the shared FlatList (the same list shell and blade
 // detail as Users and Groups): a directory row per role, ordered by tier, and a
@@ -14,10 +15,10 @@ import { ROLES_KEY, type Role } from "../lib/principals";
 // must render it like any other capability.
 const UNIVERSE = ["audit:read:admin", "component:create", "component:delete", "component:read", "platform:update", "system:read"];
 const seed: Role[] = [
-  { id: "owner", name: "owner", official: true, display_name: "Owner", description: "Full control, break-glass.", permissions: [">"], inherits: [], effective_permissions: [">"], permission_universe: UNIVERSE, held: UNIVERSE },
-  { id: "admin", name: "admin", official: true, display_name: "Administrator", description: "Manage the estate.", permissions: ["audit:read:admin"], inherits: ["operator"], effective_permissions: ["*:read", "principal:*", "audit:read:admin"], permission_universe: UNIVERSE, held: UNIVERSE },
-  { id: "operator", name: "operator", official: true, display_name: "Operator", description: "Day-to-day ops.", permissions: ["component:create"], inherits: ["viewer"], effective_permissions: ["*:read", "component:create"], permission_universe: UNIVERSE, held: ["component:create", "component:read", "system:read"] },
-  { id: "viewer", name: "viewer", official: true, display_name: "Viewer", description: "Read only.", permissions: ["*:read"], inherits: [], effective_permissions: ["*:read"], permission_universe: UNIVERSE, held: ["component:read", "system:read"] },
+  { id: uuidFor("owner"), name: "owner", official: true, display_name: "Owner", description: "Full control, break-glass.", permissions: [">"], inherits: [], effective_permissions: [">"], permission_universe: UNIVERSE, held: UNIVERSE },
+  { id: uuidFor("admin"), name: "admin", official: true, display_name: "Administrator", description: "Manage the estate.", permissions: ["audit:read:admin"], inherits: ["operator"], effective_permissions: ["*:read", "principal:*", "audit:read:admin"], permission_universe: UNIVERSE, held: UNIVERSE },
+  { id: uuidFor("operator"), name: "operator", official: true, display_name: "Operator", description: "Day-to-day ops.", permissions: ["component:create"], inherits: ["viewer"], effective_permissions: ["*:read", "component:create"], permission_universe: UNIVERSE, held: ["component:create", "component:read", "system:read"] },
+  { id: uuidFor("viewer"), name: "viewer", official: true, display_name: "Viewer", description: "Read only.", permissions: ["*:read"], inherits: [], effective_permissions: ["*:read"], permission_universe: UNIVERSE, held: ["component:read", "system:read"] },
 ];
 
 function mount() {

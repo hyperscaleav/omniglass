@@ -6,6 +6,7 @@ import Users from "./Users";
 import { PRINCIPALS_KEY, ROLES_KEY, type Principal } from "../lib/principals";
 import { GROUPS_KEY } from "../lib/groups";
 import { ME_KEY, type Me } from "../lib/auth";
+import { uuidFor } from "../lib/testids";
 
 // The Users page is a config over the shared FlatList: a directory row per
 // principal, a row opening the detail blade (facts, the groups it belongs to, grants,
@@ -13,7 +14,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 // seeded into the query cache so no server is needed; `>` grants the caller every
 // permission, so every gated affordance is present.
 const seed: Principal[] = [
-  { id: "u-alice", kind: "human", active: true, human: { username: "alice", email: "alice@example.com", display_name: "Alice Ng" }, grants: [{ id: "g1", role: "admin", scope_kind: "all" }], groups: [{ id: "g-hd", name: "Help Desk" }] },
+  { id: uuidFor("u-alice"), kind: "human", active: true, human: { username: "alice", email: "alice@example.com", display_name: "Alice Ng" }, grants: [{ id: uuidFor("g1"), role: "admin", scope_kind: "all" }], groups: [{ id: uuidFor("g-hd"), name: "Help Desk" }] },
   { id: "u-svc", kind: "service", active: true, service: { label: "ingest-bot" }, grants: [] },
   { id: "u-bob", kind: "human", active: false, human: { username: "bob" }, grants: [] },
 ];
@@ -34,7 +35,7 @@ function mount() {
   qc.setQueryData(["systems"], []);
   qc.setQueryData(["components"], []);
   // The group a user drills into (its blade self-fetches these by id).
-  qc.setQueryData([...GROUPS_KEY, "g-hd"], { id: "g-hd", name: "help-desk", display_name: "Help Desk" });
+  qc.setQueryData([...GROUPS_KEY, "g-hd"], { id: uuidFor("g-hd"), name: "help-desk", display_name: "Help Desk" });
   qc.setQueryData([...GROUPS_KEY, "g-hd", "members"], []);
   qc.setQueryData([...GROUPS_KEY, "g-hd", "grants"], []);
   // A Router wraps the page so its router hooks (the ?u= deep-link uses
@@ -217,7 +218,7 @@ describe("Users page", () => {
     // Clicking one confirms, then posts to :revokeAll with the chosen purpose.
     fireEvent.click(within(blade).getByText("Revoke all tokens"));
     await waitFor(() => expect(calls.length).toBe(1));
-    expect(calls[0].url).toContain("/principals/u-alice/sessions:revokeAll");
+    expect(calls[0].url).toContain(`/principals/${uuidFor("u-alice")}/sessions:revokeAll`);
     expect(calls[0].method).toBe("POST");
     expect(calls[0].body).toEqual({ purpose: "token" });
   });
@@ -434,7 +435,7 @@ describe("Users page", () => {
   });
 
   it("does not offer Reset password on your own blade (use your profile)", async () => {
-    const meAlice: Me = { principal: { id: "u-alice", kind: "human" }, human: { username: "alice" }, permissions: [">"], grants: [] };
+    const meAlice: Me = { principal: { id: uuidFor("u-alice"), kind: "human" }, human: { username: "alice" }, permissions: [">"], grants: [] };
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
     qc.setQueryData([...PRINCIPALS_KEY, false], seed);
     for (const pr of seed) qc.setQueryData([...PRINCIPALS_KEY, pr.id], pr);

@@ -85,7 +85,7 @@ export default function Secrets() {
         rowId: (s) => s.id,
         blades: { registry: { secret: secretBlade }, rootKind: "secret" },
         create: can(me.data, "secret", "create")
-          ? { label: "New secret", can: () => can(me.data, "secret", "create"), body: (ctx) => <CreateSecretForm onCreated={ctx.close} /> }
+          ? { label: "New secret", can: () => can(me.data, "secret", "create"), body: (ctx) => <CreateSecretForm onCreated={ctx.select} /> }
           : undefined,
       }}
     />
@@ -228,7 +228,7 @@ function SecretBladeBody(p: { id: string }): JSX.Element {
 
 // CreateSecretForm: pick a type and a scope, then fill the type's operator
 // fields. Secret fields use a password input; the values are sealed server-side.
-function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
+function CreateSecretForm(p: { onCreated: (s: Secret) => void }): JSX.Element {
   const qc = useQueryClient();
   const me = useMe();
   const types = useQuery(() => ({ queryKey: SECRET_TYPES_KEY, queryFn: listSecretTypes }));
@@ -255,7 +255,8 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
     if (!ownerKinds().includes(ownerKind())) setOwnerKind(ownerKinds()[0]);
   });
 
-  const shape = createMemo(() => (types.data ?? []).find((t) => t.id === typeId()));
+  // typeId holds the kebab handle (ADR-0062: the name is the address the API resolves).
+  const shape = createMemo(() => (types.data ?? []).find((t) => t.name === typeId()));
   // The fields the operator fills (lifecycle-origin fields are set by the secret's
   // own machinery, never at creation).
   const operatorFields = createMemo(() => (shape()?.fields ?? []).filter((f) => f.origin !== "lifecycle"));
@@ -282,7 +283,7 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
     setBusy(true);
     setFormErr(null);
     try {
-      await createSecret({
+      const created = await createSecret({
         name: name().trim(),
         secret_type: typeId(),
         owner_kind: ownerKind(),
@@ -290,7 +291,7 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
         fields: fields(),
       });
       await qc.invalidateQueries({ queryKey: SECRETS_KEY });
-      p.onCreated();
+      p.onCreated(created);
     } catch (er) {
       setFormErr(describeError(er));
     } finally {
@@ -309,7 +310,7 @@ function CreateSecretForm(p: { onCreated: () => void }): JSX.Element {
       <FieldRow label="Type">
         <select class="select select-bordered w-full" value={typeId()} onChange={(e) => { setTypeId(e.currentTarget.value); setFields({}); }}>
           <option value="" disabled>Choose a type…</option>
-          <For each={types.data}>{(t) => <option value={t.id}>{t.display_name}</option>}</For>
+          <For each={types.data}>{(t) => <option value={t.name}>{t.display_name}</option>}</For>
         </select>
       </FieldRow>
       <div class="grid grid-cols-2 gap-3">
