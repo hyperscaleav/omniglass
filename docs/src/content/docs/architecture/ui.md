@@ -105,8 +105,7 @@ rules, config, groups, schedules, severity levels, and the IAM resources). **Typ
 first of these to span several registries rather than one per primitive: a segmented tab per
 kind (location and secret; the system and component kinds moved to Standards and Products), each
 tab its own directory over that registry, CRUD on the location kind, and a read-only view of
-secret ([implementation
-status](/architecture/status/#build-progress)). Editing a setting is editing
+secret ([build log](/architecture/build-log/)). Editing a setting is editing
 **[config](/architecture/variables/)**, an audited mutation, not a separate prop store
 ([audit](/architecture/audit/)). The standout is the **rule-authoring
 page**:

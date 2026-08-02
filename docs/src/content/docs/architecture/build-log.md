@@ -1,0 +1,2238 @@
+---
+title: Build log
+description: "The slice-by-slice build history: one entry per merged vertical slice, oldest first."
+---
+
+Each entry below is one merged vertical slice, oldest first, logged as it landed. The live
+map of what is built sits on [implementation status](/architecture/status/); this page is
+the history behind it. Entries are append-only and quote the vocabulary of their day, so
+retired terms appear here exactly as they shipped.
+
+The code is built one **vertical slice per PR**, each a thin cut through the whole stack rather than a
+horizontal layer. Slices are logged here as they land; a page's badge only flips once *all* of its
+capabilities ship, so an early slice can prove a seam without moving any page off `Design`.
+
+- **Slice 1: the walking skeleton.** The single binary boots in two run modes. `omniglass migrate`
+  applies an embedded [dbmate](/architecture/storage/) migration (pure DDL, run-once, idempotent) against
+  a BYO Postgres, and `omniglass server` serves `GET /api/v1/healthz`, which pings the database through
+  the [Storage Gateway](/architecture/storage/) seam (the only DB path, an interface from day one) and
+  reports `{status, db}`. The [HTTP API](/architecture/api/) is Huma over chi; the OpenAPI 3.1 document
+  is generated from the Go structs (`make gen`), the source the typed clients are generated from in later
+  slices. Proven by a testcontainer integration test (migrate applies clean, the gateway ping succeeds,
+  healthz returns db ok) and an end-to-end test that builds and runs the real binary. Deferred to later
+  slices: messaging (NATS / JetStream), the worker and outbox, [identity and access](/architecture/identity-access/)
+  (Slice 2), the [collection](/architecture/collection/) engine, and the rest of the generation pipeline.
+- **Slice 2: the auth and gateway foundation.** The [identity and access](/architecture/identity-access/)
+  schema (principal with per-kind human and service, credential, role, principal_grant, and audit_log;
+  uuidv7 keys), the four official roles seeded idempotently at boot, and `omniglass bootstrap <username>`,
+  which creates the first owner (an `owner@all` grant plus a bearer credential) directly and idempotently.
+  A bearer token resolves through the [Storage Gateway](/architecture/storage/) to its principal and
+  grants, which flatten through the role index (inheritance, wildcards, the `:read` floor) into a
+  capability set. Two seams every later route reuses: the **capability** fast-reject (401 unauthenticated,
+  403 missing capability) and `GET /api/v1/auth/me` (principal, permissions, grants). `GET /api/v1/roles`
+  is gated by `role:read`. Proven by testcontainer integration and end-to-end tests (bootstrap
+  idempotency, the 401 and 403 paths, the auth/me contract) plus pure unit tests of the capability logic.
+  Deliberate thin cuts this slice: bearer-token auth only, and scope resolves `owner@all` to all (the
+  per-action `visible_set` resolver lands when there are entities to scope). Deferred: password and OIDC
+  auth, the first-class agent principal, and CDC-driven cache invalidation of the role index.
+- **Slice 3: locations and the per-action scope resolver.** The first scoped [core entity](/architecture/core-entities/),
+  and where the [ABAC scope](/architecture/identity-access/) deferred from Slice 2 lands. The `location_type`
+  registry (the only shape-definer, since a location has no template) seeds the four official types at boot,
+  ranked (campus/building/floor/room, spaced by ten); `location` is a name-addressable, variable-depth tree
+  (`parent_id`) whose type is a foreign key. `POST/GET/PATCH/DELETE/list /api/v1/locations` each declare a
+  `location:<action>` capability and resolve the caller's per-action `visible_set` from their grants and the
+  role index, which the [Storage Gateway](/architecture/storage/) expands (a recursive subtree walk) into the
+  row filter and applies on every query, writing the `audit_log` row in the same transaction. The over-permit
+  fix is real: only the grants whose role carries the action contribute scope, so a read-anywhere principal
+  with a narrow write grant cannot write outside it. The three-way status split holds: out of read scope is a
+  non-disclosing 404, readable-but-out-of-action-scope is 403, and a delete is refused (409) while the location
+  still has children. The `location_type` registry that classifies a location is itself readable at `GET /api/v1/types/location` (ranked, gated by `location:read`), which the operator console type picker lists. Proven by a pure resolver unit suite, a testcontainer integration test of the gateway
+  split and audit, and an end-to-end HTTP test (scoped subtree listing, the 404, the capability 403, full owner
+  CRUD). Deliberate thin cuts: scope kinds resolved are `all` and `location` only; the `location_type` registry
+  seeds official rows only; `rank` orders and signals hierarchy but does not constrain nesting; update patches
+  `display_name` and `location_type` (rename and reparent deferred); occupancy counts child locations only
+  (placed systems and components join when they land). Deferred: system and component entities (Slice 4),
+  group and dynamic-group scope (Slice 5), operator-defined location types via the namespace shadow, hard
+  containment rules, and any `LocationTemplate`.
+- **Slice 3a: the generated CLI.** The second stage of the [generation pipeline](/contributing/api-first/)
+  lands: `make gen` now runs `cmd/cligen`, which reads the committed `api/openapi.json` and emits the cobra
+  command tree (`internal/cli/api_gen.go`, committed and reviewed like the spec). One command per operation,
+  derived from the AIP path and method: `omniglass location list/get/create/update/delete`, `role list`,
+  `auth me`, `healthz`; path parameters are positional args, the request body becomes `--flags`, and `--help`
+  plus the example come from the operation's summary and description. A `:verb` custom method maps to
+  `<resource> <verb> <id>` generically, so future custom methods surface with no generator change. The
+  generated tree composes with the hand-written commands (the `server`/`migrate` run modes and the trusted
+  `bootstrap` lane) on one root through a stable seam (`internal/cli/api_hooks.go`: the JSON-over-HTTP client
+  and the shared `--server`/`--token` flags), so regeneration never touches a hand-written command. The CLI is
+  a client of the API like any other: it carries a bearer token and the server enforces the same capability
+  and scope. Proven by an end-to-end test that builds the real binary, bootstraps an owner with the
+  hand-written command, and drives the generated location commands against a live server (create, scoped list,
+  get, a non-disclosing 404 as a non-zero exit, delete, and `--help`). Deliberate thin cuts: JSON output only
+  (no table rendering), and a generic client rather than a per-type typed one. Deferred: the typed SPA client
+  and UI (Slice 3b), shell completion, multi-server contexts, and the YAML JSONSchema target.
+- **Slice 3b: the operator console.** The last stage of the [generation pipeline](/contributing/api-first/)
+  and the first browser surface: a SolidJS SPA (Vite, daisyUI 5 on Tailwind 4, `@solidjs/router`,
+  `@tanstack/solid-query`, `openapi-fetch`) `go:embed`'d into the binary and served under `/web`. `make gen`
+  now also emits the **typed SPA client** (`openapi-typescript` to `web/src/api/schema.gen.ts`), so the
+  console cannot drift from the API. The embed uses the build-tag-with-fallback pattern (`internal/webui`): a
+  bare `go build`/`go test` needs no `dist/` and serves a build-the-console placeholder, while `make build-web`
+  runs the Vite build and compiles with `-tags web` to embed the real shell. The visual system is the
+  "Omniglass Console" design ported faithfully (the `theme.css` tokens and component classes, the nav rail,
+  top bar, density/theme tweaks, and Home). **Locations is the first live view**: list, detail, and create
+  through the typed client, gated by a bearer-token login and the AuthGuard; the other nav sections render
+  honest stubs until their backends land. Proven by `internal/webui` unit tests (the SPA-fallback routing
+  against a fake FS, and the real embed under `-tags web`), an API mount test (`/web` serves the shell and the
+  bare `/web` redirects), and a vitest suite over the locations data layer. Deliberate thin cuts: only
+  locations is wired live; styling is daisyUI (two brand themes via the plugin) with Kobalte deferred until the
+  first interactive widget needs it; auth is bearer-token paste, not a full login. Deferred: the mock-data screens
+  (alarms, systems, components, dashboards) as their backends land, HTTP/2 (h2c) and the SSE live relay, and
+  full auth UX.
+- **Slice 4a: the system tier.** The second scoped [core entity](/architecture/core-entities/): a `system_type`
+  registry (seeded official, ranked, like `location_type`) and `system` as a name-addressable, variable-depth
+  tree (`parent_id` subsystems), optionally located at a location (`location_id`) and classified by its type.
+  Full scoped CRUD (`POST/GET/PATCH/DELETE/list /api/v1/systems`), gated by `system:<action>`, with the same
+  per-action `visible_set`, three-way 404/403 split, and in-transaction audit as locations. The scoped-tree
+  recursive walk is now a **shared primitive** (`internal/storage/scopetree.go`): locations were refactored
+  onto it and systems consume it, so the over-permit-safe subtree filter is written once. Proven by the pure
+  resolver unit cases for the `system` kind, a testcontainer integration test (subtree scope, the 404/403
+  split, occupancy, FK faults, located-at, audit), and an end-to-end HTTP test plus the generated
+  `omniglass system` CLI. Deliberate thin cuts: each entity is scoped by its **own** subtree (the cross-tier
+  cascade, a location scope also covering its systems, is a later slice); reparent and located-at editing are
+  deferred (create-time only). Deferred: components (Slice 4b), the cascade, templates, datapoints, and the
+  systems UI (console section stays a stub for now).
+- **Slice 4b: the component tier, and a generic scoped-CRUD primitive.** The estate is complete: `component`
+  (the leaf) joins locations and systems, with a `component_type` registry and a tree that belongs to a
+  primary `system_id` and is located at a `location_id`. The per-entity boilerplate is now a **shared
+  generic** (`internal/storage/scopedcrud.go`): the read, resolve, and delete paths (list/get/resolve-for-action/
+  delete-with-occupancy/by-name, all scope-aware and audited) are written once over a `scopedConfig[T]`, and
+  locations and systems were refactored onto it; each entity keeps only its own create/update (which differ by
+  the foreign keys they resolve). So a new scoped entity is a registry, a thin create/update, and a route file,
+  not a mirrored copy. And the [authorization conformance suite](/architecture/identity-access/) made adding
+  component **one registry line**: the full security matrix (capability 403, the over-permit scope 403, the
+  non-disclosing 404, in-scope success) and the no-unguarded-route guard now cover all three entities
+  automatically. Proven by the pure resolver `component` case, a testcontainer integration test (subtree scope,
+  the split, occupancy, belongs-to + located-at FK resolution, faults, audit), the generic authz conformance
+  over location + system + component, and the generated `omniglass component` CLI. Thin cuts as the other
+  tiers: own-subtree scope (no cross-tier cascade), reparent/rebind/relocate deferred, components UI deferred.
+- **Identity slice 1: password auth and the session cookie.** Humans now sign in to the console with a
+  username and password, the local-password method the [identity model](/architecture/identity-access/)
+  designs: a `password` credential (argon2id, PHC-encoded, one per principal). `POST /api/v1/auth/login`
+  verifies it and sets an httpOnly, `SameSite` session cookie, so the console no longer holds a token
+  (services and the CLI still send a bearer header); `POST /api/v1/auth/logout` revokes the session and
+  clears the cookie, and
+  the authn middleware accepts either. `omniglass bootstrap --password` sets the first owner's password.
+  Proven by argon2 unit tests, a storage round-trip, a real-binary login integration test, and a browser
+  e2e that signs in through the form. Thin cuts: self profile edit and change-password (slice 2), admin
+  user CRUD and role assignment (slice 3); email invite and forgot-password are later.
+- **Identity slice 2: the self-service profile.** A signed-in operator manages their own account, whatever
+  their role: `PATCH /api/v1/auth/me` edits their own display name (email stays administrator-set), and
+  `POST /api/v1/auth/me:changePassword` (the first AIP `:verb` custom method on the surface) verifies the
+  current password and sets a new one, reusing the slice-1 argon2 primitive. Both are authn-only and
+  self-scoped (they touch only the caller's own principal), so they join the small ungated allow-list
+  alongside `GET /api/v1/auth/me` rather than carrying a
+  capability. The console gains a **Your profile** page (profile form, change-password form, and a read-only
+  Access panel that teaches the principal, grants, and permissions it operates on); the CLI gains
+  `auth update-profile` and `auth change-password` from the generator. Proven by a storage round-trip, a
+  real-binary integration test (wrong current password 403, short new 422, rotation, self-scope), and the
+  client hook units. Thin cut: changing a password does not revoke existing sessions (a later hardening);
+  admin user CRUD and role assignment are slice 3.
+- **Identity slice 3a: the admin principal directory.** The first surface to exercise the already-seeded
+  `principal:*` capability: `GET /api/v1/principals` (with a `kind` filter) and `GET /api/v1/principals/{id}`
+  list and read every principal with its grants, and `POST /api/v1/principals` creates a human with an
+  optional initial password (argon2id, reusing the slice-1 credential; no new migration). All three are gated
+  by a `principal` capability that resolves **only at all-scope**: a principal is not a scope-tree entity, so
+  a location or system grant confers nothing and the gateway answers a non-all scope with 403, proven both
+  ways. Responses carry credential-free profiles and grants, so no secret ever leaves the API. The console
+  `/users` stub becomes a real **Users** directory (grid, detail panel, and a create form); the CLI gains
+  `principal list` / `get` / `create`. Proven by a storage round-trip, a real-binary integration test
+  (all-scope allow, scoped-deny 403, duplicate 409, short-password 422, secret redaction, created-human
+  login), the route-gating guard, and the client data-layer units. Thin cuts: no `created_at` column in the
+  directory yet, and create is human-only. Deferred: update / disable / delete a principal, role assignment,
+  the owner-invariant trigger, and service-account and credential management.
+- **Identity slice 3b: admin update a principal.** `PATCH /api/v1/principals/{id}` edits a human's display
+  name, email, and **username**, gated by `principal:update` (all-scope). Renaming is safe by construction:
+  nothing keys on the username (credentials and grants reference the `principal.id` uuid), so a rename
+  re-homes the login rather than breaking it. A non-human target is 422, a clash 409, an unknown id 404, a
+  location-scoped admin 403. The console Users detail panel gains an **Edit** form; the CLI gains
+  `principal update`. Proven by a storage round-trip (the rename re-homes authentication), a real-binary
+  integration test (allow, scoped-deny 403, 409, 404, 422), and the client unit. Deferred: disable / delete,
+  role assignment, and editing a service account's label.
+- **Identity slice 3c: role assignment and the owner invariant.** `POST /api/v1/principals/{id}/grants`
+  assigns a role at a scope and `DELETE /api/v1/principals/{id}/grants/{grantId}` revokes one, gated by
+  `principal_grant:create` / `:delete` (all-scope). This is how a fresh user gets permissions. The
+  **owner-invariant trigger** (ADR-0006, now resolved) lands here: a `DEFERRABLE INITIALLY DEFERRED` Postgres
+  constraint trigger refuses to leave zero `owner @ all` grants at `COMMIT`, so revoking the last owner is a
+  409 while a one-transaction owner swap still passes (mapped from the custom SQLSTATE `OG001` to
+  `ErrLastOwner`). Bad inputs are caught: duplicate 409, unknown role 422, a scoped grant with no id 422,
+  unknown grant 404. The console detail panel gains a grant chip **x** (revoke) and an **add-grant** form
+  (role picker, scope kind, scope id); the CLI gains `grant create` / `grant delete`. Proven by a migration
+  round-trip, a storage test (grant, revoke, the last-owner refusal, the swap), a real-binary integration
+  test, and the client units. Deferred: disable / delete a principal, group grants, and editing a grant in
+  place (revoke and re-grant instead).
+- **Identity slice 3d: disable and enable a principal.** `POST /api/v1/principals/{id}:disable` and
+  `:enable` (AIP custom methods, gated `principal:update`, all-scope) soft-disable an account: a new
+  `active` flag on `principal`, and `AuthenticateBearer` / `AuthenticatePassword` refuse a disabled
+  principal, so it can neither sign in nor use a token. Its rows (and the audit trail that references it)
+  are kept, which is why the model is disable, not delete: `audit_log` references the principal, so an
+  actor that has acted cannot be removed. A **last-active-owner guard** refuses to disable the final active
+  `owner @ all` (409), mirroring the grant trigger for the active flag. The console shows an **inactive**
+  badge and a **Disable / Enable** toggle; the CLI gains `principal disable` / `enable`. Proven by a
+  migration round-trip, a storage test (both auth paths refused, enable restores, last-owner refusal, the
+  swap), and a real-binary integration test. Deferred: hard delete (would need an audit-actor
+  `on delete set null`, a separate decision) and bulk operations.
+- **Identity slice 3e: the grant builder (console).** A UI-only refinement of slice 3c: the user card's
+  three stacked selects become a **filter-bar-style scope editor**. A keyboard-staged combobox (type a
+  role, Tab/Enter to the scope kind, then the entity as an indented tree) commits each grant as a chip,
+  and the whole set of changes is staged locally and applied only on **Save** (stage, preview, save), so
+  there are no accidental or unclear edits: removing an existing grant marks it (dimmed, undoable) instead
+  of firing a live `DELETE`, and a pending-diff preview shows exactly what Save will grant and revoke. No
+  new API: it drives the slice-3c `POST` / `DELETE` grant routes, applying adds before removes so an owner
+  swap never trips the last-owner guard mid-batch. The staging core (draft, per-chip state, add/remove
+  diff, stage validation) is a pure unit-tested module (`lib/grantdraft`); the `GrantBuilder` component
+  takes its roles, entity trees, and save mutation as props, proven by a component test that drives the
+  keyboard pipeline and asserts the saved diff. Deferred: previewing a grant's *effective access* across
+  the scope subtree (#89) and group grants.
+- **Console: unified button vocabulary.** Buttons across the console moved from ad-hoc daisyUI classes
+  (`btn-primary`, `btn-ghost text-error`, and an inconsistent disable/edit pairing) to a small set of
+  **semantic intent classes** defined in `app.css` (`btn-action`, `btn-quiet`, `btn-danger`, `btn-warn`,
+  `btn-ok`), `@apply`-composed from the daisyUI theme tokens so a future custom theme restyles every
+  button from one place. A `style-guard` unit test scans the source and fails on a raw `btn-primary` /
+  `btn-ghost`, pinning the vocabulary against drift. No behavior or API change: purely how buttons are
+  styled. See the [design system](/contributing/design-system/#button-vocabulary). Follow-on: custom
+  theme switching beyond the two brand themes.
+- **Identity: disabled-account sign-in message.** A disabled account that signs in with the **correct**
+  password now gets an explicit "This account is disabled. Contact your administrator." (a distinct
+  `403`), instead of the generic invalid-credentials message, so a locked-out operator knows to ask an
+  admin rather than assuming a wrong password. The disclosure is **oracle-safe by construction**:
+  `AuthenticatePassword` drops the `and pr.active` filter, always runs the argon2 verify (against the
+  real hash, or a dummy hash of matching parameters on a miss, so there is no early-return timing leak),
+  and only branches to the new `ErrAccountDisabled` **after** the password verifies. So a wrong password
+  (or an unknown user) against a disabled account is indistinguishable from any other bad credential:
+  same generic `401`, same work. The bearer/token path is unchanged. Proven by storage tests (correct
+  password on a disabled account -> `ErrAccountDisabled`; wrong password -> `ErrBadCredentials`), a
+  real-binary api test (disabled + correct -> `403`, disabled + wrong -> `401`), and a web unit. Deferred:
+  **auditing** the disabled-login attempt (#97), which belongs at the api/outbox layer, not the gateway
+  read, to avoid a write-on-read and an attacker-append vector.
+- **Identity: root-excluded grants and the deploy role.** A grant gains an optional `exclude_root` modifier
+  that narrows its **modify** actions (update, delete) to the root's descendants: the holder can create under
+  and edit within the subtree, but a `PATCH` / `DELETE` on the root itself is a **403** (readable, outside the
+  write scope). Read and create-placement keep the root, so a `POST` under the root and a `PATCH` on a child
+  still succeed. A new **deploy** official role (create + update on location / system / component, read via the
+  viewer floor) is the integrator / field-tech grant: `deploy @ location:room-42 (exclude_root)` populates a
+  room without touching its record. The modifier lives on `principal_grant`, resolved in one predicate
+  (`inScopeTree`) shared by all three tree entities, not a new scope kind (ADR-0009); an inclusive grant on the
+  same root wins. Proven by scope unit tests (per-action classification, inclusive-wins) and a real-binary API
+  test (read root 200, create-under-root 201, update child 200, update root 403, delete 403). API and CLI carry
+  `exclude_root`; the grant-builder toggle is a fast-follow (#99).
+- **Console: scope-aware per-row action gating.** The read side now annotates every inventory row with the
+  scope-aware `actions` it permits (create-a-child / update / delete), computed from the **same** per-action
+  `visible_set` the gateway enforces (a new batch `InScopeIDs` primitive answers a whole page in one query per
+  action). The console's `ListView` gates each row's Add-child / Edit / Delete affordance on `row.actions`
+  rather than the coarse `can(...)` capability, so a scoped operator (e.g. `viewer@all + writer@root`, or a
+  `deploy` grant) sees only the buttons the server would actually allow, per row, with no client-side scope
+  math. `can(...)` stays the coarse nav/section hint; the server remains the only authority. Proven by a
+  storage test (batch membership across all / rooted / exclude-root scopes) and a real-binary API test (owner
+  gets every action on every row, a viewer none, a `deploy @ root (exclude_root)` gets create-only on the root
+  and create+update on descendants). Thin cut: the list carries `actions`; single-item GET annotation is a
+  follow-on (the blades render from the list rows).
+- **Identity: impersonation (view-as and act-as).** An owner or all-scope admin holding
+  `principal:impersonate` can `POST /principals/{id}:impersonate` to mint a bounded, revocable token to
+  **view as** (read-only) or **act as** (full) another principal, and `POST /auth/me:stopImpersonation` to
+  end it. Two guarantees: the **escalation guard** (`rbac.Set.Covers`) refuses impersonating a principal
+  whose capabilities exceed the caller's, so no capability is ever gained; and **dual-actor audit**, a new
+  nullable `audit_log.real_actor_principal_id` (threaded via a request-scoped context value, no gateway
+  signature churn) records the true admin behind every impersonated mutation. The token is an
+  `impersonation_session` (its own table, not a credential); `authn` resolves it on a bearer miss to the
+  target, and `require()` refuses every non-read action in view-as. Self and nesting are refused; disabling
+  either party kills the session on its next request (ADR-0008 / ADR-0010). Proven by a storage round-trip
+  and a real-binary API test (act-as writes in the target scope with a dual-actor audit row, view-as GET 200
+  / PATCH 403, a lesser admin cannot impersonate the owner, self 422, a viewer capability-gated, stop kills
+  the token, a split-grant admin cannot act-as into a disjoint scope). The console ships an **Impersonate**
+  action (View as / Act as) on the user card and a persistent **acting-as banner** with Stop. Deferred:
+  act-as within a scoped admin's own scope by intersection (#101; act-as currently requires all-scope over
+  the target's write capabilities) and re-checking the guard per request (bounded by the TTL + revoke for now).
+- **Identity: grant scope operators (`scope_op`).** The `exclude_root` boolean generalizes into a `scope_op`
+  operator on `principal_grant` (ADR-0011): **`subtree`** (root + descendants, the default, == old
+  `exclude_root=false`), **`subtree_excl_root`** (descendants only for update/delete, root kept for
+  read/create, == old `exclude_root=true`), and **`self`** (exactly the root row for read/update/delete, no
+  descendants and no create-placement, a leaf-lock) which is **net-new**, a grant on exactly one node. The pure `scope.Resolve` gains a `SelfIDs`
+  set (matched by id equality, never subtree-expanded; a `self` grant re-adds a root a `subtree_excl_root` grant
+  stripped), and the three gateway walks (`inScopeTree`, `InScopeIDs`, `scopedListSQL`) gain a self arm. The
+  migration recreates the dedup index to include `scope_op` (fixing a latent collision where two grants
+  differing only by operator clashed) and threads `scope_op` through `RevokeGrant`'s audit SELECT (previously
+  dropped). The **grant builder** gains an operator stage (role -> kind -> entity -> operator, subtree
+  pre-selected), and each scoped chip shows its operator glyph (= / ≥ / >), so #99 (setting the modifier from
+  the console) ships here too. Proven by scope unit tests (self classification, self re-adds an excluded root,
+  self-under-subtree is redundant), a storage round-trip (bad operator refused, a self grant persists alongside
+  a subtree grant on the same root), a real-binary API test (a `self` grant reads and updates its node,
+  descendants 404, list returns only the node), and web unit + component tests (operator in the grant identity,
+  an operator change diffs as revoke + grant, staging a self grant sends `scope_op: self`). The act-as scope
+  intersection (#101) is **not** subsumed: it is plumbing, orthogonal to how a scope is expressed.
+- **Identity: owner accounts are un-impersonatable.** A principal holding `owner @ all` cannot be impersonated
+  by anyone, including another owner, in either mode (ADR-0012): a target-side check in the `:impersonate`
+  handler before the mode branch (403), reusing the owner-invariant's `role='owner' and scope_kind='all'` lane.
+  The escalation guard (`Covers`) already blocked a lesser admin from an owner, but `owner.Covers(owner)` was
+  true, so owner-impersonates-owner was possible; this removes the highest-trust-account takeover vector
+  explicitly. Impersonate stays gated by `principal:impersonate` **swept by `principal:*`** (holding it already
+  lets a caller create and use its own principals, so impersonate confers no new reach there). Act-as scope
+  intersection (#101) is **dropped**: act-as stays all-scope-only. Proven by the real-binary API test (an owner
+  cannot view-as or act-as another owner, 403; admin-to-owner stays 403; a non-owner target still works).
+- **Identity: a grant cannot exceed the granter.** Grant creation is refused (403) when the granted role's
+  capabilities are not covered by the granter's **all-scope** capabilities (`rbac.Set.Covers`, ADR-0013), so no
+  caller can promote anyone (including itself) above its own tier: an **admin cannot grant `owner`** (`*:*`) and
+  therefore cannot self-promote to superuser. `CreateGrant` previously checked only all-scope
+  `principal_grant:create`, so admin could grant itself `owner@all` and log in as a superuser; the guard lives
+  in the `create-grant` handler, mirroring the impersonation escalation guard, and only all-scope grants count
+  (a narrowly-scoped capability cannot be conferred estate-wide). The deliberate stance: **admin is bounded on
+  purpose**, the top management role, not the superuser; `owner` is the break-glass superuser and the
+  owner-invariant anchor. Proven by a real-binary API test (admin cannot grant owner to a user or itself, 403;
+  admin can grant viewer/operator it covers; owner can grant owner). Role editing will need the same rule.
+- **Identity: the Roles view and role metadata.** Roles gain a `display_name` and `description` (additive
+  migration, seeded for the five official roles), and `GET /roles` now returns them plus each role's
+  **effective permissions** (flattened through the role index: inheritance, wildcard, and the `:read` floor
+  resolved). The console gains a read-only **Roles** page (`Settings > Roles`): a self-teaching catalog of each
+  role's display name, description, inheritance, and effective permissions, ordered by tier, rendered from the
+  real seeded roles. The **grant builder** role picker gains a hover tooltip showing a role's description and
+  permissions, so an admin sees what a role grants while assigning it. No custom-role CRUD (a later slice; the
+  ADR-0013 cover rule must extend to role editing then). Proven by a real-binary API test (owner effective set
+  is `*:*`, admin's is broad but not `*:*`, viewer's includes `*:read`, operator inherits the read floor),
+  storage round-trip, and web tests (the Roles page renders and tier-orders the seeded roles).
+- **Estate slice: per-type location icons.** `location_type` gains an `icon` column (a glyph key,
+  seeded `landmark` / `building` / `layers` / `door-open` for the four official types, default
+  `map-pin`), projected on `GET /types/location`. The console resolves the key to an SVG and renders
+  it as the leading glyph on every location in the tree, tinted the same hue as the type badge, so a
+  campus reads differently from a building at a glance. The glyph rides a new reusable `leadIcon` slot
+  on the shared `ListView`, and `resolveIcon` falls back to `map-pin` for a key the console does not
+  know, so the API can introduce a type icon without a coordinated release. Proven by a storage
+  round-trip (the icon survives upsert and idempotent update), a seed test (the four shipped keys), a
+  real-binary API test (the icon travels the wire), and a client unit (the resolver and its fallback).
+  Deferred: per-location icon override, an operator icon picker (needs a `location_type` write
+  surface), and server-side key validation.
+- **Dev experience: an example estate on `make dev`.** Distinct from the three production seeding concerns
+  the [storage](/architecture/storage/) page names (schema migrations, boot seed, one-time backfills), a
+  **dev-only example seed**, applied by `make dev` and never in production. `internal/devseed` embeds a
+  fixture (a multi-site estate of three campuses, `hq` / `east` / `airport`, three sign-in-able users, and
+  their grants spanning `operator@all`, `viewer@hq` subtree, and `deploy@east` subtree-excl-root) and
+  installs it through the [Storage Gateway](/architecture/storage/) on the same trusted direct-DB lane as
+  `bootstrap`, exposed as `omniglass seed-dev`. It is idempotent (a re-run of `make dev` changes nothing:
+  locations are skipped by name, users by their taken-username error), so a fresh console comes up populated
+  instead of empty and nobody hand-creates rows to demo a feature. Proven by a pure fixture-shape unit test
+  and a testcontainer integration test (run twice: thirteen locations across three campuses, three users with
+  password credentials, three grants of the expected scope, all stable across the second run), plus the
+  `seed-dev` command driven end-to-end against a real Postgres. The `/ship-slice` gate now requires any slice that adds a new operator entity to seed an
+  example of it here.
+- **Identity: the auth event log.** The `audit_log` already recorded every privileged mutation (with `actor`
+  and, for impersonated actions, `real_actor`); this adds the read surface and captures auth events. `GET
+  /audit-log` (newest first, filter by resource / verb, backward-paged by `before`) resolves each actor and
+  real-actor to a username, and **login / logout are now captured** (`resource = 'auth'`, via a non-transactional
+  emit seam, since login is a read/no-tx path), and so are **failed sign-ins**: a wrong password on a real
+  account is `login_failed` (attributed to that principal) and a correct password against a disabled account is
+  `login_denied` (#97), while an attempt on an unknown username is not written (so scanning cannot flood the
+  log). The console gains a read-only **Audit** page (`Settings > Audit`): every action and sign-in, with an
+  `as <actor>` tag on anything done while impersonating. It is **admin/owner-only**: `audit` is a sensitive
+  resource, so a `viewer`'s `*:read` does **not** confer `audit:read`, only an explicit grant or `*:*` (a small
+  `rbac` sensitive-resource carve-out, ADR-0014). Proven by an rbac unit test (the carve-out: `*:read` denied,
+  `*:*` and explicit allowed), a storage round-trip, a real-binary API test (a login appears, a real-account
+  failed login is attributed while an unknown-user attempt is not, a viewer is 403, the resource filter
+  narrows, and an impersonated action carries `real_actor`), and web tests (the Audit page renders and marks
+  impersonated rows). Deferred: a failed-login rate-limit counter.
+- **Identity: permissions are topic patterns.** The capability matcher became a consistent NATS-style topic
+  match (ADR-0015, superseding the ADR-0014 carve-out): `*` matches exactly one token and `>` matches the tail,
+  so a two-token pattern (`*:read`, `*:*`, `principal:*`) structurally cannot reach a three-token `:admin`
+  permission, and admin-sensitivity is a deeper token rather than a special case. `audit:read` became the
+  admin-sensitive `audit:read:admin` (the audit route requires it), `owner` became `>`, and the
+  `sensitiveResources` set and `grantsAll` helper were deleted. `Set.Allows` matches by token (with the
+  unchanged `:read` floor); `Set.Covers` (the impersonation and grant-escalation guard) became pattern
+  subsumption plus the floor, staying conservative. The one seed change is `owner`'s `*:*` -> `>`; every other
+  permission keeps its meaning (`*` already meant a single token). As a free consequence, `principal:*` no
+  longer sweeps a future admin-tier `principal:<action>:admin`. Proven by an rbac unit matrix (`*` one token,
+  `>` tail, `*:read`/`*:*`/`principal:*` miss `:admin`, `>` and explicit hit it, Covers subsumption), the whole
+  authz suite (the viewer is still 403 on the audit trail, now structurally), and web tests (the Roles view
+  renders `>` as an "everything" chip and marks an `:admin` tier). The console Roles view and grant-builder
+  render the new grammar. Foundational for a custom-role permission preview (a permission catalog).
+- **Identity: the audit page joins the list-view standard.** The Audit page swaps its bare table for the
+  console's shared **FilterBar** faceted search (the same one the inventory lists use): filter by `who`,
+  `action`, `resource`, or `id`, chips combining to narrow, matched client-side over the loaded rows via the
+  `lib/predicate` engine. **Load older** pages backward through the server `before` cursor, so a filter that
+  comes up short is a cue to load deeper. Proven by a predicate unit test (each facet, within-chip OR and
+  cross-chip AND, the sorted value catalog) and a component test (the FilterBar narrows the rows, and load-older
+  asks for events older than the oldest loaded). Deferred: a chip time-range facet (the shared `matchOp`
+  compares `gt`/`lt` numerically, so an ISO-timestamp facet needs a date-aware operator in the predicate
+  primitive first).
+- **Console: the list surface splits into a shell plus swappable bodies.** `ListShell` owns the chrome every
+  list wears (the FilterBar chip state and client-side predicate, the card, the error banner, a trailing
+  action slot) and hands its body the filtered rows; `FlatList` is the flat body (a sortable table, an
+  optional row-to-Drawer detail, an optional create Drawer, an optional footer). The Audit page becomes a thin
+  `FlatList` config, behaviour-preserving. This is the primitive-first factoring of the four list idioms that
+  had grown up (tree ListView, the Users split-panel, the Roles catalog, the Audit table): the tree pages move
+  onto `ListShell` + a `TreeList` body, and Users onto `FlatList`, in follow-up slices; Roles stays the
+  read-only catalog until custom-role CRUD. Proven by the Audit component test (unchanged behaviour on the new
+  primitives) and the existing web suite.
+- **Identity: principal groups (grant-by-group), backend.** A `principal_group` plus membership, and a grant
+  that targets a group (a nullable `group_id` on the one `principal_grant` table, exactly-one-of
+  principal/group). A member's effective grants are its direct grants unioned with its groups' grants in the
+  grant loader, the single seam both the permission flatten and the gateway scope resolution already read, so an
+  inherited grant scopes and flattens exactly like a direct one and no other code changes. Group CRUD, member
+  add/remove, and group-grant assignment ship on the Gateway and the API (`/principal-groups`), gated by a new
+  `principal_group` capability (admin gets `principal_group:*`); a group grant reuses `principal_grant:create`
+  and the same escalation cover-check. Proven against real Postgres: a storage integration test (a viewer @ hq
+  granted to a group resolves into a member's read scope and permissions; removal and group-deletion drop it;
+  dedup / duplicate-name / idempotent-add hold) and an HTTP end-to-end test (a no-access user gains read once
+  added to a group holding viewer @ all and loses it on removal; management is `principal_group`-gated; an admin
+  cannot group-grant owner).
+- **Collection slice (checkpoints 1-2): the storage tier and the node runtime.** The first cut of the
+  [collection](/architecture/collection/) engine. Checkpoint 1 landed the storage tier: the `node`,
+  `interface_type`, `interface`, `task`, `datapoint_type`, and `metric_datapoint` tables (an idempotent
+  dbmate migration), the reachability `datapoint_type` canon and the `icmp`/`tcp` `interface_type`s seeded at
+  boot, a scope-safe `metric_datapoint` write path, and the pure reject-not-project registry. Checkpoint 2
+  adds the [node](/architecture/nodes/) runtime: `omniglass server` hosts an in-process `nats-server`
+  (JetStream enabled) and `omniglass node` enrolls (create, `POST /nodes/{name}:enroll` mints the token,
+  `POST /nodes:claim` exchanges it for the NATS credential), then over NATS pulls its worklist
+  (`og.v1.worklist.<node>` request-reply, its enabled tasks plus a `config_generation`) and heartbeats
+  (`og.v1.heartbeat.<node>`, the server stamps `last_heartbeat_at`). **Per-node subject isolation is real**:
+  an in-process auth callback scopes each node's NATS credential to its own subjects, proven by a negative
+  integration test (node A cannot publish or pull as node B) against a real embedded server on an ephemeral
+  port, plus a fake-seam unit test and the full enroll -> pull -> heartbeat round trip. A node is a
+  first-class `principal` of `kind='node'` with a 1:1 `node` detail table (name is the estate address the
+  collection FKs reference) and a bearer `credential` row, reusing the human/service identity machinery.
+  Deliberate thin cuts ([ADR-0017](/architecture/decisions/)): the credential is an interim shared secret
+  stored as a bearer credential (the enrollment token doubles as the NATS password; nkey/JWT and the
+  single-use bootstrap deferred), and the control plane is JSON over core NATS. Deferred to later
+  checkpoints of this slice: the probes (tcp, then icmp), the protobuf telemetry `Event` over JetStream, the
+  ingest consumer, and the API/CLI/UI surfaces (interface and task CRUD, the Nodes inventory and reachability
+  panels).
+- **Collection slice (checkpoint 3): the reachability datapoint, end to end.** The capability-primitive heart:
+  `omniglass node` runs a real **tcp reachability probe** (`collection.NewTCPDialer`, closed over the socket
+  boundary and proven by a real-socket integration test, not just a fake seam), ships the result as a protobuf
+  `Event` over JetStream (`og.v1.telemetry.<node>`), and the `tcp.open` / `tcp.connect_time` datapoints land in
+  `metric_datapoint` owned by the target component. Protobuf is **new** to omniglass: `proto/og/v1/event.proto`
+  (`Event` + `Datapoint`, no gRPC service), generated by a `gen-proto` stage on `make gen`. The server hosts an
+  `OG_TELEMETRY` JetStream stream and a single durable consumer (`og-telemetry-worker`) that derives inline:
+  it binds the owner **server-side** from the task's interface (the node stamps no component identity),
+  **confines** a node to its own tasks (an Event carrying another node's `task_id` is orphan-dropped, no row
+  written), applies **reject-not-project** (an unregistered datapoint name is dropped), and writes through the
+  checkpoint-1 `InsertMetricDatapoints` path (`provenance=observed`). Both invariants are negatively tested
+  against real Postgres + a real embedded bus, and the whole path is driven end to end through the real `server`
+  and `node` binaries. Deliberate thin cuts ([ADR-0018](/architecture/decisions/)): the hot-path/async split
+  collapses (the durable consumer is the at-least-once worklist, no raw-telemetry table or Postgres queue), and
+  owner binding is the interface-prebind path only. Deferred: raw-`Event` persistence + replay/backfill,
+  label-based multi-owner routing, the remaining probes (snmp, http), and the API/CLI/UI surfaces.
+- **Collection slice (checkpoint 4): the icmp (ping) probe, the second capability primitive.** `omniglass node`
+  now also runs a real **icmp reachability probe** (`collection.NewICMPPinger`, unprivileged SOCK_DGRAM ICMP via
+  `pro-bing`), emitting `icmp.reachable` (always present, `1`/`0` with a `reason` label) and `icmp.rtt_avg` (ms,
+  absent when unreachable). It rides the checkpoint-3 pipeline unchanged: the same protobuf `Event`, JetStream
+  stream, and owner-confining reject-not-project consumer carry it (the consumer does not branch on probe type).
+  The capability question is the point of the primitive: a once-cached loopback self-check tells "this node
+  cannot do ICMP at all" (an error, inconclusive, no datapoint) from "this target did not answer" (DATA:
+  `icmp.reachable=0` with a down reason), and per the capability-wrapping doctrine a fake-`Pinger` unit test does
+  not close the increment, a real-socket integration test (loopback echo + a TEST-NET-1 unreachable address where
+  `received==0` is data, not an error) is the closing gate.
+- **Collection slice (checkpoint 5a): the reachability verdict as a state.** The first honest substrate for
+  availability history. The node now computes the per-interface verdict `interface.reachable` (`up`/`down`, the
+  AND of the interface's probe results) and emits it as a built-in **state** datapoint (seeded `datapoint_type`
+  at `kind=state`, domain `up`/`down`), riding the proto `string_value`. A new `state_datapoint` table mirrors
+  `metric_datapoint` (same owner exclusive-arc, same lineage CHECK) with a categorical `value text` plus optional
+  `value_json`, and the Gateway gains `InsertStateDatapoints` / `LatestState` / `StateTransitions`. The ingest
+  consumer now **routes by the registry kind** (metric to `metric_datapoint`, state to `state_datapoint`) after
+  the **unchanged** owner-confinement and reject-not-project, so a foreign or unregistered state is orphan-dropped
+  identically to a metric (negatively tested for the state path). The series is **transition-only**: the node
+  remembers the last verdict per interface and emits only on a flip or first observation, and the ingest side
+  re-guards by skipping a write whose value equals the latest stored value (the net for a node restart), proven
+  by a negative test that repeated identical verdicts produce one row per transition, not per tick. Availability
+  as `time_in_state` over this state, and the operator surfaces that render the transitions, are checkpoint 5b.
+  See [ADR-0034](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state).
+- **Collection slice (checkpoint 5b): the reachability surface, seen.** The first datapoint read surface. A
+  per-component read BFF `GET /components/{name}/reachability` (permission `component:read`, scope-injected, so a
+  viewer gets a 404 on a component outside its scope) composes, per interface, the latest verdict (`LatestState`
+  on `interface.reachable`), the layer signals (`LatestMetric` on `tcp.open` / `icmp.reachable` and their rtt),
+  and the verdict's transition history (`StateTransitions` over a window). The operator console gains a
+  **Reachability panel** on the component detail: one row per interface with a verdict pill (`responding` /
+  `down` / `stale` / `unknown`, staleness derived at read time), an **availability strip** drawn from the state
+  transitions (up/down over time, not a latency trend), and an expandable L3/L4 gate breakdown (ping and port,
+  the inline probes this slice ships; the L7 app-layer gate lands with the snmp/http/ssh interface types) with
+  the reason a down interface is down. It renders only real API fields. The availability-percentage SLI
+  (`time_in_state` over the verdict) still rides in with the health slice; the panel shows the transitions
+  directly. Interface and task authoring (the "add check" affordance and the flat Nodes / Interfaces / Tasks
+  pages) are checkpoints 5c and 5d.
+- **Collection slice (checkpoint 5c): the Nodes surface and enrollment.** The first authoring surface for the
+  [node](/architecture/nodes/) tier. The console `/nodes` stub becomes a live **Nodes** inventory (the flat
+  sibling of the tree lists, a config over the shared `FlatList`): a row per collection daemon with a
+  liveness **status pill** derived client-side from `last_heartbeat_at` against the server's down window
+  (`OMNIGLASS_NODE_DOWN_AFTER`, 90s: `up` within it, `down` once stale, `never` before first heartbeat), the
+  relative last-heartbeat time, and a description, with name and status facets on the same FilterBar the other
+  lists use. A row opens a detail Drawer (facts plus an Enroll / Re-enroll action), and **New node** creates a
+  node then enrolls it (day-one: create, then `POST /nodes/{name}:enroll`). The minted **enrollment token is a
+  secret shown once**: a modal reveals it in a monospace field with a copy-to-clipboard button and a clear
+  "shown once, cannot be retrieved again" warning, and the token lives only for the modal's lifetime (cleared
+  on close, never written to the query cache, `localStorage`, or a log). The nav tab is gated on `node:read`,
+  create on `node:create`, and enroll on `node:enroll` via the same `can()` the sidebar and route guard read;
+  the page renders only real `NodeBody` fields. No API or engine change (the node routes already exist), so
+  `make gen` shows no drift. Proven by vitest: the data layer (list-envelope unwrap, create body, the `:enroll`
+  custom-method POST, the pure status derivation and its window boundary, the status facet catalog) and the
+  page (a row per node with the derived pill, the create affordance hidden without `node:create`, and the
+  enrollment modal revealing the token, copying it to a faked clipboard, and clearing it on close). The Nodes
+  page stays `Partial`: placement, assigned-task worklists, and node health beyond the heartbeat pill are still
+  Design. Interfaces and Tasks authoring is checkpoint 5d.
+- **Collection slice (checkpoint 5d-api): the interface and task authoring backend.** The operator CRUD over the
+  two collection primitives that the reachability read and the node worklist consume. The Storage Gateway gains
+  scoped `Create/List/Get/Update/Delete` for both `interface` (name, type, owning component, node placement,
+  params) and `task` (a content-addressed id over interface + mode + spec, so identical work dedupes), auditing
+  every mutation in-transaction like the estate tiers; the Huma surface adds AIP CRUD at `/interfaces`,
+  `/interfaces/{name}`, `/tasks`, and `/tasks/{id}`, regenerated into the OpenAPI document, the cobra CLI
+  (`omniglass interface …` / `omniglass task …`), and the typed SPA client. Both authorization layers apply on
+  every route: an `interface:<action>` / `task:<action>` **permission** (admin gains `interface:*` / `task:*`,
+  operator keeps `create,update`, the `*:read` floor gives everyone read), and **scope** injected by the gateway.
+  Neither primitive is a scope-tree entity of its own, so scope **cascades through the owning component**: an
+  interface inherits its component's read/action scope, a task inherits its interface's component's, reusing the
+  component tier with no new `scope_kind` (an operator scoped to a component subtree administers exactly that
+  subtree's interfaces and tasks). A component-less (server-hosted) interface is reachable only under an all
+  scope. An interface or task whose component is outside the caller's scope is a **non-disclosing 404** on read
+  and update, and a create under an out-of-scope component is a 403, negatively tested at both the gateway and
+  the API. No web surface yet: the flat Interfaces / Tasks pages and the "add check" affordance are checkpoint
+  5d-ui.
+- **Collection slice (checkpoint 5d-ui): the interface and task authoring surfaces.** The console gains the two
+  authoring pages the 5d-api CRUD feeds, plus the component-scoped **Add reachability check** affordance. The
+  `/interfaces` and `/tasks` stubs become live **Interfaces** and **Tasks** inventories (configs over the shared
+  `FlatList`, the flat sibling of the tree lists): Interfaces shows a row per endpoint (name, type, owning
+  component, node placement, probed target derived from `params`) with name / type / component facets; Tasks shows
+  a row per unit of work (display name or content-addressed id, interface, mode, an enabled pill, node) with
+  interface / mode / enabled facets. A row opens a detail Drawer (facts plus an inline edit of the mutable fields
+  and a delete), and **New interface** / **New task** open the create Drawer. Because there is no `interface_type`
+  list endpoint, the type picker offers the built transports (`icmp`, `tcp`, `ssh`, `http`) this slice ships; a
+  future `GET /interface-types` registry route can replace the static options. The **Add reachability check** button
+  on the Reachability panel (gated on `interface:create` *and* `task:create`) authors a check the way the node runs
+  one: it creates the interface (`type` = the chosen transport, **named by its protocol**, owned by that component,
+  `params.target` the `host[:port]` the probe dials) then a **poll** task over it (`mode=poll`, enabled), then invalidates the
+  reachability, interfaces, and tasks queries so the panel and pages refresh. The two writes are handled honestly:
+  if the task create fails after the interface exists, the affordance surfaces the partial state (the interface is
+  created; the operator retries just the task) instead of swallowing it. Every nav tab and action gates on the
+  real permission via the same `can()` the sidebar and route guard read (`interface:read` / `task:read` tabs and
+  URL guard; create / update / delete actions), and the pages render only real `InterfaceBody` / `TaskBody`
+  fields. No API or engine change (5d-api already ships the routes and typed client), so `make gen` shows no
+  drift. Proven by vitest: the two data layers (envelope unwrap, create / patch bodies, filter keys, the target
+  derivation), both pages (rows, the create gate hidden without the perm, the type / mode / interface pickers),
+  and the Add-check affordance (the gate needs both perms, submit fires the interface then the task create with
+  the right bodies, and the two-step error path surfaces). This closes the collection slice's authoring surfaces.
+  (Superseded before the PR: checkpoint 5f removes the Add-check affordance, and 5g folds the standalone
+  Interfaces and Tasks pages into the component and node details and **derives** the task, so these standalone
+  surfaces and the `task:create` gate do not ship; the flat pages became detail panels.)
+- **Collection slice (checkpoint 5e): the interface model reframe.** Before its PR, the interface model was
+  corrected: an **interface is an API we intend to call** (named by the protocol it speaks, `web` / `qrc`,
+  unique per component), **not** a network interface; `interface_type` is the **transport** (the reach gate), not
+  the protocol driver. Reachability is the first gate of a ladder (reach, auth, responds, collecting). The built
+  transports grew from `tcp`/`icmp` to also cover `ssh` and `http` (all reach by opening the tcp port; icmp
+  pings), the Add-check picker separates the transport **type** from the protocol **name**, and the dev seed now
+  models a lab **polaris DSP** with two protocol-named APIs on one device (`web` over http, `qrc` over tcp) so
+  `make dev` shows the "two APIs on one box" story. The driver layer that turns a device API into a normalized
+  menu of datapoints and functions (OIDs, commands, parse) is a separate, later concern, decided in
+  [ADR-0035](/architecture/decisions/#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver);
+  this slice ships only the transport / reach tier of it.
+- **Collection slice (checkpoint 5f): reachability lands read-only; check authoring deferred.** Before the PR, the
+  component-scoped **Add check** affordance was **removed**: it was a stopgap that a proper **driver**-based
+  authoring flow (attach a driver to a component, fill its inputs) replaces, and the driver/collect layer is
+  under active design (template-centric vs driver-centric), decided deliberately rather than on momentum
+  ([ADR-0020](/architecture/decisions/) status note). So the reachability panel is now **read-only display**; a
+  reachability check is authored by adding an **interface** to its component (checkpoint 5g settles the interface
+  as the only authored primitive, its poll task **derived**, and folds the interface and task surfaces into the
+  component and node details). The slice lands as **remote node reachability**: enroll a
+  node, it probes, the operator sees per-interface reachability. The collect layer (drivers, the normalized menu,
+  SNMP) is its own slice after the driver design.
+  out of `TreeList` into a standalone `BladeStack` primitive over a `createBladeController`, and both the
+  inventory tree and the flat identity pages (`FlatList`) now consume it. A stack entry is a cross-entity
+  `{ kind, id }` ref against a registry, so a user's group opens the group's blade over it and a group's member
+  opens that user's blade, both stacking. Depth is bounded by construction: each page roots one kind and drills
+  one direction (Users: user to group; Groups: group to user; Roles: role), so the drill graph is acyclic and
+  the reverse relation on a terminal blade is read-only. A shared `DetailShell` (`Fact`, `RelatedList`,
+  `DetailActions`) standardizes the chrome, so a group's members and a user's groups render through one list
+  idiom and every footer places the destructive action left of the primary. Roles moves from the card catalog
+  onto the same `FlatList` + read-only blade. Behaviour-preserving for the inventory pages (the Locations blade
+  is identical); proven by the web suite (the `BladeStack`, `DetailShell`, and both-way identity drill tests)
+  and tsc.
+- **Console: the read -> Edit -> Save contract on a blade footer action bar.** Every detail blade opens
+  read-only; the header is chrome only (back, full-page, close), and a `createEditSlot` per blade drives a sticky
+  **footer action bar** that `BladeStack` renders: a destructive action on the left (always available), secondary
+  actions in a `⋯` kebab, and Edit on the right (which swaps to Save / Cancel in edit mode). The body reads
+  `useBladeEdit().editing()` to switch its sections read-only vs live and registers the whole footer through
+  `bind` (`editable`, `save`, `cancel`, `destructive`, `secondary`), so editability and the destructive label
+  follow the caller's permission and a read-only blade (a role) registers nothing and shows no bar. In edit mode
+  the profile becomes inputs, member add / remove stages locally, and the `GrantBuilder` gains a `bind` so its
+  diff commits as part of the one blade Save; the destructive action (Delete for a group, Disable / Enable for a
+  user, per the accounts-never-deleted invariant) confirms and is reachable straight from read mode. Save commits
+  the staged session together and Cancel reverts. A single consolidated audit event and a config restore point
+  (one backend action per Save) remain deferred to a batched endpoint; the user archive / purge lifecycle is
+  its own slice. Proven by the web suite (the edit-slot, the `BladeStack` footer-bar chrome, and the Group / User
+  read-vs-edit tests) and tsc.
+- **Identity: the principal lifecycle (archive + purge), backend.** Beyond the reversible disable, a principal
+  can be **archived** (a soft delete, `archived_at`: hidden from the directory, cannot authenticate,
+  reversible) and then **purged** (an irreversible hard delete, gated on prior archival and on the
+  admin-sensitive `principal:purge:admin`, so admin and owner can purge but a two-token `principal:*` cannot
+  reach it). The purge preserves the audit trail: every `audit_log` row now denormalizes the actor's label at
+  write time, the audit foreign keys are `ON DELETE SET NULL`, and the read coalesces the live join to the
+  snapshot, so a purged actor's history stays legible ([ADR-0016](/architecture/decisions/#adr-0016-a-principal-can-be-purged-and-the-audit-trail-is-denormalized-to-survive-it),
+  retiring the "never hard-deleted" rule). The last-active-owner guard extends to archive. Gateway
+  (`ArchivePrincipal` / `RestorePrincipal` / `PurgePrincipal`), the `:archive` / `:restore` /
+  `:purge` API custom methods, and the generated CLI / client ship; proven against real Postgres by a storage
+  integration test (lifecycle + audit-actor survival + owner guard) and an HTTP end-to-end test (the capability
+  split, the archive-before-purge gate, soft-delete visibility). The console UI for the lifecycle is a
+  follow-up ([#143](https://github.com/hyperscaleav/omniglass/issues/143) backend).
+- **Identity: the principal lifecycle in the console, UI.** The user blade's footer action bar presents the
+  lifecycle by state: the left slot is the reversible toggle (Disable / Enable, or Restore for an archived
+  account), and the kebab holds the escalating red steps (Archive when live, Purge when archived and the
+  caller holds `principal:purge:admin`), each confirmed. The detail fetches the principal by id (not the
+  directory list, which hides archived) so a just-soft-deleted user stays resolvable, and a **Show
+  archived** toggle on the Users directory (a new `include_archived` list param) surfaces hidden accounts
+  to re-find one. `BladeSecondary` gains a red tone and the destructive slot a restore tone; the web `can()`
+  already honours the three-token `principal:purge:admin`. This slice also **renamed the soft-delete verb
+  deactivate to archive** (restore, not reactivate) so the ladder reads pause (disable) to remove (archive)
+  to destroy (purge), instead of two pause-synonyms; the column, endpoints, capability, and list param follow.
+  Proven by the web suite (the live and archived footer states and the show-archived flow) and a storage test
+  for the include-archived list; completes
+  [#143](https://github.com/hyperscaleav/omniglass/issues/143) / [#146](https://github.com/hyperscaleav/omniglass/issues/146).
+- **Identity: IAM console form + blade hardening, UI.** A polish pass over the identity surfaces. Removing a
+  principal now closes its blade cleanly: **archiving**, **purging** (and a group **delete**) closes the blade
+  first, drops the dead detail query, then refreshes the list, so the blade never lingers on a stale or 404 view
+  of the entity it just removed from the working set.
+  **Impersonation** (start and stop) now reboots the console to Home (`window.location`), so the
+  permission-driven sidebar and route guard rebuild from the new identity rather than showing the previous
+  principal's navigation. The forms gain **inline validation** that mirrors the server's Huma constraints: a
+  username and a group name are lowercase handles (pattern `^[a-z0-9][a-z0-9._-]*$`, no capitals or spaces) and
+  an email must be well formed (`format: email`), each enforced on the create body server-side and checked in
+  the form so an invalid field shows an inline error and disables the submit before the round-trip (a new
+  `valid` gate on the blade edit contract disables the footer **Save**). The group create Drawer title now reads
+  **New group** (it leaked the `principal_group` resource key), the group create form gained the same
+  subtitle the user form has, and the form placeholders are consistent across create and edit. A newly created
+  **user or group** opens **directly in edit mode** so its grants (and a group's members, child resources that
+  need the parent id) are added in one flow rather than a second step. Proven by an API
+  validation test (a malformed username, name, or email is a 422; a valid one is accepted) and web tests (the
+  blade closes without an orphan refetch, and an invalid field blocks create and the footer Save).
+- **Identity: the Groups console + inherited-vs-direct grants, UI.** A **Groups** page (`Settings > Groups`,
+  gated `principal_group:read`) as a config over the shared `FlatList`: list and create, and a row Drawer with
+  member add/remove and the grant builder (reused, wired to the group grant endpoints, so a group's members
+  inherit what it grants). On the **user** detail, grants now split into **direct** (editable) and **inherited
+  from a group** (read-only, tagged `from <group>`), so it is clear where a user's access comes from; the
+  principal grant body gained `group_id` / `group_name` for the distinction. Proven by the web suite and tsc,
+  with the route guard and sidebar both gating `/groups` on `principal_group`. This completes grant-by-group
+  ([#90](https://github.com/hyperscaleav/omniglass/issues/90)); dynamic membership and SCIM group mapping remain
+  deferred.
+- **Identity: password policy + generator.** A single pure validator (`auth.ValidatePassword`) enforces a
+  password policy on the API password surfaces: **create a user** and **self-service change-password**. The
+  direct-DB break-glass lanes (`bootstrap`, `set-password`) are exempt (fully trusted, DB-access-gated, the
+  recovery path). The policy is **at least 12 characters, not on an embedded common-password denylist, and not
+  containing the username** (NIST 800-63B style: length and a blocklist over composition rules). The API bodies
+  raise their `minLength` to 12 and map a violation to 422 with a specific message; the console mirrors the
+  length and username rules inline (a new `passwordError`) and gates the submit, while the denylist stays
+  server-side (a 422 on a manually typed common password). A shared **`PasswordField`** component adds a
+  show/hide toggle and, on the New user and change-password forms, a crypto-strong **Generate** action
+  (`generatePassword`, a readable charset with no look-alike characters, kept masked and copied or revealed on
+  demand) plus a **Copy** button. Proven by an `internal/auth` unit test (short / common / contains-username / valid), an API
+  test (a weak, common, or username-containing password is a 422 on create, a strong one is accepted), and web
+  tests (the generator's length / charset / policy-compliance, `passwordError`, and the Generate-fills-and-enables
+  flow). Completes [#104](https://github.com/hyperscaleav/omniglass/issues/104) and
+  [#151](https://github.com/hyperscaleav/omniglass/issues/151); an operator-configurable policy and a HIBP
+  breached-password check remain deferred.
+- **Identity: admin password reset.** An administrator can reset another user's password without the
+  user's current one: `POST /principals/{id}:resetPassword` gated by a new `principal:reset-password`
+  capability (all-scope; admin holds it via `principal:*`, so a future help-desk role can be granted only
+  the reset), policy-enforced (a 422 on a weak password), refused on self (change your own password from
+  your profile, which verifies the current one), behind the same **takeover guard** as
+  impersonation (an owner cannot be reset by anyone, and a caller cannot reset a principal whose
+  capabilities exceed their own, a shared `checkTakeoverGuard`, plus the shared `allScopeCovers`
+  all-scope-only cover that act-as uses so a reset cannot promote a narrow-scope capability estate-wide),
+  and audited with the admin as the actor (the
+  storage method `SetPrincipalPassword` sets by id, distinct from the self-service `SetPassword` that keys
+  on username and audits the target). It also **forces logout**: a reset revokes every one of the target's
+  bearer credentials (all sessions and tokens) in the same transaction, so a compromised or departing
+  account is cut off at once; the self-service change-password revokes the caller's OTHER sessions
+  (`RevokePrincipalBearers` keeping the current session's hash, stashed in the request context by authn). The console adds a **Reset password** kebab action on the user blade
+  that opens an inline panel reusing the `PasswordField` (Generate, Copy, inline policy check); the set
+  password stays copyable to hand over. This is the console counterpart to the CLI `set-password` (which,
+  as a trusted direct-DB lane, stays policy-exempt). Proven by a storage test (the new secret
+  authenticates and the old does not, the reset is audited as the admin, non-all scope and unknown id are
+  refused), an API test (an operator lacks the capability 403, a weak / common / username-containing
+  password is a 422, resetting yourself is a 422 and an owner is a 403, the admin reset lets the user
+  sign in with the new password), and web tests (the kebab opens the panel and Generate + Set password
+  calls the endpoint and confirms; the action is hidden on your own blade).
+- **Identity: bearer session expiry.** Bearer credentials gain a nullable `credential.expires_at` (a new
+  additive migration), and `AuthenticateBearer` refuses a credential whose expiry has passed (an expired
+  session authenticates nothing). A web login installs its session cookie with a fixed absolute lifetime
+  (12h), setting both the credential's `expires_at` and the cookie `Max-Age`, so a stolen session cookie is
+  no longer valid forever; the `IssueBearerCredential` gateway method gained an `expiresAt` argument. CLI
+  API tokens (`omniglass token`) and the bootstrap token pass a null expiry and do not expire, so
+  automation keeps working. Proven by a storage test (a past-expiry bearer is `ErrCredentialNotFound`, a
+  future or null one authenticates). A sliding idle timeout and a background sweep of expired rows are
+  deferred refinements; the security floor (expired is refused at auth) lands here.
+
+- **Identity: login brute-force lockout.** Failed password logins are now throttled. Two additive columns
+  on `human` (`failed_login_count`, `locked_until`) count consecutive misses on a real account and, on the
+  5th, lock it for 15 minutes. Inside the window `AuthenticatePassword` refuses every attempt (even the
+  correct password) via a new `ErrAccountLocked`, which the login handler maps to the **same generic 401**
+  as a bad credential so the lock is not an enumeration oracle (only the `login_locked` audit records it).
+  The lock is decided after the argon2 verify (a locked account is not a faster probe), and a correct
+  password below the threshold clears the counter. The decision itself is a pure, unit-tested function;
+  proven end to end by a storage integration test (5 misses lock, the correct password is refused while
+  locked, an expired window lets it through and resets) and a real-endpoint test (the lockout as seen over
+  `POST /auth/login`). Per-IP throttling and a configurable threshold are deferred.
+
+- **Identity: force a password change after an admin reset.** An admin reset now sets a new additive
+  `human.must_change_password` flag; the user's own change-password clears it. While set, the `authn`
+  choke point (the same place view-as read-only is enforced) refuses **every** route with a 403 except
+  reading their own principal and the change itself, so the admin-known secret cannot be used to act.
+  `GET /auth/me` carries `must_change_password`, and the console's `AuthGuard` swaps the whole app shell
+  for a forced change-password screen until it clears (a `useChangePassword` that invalidates `/auth/me`
+  releases the gate on success). Proven by a storage test (a reset sets the flag, a self-change clears
+  it), a real-endpoint test (a flagged user reads `/auth/me` but every other route is a distinct
+  "password change required" 403 until the change, then the gate releases), and a web test (the guard
+  renders the forced screen only when flagged). Enforcement is a hard block on all routes; the CLI
+  break-glass lanes do not set the flag.
+
+- **Identity: address a principal by username or uuid.** Every `/principals/{id}` route (read, update,
+  grants, the lifecycle verbs, reset, impersonate) now accepts either the principal's uuid or a human's
+  current username. A new gateway primitive `ResolvePrincipalRef` resolves it (a uuid passes through
+  unchanged, so an unknown uuid keeps its existing not-found handling; otherwise a username lookup, and an
+  unknown username is a 404), and each handler resolves at the top, before any self-check (so addressing
+  yourself by username is caught for a reset or impersonation). The uuid stays the stable identity; a
+  username is a convenience address resolved at call time. Service principals have no username and stay
+  uuid-addressed. This makes the CLI usable without a uuid lookup first (`omniglass principal archive
+  alice`). Proven by a storage test (username resolves, a uuid passes through, an unknown username is not
+  found) and an API test (get by username matches get by uuid, a `:verb` method archives by username, an
+  unknown username is a 404).
+- **Tag: value-domain enums and existing-value autocomplete.** A tag key can now **constrain its values to an enum**,
+  answering the enum half of the value-domain open question. A new **`allowed_values`** column on `tag` (empty = free
+  text) is the value set a bound value must belong to; `SetTagBinding` enforces it (a non-member is a dedicated 422,
+  `ErrTagValueNotAllowed`), so `environment` can be declared as one of `prod` / `staging` / `dev`. The Tags directory
+  create and edit forms gain a value-domain control (a checkbox that turns a key into an enum plus a value-list
+  editor), and the **TagAdder value stage** renders a **strict dropdown** for an enum key. A **free** key instead
+  autocompletes the **distinct values already in use** for it, via a new `GET /tags/{name}:values` read
+  (`select distinct value`), so an operator reaches for an existing value without the key declaring a set. Pure
+  `web/src/lib/tagdraft` helpers (`isEnumKey`, `valueOptions`, `valueAllowed`) and a pure `internal/tag`
+  (`ValidateAllowedValues`, `ValueAllowed`) hold the logic. Proven by unit suites on both pure cores, a storage
+  integration test (the enum admits members and rejects non-members, a free key admits anything, narrowing the enum is
+  enforced on the next bind, the distinct-values query dedupes and sorts) and an HTTP e2e (the enum 422, the values
+  endpoint, the round-trip). A typed `value_type` and input normalization stay deferred ([ADR-0024](/architecture/decisions/#adr-0024-a-tag-key-may-constrain-its-values-to-an-enum)).
+- **Tag: apply and remove tags from the entity detail blade (TagAdder).** The capability that closes the
+  set-side of the tag console: an operator now binds and unbinds tag values from the UI, not only the CLI. Each
+  component, system, and location detail blade carries a **Tags** panel listing the tags bound **directly** on the
+  entity as removable colored chips, plus a staged **key -> value** add row. The key stage autocompletes the registry
+  filtered by `applies_to` for the entity kind and by what is already bound (a pure `web/src/lib/tagdraft` core:
+  `keySuggestions`, `exactKey`, `canCoin`, `valueValid`); with `tag:create`, a **Create key** affordance opens the
+  Tags directory's create form ([#192](https://github.com/hyperscaleav/omniglass/issues/192)'s `CreateTagForm`, now
+  exported) in a drawer and returns with the minted key selected. Writes are immediate (each is the entity's own
+  `:setTag` / `:removeTag` write, gated by its `:update`), so there is no separate Save; the affordances hide without
+  the permission. The resolved cascade (inherited tags) stays in the directory [Tags column](/guides/operator/inventory/),
+  not the panel. Proven by a `tagdraft` unit suite (applies_to filtering, already-bound exclusion, exact-match and
+  coin eligibility, value validity) and a `TagAdder` render test (chips, the update-gated add row and per-chip remove,
+  the read-only and empty states). The full winner-plus-shadowed cascade provenance in the blade, the dynamic tag
+  search facets, and a stored per-key color override are later slices ([#189](https://github.com/hyperscaleav/omniglass/issues/189)).
+- **Tag: the colored effective-tags column on the directories.** The first VISIBLE tag surface, consuming the
+  batch resolver: Components, Systems, and Locations each gain a **Tags** column rendering their **effective**
+  tags (the resolved cascade winners, not just direct bindings) as `key = value` pills. Color is
+  **client-derived** and needs no backend: `tagHue(key)` (a pure `web/src/lib/tagcolor` FNV-1a hash into a
+  curated, yellow-green-pruned 12-hue ramp) maps a key to a stable hue, so the same key is the same color
+  everywhere; a shared `TagPills` component crosses only that hue into a new unlayered `.tag-pill` CSS recipe
+  (text and outline are the seed, the fill is the seed at 15% via `color-mix`), with lightness and chroma in
+  per-theme tokens so one hue reads correctly and stays contrast-safe in both themes. The chips stay on one
+  line, fading at the edge when they overflow, and a portaled hover tooltip reveals the full wrapped set (a `wrap`
+  prop on `TagPills` is the seam for a future per-table wrap toggle). The column registers in each
+  page descriptor, so the columns menu shows, hides, and reorders it, and it sorts by key set. A stored per-key
+  color override is a later slice; the type-to-add editor and tag search follow ([#189](https://github.com/hyperscaleav/omniglass/issues/189)).
+  Proven by a `tagHue` determinism unit test (stable, in-ramp, spread) and a `TagPills` render test (sorted
+  chips, the `--tag-h` per key, the empty dash), plus the page-descriptor conformance matrix.
+- **Tag: batch effective-tags on the directory rows.** The first slice of the tag-apply UI, backend only: the
+  directory list routes (`GET /components`, `/systems`, `/locations`) now carry an **`effective_tags`** map (key to
+  winning value, winners only) on each row, resolved for the whole page in one batched query per kind
+  (`Gateway.EffectiveTags`), feeding the coming Tags column with zero per-row fetch. Effective resolution extends past
+  the component: a **location** resolves the install-wide tier + its own location tree, and a **system** resolves it + its
+  system tree + **the location it is placed at** ([ADR-0022](/architecture/decisions/#adr-0022-effective-tags-resolve-onto-systems-and-locations-a-placed-system-inherits-its-location)),
+  so a system in a PCI building surfaces `compliance: pci`. Three per-kind recursive-CTE resolvers thread a target id
+  through the ancestor chains and rank per (target, key); the resolver is scopeless by contract (the list already
+  filtered the ids to the read scope, the rowActions batch pattern). Proven by a storage integration test (the
+  four-band component cascade, the placed-system-inherits-location case, the non-propagating flat case, a batched
+  shared-ancestor pair with no false cycle, and the empty/unknown edges) and an HTTP e2e (`effective_tags` on the
+  component, system, and location list bodies). The Tags column, the type-to-add editor, and tag search follow in
+  later slices ([#189](https://github.com/hyperscaleav/omniglass/issues/189)).
+- **Tag: the console key directory.** The [tag](/architecture/tags/) vocabulary gets its operator surface: a **Tags**
+  directory under Catalog on the shared FlatList shell, where an admin mints a key (`tag:create`), edits its
+  governance fields (applies_to and the cascade-versus-flat `propagates` toggle, `tag:update`), and deletes it
+  (`tag:delete`, cascading its bindings). Rows address by the key **name** (the write paths key on the name), and the
+  create drawer plus the edit blade reuse the estate's drawer and blade primitives, no fork. Binding a value onto an
+  entity and the effective-tags cascade panel are the next console slice ([#189](https://github.com/hyperscaleav/omniglass/issues/189)).
+  Proven by a data-layer unit test (the envelope unwrap, the create/update/delete request shapes, the error throw)
+  and the full web suite, and live-verified against `make dev` (the directory, the create drawer, the edit blade).
+- **Tag: the governed label vocabulary and its cascaded bindings.** The [tag](/architecture/tags/) primitive lands as
+  its own page: a governed **`tag`** key registry (a normalized lowercase-identifier vocabulary, minting gated by
+  all-scope `tag:create`, broadened to `tag:*` for admin), a per-entity **`tag_binding`** cell owned on the same
+  exclusive arc as a secret and a variable (`platform | location | system | component`), and a resolver that **unions
+  keys and overrides values** most-specific-wins down the [cascade](/architecture/cascade/). The governance split is the
+  point: minting a key is admin-curated, but **setting a value is the entity's own write** (`component:update` and
+  friends), so an operator tags what it may already edit with no new grant; a platform-tier binding is `tag:update`
+  plus `platform:update`. A key
+  carries **`applies_to`** (an entity-kind allow-list, checked on bind) and **`propagates`** (cascade inheritance
+  versus a flat per-entity set, the shape a [file](/architecture/files/) reuses). `GET|POST /tags`,
+  `PATCH|DELETE /tags/{name}`, `POST /tags/{name}:setPlatform|:clearPlatform` (the platform-tier value), and per-entity custom
+  methods `GET /{components,systems,locations}/{name}:listTags` and `POST .../{name}:setTag|:removeTag` (bindings are
+  entity custom methods, like the principal lifecycle, so the generated CLI stays collision-free), plus
+  `GET /components/{name}/effective-tags` (the per-component cascade). Deferred (ADR-0021): the console surface (a Tags
+  directory and per-entity editor, [#189](https://github.com/hyperscaleav/omniglass/issues/189)), binding via
+  [groups](/architecture/groups/) and a `template`-scoped binding ([#184](https://github.com/hyperscaleav/omniglass/issues/184)),
+  value-domain governance ([#190](https://github.com/hyperscaleav/omniglass/issues/190)), and binding onto a file
+  ([#191](https://github.com/hyperscaleav/omniglass/issues/191)). Proven by a pure `internal/tag` validation unit test (key
+  normalization, value bounds, the applies_to allow-list), a storage integration test (the registry CRUD and all-scope
+  gate, the applies_to and value gates, the binding upsert and the owner-update scope split, the full union-on-key /
+  override-on-value cascade incl. the non-propagating flat case, and the delete-key cascade to bindings), and an HTTP
+  e2e (the cascade over the wire and the mint-versus-bind authz split: an operator binds on its component but cannot
+  mint a key nor bind on a system it cannot write, a viewer reads but cannot mint or bind).
+- **Variable: the cascade-resolved free value.** The second member of the [config, secrets, and
+  variables](/architecture/variables/) trio lands, after the secret. A **variable** is a typed **plaintext**
+  value (a macro) owned on the same exclusive arc as a secret (`platform | location | system | component`) and
+  resolved most-specific-wins down the [cascade](/architecture/cascade/), but shown in the clear (no crypto, no
+  masking, no reveal). Typing is **inline**: a `value_type` of `string` / `int` / `float` / `bool` / `json` plus a
+  jsonb `value`, validated against the type in a pure `internal/variable` package (no shape registry, unlike the
+  secret). `GET|POST /variables`, `PATCH|DELETE /variables/{id}`, and `GET /components/{name}/effective-variables`
+  (the per-component cascade view, **since retired**, [#281](https://github.com/hyperscaleav/omniglass/issues/281)).
+  Reads ride the viewer floor; **create and update are granted to operators**
+  (`variable:create,update`), delete stays `variable:delete` (admin, owner), the same split the secret got.
+  Scoping a variable required wiring `variable` into the ABAC resolver's owner-arc tiers, exactly as the secret
+  did. The console adds a **Variables** directory (type in its own column) with a type-aware value editor; a
+  per-component **effective-variables** cascade panel also shipped and was **later retired**
+  ([#281](https://github.com/hyperscaleav/omniglass/issues/281), the panel-retirement note below). Deferred
+  (ADR-0020): the **`template`** owner scope and cascade groups ([#184](https://github.com/hyperscaleav/omniglass/issues/184)),
+  a `variable_type` registry (types are inline), the **`$var:`** interpolation consumer, and the secret-flagged
+  variable.
+  Proven by a `value_type` validation unit test (each scalar's valid and invalid forms), a storage integration test
+  (jsonb round-trip per type, full cascade precedence, the owner-scope split), an HTTP e2e (the cascade, the authz
+  split incl. the scoped-operator create / update and the viewer 403s), a scope-resolver unit test for the
+  owner-arc kinds, and the web data-layer suite.
+- **Secret: the cascade-resolved encrypted value.** The first of the [config, credentials, and
+  variables](/architecture/variables/) trio lands, and the prerequisite for the [collection](/architecture/collection/)
+  driver's interface inputs ([#155](https://github.com/hyperscaleav/omniglass/issues/155)). A **secret** is a
+  typed, encrypted-at-rest value owned on the exclusive arc (`platform | location | system | component`) and
+  resolved most-specific-wins down the [cascade](/architecture/cascade/). Its shape is a `secret_type` registry
+  (per-field secrecy and origin; `snmp-community` and `basic-auth` seeded); crypto is **envelope AES-256-GCM**
+  behind a pluggable KEK provider (env / file / fallback), with `(owner, name, field)` bound as AAD so a
+  ciphertext cannot be lifted between rows. The load-bearing new piece is the **cascade resolver**: it walks the
+  three owner trees up from a component, tags each owner with a band and depth, and ranks per name (highest tier,
+  then deepest), returning the winner and the shadowed candidates. `GET /types/secret`, `/secrets` (all-scope
+  list, create, update, delete), `GET /components/{name}/effective-secrets` (the masked cascade view, **since
+  retired**, [#281](https://github.com/hyperscaleav/omniglass/issues/281)), and the
+  audited decrypts `POST /secrets/{id}:reveal` and `:copy` (a clipboard copy, recorded under a distinct `copy`
+  verb). Masked reads ride the viewer floor; **create and update** are gated by `secret:create` / `secret:update`
+  and granted to **operators** in their scope; **delete** stays `secret:delete` (admin, owner); **reveal** and
+  **copy** by the sensitive `secret:reveal`, which the `*:read` floor does not carry, so only admin (`secret:*`)
+  and owner may decrypt. Scoping a secret required wiring `secret` into the ABAC resolver's owner-arc tiers
+  (location / system / component), so a scoped grant now confers secret scope over its subtree (before, only an
+  all-scope owner could). The console adds a **Secrets** directory (type in its own column) with per-field
+  in-place reveal + copy adornments; a per-component **effective-secrets** list also shipped (each resolved
+  secret opening a blade that decrypts the value and shows the full cascade top-to-bottom) and was **later
+  retired** ([#281](https://github.com/hyperscaleav/omniglass/issues/281), the panel-retirement note below).
+  Renamed **credential to secret** (ADR-0017).
+  Proven by a real-crypto testcontainer test (seal, jsonb round-trip, unseal; encrypted-at-rest; full cascade
+  precedence), an HTTP e2e (the cascade, the authz split incl. the scoped-operator create / update, and the
+  reveal / copy round-trips plus their 403s), a scope-resolver unit test for the owner-arc kinds, and the web
+  data-layer suite. Deferred: the **variable** and **config** members of the page, the interpolation consumer,
+  secret **lifecycle** (oauth2 refresh, rotation), and groups / weighted precedence in the cascade.
+
+- **Identity: clear the login lockout on a password rotation.** Rotating a password now clears the
+  brute-force lockout (`failed_login_count = 0`, `locked_until = null`) in the same transaction as the new
+  secret. Before this the lock (from the login-throttle slice) only cleared lazily at the next login, so an
+  admin reset left the account locked for the rest of the 15-minute window even with the new password. Both
+  rotation lanes clear it: the admin reset (`SetPrincipalPassword`, the reachable intervention while an
+  account is locked) and the self-service change / CLI set-password (`SetPassword`). No new endpoint or
+  capability: rotating the secret is the intervention (auto-unlock over a dedicated `:unlock` action).
+  Proven by a storage test that locks the account with five misses, confirms it is locked, rotates via each
+  lane, and asserts the new secret authenticates immediately with no wait. No migration (the columns exist);
+  no operator-facing surface change.
+
+- **Identity: profile pictures for human principals.** A human principal can carry a **profile picture**,
+  managed on two lanes: **self** (any signed-in user sets or removes their own via `POST /auth/me:setAvatar`
+  / `:removeAvatar`, authn-only and self-scoped, no capability, on the ungated self-service lane) and
+  **admin** (a new `principal:set-avatar` all-scope capability sets or removes any principal's via
+  `POST /principals/{id}:setAvatar` / `:removeAvatar`, audited with the admin as actor; `admin` holds it
+  through `principal:*` and `owner` through `>`, so no `roles.yaml` change). A pure `internal/avatar.Normalize`
+  primitive is the server-authoritative pipeline: accept JPEG/PNG/WebP (GIF and all else rejected), reject a
+  payload over 8 MiB or any dimension over 8000px (decompression-bomb guards), center-crop to a square, resize
+  256x256, re-encode JPEG q82; a bad or oversize image is a 422. Two additive columns on `human` (`avatar`
+  base64, `avatar_updated_at`) store the one normalized size; the bytes never load on the `loadPrincipal` hot
+  path (which selects only `avatar is not null`), so a cheap `has_avatar` bool rides the read models
+  (`GET /principals/{id}`, the Users list, `GET /auth/me`). The **read endpoint is JSON**
+  (`GET /principals/{id}/avatar` gated `principal:read`, `GET /auth/me/avatar` self), returning
+  `{ image_base64 }` the console renders as a `data:` URL, deliberately not a raw `image/jpeg` handler so every
+  route stays under the Huma authz middleware
+  ([ADR-0018](/architecture/decisions/#adr-0018-the-avatar-read-endpoint-is-json-not-raw-image-bytes)); a
+  principal without a picture is a 404. The console **Profile** page gains an image-backed avatar with
+  upload/remove (initials fallback), and the **Users** directory renders per-row thumbnails plus an admin
+  upload/remove panel gated on `principal:set-avatar`. The CLI and typed client fall out of the generator
+  (`omniglass principal setAvatar` / `removeAvatar`). Proven by the `internal/avatar` golden-fixture unit
+  suite (a square JPEG out, non-image / GIF / oversize rejected), a storage round-trip (set / get / clear,
+  `has_avatar` and `avatar_updated_at`, the all-scope gate on the admin write), and a real-binary API test
+  (self set + read + remove, garbage 422, the admin permission 403 without `principal:set-avatar` and success
+  with), plus web tests for both surfaces. Deferred: the top-nav avatar, non-human avatars, multiple sizes /
+  srcset, and external (Gravatar) sources.
+
+- **Identity: view and revoke your own sessions (slice 1 of 2).** A signed-in user can now see and end
+  their own sign-ins and API tokens. Two gateway primitives land on the existing `credential` table (no
+  migration; `created_at` and `expires_at` already exist): `ListBearerCredentials` returns each of a
+  principal's bearer credentials with only non-secret metadata (id, `ogp_` prefix, created, expiry) and
+  never selects the raw `secret_hash` into a returned field (the request's own `sha256(token)` is compared
+  in SQL to flag the `current` one, so the hash never leaves the database), and `RevokeBearerByID` deletes
+  one **scoped to the owning principal** so a caller can only revoke their own. Over the API, `GET
+  /auth/me/sessions` lists them (labelled `session` or `token` by the credential's `purpose`, the
+  current one flagged) and `POST /auth/me/sessions/{id}:revoke` ends one (204); both are authn-only and
+  self-scoped, so a credential id belonging to another principal is a non-disclosing 404, and revoking the
+  current credential signs it out. The console's **Your profile** gains a **Sessions** card listing each
+  credential with a **Revoke** action (**Sign out** on the current one), through the generated typed client
+  and TanStack Query. The generated CLI gains `omniglass session list` / `session revoke <id>`. Proven by a
+  storage test (list returns both with metadata and no secret and the current flag, revoke by id scoped to
+  the principal, a cross-principal or malformed id is a no-op) and a real-binary API test (the current
+  session is flagged, a second session is revoked and stops authenticating, another principal's id is a
+  404, and revoking the current one signs out). The **admin** surface (an operator revoking another
+  principal's sessions) is slice 2.
+
+- **Identity: every credential is time-bounded, and sessions split from API tokens.** Building on the slice
+  above, the tokens-never-expire behavior is reversed ([ADR-0019](/architecture/decisions/#adr-0019-every-credential-is-time-bounded-token-purpose-not-expiry-shape)):
+  a web-login **session** keeps its 12h absolute lifetime, while a CLI/API **token** (`omniglass token`) and
+  the **bootstrap token** (`omniglass bootstrap`) now get a **90-day default** expiry with a `--ttl` override
+  hard-capped at **365 days** (a `--ttl` above the cap is a clean error, before any DB work), so no eternal
+  secret sits in the field. Because both kinds now carry an expiry, a new **`credential.purpose`** column
+  (`session` / `token`), not the nullable `expires_at`, is the discriminator; a migration adds it and
+  backfills existing bearers (expiry set to `session`, else `token`). `IssueBearerCredential` and
+  `BootstrapOwner` take the purpose and expiry; `ListBearerCredentials` returns the purpose and now filters
+  to **live** rows only (`expires_at is null or expires_at > now()`, mirroring `AuthenticateBearer`), so a
+  dead credential is never listed. The console's **Your profile** splits the one list into a **Sessions**
+  section and an **API tokens** section, both rendering a shared `SessionsList` primitive, and a token now
+  shows its expiry. Enforcement stays **lazy** (an expired row is refused at auth, no background sweep).
+  Proven by a storage test (the list carries the right purpose and excludes an expired row), an updated
+  real-binary API test (session vs token asserted via purpose, the minted token carries a future expiry), and
+  a CLI unit test (a `--ttl` above the 365-day cap errors for both `token` and `bootstrap`). Deferred: a
+  sliding idle timeout, a housekeeping sweep of long-expired rows, and nearing-expiry notifications.
+
+- **Identity: an admin can view and revoke a user's sessions (slice 2 of 2).** An administrator can now
+  see and end **another** principal's sign-ins and API tokens, so a lost laptop or a leaked token is cut
+  off without resetting the account. No new storage: it reuses slice 1's `ListBearerCredentials` (passing a
+  nil `currentHash`, so no row is ever flagged `current` when viewing someone else) and the
+  principal-scoped `RevokeBearerByID`. A new **`principal:revoke-session`** capability (a normal two-token
+  permission, held by `admin` and `owner` through their `principal:*` / `>` wildcards, kept separable for a
+  future help-desk role) gates both `GET /principals/{id}/sessions` and
+  `POST /principals/{id}/sessions/{sid}:revoke`. The revoke is bounded to the target (a `sid` that is not
+  theirs is a non-disclosing 404), sits behind the same **takeover guard** as impersonation and the
+  password reset (an owner's sessions cannot be revoked by a lesser admin, nor a principal whose
+  capabilities exceed the caller's), and is **audited with the acting admin as the actor**. The console's
+  **Users** blade gains **Sessions** and **API tokens** sections (a shared `SessionsList` now backs both
+  them and the self-service Profile card), hidden unless the caller holds the capability, with a **Revoke** per row.
+  The blade's action-rail kebab also offers **Revoke all sessions** and **Revoke all tokens** (each confirmed),
+  bulk-ending one purpose at a time through a new `POST /principals/{id}/sessions:revokeAll` backed by a
+  purpose-filtered `RevokeBearersByPurpose` (revoking sessions never touches tokens), returning the count and under
+  the same gate, takeover guard, and audit as the single revoke. The generated CLI gains
+  `omniglass principal sessions <id>` / `principal revoke-session <id> <sid>` /
+  `principal revoke-all-sessions <id>` (the cligen `nameOverride` seam groups them under `principal` so they do
+  not collide with the self-service `session` commands, which share the leaf noun). Proven by real-binary API
+  tests: an admin lists a target's sessions and revokes one so it stops authenticating, bulk-revokes all sessions
+  (both cookies stop authenticating, the tokens survive) then all tokens, an operator is 403, revoking an
+  **owner's** session or bulk-revoking its tokens as a lesser admin is 403 (the takeover guard), a `sid` that is
+  not the target's (or an unknown principal) is a 404, a bad purpose is a 422, the secret never appears, and the
+  revoke is audited with the admin as actor.
+
+- **Identity: a password change keeps API tokens, and self-service bulk revoke.** Two refinements to the
+  session/token model. First, a password change now revokes **sessions only, never tokens** ([#194](https://github.com/hyperscaleav/omniglass/issues/194)): a token is its own bearer secret, not tied to the password, and has its own revoke surface, so both the admin reset (`SetPrincipalPassword`, now `purpose = 'session'`) and the self-service change (`RevokeBearersByPurposeExcept(pr, "session", keep)`, keeping the current session) leave the target's tokens intact. Second, the self-service **Profile** gains **Revoke all** on each of its Sessions and API tokens sections ([#195](https://github.com/hyperscaleav/omniglass/issues/195)), through a new authn-only, self-scoped `POST /auth/me/sessions:revokeAll` (a `{ purpose }` body) that ends all of one kind at once but **always keeps the credential making the request**, so a user is never signed out of the one they are on; the generated CLI gains `omniglass session revoke-all`. Both are built on one shared primitive, `RevokeBearersByPurposeExcept` (the plain `RevokeBearersByPurpose` becomes its nil-keep case, and the now-unused `RevokePrincipalBearers` is retired). The admin blade also stops offering revoke on an **owner** target (whom the takeover guard makes un-revocable): its session/token list renders read-only, with a line explaining an owner can be seen but not ended. Proven by a storage test (the keep-current filter revokes the others and keeps the current + the tokens), an updated real-binary API test (a password change and an admin reset both leave the token authenticating while the sessions die), a new self-service bulk-revoke API test (all sessions except current, then all tokens, a bad purpose 422), and web tests (the Profile Revoke all posts the purpose, and an owner target hides every revoke).
+
+- **Identity: break-glass `set-password` locks out live sessions.** The direct-DB `omniglass set-password <user> <pw>` (the trusted recovery lane, and the **only** way to touch a compromised **owner**, whose credentials the API guards leave un-revocable) previously rotated only the password, so a stolen session cookie or API token kept working after the reset ([#198](https://github.com/hyperscaleav/omniglass/issues/198)). It now also revokes the target's live **sessions** (a break-glass is a lockout), and revokes its API **tokens** too with `--revoke-tokens` (kept by default, matching the password-change-keeps-tokens rule; a full compromise wants the flag). It reuses the `RevokeBearersByPurpose` primitive after `SetPassword`, resolving the principal by username; no API or console change (break-glass stays behind Postgres access). Proven by a real-Postgres CLI test: a live session stops authenticating after the reset, the token survives without the flag and is revoked with it, and the new password authenticates while the old one does not.
+
+- **Identity: self-service tokens, token descriptions, and session identification.** Three coupled additions to the bearer-credential model. A signed-in user can **mint its own** API token from the console (a **Create token** action on the Profile API tokens section) or the API (`POST /auth/me/tokens`, authn-only and self-scoped): a **required description** and an optional `ttl_days` (default 90, capped at 365), returning the secret **once** ([#204](https://github.com/hyperscaleav/omniglass/issues/204), [#205](https://github.com/hyperscaleav/omniglass/issues/205)). A token now **must** carry a description (the CLI `omniglass token` gains a required `--description`, the bootstrap token gets a default, a session leaves it empty), so a user can tell tokens apart. And every credential records the **device and address** that created it: three additive `credential` columns (`description`, `user_agent`, `client_ip`), captured by a middleware before Huma so both login and the token mint stamp them, plus the existing `last_used_at` now **bumped on authentication** (throttled to the minute). The session and token lists (self and admin) show a **device label** (a coarse User-Agent parse, `Chrome on macOS`; `CLI / API` for a token), the creating **IP**, and a **last active** time; `IssueBearerCredential` is struct-ified to a `BearerIssue` to carry the metadata. Location from the IP (a GeoIP lookup, [#193](https://github.com/hyperscaleav/omniglass/issues/193)) is deferred: v1 is IP and User-Agent only. Proven by a storage test (the identity fields round-trip and `last_used_at` bumps on auth), a real-binary API test (self-mint returns the token once, it authenticates and lists as a described token, a blank description or over-cap ttl is a 422), a `deviceLabel` unit test, and a Profile web test.
+- **Identity: the Users, Roles, and Groups directories move to the admin tier.** The directory reads of
+  `principal` (list, get, and the profile-picture route), `role`, and `principal_group` are promoted from a
+  two-token `<resource>:read` to the admin-sensitive **`<resource>:read:admin`**, so the `viewer` read floor
+  (`*:read`) no longer reaches the Users, Roles, and Groups pages, on the console or the API. This supersedes
+  the earlier `role:read` / `principal_group:read` / `principal:read` gates named in the slices above. `admin`
+  carries an explicit `<resource>:read:admin` alongside its wildcards, the same shape as `principal:purge:admin`;
+  `owner`'s `>` is unaffected, and create, update, and the lifecycle verbs stay two-token. Proven by a
+  real-binary API test (a viewer@all 403s on `/principals`, `/roles`, `/principal-groups`; admin and owner
+  200), the nav filter's web test (the three tabs hidden from `*:read`, shown to admin), and rbac matcher
+  cases ([ADR-0023](/architecture/decisions/#adr-0023-the-iam-directory-reads-principal-role-principal_group-are-admin-tier)).
+  Secrets, which an operator legitimately reads in scope, are handled by a later slice.
+- **Secret: admin-sensitivity and a scoped, sensitive-off-the-floor directory.** The second half of the
+  visibility rework, for secrets. Two axes now decide who reaches a secret ([#210](https://github.com/hyperscaleav/omniglass/issues/210)):
+  **placement scope** (unchanged) gives locality, and a new per-secret **`admin_sensitive`** column flips a
+  secret to the **`:admin` tier**, so a platform credential (a Zoom or Microsoft client secret) stays
+  admin/owner-only even at the same scope as an operational device secret. The type carries a
+  **`default_admin_sensitive`** that seeds the create form (a new `oauth2-client` type defaults sensitive,
+  `snmp-community`/`basic-auth` operational). `secret` also joins a **sensitive-resource set** a bare `*`
+  does not reach, in both the direct match and the `:read` floor (Go rbac and the client `can()`), so a
+  `viewer` (only `*:read`) reads no secrets while `operator`/`deploy` gain a scoped
+  `secret:read,reveal,create,update`; `admin`'s `secret:*` becomes `secret:>`. Enforcement is a `canAdmin`
+  capability computed at the API and passed to the Storage Gateway: the `/secrets` directory is now
+  **scope-filtered** and hides admin-sensitive rows, and reveal/update/delete of a hidden secret is a
+  **non-disclosing 404**; creating an admin-sensitive secret needs the admin tier. Proven by a real-binary
+  API test (an operator sees and reveals its in-scope device secret but a non-disclosing 404 on the
+  admin-sensitive one and an out-of-scope one, and is 403 creating a sensitive one; a same-scope admin and
+  the owner see and reveal it), storage integration tests (the scoped list, the seeded type defaults), rbac
+  matcher and covers cases, and the nav/`can()` web tests (Secrets hidden from `*:read`, shown to an explicit
+  `secret:read`). The move of Secrets, Variables, and Config into Catalog is a separate branch
+  ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)).
+- **Tag: filter the directories by their effective tags.** The last major tag piece, closing the
+  set-and-see loop's read half: the Components, Systems, and Locations chip filters gain a single **tag**
+  field that discloses one facet per tag key in use, so an operator narrows a directory by any tag through
+  one guided step (**tag**, then the key, then the value) rather than a top-level field per key. A tag facet
+  reads a row's **effective** value (a component matches on a tag it inherits from its system or location,
+  not only a direct binding), autocompletes the values already in use for that key, and offers two new
+  **value-less** operators, **is set** (`?`) and **is absent** (`!?`), that test only whether the tag is
+  present. These land in the shared [`lib/predicate`](/guides/operator/inventory/#filter) engine (an
+  `exists` / `absent` `OpKey` carrying a `valueless` flag, threaded through `opsFor`, `matchOp`,
+  `buildPredicate`, and `tokenToChip`) so every FilterBar inherits them, plus a `tagFilterKeys` helper that
+  projects one `FilterKey` per tag key present on the loaded rows; the FilterBar keeps those presence facets
+  out of the top-level field list and groups them under the `tag` entry (a direct `key:` still works as a
+  fast path). `ListConfig.filterKeys` becomes **accessor-reactive** (a `FilterKeys<T>` is an array **or** an
+  accessor, resolved in a reactive scope), so the facet set appears the moment the effective tags resolve and
+  tracks whatever the estate is tagged with; each page merges its static facets with a `tagFacets` memo
+  derived from the rows. Deferred: server-side tag filtering at pagination scale (today the match is
+  client-side over the loaded rows) and a stored per-key color override
+  ([#226](https://github.com/hyperscaleav/omniglass/issues/226)). Proven by a `lib/predicate` unit suite (the
+  presence operators, the per-key facet projection and its dedup against the static keys, the value-less
+  tokenizing) and `FilterBar` render tests (the `tag` group discloses its keys, and a `?` / `!?` token
+  commits a value-less chip that renders with no value button).
+- **Estate: the `type` capability resource gates the location/system/component type registries.** The three
+  classifier registries (`location_type`, `system_type`, `component_type`) gain full CRUD behind one new,
+  capability-only, unscoped **`type`** resource, replacing the borrowed `location:read` gate on
+  `list-location-types`. `type:read` needs no new grant (already covered by `viewer`'s `*:read` floor);
+  `type:create,update,delete` is granted to `admin`. A shared storage primitive (`typeregistry.go`) carries the
+  sentinels and the delete guard: an `official` (seed-owned) row is read-only (422 on update/delete), and a row
+  still referenced by a location, system, or component is refused on delete (409, a Gateway pre-count backstopped
+  by the parent foreign key's `NO ACTION`). `system_type` and `component_type` also gain their first `list` route
+  (previously list-only for `location_type`, absent for the other two), retiring the console's fake-from-existing-
+  rows type picker workaround. `secret_type` is untouched (list-only; its fields-schema editor is a separate
+  follow-up). Proven by a storage round-trip per registry (create, duplicate id 409, update, official read-only,
+  in-use delete refused) and a real-binary API test per registry (the CRUD lifecycle, 422 official, 409 in-use,
+  auto-discovered 403 without `type:*` by the route-gating guard). The generated CLI and web client ship in the
+  same slice (`make gen`). Deferred: the Types catalog console page (segmented tab per kind, CRUD drawer
+  over the three writable kinds plus a read-only view of `secret_type`) is a follow-up slice.
+- **Console: nav IA rework, estate values get their own group and Settings becomes Admin.** The
+  sidebar's `nav.ts` gains a new **Values** top-level group (Variables, Secrets, Config), the
+  estate-attached values that used to sit under Settings, standing beside **Inventory** (Components,
+  Systems, Locations, and **Nodes**, the collection daemons) rather than nested inside it. Interfaces
+  and Tasks are dropped from the nav: an interface is a panel on a component and a task is a panel on
+  a node, both future work, not directories of their own. The Settings group is renamed **Admin**
+  (Users, Roles, Groups, Audit) and gains an ungated **soon** Settings leaf reserving the
+  platform-preferences page (severity scales, schedules, retention, defaults)
+  ([#222](https://github.com/hyperscaleav/omniglass/issues/222)). Routes stay flat and unchanged
+  (`/secrets`, `/variables`, `/config`, `/nodes`, the new `/settings` stub), so only the grouping and
+  labels move; this supersedes the earlier same-day plan to move those values into Catalog
+  ([decision log](/architecture/decisions/)). Proven by `nav.test.ts` (the Inventory and Values group
+  order and labels, Admin's renamed label and its soon-stub surviving for both an owner and a bare
+  `*:read` viewer, the moved entries keeping their existing gates) and a `Sidebar.test.tsx` render
+  test (the Inventory and Values groups actually render in the expanded submenu).
+- **Console: the Types catalog page.** The UI follow-up to the type registry CRUD API above:
+  **[Catalog > Types](/guides/admin/types/)** (`/types`) is a **segmented tab control** over all four
+  classifier registries (`location_type`, `system_type`, `component_type`, `secret_type`), the first catalog
+  page to span several registries in one page rather than a directory per primitive. Each tab (Location,
+  System, Component, Secret) renders its own `FlatList` directory scoped to that kind's rows, so the tab is
+  the facet: no cross-kind table and no kind filter to type in. Name and official/custom still narrow the
+  active tab, and rows are addressed `<kind>:<id>` on the shared blade stack since an id is unique only
+  within its own kind. The create drawer opens scoped to the active tab when it is a writable kind (location,
+  system, component); an **official** (seed-owned) row and every row on the Secret tab render with neither
+  Edit nor Delete, the Secret tab instead showing each row's declared fields (name, scalar type, secrecy,
+  origin) read-only, with a note that the fields-schema editor is a follow-up. The page reuses the shell
+  built for the identity surfaces (`FlatList`, `BladeStack`, the blade edit contract) rather than a bespoke
+  layout, so a fifth classifier registry is a `TYPE_KINDS` entry and a route, not a new page shape. Proven by
+  a web data-layer unit suite (`lib/types.ts`): the four-registry aggregation tags each row's kind, a
+  location row carries its icon and a secret row its fields, and create/update/delete each refuse the
+  `secret` kind without a network call. Deferred: the `secret_type` fields-schema editor (noted above) and a
+  page-level component test of the blade CRUD flow.
+- **Inventory: create-as-route and the read-only view invariant.** Creating a component, system, or location no
+  longer returns you to the list. `New` navigates to `/<entity>/create`, a **draft accordion** (Identity and
+  Placement writable, the Tags section locked until the entity exists); **Save** commits the row and hands off to
+  `/<entity>/<id>` in **edit mode** via a one-shot pending-edit flag, so you tag and finish configuring in place.
+  The detail is one accordion, **read-only in view and the sole writer in edit**: the own-field inputs and the
+  `TagAdder` write controls appear only in edit (the footer Edit/Delete and the read-only effective-secrets/variables
+  panels, both since retired ([#281](https://github.com/hyperscaleav/omniglass/issues/281)), were exempt), which
+  retires the old drawer-reopen edit and the mutation-in-view. This is the Users
+  inline-blade-edit model generalised to inventory, on both the docked blade and the full page
+  ([ADR-0027](/architecture/decisions/#adr-0027-create-is-a-route-inventory-create-and-edit-unify-on-the-detail-accordion),
+  [#231](https://github.com/hyperscaleav/omniglass/issues/231)). The shared `TreeList` gains a per-surface edit slot
+  on `ListCtx` (the full page makes its own, since the shared `renderDetail` must not call `useBladeEdit` outside a
+  blade provider), plus `renderCreate` / `onNew` / `onEdit` hooks and an optional `FormBody`. Proven by the live
+  console (draft to create to edit hand-off, then a read-only fresh visit) and per-page web tests for the three
+  entities (the draft route renders, the view has no tag-add control). Deferred: a shared cross-page form shell
+  (slice 2) and moving the Users page onto it (slice 3).
+- **Estate: `rank` retired from the type registries; alphabetical sort.** `rank` was sort-only
+  (no nesting enforcement, per its own seed comment) on `location_type`, `system_type`, and
+  `component_type`; a new dbmate migration (`ALTER TABLE ... DROP COLUMN IF EXISTS rank`,
+  idempotent) drops it from all three tables, and `ListLocationTypes`/`ListSystemTypes`/
+  `ListComponentTypes` now `ORDER BY display_name, id`. The field is gone from the three type
+  bodies, the boot-seed YAMLs, the generated client and CLI, and the
+  [Types catalog](/guides/admin/types/) page (no Rank column, no Rank field on create or edit).
+  This is the mechanical precursor to `allowed_parent_types` (placement constraints on
+  `location_type`), which lands as its own slice
+  ([#239](https://github.com/hyperscaleav/omniglass/issues/239)). Proven by the storage
+  round-trip per registry (alphabetical order, not insertion or id order), the boot-seed
+  idempotency test (the lowest-alphabetical official row per registry), and a web test suite
+  update (no Rank fixtures, no Rank assertions).
+- **Estate: technical-name rename with an inline name check.** A component, system, or location's
+  technical name (its `name`, the URL address) is now editable from the detail accordion in edit
+  mode rather than fixed at creation. Because `id` (uuidv7) is the identity and every foreign key,
+  tag/variable/secret binding, and placement references that UUID, a rename is a one-column update
+  with no cascade. A shared `ValidateEntityName` slug rule (`^[a-z0-9][a-z0-9-]*$`) is the server
+  source of truth, mirrored client-side, and now gates create as well as rename. An inline **Check**
+  button calls a collection-level `POST /<entity>:checkName` that reports `{valid, available,
+  reason}`; availability is deliberately **scope-blind** to match the global unique constraint (a
+  scope-aware check would false-positive on a name held outside the caller's scope) and is gated by
+  `<entity>:update`. The check is advisory: Save stays enabled and the unique constraint (409) is the
+  real gate. `make gen` carries the new field and method through to the typed client and CLI. Proven
+  by the rename round-trip per entity (a child or binding's UUID foreign key still resolves after the
+  parent renames, and the old name frees for reuse), dup-name 409, bad-slug 422 at both create and
+  rename, the three checkName states, and a scope-blind test (a `deploy` principal sees an
+  out-of-scope name as taken, not available), plus per-page web tests for the editable field and the
+  read-only view ([#245](https://github.com/hyperscaleav/omniglass/issues/245)). Deferred: an
+  old-name to id redirect for bookmarked links (a soft 404 today), and wiring the check into the
+  create draft's live validation.
+- **Files: the content-addressed blob store and the file handle.** The first
+  [files](/architecture/files/) slice. A **`blob`** store lands as a Storage Gateway **primitive**: a
+  `blob.Store` seam with a default **pgblobs** backend (bytes held inline in Postgres), keyed by the **sha256**
+  of the bytes so identical bytes **dedup** to one row (`on conflict do nothing`), integrity-verified on read.
+  On top of it, the **`file`** handle, searchable metadata (name, content_type, size, sha256, sensitive) that
+  points at a blob by hash, gets CRUD over the API: **create-from-upload** hashes and dedups server-side, plus
+  get, list, **download** (bytes read back and hash-verified), and delete (which **frees the blob** in the same
+  transaction when no other handle still references it, dedup-aware, so storage is reclaimed; async mark-sweep GC of
+  aged/event-referenced blobs is a later slice). Access is two layers with **no new machinery**: the `file:<action>` permission, and a per-file
+  **`sensitive`** flag reusing the secret `:admin`-tier rule (a flagged file is hidden from a non-admin lister
+  and a non-disclosing 404 to a non-admin reader, admin-only to create), defaulting **off** and leaving `file`
+  off the sensitive-resource set so the viewer floor reads ordinary files. Files carry **no placement scope** (a
+  file is tenant-wide; its 1:many locality is a future attachment, not an owner arc). The generated CLI (a `file`
+  command group) and typed client follow from the Huma structs, and the **Files directory** ships under Values
+  (upload, download, delete, a sensitive badge). Proven by the pure blob and file-validation unit tests, the
+  **pgblobs testcontainer** round-trip and dedup gate (the capability-wrapping close), the gateway integration
+  tests (round-trip, dedup, delete-leaves-blob, the sensitive gate), and a real-binary API e2e (upload to
+  download identical bytes, the viewer/operator/admin permission and sensitive gates)
+  ([ADR-0029](/architecture/decisions/#adr-0029-files-slice-1-a-content-addressed-blob-store-and-a-tenant-wide-file-handle),
+  [#242](https://github.com/hyperscaleav/omniglass/issues/242), [#244](https://github.com/hyperscaleav/omniglass/issues/244)).
+  Deferred: attach-to-entities-and-types (slice 2), tags-on-files ([#191](https://github.com/hyperscaleav/omniglass/issues/191)),
+  async mark-sweep GC of aged/event-referenced blobs, the S3 and disk backends, and the classification lattice
+  ([#243](https://github.com/hyperscaleav/omniglass/issues/243)).
+- **Estate: `allowed_parent_types` constrains where a location may be placed.** `location_type`
+  gains `allowed_parent_types` (`text[]`, default `{}`, a new idempotent migration): a set of
+  `location_type` ids and/or the reserved `root` sentinel a location of that type may sit under.
+  Empty is unconstrained (every existing custom type, unchanged); non-empty is enforced on
+  `CreateLocation` and a new move primitive on `UpdateLocation` (a `parent` patch field,
+  cycle-guarded). A violation is a distinct `storage.PlacementError` (wraps
+  `storage.ErrPlacementNotAllowed`, carries the offending child and parent type names), mapped to
+  a 422 that names both. `CreateLocationType` refuses the id `root`, so a real type can never
+  collide with the sentinel. The four seeded types ship their sets: `campus={root}`,
+  `building={root,campus}`, `floor={building,campus}`, `room={floor,building,campus}`. The
+  [Types catalog](/guides/admin/types/) gains an allowed-parents editor (a checkbox list over the
+  location types plus a Root option) on the location tab's create and edit forms, and the
+  **location edit form's Placement section makes Parent editable**: a picker (riding #240's
+  inventory edit model, the same `Show when={editing()}` split as every other editable field)
+  narrowed to the type's allowed parents and excluding the location's own subtree, wired to the
+  move primitive; moving back to root is not offered
+  ([ADR-0030](/architecture/decisions/#adr-0030-allowed_parent_types-constrains-where-a-location-may-be-placed),
+  [#239](https://github.com/hyperscaleav/omniglass/issues/239)). Proven by a storage integration
+  suite (unconstrained allows all, a listed parent and root both succeed, an out-of-order
+  placement is refused on create and on move with the type names in the error, a cycle move is
+  refused distinctly, and an existing noncompliant placement is untouched by an unrelated update
+  until something tries to move it), a boot-seed idempotency assertion, and API/web tests
+  (including the reparent picker's candidate filtering and self-exclusion). Deferred:
+  `allowed_parent_types` for `system_type`/`component_type`, the same read-only-in-edit Parent gap
+  on Systems and Components, and a drag-to-reparent affordance (this slice's picker is a select,
+  not a drag surface).
+- **Collection slice (checkpoint 5g): the derived interface/task model.** The reachability primitives were
+  reframed to their honest shape ([ADR-0040](/architecture/decisions/#adr-0040-the-task-is-derived-read-only-plumbing-projected-from-its-interface)):
+  the **interface** is the only authored primitive and the **task** is **derived**. An interface is now
+  **named by its protocol** (the name derives from its `interface_type`, unique per component), so the create
+  surface takes a type, not a free-text name. Creating an interface **derives its one poll task**, so the task
+  surface is **read-only**: the `POST` / `PATCH` / `DELETE /tasks` routes and the `task:create` / `task:update`
+  grants are gone, leaving `GET /tasks` and `GET /tasks/{id}`. `task.node_name` is dropped and **projected** from
+  `interface.node_name` (the worklist and the telemetry owner-confinement now join the interface for placement),
+  and a **node purge cascades** its interfaces and their tasks (`interface.node_name` and `task.interface_id` are
+  `ON DELETE CASCADE`). The console follows the entity model, folding the collection children onto their parents:
+  the standalone Tasks page is removed and a node's derived tasks read as a **panel on the node detail**, and the
+  standalone Interfaces tab is removed and a component's interfaces (with their reachability, add, and edit/delete)
+  read as a **panel on the component detail** (an interface belongs to its component). The interface create form
+  drops the name input (name derives from the protocol), the node detail moves onto the shared read-edit-save blade,
+  and the collection pages route through the shared Button primitive.
+  Storage, the API, the CLI, and the typed client regenerate from the reduced surface, so `make gen` is clean.
+  Proven by the reduced storage, API, and web suites over the derived model (an interface derives its task, the
+  task surface is read-only, placement projects, a node purge cascades). This keeps the [collection](/architecture/collection/)
+  and [nodes](/architecture/nodes/) pages `Partial`: the driver / collect layer (the normalized menu, SNMP, the
+  `$sec:` / `$var:` interpolation consumer, templates) is still Design.
+- **Catalog: the `component_make` manufacturer registry.** The first landed slice of a larger
+  make/model catalog: a flat, seed-and-custom registry (`id`, `official`, `display_name`, `icon`,
+  `support_phone`, `website`) naming who makes a component, on the same official-row-read-only
+  pattern as the `*_type` registries. Full CRUD (`POST/GET/PATCH/DELETE/list /api/v1/component-makes`)
+  gated by a new, capability-only, unscoped **`make`** resource (`make:read` sits in the viewer
+  `*:read` floor, `make:create,update,delete` at the admin tier, mirroring `type:*`); eight
+  official makes (Crestron, Biamp, QSC, Shure, Cisco, Extron, Sony, Samsung) are upserted
+  idempotently at boot. The `website` field is validated to an `http`/`https` URL on create and
+  update, both client and server side (a non-browser caller is refused with a 422), closing a
+  stored-XSS path a `javascript:`/`data:` value would otherwise open when the console rendered it
+  as a live link; a value that still fails the check renders as plain text, never a dead or unsafe
+  anchor. The console ships a **[Makes](/guides/admin/vendors/)** catalog page (`FlatList` + blade,
+  an official row read-only, same shape as [Types](/guides/admin/types/)) and the generated CLI
+  (`omniglass component-make list/get/create/update/delete`). Proven by a storage round-trip
+  (official read-only, duplicate id, alphabetical list), a seed idempotency test, a real-binary API
+  test (the CRUD lifecycle, the website-scheme 422, the capability gate), and web unit and
+  component tests covering the safe-URL render guard. Deliberate thin cuts: no in-use delete guard
+  (nothing references a make yet, so a custom row deletes unconditionally; the referential 409
+  lands with `component_model`), no `component_type` genus tree, no `component_model`, and no
+  picker wiring a component to a make. Deferred: the rest of the make/model catalog
+  ([epic #254](https://github.com/hyperscaleav/omniglass/issues/254),
+  [#255](https://github.com/hyperscaleav/omniglass/issues/255)).
+- **Field: an operator-defined typed attribute on a type (slice 0).** The first cut of the
+  [field](/architecture/variables/#property-one-typed-name-a-product-contract-a-stored-value) primitive: an operator declares a typed
+  field on a `component_type` (a `field_definition`: a `name`, a `data_type` of `string`/`int`/`float`/`bool`/`json`, and an
+  optional type-level default validated against the `data_type`, unique per `(component_type, name)`), a component sets a
+  **literal** for a field defined on its type (a `field_value`), and the component's **effective** value resolves to the set
+  literal or the type default (an `is_set` flag marks the override). The whole vertical shipped: storage (transactional,
+  audited), the API (the definition catalog flat and `field:<action>`-gated, the value routes ABAC-scoped to the owning
+  component), the generated CLI and typed client, and the UI (define on the component-type blade under
+  [Types](/guides/admin/types/), plus an **Effective fields** panel on the component detail that sets a literal and shows
+  override-versus-default). Owner is the **component only**: macro interpolation (`$var:`/`$sec:`/`$datapoint:` in a value),
+  the cross-type cascade (`product → location → system → component`, deepest-wins), the `sources` model, typed `file` fields,
+  and definitions on the non-`component_type` owners are deferred to later slices; the UI cannot yet clear a set value back to
+  the type default (the clear route exists on the API and CLI but is not wired into the panel). The [config, secrets, and
+  variables](/architecture/variables/) page moves to `Partial` for the field member. Proven by a storage integration test
+  (definition CRUD and the default type-match guard on create and update, the effective set-or-default read and the
+  not-applicable guard, and value update/delete reverting the component to the default), an HTTP e2e (the effective read, the
+  override set path, and the viewer-reads / operator-sets authz split at the `field:create` gate), and a scope-resolver unit
+  test for the field arc kinds (a component-scoped operator resolves a subtree scope, a viewer resolves empty).
+- **Platform: the settings engine (install-wide level).** The [settings](/architecture/settings/) subsystem ships its first
+  slice: a pure `settings` package that resolves an effective configuration document by deep-merging ordered layers (embedded
+  declared defaults, an optional operator `file`, and the install-wide DB override) most-specific-wins in JSON map-space, tracking
+  per-key **provenance** and enforcing a top-down **lock** (broader level wins). The single **`setting_override`** table holds
+  only the override level, since the base layers are recomputed in memory each boot and restore is therefore a delete
+  ([ADR-0033](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory)),
+  and its Gateway methods are **unscoped**, gated by the `settings:<action>` permission alone
+  ([ADR-0034](/architecture/decisions/#adr-0034-the-settings-gateway-is-unscoped-only-the-permission-gates-it)), reusing the
+  [cascade](/architecture/cascade/) primitive on the principal axis
+  ([ADR-0035](/architecture/decisions/#adr-0035-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock)). The
+  API exposes an admin **`GET /settings`** with provenance, a client-safe authn-only **`GET /settings/me`**, and **`PATCH`** /
+  **`DELETE`** / **`POST /settings:restoreDefaults`** writes under `settings:read` / `settings:update`; the generated CLI and
+  typed client follow. Two `profile`-domain namespaces seed (**`ui`** and **`keybindings`**), and **`ui.theme` is wired end to
+  end**: the console reads its theme from `/settings/me`, so an admin setting the org theme default re-themes the SPA on next
+  load. The Admin **Settings** page (namespace sections, provenance badges, lock chips, restore-to-default) replaces the
+  `/settings` nav stub. Proven by the pure engine unit suite (deep merge, RFC 7386 merge-patch, cascade resolution, lock
+  enforcement, provenance), a testcontainer override round-trip (upsert, audit-in-transaction, delete-restores), an HTTP e2e
+  (admin read with provenance, patch-then-read reflects the override, `/settings/me` readable by a non-admin, the admin read
+  forbidden to a viewer), and web tests (the page renders a provenance badge; the theme mapper). Deferred to the fast-follow:
+  the **group** and **user** override rungs and the Profile preferences tab, the `settings:lock` split for group-admins,
+  `platform`-domain namespaces (`retention`, `integrations`), a GitOps read-only mode, and live file reload (SIGHUP).
+- **Platform: typed settings (slice 1).** A setting is now declared once as a field on a canonical **`Settings`**
+  Go struct: reflection over its `default`, `enum`, `pattern`, and `settings:"<domain>,<visibility>"` tags builds
+  the code-defaults layer and the namespace registry (the embedded `defaults.yaml` and the hand-kept
+  `Namespaces()` list are retired), so adding a setting is one tagged field with no second place to drift
+  ([ADR-0041](/architecture/decisions/#adr-0041-settings-are-a-reflected-typed-struct-with-generated-client-and-server-validation)).
+  The cascade still merges partial maps, but the effective read unmarshals into the typed struct: the API `values`
+  is now the typed **`Settings`** (the generated client gets `values.ui.theme` as a union), and Go code reads a
+  setting off `settingsSvc.EffectiveTyped(ctx)`. Writes validate against the reflected schema (Huma
+  `SchemaFromType` plus `Validate`): an unknown namespace is a **404**, an unknown key or a value failing its
+  `enum`/`pattern`/type is a **422**. A `make gen` step slices those field constraints out of the OpenAPI into
+  **`web/src/api/settings.schema.gen.ts`**, and the settings form validates each field **inline** against it
+  (an enum renders as a select of the generated options, a bad value shows an inline message and blocks Save),
+  with the server 422 as the backstop, so the console and the server enforce the same rules from one source.
+  `default_landing` gains a `^/` pattern to make the inline validation demonstrable. Proven by the reflection
+  unit suite (defaults coercion, registry from tags), the validator suite (unknown-namespace, unknown-key, enum
+  and pattern violations, null-delete skipped), HTTP e2e (a bad `PATCH` is 422 and leaves no override, an unknown
+  namespace is 404), and web tests (the inline validator plus the form rendering the generated enum). Deferred:
+  the declarative operator-file machinery (a generated schema for the operator file, file-layer validation, and
+  letting the file layer outrank the database at the platform level).
+- **Field: an optional `display_name` on a definition.** A `field_definition` gains a nullable
+  **`display_name`**, a human label threaded schema through UI: the console shows the label wherever it is
+  set (the Fields editor on the component-type blade and the **Effective fields** panel), while the raw
+  `name` stays the unique key and the interpolation handle, so an unset label falls back to the key. The
+  column is additive and idempotent, presentation only. Proven by the storage round-trip (the definition
+  create and update carry the label, an unset label stores NULL), the HTTP e2e (the create body accepts
+  `display_name` and it round-trips through the catalog list), and the dev seed (the seeded display fields
+  carry labels without changing row counts). The [config, secrets, and variables](/architecture/variables/)
+  page keeps its `Partial` field badge.
+- **Field: batched edit, upsert, and inherited-versus-set clarity.** The Fields panel's edit flow is
+  reworked. Setting a value is now an **idempotent upsert** (`SetFieldValue`): the first set creates, a
+  later set patches in place (no more `409 field already exists` on a second set), and a set to the
+  unchanged value is a no-op, so the `set-field-value` route returns `200` and stays `field:create`-gated.
+  In the UI the per-field save is gone: a field's edit **stages a draft** and the blade's **Save changes**
+  flushes every touched field (an upsert, or a delete for a cleared override) alongside the component core,
+  through a new `onSave` contributor on the blade edit slot. Edit mode now tells **inherited** from
+  **set**: an inherited field is an empty input with a greyed `unset` placeholder, a set field shows its
+  value with a **clear (×)** that stages a revert to the type default (replacing the revert arrow). Proven
+  by a storage integration test (a second set patches in place, a same-value set writes no audit row), the
+  updated HTTP e2e (the second POST upserts to `200` keeping its `value_id`), and a blade-slot unit test
+  (contributors flush before the primary save, and a throwing contributor aborts and keeps the blade in
+  edit). The [config, secrets, and variables](/architecture/variables/) page keeps its `Partial` field
+  badge.
+- **Config, secrets, and variables: the per-component effective-secrets and effective-variables panels retire.**
+  The standalone **Effective secrets** and **Effective variables** panels on the component detail, and their
+  `GET /components/{name}/effective-secrets` / `GET /components/{name}/effective-variables` routes (with the
+  generated `omniglass effective-secret list` / `effective-variable list` commands and the matching typed-client
+  methods), are **removed** ([#281](https://github.com/hyperscaleav/omniglass/issues/281), under the
+  [field](/architecture/variables/#property-one-typed-name-a-product-contract-a-stored-value) epic
+  [#266](https://github.com/hyperscaleav/omniglass/issues/266)). The panels listed **every** cascade-resolving cell
+  that reached a component, mostly inherited noise; the **field** primitive is the schema-over-cells consumer, so a
+  component's values are now its **fields** (override versus type-default, the **Effective fields** panel), and a
+  secret or variable reaches a component by being **sourced into a field** (the deferred field `sources` model) or
+  **bound to a collection interface input**, not through a per-component cascade-browse panel. **Kept:** the storage
+  cascade **resolvers** (`ResolveSecrets` / `ResolveVariables`) as the internal primitive the future `$sec:` /
+  `$var:` interpolation consumer will call, and the **Secrets** and **Variables** directories (browse, create,
+  edit, reveal) with all their routes and CLI. The [config, secrets, and variables](/architecture/variables/) page
+  drops the retired-panel claims and the [decision log](/architecture/decisions/) records the call. No schema
+  change: the value cells, the resolvers, and the directories are all unchanged.
+- **Node identity and edit (N1).** A node reaches parity with the component/system/location
+  primitives: it gains a nullable `display_name` and an optional `location` (a descriptive
+  placement referencing `location(name)`, `ON DELETE SET NULL`, not a scope; a node stays
+  estate-wide), added by an additive migration. `name` stays the immutable key and estate
+  address. `UpdateNode` and `PATCH /nodes/{name}` (gated a new `node:update`, covered by the
+  owner `node:*`) patch display_name, description, and location, with an unknown location a 422
+  through the FK. The console blade becomes read-edit-save: the title is the display_name
+  (falling back to the name), **Edit** is the primary action and Enroll / Re-enroll moves to the
+  secondary kebab, the list row labels by display_name with the key and location as its subtitle,
+  and the create Drawer carries the two identity fields (its enroll flow is unchanged). Proven by
+  the storage round-trip (each patched field, name immutable, location set / clear, the
+  `ON DELETE SET NULL`), the real-binary API test (the PATCH round-trip, the `node:update` 403,
+  the unknown-location 422, create mints no token in the body), and the web suite (the Edit
+  action gated on `node:update`, the editable fields, Re-enroll from the kebab, the labelled
+  rows). Deferred to their own issues: the token-after-create flow (#287), node tags (#285),
+  decommission (#286), and inline create for flat lists (a platform list-primitive concern). The
+  [nodes](/architecture/nodes/) page stays `Partial`.
+- **Node tags (N2).** A node becomes a taggable owner kind, alongside the install-wide tier / component / system /
+  location. The `tag_binding` owner arc gains a `node_id` leg (an additive migration re-adding the two
+  CHECK constraints; `ON DELETE CASCADE` so a node purge drops its bindings), and the governed
+  `applies_to` set can now include `node`. A node is estate-wide, not a scope tree, so tagging it needs
+  an all scope (`node:update`, reusing the identity gate) and its effective tags are the install-wide layer
+  plus its own direct bindings, no inheritance. The generic per-entity tag routes grow the
+  `/nodes/{name}:listTags` / `:setTag` / `:removeTag` methods, and the node body carries `effective_tags`.
+  The console node blade gains a **Tags** panel (the shared `TagAdder`: read pills, add / remove in edit),
+  and the node list a **Tags** column plus a per-key filter facet, the same shape as the component list.
+  Proven by a storage integration test (the applies_to gate, the all-scope requirement, effective = install-wide
+  + direct, unbind), a real-binary API test (bind / list / effective / unbind and the `node:update` 403),
+  and the web suite. Follows [node identity](/architecture/nodes/) (N1); the [tags](/architecture/tags/)
+  page stays `Partial`. Deferred: setting tags **during** node create (an inline-create platform concern).
+- **Node decommission (N3).** The node blade gets its destructive action: `DeleteNode` +
+  `DELETE /nodes/{name}` (gated a new `node:delete`, covered by the owner `node:*`). It is a
+  hard delete of the node's `kind='node'` principal, which cascades the node detail and, through
+  it, its interfaces and their derived tasks, its node-owned tags and self-telemetry, and its
+  enrollment credential, every referencing FK is already `ON DELETE CASCADE`, so no migration. A
+  node is estate-wide, so it needs an all scope; the delete is audited, and the component
+  telemetry the node collected (owner arc = component, `node_id` null) survives untouched. The
+  console blade adds a **Delete** action (confirm, then close and refresh), completing its
+  cred-action set (Edit primary, Enroll / Re-enroll kebab, Delete destructive). Proven by a
+  storage test (the cascade of interfaces / tasks / tags, the component datapoint surviving, the
+  all-scope gate) and a real-binary API test (the DELETE and the `node:delete` 403). Closes the
+  node-lifecycle arc (N1 identity, N2 tags, N3 delete). The [nodes](/architecture/nodes/) page
+  stays `Partial`.
+- **Field: the override model.** Field rendering converges on one generic primitive, **`FieldControl`** (the
+  field-facing sibling of the `KVRow` / `KVStacked` key:value pair), consumed everywhere a
+  resolved-value-with-override appears. It renders in two modes. **Read** is a slim one-line row (label left,
+  value right) where an **override** reads with an accent **dot on its key** and its value in the **accent
+  colour**, while inherited stays muted. **Edit** is a stacked cell whose key row carries a right-aligned
+  **Override** switch: switch **off** inherits the resolved value (the type default this slice) with no
+  editable input; switch **on** reveals a type-aware input seeded from that value, and **revert is the switch
+  off** (no separate clear). This fixes the **bool** case the old renderer got wrong: inherited, a bool shows
+  the resolved word (`true` / `false`) muted rather than a toggle you appear to have set, and override on
+  gives a real editable toggle. A new **`field_definition.required`** boolean (additive migration, default
+  false, carried through the effective read) marks a required field with a red **`*`**, forces its override
+  on, and gates the blade **Save**: the red input box and a "This value is required" label appear only after
+  a submit attempt leaves the field empty, and Save is blocked while any required field is unfilled.
+  **`EffectiveFields`** is the first consumer, now rendering every field through `FieldControl` and still
+  batching each touched field onto the blade Save. The **`$` source picker** (variable / secret / file) and
+  the symbol-plus-name display of a sourced value are **drawn in the control but wired in a later slice**;
+  this slice sets literals only. Proven by `FieldControl` unit tests (read dot-and-colour and
+  inherited-muted, edit switch-off-value versus switch-on-input and revert, the bool word-versus-toggle
+  split, and the required marker plus the submit-only red box and Save gate), the `EffectiveFields`
+  blade-batch test, and a storage/HTTP round-trip carrying `required`. The [config, secrets, and
+  variables](/architecture/variables/) page keeps its `Partial` field badge.
+- **The property catalog.** The `datapoint_type` catalog is generalized into the primitive-agnostic
+  **`property`** catalog (the physical table; the concept, the `/properties` API, the Go `Property`, and the
+  console all read `property`, while a property's identifier stays a `key`): the typed set of signals a
+  datapoint **observes** and a field **declares**. The
+  `(scope, name)` ladder collapses to a `name` primary key plus an **`official`** boolean (seed-owned
+  properties read-only); `value_type` becomes **`data_type`** over `{string, int, float, bool, json}` (`text`
+  backfills to `string`, `bool` added); **`kind`** is nullable (a declared-only attribute property has none);
+  and **`validation`** is a **JSON Schema** enforced by Huma's own validator with **no new dependency**.
+  Value and source tables keep keying by the **name string** (no FK), so the rename is behavior-preserving:
+  the ingest registry, the reachability BFF, and the metric/state sinks are unchanged. A new
+  **`internal/key`** primitive holds the one canonical name-format rule (lowercase, dot-hierarchied) and
+  the typed value validator; tag's key rule folds onto it. The Storage Gateway gains custom-property CRUD
+  (gated `property:create` / `:update` / `:delete`, official properties read-only, audited in the same transaction),
+  exposed at **`/properties`** with a generated CLI and client, and a new **Catalog > Properties** console page (list,
+  blade, create form). An official seed ships the reachability properties plus a starter attribute set
+  (`serial_number`, `mac_address`, `firmware_version`, `model_number`). Proven by `internal/key` unit
+  tests, the `property` CRUD integration test, the `/properties` HTTP e2e (the `property:create` 403 and official
+  read-only), and the console suite. The type-schema (`field_definition.key`, PR-B) and reconciliation are
+  deferred ([ADR-0043](/architecture/decisions/#adr-0043-the-property-catalog),
+  [#297](https://github.com/hyperscaleav/omniglass/issues/297)). The
+  [config, secrets, and variables](/architecture/variables/) page stays `Partial`.
+- **The component classification catalogs.** The `component_make` registry is generalized into a **`vendor`**
+  catalog with a **`kind`** (`manufacturer` / `integrator` / `developer`), and two new leaf catalogs join it as
+  the rest of the component-classification reference data: a **`driver`** (id, display_name, version) and a
+  **`capability`** (id, display_name). Each of the three reuses the `official`-boolean chassis the type and
+  property registries prove: seed-owned official rows are read-only (update / delete refused 422), a custom row
+  is full CRUD gated by the resource's `<resource>:create` / `:update` / `:delete` permission (admin gains
+  `<resource>:*`, the `*:read` floor gives everyone read) and audited in the same transaction, with official
+  rows seeded at boot. All three ship end to end: the Storage Gateway CRUD, the Huma surface (`/vendors`,
+  `/drivers`, `/capabilities`) regenerated into the OpenAPI document, the cobra CLI, and the typed SPA client,
+  plus a gated **Catalog** console page each (`/vendors`, `/drivers`, `/capabilities`) with a list, detail
+  blade, and create form, official rows read-only in the UI. Proven by the per-catalog CRUD integration tests
+  (official read-only, the scoped permission 403), the HTTP e2e, and the console suites. This is **PR2** of the
+  estate-model shift toward property / event / command + vendor / product / driver / capability / standard /
+  role / health; `product`, `product_capability`, and `component.product` are the next slice
+  ([ADR-0044](/architecture/decisions/#adr-0044-the-component-classification-catalogs)). The
+  [core entities](/architecture/core-entities/) page stays `Partial`.
+- **The product catalog.** **`product`** lands as the concrete **SKU** that ties the
+  [ADR-0044](/architecture/decisions/#adr-0044-the-component-classification-catalogs) leaf catalogs together:
+  a **`kind`** (`device` / `app` / `service` / `vm`), an optional `vendor_id` (who makes it) and `driver_id`
+  (what talks to it), an optional `parent_product_id` (a variant points at its base product), the `official`
+  boolean, and the capabilities it provides through the **`product_capability`** join (a video bar provides
+  microphone, speaker, camera, codec; a replace-the-whole-set update). It reuses the `official`-boolean
+  chassis: seed-owned official rows read-only (update / delete 422), custom rows full CRUD gated by
+  `product:create` / `:update` / `:delete` (the `*:read` floor gives everyone read) and audited in the same
+  transaction, official rows seeded at boot. The slice also adds **`component.product_id`**
+  (`on delete restrict`), the pointer from a component to the product it **is**, making the product the source
+  of a component's shape and retiring the `component_type`-as-shape notion; a product still referenced by a
+  component cannot be deleted (409). It ships end to end: the Storage Gateway CRUD, the Huma surface
+  (`/products`) regenerated into the OpenAPI document, the cobra CLI (`omniglass product
+  list/get/create/update/delete`), the typed SPA client, and a gated **Catalog** console page (`/products`)
+  with a list, detail blade, and create form (vendor, driver, parent, and capability pickers), official rows
+  read-only in the UI. Proven by the product CRUD integration test (official read-only, the `product:create`
+  403, an unknown vendor / driver / capability reference 422, and the in-use 409 when a component points at
+  it), the `/products` HTTP e2e, and the console suite. This is **PR3** of the estate-model shift toward
+  property / event / command + vendor / product / driver / capability / standard / role / health
+  ([ADR-0045](/architecture/decisions/#adr-0045-the-product-catalog)). The
+  [core entities](/architecture/core-entities/) page stays `Partial`.
+- **The `event` log-kind sink.** The collection pipeline gains its **third sink**. A new **`event`** table is
+  the **log-kind sink** (a past occurrence) beside `metric_datapoint` / `state_datapoint` (a sampled present
+  value), carrying the **same datapoint owner exclusive-arc** (`owner_kind` plus `component_id` / `system_id` /
+  `location_id` / `node_id`, one-set CHECK) and the **same provenance** (`observed` / `calculated` / `intended` /
+  `declared`, default `observed`), plus a **`message`** (text) and structured **`attributes`** (jsonb). A
+  **log**-kind datapoint that the ingest consumer used to **drop** (it had no sink) now routes to `event`:
+  `deriveDatapoints` returns metrics, states, **and** events, and the consumer calls **`InsertEvents`**, so a log
+  rides `string_value` (its message) or `json_value` (its attributes) under the **same** owner-confinement and
+  reject-not-project gates as the other two sinks. A boot-seed property **`log.line`** (kind `log`) is the
+  canonical starter. The reserved **`event_id`** columns on `metric_datapoint` and `state_datapoint` are closed
+  into real foreign keys to `event(id)` (`on delete set null`), so an **intended**-provenance datapoint
+  references the `event` that produced it. Storage adds `InsertEvents` (batch, in-tx) and `ListComponentEvents`
+  (newest first); the read route **`GET /components/{name}/events`** (`list-component-events`, gated
+  `component:read`, non-disclosing 404 out of scope) returns the last 24 hours capped at 200, regenerated into
+  the OpenAPI document, the cobra CLI, and the typed SPA client, and the component detail page gains an **Events**
+  panel over it. Proven by the consumer unit tests (a log routes to the event slice, a metric/state still land in
+  their sinks), the `InsertEvents` / `ListComponentEvents` storage integration test, and the
+  `/components/{name}/events` HTTP e2e (the newest-first window and the out-of-scope 404). With metric, state,
+  **and** log all flowing, this is the **P1 follow-up** of the estate-model roadmap
+  ([ADR-0046](/architecture/decisions/#adr-0046-the-event-log-kind-sink)); the
+  [datapoints](/architecture/properties/) and [data collection](/architecture/collection/) pages stay `Partial`
+  (the `log_datapoint` table, the `event_type` registry, and log-to-event promotion are still `Design`).
+- **The fields fold: the product contract and the property value store.** The standalone **fields** feature
+  **retires**: a field was never a primitive, it was a **property with `declared` provenance**. Two tables take
+  its place. **`product_property`** is the product's declared-property **contract** (`product_id`,
+  `property_name`, an optional `default_value`, a `required` flag, unique per pair), replacing
+  `field_definition` and its per-`component_type` catalog; `data_type` and `validation` are **not** duplicated,
+  they stay on the [property catalog](/guides/admin/properties/). **`property_value`** is the value store,
+  carrying the **same owner exclusive-arc** as `metric_datapoint` and `event` (`owner_kind` plus
+  `component_id` / `system_id` / `location_id` / `node_id`, one-set CHECK) plus an `instance` discriminator, a
+  **`provenance`** (`observed` / `calculated` / `intended` / `declared`, default `declared`), and a jsonb
+  `value`; its series key is `unique nulls not distinct`, since the arc leaves three owner columns NULL and the
+  default NULLS DISTINCT would let duplicates through. The resolver **`EffectiveProperties`** is one SQL UNION:
+  the **contract arm** (every `product_property` of the component's product, valued
+  `coalesce(the component's declared value, the contract default)`, `from_contract` true) plus the
+  **off-contract arm** (declared values the contract does not declare), so a **productless** component still
+  resolves, to its off-contract set alone. Six routes ship, regenerated into the OpenAPI document, the cobra
+  CLI, and the typed SPA client: `GET /products/{id}/properties` and `PUT` / `DELETE
+  /products/{id}/properties/{property}` (gated `product:read` / `:update` / `:delete`, an official product
+  read-only 422), and `GET /components/{name}/properties` plus `PUT` / `DELETE
+  /components/{name}/properties/{property}` (gated `component:read` / `:update`, ABAC-scoped with a
+  non-disclosing 404 out of scope, audited in the same transaction). The CLI reads `omniglass product
+  properties|set-property|delete-property` and `omniglass component properties|set-property|clear-property`.
+  The console renames the operator word from **Fields** to **Properties**: the component detail gains a
+  **Properties** panel (contract rows, a dashed-bordered **off contract** group for the ad-hoc ones, an
+  override toggle with an accent dot on an override, a required property blocking Save), and the product detail
+  gains a **Declared properties** contract editor (declare, edit, withdraw, read-only for an official product).
+  Retired with the feature: `field_value`, `field_definition`, `component.component_type`, and the
+  `component_type` table with its `/types/component` routes, its console registry section, and its seed. A
+  component's shape now comes from its **product** (optional: a productless component simply has no contract),
+  and the category `component_type` used to carry (display, codec) is expressed by the **capabilities** that
+  product provides. The seeded products ship a starter contract (`cisco-room-bar` and `samsung-qm55` declare
+  `serial_number`, `firmware_version`, and `model_number` with defaults), and `roles.yaml` drops the
+  now-unclaimed `field:*` permissions, since `property:*` already covers the tier. Proven by the
+  `product_property` and `property_value` storage integration tests (the in-place contract upsert, a nil
+  default round-tripping as SQL NULL, both resolver arms, the idempotent re-set on one series row, the
+  clear-to-default, and the productless component), the `/products/{id}/properties` and
+  `/components/{name}/properties` HTTP e2e (the official-product 422, the unknown-property 422, the
+  out-of-scope non-disclosing 404, the withdraw-twice 404, and the clear back to the contract default), and the
+  console suites for both new surfaces. This is **PR5** of
+  the estate-model shift ([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)).
+  No page badge moves: [core entities](/architecture/core-entities/) and
+  [config, secrets, and variables](/architecture/variables/) both stay `Partial` (the cross-owner cascade, the
+  non-`declared` provenance producers, and the `standard` / `location_type` contracts are still ahead).
+- **The `standard` blueprint, the owner-generic resolver, and the template-fork seed model.** `system_type` is
+  **promoted to `standard`**: the blueprint a system conforms to, the system-side counterpart of `product`. The
+  renamed table gains **`parent_standard_id`** (variants, mirroring `product.parent_product_id`) and a declared
+  property contract, and `system.system_type` becomes **`system.standard_id`**, now **optional**, so a **one-off
+  system that conforms to no standard** is first-class exactly like a productless component. The seeded rows carry
+  over. Since a standard now owns a contract it is a **Catalog entity, not a bare type registry**: it leaves the
+  shared `type:*` permission for its own **`standard:read` / `:create` / `:update` / `:delete`** (read on the
+  viewer `*:read` floor, the writes admin-tier, exactly like `product:*`) and its routes move from `/types/system`
+  to **`/standards`**. Two contract tables join `product_property` on the identical shape:
+  **`standard_property`** and **`location_type_property`** (`<classifier>_id`, `property_name`, an optional
+  `default_value`, a `required` flag, unique per pair); `data_type` and `validation` are **never** duplicated onto
+  a contract, they stay in the [property catalog](/guides/admin/properties/). The resolver then generalizes to
+  **`EffectiveProperties(ctx, ownerKind, ownerID, read)`**, resolving **component, system, location, and node**
+  off **one** parameterized SQL template driven by an **`ownerContract`** table (instance table, classifier
+  column, contract table, contract key, arc column): component reads through `component.product_id`, system
+  through `system.standard_id`, location through `location.location_type`, and a node, having no classifier,
+  resolves ad-hoc values only. The two-arm shape is unchanged (contract arm
+  `coalesce(the instance's value, the contract default)` with `from_contract` true, UNION the ad-hoc arm), so
+  three classifier/instance pairs cannot drift apart. `guardOwnerScope` now scope-checks **every** owner arc on a
+  value write, not just the component one. The routes ship regenerated into the OpenAPI document, the cobra
+  CLI, and the typed SPA client: the `/standards` CRUD; `GET /standards/{id}/properties` plus
+  `PUT` / `DELETE .../{property}` (gated `standard:read|update|delete`); `GET /location-types/{id}/properties`
+  plus `PUT` / `DELETE .../{property}` (gated `type:*`, the registry CRUD staying at `/types/location`); and the
+  value sides `GET /systems/{name}/properties` and `GET /locations/{name}/properties` plus their
+  `PUT` / `DELETE .../{property}` (gated `system:*` / `location:*`, ABAC-scoped with a non-disclosing 404 out of
+  scope, audited in the same transaction). The CLI reads `omniglass standard properties|set-property|delete-property`,
+  `omniglass location-type properties|set-property|delete-property`, and
+  `omniglass system|location properties|set-property|clear-property`. The console gains a **Standards** catalog
+  page with a **Declared properties** contract editor (the Products pattern), a contract editor on the location
+  type blade, and a **Properties** panel on the system and location details (the component pattern: contract
+  rows, a dashed-bordered **off contract** group, an override toggle, a required property blocking Save); the
+  **Types** page drops its System tab. The **seed model** is the conceptual half of the slice: a standard and a
+  location type are created by **forking an in-code template**, a **one-time fork with no inheritance**, so a
+  template can be improved in any release because nothing in any tenant points at it. What lands is therefore
+  **operator-owned**: shipped standards and the four shipped location types seed **`official: false`** through
+  **seed-if-absent** paths (`SeedStandard` / `SeedLocationType`, `ON CONFLICT DO NOTHING`), never the
+  authoritative `Upsert*`, whose `ON CONFLICT DO UPDATE` would silently revert an operator's edit on the next
+  boot. Forking applies **template -> standard**, never **standard -> system**: a system **conforms** with
+  **live** inheritance. The **canonical catalogs are the exception** and keep the authoritative upsert with
+  `official: true`, `property` above all, since it is the shared vocabulary a driver maps onto and a release must
+  be able to correct it. Proven by the `standard`, `standard_property`, and `location_type_property` storage
+  integration tests, the owner-generic resolver tests across all four owner kinds (including the classifier-less
+  node and one-off system), the seed regression test that **edits a seeded standard, re-runs the seed, and
+  asserts the edit survived**, the `/standards` and four property-route HTTP e2e suites (the official read-only
+  422, the unknown-property 422, the out-of-scope non-disclosing 404 on both the read and the write, the
+  withdraw-twice 404, and the clear back to the contract default), and the console suites for the new surfaces.
+  This is **PR6** of the estate-model shift
+  ([ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)). No page
+  badge moves: [core entities](/architecture/core-entities/) stays `Partial` (the cross-owner cascade, the
+  non-`declared` provenance producers, `system_member` composition, and template pinning are still ahead), and
+  [API](/architecture/api/) stays `Partial`.
+- **System roles, required capabilities, and the assignment guard.** A system now declares **what it needs
+  filled**. **`system_role`** is the slot (a table microphone, a main display), declared either on a
+  **`standard`**, where every conforming system **inherits it live**, or **directly on one `system`** (ad-hoc,
+  which is how a one-off system gets roles at all). Both owners ride the **same exclusive arc `property_value`
+  uses** (`owner_kind` plus `standard_id` / `system_id`, a one-set CHECK, and a `unique nulls not distinct` key
+  over the arc columns and the role name, since the arc leaves one owner column NULL). A role carries a
+  **`quorum`** (how many components should fill it, floored at one) and requires a **conjunctive** set of
+  **`role_capability`** rows: a component must provide **every** listed capability. Two more tables complete it:
+  **`component_capability`** (`component_id`, `capability_id`, `present`) is the component's **own** capability
+  facts layered over its product's (`present=true` adds one the product does not claim, `present=false`
+  suppresses one it does), and **`role_assignment`** records who fills the role in this system, with the
+  component FK **`on delete restrict`** so a component staffing a role cannot be deleted out from under it. Two
+  resolvers ship with them. **`EffectiveCapabilities(component)`** is the product's capabilities UNION the
+  component's additions MINUS its suppressions, so a **productless component resolves to just its own
+  declarations**; it is the single definition of "what this component can do" for the whole platform.
+  **`EffectiveRoles(system)`** merges the inherited arm (`from_standard` true) with the ad-hoc arm, each role
+  carrying its required capabilities, its quorum, its assignments, and the served **`assigned`** and
+  **`understaffed`** counts, so no surface does the arithmetic itself. The slice's decision is the
+  **guard**: **`AssignRole` refuses (422) when the component's resolved capabilities do not cover the role's
+  requirement, and the refusal NAMES the missing ones** (`component "panel-1" cannot fill role "table-mic":
+  missing microphone, speaker`, sorted so the same gap always reads the same way), a refusal on **modeled**
+  grounds in the same class as the location placement constraint, and named for the same reason. Capabilities became a **resolved** set precisely to make that
+  strictness survivable: `product` is optional on a component, so a guard over a product-only fact would have
+  locked every productless component out of every role. Eight routes ship, regenerated into the OpenAPI
+  document, the cobra CLI, and the typed SPA client: `GET /standards/{id}/roles` plus
+  `PUT` / `DELETE /standards/{id}/roles/{role}` (gated `standard:read` / `:update` / `:delete`);
+  `GET /systems/{name}/roles` (the resolved read) plus `PUT` / `DELETE /systems/{name}/roles/{role}` and
+  `PUT` / `DELETE /systems/{name}/roles/{role}/assignments/{component}` (gated `system:read` / `:update`); and
+  `GET /components/{name}/capabilities` plus `PUT` / `DELETE /components/{name}/capabilities/{capability}`
+  (gated `component:read` / `:update`). Every system and component route resolves its owner **within the
+  caller's scope** first, so an out-of-scope target is a non-disclosing 404 on the read and the write alike, and
+  every write is audited in the same transaction. The CLI reads `omniglass standard roles|set-role|delete-role`,
+  `omniglass system roles|set-role|delete-role|assign-role|unassign-role`, and
+  `omniglass component capabilities|set-capability|clear-capability`. The console follows the property pattern
+  one tier up: a **Roles** editor on the standard blade (declare a role, set its quorum, pick the capabilities
+  it requires), a **Roles** panel on the system detail (each role with its source, its staffing, an
+  **understaffed** marker, and assign / unassign), and a **Capabilities** panel on the component detail
+  (the resolved set, with the component's own additions and suppressions marked against its product's).
+  The shipped **`meeting-room`** standard
+  declares **`room-mic`** (microphone + speaker, quorum 2) and **`main-display`** (flat-panel-display, chosen so
+  the shipped Samsung QM55 can actually fill it), **seeded if absent** on the operator-owned lane. Proven by the
+  `EffectiveCapabilities` storage integration test (the product's set, an addition, a suppression, and the
+  productless component resolving to exactly its own declarations), the `EffectiveRoles` and assignment test
+  (both arms resolving, quorum 2 reading understaffed 2 then 1 after one assignment, the idempotent re-assign,
+  the **named** shortfall on a display that provides neither microphone nor speaker, a productless component
+  that declares what the role needs being staffed successfully, the unassign-twice miss, the unknown-role
+  not-found, and the one-off system seeing only its own roles), the `/systems/{name}/roles` HTTP e2e (the
+  inherited and ad-hoc rows, the 422 that names the gap, the out-of-scope non-disclosing 404) plus the
+  seeded-standard e2e, and the seed regression that **retunes a seeded role's quorum, re-runs the seed, and
+  asserts the retune survived**. This is **PR7** of the estate-model shift
+  ([ADR-0049](/architecture/decisions/#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)).
+  No page badge moves: [core entities](/architecture/core-entities/) stays `Partial` (a role's **impact** on
+  health, `system_member` composition, template pinning, the cross-owner cascade, and operational mode are still
+  ahead) and [API](/architecture/api/) stays `Partial`.
+- **Health: the alarm-capability-role chain, and a verdict recorded as a transition.** A system and a location
+  now answer "is this working right now?" and "since when?". An **`alarm`** is **component-local** (a
+  `severity` of `info` / `warning` / `critical`, a `message`, a `raised_at`, and a **nullable `cleared_at`**,
+  so clearing **keeps the row** and the record of what was wrong outlives the fix), and **`alarm_capability`**
+  names the capabilities it **degrades**. That naming is the only route out of the component: a component
+  **satisfies** a role only when it provides **every** required capability **and none of those is currently
+  degraded**; a role with fewer satisfying components than its **quorum** is **impaired**; an impaired role
+  contributes the new **`system_role.impact`** (`outage` / `degraded` / `none`, defaulting to `degraded`,
+  landing here because this is the slice that reads it); a system takes the **worst** contribution among its
+  roles and a location the worst among the systems placed anywhere beneath it. The verdict domain is
+  **`healthy` < `degraded` < `outage`**, and the judgement is a **pure package** (`internal/health`) unit-tested
+  with **no database**: `Satisfies`, the quorum boundary, worst-wins, and two deliberate safety defaults in
+  opposite directions (an unrecognized **impact** reads `degraded`, so a bad value never makes an impaired role
+  silently harmless; an unrecognized **recorded value** reads `healthy`, so one stray row cannot paint an estate
+  broken). The conceptual heart is **how health is recorded**. It is written **transition-only** onto
+  **`state_datapoint`**, which is already exactly that primitive (a row only when the value differs from the
+  last one stored, and `StateTransitions` reads the ordered flips the reachability strip draws), on the owner
+  arc with `provenance='calculated'` and `source_rule='health-rollup'`; there is **no new history table**. Two
+  alternatives were rejected for failing the requirement that the **edges be accurate weeks later**:
+  **compute-on-read** keeps no history at all, and **compute-and-write-through-on-read** keeps a history
+  **sampled by whoever opens a page**, so the recorded edge is stamped when somebody looked rather than when the
+  estate changed. Instead the verdict is **recomputed at the writes that can change it, in the same
+  transaction**: alarm raise and clear, assign and unassign, role declare and withdraw, a quorum or impact
+  change, a component capability or **product** change, system create (which gives a system's history a defined
+  beginning), a **standard** change (which moves every conforming system), and a **relocation** (recomputing
+  **both** the location arrived at and the one left, since that one may have just improved). **A read never
+  writes**, and it computes the verdict it serves from the **same resolved rows it displays**, a correctness fix
+  for a report that could otherwise say `healthy` beside an impaired `outage` role; recorded transitions stay
+  the source for history. The slice also forced a **latent bug** into the open: recording an opening verdict at
+  system creation gave every system a `state_datapoint` row from birth, and **every rename then failed on the
+  owner foreign key**, because those FKs address the owner **by name** and declared no `ON UPDATE`. Migration
+  `20260721170000` re-adds all four `state_datapoint` owner FKs with **`on update cascade`**, which is what
+  name-as-address always meant; the same gap on `metric_datapoint`, `event`, `property_value`, `alarm`, and the
+  role tables is tracked in [#314](https://github.com/hyperscaleav/omniglass/issues/314). Five routes ship,
+  regenerated into the OpenAPI document, the cobra CLI, and the typed SPA client:
+  `GET` / `POST /components/{name}/alarms` and `DELETE /components/{name}/alarms/{id}` (gated `component:read` /
+  `:update`, an unknown capability or bad severity a 422), plus `GET /systems/{name}/health` and
+  `GET /locations/{name}/health` (gated `system:read` / `location:read`, scope-injected with a non-disclosing
+  404), each returning the verdict, the contributing roles with their degraded capabilities and the causing
+  alarms (or the systems beneath, for a location), and the recorded transitions over the last 30 days. The CLI
+  reads `omniglass component alarms|raise-alarm|clear-alarm`, `omniglass system health`, and
+  `omniglass location health`, and the seed adds a **`health`** state-kind property. The console carries a
+  **health badge** on the system and location details and in the systems list, a **Health** panel that names
+  the causal chain role by role (alarm -> degraded capability -> role below quorum -> verdict), a **History**
+  strip reusing the reachability availability-strip shape, and an **Alarms** panel on the component (raise,
+  clear, and a recently-cleared group). Proven by the
+  `internal/health` unit suite (the quorum boundary, a degraded assignee dropping a role below it, worst-wins at
+  both levels, the impact mapping, and the verdict round-trip) and the storage and HTTP integration suites (the
+  transitions written through the whole chain, an irrelevant degraded capability changing nothing, the report
+  naming the cause, impact and quorum, the moves on unassign / standard change / product change / relocation,
+  the fresh system's report, **health surviving a rename**, the alarm listing and its refusals, and the
+  out-of-scope non-disclosing 404). This is **PR8** of the estate-model shift
+  ([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)),
+  and it **closes epic [#266](https://github.com/hyperscaleav/omniglass/issues/266)**: the slice that consumes
+  what the previous seven built. [Health](/architecture/health/) advances from `Design` to **`Partial`** (alarms
+  raised by an `event_rule`, system- and location-owned alarms, the `unknown` verdict, the `global` estate top,
+  and the SLI / SLO / SLA and KPI tier are still `Design`); [core entities](/architecture/core-entities/) and
+  [API](/architecture/api/) stay `Partial`.
+- **System membership** (`system_member`): a component's binding to a system is now a row rather than a
+  write-once pointer nobody read, and a role attaches to it. Membership is **many-valued**, so a rack DSP
+  serving three rooms is a member of all three, which the old single pointer could not say at all, and
+  **`is_primary`** keeps one answer for a question asked with no system in hand (a default for context-free
+  callers, not a resolution rule; a partial unique index makes a second primary impossible). **Staffing a
+  role creates the membership**, so the two can never disagree, while giving up a role leaves it, because a
+  member carrying no role (a power conditioner, a spare) is ordinary. A one-time backfill reads **both** of
+  the places membership used to be implied, the role table and the old pointer, since each holds components
+  the other drops. The API adds `GET /systems/{name}/members`, `GET /components/{name}/memberships`,
+  `PUT`/`DELETE /systems/{name}/members/{component}` and
+  `POST /systems/{name}/members/{component}:setPrimary`; the CLI adds `omniglass system
+  members|add-member|remove-member|set-primary-member` and `omniglass component systems`. Proven by the
+  storage integration suite (the shared device in two systems, the first membership taking the default
+  without being asked, a later one not stealing it, the default moving rather than duplicating, assignment
+  creating the binding, removal refused while a role is still filled, the cascade from both ends, and the
+  out-of-scope non-disclosing 404) and by a backfill test that executes the **shipped migration file** rather
+  than a copy, covering the shared device, the pointer-only component, and both-at-once, and asserting a
+  second run changes nothing. Resolution behaviour is a **deliberate thin cut**: `component.system_id` stays
+  and keeps feeding the four cascade resolvers unchanged, so this slice ships and is verified on its own.
+  Slice 1 of epic [#324](https://github.com/hyperscaleav/omniglass/issues/324)
+  ([ADR-0051](/architecture/decisions/#adr-0051-membership-is-the-attachment-and-a-role-is-what-it-does));
+  [core entities](/architecture/core-entities/) and [API](/architecture/api/) stay `Partial`.
+- **Membership-scoped resolution** and the end of the component's system pointer: the tag and variable
+  cascades seed their system band from `system_member` rather than `component.system_id`, and tag
+  resolution takes the system to resolve against (`GET /components/{name}/effective-tags?system=`),
+  falling back to the component's **primary** membership when none is given. A shared device therefore
+  answers **differently for each system it serves**, which the single pointer could not express at
+  all. **Secrets carry no system band**, on ownership grounds: a credential belongs to the device, not
+  to the room it serves. `component.system_id` is **dropped**; the component body now reports `system`
+  (the primary, by name) and `system_count`, and the console reads both instead of joining uuids
+  client-side. Proven by an integration suite written before the change, since a mis-seeded chain is
+  valid SQL that silently returns fewer rows: the same component resolving `prod` for one system and
+  `lab` for another, the context-free read following the primary and moving when the primary moves, a
+  component in no system resolving the other bands without error, a system the component is not a
+  member of lending it nothing, and a system-owned secret never reaching a component. Slice 2 of epic
+  [#324](https://github.com/hyperscaleav/omniglass/issues/324)
+  ([ADR-0052](/architecture/decisions/#adr-0052-the-cascade-resolves-through-membership-and-secrets-carry-no-system-band));
+  [cascade](/architecture/cascade/) and [core entities](/architecture/core-entities/) stay `Partial`.
+- **The effective-values resolution view**, resolved per membership: the component detail gains an
+  **Effective tags** panel showing, per key, the **winning value**, the tier it won from (global,
+  location, system, or the component itself) and the owner's name, with the **shadowed candidates**
+  struck through beneath it. `GET /components/{name}/effective-tags` had existed for some time with no
+  console consumer, so the provenance it returns was being thrown away and the list's flat pills were
+  the only view of a resolved value. A **system selector** appears only when the component belongs to
+  more than one system, and switching it re-resolves against that membership (`?system=`), so a shared
+  device visibly answers `prod` for one room and `lab` for another. A component in a single system
+  sees no selector and reads exactly as before. This closes epic
+  [#324](https://github.com/hyperscaleav/omniglass/issues/324): the engine became per-membership in
+  slice 2, and this is the surface that teaches it. [Cascade](/architecture/cascade/) and
+  [core entities](/architecture/core-entities/) stay `Partial`.
+- **A name is the address** ([ADR-0053](/architecture/decisions/#adr-0053-a-name-is-the-address-a-uuid-is-identity)):
+  the API accepted names on write and returned uuids on read, so a component created with
+  `{"parent": "rack"}` read back as `{"parent_id": "0198f..."}` and no response body could be replayed
+  as the request that produced it. Every client had to fetch a second collection and join by uuid to
+  render one label. Normalized on component, system, and location (`parent`, `location`) and on the tag,
+  variable, and secret bodies, which already carried `owner_name` beside the redundant id. Enforced by
+  `TestResponsesAddressEntitiesByName`, a guard over the generated OpenAPI that fails on any field
+  naming another entity by uuid, and proven by an HTTP round-trip test on all three entities. **Breaking**
+  at v0.0.0, deliberately. The schema stragglers (`secret`, `variable`, `tag_binding` owner arcs) keep
+  their uuid keys for now and are called out in the ADR.
+- **The owner arcs key by name** ([ADR-0055](/architecture/decisions/#adr-0055-the-tag-variable-and-secret-owner-arcs-key-by-name)):
+  the nine arc columns on `tag_binding`, `variable`, and `secret` convert from `uuid references <entity>
+  (id)` to `text references <entity> (name) on update cascade`, matching every table from the collection
+  era onward and completing what ADR-0053 deliberately left. The two conventions no longer meet inside a
+  query: the cascade resolvers projected uuid chains purely to match these three tables, and each chain
+  now projects the **name** while still recursing on `parent_id`. Proven by `TestOwnerArcsSurviveARename`,
+  which binds a tag, a variable, and a secret at a location, renames it, and asserts all three still
+  resolve; **mutation-checked**, since removing `on update cascade` makes the rename fail outright rather
+  than merely orphan the rows. `tag_binding.node_id` keeps its uuid (a node is addressed by its enrollment
+  identity) and `tag_binding.tag_id` is tracked separately in
+  [#340](https://github.com/hyperscaleav/omniglass/issues/340).
+- **Every foreign key stores a primary key** ([ADR-0056](/architecture/decisions/#adr-0056-every-foreign-key-stores-a-primary-key)):
+  all 30 name-keyed foreign keys convert to the target's primary key (a uuid, `principal_id` for a node),
+  reversing the direction ADR-0053 set and ADR-0055 completed. `on update cascade` is gone with them: it
+  was write amplification across every referencing row to protect a key that did not need to be a name.
+  The conversion also fixed a refusal, not just an inefficiency: `interface.component` referenced
+  `component (name)` with **no** `on update` clause, so renaming a component that owned any interface
+  failed outright with a foreign-key violation. Verified against the restored pre-conversion schema
+  rather than argued. In exchange the API accepts **either** form wherever a reference is written (uuid
+  tried first) and every response carries both the name and the id. Shipped in five slices grouped by
+  subsystem so each file changed once; the last converts the collection tier (`metric_datapoint`'s four
+  arcs, `interface`'s component and node arcs, `node.location_name`) and every remaining node reference.
+  Proven by `TestCollectionReferencesSurviveARename`, which renames a component and a location under a
+  live interface, task, and datapoint and asserts the node's resolved worklist and the component's
+  interface list still come back; **mutation-checked** in both directions. Health keeps names internally
+  on purpose, since its advisory lock hashes `health/<kind>/<name>` and a mixed currency would silently
+  stop serializing.
+- **The cascade's least-specific tier is `platform`.** One word, `global`, named two unrelated things: the
+  install-wide **binding tier** and the singleton estate **owner** where health and KPIs roll up. The tier is
+  renamed **`platform`** on both axes, at exactly the rung it already occupied, and `default` is documented off
+  the axis entirely ([ADR-0057](/architecture/decisions/#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier)).
+  An idempotent migration rewrites `owner_kind` on `variable`, `secret`, and `tag_binding` plus `setting_override.scope`,
+  with the check constraints and the partial unique indexes keyed on the value; **no precedence changes, no rows are
+  added, and every existing deployment resolves byte-identically after upgrade**. The settings engine's `code` level
+  becomes **`default`** and its `global` level **`platform`**, the enum rides `make gen` into the OpenAPI, the typed
+  client, and the CLI (`tag setPlatform` / `clearPlatform`, `--owner-kind platform`), and the console renders the tier
+  and a declared default as what they are ("Declared default" carries no origin badge, because nobody set it). The
+  new capability is authorization: a write at the tier now needs **`platform:<action>`** on top of the resource
+  permission, published per route as `x-omniglass-platform-permission` and seeded to `admin` only, so an all-scoped
+  operator runs every site without being able to move the install-wide value under them. `platform` joins the
+  **sensitive-resource set** (with `secret` and `settings`) so a bare `*:update` cannot reach it: install-wide
+  authority is never implied by estate reach, in the rbac core and in the console's mirror of it. The console gates
+  every tier control on **both** halves, on all three surfaces that write at the tier: the Settings page, and the
+  Secrets and Variables pages, where a caller without the tier half is not offered the Platform scope on the create
+  form nor Edit / Delete on a tier row, and reads which capability is missing instead of meeting a 403. **Breaking:** a secret
+  sealed at the old tier cannot be decrypted after upgrade, since the AAD binds `ownerKind|ownerID|name|field`
+  (accepted deliberately, see the ADR). Proven by a testcontainer upgrade test (pre-rename rows resolve identically
+  after the migration, the constraints and unique indexes still hold one row per identity), the settings resolver
+  unit suite on the renamed levels, and an HTTP end-to-end authz test (an all-scoped role without `platform:*` is
+  refused at the tier and permitted below it, and the seeded roles carry the capability exactly where they should).
+  The dev seed carries the no-root-location rule into `make dev`: the example estate is a forest of three unparented
+  tops with devices under two of them, so the location binding at HQ visibly misses the East campus and only the
+  `platform` value reaches both (proven by a pure fixture test and a seeded effective-tags assertion).
+  A closing migration puts `setting_override.scope` under its own CHECK. It was the one tier column with no
+  constraint behind it, which is how the rename passed a green suite while the Go layer still wrote `global` and
+  orphaned every override in silence. The legal set is the levels that are persisted as rows, today `platform`
+  alone: `default` is reflected off the `Settings` struct and `file` is read from disk at boot, so neither can ever
+  be a row, and the group and user rungs will widen the CHECK when they land.
+  The [cascade](/architecture/cascade/) page moves to
+  `Partial`: its binding chain ships for tags, secrets, and variables, while the template bands, group placement by
+  weight, rule accumulation, and the resolve view stay `Design`.
+- **The node API commands are reachable, and a guard keeps the CLI namespace honest**
+  ([ADR-0058](/architecture/decisions/#adr-0058-a-run-mode-is-a-verb-under-its-noun-and-no-command-may-be-shadowed)):
+  the hand-written edge run mode and the generated `node` group both registered as `node`, so cobra
+  resolved `omniglass node list` to the daemon and it failed asking for `--token`. Every generated node
+  command was unreachable while the CLI guide documented them as working. The run mode is now
+  `omniglass node run`. The durable half is `TestNoCommandNameCollisions`, which walks the assembled
+  tree and fails on any duplicate name: written first, it found the known `node` and `type list` cases
+  plus **two nobody had reported**, `grant create` and `grant delete`, where the principal-group
+  variants shadow the principal ones and granting a role to a principal has no CLI path at all
+  ([#357](https://github.com/hyperscaleav/omniglass/issues/357)). Those four are carried as an explicit
+  list that may only shrink, since the guard also fails on an entry that stops colliding.
+- **The CLI naming rule is derived from the whole route, not the leaf noun**
+  ([ADR-0059](/architecture/decisions/#adr-0059-every-collection-segment-is-a-command-level)): every
+  collection segment is a level, so a subresource is addressed under its owner (`component property
+  list`, `principal grant create`). The old leaf-noun rule produced **24 collisions across 195
+  operations** (`property list` seven ways), each silently unreachable and each patched by hand
+  afterwards: `nameOverride` had reached 53 entries whose comments all described the same defect. It
+  is now 14, all genuinely non-AIP `/auth` routes. The generator's grouping also became a real
+  N-level tree, since bucketing by the first word and naming by the last collapsed three-word paths
+  back into collisions. 67 of 202 commands renamed, 135 unchanged, zero collisions. `omniglass statu`
+  (the depluralizer eating `status`) is gone. Two guards keep it: the collision test, whose
+  known-collision list is now empty, and `TestDocsOnlyNameRealCommands`, which fails when a guide
+  teaches a command that does not resolve and immediately found one that had never existed in any
+  build plus two with no API route ([#359](https://github.com/hyperscaleav/omniglass/issues/359)).
+- **The `/types` umbrella is retired**
+  ([ADR-0060](/architecture/decisions/#adr-0060-a-resource-is-one-kebab-case-noun-nesting-means-ownership)):
+  the location type registry was addressed two ways, `/types/location` for its CRUD and
+  `/location-types/{id}/properties` for its contract, so one entity had two command groups and an
+  operator had to know both spellings. The registry CRUD moves to `GET/POST /location-types`,
+  `PATCH/DELETE /location-types/{id}`, and the secret shape registry to `GET /secret-types`. The rule
+  is now stateable in one line: a resource is one kebab-case noun, and nesting means ownership. The
+  `type` command group is gone; `location-type list` is the registry and `location-type property list`
+  its contract. Addressing only: same handlers, same permission gates, same scope injection, no schema
+  change.
+- **"Latest" in a calculated series means the highest id**
+  ([ADR-0061](/architecture/decisions/#adr-0061-a-calculated-series-is-current-at-its-highest-id-not-its-newest-timestamp)):
+  a health row's `ts` is `clock_timestamp()` evaluated before its identity id is assigned, so two
+  concurrent inserts can land with the two orderings disagreeing about which row is current. Every
+  production reader already ordered by id; the health test helper ordered by `ts`, which is what made
+  `make test` intermittently red with a verdict the engine never produced. `LatestState`, which backs the
+  ingest transition guard, ordered by `ts` alone and now tie-breaks on id, so a poll cycle stamping
+  several rows in one instant can no longer resolve to an arbitrary one. Reproduced deliberately (six
+  concurrent copies of the storage package; never once in nine idle full-suite runs) and verified over 24
+  runs under the same load.
+- **The variable and secret cascades get their routes.** `GET /components/{name}/effective-variables`
+  and `/effective-secrets` resolve the same cascade the tag route resolves, returning the winner **and**
+  the shadowed candidates with the tier each came from. The gateway resolvers had been written and
+  tested since the cascade slice and were **unreachable**: no route, so no CLI command and no console
+  read, while the CLI guide taught `omniglass effective-secret list` as though it worked
+  ([#359](https://github.com/hyperscaleav/omniglass/issues/359), found by the docs-command guard).
+  The two are gated differently on purpose: a variable read rides `variable:read`, a secret read rides
+  **`secret:read`**, which the viewer floor deliberately does not carry, and returns **masked** fields.
+  The effective read answers which secret applies and where it comes from, never what it contains;
+  plaintext stays behind the audited reveal, proven by a test that fails if the seeded plaintext ever
+  appears. The CLI commands generated with no generator change (`component effective-variable list`,
+  `component effective-secret list`), which is the parent-qualified naming rule paying off. **Thin cut:**
+  the console's resolution panel still shows tags only ([#365](https://github.com/hyperscaleav/omniglass/issues/365)).
+- **A list row carries both identities.** Every estate entity has a **key** (`name`, the kebab
+  identifier the API and CLI address it by) and an optional **display name**. The console showed one or
+  the other and never both, so the string an operator needs for `omniglass component get <key>` was
+  invisible on every list but Nodes. The row now shows the display name with the key beneath it, muted
+  and in the data face, always visible rather than on hover: hover does not exist on touch, is not
+  discoverable, and cannot be selected to copy, and copying it is the point. When an entity has no
+  display name the label **is** the key, so it renders once, in the data face, marking it as an
+  identifier. **Nothing is derived:** sentence-casing `hq-boardroom-dsp` gives "Hq boardroom dsp", and
+  this domain is acronyms (DSP, HDMI, NVX, PTZ, UC, AVoIP), so mechanical casing mangles them and makes
+  an absent display name look like a typo rather than an absence. The rule now lives in one place
+  (`entityLabel`), replacing **nine** copies of `display_name || name` across the node helper, three
+  page mappers, two local `label` helpers, and the owner and parent pickers.
+- **Create forms lead with the display name and derive the key as you type.** An operator types
+  "Conf Room 301" and the key fills in as `conf-room-301`, editable underneath, instead of having to
+  invent a kebab identifier and get the character class right. `deriveKey` folds diacritics (so "Café"
+  is `cafe`, not `caf`), collapses punctuation runs, trims leading and trailing separators, and
+  respects the 100 character ceiling without leaving a trailing `-`; it only ever produces the empty
+  string or a key matching the `^[a-z0-9][a-z0-9-]*$` the API enforces, asserted against that pattern
+  directly. **The moment the operator edits the key it becomes theirs and stops following**, which is
+  the rule that makes the pattern usable rather than infuriating, and the field says which state it is
+  in. An existing entity's key is owned from the start, so relabelling can never rename: the API takes
+  a rename explicitly and it stays a deliberate act. The coupling is one primitive (`createIdentity`)
+  rather than three copies of a signal pair, on Components, Systems, and Locations.
+- **The resolution panel reads all three cascades, in one list.** It explained the tag cascade only; the
+  variable and secret cascades had routes since the effective-values slice and no console read. All three
+  are the same engine, so they share one table with a **kind** column rather than tabs or stacked
+  sections: their bands genuinely differ (a variable seeds its system band from the **primary**
+  membership, a secret has **no** system band at all), and one list makes that visible instead of hiding
+  it behind a control. A secret shows its provenance and the word `masked`, never a value: which
+  credential a device resolves and from where is the operationally useful fact, and plaintext stays
+  behind the audited reveal. The system selector appears only when a tag is in play, since it is the
+  only kind that answers per-system. A caller without `secret:read` simply sees the other two kinds.
+  Fixed on the way: `bandLabel` still said **global** for the install-wide tier, months after
+  [ADR-0057](/architecture/decisions/#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier)
+  renamed it to `platform`. Its test asserted `from global` against a fixture whose `owner_kind` was
+  `global`, a value the API stopped producing at that rename, so the label and its test were stale
+  together and the suite stayed green.
+- **`product` and `vendor` take uuid primary keys**
+  ([ADR-0062](/architecture/decisions/#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle),
+  slice 1 of [#262](https://github.com/hyperscaleav/omniglass/issues/262)): their kebab id becomes `name`, a
+  unique **renameable** handle, and five inbound foreign keys move to the uuid (`product.vendor_id`,
+  `product.parent_product_id`, `product_capability`, `product_property`, and `component.product_id`). The
+  registries were the last place a foreign key pointed at a mutable string, so a product id could not be
+  corrected after a typo or a rebrand. The API now carries **both** forms on every body and accepts either
+  wherever a product or vendor is named. Proven by `TestRegistryHandleRenameKeepsReferences`, which renames
+  both handles under a live sub-product, contract, capability set, and component instance, and asserts every
+  reference resolves and reads the new handle; **mutation-checked**. The remaining seven registries follow,
+  and five of those are a **rename** of `id` to `name` rather than an addition, since the registries did not
+  agree with each other on the column name to begin with.
+- **`capability` and `standard` take uuid primary keys** (slice 2 of
+  [#262](https://github.com/hyperscaleav/omniglass/issues/262), [ADR-0062](/architecture/decisions/#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle)):
+  their kebab id becomes `name`, and eight inbound foreign keys move to the uuid, `capability` from
+  `product_capability`, `role_capability`, `component_capability`, and `alarm_capability`; `standard` from
+  `standard_property`, `system_role`, its own `parent_standard_id`, and `system.standard_id`. Every read
+  that returned a capability set (the effective-capabilities resolver, the role requirement lists, an
+  alarm's degraded set, the health rollup) now projects the capability's **name**, so the wire surface is
+  unchanged while the storage key is a uuid. Two migration facts from slice 1 recurred and are worth the
+  note: a renamed table keeps its old primary-key constraint name (here `standard` still answered to
+  `system_type_pkey`), so the drop looks the name up from the catalog rather than guessing; and recreating
+  a column drops the NOT NULL and the unique constraints it carried, so an unknown capability that resolves
+  to null on a not-null arc is mapped back to the ref-not-found sentinel rather than surfacing as a 500.
+  The rename test now renames a capability and a standard under a live product, role, and contract and
+  asserts each still resolves and reads the new handle.
+- **`property` takes a uuid primary key, and telemetry keys become real foreign keys** (slice 3 of
+  [#262](https://github.com/hyperscaleav/omniglass/issues/262), [ADR-0062](/architecture/decisions/#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle)):
+  the largest registry conversion. `property`'s kebab id becomes `name`, and its **seven** references
+  move to the uuid: four contract/value tables (`product_property`, `standard_property`,
+  `location_type_property`, `property_value`) that already referenced it, plus the `key` column on
+  `metric_datapoint`, `state_datapoint`, and `event`, which had been a loose property name with **no**
+  foreign key. Those three become real `property_id` foreign keys, so a rename now follows an observation
+  series, not only a contract. Every telemetry key was already a registered property (reject-not-project
+  drops an unregistered name at collection), so the constraint only makes the invariant the database's as
+  well. Every read still projects the property's **name** as `key` and `property_name`, so the wire
+  surface is unchanged. Proven by `TestRegistryHandleRenameKeepsReferences`, extended to rename a property
+  under a live contract, a declared value, and a metric datapoint, and assert the datapoint reads the new
+  key. The remaining four leaf registries are slice 4.
+- **`location_type`, `secret_type`, `driver`, and `interface_type` take uuid primary keys** (slice 4 of
+  [#262](https://github.com/hyperscaleav/omniglass/issues/262), [ADR-0062](/architecture/decisions/#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle)):
+  the last of the epic, closing the invariant that no foreign key anywhere points at a mutable string.
+  `location_type`, `secret_type`, and `driver` are a **rename** of their kebab `id` to `name`;
+  `interface_type` already called its slug `name` and only gains the uuid, as `property` did. Five inbound
+  foreign keys move to the uuid: `location.location_type` and `location_type_property.location_type_id`,
+  `secret.secret_type`, `product.driver_id`, and `interface.type`. Every read still projects the type's
+  **name** (a scalar subquery aliased to the wire field), so the wire surface is unchanged while the
+  storage key is a uuid, and the product body now carries a `driver` handle beside `driver_id` as it
+  carries `vendor` beside `vendor_id`. `allowed_parent_types` stays a text array of type **names**, not a
+  foreign key, since it is a self-reference the placement validator resolves by name. Proven by
+  `TestRegistryHandleRenameKeepsReferences`, extended to rename all four under a live location, a
+  location-type property contract, a secret, a product, and an interface, and assert every reference
+  resolves and reads the new handle; **mutation-checked**. With this slice every registry is uuid-keyed;
+  retiring the slug-key carve-out in the doctrine and the guard allow-lists is the epic's closing slice.
+- **The slug-keyed exception is retired** (slice 5 of
+  [#262](https://github.com/hyperscaleav/omniglass/issues/262), [ADR-0062](/architecture/decisions/#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle),
+  the epic's close): a docs-and-guard slice with one real fix. The [api-first](/contributing/api-first/) rule
+  now reads "every foreign key stores a uuid, no exception"; [ADR-0056](/architecture/decisions/#adr-0056-every-foreign-key-stores-a-primary-key)'s
+  slug-keyed carve-out is marked retired. The `TestReferencesCarryBothForms` guard drops its slug-keyed
+  allow-list: the registry references (`product_id`, `vendor_id`, `driver_id`, `standard_id`, and the two
+  parents) move into the both-forms rule, and emptying the allow-list **surfaced a real gap**, the
+  component response carried `product_id` without the product's name, now fixed by adding the `product`
+  handle to the component body (the guard's whole purpose, catching a uuid-only reference). The storage
+  helper collapses in step: the per-registry `productRefCol` / `vendorRefCol` and the `registryHandles`
+  set fold into one `registryRefCol(ref)`, since every registry behaves identically now. **Epic #262 is
+  complete**: no foreign key anywhere points at a mutable string.
+- **`role` (IAM) takes a uuid primary key**, the last named entity still keyed by its slug. It gains a uuid
+  `id` and demotes the slug to a unique, renameable `name`, and its one inbound reference,
+  `principal_grant.role_id`, moves to the uuid. The RBAC engine is unchanged: it keys roles by name and
+  expands `inherits` by name, so the well-known handles (`owner` / `viewer` / `operator` / `deploy` /
+  `admin`) stay stable and the storage layer resolves `role_id` to a name on read and a name (or uuid) to
+  the uuid on write. The owner invariant, previously holding the literal slug `'owner'` in its trigger,
+  now resolves owner by name (`(select id from role where name = 'owner')`), and the roles view and grant
+  bodies carry the role's name beside the uuid. With this every named entity in the schema is uuid-keyed;
+  the only non-uuid identities left are deliberate (`node.principal_id`, the polymorphic `scope_id` /
+  `resource_id`, content-addressed `blob` / `task`).
+- **The type-registry references carry both forms**: the `interface`, `location`, and `secret` bodies
+  gained `type_id` / `location_type_id` / `secret_type_id` beside their name (`type` / `location_type` /
+  `secret_type`), which were previously name-only, an inconsistency with the both-forms rule the epic
+  enforces everywhere else. `TestReferencesCarryBothForms` now guards **both directions**: the forward
+  scan already caught a `*_id` with no name; a reverse pass over a curated set of unambiguous registry
+  name-fields (`location_type`, `secret_type`) now catches a registry handle with no id, closing the gap
+  that let those name-only references slip past (the forward scan has no `*_id` field to trip on). `type`
+  stays forward-covered on the primary interface body alone, since it also names an RFC-9457 error type
+  and a secret field's data type. The `property_name` contract and value bodies are a follow-up.
+- **The interface's registry field is renamed `type` to `interface_type`** (with `interface_type_id`),
+  matching `location_type` and `secret_type` so the interface reference reads uniformly and can join the
+  guard's reverse set (a bare `type` could not, since it also names an RFC-9457 error type and a secret
+  field's data type). The create flag becomes `--interface-type`. The diagnostic reachability row keeps its
+  `interface_type` name-only (a display value never fed back to a write), recorded as an explicit
+  reverse-check exemption.
+- **The declared-property contract and value bodies carry `property_id`** beside `property_name`, the last
+  name-only registry references: the product / standard / location_type contract lines, the
+  component / system / location value bodies, and the effective-property resolution. `property_name` joins
+  the guard's reverse set, so a contract or value body can no longer name a property without its uuid. The
+  **event body carries `property_id` beside its `key`** too (`key` is the datapoint-key vocabulary for the
+  property name on the telemetry bodies): the event row already stored `property_id` exactly as metric and
+  state do, so exposing it is just a projection. The guard accepts `key` as property_id's name pair on the
+  telemetry body; `key` stays forward-covered rather than joining the reverse set, since it is also a
+  tag-binding field and so ambiguous. Every registry reference in the API now carries both forms.
+- **The migration chain is collapsed to a single init.** The 69 per-slice migrations that carried the
+  schema from the first commit through the uuid-key epic are squashed into one `db/migrations` file that
+  reproduces the current schema exactly. Verified by round trip: a fresh apply of the full chain and a fresh
+  apply of the lone init produce a **byte-identical** `pg_dump`. It is pure DDL (no seed rows, which a squash
+  drops), reuses the original initial migration's version so an existing database treats it as already
+  applied, and carries a real `down` that drops every table. The workflow is unchanged going forward: the
+  next schema change is still a new migration on top, never an edit to this one. One migration-history test
+  that rolled the database back to a now-absent version was removed; the resolution behaviour it checked is
+  covered by the cascade suite. (The stale constraint names the renames left, `component_make_*` on `vendor`
+  and so on, are preserved faithfully by the squash; renaming them is a separate cosmetic pass.)
+- **The observation tables lose the `_datapoint` genus**: `metric_datapoint` becomes `metric` and
+  `state_datapoint` becomes `state`, matching their bare-noun sibling `event` on the principle that the
+  noun is the entity and classification takes a `_type` / `_kind` suffix (the `datapoint_type` classifier
+  already became `property`). Each table name now equals the `property.kind` value it stores
+  (`kind='metric'` to `metric`), and the freed name `datapoint` stays available for the future UNION view
+  over the kind-tables. Verified collision-free (not Postgres keywords, no existing table or column named
+  `metric`/`state`/`log`). Dependent object names (pkey, sequence, indexes, FK and CHECK constraints) keep
+  their `_datapoint` identifiers for now, as the `#262` renames left `vendor` and `standard`; the pending
+  migration collapse cleans every stale identifier in one pass. Table-only rename, no data or wire change.
+- **The stale schema identifier names are cleaned, and two role tables disambiguated.** The collapse
+  preserved every dependent object name verbatim, so the single init carried constraints, indexes, and
+  sequences whose prefixes no longer matched their tables: `metric_datapoint_*` and `state_datapoint_*` on
+  the renamed `metric` / `state`, `component_make_*` on `vendor`, `system_type_*` on `standard`,
+  `datapoint_type_*` on `property`. Each is brought back in line with its table, and the `#262` artifact is
+  fixed too: every registry had a `*_uuid_id_not_null` on its uuid `id` column while the text handle kept
+  the old `*_id_not_null`, now `*_id_not_null` on `id` and `*_name_not_null` on `name`. Separately,
+  `role_capability` and `role_assignment` become `system_role_capability` and `system_role_assignment`:
+  both belong to the AV [system role](/architecture/core-entities/) (a slot a component fills in a system),
+  not the IAM `role` table, and the bare `role_` prefix invited exactly that confusion. Identifiers only,
+  no behaviour change: the init applies clean and the full suite is green.
+- **The name foundation of [ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables) lands: `property_type`, `property`, `property_type_id`.** The
+  signal-definition registry (long carried in the docs as `datapoint_type`, and built as `property`)
+  becomes **`property_type`**; the latest-value store `property_value` takes the freed bare noun
+  **`property`**; and every data table's FK to the registry (`metric`, `state`, `event`,
+  `product_property`, `standard_property`, `location_type_property`, and `property` itself) is repointed
+  `property_id` to **`property_type_id`**, on the wire as well as in the column. A guarded dbmate
+  migration does the table and column renames (the stale dependent object names are left for a cosmetic
+  pass, as the collapse did); the storage structs (`PropertyType`, `Property`), the API bodies, the
+  generated OpenAPI, typed client, CLI, and JSONSchema, and the console all follow. This closes the
+  `datapoint_type`-to-`property` divergence the docs carried: the registry is `property_type`
+  everywhere. The rename is **complete, not a thin cut**: the public resource surface moves too (the
+  registry is `GET/POST /property-types` under the `property_type:*` permission, while the owner-scoped
+  `/{owner}/properties` value routes stay), the both-forms name pair reads `(property_type_id,
+  property_type_name)`, the audit resources are `property_type` / `property`, and a second migration
+  block renames every dependent constraint and index in line with its table. The fuller ADR-0063 model
+  (the provenance-keyed cache, the `event_type` family, the `command` pillar) is still staged.
+- **A component's product, location, and parent, and a system's location and parent, become patchable
+  ([ADR-0064](/architecture/decisions/#adr-0064-placement-and-classification-are-mutable-after-create)).**
+  These fields were accepted on create but had no update path, so a mis-classified or physically moved
+  entity could only be deleted and recreated, losing its telemetry history. `PATCH /components/{name}`
+  and `PATCH /systems/{name}` now take them on the house three-state (omitted unchanged, empty string
+  clears, name sets); a reparent is cycle-guarded and scope-injected like a location move, and a product
+  swap keeps hand-set property values while the new contract's defaults follow. No new UI: this opens the
+  API and CLI and unblocks the CRUD form primitive's generated edit form. Closes
+  [#342](https://github.com/hyperscaleav/omniglass/issues/342).
+- **The `property` latest-value cache and the reconciliation read land ([ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables), first feature slice).**
+  `property` becomes the single-lookup latest-value cache for the producer provenances: the telemetry
+  ingest sink, after appending the `metric`/`state` sample, derives the newest value per `(owner,
+  property_type, instance, provenance)` series through a new `UpsertProperties` gateway, where an
+  out-of-order guard keeps a late older sample from displacing a newer latest. The derive is
+  **non-gating** (a failed upsert is logged, never fails the ack, and the cache is rebuildable from the
+  append-only samples) and idempotent, so a redelivery does not double-write. `LatestValue` returns the
+  current value in one lookup instead of an `order by ts` scan, and a **reconciliation** read (`GET
+  /components/{name}/reconciliation`) pivots **want** (declared, resolved live from the cascade via
+  `EffectiveProperties`, never a cache row), **told** (intended), and **is** (observed), with config-drift
+  computed on read; a read-only Reconciliation panel on the component detail teaches the pivot. Only
+  `observed` has a live producer today; `intended` (the command pillar) and `calculated` (the calc engine)
+  are tested cache slots. One additive migration adds the value's own `ts` to `property`. The
+  [datapoints](/architecture/properties/) and [config, secrets, and variables](/architecture/variables/)
+  pages stay `Partial` (the cache and reconciliation are built; the intended/calculated producers,
+  log-to-event, calc, and fusion remain). Part of
+  [#394](https://github.com/hyperscaleav/omniglass/issues/394).
+- **The event_type family lands: events get their own registry ([ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables), second feature slice).**
+  Events move out of `property_type` into their own **`event_type`** registry, the occurrence keyspace and
+  the twin of `property_type`. A guarded migration creates `event_type`, repoints `event` off
+  `property_type` (kind=log) onto `event_type`, adds the **`origin`** column (caught/caused/derived/
+  scheduled) plus the `caused_by_event_id` and `correlation_id` causation columns, and drops the `log` kind
+  from `property_type` (now `{metric, state}`). Event rows are ephemeral telemetry logs, so the repoint
+  clears the occurrence log rather than backfilling a type. The registry ships full CRUD (`/event-types`,
+  gated `event_type:*`, seeded official `call.started`, official rows read-only), a
+  generated CLI and typed client, and a console **Event Types** catalog page mirroring Properties.
+  The **native caught path** is built: a component that publishes an event (an xAPI event, a trap) has its
+  registered `event_type` name route it to the `event` sink with `origin=caught`, under the same
+  owner-confinement and reject-not-project as a metric or state, and the events panel shows the origin. Raw
+  log lines are a **separate ingest lane**, not events ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)):
+  the `log_line` table and the derivation rules that turn a log line into an event are a later slice. Only
+  the caught path has a producer today; `caused` is the command pillar (#396) and `derived`/`scheduled` need
+  the rule engine and the clock (the action layer).
+  [events](/architecture/events/) advances `Design` to **`Partial`**; [datapoints](/architecture/properties/)
+  notes the `log` kind's graduation. Part of
+  [#395](https://github.com/hyperscaleav/omniglass/issues/395).
+- **The command pillar lands: the do primitive and computed settlement ([ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables), third and final slice).**
+  Events know, datapoints happen, and now a **command** records what a component was told, the third
+  registry (`command_type`) alongside `property_type` and `event_type`. A migration adds `command_type`
+  (with a driver-owned `settle_window_seconds` and an optional `target_property_type`) and the `command`
+  invocation table over the owner arc. **Issuing** a command is one transaction that composes the whole
+  model: it writes the `command`, a **caused** event (`origin=caused`, typed `command.issued`, #395), and,
+  for a settleable command, an **intended** value in the property cache (#394) that the observed value
+  settles against. **Settlement is computed, never stored:** within the settle window a difference is
+  pending, past it a match is settled and a mismatch is failed, the windowed form of the reconciliation
+  read's want/told/is. The registry ships full CRUD (`/command-types`, gated `command_type:*`, seeded
+  `set_input`/`reboot`, plus a `video.input` state and a `command.issued` event_type), the `POST
+  /components/{name}/commands:issue` custom method (gated `command:issue`), a generated CLI and client,
+  and a console **Command Types** catalog page mirroring the property and event catalogs. Deferred (the
+  actuation half): the outbound push to a driver or node, the protobuf `Command` on the wire, and the
+  device acknowledgement. A new [commands](/architecture/commands/) page lands at `Partial`. Part of
+  [#396](https://github.com/hyperscaleav/omniglass/issues/396).
+- **The datapoint concept retires for property, sample, and current value ([ADR-0065](/architecture/decisions/#adr-0065-property-sample-and-current-value-replace-the-datapoint)).** The one word "datapoint" split the signal from the observation: a **property** is the signal (registry `property_type`), a **sample** is one timestamped observation of it (a `metric` / `state` row, the kind), and the **current value** is the latest sample per series (the `property` cache). A behavior-preserving rename, no tables touched: the proto `Datapoint` message becomes `Sample`, the metric and state datapoint Go types become `*Sample`, `deriveDatapoints` becomes `deriveSamples`, and the value-model page is now [properties](/architecture/properties/) (redirect from the old slug), which carries the current-value cache and want/told/is reconciliation explainer. The ADR also settles that the built `property` cache, a table upserted from the sink rather than the once-sketched metric view, is the architecture-of-record for current values. Part of [#405](https://github.com/hyperscaleav/omniglass/issues/405).
+- **The platform ERD is generated from the schema ([data model](/architecture/data-model/)).** A new
+  `make gen` step (`cmd/erdgen`) applies the embedded migrations to a throwaway Postgres, introspects
+  `information_schema` (tables, primary and foreign keys), and renders a subsystem-clustered D2
+  entity-relationship diagram onto the new **Data model** page, so the diagram can never drift from
+  the tables. The `internal/erd` render core is pure and golden-tested; the introspection and a drift
+  gate (regenerate, compare to the committed D2) run against the real schema. Tables land in
+  hand-mapped subsystem containers (identity, estate, catalog, telemetry, collection, config, content,
+  audit); an unmapped table renders in a visible `unclustered` box that trips the drift gate. The
+  sql_table shapes are themed from the brand tokens so the ERD tracks the light/dark toggle. Part of
+  [#406](https://github.com/hyperscaleav/omniglass/issues/406).
+- **The raw-log ingest lane is built for the read path ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)).**
+  `log_line` is the raw-arrival table: untyped device text owned through the exclusive arc, with
+  `severity` and `facility` promoted to indexed columns for retention and routing, and freeform
+  `attributes`/`labels`. A log line is not an event, so the write has no registry gate. The read is
+  `GET /components/{name}/logs` (gated `component:read`, scope-injected), with a generated CLI and typed
+  client, and a console **Logs** panel beside the events panel (severity badges, the structured
+  `attributes` and `labels` columns on demand). The dev seed installs the lobby display's device logs (link, CEC, EDID, input, thermal) as log
+  lines, their model-correct home. The generated ERD picks up `log_line` in the telemetry cluster. Still
+  directional: the ingest producer, the derivation engine that turns log lines into events, and the
+  lineage columns. Part of [#410](https://github.com/hyperscaleav/omniglass/issues/410).
+- **The event lineage columns land ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)).**
+  `event.caused_by_event_id` is renamed to **`source_event_id`** (the source is the cause), and
+  **`source_log_line_id`** (an FK to `log_line`, the raw line a rule derived the event from) and
+  **`derived_by_rule_id`** (which rule) are added, all nullable, so a natively-caught event carries none.
+  This is the schema the derivation engine writes into: a rule that turns a `log_line` into an event will
+  stamp the two new columns. No producer fills them yet (the derivation engine is the next slice); the
+  generated ERD carries the new shape and the `event -> log_line` edge. Part of
+  [#410](https://github.com/hyperscaleav/omniglass/issues/410).
+- **The raw-log lane gets its first producer: node self-logs ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)).**
+  The telemetry `Event` gains a `LogLine` message and a `repeated logs` field: raw log lines are untyped
+  arrival, not registry-resolved samples, so they need their own wire slot. The node now runs an slog handler
+  that writes to its console and buffers every record, **installed as the process default so it is a node-wide
+  emitter**: any node code ships a self-log with a plain `slog.Info(...)` (carrying a `facility`, and optionally
+  a `source`, which the mapping lifts into the `log_line` columns), with no logger threaded down to it, and the
+  buffer is bounded (oldest dropped, count reported) so a chatty stretch between ticks cannot grow the edge
+  process without bound. The run loop drains it each tick and publishes the
+  records as a logs-only Event, which the ingest consumer routes to `log_line` **owner-bound to the node**,
+  ahead of the sample owner-confinement and independent of any task (a logs-only Event lands without a
+  `task_id`). The node narrates its operational story back to the platform (connected to the bus, worklist
+  pulled, a task skipped) instead of swallowing it, and a skipped task becomes a node self-log, not a
+  false-down component state. The read is `GET /nodes/{name}/logs` (gated `node:read`, scope-injected), with
+  a generated CLI (`node log list`) and typed client; the console reuses the `LogsPanel` primitive as a
+  **Self-logs** panel on the node blade. That panel's disclosure is now named for the columns it reveals
+  (`attributes`, `labels`, or `attributes + labels`, each block captioned once open) rather than the
+  overloaded "fields", which collided with a component's property fields and said nothing about which of
+  the two a line carries. The dev seed installs the edge node's example self-logs, and one seeded device
+  log line is **classified with a label**, the ADR-0066 way an untyped line gets sorted into a class
+  without a registry, which nothing in dev exercised before. The
+  end-to-end producer loop is closed by a real node publishing a `worklist pulled` self-log that lands on
+  its `log_line` lane. Still directional: a device-log source (a syslog listener or a poll) and the
+  derivation engine that turns log lines into events. Part of
+  [#410](https://github.com/hyperscaleav/omniglass/issues/410).
+- **The telemetry wire message is renamed: `Event` becomes `TelemetryBatch`
+  ([#424](https://github.com/hyperscaleav/omniglass/issues/424)).** The protobuf message a node ships was
+  called `Event`, but an event in this platform is a semantic occurrence (`event_type`-registered, carrying
+  an `origin`, per [ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)),
+  while the message is the **envelope** that carries samples and, since the log lane landed, raw log lines.
+  Naming the envelope after one of its passengers had put four different meanings on the word "event",
+  three of them in a single function signature. So `proto/og/v1/event.proto` becomes `telemetry.proto`,
+  the message becomes **`TelemetryBatch`** (head-noun-last, matching the subject it travels on,
+  `og.v1.telemetry.<node>`), and the storage write structs align with the `LogLineWrite` convention the log
+  lane established: `MetricSampleEvent` and `StateSampleEvent` become **`MetricSampleWrite`** and
+  **`StateSampleWrite`** (they are insert structs, not events), and `EventOccurrence` becomes
+  **`EventWrite`**. Wire-safe by construction: protobuf encodes field numbers, never message names, so the
+  bytes are identical before and after and a mixed-vintage node and server still interoperate. No behavior
+  change, no schema change, no API surface touched.
+- **Push ingest: the API telemetry lane ([#423](https://github.com/hyperscaleav/omniglass/issues/423)).**
+  A second ingest lane beside the node's, so data can arrive without a driver, a node, or a protocol
+  client. **`POST /telemetry:push`** takes telemetry in our own schema (a *webhook*, by contrast, is the
+  case where we do not control the payload and something must normalize it, which is driver work) and is
+  gated by **`telemetry:push`** with the caller's **scope as the fence**: the owner is declared in the
+  body and read back through the gateway, so an out-of-scope owner is a non-disclosing 404. That is the
+  inverse of the node lane, where the server must derive the owner because a node cannot be trusted to
+  assert one.
+  The payload is **two arrays, split typed versus untyped**: `samples[]`, where the **registry** decides
+  the destination (metric, state, or a caught `event`), and `logs[]`, which are untyped and ungated. The
+  caller supplies a name, never a table, so reject-not-project stays the only authority over where a
+  value lands. Rejection is **synchronous** (validated at the route against the in-memory registry
+  snapshot) while acceptance stays asynchronous, because a 202 that reveals nothing is useless to a human
+  who mistyped a name.
+  A push **publishes onto the data lane** (`og.v1.api.telemetry`) rather than writing Postgres directly,
+  since the rule engine is designed as a stream consumer and anything skipping the stream would be
+  invisible to every rule, alarm, and derivation. Trust is decided by **which subject a batch arrived
+  on**: the lane sits outside the single-token `og.v1.telemetry.*` wildcard (a node named for any literal
+  reserved there would otherwise be granted it), only the server's credential can publish to it, and a
+  node-lane batch that asserts an owner is **dropped, not ignored**. Both lanes land through one
+  extracted **`land()`**, so a new lane cannot drift from the node lane's semantics.
+  Three proto fields earn their place: `owner`, `source` (the node lane fills provenance from
+  `interface_type`, which a push has none of), and `Sample.instance` (a first-class dimension the wire
+  could never express, since the node lane smuggles it via the interface name). Both fall back to the
+  interface-derived value, so the node lane is unchanged. Still directional: owner kinds beyond
+  `component` ([#422](https://github.com/hyperscaleav/omniglass/issues/422)) and webhook normalization.
+- **Templates are redefined, not deferred
+  ([ADR-0071](/architecture/decisions/#adr-0071-a-template-is-a-clonable-example-not-a-versioned-shape-an-instance-pins)).**
+  The decision log and the code had drifted into disagreement and neither said so. ADR-0045 deferred "a product's own
+  template or field-schema binding" and ADR-0049 stated "Templates and their frozen BOM stay `Design`", so the log
+  asserted the pinned model was merely *deferred*, while the shipped schema pointed a component at `product_id` and a
+  system at `standard_id` and ADR-0047 and ADR-0048 had retired `component_type` and `system_type` outright.
+  A template is now an **example configuration an operator clones**: forking is one-time, with no inheritance and no
+  back-pointer, so **a template is upgrade-safe precisely because nothing stays connected to it**. The versioned-shape
+  model retires with the pin (`component_template`, `system_template`, their `*_version` rows, the `stable` / `beta`
+  channels, the frozen BOM, "an instance pins a version"). A component's shape is its **`product`**; a system's is the
+  **`standard`** it **conforms** to with live inheritance. Forking applies template to row, conformance applies row to
+  instance, and only the second is live. The word survives with its purpose inverted: the pin existed so a template
+  could not change under an instance, the fork exists so it can change freely.
+  `templates.md` is rewritten to the fork model (its frontmatter description carried the retired nouns into search
+  results), the cascade loses two rungs (a template cannot be a resolution tier when nothing points at it), and the
+  glossary's two shape rows become supersession entries. Two denylist entries land with it, scoped to the snake_case
+  identifiers on purpose: the *word* template is not retired, so prose like "start from a template" stays correct.
+  Still `Design`: the template loader, its catalog, and the create-from-template flow
+  ([#317](https://github.com/hyperscaleav/omniglass/issues/317)), which now also covers instantiating a whole system.
+- **The collect layer is authorized: a driver consumes transports, and a transport is code
+  ([ADR-0073](/architecture/decisions/#adr-0073-a-driver-consumes-transports-a-transport-is-code-not-a-row)).**
+  [ADR-0039](/architecture/decisions/#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver)
+  recorded the driver-centric split as "the current-best direction, **not a locked gate**" and named its own
+  successor: driver-centric versus template-centric had to be re-examined "in a later ADR **before the collect layer
+  is built**". That ADR was never written, so every collect slice sat behind the scope gate. This is it, and it
+  confirms rather than reverses: `interface_type` is the **transport**, decided to be a **code** registry (one
+  package per transport) rather than an operator-editable table, which retires the table, its FK from
+  `interface.type`, and the hand-written dispatch switch in `internal/node/probe.go` in a later slice. A **driver**
+  declares the transports it can run over and is never one of them. The `interface_type` **is** a driver clause in
+  ADR-0067 is **retracted**: a calendar integration is an `https` transport plus a `graph-calendar` driver, which is
+  the drift a table invites, since any string fits where a transport belongs. Two denylist entries land with it,
+  matching the **claim** rather than the two nouns, so ordinary prose naming both a transport and a driver stays
+  correct. Nothing here is built: `driver` still carries identity only (name, version, official), and the catalog,
+  the normalized menu, discovery, and the device pack are the [collect layer
+  epic](https://github.com/hyperscaleav/omniglass/issues/489). Deliberately left open, each with a home: whether a
+  product may bind more than one driver, whether a product is versioned or stays a live classifier
+  ([#491](https://github.com/hyperscaleav/omniglass/issues/491)), and where cadence lives.
+- **The feature-loop framework: work defined once, approved once, shipped as one rollup PR
+  ([ADR-0074](/architecture/decisions/#adr-0074-an-approved-definition-rolls-up-to-one-pr-slices-cascade-on-an-integration-branch)).**
+  The [feature loops](/contributing/feature-loops/) contract page defines how a body of work executes through an
+  agent loop with exactly two human touchpoints: the architect approves a prose definition at the front and merges
+  one rollup PR at the end, while sub-issue slices cascade through per-slice gates (test-first, the docs lints, an
+  adversarial review) on an integration branch between them. Four skills operationalize it: `/define-work` (the
+  nine-section approvable shape), `/run-feature-loop` (the executor run-book), `/add-api-route` (the
+  middle-of-slice procedure, built from a code study so every named symbol resolves: `gated(...)`, the scoped-CRUD
+  primitive, `writeAuditRes` in-transaction, the ADR-0062 addressing rule, the gen ripple), and
+  `/adversarial-review` (refute-not-confirm, a concrete failure scenario per finding, sweeping a twelve-entry
+  anti-pattern catalog seeded from the 2026-07-30 audit's failure classes). Generate-first is codified as a house
+  rule with its `/ship-slice` gate, and the harness gains unattended-run plumbing (a permission allowlist and a
+  SessionStart environment check pinned to the gen-drift versions). Built as the
+  [AI-driven feature loops epic](https://github.com/hyperscaleav/omniglass/issues/488); the pilot loop
+  ([#502](https://github.com/hyperscaleav/omniglass/issues/502)) runs one approved drift batch through the whole
+  frame before any feature loop launches.
+- **The generated-facts rails: schema, seed, and environment claims can no longer drift
+  ([#433](https://github.com/hyperscaleav/omniglass/issues/433)).** Three artifacts now render the fact classes the
+  2026-07-30 audit found drifting worst, each committed by `make gen`, gated by `gen-drift.yml`, and pinned by its
+  own drift test. `schema.json` (erdgen's introspection, extended to nullability, defaults, CHECK constraints, and
+  unique indexes) feeds the `SchemaTable` component, and eleven architecture pages plus [tags](/architecture/tags/)
+  now render their storage-table mechanics from it, hand-written narrative kept as notes; the sweep verifies no
+  remaining hand-written row claims a live table's columns. `seed.json` (seedgen, no database: the twelve embedded
+  seed YAMLs, with role rows carrying **effective** permissions through the same rbac path the authorizer uses)
+  feeds `SeededSet`, and five admin guides render their shipped-set claims from it, retiring the enumerations that
+  undercounted the property catalog. `config.json` (configgen) renders the new **declarative environment
+  registry**: every variable the binary reads is declared with its doc and scope, `config.Get` refuses an
+  undeclared key, and the container and Helm guides render their env tables from it (the Helm guide previously
+  documented none). Two API guards land with it: every gated operation's description must name its
+  `x-omniglass-permission` stamp verbatim (one shipped deviation corrected: `principal:purge:admin`), and api.md's
+  last hand-written route table is replaced by the generated `/reference/api/`. Built as the
+  [#502](https://github.com/hyperscaleav/omniglass/issues/502) pilot of the feature-loop framework; the run's
+  lessons landed on [feature loops](/contributing/feature-loops/) in the same PR.
+- **Scope and secrets integrity: the schema admits only what the model allows
+  ([#431](https://github.com/hyperscaleav/omniglass/issues/431)).** The unifying idea, a value the code refuses must
+  not be a value the schema, the API, or the console offers, closed across eight slices. The secret directory now
+  **injects scope into its query** through the new arc-scope primitive (`arcScopeCTEs` / `arcScopePredicate`, the
+  exclusive-arc counterpart of the scoped-CRUD walk; one query regardless of row count), retiring the audit's
+  `unscoped-gateway-list` anti-pattern; the secret **system band** is gone from the CHECK, the enum, the console
+  picker, and the docs (finishing ADR-0052); the sample provenance domains lost their impossible `declared` arm;
+  `scope_kind='group'` stopped being advertised by the schema and both grant enums (group-as-scope returns with its
+  slice); the decoy `platform_setting` table and the eight unrouted seed grants are gone, the ship-ahead
+  allowlist now deliberately empty under a reversed policy (a grant lands with its first route); the Helm chart
+  defaults session cookies to `Secure`; and `alarm` gained its **condition identity**
+  ([ADR-0075](/architecture/decisions/#adr-0075-an-alarms-condition-identity-is-a-raiser-supplied-dedup-key)): a
+  `dedup_key` plus the `alarm_open_condition_key` partial unique index make one-open-per-condition a database fact,
+  with `RaiseAlarm` a guarded conditional insert returning the existing incident instead of a duplicate. Run as the
+  second feature loop on the ADR-0074 machinery.
+- **Console address honesty and the audit diff
+  ([#432](https://github.com/hyperscaleav/omniglass/issues/432)).** The console now addresses everything the way
+  [ADR-0062](/architecture/decisions/) promised: the uuid is identity, the kebab `name` is what an operator reads,
+  types, and posts. Nine slices: the location_type and secret_type pickers post the handle the write paths resolve
+  (a fresh install could not add a location from the console before); every registry write accepts either form
+  through `registryRefCol`; the six catalog pages (Drivers, Vendors, Products, Capabilities, Standards, Types) lead
+  with a Name column, filter and address rows by the handle, and keep the uuid as a dim blade fact; Products
+  renders vendor/driver handles and its capability picker joins on the names the wire carries, so removal works; a
+  successful create now lands the operator on the new row's blade across all twelve catalog pages; the 52 blank
+  CLI-reference flag descriptions are filled at their Huma `doc:` tags and a docslint check keeps the class from
+  recurring; and the audit read finally answers "and to what?": `old`/`new` ride the wire and the Audit page's
+  first detail surface renders a field-level before/after diff (a pure `diffFields` projection), with redaction
+  swept and pinned by an e2e (a secret's audit body carries metadata only). The prevention half is a
+  fixture guard: console test fixtures must mint uuid-shaped registry ids (`uuidFor`), and converting 25 files
+  flushed out four more live uuid-vs-name joins (the Systems standard picker, RoleEditor, AlarmsPanel,
+  CapabilitiesPanel), fixed in the same sweep. The `uuid-as-address` anti-pattern is retired in the adversarial
+  catalog. Run as the third feature loop on the ADR-0074 machinery.

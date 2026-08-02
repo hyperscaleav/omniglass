@@ -44,7 +44,7 @@ Not a vibe at each gate, a check:
 - **Docs ship with the feature.** The page that teaches the concept lands in the same PR, the
   architecture-of-record stays consistent, and any divergence is stated, never silent.
 - **Status moves with the code.** A slice that advances a page flips its **status badge** to the new
-  floor (`Design` to `Partial` to `Built`), adds the `status.mdx` build-progress note, and records any
+  floor (`Design` to `Partial` to `Built`), adds the [build log](/architecture/build-log/) entry, and records any
   divergence from the design both inline on the page and in the [decision log](/architecture/decisions/).
   A built capability behind a `Design` badge is a drift bug.
 - **The API cannot drift.** `make gen` regenerates the OpenAPI and the clients (the cobra CLI and the
@@ -77,7 +77,7 @@ Proof:     make test green (fresh, N packages); the load-bearing behaviors; tier
 Visual:    live screenshots for any operator-facing surface (the PR template's
            Visual confirmation section) | n/a (no UI surface)
 Docs:      what shipped; arch-of-record consistent or a divergence note
-Status:    pages advanced (page: Design->Partial); status.mdx entry; ADR-#### if diverged
+Status:    pages advanced (page: Design->Partial); build-log entry; ADR-#### if diverged
 Review:    findings and how addressed; security note if relevant
 
 Decisions I made (your veto window): the judgment calls that bound the design

@@ -63,7 +63,7 @@ A slice that advances a page updates three surfaces in the **same PR**:
 
 - the page's **status badge** moves to its new floor (`Design` to `Partial` to `Built`), which the live
   grid on [implementation status](/architecture/status/) reads directly, so the grid never lies;
-- the **build-progress note** on `status.mdx` gains the slice's entry; and
+- the [build log](/architecture/build-log/) gains the slice's entry; and
 - if the shipped code **diverges** from a page's design, the page carries an inline note and a
   [decision-log](/architecture/decisions/) entry (an ADR) lands in the same PR.
 

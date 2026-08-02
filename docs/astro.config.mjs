@@ -87,17 +87,16 @@ export default defineConfig({
             { label: 'Why Omniglass', slug: 'architecture/why' },
             { label: 'Overview', slug: 'architecture' },
             { label: 'Implementation status', slug: 'architecture/status' },
+            { label: 'Build log', slug: 'architecture/build-log' },
             { label: 'Decision log', slug: 'architecture/decisions' },
             { label: 'Roadmap', slug: 'architecture/roadmap' },
             // the estate model, then the shapes it pins
             { label: 'Core entities', slug: 'architecture/core-entities' },
-            { label: 'Templates', slug: 'architecture/templates' },
             // the journey, in the order the data travels
             { label: 'Data collection', slug: 'architecture/collection' },
             { label: 'Properties', slug: 'architecture/properties' },
             { label: 'Events', slug: 'architecture/events' },
             { label: 'Commands', slug: 'architecture/commands' },
-            { label: 'Calculations', slug: 'architecture/calculations' },
             { label: 'Config & credentials', slug: 'architecture/variables' },
             { label: 'Tags', slug: 'architecture/tags' },
             { label: 'Cascade', slug: 'architecture/cascade' },
@@ -105,7 +104,6 @@ export default defineConfig({
             { label: 'Health & KPIs', slug: 'architecture/health' },
             { label: 'Alarms and actions', slug: 'architecture/alarms-actions' },
             { label: 'UI', slug: 'architecture/ui' },
-            { label: 'Views', slug: 'architecture/views' },
             { label: 'API', slug: 'architecture/api' },
             { label: 'Messaging', slug: 'architecture/messaging' },
             // the foundations underneath
@@ -115,13 +113,25 @@ export default defineConfig({
             { label: 'Workers', slug: 'architecture/workers' },
             { label: 'Scaling and deployment', slug: 'architecture/scaling' },
             { label: 'Settings', slug: 'architecture/settings' },
-            { label: 'Time', slug: 'architecture/time' },
             { label: 'Identity and access', slug: 'architecture/identity-access' },
             { label: 'Audit', slug: 'architecture/audit' },
             { label: 'Files and blobs', slug: 'architecture/files' },
-            { label: 'AI', slug: 'architecture/ai' },
-            { label: 'Expressions', slug: 'architecture/expressions' },
             { label: 'Glossary', slug: 'architecture/glossary' },
+          ],
+        },
+        {
+          // The pages that describe entirely unbuilt capability: every one is a
+          // :::design sketch, badged Design, and graduates out of this group as
+          // its subsystem lands (#434).
+          label: 'Design sketches',
+          collapsed: true,
+          items: [
+            { label: 'Templates', slug: 'architecture/templates' },
+            { label: 'Calculations', slug: 'architecture/calculations' },
+            { label: 'Expressions', slug: 'architecture/expressions' },
+            { label: 'Time', slug: 'architecture/time' },
+            { label: 'Views', slug: 'architecture/views' },
+            { label: 'AI', slug: 'architecture/ai' },
           ],
         },
         {
