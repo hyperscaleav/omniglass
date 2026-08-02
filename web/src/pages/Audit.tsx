@@ -12,17 +12,21 @@ import { diffFields, type DiffRow } from "../lib/auditdiff";
 // (admin and owner), so a viewer never sees it. Filtering is client-side over the
 // loaded rows; "Load older" pages backward through the server `before` cursor.
 
-// Colour a verb so the trail scans at a glance: destructive red, additive green,
-// auth blue, the rest neutral.
-const verbClass = (verb: string): string => {
-  if (verb === "delete" || verb === "login_failed") return "badge-soft badge-error";
-  if (verb === "create") return "badge-soft badge-success";
-  if (verb === "update" || verb === "change_password" || verb === "login_denied") return "badge-soft badge-warning";
-  if (verb === "reveal" || verb === "copy") return "badge-soft badge-warning";
-  if (verb === "login" || verb === "logout") return "badge-soft badge-info";
-  if (verb === "impersonate") return "badge-soft badge-primary";
-  return "badge-ghost";
+// Colour a verb so the trail scans at a glance: destructive red, additive
+// green, mutating amber, auth blue. Every arm returns the same badge-soft
+// treatment, the fallback included, so an unmapped verb reads as one more
+// pill in a neutral tone rather than a second visual style (set and enroll
+// used to render as outlined ghost boxes beside the tinted pills).
+const VERB_FAMILY: Record<string, string> = {
+  delete: "badge-error", purge: "badge-error", revoke_session: "badge-error", login_failed: "badge-error", login_locked: "badge-error",
+  create: "badge-success", enroll: "badge-success", issue: "badge-success", restore: "badge-success", enable: "badge-success",
+  update: "badge-warning", set: "badge-warning", unset: "badge-warning", archive: "badge-warning", disable: "badge-warning",
+  change_password: "badge-warning", reset_password: "badge-warning", clear_avatar: "badge-warning",
+  login_denied: "badge-warning", reveal: "badge-warning", copy: "badge-warning",
+  login: "badge-info", logout: "badge-info",
+  impersonate: "badge-primary",
 };
+const verbClass = (verb: string): string => `badge-soft ${VERB_FAMILY[verb] ?? "badge-ghost"}`;
 
 const when = (ts: string): string => {
   const d = new Date(ts);

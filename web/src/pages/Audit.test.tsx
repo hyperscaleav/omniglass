@@ -14,6 +14,8 @@ const seed: AuditEvent[] = [
   { id: "2", ts: "2026-07-07T10:01:00Z", actor: "u-alice", actor_name: "alice", real_actor: "u-root", real_actor_name: "root", verb: "update", resource: "principal", resource_id: "u-alice", old: { display_name: "Alice" }, new: { display_name: "Alice Cooper" } },
   { id: uuidFor("3"), ts: "2026-07-07T10:00:00Z", actor: "u-bob", actor_name: "bob", verb: "delete", resource: "component", resource_id: "cmp_9f2", old: { name: "encoder" } },
   { id: uuidFor("4"), ts: "2026-07-07T09:59:00Z", actor: "u-bob", actor_name: "bob", verb: "create", resource: "secret", resource_id: "00000000-0000-4000-8000-00000000aaaa", new: { name: "core-snmp", secret_type: "snmp-community" } },
+  { id: uuidFor("5"), ts: "2026-07-07T09:58:00Z", actor: "u-bob", actor_name: "bob", verb: "set", resource: "tag_binding", resource_id: "hq" },
+  { id: uuidFor("6"), ts: "2026-07-07T09:57:00Z", actor: "u-bob", actor_name: "bob", verb: "somenewverb", resource: "widget", resource_id: "w-1" },
 ];
 
 const beforeParams: (string | null)[] = [];
@@ -140,5 +142,20 @@ describe("Audit resource labels (ADR-0062)", () => {
     const dialog = await screen.findByRole("dialog");
     expect(dialog.textContent).toContain("create secret core-snmp");
     expect(dialog.textContent).not.toContain("create secret 00000000-0000-4000");
+  });
+});
+
+// Every action badge wears the same soft treatment: known verbs take their
+// semantic hue and an unmapped verb falls back to a soft neutral, never a
+// second visual style (the plain ghost badge rendered set/enroll as outlined
+// boxes beside the tinted pills).
+describe("Audit action badge consistency", () => {
+  it("renders every verb, mapped or not, with the soft badge treatment", async () => {
+    const { findByText, getByText } = render(() => <Audit />);
+    await findByText("login");
+    for (const verb of ["login", "update", "delete", "create", "set", "somenewverb"]) {
+      const badge = getByText(verb, { selector: ".badge" });
+      expect(badge.className, `verb ${verb}`).toContain("badge-soft");
+    }
   });
 });
