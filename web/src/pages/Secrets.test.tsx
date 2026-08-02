@@ -22,8 +22,8 @@ const types: SecretType[] = [
 ];
 
 const seed: Secret[] = [
-  { id: "s-tier", name: "poll_community", secret_type: "snmp-community", owner_kind: "platform", fields: [{ name: "community", value: "••••••", secret: true }] },
-  { id: "s-below", name: "room_community", secret_type: "snmp-community", owner_kind: "location", owner_name: "room", fields: [{ name: "community", value: "••••••", secret: true }] },
+  { id: uuidFor("s-tier"), name: "poll_community", secret_type: "snmp-community", owner_kind: "platform", fields: [{ name: "community", value: "••••••", secret: true }] },
+  { id: uuidFor("s-below"), name: "room_community", secret_type: "snmp-community", owner_kind: "location", owner_name: "room", fields: [{ name: "community", value: "••••••", secret: true }] },
 ];
 
 const owner: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, fireEvent, screen, waitFor } from "@solidjs/testing-library";
 import Audit from "./Audit";
 import { AUDIT_PAGE, type AuditEvent } from "../lib/audit";
+import { uuidFor } from "../lib/testids";
 
 // The Audit page renders the trail newest-first (resolving the actor to a name and
 // marking an impersonated action), and wears the list-view standard: the shared
@@ -11,7 +12,7 @@ import { AUDIT_PAGE, type AuditEvent } from "../lib/audit";
 const seed: AuditEvent[] = [
   { id: "1", ts: "2026-07-07T10:02:00Z", actor: "u-alice", actor_name: "alice", verb: "login", resource: "auth" },
   { id: "2", ts: "2026-07-07T10:01:00Z", actor: "u-alice", actor_name: "alice", real_actor: "u-root", real_actor_name: "root", verb: "update", resource: "principal", resource_id: "u-alice", old: { display_name: "Alice" }, new: { display_name: "Alice Cooper" } },
-  { id: "3", ts: "2026-07-07T10:00:00Z", actor: "u-bob", actor_name: "bob", verb: "delete", resource: "component", resource_id: "cmp_9f2", old: { name: "encoder" } },
+  { id: uuidFor("3"), ts: "2026-07-07T10:00:00Z", actor: "u-bob", actor_name: "bob", verb: "delete", resource: "component", resource_id: "cmp_9f2", old: { name: "encoder" } },
 ];
 
 const beforeParams: (string | null)[] = [];

@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import AlarmsPanel from "./AlarmsPanel";
 import { componentAlarmsKey, type Alarm } from "../lib/alarms";
 import { CAPABILITIES_KEY, type Capability } from "../lib/capabilities";
+import { uuidFor } from "../lib/testids";
 
 // The alarms panel is where estate health starts: a condition on this component,
 // and the capabilities it takes away. Rows are seeded into the query cache so no
@@ -45,8 +46,8 @@ const alarms: Alarm[] = [
 ];
 
 const catalog: Capability[] = [
-  { id: "display", name: "display", display_name: "Display", official: true },
-  { id: "hdmi-input", name: "hdmi-input", display_name: "HDMI input", official: true },
+  { id: uuidFor("display"), name: "display", display_name: "Display", official: true },
+  { id: uuidFor("hdmi-input"), name: "hdmi-input", display_name: "HDMI input", official: true },
 ];
 
 function json(body: unknown, status = 200, type = "application/json") {

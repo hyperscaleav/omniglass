@@ -17,9 +17,9 @@ import { uuidFor } from "../lib/testids";
 // Data is seeded into the query cache so no server is needed; `>` grants every
 // permission.
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const hq: Location = { id: "l-hq", name: "hq", display_name: "HQ", location_type: "campus", effective_tags: {} };
-const lab: Location = { id: "l-lab", name: "lab", display_name: "Lab", location_type: "campus", effective_tags: {} };
-const hqB1: Location = { id: "l-b1", name: "hq-b1", display_name: "HQ B1", location_type: "building", parent: "hq", effective_tags: {} };
+const hq: Location = { id: uuidFor("l-hq"), name: "hq", display_name: "HQ", location_type: "campus", effective_tags: {} };
+const lab: Location = { id: uuidFor("l-lab"), name: "lab", display_name: "Lab", location_type: "campus", effective_tags: {} };
+const hqB1: Location = { id: uuidFor("l-b1"), name: "hq-b1", display_name: "HQ B1", location_type: "building", parent: "hq", effective_tags: {} };
 // Registry rows carry a uuid id and the kebab handle in name (ADR-0062); the
 // server stores and compares the handle everywhere a location references its
 // type, so a fixture with the handle in the id slot would hide a uuid-vs-name
@@ -133,7 +133,7 @@ describe("Locations create-as-route", () => {
     // is [root, campus], so the real campus HQ must be offered as a candidate even
     // though b2 is currently root, not filtered out just because there is no current
     // parent to compare against.
-    const b2: Location = { id: "l-b2", name: "b2", display_name: "B2", location_type: "building", effective_tags: {} };
+    const b2: Location = { id: uuidFor("l-b2"), name: "b2", display_name: "B2", location_type: "building", effective_tags: {} };
     mount("/locations/b2", [b2]);
     await waitFor(() => expect(screen.getByText("Technical name")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
@@ -332,7 +332,7 @@ describe("Locations list identity", () => {
   });
 
   it("shows the key once when the entity has no display name", async () => {
-    const bare: Location = { id: "l-bare", name: "hq-boardroom-nvx-tx", location_type: "campus", effective_tags: {} };
+    const bare: Location = { id: uuidFor("l-bare"), name: "hq-boardroom-nvx-tx", location_type: "campus", effective_tags: {} };
     mount("/locations", [bare]);
     await waitFor(() => expect(screen.getByText("hq-boardroom-nvx-tx")).toBeTruthy());
     // Rendered once, not duplicated as label-plus-key: the label IS the key, and

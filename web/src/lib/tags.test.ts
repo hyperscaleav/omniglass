@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { listTags, createTag, updateTag, deleteTag, appliesToLabel } from "./tags";
+import { uuidFor } from "./testids";
 
 // The data layer is the unit under test; fetch is the seam we fake, so these
 // assert the request shape and the response handling without a server.
@@ -14,7 +15,7 @@ describe("tags data layer", () => {
 
   it("lists tags and unwraps the envelope", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ tags: [{ id: "1", name: "environment", applies_to: [], propagates: true }] }),
+      jsonResponse({ tags: [{ id: uuidFor("1"), name: "environment", applies_to: [], propagates: true }] }),
     );
     const tags = await listTags();
     expect(tags).toHaveLength(1);
@@ -25,7 +26,7 @@ describe("tags data layer", () => {
 
   it("posts the create body with applies_to and propagates", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ id: "2", name: "rack_position", applies_to: ["location"], propagates: false }, 201),
+      jsonResponse({ id: uuidFor("2"), name: "rack_position", applies_to: ["location"], propagates: false }, 201),
     );
     const created = await createTag({ name: "rack_position", applies_to: ["location"], propagates: false });
     expect(created.propagates).toBe(false);
@@ -37,7 +38,7 @@ describe("tags data layer", () => {
 
   it("patches the governance fields on update, addressing by name", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ id: "1", name: "environment", applies_to: ["component"], propagates: true }),
+      jsonResponse({ id: uuidFor("1"), name: "environment", applies_to: ["component"], propagates: true }),
     );
     await updateTag("environment", { applies_to: ["component"], propagates: true });
     const req = fetchMock.mock.calls[0][0] as Request;

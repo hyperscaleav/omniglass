@@ -7,6 +7,7 @@ import {
   displayValue,
   parseInput,
 } from "./variables";
+import { uuidFor } from "./testids";
 
 // The data layer is the unit under test; fetch is the seam we fake, so these
 // assert the request shape and the response handling without a server.
@@ -21,7 +22,7 @@ describe("variables data layer", () => {
 
   it("lists variables and unwraps the envelope", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ variables: [{ id: "1", name: "poll", value_type: "int", owner_kind: "platform", value: 30 }] }),
+      jsonResponse({ variables: [{ id: uuidFor("1"), name: "poll", value_type: "int", owner_kind: "platform", value: 30 }] }),
     );
     const vars = await listVariables();
     expect(vars).toHaveLength(1);
@@ -33,7 +34,7 @@ describe("variables data layer", () => {
 
   it("posts the create body with the typed value", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ id: "2", name: "poll", value_type: "int", owner_kind: "location", owner_name: "room", value: 30 }, 201),
+      jsonResponse({ id: uuidFor("2"), name: "poll", value_type: "int", owner_kind: "location", owner_name: "room", value: 30 }, 201),
     );
     const created = await createVariable({ name: "poll", value_type: "int", owner_kind: "location", owner: "room", value: 30 });
     expect(created.owner_name).toBe("room");
@@ -45,7 +46,7 @@ describe("variables data layer", () => {
 
   it("patches the value on update", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ id: "sec_123", name: "poll", value_type: "int", owner_kind: "platform", value: 60 }),
+      jsonResponse({ id: uuidFor("sec_123"), name: "poll", value_type: "int", owner_kind: "platform", value: 60 }),
     );
     await updateVariable("v1", 60);
     const req = fetchMock.mock.calls[0][0] as Request;

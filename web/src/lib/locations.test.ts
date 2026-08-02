@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { listLocations, listLocationTypes, createLocation, updateLocation, deleteLocation } from "./locations";
+import { uuidFor } from "./testids";
 
 // The data layer is the unit under test; fetch is the seam we fake, so these
 // assert the request shape and the response handling without a server.
@@ -14,7 +15,7 @@ describe("locations data layer", () => {
 
   it("lists locations and unwraps the envelope", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ locations: [{ id: "1", name: "hq", location_type: "campus" }] }),
+      jsonResponse({ locations: [{ id: uuidFor("1"), name: "hq", location_type: "campus" }] }),
     );
     const locs = await listLocations();
     expect(locs).toHaveLength(1);
@@ -38,7 +39,7 @@ describe("locations data layer", () => {
 
   it("posts the create body", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ id: "2", name: "hq-b1", location_type: "building" }, 201),
+      jsonResponse({ id: uuidFor("2"), name: "hq-b1", location_type: "building" }, 201),
     );
     const created = await createLocation({ name: "hq-b1", location_type: "building", parent: "hq" });
     expect(created.name).toBe("hq-b1");
@@ -50,7 +51,7 @@ describe("locations data layer", () => {
 
   it("patches the parent to move a location", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ id: "3", name: "hq-b1", location_type: "building", parent: "lab" }),
+      jsonResponse({ id: uuidFor("3"), name: "hq-b1", location_type: "building", parent: "lab" }),
     );
     const moved = await updateLocation("hq-b1", { parent: "lab" });
     expect(moved.name).toBe("hq-b1");

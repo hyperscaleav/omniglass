@@ -64,13 +64,13 @@ export default function CapabilitiesPanel(props: {
     () => (props.productId ? (products.data ?? []).find((p) => p.id === props.productId)?.capabilities ?? [] : []),
   );
   const lines = createMemo<CapabilityLine[]>(() => splitCapabilities(q.data ?? [], declared()));
-  const nameOf = (id: string) => (catalog.data ?? []).find((c) => c.id === id)?.display_name ?? "";
+  const nameOf = (handle: string) => (catalog.data ?? []).find((c) => c.name === handle)?.display_name ?? "";
 
   // The registry minus everything already on the component, suppressed included:
   // restoring a suppressed capability is a clear, not an add.
   const addable = createMemo(() => {
     const taken = new Set(lines().map((l) => l.id));
-    return [...(catalog.data ?? [])].filter((c) => !taken.has(c.id)).sort((a, b) => a.display_name.localeCompare(b.display_name));
+    return [...(catalog.data ?? [])].filter((c) => !taken.has(c.name)).sort((a, b) => a.display_name.localeCompare(b.display_name));
   });
 
   const [err, setErr] = createSignal<string | null>(null);
@@ -176,7 +176,7 @@ export default function CapabilitiesPanel(props: {
               onChange={(e) => setAdding(e.currentTarget.value)}
             >
               <option value="">Add a capability…</option>
-              <For each={addable()}>{(c) => <option value={c.id}>{c.display_name} ({c.id})</option>}</For>
+              <For each={addable()}>{(c) => <option value={c.name}>{c.display_name} ({c.name})</option>}</For>
             </select>
             <Button square size="sm" intent="action" icon={Plus} label="Add capability" title="Add" disabled={busy() || !adding()} onClick={() => void add()} />
           </div>

@@ -10,6 +10,7 @@ import {
   type Interface,
 } from "./interfaces";
 import { buildPredicate, type Chip } from "./predicate";
+import { uuidFor } from "./testids";
 
 // The data layer is the unit under test; fetch is the seam we fake, so these assert
 // the request shape and the response handling without a server.
@@ -24,7 +25,7 @@ describe("interfaces data layer", () => {
 
   it("lists interfaces and unwraps the envelope", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ interfaces: [{ id: "if-1", name: "disp-1-tcp", interface_type: "tcp", component: "disp-1" }] }),
+      jsonResponse({ interfaces: [{ id: uuidFor("if-1"), name: "disp-1-tcp", interface_type: "tcp", component: "disp-1" }] }),
     );
     const ifaces = await listInterfaces();
     expect(ifaces).toHaveLength(1);
@@ -39,7 +40,7 @@ describe("interfaces data layer", () => {
   });
 
   it("gets an interface by id", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: "if-1", name: "disp-1-tcp", interface_type: "tcp" }));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: uuidFor("if-1"), name: "disp-1-tcp", interface_type: "tcp" }));
     const i = await getInterface("if-1");
     expect(i.name).toBe("disp-1-tcp");
     const req = fetchMock.mock.calls[0][0] as Request;
@@ -48,10 +49,10 @@ describe("interfaces data layer", () => {
 
   it("posts the create body (type, component, node, params.target) and returns the created interface", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ id: "if-1", name: "disp-1-tcp", interface_type: "tcp", component: "disp-1" }, 201),
+      jsonResponse({ id: uuidFor("if-1"), name: "disp-1-tcp", interface_type: "tcp", component: "disp-1" }, 201),
     );
     const created = await createInterface({ interface_type: "tcp", component: "disp-1", node: "edge-hq", params: { target: "10.0.0.1:22" } });
-    expect(created.id).toBe("if-1");
+    expect(created.id).toBe(uuidFor("if-1"));
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("POST");
     expect(req.url).toContain("/api/v1/interfaces");
@@ -59,7 +60,7 @@ describe("interfaces data layer", () => {
   });
 
   it("patches only the mutable fields (node, params) on update, addressed by id", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: "if-1", name: "disp-1-tcp", interface_type: "tcp" }));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: uuidFor("if-1"), name: "disp-1-tcp", interface_type: "tcp" }));
     await updateInterface("if-1", { node: "edge-east", params: { target: "9.9.9.9" } });
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("PATCH");
@@ -84,7 +85,7 @@ describe("interfaces data layer", () => {
 // interfaceTarget renders the probed endpoint from the interface params, mirroring
 // the read side: target, with :port appended only when a separate port is present.
 describe("interfaceTarget", () => {
-  const iface = (params?: Interface["params"]): Interface => ({ id: "if-i", name: "i", interface_type: "tcp", params });
+  const iface = (params?: Interface["params"]): Interface => ({ id: uuidFor("if-i"), name: "i", interface_type: "tcp", params });
   it("returns the bare target when there is no separate port", () => {
     expect(interfaceTarget(iface({ target: "10.0.0.1" }))).toBe("10.0.0.1");
   });
@@ -103,9 +104,9 @@ describe("interfaceTarget", () => {
 // interfaceFilterKeys are the console's shared faceted search: name (substring), type
 // (exact), and component (exact). Matching is client-side via lib/predicate.
 const rows: Interface[] = [
-  { id: "if-1", name: "disp-1-tcp", interface_type: "tcp", component: "disp-1", params: { target: "10.0.0.1:22" } },
-  { id: "if-2", name: "disp-1-icmp", interface_type: "icmp", component: "disp-1", params: { target: "10.0.0.1" } },
-  { id: "if-3", name: "srv-tcp", interface_type: "tcp", params: { target: "10.0.0.9:80" } },
+  { id: uuidFor("if-1"), name: "disp-1-tcp", interface_type: "tcp", component: "disp-1", params: { target: "10.0.0.1:22" } },
+  { id: uuidFor("if-2"), name: "disp-1-icmp", interface_type: "icmp", component: "disp-1", params: { target: "10.0.0.1" } },
+  { id: uuidFor("if-3"), name: "srv-tcp", interface_type: "tcp", params: { target: "10.0.0.9:80" } },
 ];
 const matched = (chips: Chip[]): string[] => rows.filter(buildPredicate(interfaceFilterKeys, chips)).map((r) => r.name);
 
