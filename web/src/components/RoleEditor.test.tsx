@@ -5,6 +5,7 @@ import RoleEditor from "./RoleEditor";
 import { standardRolesKey, type DeclaredRole } from "../lib/system_roles";
 import { CAPABILITIES_KEY, type Capability } from "../lib/capabilities";
 import { ME_KEY, type Me } from "../lib/auth";
+import { uuidFor } from "../lib/testids";
 
 // The editor curates the roles a standard declares: the slots every conforming
 // system needs filled, each with the capabilities a component must provide and how
@@ -16,10 +17,10 @@ const declared: DeclaredRole[] = [
 ];
 
 const catalog: Capability[] = [
-  { id: "microphone", name: "microphone", display_name: "Microphone", official: true },
-  { id: "speaker", name: "speaker", display_name: "Speaker", official: true },
-  { id: "display", name: "display", display_name: "Display", official: true },
-  { id: "hdmi-in", name: "hdmi-in", display_name: "HDMI input", official: true },
+  { id: uuidFor("microphone"), name: "microphone", display_name: "Microphone", official: true },
+  { id: uuidFor("speaker"), name: "speaker", display_name: "Speaker", official: true },
+  { id: uuidFor("display"), name: "display", display_name: "Display", official: true },
+  { id: uuidFor("hdmi-in"), name: "hdmi-in", display_name: "HDMI input", official: true },
 ];
 
 const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };

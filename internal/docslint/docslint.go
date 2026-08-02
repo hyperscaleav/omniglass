@@ -410,3 +410,30 @@ func itoa(n int) string {
 	}
 	return string(b)
 }
+
+// cliBlankFlag matches a generated CLI-reference flag row whose Description
+// cell is empty: `| `--flag` | type | default |  |`. The reference is fully
+// generated (cmd/docsgen), so a blank cell is always a missing `doc:` struct
+// tag on the Huma input field the flag renders from.
+var cliBlankFlag = regexp.MustCompile("^\\| `--[^`]+` \\|.*\\| *\\|$")
+
+// ScanCLIReference walks the generated CLI reference for flag rows with an
+// empty Description cell (#472). The reference is the one doc artifact the
+// drift audit found accurate because it is generated; this lint keeps the
+// generation from quietly publishing undocumented flags when an input struct
+// gains a field without a doc tag.
+func ScanCLIReference() ([]Finding, error) {
+	rel := filepath.Join("reference", "cli", "index.md")
+	raw, err := os.ReadFile(filepath.Join(DocsRoot, rel))
+	if err != nil {
+		return nil, err
+	}
+	var findings []Finding
+	for i, line := range strings.Split(string(raw), "\n") {
+		if cliBlankFlag.MatchString(line) {
+			flag := line[2 : strings.Index(line, "` |")+1]
+			findings = append(findings, Finding{File: rel, Line: i + 1, Text: "flag " + flag + " has an empty Description cell: add a doc tag to its Huma input field and re-run make gen"})
+		}
+	}
+	return findings, nil
+}

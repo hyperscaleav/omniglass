@@ -142,7 +142,7 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
   function CapabilitySet(p: { picked: string[]; label: string; onChange: (next: string[]) => void }): JSX.Element {
     const left = createMemo(() =>
       [...(catalog.data ?? [])]
-        .filter((c) => !p.picked.includes(c.id))
+        .filter((c) => !p.picked.includes(c.name))
         .sort((a, b) => a.display_name.localeCompare(b.display_name)),
     );
     return (
@@ -175,7 +175,7 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
             onChange={(e) => { const v = e.currentTarget.value; if (v) p.onChange([...p.picked, v]); e.currentTarget.value = ""; }}
           >
             <option value="">Require a capability…</option>
-            <For each={left()}>{(c) => <option value={c.id}>{c.display_name} ({c.id})</option>}</For>
+            <For each={left()}>{(c) => <option value={c.name}>{c.display_name} ({c.name})</option>}</For>
           </select>
         </Show>
       </div>

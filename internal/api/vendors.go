@@ -42,22 +42,22 @@ type vendorPathInput struct {
 type createVendorInput struct {
 	Body struct {
 		Name         string `json:"name" minLength:"1" doc:"The globally unique kebab handle; renameable"`
-		DisplayName  string `json:"display_name" minLength:"1"`
-		Kind         string `json:"kind,omitempty" enum:"manufacturer,integrator,developer" default:"manufacturer"`
-		Icon         string `json:"icon,omitempty"`
-		SupportPhone string `json:"support_phone,omitempty"`
-		Website      string `json:"website,omitempty"`
+		DisplayName  string `json:"display_name" minLength:"1" doc:"What an operator reads in pickers and lists"`
+		Kind         string `json:"kind,omitempty" enum:"manufacturer,integrator,developer" default:"manufacturer" doc:"The role the organization plays"`
+		Icon         string `json:"icon,omitempty" doc:"A glyph key, e.g. crestron-logo"`
+		SupportPhone string `json:"support_phone,omitempty" doc:"The vendor's support line"`
+		Website      string `json:"website,omitempty" doc:"The vendor's website (http or https)"`
 	}
 }
 
 type updateVendorInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		DisplayName  *string `json:"display_name,omitempty"`
-		Kind         *string `json:"kind,omitempty" enum:"manufacturer,integrator,developer"`
-		Icon         *string `json:"icon,omitempty"`
-		SupportPhone *string `json:"support_phone,omitempty"`
-		Website      *string `json:"website,omitempty"`
+		DisplayName  *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
+		Kind         *string `json:"kind,omitempty" enum:"manufacturer,integrator,developer" doc:"A new organization role"`
+		Icon         *string `json:"icon,omitempty" doc:"A new glyph key"`
+		SupportPhone *string `json:"support_phone,omitempty" doc:"A new support line"`
+		Website      *string `json:"website,omitempty" doc:"A new website (http or https)"`
 	}
 }
 

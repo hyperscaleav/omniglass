@@ -63,7 +63,7 @@ type pushInput struct {
 		Owner struct {
 			Kind string `json:"kind" enum:"component" doc:"The owner arc. Only component today; system and location arrive with #422"`
 			Ref  string `json:"ref" minLength:"1" doc:"The owning entity, by name or id"`
-		} `json:"owner"`
+		} `json:"owner" doc:"The entity every row in the batch lands under"`
 		Source  string       `json:"source,omitempty" doc:"Who observed this batch (recorded as the provenance source on every row)"`
 		TS      time.Time    `json:"ts,omitempty" doc:"Batch timestamp; a per-item timestamp overrides it"`
 		Samples []pushSample `json:"samples,omitempty" doc:"Registry-resolved observations. The registry decides which table each lands in"`

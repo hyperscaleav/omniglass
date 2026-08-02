@@ -34,14 +34,14 @@ type capabilityPathInput struct {
 type createCapabilityInput struct {
 	Body struct {
 		Name        string `json:"name" minLength:"1" doc:"The globally unique kebab handle; renameable"`
-		DisplayName string `json:"display_name" minLength:"1"`
+		DisplayName string `json:"display_name" minLength:"1" doc:"What an operator reads in pickers and lists"`
 	}
 }
 
 type updateCapabilityInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		DisplayName *string `json:"display_name,omitempty"`
+		DisplayName *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
 	}
 }
 

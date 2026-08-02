@@ -29,9 +29,10 @@ export type CreateEventType = {
   payload_schema?: unknown;
 };
 
-export async function createEventType(body: CreateEventType): Promise<void> {
-  const { error } = await api.POST("/event-types", { body });
+export async function createEventType(body: CreateEventType): Promise<EventTypeRow> {
+  const { data, error } = await api.POST("/event-types", { body });
   if (error) throw error;
+  return data as EventTypeRow;
 }
 
 export type UpdateEventType = {

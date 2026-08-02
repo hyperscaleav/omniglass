@@ -62,7 +62,7 @@ func (e *PlacementError) Unwrap() error { return ErrPlacementNotAllowed }
 // left to the insert's FK check (ErrUnknownType), not this validator.
 func (p *PG) validatePlacement(ctx context.Context, q querier, childType string, parentType *string) error {
 	var allowed []string
-	err := q.QueryRow(ctx, `select allowed_parent_types from location_type where name = $1`, childType).Scan(&allowed)
+	err := q.QueryRow(ctx, `select allowed_parent_types from location_type where `+registryRefCol(childType)+` = $1`, childType).Scan(&allowed)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
@@ -394,7 +394,7 @@ func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSp
 
 	l, err := scanLocation(tx.QueryRow(ctx, `
 		insert into location (name, display_name, location_type, parent_id)
-		values ($1, $2, (select id from location_type where name = $3), $4)
+		values ($1, $2, (select id from location_type where `+registryRefCol(spec.LocationType)+` = $3), $4)
 		returning `+locationCols,
 		spec.Name, nullize(spec.DisplayName), spec.LocationType, parentID))
 	if err != nil {
@@ -470,11 +470,17 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 		parentID = &newParent.ID
 	}
 
+	// A nil type patch keeps the ref column on name: the subselect gets NULL,
+	// resolves nothing, and coalesce keeps the current value, same as before.
+	typeRefCol := "name"
+	if patch.LocationType != nil {
+		typeRefCol = registryRefCol(*patch.LocationType)
+	}
 	after, err := scanLocation(tx.QueryRow(ctx, `
 		update location set
 			name          = coalesce($2, name),
 			display_name  = coalesce($3, display_name),
-			location_type = coalesce((select id from location_type where name = $4), location_type),
+			location_type = coalesce((select id from location_type where `+typeRefCol+` = $4), location_type),
 			parent_id     = $5,
 			updated_at    = now()
 		where id = $1

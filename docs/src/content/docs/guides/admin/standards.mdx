@@ -8,8 +8,11 @@ import SeededSet from '../../../../components/SeededSet.astro';
 **Catalog > Standards** (`/standards`, with `standard:read`, covered by every viewer's `*:read` floor)
 is the directory of **standards**: the blueprints your systems are built against. A **Huddle Room**, a
 **Classroom**, an **Auditorium** are standards; the meeting room on the third floor is a
-[system](/guides/operator/inventory/) that **conforms** to one. Each row shows the **id**, the
-**display name**, its **parent standard** if it is a variant, and its **origin**.
+[system](/guides/operator/inventory/) that **conforms** to one. Each row shows the **name** (the
+operator-facing kebab handle, for example `huddle-room`), the **display name**, its **parent
+standard** if it is a variant, and its **origin**. A standard also carries an `id`, a uuid minted
+by the database, the internal address the handle resolves to
+([ADR-0062](/architecture/decisions/)); the handle is what you type and read.
 
 A standard is the **system-side counterpart of a [product](/guides/admin/products/)**. A product says
 what a component *is* and what it carries; a standard says what a system is built to be and what it
@@ -23,11 +26,12 @@ sitting under the shared type registry.
 - **Variants use parent standard.** A specific blueprint that refines a broader one points at it with
   **parent standard** (a Large Classroom under Classroom). A standard with no parent is a base
   standard.
-- **New standard** (with `standard:create`, an admin permission) opens a create drawer: name its **id**
-  (a kebab identifier, unique tenant-wide, e.g. `lecture-hall`), give it a **display name**, and
+- **New standard** (with `standard:create`, an admin permission) opens a create drawer: give it a
+  **name** (the kebab handle, unique tenant-wide, e.g. `lecture-hall`) and a **display name**, and
   optionally pick a **parent standard**. An unknown parent is refused (422).
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `standard:update`) edits the
-  display name and parent; the id is fixed. **Delete** (with `standard:delete`) removes the row, behind
+  display name and parent; the uuid `id` is database-minted and never edited. **Delete** (with
+  `standard:delete`) removes the row, behind
   a confirm.
 - **Delete is refused (409) while a system still conforms to it.** Repoint or remove those systems
   first.

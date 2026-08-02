@@ -231,7 +231,7 @@ func (p *PG) CreateSecret(ctx context.Context, actorID string, spec SecretSpec, 
 	compID, sysID, locID := arcColumns(spec.OwnerKind, ownerID)
 	s, err := scanSecretRow(tx.QueryRow(ctx, `
 		insert into secret (name, secret_type, owner_kind, component_id, system_id, location_id, value, admin_sensitive)
-		values ($1, (select id from secret_type where name = $2), $3, $4, $5, $6, $7, $8)
+		values ($1, (select id from secret_type where `+registryRefCol(spec.SecretType)+` = $2), $3, $4, $5, $6, $7, $8)
 		returning `+secretCols,
 		spec.Name, spec.SecretType, spec.OwnerKind, compID, sysID, locID, valueJSON, adminSensitive), shape)
 	if err != nil {

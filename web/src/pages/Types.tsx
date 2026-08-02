@@ -46,12 +46,13 @@ function officialBadge(official: boolean): JSX.Element {
     : <span class="badge badge-outline badge-sm">custom</span>;
 }
 
-// Columns for the active kind: every kind shows id, display name, and origin;
-// location alone adds its icon glyph. There is no Kind column because the tab
+// Columns for the active kind: every kind shows the kebab name (ADR-0062: the
+// operator-facing address; the uuid stays in the blade), display name, and
+// origin; location alone adds its icon glyph. There is no Kind column because the tab
 // already names the kind.
 function columnsFor(kind: TypeKind): FlatColumn<TypeRow>[] {
   const cols: FlatColumn<TypeRow>[] = [
-    { key: "id", label: "Id", sortVal: (r) => r.id, cell: (r) => <span class="font-data font-semibold">{r.id}</span> },
+    { key: "name", label: "Name", sortVal: (r) => r.name, cell: (r) => <span class="font-data font-semibold">{r.name}</span> },
     { key: "display_name", label: "Display name", sortVal: (r) => r.display_name, cell: (r) => <span>{r.display_name}</span> },
   ];
   if (kind === "location") {
@@ -66,11 +67,11 @@ export default function Types() {
   const types = useQuery(() => ({ queryKey: TYPES_KEY, queryFn: listTypes }));
   const [kind, setKind] = createSignal<TypeKind>("location");
 
-  // Rows for the active kind, sorted alphabetically by display name then id.
+  // Rows for the active kind, sorted alphabetically by display name then name.
   const rowsFor = (k: TypeKind) =>
     (types.data ?? [])
       .filter((r) => r.kind === k)
-      .sort((a, b) => a.display_name.localeCompare(b.display_name) || a.id.localeCompare(b.id));
+      .sort((a, b) => a.display_name.localeCompare(b.display_name) || a.name.localeCompare(b.name));
 
   return (
     <div class="flex min-h-full flex-col gap-4">
@@ -103,18 +104,18 @@ export default function Types() {
                 loading: () => types.isPending,
                 error: () => types.error,
                 filterKeys: [
-                  { key: "name", type: "string", hint: "substring", get: (r) => `${r.id} ${r.display_name}`, values: () => [] },
+                  { key: "name", type: "string", hint: "substring", get: (r) => `${r.name} ${r.display_name}`, values: () => [] },
                   { key: "official", type: "string", hint: "exact", get: (r) => (r.official ? "official" : "custom"), values: () => ["official", "custom"] },
                 ],
-                filterPlaceholder: `filter ${label} types by id, name…`,
+                filterPlaceholder: `filter ${label} types by name…`,
                 columns: columnsFor(k),
                 empty: `No ${label} types.`,
-                // Address a row by kind + id: the registries are per-kind, and an
-                // id is unique only within its own kind.
-                rowId: (r) => `${r.kind}:${r.id}`,
+                // Address a row by kind + name: the registries are per-kind, and
+                // a name is unique only within its own kind.
+                rowId: (r) => `${r.kind}:${r.name}`,
                 blades: { registry: { type: typeBlade }, rootKind: "type" },
                 create: canCreate()
-                  ? { label: "New type", can: canCreate, body: (ctx) => <CreateTypeForm kind={k} onCreated={ctx.close} /> }
+                  ? { label: "New type", can: canCreate, body: (ctx) => <CreateTypeForm kind={k} onCreated={ctx.select} /> }
                   : undefined,
               }}
             />
@@ -133,8 +134,8 @@ export const typeBlade: BladeDef = {
   Body: (p) => <TypeBladeBody id={p.id} />,
 };
 
-// The blade id is "<kind>:<id>"; split on the FIRST colon (ids are kebab, no
-// colons of their own) and look the row up from the cached listTypes query.
+// The blade id is "<kind>:<name>"; split on the FIRST colon (names are kebab,
+// no colons of their own) and look the row up from the cached listTypes query.
 function splitBladeId(id: string): { kind: TypeKind; id: string } {
   const i = id.indexOf(":");
   return i < 0 ? { kind: id as TypeKind, id: "" } : { kind: id.slice(0, i) as TypeKind, id: id.slice(i + 1) };
@@ -143,12 +144,12 @@ function splitBladeId(id: string): { kind: TypeKind; id: string } {
 function useTypeRow(id: string): () => TypeRow | undefined {
   const types = useQuery(() => ({ queryKey: TYPES_KEY, queryFn: listTypes }));
   const { kind, id: rowId } = splitBladeId(id);
-  return () => (types.data ?? []).find((r) => r.kind === kind && r.id === rowId);
+  return () => (types.data ?? []).find((r) => r.kind === kind && r.name === rowId);
 }
 
 function TypeBladeTitle(p: { id: string }): JSX.Element {
   const row = useTypeRow(p.id);
-  return <span class="font-data">{row()?.id ?? splitBladeId(p.id).id}</span>;
+  return <span class="font-data">{row()?.name ?? splitBladeId(p.id).id}</span>;
 }
 
 function TypeBladeBody(p: { id: string }): JSX.Element {
@@ -176,10 +177,10 @@ function TypeBladeBody(p: { id: string }): JSX.Element {
   async function removeType() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete ${r.kind} type "${r.id}"?`)) return;
+    if (!confirm(`Delete ${r.kind} type "${r.name}"?`)) return;
     setErr(null);
     try {
-      await deleteType(r.kind, r.id);
+      await deleteType(r.kind, r.name);
       blades.close();
       await qc.invalidateQueries({ queryKey: TYPES_KEY });
     } catch (e) {
@@ -192,7 +193,7 @@ function TypeBladeBody(p: { id: string }): JSX.Element {
     if (!r) return;
     setErr(null);
     try {
-      await updateType(r.kind, r.id, {
+      await updateType(r.kind, r.name, {
         display_name: displayName(),
         ...(r.kind === "location" ? { icon: icon(), allowed_parent_types: allowedParents() } : {}),
       });
@@ -222,6 +223,7 @@ function TypeBladeBody(p: { id: string }): JSX.Element {
           <div class="grid grid-cols-2 gap-3 text-sm">
             <KVStacked label="Kind" value={kindBadge(r().kind)} />
             <KVStacked label="Origin" value={officialBadge(r().official)} />
+            <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
           <div class="flex flex-col gap-1.5">
             <span class="eyebrow">Display name</span>
@@ -257,7 +259,7 @@ function TypeBladeBody(p: { id: string }): JSX.Element {
                       <For each={r().allowed_parent_types}>
                         {(pid) => (
                           <span class="badge badge-outline badge-sm">
-                            {pid === ROOT_PLACEMENT ? "Root" : locationTypeOptions().find((t) => t.id === pid)?.display_name ?? pid}
+                            {pid === ROOT_PLACEMENT ? "Root" : locationTypeOptions().find((t) => t.name === pid)?.display_name ?? pid}
                           </span>
                         )}
                       </For>
@@ -274,7 +276,7 @@ function TypeBladeBody(p: { id: string }): JSX.Element {
               of this type exposes. Writes are immediate (a PUT per line), so the
               panel sits outside the blade's edit slot, which the core facts own. */}
           <Show when={r().kind === "location"}>
-            <ContractEditor classifier="location-type" id={r().id} official={r().official} />
+            <ContractEditor classifier="location-type" id={r().name} official={r().official} />
           </Show>
           <Show when={r().kind === "secret"}>
             <div class="flex flex-col gap-1.5">
@@ -305,11 +307,12 @@ function TypeBladeBody(p: { id: string }): JSX.Element {
   );
 }
 
-// CreateTypeForm: name the id and set the display name for a new custom type of
+// CreateTypeForm: pick the kebab name (the operator-facing address; the uuid
+// is the database's to mint) and set the display name for a new custom type of
 // the active kind (the tab decides the kind; secret_type has no write routes
 // this slice, so it never opens this form). A location type also gets an icon
 // glyph key.
-export function CreateTypeForm(p: { kind: TypeKind; onCreated: (id: string) => void }): JSX.Element {
+export function CreateTypeForm(p: { kind: TypeKind; onCreated: (t: TypeRow) => void }): JSX.Element {
   const qc = useQueryClient();
   const types = useQuery(() => ({ queryKey: TYPES_KEY, queryFn: listTypes }));
   const locationTypeOptions = () => (types.data ?? []).filter((r) => r.kind === "location");
@@ -332,13 +335,13 @@ export function CreateTypeForm(p: { kind: TypeKind; onCreated: (id: string) => v
     setBusy(true);
     setFormErr(null);
     try {
-      await createType(p.kind, {
+      const created = await createType(p.kind, {
         name: id().trim(),
         display_name: displayName().trim(),
         ...(p.kind === "location" ? { icon: icon().trim() || "map-pin", allowed_parent_types: allowedParents() } : {}),
       });
       await qc.invalidateQueries({ queryKey: TYPES_KEY });
-      p.onCreated(id().trim());
+      p.onCreated(created);
     } catch (er) {
       setFormErr(describeError(er));
     } finally {
@@ -355,7 +358,7 @@ export function CreateTypeForm(p: { kind: TypeKind; onCreated: (id: string) => v
         <span class="eyebrow">Kind</span>
         {kindBadge(p.kind)}
       </div>
-      <Field label="Id" hint="A kebab id, e.g. wing.">
+      <Field label="Name" hint="A kebab name, e.g. wing.">
         <input class="input input-bordered w-full font-data" value={id()} placeholder="wing" onInput={(e) => setId(e.currentTarget.value)} />
       </Field>
       <Field label="Display name">
@@ -401,9 +404,9 @@ function AllowedParentsPicker(p: { options: TypeRow[]; value: string[]; onChange
       <For each={p.options}>
         {(t) => (
           <label class="flex items-center gap-2 text-sm">
-            <input type="checkbox" class="checkbox checkbox-sm" checked={p.value.includes(t.id)} onChange={() => toggle(t.id)} />
+            <input type="checkbox" class="checkbox checkbox-sm" checked={p.value.includes(t.name)} onChange={() => toggle(t.name)} />
             <span>{t.display_name}</span>
-            <span class="font-data text-xs text-base-content/40">{t.id}</span>
+            <span class="font-data text-xs text-base-content/40">{t.name}</span>
           </label>
         )}
       </For>

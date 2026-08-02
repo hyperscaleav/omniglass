@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, fireEvent, waitFor } from "@solidjs/testing-library";
+import { render, fireEvent, screen, waitFor } from "@solidjs/testing-library";
 import Audit from "./Audit";
 import { AUDIT_PAGE, type AuditEvent } from "../lib/audit";
+import { uuidFor } from "../lib/testids";
 
 // The Audit page renders the trail newest-first (resolving the actor to a name and
 // marking an impersonated action), and wears the list-view standard: the shared
@@ -10,8 +11,11 @@ import { AUDIT_PAGE, type AuditEvent } from "../lib/audit";
 // exactly as a user would without a server.
 const seed: AuditEvent[] = [
   { id: "1", ts: "2026-07-07T10:02:00Z", actor: "u-alice", actor_name: "alice", verb: "login", resource: "auth" },
-  { id: "2", ts: "2026-07-07T10:01:00Z", actor: "u-alice", actor_name: "alice", real_actor: "u-root", real_actor_name: "root", verb: "update", resource: "principal", resource_id: "u-alice" },
-  { id: "3", ts: "2026-07-07T10:00:00Z", actor: "u-bob", actor_name: "bob", verb: "delete", resource: "component", resource_id: "cmp_9f2" },
+  { id: "2", ts: "2026-07-07T10:01:00Z", actor: "u-alice", actor_name: "alice", real_actor: "u-root", real_actor_name: "root", verb: "update", resource: "principal", resource_id: "u-alice", old: { display_name: "Alice" }, new: { display_name: "Alice Cooper" } },
+  { id: uuidFor("3"), ts: "2026-07-07T10:00:00Z", actor: "u-bob", actor_name: "bob", verb: "delete", resource: "component", resource_id: "cmp_9f2", old: { name: "encoder" } },
+  { id: uuidFor("4"), ts: "2026-07-07T09:59:00Z", actor: "u-bob", actor_name: "bob", verb: "create", resource: "secret", resource_id: "00000000-0000-4000-8000-00000000aaaa", new: { name: "core-snmp", secret_type: "snmp-community" } },
+  { id: uuidFor("5"), ts: "2026-07-07T09:58:00Z", actor: "u-bob", actor_name: "bob", verb: "set", resource: "tag_binding", resource_id: "hq" },
+  { id: uuidFor("6"), ts: "2026-07-07T09:57:00Z", actor: "u-bob", actor_name: "bob", verb: "somenewverb", resource: "widget", resource_id: "w-1" },
 ];
 
 const beforeParams: (string | null)[] = [];
@@ -84,5 +88,74 @@ describe("Audit page", () => {
     fireEvent.click(btn());
     // The load-older page asks for events strictly older than the oldest loaded row.
     await waitFor(() => expect(beforeParams).toContain(oldestTs));
+  });
+});
+
+// The drawer answers the second half of "who changed this, and to what?"
+// (#473): a row opens into the field-level before/after diff over the images
+// the write recorded.
+describe("Audit drawer (#473)", () => {
+  it("opens a row into a drawer with the field-level before/after diff", async () => {
+    const { findByText } = render(() => <Audit />);
+    // The drawer portals to document.body, so the assertions use screen.
+    fireEvent.click(await findByText("update"));
+    expect(await screen.findByText("Change")).toBeTruthy();
+    expect(screen.getByText("display_name")).toBeTruthy();
+    expect(screen.getByText("Alice")).toBeTruthy();
+    expect(screen.getByText("Alice Cooper")).toBeTruthy();
+  });
+
+  it("a delete renders only the Before side, After reads (none)", async () => {
+    const { findByText } = render(() => <Audit />);
+    fireEvent.click(await findByText("delete"));
+    expect(await screen.findByText("Change")).toBeTruthy();
+    expect(screen.getAllByText("encoder").length).toBeGreaterThan(0);
+    expect(screen.getByText("(none)")).toBeTruthy();
+  });
+
+  it("an event that recorded no images says so instead of an empty table", async () => {
+    const { findByText } = render(() => <Audit />);
+    fireEvent.click(await findByText("login"));
+    expect(await screen.findByText(/recorded no row images/)).toBeTruthy();
+  });
+});
+
+// The trail stores the uuid as resource_id (identity survives a rename), but an
+// operator reads the friendly handle (ADR-0062): the console resolves it from
+// the row's own images, keeping the uuid one hover away.
+describe("Audit resource labels (ADR-0062)", () => {
+  it("shows the handle from the row's image in the Id column, uuid on hover", async () => {
+    const { findByText, getByText } = render(() => <Audit />);
+    expect(await findByText("core-snmp")).toBeTruthy();
+    expect(getByText("core-snmp").getAttribute("title")).toContain("00000000-0000-4000-8000-00000000aaaa");
+  });
+
+  it("falls back to the raw resource_id when no image carries a name", async () => {
+    const { findByText } = render(() => <Audit />);
+    // Row 2 (principal update) images carry no name key; its id renders as-is.
+    expect(await findByText("u-alice")).toBeTruthy();
+  });
+
+  it("titles the drawer with the handle, not the uuid", async () => {
+    const { findByText } = render(() => <Audit />);
+    fireEvent.click(await findByText("core-snmp"));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.textContent).toContain("create secret core-snmp");
+    expect(dialog.textContent).not.toContain("create secret 00000000-0000-4000");
+  });
+});
+
+// Every action badge wears the same soft treatment: known verbs take their
+// semantic hue and an unmapped verb falls back to a soft neutral, never a
+// second visual style (the plain ghost badge rendered set/enroll as outlined
+// boxes beside the tinted pills).
+describe("Audit action badge consistency", () => {
+  it("renders every verb, mapped or not, with the soft badge treatment", async () => {
+    const { findByText, getByText } = render(() => <Audit />);
+    await findByText("login");
+    for (const verb of ["login", "update", "delete", "create", "set", "somenewverb"]) {
+      const badge = getByText(verb, { selector: ".badge" });
+      expect(badge.className, `verb ${verb}`).toContain("badge-soft");
+    }
   });
 });

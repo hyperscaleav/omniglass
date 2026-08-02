@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import ReachabilityPanel from "./ReachabilityPanel";
 import { REACHABILITY_KEY, type Reachability } from "../lib/reachability";
 import { INTERFACES_KEY, type Interface } from "../lib/interfaces";
+import { uuidFor } from "../lib/testids";
 
 // The panel is read-only and derives verdict/strip/reason client-side from the
 // real API fields. Data is seeded into the query cache so no server is needed.
@@ -106,8 +107,8 @@ describe("ReachabilityPanel", () => {
 // component detail passes their callbacks (which it gates on interface:create /
 // interface:read). A row maps to its interface id via the seeded interfaces list.
 const ifaceSeed: Interface[] = [
-  { id: "if-1", name: "disp-1-tcp", interface_type: "tcp", component: "disp-1" },
-  { id: "if-2", name: "disp-1-icmp", interface_type: "icmp", component: "disp-1" },
+  { id: uuidFor("if-1"), name: "disp-1-tcp", interface_type: "tcp", component: "disp-1" },
+  { id: uuidFor("if-2"), name: "disp-1-icmp", interface_type: "icmp", component: "disp-1" },
 ];
 
 function mountManaged(opts: { onAdd?: () => void; onOpenInterface?: (id: string) => void }) {
@@ -137,7 +138,7 @@ describe("ReachabilityPanel management affordances", () => {
     mountManaged({ onOpenInterface: (id) => opened.push(id) });
     // No Manage affordance without the callback.
     fireEvent.click(screen.getByLabelText("Manage disp-1-tcp"));
-    expect(opened).toEqual(["if-1"]);
+    expect(opened).toEqual([uuidFor("if-1")]);
   });
 
   it("omits the Manage affordance when onOpenInterface is absent", () => {

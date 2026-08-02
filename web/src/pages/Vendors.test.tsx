@@ -5,15 +5,16 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Vendors from "./Vendors";
 import { VENDORS_KEY, type Vendor } from "../lib/vendors";
 import { ME_KEY, type Me } from "../lib/auth";
+import { uuidFor } from "../lib/testids";
 
 // Vendors is the manufacturer catalog on the flat FlatList surface (the
 // vendor picker on the component_model form). An official (seed-owned) row is
 // read-only, same invariant as the Types catalog's official rows: no edit
 // pencil, no Delete. Data is seeded into the query cache so no server is needed.
 const seed: Vendor[] = [
-  { id: "u-crestron", name: "crestron", display_name: "Crestron", kind: "manufacturer", official: true, icon: "crestron-logo" },
-  { id: "u-acme-av", name: "acme-av", display_name: "Acme AV", kind: "integrator", official: false, website: "https://acme.example" },
-  { id: "u-evil-corp", name: "evil-corp", display_name: "Evil Corp", kind: "manufacturer", official: false, website: "javascript:alert(document.cookie)" },
+  { id: uuidFor("ven-crestron"), name: "crestron", display_name: "Crestron", kind: "manufacturer", official: true, icon: "crestron-logo" },
+  { id: uuidFor("ven-acme-av"), name: "acme-av", display_name: "Acme AV", kind: "integrator", official: false, website: "https://acme.example" },
+  { id: uuidFor("ven-evil-corp"), name: "evil-corp", display_name: "Evil Corp", kind: "manufacturer", official: false, website: "javascript:alert(document.cookie)" },
 ];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
@@ -96,5 +97,24 @@ describe("Vendors page", () => {
     const value = await within(blade).findByText("javascript:alert(document.cookie)");
     expect(value.tagName).not.toBe("A");
     expect(blade.querySelector('a[href^="javascript:"]')).not.toBeInTheDocument();
+  });
+});
+
+// The catalog addresses rows by the kebab handle (ADR-0062): the first column
+// shows it, and the substring filter matches it. With uuid-shaped fixture ids
+// these fail when the page feeds the uuid anywhere an operator reads or types.
+describe("Vendors addressing honesty (#469)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("shows the handle in the Name column and finds the row by it in the filter", async () => {
+    mount();
+    expect(await screen.findByText("Acme AV")).toBeInTheDocument();
+    const row = screen.getByText("Acme AV").closest("tr")!;
+    expect(within(row).getByText("acme-av")).toBeInTheDocument();
+    const input = screen.getByRole("combobox") as HTMLInputElement;
+    fireEvent.input(input, { target: { value: "acme-av" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(screen.getByText("Acme AV")).toBeInTheDocument();
+    expect(screen.queryByText("Crestron")).toBeNull();
   });
 });

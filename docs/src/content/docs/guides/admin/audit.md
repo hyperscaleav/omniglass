@@ -28,5 +28,17 @@ The page uses the same faceted search as the inventory lists: filter by **who**,
 Filtering runs over the rows already loaded; **Load older** pages further back in time, so a search that comes
 up short is a cue to load older and look deeper.
 
+The **Id** column shows the resource's friendly handle, resolved from the row's own change images;
+hovering it reveals the stable uuid the trail actually stores, which is what keeps a row attributable
+after a rename. A row whose images carry no handle (an older registry delete) falls back to the raw id.
+
+Pick a row to open its **detail drawer**: who acted (and, for an impersonated action, who was behind
+it), when, and the **field-level before/after diff** of the change itself. Changed fields highlight
+both sides, an added field only its After, a removed one only its Before, and unchanged fields dim. A
+create shows only After values and a delete only Before; some registry deletes recorded only the row
+id before this shipped, so an old row can read one-sided. Auth events (sign-ins, password changes)
+record no row images at all, and the drawer says so. Sealed material never appears: a secret's audit
+row carries its metadata only, and password changes record that the credential changed, never a value.
+
 The model behind the trail, what is recorded and the dual-actor rule for impersonation, is
 [identity and access](/architecture/identity-access/) and [audit](/architecture/audit/).

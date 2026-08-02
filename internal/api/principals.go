@@ -101,8 +101,8 @@ type principalOutput struct {
 type createPrincipalInput struct {
 	Body struct {
 		Username    string `json:"username" minLength:"1" maxLength:"200" pattern:"^[a-z0-9][a-z0-9._-]*$" doc:"Unique sign-in name (lowercase letters, digits, and . _ -)"`
-		DisplayName string `json:"display_name,omitempty" maxLength:"200"`
-		Email       string `json:"email,omitempty" maxLength:"320" format:"email"`
+		DisplayName string `json:"display_name,omitempty" maxLength:"200" doc:"What an operator reads in lists; falls back to the username"`
+		Email       string `json:"email,omitempty" maxLength:"320" format:"email" doc:"Contact email for the account"`
 		Password    string `json:"password,omitempty" minLength:"12" maxLength:"256" doc:"Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in"`
 	}
 }

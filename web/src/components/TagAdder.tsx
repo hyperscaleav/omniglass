@@ -205,7 +205,7 @@ export default function TagAdder(props: { kind: EntityKind; name: string; canUpd
       <Drawer open={coining()} onClose={() => setCoining(false)} title="New tag key">
         <CreateTagForm
           initialName={keyQuery().trim()}
-          onCreated={(name) => { setCoining(false); qc.invalidateQueries({ queryKey: TAGS_KEY }); chooseKey(name); }}
+          onCreated={(t) => { setCoining(false); qc.invalidateQueries({ queryKey: TAGS_KEY }); chooseKey(t.name); }}
         />
       </Drawer>
     </div>

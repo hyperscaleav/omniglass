@@ -3,11 +3,12 @@ import { render } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import TagAdder from "./TagAdder";
 import { TAGS_KEY, entityTagsKey, type Tag, type TagBinding, type EntityKind } from "../lib/tags";
+import { uuidFor } from "../lib/testids";
 
 const registry: Tag[] = [
-  { id: "environment", name: "environment", applies_to: [], propagates: true, allowed_values: [] },
-  { id: "category", name: "category", applies_to: ["component"], propagates: true, allowed_values: [] },
-  { id: "rack_position", name: "rack_position", applies_to: ["location"], propagates: true, allowed_values: [] },
+  { id: uuidFor("environment"), name: "environment", applies_to: [], propagates: true, allowed_values: [] },
+  { id: uuidFor("category"), name: "category", applies_to: ["component"], propagates: true, allowed_values: [] },
+  { id: uuidFor("rack_position"), name: "rack_position", applies_to: ["location"], propagates: true, allowed_values: [] },
 ];
 
 function mount(opts: { kind?: EntityKind; canUpdate?: boolean; canCreateKey?: boolean; bindings?: TagBinding[] } = {}) {

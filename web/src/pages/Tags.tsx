@@ -65,7 +65,7 @@ export default function Tags() {
         rowId: (t) => t.name,
         blades: { registry: { tag: tagBlade }, rootKind: "tag" },
         create: can(me.data, "tag", "create")
-          ? { label: "New tag key", can: () => can(me.data, "tag", "create"), body: (ctx) => <CreateTagForm onCreated={ctx.close} /> }
+          ? { label: "New tag key", can: () => can(me.data, "tag", "create"), body: (ctx) => <CreateTagForm onCreated={ctx.select} /> }
           : undefined,
       }}
     />
@@ -216,7 +216,7 @@ function PropagatesToggle(p: { value: boolean; onChange: (v: boolean) => void })
 
 // CreateTagForm: name the key (a normalized lowercase identifier), pick the
 // entity kinds it applies to and whether it cascades, then mint it.
-export function CreateTagForm(p: { onCreated: (name: string) => void; initialName?: string }): JSX.Element {
+export function CreateTagForm(p: { onCreated: (t: Tag) => void; initialName?: string }): JSX.Element {
   const qc = useQueryClient();
   const [name, setName] = createSignal(p.initialName ?? "");
   const [appliesTo, setAppliesTo] = createSignal<EntityKind[]>([]);
@@ -238,14 +238,14 @@ export function CreateTagForm(p: { onCreated: (name: string) => void; initialNam
     setBusy(true);
     setFormErr(null);
     try {
-      await createTag({
+      const created = await createTag({
         name: name().trim(),
         applies_to: appliesTo(),
         propagates: propagates(),
         allowed_values: isEnum() ? allowedValues() : [],
       });
       await qc.invalidateQueries({ queryKey: TAGS_KEY });
-      p.onCreated(name().trim());
+      p.onCreated(created);
     } catch (er) {
       setFormErr(describeError(er));
     } finally {

@@ -50,8 +50,8 @@ type listGroupsOutput struct {
 type createGroupInput struct {
 	Body struct {
 		Name        string `json:"name" minLength:"1" maxLength:"200" pattern:"^[a-z0-9][a-z0-9._-]*$" doc:"Unique group name (lowercase letters, digits, and . _ -)"`
-		DisplayName string `json:"display_name,omitempty" maxLength:"200"`
-		Description string `json:"description,omitempty" maxLength:"1000"`
+		DisplayName string `json:"display_name,omitempty" maxLength:"200" doc:"What an operator reads in lists"`
+		Description string `json:"description,omitempty" maxLength:"1000" doc:"Free-form notes on what the group is for"`
 	}
 }
 type updateGroupInput struct {

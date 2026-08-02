@@ -6,6 +6,7 @@ import { systemRolesKey, type EffectiveRole } from "../lib/system_roles";
 import { COMPONENTS_KEY, type Component as Comp } from "../lib/components";
 import { SYSTEMS_KEY, type System } from "../lib/systems";
 import { ME_KEY, type Me } from "../lib/auth";
+import { uuidFor } from "../lib/testids";
 
 // The panel resolves a system's roles: what its standard declares plus what the
 // system declares of its own, each with the capabilities it requires, its quorum,
@@ -50,11 +51,11 @@ const roles: EffectiveRole[] = [
   },
 ];
 
-const system: System = { id: "s-1", name: "boardroom", display_name: "Boardroom", member_count: 3 };
+const system: System = { id: uuidFor("s-1"), name: "boardroom", display_name: "Boardroom", member_count: 3 };
 const components: Comp[] = [
-  { id: "c-1", name: "mic-1", display_name: "Ceiling Mic 1", system: "boardroom", system_count: 1 },
-  { id: "c-2", name: "panel-1", display_name: "Touch Panel 1", system: "boardroom", system_count: 1 },
-  { id: "c-3", name: "disp-1", display_name: "Display 1", system: "boardroom", system_count: 1 },
+  { id: uuidFor("c-1"), name: "mic-1", display_name: "Ceiling Mic 1", system: "boardroom", system_count: 1 },
+  { id: uuidFor("c-2"), name: "panel-1", display_name: "Touch Panel 1", system: "boardroom", system_count: 1 },
+  { id: uuidFor("c-3"), name: "disp-1", display_name: "Display 1", system: "boardroom", system_count: 1 },
 ];
 
 const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };

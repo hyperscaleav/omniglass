@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import MembersPanel from "./MembersPanel";
 import { systemMembersKey, type Member } from "../lib/members";
 import { COMPONENTS_KEY, type Component as Comp } from "../lib/components";
+import { uuidFor } from "../lib/testids";
 
 // The panel answers "what is in this system". Membership is the attachment and a
 // role is what it does, so a member may hold no role at all, and a member may
@@ -20,10 +21,10 @@ const members: Member[] = [
 ];
 
 const components: Comp[] = [
-  { id: "c-1", name: "boardroom-a-bar", display_name: "Boardroom A Bar" },
-  { id: "c-2", name: "shared-bar", display_name: "Shared Room Bar" },
-  { id: "c-3", name: "boardroom-power", display_name: "Power Conditioner" },
-  { id: "c-4", name: "spare-panel", display_name: "Spare Panel" },
+  { id: uuidFor("c-1"), name: "boardroom-a-bar", display_name: "Boardroom A Bar" },
+  { id: uuidFor("c-2"), name: "shared-bar", display_name: "Shared Room Bar" },
+  { id: uuidFor("c-3"), name: "boardroom-power", display_name: "Power Conditioner" },
+  { id: uuidFor("c-4"), name: "spare-panel", display_name: "Spare Panel" },
 ] as Comp[];
 
 // 204 carries no body: the Response constructor rejects one, exactly as the real

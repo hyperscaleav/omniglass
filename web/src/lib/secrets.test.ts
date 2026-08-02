@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { listSecrets, listSecretTypes, createSecret, updateSecret, deleteSecret, revealSecret, copySecret } from "./secrets";
+import { uuidFor } from "./testids";
 
 // The data layer is the unit under test; fetch is the seam we fake, so these
 // assert the request shape and the response handling without a server.
@@ -14,7 +15,7 @@ describe("secrets data layer", () => {
 
   it("lists secrets and unwraps the envelope", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ secrets: [{ id: "1", name: "poll", secret_type: "snmp-community", owner_kind: "platform", fields: [{ name: "community", value: "••••••", secret: true }] }] }),
+      jsonResponse({ secrets: [{ id: uuidFor("1"), name: "poll", secret_type: "snmp-community", owner_kind: "platform", fields: [{ name: "community", value: "••••••", secret: true }] }] }),
     );
     const secrets = await listSecrets();
     expect(secrets).toHaveLength(1);
@@ -26,18 +27,18 @@ describe("secrets data layer", () => {
 
   it("lists secret types and unwraps the registry envelope", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ secret_types: [{ id: "snmp-community", display_name: "SNMP Community", official: true, fields: [{ name: "community", type: "string", secret: true, origin: "operator" }] }] }),
+      jsonResponse({ secret_types: [{ id: uuidFor("snmp-community"), name: "snmp-community", display_name: "SNMP Community", official: true, fields: [{ name: "community", type: "string", secret: true, origin: "operator" }] }] }),
     );
     const types = await listSecretTypes();
     expect(types).toHaveLength(1);
-    expect(types[0]).toMatchObject({ id: "snmp-community", official: true });
+    expect(types[0]).toMatchObject({ id: uuidFor("snmp-community"), name: "snmp-community", official: true });
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.url).toContain("/api/v1/secret-types");
   });
 
   it("posts the create body with the field map", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ id: "2", name: "poll", secret_type: "snmp-community", owner_kind: "location", owner_name: "room", fields: [] }, 201),
+      jsonResponse({ id: uuidFor("2"), name: "poll", secret_type: "snmp-community", owner_kind: "location", owner_name: "room", fields: [] }, 201),
     );
     const created = await createSecret({ name: "poll", secret_type: "snmp-community", owner_kind: "location", owner: "room", fields: { community: "public" } });
     expect(created.owner_name).toBe("room");
@@ -54,7 +55,7 @@ describe("secrets data layer", () => {
 
   it("patches the field values on update", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ id: "sec_123", name: "poll", secret_type: "snmp-community", owner_kind: "platform", fields: [] }),
+      jsonResponse({ id: uuidFor("sec_123"), name: "poll", secret_type: "snmp-community", owner_kind: "platform", fields: [] }),
     );
     await updateSecret("sec_123", { community: "rotated" });
     const req = fetchMock.mock.calls[0][0] as Request;

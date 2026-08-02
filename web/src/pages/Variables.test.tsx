@@ -8,6 +8,7 @@ import { LOCATIONS_KEY } from "../lib/locations";
 import { SYSTEMS_KEY } from "../lib/systems";
 import { COMPONENTS_KEY } from "../lib/components";
 import { ME_KEY, type Me } from "../lib/auth";
+import { uuidFor } from "../lib/testids";
 
 // A variable at the `platform` tier is install-wide, so the server gates the write
 // on `platform:<action>` on top of `variable:<action>`. The console must gate the
@@ -17,8 +18,8 @@ import { ME_KEY, type Me } from "../lib/auth";
 // read which capability it is missing rather than earn a 403. Data is seeded into
 // the query cache so no server is needed.
 const seed: Variable[] = [
-  { id: "v-tier", name: "poll_interval", value_type: "int", owner_kind: "platform", value: 60 },
-  { id: "v-below", name: "room_poll", value_type: "int", owner_kind: "location", owner_name: "room", value: 30 },
+  { id: uuidFor("v-tier"), name: "poll_interval", value_type: "int", owner_kind: "platform", value: 60 },
+  { id: uuidFor("v-below"), name: "room_poll", value_type: "int", owner_kind: "location", owner_name: "room", value: 30 },
 ];
 
 const owner: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };

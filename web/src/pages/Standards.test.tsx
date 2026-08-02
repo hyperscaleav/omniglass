@@ -7,6 +7,7 @@ import { STANDARDS_KEY, type Standard } from "../lib/standards";
 import { classifierPropertiesKey, type ClassifierProperty } from "../lib/classifier_properties";
 import { PROPERTIES_KEY, type PropertyRow } from "../lib/properties";
 import { ME_KEY, type Me } from "../lib/auth";
+import { uuidFor } from "../lib/testids";
 
 // Standards is the catalog of blueprints a system conforms to, on the flat
 // FlatList surface beside Products. An official (seed-owned) row is read-only (no
@@ -14,8 +15,8 @@ import { ME_KEY, type Me } from "../lib/auth";
 // and a writable declared-property contract on its detail blade. Data is seeded
 // into the query cache so no server is needed.
 const seed: Standard[] = [
-  { id: "u-meeting-room", name: "meeting-room", display_name: "Meeting room", official: true },
-  { id: "u-huddle-space", name: "huddle-space", display_name: "Huddle space", official: false, parent_standard: "meeting-room", parent_standard_id: "u-meeting-room" },
+  { id: uuidFor("std-meeting-room"), name: "meeting-room", display_name: "Meeting room", official: true },
+  { id: uuidFor("std-huddle-space"), name: "huddle-space", display_name: "Huddle space", official: false, parent_standard: "meeting-room", parent_standard_id: uuidFor("std-meeting-room") },
 ];
 
 const contract: ClassifierProperty[] = [{ property_type_name: "seat_count", property_type_id: "seat_count-id", default_value: 8, required: true }];
@@ -128,5 +129,24 @@ describe("Standards page", () => {
     fireEvent.click(screen.getByRole("button", { name: /new standard/i }));
     expect(await screen.findByText("Create standard")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("meeting-room")).toBeInTheDocument();
+  });
+});
+
+// The catalog addresses rows by the kebab handle (ADR-0062): the first column
+// shows it, and the substring filter matches it. With uuid-shaped fixture ids
+// these fail when the page feeds the uuid anywhere an operator reads or types.
+describe("Standards addressing honesty (#469)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("shows the handle in the Name column and finds the row by it in the filter", async () => {
+    mount();
+    expect(await screen.findByText("Huddle space")).toBeInTheDocument();
+    const row = screen.getByText("Huddle space").closest("tr")!;
+    expect(within(row).getByText("huddle-space")).toBeInTheDocument();
+    const input = screen.getByRole("combobox") as HTMLInputElement;
+    fireEvent.input(input, { target: { value: "huddle-space" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(screen.getByText("Huddle space")).toBeInTheDocument();
+    expect(screen.queryByText("Meeting room")).toBeNull();
   });
 });

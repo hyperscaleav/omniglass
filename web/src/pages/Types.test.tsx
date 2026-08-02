@@ -6,6 +6,7 @@ import { TYPES_KEY, type TypeRow } from "../lib/types";
 import { classifierPropertiesKey, type ClassifierProperty } from "../lib/classifier_properties";
 import { PROPERTIES_KEY, type PropertyRow } from "../lib/properties";
 import { ME_KEY, type Me } from "../lib/auth";
+import { uuidFor } from "../lib/testids";
 
 // The Types page is a segmented tab control (Location / Secret) over the shared
 // FlatList, one tab per type registry. Each tab rebuilds its own FlatList (keyed
@@ -16,9 +17,12 @@ import { ME_KEY, type Me } from "../lib/auth";
 // is the standard it conforms to, which has its own page. Data is seeded into the
 // query cache so no server is needed.
 const seed: TypeRow[] = [
-  { kind: "location", id: "campus", display_name: "Campus", official: true, icon: "map-pin" },
-  { kind: "location", id: "wing", display_name: "Wing", official: false, icon: "map-pin", allowed_parent_types: ["campus", "root"] },
-  { kind: "secret", id: "oauth2-client", display_name: "OAuth2 Client", official: false, fields: [] },
+  { kind: "location", id: uuidFor("lt-campus"), name: "campus", display_name: "Campus", official: true, icon: "map-pin" },
+  { kind: "location", id: uuidFor("lt-wing"), name: "wing", display_name: "Wing", official: false, icon: "map-pin", allowed_parent_types: ["campus", "root"] },
+  { kind: "secret", id: uuidFor("st-oauth2-client"), name: "oauth2-client", display_name: "OAuth2 Client", official: false, fields: [] },
+  // A handle its display name does not contain, so filtering by it can only
+  // succeed through the name field (the addressing-honesty test below).
+  { kind: "location", id: uuidFor("lt-server-room"), name: "server-room", display_name: "Machine hall", official: false, icon: "map-pin" },
 ];
 
 // The location type contract shown on the wing blade, plus the catalog the editor
@@ -261,5 +265,25 @@ describe("Types page", () => {
     await waitFor(() => expect(put).toBeTruthy());
     expect(put!.url).toContain("/location-types/wing/properties/seat_count");
     expect(await put!.json()).toEqual({ required: false, default_value: 12 }); // coerced to the int data_type
+  });
+});
+
+// The catalog addresses rows by the kebab handle (ADR-0062): the first column
+// shows it, and the substring filter matches it. The server-room fixture's
+// display name ("Machine hall") does not contain the handle, so the filter can
+// only find it through the name field.
+describe("Types addressing honesty (#469)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("shows the handle in the Name column and finds the row by it in the filter", async () => {
+    mount();
+    expect(await screen.findByText("Machine hall")).toBeTruthy();
+    const row = screen.getByText("Machine hall").closest("tr")!;
+    expect(within(row).getByText("server-room")).toBeTruthy();
+    const input = screen.getByRole("combobox") as HTMLInputElement;
+    fireEvent.input(input, { target: { value: "server-room" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(screen.getByText("Machine hall")).toBeTruthy();
+    expect(screen.queryByText("Campus")).toBeNull();
   });
 });

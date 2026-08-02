@@ -14,6 +14,11 @@ export type AuditEvent = {
   verb: string;
   resource: string;
   resource_id?: string;
+  // The row images the write recorded (#473): a create carries only new, a
+  // delete only old, an update both; auth events carry neither. The server
+  // owns redaction, so whatever arrives here is safe to render.
+  old?: unknown;
+  new?: unknown;
 };
 
 export const AUDIT_KEY = ["audit-log"] as const;
@@ -57,6 +62,39 @@ export function accountableLabel(e: AuditEvent): string {
   return e.real_actor_name || e.real_actor || actorLabel(e);
 }
 
+// Some resources carry their operator-facing handle under a resource-specific
+// key rather than a name field: a tag binding is read by its tag key, a
+// property by its property type, an assignment or grant by its role, an alarm
+// or capability fact by the component it sits on, a command by its type.
+// Casing follows the writer (Go structs marshal field names, map projections
+// lowercase).
+const RESOURCE_LABEL_KEYS: Record<string, string[]> = {
+  tag_binding: ["key"],
+  property: ["PropertyTypeName", "property_type_name"],
+  alarm: ["component", "Component"],
+  command: ["command_type"],
+  system_role_assignment: ["role"],
+  component_capability: ["component"],
+  principal_grant: ["Role", "role"],
+};
+
+// resourceLabel resolves the friendly handle an operator reads for a row's
+// resource (ADR-0062: the uuid is identity, the name is the address). The
+// trail stores resource_id as the stable form, which for uuid-keyed resources
+// is opaque; the row's own images almost always carry the handle, so prefer
+// the resource-specific key, then the generic name keys, then the raw id.
+export function resourceLabel(e: AuditEvent): string {
+  const keys = [...(RESOURCE_LABEL_KEYS[e.resource] ?? []), "name", "Name", "username", "Username"];
+  for (const img of [e.new, e.old]) {
+    if (typeof img !== "object" || img === null) continue;
+    const o = img as Record<string, unknown>;
+    for (const k of keys) {
+      if (typeof o[k] === "string" && o[k]) return o[k] as string;
+    }
+  }
+  return e.resource_id ?? "";
+}
+
 const uniqSorted = (xs: string[]): string[] => [...new Set(xs.filter(Boolean))].sort();
 
 // auditFilterKeys are the faceted-search fields for the audit trail, consumed by
@@ -72,5 +110,5 @@ export const auditFilterKeys: FilterKey<AuditEvent>[] = [
   { key: "who", type: "string", hint: "substring", get: (e) => (e.real_actor ? `${accountableLabel(e)} ${actorLabel(e)}` : accountableLabel(e)), values: (rows) => uniqSorted(rows.map(accountableLabel)) },
   { key: "action", type: "string", hint: "exact", get: (e) => e.verb, values: (rows) => uniqSorted(rows.map((e) => e.verb)) },
   { key: "resource", type: "string", hint: "exact", get: (e) => e.resource, values: (rows) => uniqSorted(rows.map((e) => e.resource)) },
-  { key: "id", type: "string", hint: "substring", get: (e) => e.resource_id ?? "" },
+  { key: "id", type: "string", hint: "substring", get: (e) => `${resourceLabel(e)} ${e.resource_id ?? ""}` },
 ];

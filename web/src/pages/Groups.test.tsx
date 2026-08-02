@@ -6,21 +6,22 @@ import Groups from "./Groups";
 import { GROUPS_KEY, type Group, type GroupMember } from "../lib/groups";
 import { PRINCIPALS_KEY, ROLES_KEY, type Principal } from "../lib/principals";
 import { ME_KEY, type Me } from "../lib/auth";
+import { uuidFor } from "../lib/testids";
 
 // The Groups page is a config over the shared FlatList (rooted on group): a row per
 // group opens the group blade (members drill into the member's user blade), and the
 // per-group caches are seeded so no server is needed. `>` grants every permission.
-const group: Group = { id: "g-hd", name: "help-desk", display_name: "Help Desk", description: "Support crew", member_count: 1, grant_count: 0 };
-const members: GroupMember[] = [{ principal_id: "u-alice", kind: "human", username: "alice" }];
-const alice: Principal = { id: "u-alice", kind: "human", active: true, human: { username: "alice", email: "alice@example.com", display_name: "Alice Ng" }, grants: [], groups: [{ id: "g-hd", name: "Help Desk" }] };
+const group: Group = { id: uuidFor("g-hd"), name: "help-desk", display_name: "Help Desk", description: "Support crew", member_count: 1, grant_count: 0 };
+const members: GroupMember[] = [{ principal_id: uuidFor("u-alice"), kind: "human", username: "alice" }];
+const alice: Principal = { id: uuidFor("u-alice"), kind: "human", active: true, human: { username: "alice", email: "alice@example.com", display_name: "Alice Ng" }, grants: [], groups: [{ id: uuidFor("g-hd"), name: "Help Desk" }] };
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 
 function mount() {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...GROUPS_KEY], [group]);
-  qc.setQueryData([...GROUPS_KEY, "g-hd"], group);
-  qc.setQueryData([...GROUPS_KEY, "g-hd", "members"], members);
-  qc.setQueryData([...GROUPS_KEY, "g-hd", "grants"], []);
+  qc.setQueryData([...GROUPS_KEY, uuidFor("g-hd")], group);
+  qc.setQueryData([...GROUPS_KEY, uuidFor("g-hd"), "members"], members);
+  qc.setQueryData([...GROUPS_KEY, uuidFor("g-hd"), "grants"], []);
   qc.setQueryData([...PRINCIPALS_KEY], [alice]);
   qc.setQueryData([...PRINCIPALS_KEY, alice.id], alice); // the drilled user blade fetches getPrincipal by id
   qc.setQueryData([...ME_KEY], me);
@@ -101,7 +102,7 @@ describe("Groups page", () => {
       const url = typeof input === "string" ? input : req.url;
       const method = typeof input === "string" ? "GET" : req.method;
       if (method === "DELETE") return new Response(null, { status: 204 });
-      if (method === "GET" && /\/principal-groups\/g-hd(\/|\?|$)/.test(url)) {
+      if (method === "GET" && url.includes(`/principal-groups/${uuidFor("g-hd")}`)) {
         detailRefetched = true;
         return new Response(JSON.stringify({ title: "not found" }), { status: 404, headers: { "Content-Type": "application/json" } });
       }
@@ -133,7 +134,7 @@ describe("Groups page", () => {
   });
 
   it("opens a newly created group straight in edit mode to add members and grants", async () => {
-    const created: Group = { id: "g-new", name: "field-crew", display_name: "Field Crew", description: "" };
+    const created: Group = { id: uuidFor("g-new"), name: "field-crew", display_name: "Field Crew", description: "" };
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;

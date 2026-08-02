@@ -84,7 +84,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
   const addable = createMemo(() => {
     const taken = new Set(picked());
     return [...(catalog.data ?? [])]
-      .filter((c) => !taken.has(c.id))
+      .filter((c) => !taken.has(c.name))
       .sort((a, b) => a.display_name.localeCompare(b.display_name));
   });
 
@@ -233,7 +233,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
               onChange={(e) => setAdding(e.currentTarget.value)}
             >
               <option value="">Add a capability it degrades…</option>
-              <For each={addable()}>{(c) => <option value={c.id}>{c.display_name} ({c.id})</option>}</For>
+              <For each={addable()}>{(c) => <option value={c.name}>{c.display_name} ({c.name})</option>}</For>
             </select>
             <Button
               square

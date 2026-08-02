@@ -72,8 +72,8 @@ export default function Systems() {
   const standardOptions = createMemo(() =>
     [...(standards.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name)),
   );
-  const standardLabel = (id?: string) =>
-    id ? (standards.data ?? []).find((s) => s.id === id)?.display_name ?? id : "";
+  const standardLabel = (handle?: string) =>
+    handle ? (standards.data ?? []).find((s) => s.name === handle)?.display_name ?? handle : "";
   const locationItems = createMemo(() => (locations.data ?? []).map((l) => ({ id: l.name, value: l.name, label: entityLabel(l), parentId: l.parent })));
   const systemItems = createMemo(() => (systems.data ?? []).map((s) => ({ id: s.name, value: s.name, label: entityLabel(s), parentId: s.parent })));
 
@@ -95,7 +95,7 @@ export default function Systems() {
         display: entityLabel(s),
         children: [],
         actions: s.actions,
-        standard: standardLabel(s.standard_id),
+        standard: standardLabel(s.standard),
         locationName: s.location ? entityLabel(lm.get(s.location) ?? { name: s.location }) : "",
         tags: s.effective_tags ?? {},
         raw: s,
@@ -141,7 +141,7 @@ export default function Systems() {
     const canUpdate = () => can(me.data, "system", "update");
 
     const [display, setDisplay] = createSignal(n().raw.display_name ?? "");
-    const [standard, setStandard] = createSignal(n().raw.standard_id ?? "");
+    const [standard, setStandard] = createSignal(n().raw.standard ?? "");
     const [name, setName] = createSignal(n().raw.name);
     const [nameCheck, setNameCheck] = createSignal<NameCheck | null>(null);
     const [checking, setChecking] = createSignal(false);
@@ -155,7 +155,7 @@ export default function Systems() {
     // Seed the inputs from the node each time edit begins (this also reverts a Cancel,
     // since Cancel exits edit and the next begin re-seeds).
     createEffect(on(editing, (isEditing) => {
-      if (isEditing) { setDisplay(n().raw.display_name ?? ""); setStandard(n().raw.standard_id ?? ""); setName(n().raw.name); setNameCheck(null); }
+      if (isEditing) { setDisplay(n().raw.display_name ?? ""); setStandard(n().raw.standard ?? ""); setName(n().raw.name); setNameCheck(null); }
     }));
     // Consume a pending "open in edit" handoff (from create or the row pencil) once
     // the node has resolved.
@@ -228,7 +228,7 @@ export default function Systems() {
                 "Standard",
                 <select class="select select-bordered w-full" value={standard()} onChange={(e) => setStandard(e.currentTarget.value)}>
                   <option value="">None (a one-off system)</option>
-                  <For each={standardOptions()}>{(s) => <option value={s.id}>{s.display_name}</option>}</For>
+                  <For each={standardOptions()}>{(s) => <option value={s.name}>{s.display_name}</option>}</For>
                 </select>,
                 "The blueprint this system conforms to; its contract declares the properties below.",
               )}
@@ -406,7 +406,7 @@ export default function Systems() {
               "Standard",
               <select class="select select-bordered w-full" value={standard()} onChange={(e) => setStandard(e.currentTarget.value)}>
                 <option value="">None (a one-off system)</option>
-                <For each={standardOptions()}>{(s) => <option value={s.id}>{s.display_name}</option>}</For>
+                <For each={standardOptions()}>{(s) => <option value={s.name}>{s.display_name}</option>}</For>
               </select>,
               "The blueprint this system conforms to. Optional.",
             )}
