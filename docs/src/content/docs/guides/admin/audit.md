@@ -28,6 +28,10 @@ The page uses the same faceted search as the inventory lists: filter by **who**,
 Filtering runs over the rows already loaded; **Load older** pages further back in time, so a search that comes
 up short is a cue to load older and look deeper.
 
+The **Id** column shows the resource's friendly handle, resolved from the row's own change images;
+hovering it reveals the stable uuid the trail actually stores, which is what keeps a row attributable
+after a rename. A row whose images carry no handle (an older registry delete) falls back to the raw id.
+
 Pick a row to open its **detail drawer**: who acted (and, for an impersonated action, who was behind
 it), when, and the **field-level before/after diff** of the change itself. Changed fields highlight
 both sides, an added field only its After, a removed one only its Before, and unchanged fields dim. A

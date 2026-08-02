@@ -62,6 +62,23 @@ export function accountableLabel(e: AuditEvent): string {
   return e.real_actor_name || e.real_actor || actorLabel(e);
 }
 
+// resourceLabel resolves the friendly handle an operator reads for a row's
+// resource (ADR-0062: the uuid is identity, the name is the address). The
+// trail stores resource_id as the stable form, which for uuid-keyed resources
+// is opaque; the row's own images almost always carry the handle, so prefer
+// it and fall back to the raw id. Image field casing varies by writer (Go
+// structs marshal Name, map projections name, principals username).
+export function resourceLabel(e: AuditEvent): string {
+  for (const img of [e.new, e.old]) {
+    if (typeof img !== "object" || img === null) continue;
+    const o = img as Record<string, unknown>;
+    for (const k of ["name", "Name", "username", "Username"]) {
+      if (typeof o[k] === "string" && o[k]) return o[k] as string;
+    }
+  }
+  return e.resource_id ?? "";
+}
+
 const uniqSorted = (xs: string[]): string[] => [...new Set(xs.filter(Boolean))].sort();
 
 // auditFilterKeys are the faceted-search fields for the audit trail, consumed by
@@ -77,5 +94,5 @@ export const auditFilterKeys: FilterKey<AuditEvent>[] = [
   { key: "who", type: "string", hint: "substring", get: (e) => (e.real_actor ? `${accountableLabel(e)} ${actorLabel(e)}` : accountableLabel(e)), values: (rows) => uniqSorted(rows.map(accountableLabel)) },
   { key: "action", type: "string", hint: "exact", get: (e) => e.verb, values: (rows) => uniqSorted(rows.map((e) => e.verb)) },
   { key: "resource", type: "string", hint: "exact", get: (e) => e.resource, values: (rows) => uniqSorted(rows.map((e) => e.resource)) },
-  { key: "id", type: "string", hint: "substring", get: (e) => e.resource_id ?? "" },
+  { key: "id", type: "string", hint: "substring", get: (e) => `${resourceLabel(e)} ${e.resource_id ?? ""}` },
 ];

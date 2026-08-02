@@ -2,7 +2,7 @@ import { For, Show, createSignal, onMount, type JSX } from "solid-js";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Button from "../components/Button";
 import KVStacked from "../components/KVStacked";
-import { type AuditEvent, AUDIT_PAGE, auditFilterKeys, listAuditLog, actorLabel, accountableLabel } from "../lib/audit";
+import { type AuditEvent, AUDIT_PAGE, auditFilterKeys, listAuditLog, actorLabel, accountableLabel, resourceLabel } from "../lib/audit";
 import { diffFields, type DiffRow } from "../lib/auditdiff";
 
 // Audit: the read-only audit trail, now a config over the shared FlatList (the flat
@@ -45,7 +45,7 @@ const columns: FlatColumn<AuditEvent>[] = [
   },
   { key: "action", label: "Action", width: "150px", cell: (e) => <span class={`badge badge-sm ${verbClass(e.verb)} font-data`}>{e.verb}</span> },
   { key: "resource", label: "Resource", width: "170px", cell: (e) => <span class="font-data text-xs text-base-content/70">{e.resource}</span> },
-  { key: "id", label: "Id", cell: (e) => <span class="font-data text-[11px] text-base-content/40">{e.resource_id || ""}</span> },
+  { key: "id", label: "Id", cell: (e) => <span class="font-data text-[11px] text-base-content/40" title={e.resource_id && e.resource_id !== resourceLabel(e) ? e.resource_id : undefined}>{resourceLabel(e)}</span> },
 ];
 
 // The state-to-style vocabulary for a diff row: an added field tints the After
@@ -81,7 +81,7 @@ function AuditDetail(p: { e: AuditEvent }): JSX.Element {
           }
         />
         <KVStacked label="Action" value={<span class={`badge badge-sm ${verbClass(e.verb)} font-data`}>{e.verb}</span>} />
-        <KVStacked label="Resource" value={<span class="font-data text-xs">{e.resource}{e.resource_id ? ` ${e.resource_id}` : ""}</span>} />
+        <KVStacked label="Resource" value={<span class="font-data text-xs" title={e.resource_id || undefined}>{e.resource}{resourceLabel(e) ? ` ${resourceLabel(e)}` : ""}</span>} />
       </div>
       <div class="flex flex-col gap-1.5">
         <span class="eyebrow">Change</span>
@@ -158,7 +158,7 @@ export default function Audit() {
         columns,
         empty: "No events yet.",
         detail: (e) => ({
-          title: <span class="font-data text-sm">{e.verb} {e.resource}{e.resource_id ? ` ${e.resource_id}` : ""}</span>,
+          title: <span class="font-data text-sm" title={e.resource_id || undefined}>{e.verb} {e.resource}{resourceLabel(e) ? ` ${resourceLabel(e)}` : ""}</span>,
           body: <AuditDetail e={e} />,
         }),
         footer: ({ shown, total, filtering }) => (

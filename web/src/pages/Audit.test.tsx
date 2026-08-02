@@ -13,6 +13,7 @@ const seed: AuditEvent[] = [
   { id: "1", ts: "2026-07-07T10:02:00Z", actor: "u-alice", actor_name: "alice", verb: "login", resource: "auth" },
   { id: "2", ts: "2026-07-07T10:01:00Z", actor: "u-alice", actor_name: "alice", real_actor: "u-root", real_actor_name: "root", verb: "update", resource: "principal", resource_id: "u-alice", old: { display_name: "Alice" }, new: { display_name: "Alice Cooper" } },
   { id: uuidFor("3"), ts: "2026-07-07T10:00:00Z", actor: "u-bob", actor_name: "bob", verb: "delete", resource: "component", resource_id: "cmp_9f2", old: { name: "encoder" } },
+  { id: uuidFor("4"), ts: "2026-07-07T09:59:00Z", actor: "u-bob", actor_name: "bob", verb: "create", resource: "secret", resource_id: "00000000-0000-4000-8000-00000000aaaa", new: { name: "core-snmp", secret_type: "snmp-community" } },
 ];
 
 const beforeParams: (string | null)[] = [];
@@ -106,7 +107,7 @@ describe("Audit drawer (#473)", () => {
     const { findByText } = render(() => <Audit />);
     fireEvent.click(await findByText("delete"));
     expect(await screen.findByText("Change")).toBeTruthy();
-    expect(screen.getByText("encoder")).toBeTruthy();
+    expect(screen.getAllByText("encoder").length).toBeGreaterThan(0);
     expect(screen.getByText("(none)")).toBeTruthy();
   });
 
@@ -114,5 +115,30 @@ describe("Audit drawer (#473)", () => {
     const { findByText } = render(() => <Audit />);
     fireEvent.click(await findByText("login"));
     expect(await screen.findByText(/recorded no row images/)).toBeTruthy();
+  });
+});
+
+// The trail stores the uuid as resource_id (identity survives a rename), but an
+// operator reads the friendly handle (ADR-0062): the console resolves it from
+// the row's own images, keeping the uuid one hover away.
+describe("Audit resource labels (ADR-0062)", () => {
+  it("shows the handle from the row's image in the Id column, uuid on hover", async () => {
+    const { findByText, getByText } = render(() => <Audit />);
+    expect(await findByText("core-snmp")).toBeTruthy();
+    expect(getByText("core-snmp").getAttribute("title")).toContain("00000000-0000-4000-8000-00000000aaaa");
+  });
+
+  it("falls back to the raw resource_id when no image carries a name", async () => {
+    const { findByText } = render(() => <Audit />);
+    // Row 2 (principal update) images carry no name key; its id renders as-is.
+    expect(await findByText("u-alice")).toBeTruthy();
+  });
+
+  it("titles the drawer with the handle, not the uuid", async () => {
+    const { findByText } = render(() => <Audit />);
+    fireEvent.click(await findByText("core-snmp"));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.textContent).toContain("create secret core-snmp");
+    expect(dialog.textContent).not.toContain("create secret 00000000-0000-4000");
   });
 });
