@@ -17,9 +17,10 @@ import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Capabilities: the capability registry (the capability picker on the product
-// form), on the flat FlatList surface. A capability is addressed by its id (a
-// kebab id, create-only); official (seed-owned) rows are read-only, same as the
-// Types catalog's official rows: no Edit pencil, no Delete.
+// form), on the flat FlatList surface. A capability is addressed by its kebab
+// name (ADR-0062: the uuid is identity, the name is what an operator reads and
+// types); official (seed-owned) rows are read-only, same as the Types
+// catalog's official rows: no Edit pencil, no Delete.
 
 function officialBadge(official: boolean): JSX.Element {
   return official
@@ -28,7 +29,7 @@ function officialBadge(official: boolean): JSX.Element {
 }
 
 const columns: FlatColumn<Capability>[] = [
-  { key: "id", label: "Id", sortVal: (c) => c.id, cell: (c) => <span class="font-data font-semibold">{c.id}</span> },
+  { key: "name", label: "Name", sortVal: (c) => c.name, cell: (c) => <span class="font-data font-semibold">{c.name}</span> },
   { key: "display_name", label: "Display name", sortVal: (c) => c.display_name, cell: (c) => <span>{c.display_name}</span> },
   { key: "official", label: "Origin", width: "100px", sortVal: (c) => String(c.official), cell: (c) => officialBadge(c.official) },
 ];
@@ -38,7 +39,7 @@ export default function Capabilities() {
   const caps = useQuery(() => ({ queryKey: CAPABILITIES_KEY, queryFn: listCapabilities }));
 
   const rows = createMemo(() =>
-    [...(caps.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name) || a.id.localeCompare(b.id)),
+    [...(caps.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name) || a.name.localeCompare(b.name)),
   );
 
   return (
@@ -49,14 +50,15 @@ export default function Capabilities() {
         loading: () => caps.isPending,
         error: () => caps.error,
         filterKeys: [
-          { key: "name", type: "string", hint: "substring", get: (c) => `${c.id} ${c.display_name}`, values: () => [] },
+          { key: "name", type: "string", hint: "substring", get: (c) => `${c.name} ${c.display_name}`, values: () => [] },
           { key: "official", type: "string", hint: "exact", get: (c) => (c.official ? "official" : "custom"), values: () => ["official", "custom"] },
         ],
-        filterPlaceholder: "filter capabilities by id, name…",
+        filterPlaceholder: "filter capabilities by name…",
         columns,
         empty: "No capabilities yet.",
-        // Address a row by id: the write paths key on id, and it is globally unique.
-        rowId: (c) => c.id,
+        // Address a row by its kebab name: globally unique, and what the API
+        // and CLI accept (the write paths resolve either form).
+        rowId: (c) => c.name,
         blades: { registry: { capability: capabilityBlade }, rootKind: "capability" },
         create: can(me.data, "capability", "create")
           ? { label: "New capability", can: () => can(me.data, "capability", "create"), body: (ctx) => <CreateCapabilityForm onCreated={ctx.close} /> }
@@ -76,12 +78,12 @@ export const capabilityBlade: BladeDef = {
 
 function useCapabilityRow(id: string): () => Capability | undefined {
   const caps = useQuery(() => ({ queryKey: CAPABILITIES_KEY, queryFn: listCapabilities }));
-  return () => (caps.data ?? []).find((c) => c.id === id);
+  return () => (caps.data ?? []).find((c) => c.name === id);
 }
 
 function CapabilityBladeTitle(p: { id: string }): JSX.Element {
   const row = useCapabilityRow(p.id);
-  return <span class="font-data">{row()?.id ?? p.id}</span>;
+  return <span class="font-data">{row()?.name ?? p.id}</span>;
 }
 
 function CapabilityBladeBody(p: { id: string }): JSX.Element {
@@ -103,10 +105,10 @@ function CapabilityBladeBody(p: { id: string }): JSX.Element {
   async function removeCapability() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete capability "${r.id}"?`)) return;
+    if (!confirm(`Delete capability "${r.name}"?`)) return;
     setErr(null);
     try {
-      await deleteCapability(r.id);
+      await deleteCapability(r.name);
       blades.close();
       await qc.invalidateQueries({ queryKey: CAPABILITIES_KEY });
     } catch (e) {
@@ -119,7 +121,7 @@ function CapabilityBladeBody(p: { id: string }): JSX.Element {
     if (!r) return;
     setErr(null);
     try {
-      await updateCapability(r.id, {
+      await updateCapability(r.name, {
         display_name: displayName(),
       });
       await qc.invalidateQueries({ queryKey: CAPABILITIES_KEY });
@@ -146,8 +148,9 @@ function CapabilityBladeBody(p: { id: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <KVStacked label="Id" value={<span class="font-data">{r().id}</span>} />
+            <KVStacked label="Name" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Origin" value={officialBadge(r().official)} />
+            <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
           <div class="flex flex-col gap-1.5">
             <span class="eyebrow">Display name</span>
@@ -167,8 +170,8 @@ function CapabilityBladeBody(p: { id: string }): JSX.Element {
   );
 }
 
-// CreateCapabilityForm: name the id (a kebab id, immutable after creation) and
-// set the display name.
+// CreateCapabilityForm: pick the kebab name (the operator-facing address; the
+// uuid is the database's to mint) and set the display name.
 export function CreateCapabilityForm(p: { onCreated: (id: string) => void }): JSX.Element {
   const qc = useQueryClient();
   const [id, setId] = createSignal("");
@@ -206,7 +209,7 @@ export function CreateCapabilityForm(p: { onCreated: (id: string) => void }): JS
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Id" hint="A kebab id, e.g. microphone.">
+      <Field label="Name" hint="A kebab name, e.g. microphone.">
         <input class="input input-bordered w-full font-data" value={id()} placeholder="microphone" onInput={(e) => setId(e.currentTarget.value)} />
       </Field>
       <Field label="Display name">

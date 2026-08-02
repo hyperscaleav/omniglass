@@ -23,7 +23,8 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Products: the product catalog (the model a component is an instance of, e.g.
 // "Crestron TSW-1070"), on the flat FlatList surface. A product is addressed by
-// its id (a kebab id, create-only); official (seed-owned) rows are read-only,
+// its kebab name (ADR-0062: the uuid is identity, the name is what an operator
+// reads and types); official (seed-owned) rows are read-only,
 // same as the Types catalog's official rows: no Edit pencil, no Delete. A
 // product carries a kind (device/app/service/vm), an optional vendor and driver
 // (picked from those registries), and a set of capability ids it exposes.
@@ -45,7 +46,7 @@ function refCell(id?: string): JSX.Element {
 }
 
 const columns: FlatColumn<Product>[] = [
-  { key: "id", label: "Id", sortVal: (p) => p.id, cell: (p) => <span class="font-data font-semibold">{p.id}</span> },
+  { key: "name", label: "Name", sortVal: (p) => p.name, cell: (p) => <span class="font-data font-semibold">{p.name}</span> },
   { key: "display_name", label: "Display name", sortVal: (p) => p.display_name, cell: (p) => <span>{p.display_name}</span> },
   { key: "vendor", label: "Vendor", width: "150px", sortVal: (p) => p.vendor_id ?? "", cell: (p) => refCell(p.vendor_id) },
   { key: "driver", label: "Driver", width: "150px", sortVal: (p) => p.driver_id ?? "", cell: (p) => refCell(p.driver_id) },
@@ -58,7 +59,7 @@ export default function Products() {
   const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
 
   const rows = createMemo(() =>
-    [...(products.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name) || a.id.localeCompare(b.id)),
+    [...(products.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name) || a.name.localeCompare(b.name)),
   );
 
   return (
@@ -69,16 +70,17 @@ export default function Products() {
         loading: () => products.isPending,
         error: () => products.error,
         filterKeys: [
-          { key: "name", type: "string", hint: "substring", get: (p) => `${p.id} ${p.display_name}`, values: () => [] },
+          { key: "name", type: "string", hint: "substring", get: (p) => `${p.name} ${p.display_name}`, values: () => [] },
           { key: "kind", type: "string", hint: "exact", get: (p) => p.kind, values: () => PRODUCT_KINDS },
           { key: "vendor", type: "string", hint: "exact", get: (p) => p.vendor_id ?? "", values: () => [] },
           { key: "official", type: "string", hint: "exact", get: (p) => (p.official ? "official" : "custom"), values: () => ["official", "custom"] },
         ],
-        filterPlaceholder: "filter products by id, name…",
+        filterPlaceholder: "filter products by name…",
         columns,
         empty: "No products yet.",
-        // Address a row by id: the write paths key on id, and it is globally unique.
-        rowId: (p) => p.id,
+        // Address a row by its kebab name: globally unique, and what the API
+        // and CLI accept (the write paths resolve either form).
+        rowId: (p) => p.name,
         blades: { registry: { product: productBlade }, rootKind: "product" },
         create: can(me.data, "product", "create")
           ? { label: "New product", can: () => can(me.data, "product", "create"), body: (ctx) => <CreateProductForm onCreated={ctx.close} /> }
@@ -98,12 +100,12 @@ export const productBlade: BladeDef = {
 
 function useProductRow(id: string): () => Product | undefined {
   const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
-  return () => (products.data ?? []).find((p) => p.id === id);
+  return () => (products.data ?? []).find((p) => p.name === id);
 }
 
 function ProductBladeTitle(p: { id: string }): JSX.Element {
   const row = useProductRow(p.id);
-  return <span class="font-data">{row()?.id ?? p.id}</span>;
+  return <span class="font-data">{row()?.name ?? p.id}</span>;
 }
 
 function ProductBladeBody(p: { id: string }): JSX.Element {
@@ -133,10 +135,10 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
   async function removeProduct() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete product "${r.id}"?`)) return;
+    if (!confirm(`Delete product "${r.name}"?`)) return;
     setErr(null);
     try {
-      await deleteProduct(r.id);
+      await deleteProduct(r.name);
       blades.close();
       await qc.invalidateQueries({ queryKey: PRODUCTS_KEY });
     } catch (e) {
@@ -149,7 +151,7 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
     if (!r) return;
     setErr(null);
     try {
-      await updateProduct(r.id, {
+      await updateProduct(r.name, {
         display_name: displayName(),
         kind: kind(),
         vendor_id: vendorId() || undefined,
@@ -180,8 +182,9 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <KVStacked label="Id" value={<span class="font-data">{r().id}</span>} />
+            <KVStacked label="Name" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Origin" value={officialBadge(r().official)} />
+            <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
           <div class="flex flex-col gap-1.5">
             <span class="eyebrow">Display name</span>
@@ -236,7 +239,7 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
               <CapabilitiesPicker value={capabilities()} onChange={setCapabilities} />
             </Show>
           </div>
-          <ProductContractEditor productId={r().id} official={r().official} />
+          <ProductContractEditor productId={r().name} official={r().official} />
           <Show when={r().official}>
             <div role="alert" class="alert alert-soft text-sm"><span>Seed-owned, read-only.</span></div>
           </Show>
@@ -246,8 +249,9 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
   );
 }
 
-// CreateProductForm: name the id (a kebab id, immutable after creation), set the
-// display name and kind; vendor, driver, and capabilities are optional.
+// CreateProductForm: pick the kebab name (the operator-facing address; the
+// uuid is the database's to mint), set the display name and kind; vendor,
+// driver, and capabilities are optional.
 export function CreateProductForm(p: { onCreated: (id: string) => void }): JSX.Element {
   const qc = useQueryClient();
   const [id, setId] = createSignal("");
@@ -293,7 +297,7 @@ export function CreateProductForm(p: { onCreated: (id: string) => void }): JSX.E
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Id" hint="A kebab id, e.g. crestron-tsw-1070.">
+      <Field label="Name" hint="A kebab name, e.g. crestron-tsw-1070.">
         <input class="input input-bordered w-full font-data" value={id()} placeholder="crestron-tsw-1070" onInput={(e) => setId(e.currentTarget.value)} />
       </Field>
       <Field label="Display name">

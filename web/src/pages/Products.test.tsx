@@ -8,6 +8,7 @@ import { VENDORS_KEY, type Vendor } from "../lib/vendors";
 import { DRIVERS_KEY, type Driver } from "../lib/drivers";
 import { CAPABILITIES_KEY, type Capability } from "../lib/capabilities";
 import { ME_KEY, type Me } from "../lib/auth";
+import { uuidFor } from "../lib/testids";
 
 // Products is the product catalog on the flat FlatList surface (the model a
 // component is an instance of). An official (seed-owned) row is read-only, same
@@ -16,8 +17,8 @@ import { ME_KEY, type Me } from "../lib/auth";
 // driver, and capability registries the pickers read are seeded too, so the
 // create form stays network-free.
 const seed: Product[] = [
-  { id: "u-crestron-tsw-1070", name: "crestron-tsw-1070", display_name: "Crestron TSW-1070", kind: "device", vendor_id: "crestron", driver_id: "crestron-ct", capabilities: ["touchscreen"], official: true },
-  { id: "u-acme-panel", name: "acme-panel", display_name: "Acme Panel", kind: "device", vendor_id: "acme-av", capabilities: [], official: false },
+  { id: uuidFor("prod-crestron-tsw-1070"), name: "crestron-tsw-1070", display_name: "Crestron TSW-1070", kind: "device", vendor_id: "crestron", driver_id: "crestron-ct", capabilities: ["touchscreen"], official: true },
+  { id: uuidFor("prod-acme-panel"), name: "acme-panel", display_name: "Acme Panel", kind: "device", vendor_id: "acme-av", capabilities: [], official: false },
 ];
 
 const vendors: Vendor[] = [
@@ -100,5 +101,24 @@ describe("Products page", () => {
   it("hides New product for a caller without product:create", () => {
     mount(viewer);
     expect(screen.queryByText(/New product/i)).toBeNull();
+  });
+});
+
+// The catalog addresses rows by the kebab handle (ADR-0062): the first column
+// shows it, and the substring filter matches it. With uuid-shaped fixture ids
+// these fail when the page feeds the uuid anywhere an operator reads or types.
+describe("Products addressing honesty (#469)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("shows the handle in the Name column and finds the row by it in the filter", async () => {
+    mount();
+    expect(await screen.findByText("Acme Panel")).toBeInTheDocument();
+    const row = screen.getByText("Acme Panel").closest("tr")!;
+    expect(within(row).getByText("acme-panel")).toBeInTheDocument();
+    const input = screen.getByRole("combobox") as HTMLInputElement;
+    fireEvent.input(input, { target: { value: "acme-panel" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(screen.getByText("Acme Panel")).toBeInTheDocument();
+    expect(screen.queryByText("Crestron TSW-1070")).toBeNull();
   });
 });

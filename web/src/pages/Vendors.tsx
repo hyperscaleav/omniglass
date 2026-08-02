@@ -18,10 +18,11 @@ import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Vendors: the vendor registry (the vendor picker on the product form), on the
-// flat FlatList surface. A vendor is addressed by its id (a kebab id,
-// create-only); official (seed-owned) rows are read-only, same as the Types
-// catalog's official rows: no Edit pencil, no Delete. Each vendor carries a
-// kind (manufacturer/integrator/developer).
+// flat FlatList surface. A vendor is addressed by its kebab name (ADR-0062:
+// the uuid is identity, the name is what an operator reads and types);
+// official (seed-owned) rows are read-only, same as the Types catalog's
+// official rows: no Edit pencil, no Delete. Each vendor carries a kind
+// (manufacturer/integrator/developer).
 
 const VENDOR_KINDS: VendorKind[] = ["manufacturer", "integrator", "developer"];
 
@@ -51,7 +52,7 @@ function kindBadge(kind: string): JSX.Element {
 }
 
 const columns: FlatColumn<Vendor>[] = [
-  { key: "id", label: "Id", sortVal: (m) => m.id, cell: (m) => <span class="font-data font-semibold">{m.id}</span> },
+  { key: "name", label: "Name", sortVal: (m) => m.name, cell: (m) => <span class="font-data font-semibold">{m.name}</span> },
   { key: "display_name", label: "Display name", sortVal: (m) => m.display_name, cell: (m) => <span>{m.display_name}</span> },
   { key: "kind", label: "Kind", width: "130px", sortVal: (m) => m.kind, cell: (m) => kindBadge(m.kind) },
   { key: "icon", label: "Icon", width: "110px", cell: (m) => <span class="font-data text-xs text-base-content/60">{m.icon ?? "—"}</span> },
@@ -63,7 +64,7 @@ export default function Vendors() {
   const makes = useQuery(() => ({ queryKey: VENDORS_KEY, queryFn: listVendors }));
 
   const rows = createMemo(() =>
-    [...(makes.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name) || a.id.localeCompare(b.id)),
+    [...(makes.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name) || a.name.localeCompare(b.name)),
   );
 
   return (
@@ -74,15 +75,16 @@ export default function Vendors() {
         loading: () => makes.isPending,
         error: () => makes.error,
         filterKeys: [
-          { key: "name", type: "string", hint: "substring", get: (m) => `${m.id} ${m.display_name}`, values: () => [] },
+          { key: "name", type: "string", hint: "substring", get: (m) => `${m.name} ${m.display_name}`, values: () => [] },
           { key: "kind", type: "string", hint: "exact", get: (m) => m.kind, values: () => VENDOR_KINDS },
           { key: "official", type: "string", hint: "exact", get: (m) => (m.official ? "official" : "custom"), values: () => ["official", "custom"] },
         ],
-        filterPlaceholder: "filter vendors by id, name…",
+        filterPlaceholder: "filter vendors by name…",
         columns,
         empty: "No vendors yet.",
-        // Address a row by id: the write paths key on id, and it is globally unique.
-        rowId: (m) => m.id,
+        // Address a row by its kebab name: globally unique, and what the API
+        // and CLI accept (the write paths resolve either form).
+        rowId: (m) => m.name,
         blades: { registry: { vendor: vendorBlade }, rootKind: "vendor" },
         create: can(me.data, "vendor", "create")
           ? { label: "New vendor", can: () => can(me.data, "vendor", "create"), body: (ctx) => <CreateVendorForm onCreated={ctx.close} /> }
@@ -102,12 +104,12 @@ export const vendorBlade: BladeDef = {
 
 function useVendorRow(id: string): () => Vendor | undefined {
   const makes = useQuery(() => ({ queryKey: VENDORS_KEY, queryFn: listVendors }));
-  return () => (makes.data ?? []).find((m) => m.id === id);
+  return () => (makes.data ?? []).find((m) => m.name === id);
 }
 
 function VendorBladeTitle(p: { id: string }): JSX.Element {
   const row = useVendorRow(p.id);
-  return <span class="font-data">{row()?.id ?? p.id}</span>;
+  return <span class="font-data">{row()?.name ?? p.id}</span>;
 }
 
 function VendorBladeBody(p: { id: string }): JSX.Element {
@@ -137,10 +139,10 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
   async function removeVendor() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete vendor "${r.id}"?`)) return;
+    if (!confirm(`Delete vendor "${r.name}"?`)) return;
     setErr(null);
     try {
-      await deleteVendor(r.id);
+      await deleteVendor(r.name);
       blades.close();
       await qc.invalidateQueries({ queryKey: VENDORS_KEY });
     } catch (e) {
@@ -153,7 +155,7 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
     if (!r) return;
     setErr(null);
     try {
-      await updateVendor(r.id, {
+      await updateVendor(r.name, {
         display_name: displayName(),
         kind: kind(),
         icon: icon(),
@@ -184,8 +186,9 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <KVStacked label="Id" value={<span class="font-data">{r().id}</span>} />
+            <KVStacked label="Name" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Origin" value={officialBadge(r().official)} />
+            <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
           <div class="flex flex-col gap-1.5">
             <span class="eyebrow">Display name</span>
@@ -256,8 +259,9 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
   );
 }
 
-// CreateVendorForm: name the id (a kebab id, immutable after creation), set the
-// display name and kind; icon, support phone, and website are optional.
+// CreateVendorForm: pick the kebab name (the operator-facing address; the uuid
+// is the database's to mint), set the display name and kind; icon, support
+// phone, and website are optional.
 export function CreateVendorForm(p: { onCreated: (id: string) => void }): JSX.Element {
   const qc = useQueryClient();
   const [id, setId] = createSignal("");
@@ -303,7 +307,7 @@ export function CreateVendorForm(p: { onCreated: (id: string) => void }): JSX.El
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Id" hint="A kebab id, e.g. crestron.">
+      <Field label="Name" hint="A kebab name, e.g. crestron.">
         <input class="input input-bordered w-full font-data" value={id()} placeholder="crestron" onInput={(e) => setId(e.currentTarget.value)} />
       </Field>
       <Field label="Display name">

@@ -20,8 +20,9 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Standards: the catalog of blueprints a system conforms to ("Meeting room",
 // "Huddle space"), on the flat FlatList surface beside Products. A standard is the
-// system-side counterpart of a product: it is addressed by its id (a kebab id,
-// create-only), it may be a VARIANT of another standard, and it declares the
+// system-side counterpart of a product: it is addressed by its kebab name
+// (ADR-0062: the uuid is identity, the name is what an operator reads and
+// types), it may be a VARIANT of another standard, and it declares the
 // property CONTRACT every conforming system exposes (the ContractEditor on the
 // detail). Official (seed-owned) rows are read-only, same as the product catalog:
 // no Edit pencil, no Delete, and a read-only contract.
@@ -41,7 +42,7 @@ function refCell(id?: string): JSX.Element {
 }
 
 const columns: FlatColumn<Standard>[] = [
-  { key: "id", label: "Id", sortVal: (s) => s.id, cell: (s) => <span class="font-data font-semibold">{s.id}</span> },
+  { key: "name", label: "Name", sortVal: (s) => s.name, cell: (s) => <span class="font-data font-semibold">{s.name}</span> },
   { key: "display_name", label: "Display name", sortVal: (s) => s.display_name, cell: (s) => <span>{s.display_name}</span> },
   { key: "parent", label: "Variant of", width: "180px", sortVal: (s) => s.parent_standard ?? "", cell: (s) => refCell(s.parent_standard) },
   { key: "official", label: "Origin", width: "100px", sortVal: (s) => String(s.official), cell: (s) => officialBadge(s.official) },
@@ -52,7 +53,7 @@ export default function Standards() {
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
 
   const rows = createMemo(() =>
-    [...(standards.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name) || a.id.localeCompare(b.id)),
+    [...(standards.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name) || a.name.localeCompare(b.name)),
   );
 
   return (
@@ -63,15 +64,16 @@ export default function Standards() {
         loading: () => standards.isPending,
         error: () => standards.error,
         filterKeys: [
-          { key: "name", type: "string", hint: "substring", get: (s) => `${s.id} ${s.display_name}`, values: () => [] },
+          { key: "name", type: "string", hint: "substring", get: (s) => `${s.name} ${s.display_name}`, values: () => [] },
           { key: "parent", type: "string", hint: "exact", get: (s) => s.parent_standard ?? "", values: () => [] },
           { key: "official", type: "string", hint: "exact", get: (s) => (s.official ? "official" : "custom"), values: () => ["official", "custom"] },
         ],
-        filterPlaceholder: "filter standards by id, name…",
+        filterPlaceholder: "filter standards by name…",
         columns,
         empty: "No standards yet.",
-        // Address a row by id: the write paths key on id, and it is globally unique.
-        rowId: (s) => s.id,
+        // Address a row by its kebab name: globally unique, and what the API
+        // and CLI accept (the write paths resolve either form).
+        rowId: (s) => s.name,
         blades: { registry: { standard: standardBlade }, rootKind: "standard" },
         create: can(me.data, "standard", "create")
           ? { label: "New standard", can: () => can(me.data, "standard", "create"), body: (ctx) => <CreateStandardForm onCreated={ctx.close} /> }
@@ -91,12 +93,12 @@ export const standardBlade: BladeDef = {
 
 function useStandardRow(id: string): () => Standard | undefined {
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
-  return () => (standards.data ?? []).find((s) => s.id === id);
+  return () => (standards.data ?? []).find((s) => s.name === id);
 }
 
 function StandardBladeTitle(p: { id: string }): JSX.Element {
   const row = useStandardRow(p.id);
-  return <span class="font-data">{row()?.id ?? p.id}</span>;
+  return <span class="font-data">{row()?.name ?? p.id}</span>;
 }
 
 function StandardBladeBody(p: { id: string }): JSX.Element {
@@ -120,10 +122,10 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
   async function removeStandard() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete standard "${r.id}"?`)) return;
+    if (!confirm(`Delete standard "${r.name}"?`)) return;
     setErr(null);
     try {
-      await deleteStandard(r.id);
+      await deleteStandard(r.name);
       blades.close();
       await qc.invalidateQueries({ queryKey: STANDARDS_KEY });
     } catch (e) {
@@ -136,7 +138,7 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
     if (!r) return;
     setErr(null);
     try {
-      await updateStandard(r.id, { display_name: displayName(), parent_standard_id: parentId() || undefined });
+      await updateStandard(r.name, { display_name: displayName(), parent_standard_id: parentId() || undefined });
       await qc.invalidateQueries({ queryKey: STANDARDS_KEY });
     } catch (e) {
       setErr(describeError(e));
@@ -161,8 +163,9 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <KVStacked label="Id" value={<span class="font-data">{r().id}</span>} />
+            <KVStacked label="Name" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Origin" value={officialBadge(r().official)} />
+            <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
           <div class="flex flex-col gap-1.5">
             <span class="eyebrow">Display name</span>
@@ -194,8 +197,9 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
   );
 }
 
-// CreateStandardForm: name the id (a kebab id, immutable after creation), set the
-// display name; the parent standard is optional (a variant of an existing one).
+// CreateStandardForm: pick the kebab name (the operator-facing address; the
+// uuid is the database's to mint), set the display name; the parent standard
+// is optional (a variant of an existing one).
 export function CreateStandardForm(p: { onCreated: (id: string) => void }): JSX.Element {
   const qc = useQueryClient();
   const [id, setId] = createSignal("");
@@ -235,7 +239,7 @@ export function CreateStandardForm(p: { onCreated: (id: string) => void }): JSX.
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Id" hint="A kebab id, e.g. meeting-room.">
+      <Field label="Name" hint="A kebab name, e.g. meeting-room.">
         <input class="input input-bordered w-full font-data" value={id()} placeholder="meeting-room" onInput={(e) => setId(e.currentTarget.value)} />
       </Field>
       <Field label="Display name">
