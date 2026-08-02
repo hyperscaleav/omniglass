@@ -84,9 +84,9 @@ Every operation lives under `/api/v1/*`. The path shape is derivable, not specia
 - **Plural collections**, standard CRUD by primary key: `POST` creates (409 on PK
   collision), `GET` reads, `PATCH` updates by PK (AIP-134, partial), `DELETE` removes.
   No upsert/register shortcuts.
-- **`:verb` (not `/verb`) for non-CRUD custom methods**: `/alarms/{id}:ack`,
-  `/nodes/{name}:heartbeat`, `/rules/calc:validate`, `/components/{name}:apply`,
-  `/views/{id}:run`.
+- **`:verb` (not `/verb`) for non-CRUD custom methods**: `/components/{name}/commands:issue`,
+  `/auth/me:changePassword`, `/auth/me/sessions/{id}:revoke`, `/nodes:claim`,
+  `/principals/{id}:disable`.
 - **Singular kind sub-segments**: `/rules/calc`, `/property-types`,
   `/location-types`, `/types/event`.
 - **official / private namespace** on every registry and rule family (below).
@@ -101,6 +101,9 @@ The API is **self-describing**: the running server serves `GET /api/v1/openapi.j
 ## The read side is views (backend-for-frontend)
 
 Writes go through resource CRUD (each emitting an `audit_log` row in the same transaction).
+
+:::design[Target design: the ViewResult contract, tracked in #434]
+
 **Reads beyond a single resource go through views**, and views are part of the public API:
 
 - a **view** is a named query backing a page or widget, returning a uniform `ViewResult`
@@ -113,6 +116,8 @@ Writes go through resource CRUD (each emitting an `audit_log` row in the same tr
 - views execute through the **scoped Storage Gateway**, so IAM scope applies to a view's
   results exactly as to any read. This is the safety boundary that lets the read side be a
   public BFF without handing operators raw SQL.
+
+:::
 
 ## The per-route gate
 

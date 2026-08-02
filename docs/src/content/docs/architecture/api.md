@@ -39,8 +39,8 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
 - **Plural resource collections**, standard methods by primary key (AIP-style): `POST` creates (409 on
   PK collision), `GET` reads, `PATCH` partial-updates (AIP-134), `DELETE` removes. No upsert shortcuts.
 - **Custom methods carry a colon**, `:verb` not `/verb`, for anything that is not CRUD:
-  `/alarms/{id}:ack`, `/components/{name}:apply`, `/views/{id}:run`. The verb
-  is also the **permission**: `:ack` is gated by `alarm:ack`, so the route and the
+  `/components/{name}/commands:issue`, `/auth/me/sessions/{id}:revoke`, `/nodes:claim`. The verb
+  is also the **permission**: `:issue` is gated by `command:issue`, so the route and the
   [authorization](/architecture/identity-access/) check share one vocabulary. The **self-scoped**
   `/auth/me` family is the exception: `/auth/me:changePassword`, `/auth/me/sessions/{id}:revoke`, and
   the bulk `/auth/me/sessions:revokeAll` (a `{ purpose }` body, keeping the current credential) are
@@ -216,7 +216,7 @@ require an **all-scope** grant, not a tree-scoped one.
 **named by its protocol**: its `name` derives from its `interface_type` and is unique **within its component**
 (so create takes a type, not a name, and a duplicate protocol on one component is a **409**). Creating an
 interface **derives its one poll task**, so the task surface is **read-only** (`GET /tasks`, `GET /tasks/{id}`):
-there are no task create, update, or delete routes and no `task:create` / `task:update` grants. A task references
+there are no task write routes and no task write grants. A task references
 its interface by `interface_id`, its id is **content-addressed** over its interface, mode, and spec, and it
 carries **no node column**: its placement **projects from the interface**. An interface belongs to a component
 (or is server-hosted, which needs an all-scoped grant), and a task belongs to an interface, so both inherit the

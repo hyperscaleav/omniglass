@@ -9,7 +9,7 @@ import (
 )
 
 // capabilityBody is the wire shape of a capability registry row. The registry
-// lists alphabetically by display_name, like component_type.
+// lists alphabetically by display_name, like the product catalog.
 type capabilityBody struct {
 	ID          string `json:"id" doc:"The capability's uuid, the stable handle that survives a rename"`
 	Name        string `json:"name" doc:"The kebab handle an operator reads and types; renameable"`

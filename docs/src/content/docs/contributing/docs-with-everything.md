@@ -28,11 +28,13 @@ routine escape hatch.
 
 A mechanical layer backs the human gate: the **docs lint suite** (`internal/docslint`, run
 by `go test` and so by `make test` and CI) checks the hand-written docs against the code.
-Today that is the banned-vocabulary lint (retired identifiers must not appear in
-current-tense prose) and the decisions-format lint (ADR numbering, index rows, required
-fields), plus the docs-command guard in `internal/cli`; more lints (routes, permissions,
-make targets, env vars, file paths) land under
-[#429](https://github.com/hyperscaleav/omniglass/issues/429).
+The suite covers vocabulary (retired identifiers must not appear in current-tense
+prose, in the docs, the operator strings, and the generated OpenAPI descriptions),
+the decision log's format, routes and permissions (both checked against the generated
+spec, permissions in both directions), make targets, env vars, file paths, and
+table.column references (against the generated schema facts), plus the badge-fence
+coverage check and the docs-command-and-flag guard in `internal/cli`. The semantic
+drift no lint can see gets the periodic `/docs-audit` pass (#429).
 
 ## What "the docs" means here
 
@@ -94,8 +96,8 @@ nesting rule.
 The fence is also the boundary the [docs lint suite](#the-rule) keys on
 (`internal/docslint`, the `Regions` split): the **vocabulary lint runs everywhere**,
 fenced or not, because future design must still be written in current nouns, while the
-**existence lints** (routes, permissions, tables, commands; #429) run only outside a
-fence, where prose claims to describe something that exists. Building a fenced section
+**existence lints** (routes, permissions, tables, make targets, env vars, paths) run
+only outside a fence, where prose claims to describe something that exists. Building a fenced section
 means **deleting the fence in the same PR**, exactly like moving the badge.
 
 ## Screenshots are generated, not pasted
