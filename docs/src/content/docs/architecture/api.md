@@ -12,7 +12,7 @@ The contract is **two typed surfaces, one source of truth**. The **public HTTP /
 [MCP](#also-an-mcp-surface) server, and is the only caller of the
 [Storage Gateway](/architecture/storage/); the **internal and edge transport is a sibling NATS subject
 contract**, typed and versioned the same way ([messaging](/architecture/messaging/)). The doctrine and
-generation pipeline are [API first](/contributing/api-first/); this page is the conventions every HTTP
+generation pipeline: [API first](/contributing/api-first/); this page is the conventions every HTTP
 route honors.
 
 :::note[Partial]
@@ -40,26 +40,24 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   [authorization](/architecture/identity-access/) check share one vocabulary. The **self-scoped**
   `/auth/me` family is the exception: authn-only, resolving the target from the session, never a path
   id, so it carries no capability and a credential id not the caller's own is a 404; the **admin**
-  counterparts on `/principals/{id}` do carry a capability and a scoped path id. Both surfaces are
-  specified on [identity and access](/architecture/identity-access/).
+  counterparts on `/principals/{id}` do carry a capability and a scoped path id.
 - **Each typed registry is its own plural collection**: `/location-types`, `/property-types`,
   `/event-types` ([ADR-0060](/architecture/decisions/#adr-0060-a-resource-is-one-kebab-case-noun-nesting-means-ownership)).
 - **Collection-level custom methods** carry the colon on the collection, not a member:
   `POST /systems:checkName` (also `/components:checkName`, `/locations:checkName`) is an advisory
   precheck for a technical-name rename, returning `{ valid, available, reason }`, gated by
-  `<entity>:update` like a rename. Its availability answer is deliberately **scope-blind**: the
-  `name` uniqueness constraint is global, so a scope-filtered answer would report a name held outside
-  the caller's scope as free and then 409 at save. A bounded, documented exception to the
-  ABAC-scope-on-every-query rule (it discloses only that a technical name is taken somewhere), not a
-  license to skip scope elsewhere.
-- **A principal is addressable by uuid or username.** Every `/principals/{id}` route accepts either,
-  resolved server-side (a value that parses as a uuid is used directly; otherwise it is a username
-  lookup, an unknown one a 404). The uuid stays the stable identity (a username is mutable and
-  nothing keys on it); service principals have no username and stay uuid-addressed.
+  `<entity>:update` like a rename. Its availability answer is **scope-blind**: the `name` uniqueness
+  constraint is global, so a scope-filtered answer would report a name held outside the caller's
+  scope as free and then 409 at save. A bounded exception to the ABAC-scope-on-every-query rule (it
+  discloses only that a technical name is taken somewhere), not a license to skip scope elsewhere.
+- **A principal is addressable by uuid or username.** Every `/principals/{id}` route resolves either
+  server-side (a value that parses as a uuid is used directly, else a username lookup, an unknown one
+  a 404). The uuid stays the stable identity (a username is mutable, nothing keys on it); service
+  principals have no username and stay uuid-addressed.
 
 ## Lists: filter, order, page
 
-The built lists take a small fixed set of query params (`kind`, `resource`, `verb`, `system`,
+The built lists take a fixed query-param set (`kind`, `resource`, `verb`, `system`,
 `include_archived`, `include_cleared`), and the one paginated route, `GET /audit-log`, pages backward
 with `before` plus `limit`. **Every list runs through the scoped gateway**: a list never returns a row
 outside the caller's visible set, and the page count is over visible rows only.
@@ -69,8 +67,8 @@ The target contract: a list takes `filter`, `order_by`, `page_size` (capped by a
 `page_token`, and `fields`:
 
 - **Cursor pagination, never offset.** A list returns a `next_page_token`; the client echoes it on the
-  next call. The token is opaque and stable under concurrent inserts, where an offset would skip or
-  repeat rows.
+  next call. The token is opaque and stable under concurrent inserts (an offset would skip or repeat
+  rows).
 - **`filter` is one [Omniglass expression](/architecture/expressions/)** over the resource's fields, the
   same language as rule scopes and dynamic groups.
 - **`filter`, `order_by`, and `fields` name fields, not raw SQL.** Every field resolves through the
@@ -85,9 +83,9 @@ The `fields` read mask (a response subset, AIP-157) selects the fields a read re
 the full resource.
 :::
 
-Today the full resource is the only behavior. `PATCH` carries a **write mask implicitly**, and this
-part is built: only the fields present in the body change, so a partial update never clobbers an
-omitted field.
+Today the full resource is the only behavior. `PATCH` carries an implicit **write mask**, built
+today: only the fields present in the body change, so a partial update never clobbers an omitted
+field.
 
 :::caution[Open question]
 Field-mask depth: top-level fields only, or nested paths (`a.b.c`), and whether a list's `fields` and a
@@ -115,21 +113,20 @@ status mapping:
 **The 403/404 split is three-way, by where the target sits in the caller's
 [per-action scope](/architecture/identity-access/).** (a) The action is in **no** grant the principal
 holds: **403**, capability missing entirely. (b) The target is in the caller's **read-scope** but outside
-`visible_set(P, action)` for the requested action (the principal can `GET` it but cannot `:ack` it):
-**403**, which leaks nothing because the caller can already read the row. (c) The target is **outside the
-caller's read-scope** entirely: **404**, so the API never discloses that an entity exists outside the
-caller's visible set. Out-of-read-scope is the only 404 case; a readable-but-not-actionable target is a
-403, never a 404.
+`visible_set(P, action)` (the principal can `GET` it but cannot `:ack` it): **403**, which leaks nothing
+because the caller can already read the row. (c) The target is **outside the caller's read-scope**
+entirely: **404**, the only 404 case, so the API never discloses that an entity exists outside the
+caller's visible set.
 
 ::::design[Idempotency keys and optimistic concurrency, tracked in #522]
 ## Idempotency and concurrency
 
 - **`Idempotency-Key`** is accepted on `POST` and on state-changing custom methods. The server records
   the key with its **effect** for a retention window; a retry with the same key returns the original
-  outcome, not a duplicate. **Only successful (2xx) outcomes are memoized.** An authorization result
-  (401 / 403 / 404) is **never** stored against the key: a replay **re-enters the authorization and
-  gateway path** before the memoized effect is returned, so a stale denial is not re-served and a
-  success is never replayed after a grant is revoked.
+  outcome, not a duplicate. **Only successful (2xx) outcomes are memoized**, never an authorization
+  result (401 / 403 / 404): a replay **re-enters the authorization and gateway path** before the
+  memoized effect is returned, so a stale denial is not re-served and a success is never replayed
+  after a grant is revoked.
 - **Optimistic concurrency**: a conditional update carries the resource version (an `ETag` / `If-Match`);
   a write against a stale version is a 409, never a silent last-writer-wins.
 
@@ -148,8 +145,8 @@ and the caller polls `GET /actions/{id}` through `queued -> sent -> done` / `fai
 the operation handle, so "fire and follow" is one model whether the trigger was a rule or an API call;
 a fast operation may inline its result, but the handle is always returned. The action row is ABAC-owned
 by its target's exclusive-arc owner, so polling is read-scoped to whoever can see the target. The HTTP
-method is the front door; the **dispatch is over NATS**: the action fans out through
-[messaging](/architecture/messaging/) and the result flows back the same way to advance the row.
+method is the front door; **dispatch is over NATS**: the action fans out through
+[messaging](/architecture/messaging/) and the result flows back to advance the row.
 :::
 
 ## Writes are audited and scoped
@@ -159,8 +156,8 @@ method is the front door; the **dispatch is over NATS**: the action fans out thr
 - Every route **declares its permission** (checked before the handler runs) and every query **carries the
   caller's scope** (injected by the gateway), both [identity and access](/architecture/identity-access/)
   invariants; the API is the gateway's only caller, so there is no unscoped path. Each gated operation
-  carries an `x-omniglass-permission` extension (for example `role:read:admin` on `GET /roles`), so
-  `api/openapi.json` is a machine-readable map of the authz contract and the set of all stamps is the
+  carries an `x-omniglass-permission` extension (for example `role:read:admin` on `GET /roles`), making
+  `api/openapi.json` a machine-readable map of the authz contract; the set of stamps is the
   **permission universe** the [Roles
   view](/architecture/identity-access/#the-permission-universe-published-per-route) reports.
 
@@ -169,11 +166,11 @@ method is the front door; the **dispatch is over NATS**: the action fans out thr
 The [collection](/architecture/collection/) authoring routes are the first concrete resources that
 exercise every convention above at once: the standard family per resource (`/nodes`, `/interfaces`,
 `/tasks`) plus the `:verb` custom methods and the per-component reads (`reachability`,
-`reconciliation`, `events`), all `component:read`-gated. The routes themselves live in the
+`reconciliation`, `events`), all `component:read`-gated. The routes live in the
 [generated API reference](/reference/api/), rendered from the OpenAPI document on every build, each
-operation's description naming its permission gate verbatim (a guard test enforces exactly that,
-alongside the spec-contract test that every gated operation carries its `x-omniglass-permission` stamp
-and `POST /nodes:claim` stays the deliberate, justified public write).
+operation's description naming its permission gate verbatim (a guard test enforces that, alongside the
+spec-contract test that every gated operation carries its `x-omniglass-permission` stamp and
+`POST /nodes:claim` stays the deliberate public write).
 
 **The node custom methods are the day-one enrollment handshake.** `POST /nodes/{name}:enroll` (gated
 `node:enroll`) mints or re-mints the node's enrollment token and returns it **once**; the server stores
@@ -181,23 +178,22 @@ only its hash and never logs it, so a re-enroll invalidates the previous token. 
 the **node-facing** side: a node presents its token and receives its NATS credential (url, username,
 password). It is the surface's **one public route**, unauthenticated because the token itself is the
 authentication, and an invalid token is a **401** (a claim must not disclose which nodes exist). A node
-is estate-wide, so `node:read` and `node:create` require an **all-scope** grant, not a tree-scoped one.
+is estate-wide, so `node:read` and `node:create` require an **all-scope** grant.
 
 **The interface is authored; the task is derived.** An interface is addressed by a surrogate `id` and
-**named by its protocol**: its `name` derives from its `interface_type` and is unique **within its
-component** (create takes a type, not a name; a duplicate protocol on one component is a **409**).
-Creating an interface **derives its one poll task**, so the task surface is **read-only** (`GET /tasks`,
-`GET /tasks/{id}`): no task write routes, no task write grants. A task references its interface by
-`interface_id`, its id is **content-addressed** over its interface, mode, and spec, and it carries **no
-node column**: its placement **projects from the interface**. An interface belongs to a component (or is
-server-hosted, needing an all-scoped grant), and a task to an interface, so both inherit the component's
+**named by its protocol**: `name` derives from `interface_type`, unique **within its component**
+(create takes a type, not a name; a duplicate protocol on one component is a **409**). Creating an
+interface **derives its one poll task**, so the task surface is **read-only** (`GET /tasks`,
+`GET /tasks/{id}`): no task write routes or grants. A task references its interface by
+`interface_id`, its id **content-addressed** over interface, mode, and spec, with **no node column**:
+placement **projects from the interface**. An interface belongs to a component (or is server-hosted,
+needing an all-scoped grant), a task to an interface, so both inherit the component's
 [scope](/architecture/identity-access/): an out-of-read-scope component's interface or task is a
 non-disclosing **404**.
 
 **Three per-component reads stand in until the `ViewResult` framework lands**, each a hand-written
 typed `GET`, gated `component:read` and scope-injected through the same `GetComponent` gate, so an
-out-of-scope component is a non-disclosing 404 and the reads only ever run on a verified, in-scope
-component (a deliberate early exception to
+out-of-scope component is a non-disclosing 404 (a deliberate early exception to
 [reads beyond one resource are views](#reads-beyond-one-resource-are-views)):
 
 - `GET /components/{name}/reachability` composes, per interface, the latest verdict state
@@ -218,9 +214,9 @@ component (a deliberate early exception to
 **Two registries ride the `/property-types` shape** (estate-wide reference data, no scope injection;
 official seed-owned types read-only, a 409). The **event_type registry is the occurrence keyspace**:
 `GET/POST/PATCH/DELETE /event-types[/{name}]`, gated `event_type:read` / `:create` / `:update` /
-`:delete`. A registered `event_type` name is what an ingested occurrence is typed by (the log-to-event
-promotion, ADR-0063); its optional `payload_schema` is a JSON Schema fragment for the occurrence
-payload. The **command_type registry is the do catalog**:
+`:delete`; an ingested occurrence is typed by a registered `event_type` name (the log-to-event
+promotion, ADR-0063), the optional `payload_schema` a JSON Schema fragment for its payload. The
+**command_type registry is the do catalog**:
 `GET/POST/PATCH/DELETE /command-types[/{name}]`, gated `command_type:read` / `:create` / `:update` /
 `:delete`, each type carrying a `settle_window_seconds` and an optional `target_property_type` (the
 property a settleable command sets). `POST /components/{name}/commands:issue` (gated `command:issue`,
@@ -240,19 +236,19 @@ it (a **409**). The four built interface types are `icmp`, `tcp`, `ssh`, and `ht
 ## Secrets: masked reads, an audited reveal
 
 A **secret** is a typed, encrypted-at-rest operator value ([config, credentials, and
-variables](/architecture/variables/)), and its routes (`GET /secret-types`, `GET` / `POST /secrets`,
+variables](/architecture/variables/)); its routes (`GET /secret-types`, `GET` / `POST /secrets`,
 `PATCH` / `DELETE /secrets/{id}`, `POST /secrets/{id}:reveal`; shapes in the
 [reference](/reference/api/)) are a worked instance of the conventions above. Secret is a **sensitive
 resource**
 ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)),
-so the viewer `*:read` floor does **not** reach it: the registry and directory reads need an
-explicit `secret:read` grant (seeded to operator, deploy, admin, and owner); the writes gate on
-`secret:create` / `secret:update` / `secret:delete`; the plaintext decrypt gates on **`secret:reveal`**,
-held by operator and deploy (the device secrets in their scope) as well as admin (via `secret:>`, which
-alone reaches the admin-sensitive `:admin` tier) and owner (`>`). Every `:reveal` writes an
-[audit](/architecture/audit/) row (verb `reveal`) in the same call. The directory is filtered by each
+off the viewer `*:read` floor: the registry and directory reads need an explicit `secret:read` grant
+(seeded to operator, deploy, admin, and owner), the writes gate on
+`secret:create` / `secret:update` / `secret:delete`, and the plaintext decrypt on **`secret:reveal`**,
+held by operator and deploy (the device secrets in their scope), admin (via `secret:>`, which alone
+reaches the admin-sensitive `:admin` tier), and owner (`>`). Every `:reveal` writes an
+[audit](/architecture/audit/) row (verb `reveal`) in the same call. The directory filters each
 secret's owner placement against the caller's read scope, admin-sensitive secrets visible only to the
-admin tier; every other read masks a secret field (`••••••`), and only `:reveal` returns plaintext. A
+admin tier; every other read masks a secret field (`••••••`), only `:reveal` returns plaintext. A
 create names its owner (`owner_kind: platform|location|component`; the system band is retired,
 ADR-0052); a `PATCH` re-seals the given `fields`, merged over the stored value so an omitted field
 keeps its value. A `platform` secret needs an all-scope grant **and** `platform:create`
@@ -294,10 +290,10 @@ owning entity's own write. The key vocabulary and an entity's tags read on the v
   overriding most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves
   only from a binding on the component itself (`component:read`, read-scoped).
 - The directory list routes (`GET /components`, `/systems`, `/locations`) each carry an **`effective_tags`**
-  map (`{key: winning_value}`, winners only) on every row, resolved for the whole page in one batched
-  query. A component resolves the full arc; a location resolves `platform` plus its location tree; a
-  system resolves `platform`, its system tree, and the location it is placed at. Provenance lives in
-  the per-entity effective-tags detail, not the row.
+  map (`{key: winning_value}`) on every row, resolved for the whole page in one batched query. A
+  component resolves the full arc; a location resolves `platform` plus its location tree; a system
+  resolves `platform`, its system tree, and the location it is placed at. Provenance lives in the
+  per-entity effective-tags detail, not the row.
 
 The **component-classification catalogs** ([core entities](/architecture/core-entities/#catalog-reference-data-vendor-driver-capability))
 are flat official-vs-custom registries the `product` layer references, on the same pattern as the
@@ -319,8 +315,8 @@ What each catalog adds over the shared shape (bodies in the [reference](/referen
 
 - A **vendor** (Crestron, Biamp, ...) names an organization, generalizing the former manufacturer-only
   `component_make`: a `kind` of `manufacturer` / `integrator` / `developer` (default `manufacturer`, a
-  422 for any other value), and a `website` validated to an `http`/`https` scheme on write (a 422 for
-  any other scheme, for example `javascript:`).
+  422 otherwise), and a `website` validated to an `http`/`https` scheme on write (a 422 for any other
+  scheme, for example `javascript:`).
 - A **driver** (Generic SNMP, Cisco xAPI, ...) names the implementation that gets, emits, or sets a
   product's signals, with an optional `version`.
 - A **capability** (Microphone, Display, ...) names what a component can do: a **product** declares the
@@ -350,8 +346,8 @@ lands there needs **two** permissions: the resource's own (`secret:create`, `var
 `tag:update`, `settings:update`) **and** `platform:<action>`, because estate **scope** and install-wide
 **authority** are different questions
 ([identity and access](/architecture/identity-access/#install-wide-authority-is-not-estate-scope)).
-`platform:*` is seeded to `admin` (and to `owner` through `>`); `operator` and `deploy` deliberately do
-not hold it. The tier gate is **published in the spec** like every primary gate: an
+`platform:*` is seeded to `admin` (and to `owner` through `>`); `operator` and `deploy` do not hold it.
+The tier gate is **published in the spec** like every primary gate: an
 `x-omniglass-platform-permission` extension beside the route's `x-omniglass-permission` stamp, both in
 the route-derived permission universe. Where the request body names the tier (`owner_kind: platform`,
 and every settings write) the handler checks it up front; where only the stored row knows its tier (an
@@ -445,7 +441,7 @@ component "panel-1" cannot fill role "table-mic": missing microphone, speaker
 A **semantic** refusal, the 422 case in the [status table](#errors-one-problemjson-envelope), not an
 authorization one: the message tells the operator the next move. Around it: an unknown role is a
 **404**, an unknown standard or capability on a declaration a **422**, and an unknown (or out-of-scope)
-system or component the same non-disclosing **404** as anywhere else.
+system or component the same non-disclosing **404**.
 
 ## Health: the verdict, and why
 
@@ -462,8 +458,8 @@ An alarm hangs off its component and rides that component's gating:
   condition **takes away**, and an alarm naming none is a note that reaches no system. An unknown
   capability or a bad severity is a **422**.
 - `DELETE /components/{name}/alarms/{id}` clears it (204, `component:update`). The row is **kept**, so
-  the record of what was wrong outlives the fix; clearing one already cleared, or belonging to another
-  component, is a **404**.
+  the record of what was wrong outlives the fix; clearing one already cleared, or another
+  component's, is a **404**.
 
 Both writes **recompute health in the same transaction**, so an alarm and the verdict it caused are never
 separately visible, and the recorded edge carries the time the estate changed.
@@ -491,7 +487,7 @@ A **file** is a searchable handle over a content-addressed [blob](/architecture/
 tenant-wide (no placement arc), so these routes take **no scope**, only the `file:<action>` permission
 plus the per-file `sensitive` tier. Reading rides the **viewer floor** (`file:read`, which `*:read`
 carries); a **sensitive** file is fenced to the `:admin` tier (`file:read:admin`), hidden from a lister
-without it and a **non-disclosing 404** to a reader without it, exactly the
+and a **non-disclosing 404** to a reader without it, exactly the
 [secret sensitivity rule](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier).
 The bytes ride **base64 in JSON** on both create and download (the
 [avatar precedent](/architecture/decisions/#adr-0018-the-avatar-read-endpoint-is-json-not-raw-image-bytes)),
@@ -505,7 +501,7 @@ so the whole surface stays under the authz middleware and generates a uniform cl
 (`sensitive: true` additionally needs the admin tier). `DELETE /files/{id}` removes the handle (204,
 `file:delete`); the blob is freed in the same transaction when no other handle references it. A `file`
 body is `{id, name, content_type, size, sha256, sensitive, created_at}`; the `sha256` is the content
-address, so two handles over identical bytes share one blob.
+address.
 
 :::design[Views and the SSE live relay, tracked in #523]
 ## Reads beyond one resource are views
@@ -527,7 +523,7 @@ The path carries the major version (`/api/v1`). Within a version, change is **ad
 fields, new optional params, new resources, never a removal or a meaning change; a breaking change is a
 new major version. Because the [OpenAPI 3.1 document is generated](/contributing/api-first/) from the Go
 structs and the clients from that, the contract cannot drift from the implementation: a drift check fails
-the PR if a route changed without regenerating.
+the PR on an unregenerated route change.
 
 :::design[The MCP surface, tracked in #522]
 ## Also an MCP surface
@@ -550,7 +546,7 @@ commands from a durable server-side JetStream queue, enrollment by NATS JWT/nkey
 **NATS subject contract**, not this page's routes. The old node HTTP custom methods are gone; the proto
 definitions survive **as the NATS message schema**. The contract lives in
 [messaging](/architecture/messaging/) and on the [node](/architecture/nodes/) page; the same AIP
-spirit, error envelope, and idempotency carry across to it.
+spirit, error envelope, and idempotency carry across.
 :::
 
 ## Self-describing
@@ -560,8 +556,7 @@ public contract is discoverable live against any deployment; the internal NATS s
 (subjects, message schemas, stream and consumer definitions) is published from the running server the
 same way, the sibling of OpenAPI for the bus.
 
-Related: [API first](/contributing/api-first/) (the doctrine and the generation pipeline),
-[messaging](/architecture/messaging/) (the sibling NATS subject contract and the bus),
-[identity and access](/architecture/identity-access/) (permission + scope), [audit](/architecture/audit/)
-(the write-time record), [UI](/architecture/ui/) (the views BFF and the renderer contract), and
+Related: [API first](/contributing/api-first/), [messaging](/architecture/messaging/),
+[identity and access](/architecture/identity-access/), [audit](/architecture/audit/),
+[UI](/architecture/ui/) (the views BFF and the renderer contract), and
 [expressions](/architecture/expressions/) (the `filter` language).

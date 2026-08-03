@@ -17,7 +17,7 @@ The store is now named `property` per [ADR-0063](/architecture/decisions/#adr-00
 The **`secret`** member is built ([ADR-0017](/architecture/decisions/#adr-0017-credential-is-renamed-secret-the-cascade-is-the-reuse-mechanism),
 [#155](https://github.com/hyperscaleav/omniglass/issues/155)), as is the **`variable`** member
 ([#183](https://github.com/hyperscaleav/omniglass/issues/183)); each section below carries its shipped shape,
-the built surfaces being the Secrets and Variables **directories** plus the **property** slot that consumes a
+the built surfaces the Secrets and Variables **directories** plus the **property** slot that consumes a
 cell. The standalone per-component effective panels were retired
 ([#281](https://github.com/hyperscaleav/omniglass/issues/281), [decision log](/architecture/decisions/)); the
 cascade-resolution surface lives on as the **ResolutionPanel** on the component details, backed by the
@@ -51,8 +51,8 @@ plus a `template`-scoped binding the sample arc lacks (and unlike samples, confi
 ::::design[The `config` member, tracked in #153]
 A **config** item is the **declared side of a canonical signal**: `video.input` is one key with two
 sides, the **observed** value the device reports (a `state`, provenance=observed) and the
-**declared** value you set, sharing the **key** but not the **storage** (the declared value lives in
-the config table, resolved down the cascade, **never a sample row**). Their gap is **drift**.
+**declared** value you set, sharing the **key** but not the **storage** (the declared value is
+**never a sample row**). Their gap is **drift**.
 
 A component template **brings no keys, it references registered ones**: two display templates
 touching `video.input` are two references to one governed key, not a collision. Config reuses the
@@ -88,8 +88,8 @@ action:
   sample, and reconciles against the next observation (desired-state convergence). If the set
   **fails**, raise a real alarm (enforcement failure).
 
-Adopting the observed value as the declared one is **not** an ongoing mode; it is a separate
-**one-shot import action** an operator runs deliberately.
+Adopting the observed value as the declared one is **not** an ongoing mode but a separate
+**one-shot import action**.
 
 :::caution[Open question]
 The `reconcile: enforce` execution (the set-function push and the enforcement-failure alarm) and the
@@ -106,7 +106,7 @@ template bound (get alone: observe or warn; a set makes it enforceable).
 
 Because config rides the cascade, you rarely declare on the device: declare `video.input = HDMI1` for
 the **main-display role** on the system template and the cascade resolves it onto whichever display
-fills that role; drift and reconcile then just happen.
+fills that role; drift and reconcile follow.
 
 :::caution[Open question]
 Resolving a value scoped to a role slot (the [system role](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)
@@ -119,11 +119,11 @@ per-item get/set binding shape on the template.
 
 A **secret** is a typed value, encrypted at rest, owned on the exclusive arc
 (`platform | location | component`; secrets have no system band, ADR-0052) and resolved down the
-[cascade](/architecture/cascade/), sealed so its value never sits in the clear
+[cascade](/architecture/cascade/)
 ([ADR-0017](/architecture/decisions/#adr-0017-credential-is-renamed-secret-the-cascade-is-the-reuse-mechanism),
 **built**). A secret is its own primitive (stored encrypted, read back only through a masked, audited
-path), not a sensitivity flag on ordinary values; within it, the **binary** `admin_sensitive` flag
-below splits admin-only platform credentials from operator-visible device secrets.
+path), not a sensitivity flag on ordinary values; within it, the `admin_sensitive` flag below splits
+admin-only platform credentials from operator-visible device secrets.
 
 **Two senses of "platform", kept apart.** A **platform credential** is a *kind of secret* (a Zoom
 client secret), marked by `admin_sensitive` at whatever scope it sits; the **`platform` tier** is a
@@ -162,7 +162,7 @@ platform credential stays admin/owner-only beside an operational device secret. 
 `operator`/`deploy` holds an explicit scoped `secret:read,reveal,create,update`. Concretely:
 
 - The `/secrets` **directory is scope-filtered** and **hides admin-sensitive rows** from a caller
-  without the admin tier, so a platform credential's existence never appears.
+  without the admin tier.
 - **Reveal, update, and delete** of an admin-sensitive secret without the admin tier is a
   **non-disclosing 404** (identical to an out-of-read-scope row), never a 403.
 - **Creating** a secret marked `admin_sensitive` needs `secret:create:admin` (nor may an operator
@@ -211,9 +211,9 @@ label). Zabbix-style **macros**, resolved down the same [cascade](/architecture/
 interpolated as `$var:<name>` into functions, interface definitions, and rule scopes.
 
 - **Names are org-specific config keys, not canonical signals**, the one place the
-  "operator-defined, not curated" namespace genuinely applies: no registry, no pre-registration;
-  sprawl is controlled by a creation **role-gate** ([IAM](/architecture/identity-access/)) and by
-  every variable being **surfaced in the tree**.
+  "operator-defined, not curated" namespace applies: no registry, no pre-registration; sprawl is
+  controlled by a creation **role-gate** ([IAM](/architecture/identity-access/)) and by every
+  variable being **surfaced in the tree**.
 - **Install-wide and template-local are the same primitive at different scopes** (a company-wide NTP
   server versus a device class's poll interval).
 - **No observed side and no reconcile**, exactly what separates it from config.
@@ -240,7 +240,7 @@ vertical is whole: transactional audited storage; the API (each contract gated b
 permission, values by the owning entity's `:read` / `:update`, ABAC-scoped on **every** arc); the generated CLI
 and typed client; the console (**Declared properties** editors on the product, standard, and location type
 blades, a **Properties** panel on the component, system, and location details). The rest of the design is
-**deferred**, listed plainly so a built badge never hides drift
+**deferred**, listed so a built badge never hides drift
 ([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)).
 :::
 
@@ -339,8 +339,7 @@ Modeling declared state as **config** keeps **declared** out of the sample prove
 three ([observed, calculated, intended](/architecture/properties/#provenance-how-we-know-a-value)),
 and declared intent lives in config, keyed to the same signal but stored down the cascade. The
 `state` **kind** is unchanged (an observed `power.state = on` is still a `state`); only the
-*declared* value moved. The spec-and-status loop gets a real home instead of overloading sample
-provenance with operator intent.
+*declared* value moved.
 :::
 
 ## Storage

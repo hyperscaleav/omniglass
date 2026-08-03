@@ -7,7 +7,7 @@ sidebar:
     variant: note
 ---
 
-This page describes **how storage works**, the patterns every other leaf's entities land on (scope, audit, retention, lineage), not a per-table column dump.
+This page describes **how storage works**: the patterns every other leaf's entities land on (scope, audit, retention, lineage), not a per-table column dump.
 
 :::note[Partial]
 Built today: the Storage Gateway as the only door to the database, dbmate migrations (run-once,
@@ -21,13 +21,13 @@ upserted from the sink, not the metric-view once sketched here
 See [implementation status](/architecture/status/).
 :::
 
-Postgres is the **relational system of record** (entities, events, alarms, actions, audit, config, settings): the record/state/intent lane. It is **never a message bus**: the live signal travels on NATS JetStream, and Postgres is the durable record. Operator mutations and the record/state/intent lane (config, ack/snooze, settings, manual commands) are written synchronously through the Storage Gateway.
+Postgres is the **relational system of record** (entities, events, alarms, actions, audit, config, settings): the record/state/intent lane. It is **never a message bus**: the live signal travels on NATS JetStream, Postgres is the durable record. Operator mutations and the record/state/intent lane (config, ack/snooze, settings, manual commands) write synchronously through the Storage Gateway.
 
 :::design[Target design, tracked in #430]
 **The sample tables are an async SINK**: the NATS **persistence consumer** batch-writes samples off
 the data lane into `metric` / `state`, idempotent on `(series, ts)`
 ([#430](https://github.com/hyperscaleav/omniglass/issues/430) stage 3), so a redelivery lands the
-same row and the firehose never blocks on the database. Raw log lines ride the same path into `log_line` but are keyed on nothing (an
+same row and the firehose never blocks on the database. Raw log lines ride the same path into `log_line`, keyed on nothing (an
 untyped arrival has no series). Every other row (the `event` and `alarm` rows an `event_rule`
 consumer commits in one transaction, and every operator mutation) is born in a Postgres transaction
 and fanned outward by the **CDC publisher**
@@ -38,11 +38,11 @@ Column schemas live with each owning feature: [samples](/architecture/properties
 
 ## Conventions
 
-- **No `tenant_id`.** Isolation is per-database; no tenant column anywhere. The registries and catalogs (`property_type`, `event_type`, `interface_type`, `location_type`, `secret_type`, `vendor`, `driver`, `capability`, `product`, `standard`) carry an **`official` boolean** (the per-registry template / org / official `scope` ladder is future design, [key scope](/architecture/properties/#key-scope-template-org-official)): `official: true` rows are the ship-with canonical set, `official: false` operator- or org-authored. The boolean is **authority, not provenance**: a `standard` and a `location_type` ship `official: false`, installed **only if absent** (example content an estate owns), while the canonical catalogs ship `official: true` through an authoritative `ON CONFLICT DO UPDATE`, so a release can correct the shared vocabulary ([the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs)).
+- **No `tenant_id`.** Isolation is per-database; no tenant column anywhere. The registries and catalogs (`property_type`, `event_type`, `interface_type`, `location_type`, `secret_type`, `vendor`, `driver`, `capability`, `product`, `standard`) carry an **`official` boolean** (the per-registry template / org / official `scope` ladder is future design, [key scope](/architecture/properties/#key-scope-template-org-official)): `official: true` rows are the ship-with canonical set, `official: false` operator- or org-authored. The boolean is **authority, not provenance**: a `standard` and a `location_type` ship `official: false`, installed **only if absent** (example content an estate owns); the canonical catalogs ship `official: true` through an authoritative `ON CONFLICT DO UPDATE`, so a release can correct the shared vocabulary ([the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs)).
 - **Three storage shapes.** **Ground-truth records**: append-only, immutable, named for what they are ([below](#ground-truth-records)). There is **no `telemetry` table**: samples are published to the JetStream data lane (raw appears only on a `collection.failed` event or a dev raw-mode tap, [samples](/architecture/properties/)), and a schedule fire is an `event` with `origin=scheduled`. **Samples** (`metric` / `state`) are the typed firehose, `log_line` the untyped raw arrival beside them ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events): no property name, no registry gate). **Stateful entities and projections** (`alarm`, `action`, current-value) hold state directly or are rebuildable read models, **views by default**. The model is **not event-sourced**.
 - **Provenance and lineage on every sample**: `provenance` (observed / calculated / intended / declared), `source` (which sensor or path, for observed), and a lineage pointer enforced per provenance by a CHECK ([the lineage CHECK](#the-lineage-check-the-pattern)). `declared` exists as a sample provenance in the schema ([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)), though the model going forward keeps declared config in [config](/architecture/variables/).
 - **Ownership is the exclusive-arc**, though not one uniform arc: the sample tables and `event` carry `owner_kind` (`component` / `system` / `location` / `node`) plus the matching typed FK and a CHECK (no platform or global arm on a sample); `variable`'s arc is `platform` / `component` / `system` / `location` (no node arm; `platform` sets all three FKs null); `alarm` carries **no arc**, a single NOT NULL `component_id`, component-local by design today. Full pattern: [core entities](/architecture/core-entities/#ownership-the-exclusive-arc).
-- **A write struct takes the `Write` suffix; the bare noun is the row**: `MetricSampleWrite` in, `MetricSample` back, likewise `StateSampleWrite`, `EventWrite`, `LogLineWrite`. A carrier is named for what it carries, which is why the wire message is a `TelemetryBatch` ([ADR-0072](/architecture/decisions/#adr-0072-an-envelope-is-not-named-after-its-passengers-and-an-insert-struct-takes-the-write-suffix)).
+- **A write struct takes the `Write` suffix; the bare noun is the row**: `MetricSampleWrite` in, `MetricSample` back, likewise `StateSampleWrite`, `EventWrite`, `LogLineWrite`. A carrier is named for what it carries: hence the wire message is a `TelemetryBatch` ([ADR-0072](/architecture/decisions/#adr-0072-an-envelope-is-not-named-after-its-passengers-and-an-insert-struct-takes-the-write-suffix)).
 - **Keys**: samples and events use a surrogate id plus `ts`; `property_type` is name-unique with the **`official` boolean** deciding authority; structural entities are name-keyed; a `task` is **content-addressed** (`sha256` over `(interface_id, mode, spec)`); a `node` by its `principal_id`. Every foreign key stores the target's primary key, so a rename is free ([ADR-0056](/architecture/decisions/#adr-0056-every-foreign-key-stores-a-primary-key)).
 
 ## How the records relate
@@ -86,7 +86,7 @@ The immutable, append-only records: the lineage targets and what a backtest read
 
 ## The lineage CHECK (the pattern)
 
-Lineage lives on the derived row, no separate execution table: a derived row *is* the evidence of its rule's run. The pointer per provenance is enforced, so "intended with no command event" is impossible at the storage layer. The real four-branch CHECK on the sample tables:
+Lineage lives on the derived row, no separate execution table: a derived row *is* the evidence of its rule's run. The pointer per provenance is enforced, making "intended with no command event" impossible at the storage layer. The real four-branch CHECK on the sample tables:
 
 ```sql
 CHECK (
@@ -125,8 +125,9 @@ thousands, painful past a few million (a naive `DISTINCT ON` scans the whole log
 So only `current_value` for the **metric** firehose is even a table candidate, and only when
 frequent full-fleet reads meet low-millions-plus distinct keys; the sparse kinds stay views
 indefinitely. A worker-maintained table costs one upsert per sample write (write amplification,
-hot-key contention) and reintroduces a staleness window: a cost earned by a read profile. **Never a materialized view**: a PG MV is stale between refreshes and has no incremental
-refresh. The choice is plain view (default) versus inline table (profiled).
+hot-key contention) and reintroduces a staleness window: a cost earned by a read profile. **Never a
+materialized view**: a PG MV is stale between refreshes with no incremental refresh. The choice is
+plain view (default) versus inline table (profiled).
 
 :::caution[Open question]
 If `current_value` is ever materialized, is it one wide table or a table per kind, keyed per (owner,
@@ -157,15 +158,15 @@ The append-only id type under partitioning: bigint identity versus uuid v7.
 
 ## The Storage Gateway and tiering
 
-The **Storage Gateway is the only door to the database** (no direct access, no PostgREST), and it is where IAM scope is injected **per action**: every query carries `visible_set(P, action)` for the specific action it performs, so a read filters by read-scope and an `:ack` write by ack-scope. A write whose action-scoped predicate matches **0 rows** surfaces as a 403 or 404, never a silent success, matching the up-front `canDo` decision ([identity and access](/architecture/identity-access/)). Per-database isolation (one database per tenant, paired one-to-one with one NATS account) means no tenant context to set. Scope arrives as an **explicit per-call `scope.Set` argument**; the named three-mode contract (scoped / node / system) is the Design formalization of that convention, not a built mode switch. The [CDC publisher](/architecture/messaging/#two-lanes-one-bus) reads committed changes from the WAL, a replication-protocol stream beneath the table surface, not a second path around the Gateway. Every read and write goes through the Gateway, so the physical backend is swappable beneath it:
+The **Storage Gateway is the only door to the database** (no direct access, no PostgREST), and it injects IAM scope **per action**: every query carries `visible_set(P, action)` for the specific action it performs, so a read filters by read-scope and an `:ack` write by ack-scope. A write whose action-scoped predicate matches **0 rows** surfaces as a 403 or 404, never a silent success, matching the up-front `canDo` decision ([identity and access](/architecture/identity-access/)). Per-database isolation (one database per tenant, paired one-to-one with one NATS account) means no tenant context to set. Scope arrives as an **explicit per-call `scope.Set` argument**; the named three-mode contract (scoped / node / system) is the Design formalization of that convention, not a built mode switch. The [CDC publisher](/architecture/messaging/#two-lanes-one-bus) reads committed changes from the WAL, a replication-protocol stream beneath the table surface, not a second path around the Gateway. Every read and write goes through the Gateway, so the physical backend swaps beneath it:
 
 - **default**: Postgres for everything (samples, ground-truth records, views, registries). Postgres is **BYO today**.
 - **blobs**: opaque bytes (a firmware image, a config dump, a capture, later a large `log_line` body or a `collection.failed` raw payload) live in the content-addressed [blob store](/architecture/files/), a `blob.Store` seam behind the same gateway. The default **pgblobs** backend holds bytes inline in Postgres; a row references a blob by its `sha256`, never inline bytes.
 
 :::design[Embedded Postgres, tracked in #19]
-Embedded Postgres in the single binary (the same code path either way) replaces BYO for the
-all-in-one run mode; the data lane's persistence consumer and the record lane's CDC publisher (#430)
-target this one backend either way.
+Embedded Postgres in the single binary replaces BYO for the all-in-one run mode; the data lane's
+persistence consumer and the record lane's CDC publisher (#430) target this one backend through the
+same code path either way.
 :::
 
 ::::design[The cold tier, tracked in #529]
@@ -188,6 +189,6 @@ change, since rows reference blobs by `sha256`.
 
 ## Query construction: typed, parameterized, generated
 
-The gateway builds every query with **[jet](https://github.com/go-jet/jet)**, a type-safe SQL builder whose column and table types are **generated from the dbmate-managed schema** (dbmate stays the single schema authority; jet regenerates after `migrate`). The shape is dynamic (the per-action scope predicate, the [filter expression](/architecture/expressions/), order, pagination compose at runtime) but the safety is **structural, not by discipline**: values are always bound parameters, never interpolated; identifiers are typed constants from the generated schema, so a wrong or attacker-supplied column name is a **compile error** (the filter language's field names resolve against those same generated columns); operators are a closed set. All dynamic construction lives in this one module, a single reviewable chokepoint. The one carve-out is the high-volume sample insert (the persistence consumer), which may use `pgx` `COPY` for throughput, still inside the gateway: it runs in all-visibility **system mode**, its safety resting on the typed column targets plus the upstream **admission consumer** having already confined owners ([identity and access](/architecture/identity-access/)), not on a per-write scope predicate.
+The gateway builds every query with **[jet](https://github.com/go-jet/jet)**, a type-safe SQL builder whose column and table types are **generated from the dbmate-managed schema** (dbmate stays the single schema authority; jet regenerates after `migrate`). The shape is dynamic (the per-action scope predicate, the [filter expression](/architecture/expressions/), order, pagination compose at runtime) but the safety is **structural, not by discipline**: values are always bound parameters, never interpolated; identifiers are typed constants from the generated schema, so a wrong or attacker-supplied column name is a **compile error** (the filter language's field names resolve against those same generated columns); operators are a closed set. All dynamic construction lives in this one module, a single reviewable chokepoint. The one carve-out, the high-volume sample insert (the persistence consumer), may use `pgx` `COPY` for throughput, still inside the gateway: it runs in all-visibility **system mode**, its safety resting on the typed column targets plus the upstream **admission consumer** having already confined owners ([identity and access](/architecture/identity-access/)), not on a per-write scope predicate.
 
 :::

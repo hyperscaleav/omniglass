@@ -29,14 +29,14 @@ guarded at the node and at ingest). The batch also carries the node's **self-log
 the task confinement (a logs-only batch needs no `task_id`); the run loop installs a capturing
 `slog` handler as the process default, so plain `slog.Info(...)` anywhere in node code emits a
 self-log (`facility` / `source` lift into the `log_line` columns), the between-ticks buffer bounded,
-dropping the oldest. The **interface** is authored, the **task** derived: an interface has a CRUD
+dropping oldest. The **interface** is authored, the **task** derived: an interface has a CRUD
 API (gateway + Huma routes at `/interfaces`, generated into the OpenAPI document, the cobra CLI, and
 the typed client) and is named by its protocol (derived from its `interface_type`, unique per
 component), so create takes a type, not a name; a task is **read-only plumbing** (only `GET /tasks`
-and `GET /tasks/{id}`), has **no node column** (placement **projects from its interface**), and a **node purge cascades** interfaces and derived
+and `GET /tasks/{id}`) with **no node column** (placement **projects from its interface**), and a **node purge cascades** interfaces and derived
 tasks. Both surfaces carry the two authorization layers, **scope cascading through the
 owning component** (out-of-scope = non-disclosing 404, no new scope kind). Built: the reach gate
-over four transports; the protocol **drivers** are the next slices. See
+over four transports; the protocol **drivers** come next. See
 [ADR-0037](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer),
 [ADR-0038](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state),
 [ADR-0039](/architecture/decisions/#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver),
@@ -48,7 +48,7 @@ and [ADR-0040](/architecture/decisions/#adr-0040-the-task-is-derived-read-only-p
 Collection is built from **functions**. A versioned `ComponentTemplate` declares how to reach a
 class of device (its interfaces) and a set of **functions**, each a discrete unit of device logic
 that runs on the edge node and parses the answer on the spot into samples; one authoring schema
-covers a single SNMP read through a multi-step branching procedure.
+covers everything from a single SNMP read to a multi-step branching procedure.
 
 ## Model overview
 
@@ -80,7 +80,7 @@ A **function** is the device-level unit; the platform workflow that responds to 
 
 ## Interfaces: the device's APIs, declared once
 
-An **interface is an API we intend to call** on a component (its `web`, `qrc`, `ttp`, `snmp` endpoint), **not** a network interface; a host or IP is a variable it consumes, not its identity. It is **named by the protocol it speaks**, unique within its component. Reachability is the **first gate of a ladder** (reach, auth, responds, collecting) and needs only the transport. The top-level `interfaces` array declares each once; steps reference one by `id`, the interface owns the connection, and a **persistent session outlives any single function run**, so subscriptions and inbound streams attach to a connection established once.
+An **interface is an API we intend to call** on a component (its `web`, `qrc`, `ttp`, `snmp` endpoint), **not** a network interface; a host or IP is a variable it consumes, not its identity. It is **named by the protocol it speaks**, unique within its component. Reachability is the **first gate of a ladder** (reach, auth, responds, collecting), needing only the transport. The top-level `interfaces` array declares each once; steps reference one by `id`, the interface owns the connection, and a **persistent session outlives any single function run**, so subscriptions and inbound streams attach to a connection established once.
 
 ```yaml
 interfaces:
@@ -97,7 +97,7 @@ interfaces:
     persistent: true               # stateful session, outlives function runs
 ```
 
-- **Type is the `interface_type`, which is the transport**, not the protocol driver: the registry covers `snmp`, `http`, `ssh`, `telnet`, `tcp`, `icmp`, `webhook`, `mqtt`, `syslog`, and `websocket`, each with a connection-param schema and default reachability probe. The protocol handler that turns a device's API into a normalized menu of samples and functions is a separate **driver** layer, so a device's OIDs live in its driver, never on a template ([ADR-0039](/architecture/decisions/#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver)).
+- **Type is the `interface_type`, which is the transport**, not the protocol driver: the registry covers `snmp`, `http`, `ssh`, `telnet`, `tcp`, `icmp`, `webhook`, `mqtt`, `syslog`, and `websocket`, each with a connection-param schema and default reachability probe. The protocol handler turning a device's API into a normalized menu of samples and functions is a separate **driver** layer, so a device's OIDs live in its driver, never on a template ([ADR-0039](/architecture/decisions/#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver)).
 - **`liveness`**: the per-interface reachability gate deciding whether its functions run ([nodes](/architecture/nodes/)).
 - **`persistent: true`** keeps a session open across runs; scheduled functions borrow it to send, listen functions wake on its inbound.
 - **Codec and framing**: raw-TCP AV control planes wrap payloads (line terminators, length prefixes, NUL framing, JSON-RPC or TTP envelopes); the interface's codec frames outbound and parses inbound to the declared envelope, so a step sees structure, not wire bytes.
@@ -107,8 +107,8 @@ interfaces:
 
 ## Functions: a trigger plus a step DAG
 
-A top-level `functions` array: each **function** is one trigger plus a DAG of steps, one discrete
-unit of device logic. The trigger unifies what used to be a poller, a listener, and a command:
+A top-level `functions` array: each **function** is one trigger plus a DAG of steps. The trigger
+unifies what used to be a poller, a listener, and a command:
 
 | Kind | Fires when | This is |
 |---|---|---|
@@ -327,7 +327,7 @@ shape.
 
 A function runs the parse at the **edge**, not server-side:
 
-- **Steps parse, extract, and normalize on the node**, **publishing** resolved samples to the JetStream [samples](/architecture/properties/) stream, not the typed tables; the [persistence consumer](/architecture/properties/) batch-writes them async, idempotent on `(series, ts)`, while the [rule engine](/architecture/alarms-actions/) consumes the same stream live. The compiler bakes each sample's `kind` into the runtime unit, so `metric`-versus-`state` routing rides the published message.
+- **Steps parse, extract, and normalize on the node**, **publishing** resolved samples to the JetStream [samples](/architecture/properties/) stream, not the typed tables; the [persistence consumer](/architecture/properties/) batch-writes them async, idempotent on `(series, ts)`, while the [rule engine](/architecture/alarms-actions/) consumes the same stream live. The compiler-baked `kind` rides the published message, routing `metric` versus `state`.
 - **Raw payloads are not stored**: a dev raw-mode taps the wire live, a failed parse emits a `collection.failed` event carrying the raw, and there is no telemetry table.
 - **Owner attribution:** a single-owner function stamps identity at the edge; a many-device function publishes for multiple owners, resolved server-side from identity labels (below).
 - **Placement-scoped writes.** A node publishes only the owners in its **placement visible_set** (the owners of its assigned tasks), expressed as **NATS subject permissions** (the `node` gateway mode, [identity and access](/architecture/identity-access/)). An owner label outside the set is never an authoritative write, only an **orphan / discovery candidate** for the `discovery_rule` stream, so a compromised node cannot manufacture writes for owners it was never placed on; the perspectives / `disagree` model backstops a legitimately-placed node reporting bad values.
@@ -335,7 +335,7 @@ A function runs the parse at the **edge**, not server-side:
 
 ### Raw sampling: an opt-in re-parsable window
 
-An opt-in **`raw_sample`** policy keeps a bounded window of raw frames so a corrected extractor can re-derive its samples over that window, without reintroducing a telemetry table. It is **cascade-resolved** (settable on an interface, task, or template) to **`off`** (default, no raw retained), **`all`** (every frame buffered), or **`1-in-N`** (sampled, bounding a high-cadence source). Kept frames carry the **immutable function version** that parsed them, so the window re-parses against that exact version and corrects retroactively; outside it, a wrong-but-conforming parse is **forward-fixable only**, the raw being gone. Off by default, bounded, sampled, short-lived: a short-TTL holding pen, range-partitioned and cold-tierable ([storage](/architecture/storage/)), not a parallel history of record.
+An opt-in **`raw_sample`** policy keeps a bounded window of raw frames so a corrected extractor can re-derive its samples over that window, without reintroducing a telemetry table. It is **cascade-resolved** (settable on an interface, task, or template) to **`off`** (default, no raw retained), **`all`** (every frame buffered), or **`1-in-N`** (sampled, bounding a high-cadence source). Kept frames carry the **immutable function version** that parsed them, so the window re-parses against that exact version and corrects retroactively; outside it, a wrong-but-conforming parse is **forward-fixable only**, the raw being gone. A short-TTL holding pen, range-partitioned and cold-tierable ([storage](/architecture/storage/)), not a parallel history of record.
 
 ## Shared-API collection: one component, many owners
 

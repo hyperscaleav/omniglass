@@ -8,9 +8,9 @@ sidebar:
 ---
 
 Health answers "is this system working right now?" and "since when?". It is a **first-class
-capability**, not a byproduct of a rules engine: a deliberate model (an alarm degrades a capability,
+capability**, not a rules-engine byproduct: a deliberate model (an alarm degrades a capability,
 a capability failure impairs a role, an impaired role sinks its system by a declared impact) carried
-on the ordinary sample pipeline, so health is stored, queried, and trended like any other signal.
+on the ordinary sample pipeline: stored, queried, and trended like any other signal.
 
 :::note[Partial]
 Built today: the **`alarm`** table (component-local, with the capabilities it degrades), **`impact`**
@@ -37,21 +37,21 @@ alarm on a component
 
 - An **[alarm](#the-alarm-what-is-wrong-with-one-component)** is **component-local**; naming the
   **[capabilities](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)** it
-  degrades is the only route out of the component (an alarm that degrades nothing is a note on the
-  device and reaches no system).
+  degrades is its only route out (an alarm degrading nothing is a note on the device, reaching no
+  system).
 - A component **satisfies** a [system role](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)
-  only when it **provides every** capability the role requires **and none is currently degraded**.
+  only when it **provides every** capability the role requires **and none is degraded**.
 - A role with fewer satisfying components than its **quorum** is **impaired**, contributing its
-  **impact**; the system takes the **worst** contribution, the location the worst among every system
-  in its subtree.
+  **impact**; the system takes the **worst** contribution, the location the worst across its
+  subtree's systems.
 
 Capability is the only vocabulary shared by the thing that breaks (a component) and the thing that
-cares (a slot in a room), which is why it is the routing key ([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).
+cares (a slot in a room): hence the routing key ([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).
 
 ## Impact lives on the role
 
 **`impact`** is a column on `system_role`: `outage`, `degraded`, or `none`, defaulting to `degraded`.
-It lives on the **role**, not the alarm or the component, because the same broken box matters
+It lives on the **role**, not the alarm or component, because the same broken box matters
 differently per slot: a dead confidence monitor is not a dead main display.
 
 | impact | an impaired role means | use it for |
@@ -60,9 +60,9 @@ differently per slot: a dead confidence monitor is not a dead main display.
 | `degraded` | the system is working, worse | the slot that costs quality, not the meeting |
 | `none` | nothing | a slot you track but do not depend on |
 
-**Quorum is the redundancy knob.** Quorum 1 with two assigned tolerates one failure; quorum 2 with
-two assigned is impaired the moment either degrades. Redundancy is the gap between staffed and
-needed, no separate vocabulary.
+**Quorum is the redundancy knob**: 1 with two assigned tolerates one failure; 2 with two assigned
+is impaired the moment either degrades. Redundancy is the gap between staffed and needed, no
+separate vocabulary.
 
 ## The verdict vocabulary
 
@@ -82,7 +82,7 @@ Health is **distinct from severity**: severity is an alarm's alert importance
 ## The rollup is a pure function
 
 The judgement lives in a **pure package** (`internal/health`) with **no database access**: storage
-resolves the inputs and records the answer, the package decides, and the subtle cases pin down in
+resolves the inputs and records the answer, the package decides, the subtle cases pin down in
 unit tests.
 
 Two defaults are deliberate safety calls pointing in **opposite** directions:
@@ -92,34 +92,34 @@ Two defaults are deliberate safety calls pointing in **opposite** directions:
 - An **unrecognized recorded value reads `healthy`**: one stray row must not paint an estate broken.
 
 The rule behind both: **fail loud about a judgement, fail quiet about a record.** Two more defaults
-follow the same instinct: a **system with no roles is `healthy`** (nothing has been claimed about
-it), and a **quorum below one is treated as one** (a role no component need fill is not a role).
+follow: a **system with no roles is `healthy`** (nothing claimed about it), and a **quorum below
+one reads as one** (a role no component need fill is not a role).
 
 ## Health is recorded as a transition
 
 > The most important thing about health is that we have a real, accurate history of the edges. We need to
 > know exactly when a system went from healthy to unhealthy, and be able to look back at it weeks later.
 
-If the history has to be **accurate**, the only correct place to compute a verdict is the **write**
-that changed it; if it has to be **edges**, the right carrier already exists. Health lands in
-**`state`**, which is **already transition-only** (the ingest path writes a row only when the value
+If the history must be **accurate**, the verdict must be computed at the **write** that changed it;
+if it must be **edges**, the right carrier already exists. Health lands in
+**`state`**, **already transition-only** (the ingest path writes a row only when the value
 differs from the last stored), reusing that primitive with its own owner-arc read
 (`healthTransitions`, the ordered flip sequence on the
 **[owner arc](/architecture/core-entities/#ownership-the-exclusive-arc)** rather than the
 component-and-instance one `StateTransitions` reads): a component, system, or location owns its own
 health series, with `provenance='calculated'` and `source_rule='health-rollup'` naming the producer.
-There is **no `health_history` table**: it would be a second and worse copy of one that already
+There is **no `health_history` table**: it would be a second, worse copy of one that already
 exists.
 
-The first value for an owner is **always** recorded, even `healthy`, so a reader can tell "healthy
-since we started watching" from "never evaluated".
+An owner's first value is **always** recorded, even `healthy`, distinguishing "healthy since we
+started watching" from "never evaluated".
 
 ### Two alternatives, and why both fail
 
 **Compute the verdict on read** keeps **no history at all**, the opposite of the requirement.
-**Compute on read and write the result through** is more dangerous: the history **looks** real but is
-sampled by whoever opens a page (a room that broke Friday night and was opened Monday morning reads
-as breaking Monday morning), worse than none because it will be trusted.
+**Compute on read and write the result through** is more dangerous: the history **looks** real but
+is sampled by whoever opens a page (a room that broke Friday night and was opened Monday reads as
+breaking Monday morning), worse than none because it will be trusted.
 
 ### Recompute at the write, in the same transaction
 
@@ -147,17 +147,17 @@ furthest: a catalog edit is a health event across the estate. Deleting a **locat
 trigger: a location holding anything cannot be deleted (`on delete restrict` throughout), so a
 deletable location is empty and already healthy.
 
-A **missing trigger is a hole in the history**, the honest cost of this design and why the trigger
-list is enumerated rather than inferred.
+A **missing trigger is a hole in the history**: the honest cost of this design, and why the list is
+enumerated, not inferred.
 
 ### A read never writes
 
 Self-healing on read would stamp the edge at read time, precisely the inaccuracy this model avoids.
 The reads do, however, **compute the verdict they serve from the same rows they display**, a
-correctness fix: serving the **last recorded** verdict while resolving the contributing roles
+correctness fix: serving the **last recorded** verdict while resolving contributing roles
 **live** once let a system report `healthy` beside an impaired `outage` role. **Recorded transitions
-remain the source for history**; a missing trigger can cost an **edge**, but never make a report
-**lie about the present**.
+remain the source for history**; a missing trigger can cost an **edge**, never a report that
+**lies about the present**.
 
 ## Reading health
 
@@ -185,13 +185,13 @@ An alarm is a row on a component with a **`severity`** (`info`, `warning`, or `c
 Severity drives the **component's own** verdict (any active alarm makes it `degraded`, a `critical`
 one an `outage`) and **nothing above it**: what reaches a system is the **capability set**, not the
 severity. Severity is how loudly to page somebody, impact is what the room lost. A component's
-verdict is recorded on its own arc, so a component filling no role still carries an accurate history.
+verdict records on its own arc, so a component filling no role still carries accurate history.
 
 ::::design[Target design (ADR-0050)]
 
 ## Where alarms come from
 
-Today an alarm is written by an **operator or an API caller**. The full model: an
+Today an **operator or API caller** writes the alarm. The full model: an
 [`event_rule`](/architecture/alarms-actions/) watches samples, fires an event, and an alarm **opens**
 and stays open while its condition holds, closing on the paired clear event. Health is
 **ack-independent**: acking annotates, never closes, so a broken room never looks healthy. A
@@ -230,8 +230,8 @@ but calling the system an outage overstates it.
 ### The `global` estate top
 
 The rollup ends at a location today; the design adds the singleton **`global`** owner above every
-location for the estate-wide verdict and KPIs. The **owner** gives a reading its level, one `health`
-key serving component, system, location, and global without cross-triggering.
+location for the estate-wide verdict and KPIs. The **owner** gives a reading its level: one `health`
+key serves component, system, location, and global without cross-triggering.
 
 ::::
 
@@ -251,9 +251,8 @@ when: "value.healthy / value.total"   # an Expr leaf shapes it into a ratio
 # -> emits system.availability
 ```
 
-An SLI is just another derived property, and the clearest payoff of transition-only recording:
-`time_in_state` over a stream of edges is exact and cheap, where the same calc over samples is an
-approximation.
+An SLI is just another derived property, and transition-only recording's clearest payoff:
+`time_in_state` over a stream of edges is exact and cheap, over samples an approximation.
 
 ## SLO and SLA: the target, and meeting it
 
@@ -280,7 +279,7 @@ The SLA calendar-window boundaries and timezone, co-designed with the time primi
 ## KPIs: what every estate should track
 
 A **KPI** is a derived property (a calc or SLI), registered as canonical and owned at the level it
-describes (system, location, or **global**). Omniglass ships an opinionated **default set**, with
+describes (system, location, or **global**). Omniglass ships an opinionated **default set**, plus
 the escape hatch to author your own. **Availability** is health over time, the SLI
 `time_in_state(healthy)` above, shipped free at every level up to global.
 
@@ -293,7 +292,7 @@ the escape hatch to author your own. **Availability** is health over time, the S
 
 Both inputs are **ordinary components**: an occupancy sensor emitting `occupancy.*`, and the booking
 system as a component whose interface is the calendar API, emitting `booking.*`; the KPIs are calcs
-over those samples, owned at room / system / location / global (a ghost meeting is just
+over those samples, owned at room / system / location / global (a ghost meeting is
 `occupied < booked`).
 
 :::caution[Open question]
@@ -310,8 +309,8 @@ component templates that feed the utilization KPIs.
 ## Why this is the Zabbix service tree, done right
 
 Zabbix bolts services, SLA, and the service tree on as a separate subsystem. Omniglass makes health
-**first-class but not separate**: the **system tree is the service tree**, the verdict is a `state`
-sample, the history is its transitions, the SLI is a calc over them, and the SLA is an alarm.
+**first-class but not separate**: the **system tree is the service tree**, the verdict a `state`
+sample, the history its transitions, the SLI a calc over them, the SLA an alarm.
 
 Related: [core entities](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)
 (the role, the capability, the quorum), [alarms and actions](/architecture/alarms-actions/) (the

@@ -11,7 +11,7 @@ import SchemaTable from '../../../components/SchemaTable.astro';
 
 An **alarm** detects a condition and holds it; an **action** does something about it. A simple
 action is a single step (a `notify`); a multi-step action is a **flow**. Both are **stateful
-entities that hold their state directly** (not event-sourced). The credentials an action uses live
+entities that hold their state directly** (not event-sourced). An action's credentials live
 in credentials; the Expr and Go-template machinery in [expressions](/architecture/expressions/).
 
 :::note[Partial]
@@ -28,7 +28,7 @@ See [implementation status](/architecture/status/).
 action); an **alarm** goes off when its condition is met and **stays high until interacted with**.
 The `alarm` row **holds its current state directly** (`status`, `severity`, `opened_at`,
 `resolved_at`, `acked_by` in the target design; built today: `severity`, `message`, `raised_at`,
-`cleared_at`); it is **not** event-sourced.
+`cleared_at`).
 
 :::design[Target design (ADR-0050)]
 **One incident, a new row per open**, keyed by `(event_rule, owner)` (the exclusive-arc owner, so a
@@ -253,7 +253,7 @@ is built on, escalate if unchanged. The same engine covers a time-bound access g
 AI-troubleshooting flow. It is deliberately a **bounded** workflow engine, not Turing-complete; a
 flow does **not** author events, and any effect it has returns as ordinary data (the only edge that
 could re-open its alarm, lineage-bounded). A drag-and-drop editor edits flows. **Single-step and
-multi-step are one model**: nothing distinguishes them but the length of the step list.
+multi-step are one model**: only the length of the step list distinguishes them.
 :::
 
 :::design[Registry namespacing for rules, actions, and severity levels (ADR-0050)]

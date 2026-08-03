@@ -8,14 +8,14 @@ sidebar:
 ---
 
 :::note[Partial]
-Slice-0 ships the **platform** rung end to end: the pure `settings` merge and resolve primitive, the single unscoped `setting_override` table, the Huma routes, the two `settings:<action>` permissions, the two seeded `profile`-domain namespaces (`ui`, `keybindings`), `ui.theme` wired through to re-theme the SPA, and the Admin settings page ([ADR-0033](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory), [ADR-0034](/architecture/decisions/#adr-0034-the-settings-gateway-is-unscoped-only-the-permission-gates-it), [ADR-0035](/architecture/decisions/#adr-0035-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock)). Deferred to the fast-follow: the **group** and **user** override rungs and the Profile preferences tab, the lock-permission split for group-admins, `platform`-domain namespaces (`retention`, `integrations`), a GitOps read-only mode, and live file reload (SIGHUP). Slice-1 makes a setting a reflected **typed struct** ([ADR-0041](/architecture/decisions/#adr-0041-settings-are-a-reflected-typed-struct-with-generated-client-and-server-validation)): one canonical `Settings` type is the single source for the default, the OpenAPI schema, the typed client, and validation (the `defaults.yaml` and hand-kept namespace list are retired).
+Slice-0 ships the **platform** rung end to end: the pure `settings` merge and resolve primitive, the single unscoped `setting_override` table, the Huma routes, the two `settings:<action>` permissions, the two seeded `profile`-domain namespaces (`ui`, `keybindings`), `ui.theme` wired through to re-theme the SPA, and the Admin settings page ([ADR-0033](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory), [ADR-0034](/architecture/decisions/#adr-0034-the-settings-gateway-is-unscoped-only-the-permission-gates-it), [ADR-0035](/architecture/decisions/#adr-0035-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock)). The deferred fast-follow list is the design fence under [Slice-0 boundary](#slice-0-boundary). Slice-1 makes a setting a reflected **typed struct** ([ADR-0041](/architecture/decisions/#adr-0041-settings-are-a-reflected-typed-struct-with-generated-client-and-server-validation), [below](#slice-1-boundary)), retiring `defaults.yaml` and the hand-kept namespace list.
 :::
 
 Omniglass resolves a **setting** the same way it resolves a secret or a variable: down a cascade,
 most-specific-wins, with provenance, but on the **principal** axis (platform to group to user)
 rather than the [estate cascade](/architecture/cascade/)'s location to system to component. Same
-primitive (doctrine 5) pointed at identity; its least-specific level is `platform`, what an admin
-set for the **whole install**
+primitive (doctrine 5) pointed at identity; the least-specific level is `platform`, an admin's
+**install-wide** value
 ([ADR-0057](/architecture/decisions/#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier)).
 It generalizes the "platform settings store" the [scaling](/architecture/scaling/) page sketched
 ([ADR-0033](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory)):
@@ -23,7 +23,7 @@ platform settings become one **domain** within the engine, user preferences the 
 
 ## Layers and levels
 
-An effective value is resolved from ordered contributions, plus one thing that is not a level at all.
+An effective value resolves from ordered contributions, plus one thing that is not a level.
 
 **`default` is off the axis.** It is the value reflected from the canonical `Settings` struct's
 `default:` tags (see [the single-source struct](#the-single-source-struct)): the setting's own
@@ -48,11 +48,11 @@ document is always complete. It is the **fall-through**, not the bottom rung
 ### Most-specific wins
 
 Absent any lock, a more-specific level wins: `user > group > platform > file`. Where no level set
-the key, the value is the setting's `default`, which provenance reports as a **declaration** (no
-origin badge; "Declared default" in the layer stack), not a level. Merge is a **deep merge in JSON
-map-space**, so key **presence** decides an override, not a Go zero-value: a key set to `false`
-overrides, an absent key inherits. A write is an RFC 7386 JSON Merge Patch, so `null` on a key
-deletes it from that level's override, restoring the layer below or the declared default.
+the key, the value is the setting's `default`, which provenance reports as a **declaration**, not a
+level. Merge is a **deep merge in JSON map-space**, so key **presence** decides an override, not a
+Go zero-value: a key set to `false` overrides, an absent key inherits. A write is an RFC 7386 JSON
+Merge Patch, so `null` on a key deletes it from that level's override, restoring the layer below or
+the declared default.
 
 ## Locking: enforced from above
 
@@ -60,17 +60,16 @@ An admin **locks** a key at a level. A lock at level L pins L's contributed valu
 more-specific level from overriding it: lock `ui.theme` at `platform` and no group or user can
 change it.
 
-**Lock conflict: broader wins.** A `platform` lock supersedes a `group` lock; top-down admin
-authority is absolute. The editability rule falls out: a principal may edit a key at level L if and
-only if no broader level has locked it.
+**Lock conflict: broader wins.** A `platform` lock supersedes a `group` lock. The editability rule
+falls out: a principal may edit a key at level L if and only if no broader level has locked it.
 
 ## Provenance
 
 Every resolved key reports **where it came from** and its **lock state**: the admin read returns the
 effective document plus a sibling `sources` map (`namespace.key` to the winning level, or `default`)
 and a `locks` map (`namespace.key` to the locking level). The Admin page badges a set key
-(`From settings file` / `Set in console`) and deliberately badges nothing for a declared default; a
-row expands to teach the full layer stack (doctrine 4).
+(`From settings file` / `Set in console`) and badges nothing for a declared default ("Declared
+default" in the layer stack); a row expands to teach the full layer stack (doctrine 4).
 
 ## Domains: platform versus profile
 
@@ -89,18 +88,17 @@ The declared defaults and the file layer live in memory, so Postgres holds **onl
 levels**: a single `setting_override(scope, principal_id, namespace, doc, locks, ...)` table with a
 `unique nulls not distinct (scope, principal_id, namespace)` identity (a surrogate `id` primary
 key; `principal_id` is nullable, and Postgres forbids NULL in a PK column). `scope` is under a
-CHECK naming the levels actually persisted, today `platform` alone, so a level the resolver would
+CHECK naming the persisted levels, today `platform` alone, so a level the resolver would
 never read cannot be written and a future tier rename fails loudly. Restore falls out of the layer
 model: **restore a namespace** is a `DELETE` of its row, **restore everything** truncates the
 scope, and the file layer plus declared defaults re-supply the values. The table is **never
-boot-seeded** (operator data, per the seeding doctrine). Persisting only the override is a recorded
-call
+boot-seeded** (operator data). Persisting only the override is a recorded call
 ([ADR-0033](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory)),
 diverging from the scaling page's "materialized in Postgres" sketch.
 
 ### The unscoped-Gateway carve-out
 
-The two-layer authorization model has one deliberate exception here: Settings Gateway methods are
+The two-layer authorization model has one exception here: Settings Gateway methods are
 **unscoped**. Settings describe the platform and its principals, not the estate, so the ABAC
 storage-scope invariant is **not applicable** (as with the registry-type reads, `GET /types/...`);
 only the `settings:<action>` permission gates them, a recorded carve-out
@@ -132,9 +130,9 @@ type UISettings struct {
 ```
 
 Each namespace is a struct, a closed set of developer-defined keys. The
-`settings:"<domain>,<visibility>"` tag carries the metadata: `domain` is `profile` (cascades to
-groups and users, user-overridable) or `platform` (platform-level only, admin), and `client` marks a
-namespace fed to `/settings/me` (omit for admin-only-read). A reflect pass in the pure `settings`
+`settings:"<domain>,<visibility>"` tag carries the metadata: `domain` is `profile` or `platform`
+([above](#domains-platform-versus-profile)), and `client` marks a namespace fed to `/settings/me`
+(omit for admin-only-read). A reflect pass in the pure `settings`
 package produces both artifacts from the tags: **`Defaults()`** walks each leaf's `default:` tag,
 coerced to the field's Go kind (replacing the retired embedded `defaults.yaml`; no tag, no default),
 and **`Namespaces()`** reflects the top-level fields (replacing the hand-kept slice). Reflection
@@ -147,7 +145,7 @@ so the layers stay generic maps and the merge engine is unchanged; typing lives 
 effective (fully-merged) document unmarshals into `Settings`, so the API `values` field is the
 typed struct (the generated client reads `values.ui.theme` as the enum union) and Go code calls
 `settingsSvc.EffectiveTyped(ctx)` and reads `s.UI.Theme` typed; `sources` and `locks` stay flat
-maps keyed by `namespace.key`, since provenance is inherently dynamic.
+maps keyed by `namespace.key`, since provenance is dynamic.
 
 ## Adding a setting
 
@@ -181,16 +179,14 @@ type Settings struct {
 }
 ```
 
-**Then run `make gen`** and commit the drift: that one field now drives the declared default, the
-namespace registry, the OpenAPI schema, the typed SPA client (`values.<namespace>.<key>`), the
-server write-validator, the inline form validation, and the typed Go accessor, with no further
+**Then run `make gen`** and commit the drift: that one field now drives every artifact above, plus
+the inline form validation and the typed Go accessor (`values.<namespace>.<key>`), with no further
 edits.
 
-**Rules and gotchas.** Every namespace is a closed struct of developer-defined keys (no
-operator-open namespace); prefer `enum` or `pattern` over a bare string, since one tag buys the
-console picker, the inline validation, and the server 422 together; and never seed a default outside
-the tag (no `defaults.yaml`, no boot-seed `ON CONFLICT`), a second source being exactly the drift
-the single-source struct prevents.
+**Rules and gotchas.** No operator-open namespace; prefer `enum` or `pattern` over a bare string,
+since one tag buys the console picker, the inline validation, and the server 422 together; and never
+seed a default outside the tag (no `defaults.yaml`, no boot-seed `ON CONFLICT`), a second source
+being exactly the drift the single-source struct prevents.
 
 ## Generated validation, one rule set from the struct
 
@@ -221,10 +217,10 @@ Two read audiences, two read endpoints, and merge-patch writes:
 - **`PATCH /settings/{namespace}`** (`settings:update` **and** `platform:update`): an RFC 7386 JSON
   Merge Patch onto the namespace's override at the acting scope (`platform` in slice-0); `null`
   restores a key.
-- **`DELETE /settings/{namespace}`** (`settings:update` **and** `platform:update`): drop the
-  override, restoring the namespace to defaults.
-- **`POST /settings:restoreDefaults`** (`settings:update` **and** `platform:update`): an AIP custom
-  method, a factory reset of the acting scope.
+- **`DELETE /settings/{namespace}`** (same gates): drop the override, restoring the namespace to
+  defaults.
+- **`POST /settings:restoreDefaults`** (same gates): an AIP custom method, a factory reset of the
+  acting scope.
 
 Every settings write lands at the **platform** tier by definition, so all three writes carry
 `platform:update` on top of `settings:update`, the same install-wide authority a platform-tier
@@ -233,13 +229,11 @@ holding only `settings:update` reads a note naming the missing capability rather
 Save.
 
 Per doctrine 1 the effective document is a Huma struct, so the OpenAPI, the typed SPA client, the
-CLI command, and the JSONSchema all generate from it (`make gen`). Because the declared defaults
-fill every key, the effective document is always fully populated; only the override **storage** is
+CLI command, and the JSONSchema all generate from it (`make gen`); only the override **storage** is
 raw JSONB partials.
 
 `settings:read` and `settings:update` (write, restore, lock and unlock) live on the admin role. The
-store is a singleton, so there is no create or delete-of-resource permission; client-safe values
-reach ordinary users through `/settings/me`, authn-only.
+store is a singleton, so there is no create or delete-of-resource permission.
 
 ## The cascade-over-principals model
 

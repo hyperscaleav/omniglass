@@ -34,13 +34,13 @@ carrying an **impact**. See [implementation status](/architecture/status/).
 
 - A **component** is a deployed device, app, or service (a display, a DSP, a cloud UCC service). It
   owns samples and points at the **`product`** it is, the source of its shape; the pointer is
-  optional, so a productless component simply carries no contract.
+  optional, so a productless component carries no contract.
 - A **system** is a set of components doing one job: a meeting room, a classroom, a video wall. It is
   located at a location and **conforms to a `standard`**, the blueprint it is built against; the
   pointer is optional, mirroring `component.product_id`.
 - A **location** ties systems and components to a physical place, classified by `location_type`, its
-  only shape-definer (no template). A starter type set ships seeded, operator-owned (see
-  [the seed model](#the-seed-model-forked-templates-versus-canonical-catalogs)), read at
+  only shape-definer (no template). A starter type set ships seeded, operator-owned
+  ([the seed model](#the-seed-model-forked-templates-versus-canonical-catalogs)), read at
   `GET /location-types` to feed the location form's type picker. Each type carries an `icon` (a glyph
   key like `building`; unknown keys fall back to `map-pin`) rendered in the tree, and
   `allowed_parent_types` (a set of `location_type` ids and/or the reserved `root` sentinel): empty is
@@ -149,9 +149,8 @@ referenced by a component cannot be deleted (409). See the [Products guide](/gui
 ### Catalog reference data: `standard`
 
 A **`standard`** (Huddle Room, Classroom, ...) is the **blueprint a system conforms to**: a stable
-`id` and `display_name`, an optional **`parent_standard_id`** (a variant points at its base, as
-`parent_product_id` does), and the `official` boolean; the promotion of the former `system_type`
-label registry
+`id` and `display_name`, an optional **`parent_standard_id`** (a variant points at its base), and
+the `official` boolean; the promotion of the former `system_type` label registry
 ([ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)).
 
 A **`system`** conforms through the optional **`system.standard_id`**; a **one-off system** is
@@ -169,9 +168,8 @@ declared property (`<classifier>_id`, a **`property_type_id`** FK into the
 resolved to the FK at the edge. Type and validation live on the property, never repeated here.
 
 The value lives in **`property`**, on the **same owner exclusive-arc** as the sample sinks and
-`event` (`owner_kind` plus `component_id` / `system_id` / `location_id` / `node_id`, one-set CHECK),
-plus the **`property_type_id`** FK, an `instance` discriminator, a **`provenance`**, and the jsonb
-`value`. Provenance makes the fold work: one table holds values an operator **declared**, a device
+`event` ([below](#ownership-the-exclusive-arc)), plus the **`property_type_id`** FK, an `instance`
+discriminator, a **`provenance`**, and the jsonb `value`. Provenance makes the fold work: one table holds values an operator **declared**, a device
 **observed**, a rule **calculated**, and config **intended**; the per-provenance producers are on
 [config, secrets, and variables](/architecture/variables/#property-one-typed-name-a-classifier-contract-a-stored-value).
 
@@ -211,12 +209,12 @@ rather than absent.
 :::note[Not the IAM role]
 A **system role** is a slot in a system; an **[IAM role](/architecture/identity-access/)**
 (viewer / operator / admin / owner) is a capability set granted to a principal. They share only the
-word. The storage methods are deliberately `ListSystemRoles` / `SetSystemRole` / `DeleteSystemRole`,
-never mistakable for RBAC's `ListRoles` / `UpsertRole`.
+word: the storage methods are `ListSystemRoles` / `SetSystemRole` / `DeleteSystemRole`, not
+RBAC's `ListRoles` / `UpsertRole`.
 :::
 
 Five tables carry it. `system_member` is the **membership** binding a role attaches to, many-valued
-and cascading from both ends; `system_role` is the slot itself, on the same arc `property` uses
+and cascading from both ends; `system_role` is the slot, on the same arc `property` uses
 (one-set CHECK, `unique nulls not distinct` over the arc plus name); `system_role_capability` is
 what the role requires, **conjunctive** (a component must provide **every** listed capability);
 `component_capability` is the component's **own** capability facts, layered over its product's; and
@@ -241,12 +239,10 @@ what the role requires, **conjunctive** (a component must provide **every** list
 ### Membership: what a role attaches to
 
 **A component doing a job in a system is a member of it, and the role is what that membership does**:
-one attachment seen at two levels. Membership is **many-valued**: a rack DSP feeding three rooms is a
-member of all three.
-
-**Staffing a role creates the membership**, so nobody says it twice. The reverse is not symmetric:
-giving up a role does not end membership, and a member carrying no role is ordinary (the spare on the
-shelf).
+one attachment seen at two levels. Membership is **many-valued** (a rack DSP feeding three rooms is a
+member of all three). **Staffing a role creates the membership**, so nobody says it twice; the
+reverse is not symmetric: giving up a role does not end membership, and a member carrying no role is
+ordinary (the spare on the shelf).
 
 **`is_primary`** marks which membership seeds the
 [cascade](/architecture/cascade/#structural-multi-membership-a-component-in-n-systems) for a caller
@@ -284,9 +280,8 @@ the same.
 component "panel-1" cannot fill role "table-mic": missing microphone, speaker
 ```
 
-A refusal on **modeled** grounds; the named gap tells the operator what to fix. It is also why
-capabilities are a **resolved** set: `product` is optional, so a product-only guard would lock every
-productless component out of every role
+A refusal on **modeled** grounds. It is also why capabilities are a **resolved** set: `product` is
+optional, so a product-only guard would lock every productless component out of every role
 ([ADR-0049](/architecture/decisions/#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)).
 
 **A role also declares its `impact`**: `outage`, `degraded`, or `none`, what an **impaired** role
@@ -321,7 +316,7 @@ forks.
 `component`, `system`, and `location` are each a **variable-depth tree**: a `parent_id`
 self-reference nesting to arbitrary depth (campus -> building -> floor -> room). The trees are the
 structural backbone of the [cascade](/architecture/cascade/), which resolves over an entity's
-containment path; the precedence rules are stated once, there.
+containment path; precedence is stated once, there.
 
 ```d2
 direction: right
@@ -343,10 +338,9 @@ location -> location: parent (tree)
 
 The `parent_id` self-reference is **same-kind nesting**: a chassis with line cards is a parent
 component over children, and likewise a parent system over room subsystems. The nesting feeds the
-[cascade](/architecture/cascade/) (deeper wins) and the **health rollup** (a sub-system's health
-rolls into its parent system, a sub-component's into its parent component,
-[health](/architecture/health/)). The **practical starting depth is 3 levels**, a guidance default,
-**not a hard cap**.
+[cascade](/architecture/cascade/) (deeper wins) and the **health rollup** (sub-system into parent
+system, sub-component into parent component, [health](/architecture/health/)). The **practical
+starting depth is 3 levels**, **not a hard cap**.
 
 ## Ownership: the exclusive-arc
 
@@ -377,10 +371,9 @@ The arc's first built sink beyond the sample tables is **`event`**, the **occurr
 **past occurrence** with no "what is it now?", against a `metric` or `state`'s sampled present value
 (the [has-a-value-now razor](/architecture/properties/#the-has-a-value-now-razor-sample-vs-event)).
 
-An `event` row carries the **identical owner exclusive-arc** as a sample (`owner_kind` plus the
-matching `component_id` / `system_id` / `location_id` / `node_id`, same one-set CHECK) and the **same
-provenance** vocabulary (`observed` / `calculated` / `intended` / `declared`, default `observed`), so
-the same owner-confinement and reject-not-project gates apply at ingest. The occurrence key
+An `event` row carries the **identical owner exclusive-arc** as a sample (same one-set CHECK) and
+the **same provenance** vocabulary (`observed` / `calculated` / `intended` / `declared`, default
+`observed`), so the same owner-confinement and reject-not-project gates apply at ingest. The occurrence key
 (`event_type_id`), the lineage columns, and the separate raw `log_line` lane
 ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)) are the
 [events](/architecture/events/) page's model. Closing the loop, the reserved **`event_id`** columns

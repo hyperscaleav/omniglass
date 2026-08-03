@@ -7,11 +7,11 @@ sidebar:
     variant: note
 ---
 
-A node is the edge runtime that collects from and controls gear wherever it sits: it pulls its worklist from the server, runs it on the spot, and ships results back. This page covers worklist pull, placement, executing tasks and commands, sessions, inbound demux, the task queue, reachability, and shipping telemetry; the declarative shape it executes lives in [templates](/architecture/templates/) and [collection](/architecture/collection/).
+A node is the edge runtime that collects from and controls gear wherever it sits: it pulls its worklist from the server, runs it on the spot, and ships results back. This page covers worklist pull, placement, tasks and commands, sessions, inbound demux, the task queue, reachability, and shipping telemetry; the declarative shape it executes lives in [templates](/architecture/templates/) and [collection](/architecture/collection/).
 
 :::note[Partial]
-Built today: `omniglass node run` enrolls (a node is created server-side, its enrollment token minted at
-`POST /nodes/{name}:enroll` and exchanged for its NATS credential at `POST /nodes:claim`), connects
+Built: `omniglass node run` enrolls (node created server-side, enrollment token minted at
+`POST /nodes/{name}:enroll`, exchanged for its NATS credential at `POST /nodes:claim`), connects
 outbound-only to the server's in-process NATS server, pulls its worklist over a `og.v1.worklist.<node>`
 request-reply (its enabled tasks plus a `config_generation`), and heartbeats on `og.v1.heartbeat.<node>`
 (the server stamps `last_heartbeat_at`). **Per-node subject isolation is enforced**: each node's NATS
@@ -21,7 +21,7 @@ credential is permitted only its own `<node>` subjects. Also built: running task
 `GET /nodes/{name}/logs`, the console Self-logs panel). Still `Design`: commands and the durable
 command queue, sessions and inbound demux, the layered `_check` reachability gate,
 config-generation-driven cache invalidation, node self-telemetry, the node-down sweep, the JetStream
-publish-ack delivery contract (today the telemetry publish is fire-and-forget, #430), the tick
+publish-ack delivery contract (telemetry publish is fire-and-forget today, #430), tick
 scheduling and concurrency knobs, and config apply (the `:apply` flow). The credential is a shared
 secret (the enrollment token doubles as the NATS password); the decentralized nkey/JWT model is
 deferred. See [implementation status](/architecture/status/) and
@@ -30,15 +30,15 @@ deferred. See [implementation status](/architecture/status/) and
 
 ## The node
 
-The node is the edge process (`omniglass node run`), one per site, or the **server itself** for work with no site-local edge (see *Placement*). Its identity is **bound to `node.name`**, so a compromised node cannot impersonate another ([identity-access](/architecture/identity-access/)); it holds no config of its own, and its writes are confined to its **placement-derived `visible_set`** (the owners of its assigned tasks): **node mode**, not all-visibility system mode.
+The node is the edge process (`omniglass node run`), one per site, or the **server itself** when no site-local edge exists (see *Placement*). Identity is **bound to `node.name`** (a compromised node cannot impersonate another, [identity-access](/architecture/identity-access/)); it holds no config, and its writes are confined to its **placement-derived `visible_set`** (the owners of its assigned tasks): **node mode**, not all-visibility system mode.
 
-A node carries the same **name / display_name** identity as the other entities: `name` the immutable key and estate address (the NATS subject token and enrollment identity, never renamed), `display_name` the operator label (console falls back to the name). Its optional `location` is **descriptive**, **not** a scope: a node stays estate-wide, `location` clearing if that location is deleted (`ON DELETE SET NULL`). The console blade is read-edit-save (Edit primary, gated `node:update`, editing display_name, description, location; name read-only; enrolling secondary), via `PATCH /nodes/{name}`.
+A node carries the standard **name / display_name** identity: `name` the immutable key and estate address (the NATS subject token and enrollment identity, never renamed), `display_name` the operator label (console falls back to the name). Its optional `location` is **descriptive**, **not** a scope: a node stays estate-wide, `location` clearing if that location is deleted (`ON DELETE SET NULL`). The console blade is read-edit-save via `PATCH /nodes/{name}` (Edit primary, gated `node:update`, editing display_name, description, location; name read-only; enrolling secondary).
 
-A node is a **taggable owner**: governed [tags](/architecture/tags/) whose `applies_to` includes `node` bind to it (estate-wide, all-scope, `node:update`); effective tags are the `platform` layer plus direct bindings, no cascade (a node is not a scope tree); the blade carries a **Tags** panel, the list a Tags column and per-key facet. **Decommissioning** (`DELETE /nodes/{name}`, `node:delete`) is a hard delete cascading its interfaces, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential; the component telemetry it collected is untouched.
+A node is a **taggable owner**: governed [tags](/architecture/tags/) whose `applies_to` includes `node` bind to it (estate-wide, all-scope, `node:update`); effective tags are the `platform` layer plus direct bindings, no cascade (a node is not a scope tree); the blade carries a **Tags** panel, the list a Tags column and per-key facet. **Decommissioning** (`DELETE /nodes/{name}`, `node:delete`) hard-deletes, cascading its interfaces, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential; collected component telemetry is untouched.
 
 ## Getting its instructions
 
-The node pulls a **worklist**, the tasks and commands resolved for the components **placed on it**, over a NATS request-reply config pull, and **heartbeats** separately on its own subject (see [the protocol](#the-node-server-protocol)), so liveness is tracked independently of the pull.
+The node pulls a **worklist** (the tasks and commands resolved for the components **placed on it**) over a NATS request-reply config pull, and **heartbeats** separately on its own subject ([the protocol](#the-node-server-protocol)), so liveness tracks independently of the pull.
 
 :::design[Target design: the cascade-resolved worklist, tracked in #489]
 The server, not the template, decides placement (next) and resolves the cascade (config / `$var:`
@@ -46,27 +46,25 @@ values, effective `interval`, credentials) before handing the node concrete work
 sees a template, only materialized, resolved task and command instances.
 :::
 
-The full wire contract: **[the node-server protocol](#the-node-server-protocol)** below.
-
 ### Config propagation (declared change to running node)
 
 :::design[Target design: config propagation to a running node (`:apply` and the generation-driven cache), tracked in #489]
 An interface's connection config (endpoint, snmp community, http auth header) is a **projection** of
 the component's declared config through its template. The node re-pulls the worklist every tick but
-**caches interface config for its process lifetime**, so a changed input must be propagated:
+**caches interface config for its process lifetime**, so a changed input must propagate:
 **reconcile on the server** (a changed declared input, via `/components/{name}:apply` or a direct
 config write, re-renders the affected interfaces from the *current* declared config and upserts
 them, preserving placement) and **invalidate on the node** (the worklist reply carries a per-node
 **`config_generation`**, the max `updated_at` across the interfaces the node polls; an advance drops
 the node's interface cache and re-fetches this tick, a steady value serves from cache: a real change
 lands within one tick, no restart). The generation moves at **operator-config pace, not telemetry
-pace**: the sample-write path never touches `interface.updated_at`, and a no-op re-apply does not
+pace**: the sample-write path never touches `interface.updated_at` and a no-op re-apply does not
 advance it, so nodes are never woken for nothing.
 :::
 
 ## The node-server protocol
 
-The edge is **outbound-only**: a node sits behind NAT, so the server never dials it. A node is a **NATS client over the WAN**, one authenticated outbound connection (an nkey/JWT credential bound to `node.name`), and everything server-to-node arrives as messages on subjects the node is permitted to consume. Three flows share the connection:
+The edge is **outbound-only**: a node sits behind NAT, so the server never dials it. A node is a **NATS client over the WAN**, one authenticated outbound connection (an nkey/JWT credential bound to `node.name`); everything server-to-node arrives on subjects the node is permitted to consume. Three flows share the connection:
 
 :::design[The full node NATS contract, per ADR-0036; delivery guarantees are #430]
 - **Telemetry up**: the node **publishes** `TelemetryBatch` batches (`{samples, labels}` plus the
@@ -84,8 +82,8 @@ The edge is **outbound-only**: a node sits behind NAT, so the server never dials
 A command is **issued server-side** (the action layer records it and writes intended state,
 [alarms and actions](/architecture/alarms-actions/)) and dispatched onto a **durable server-side
 JetStream command queue**. The **edge holds nothing durable**: the node pulls from its durable
-consumer (on reconnect resuming from its last ack), runs, and reports the result, updating the
-`action` row. A node restart loses no command; the held consumer delivers with no poll latency.
+consumer (resuming from its last ack on reconnect), runs, and reports the result, updating the
+`action` row. A restart loses no command; the held consumer delivers with no poll latency.
 
 ### Delivery: at-least-once, idempotent by nature
 
@@ -96,24 +94,24 @@ upsert; the edge stamps `ts`, so the server is **ts-authoritative**, reorders ou
 and needs **no strict ordering** on the wire), and **command results** are an idempotent status
 update on a known `action` row by id. **Events are not shipped from the edge**: an event is
 **derived server-side** (an `event_rule` over samples, or from a `log_line`,
-[events](/architecture/events/)), so there is nothing to dedup; "we do not re-raise the same event
-next poll" is the **alarm** model's job (one stateful open alarm, fire and clear).
+[events](/architecture/events/)), so nothing needs dedup; not re-raising the same event
+next poll is the **alarm** model's job (one stateful open alarm, fire and clear).
 :::
 
 ### Buffering and retention are cascade settings
 
 :::design[Target design: the edge buffer, tracked in #430; retention is #417]
-When the server is unreachable the node **buffers in memory**, bounded; the buffer is **not durable
+When the server is unreachable the node **buffers in memory**, bounded, **not durable
 at the edge**. Both the **buffer** (size, shed policy) and **retention** are **cascade-resolved**
 ([cascade](/architecture/cascade/)) with an install-wide `platform` binding, overridable down the
-tree. When the buffer fills the node **sheds oldest metrics first and surfaces it** as a
+tree. A full buffer **sheds oldest metrics first and surfaces it** as a
 `node.buffer` sample (depth, drops): visible, never silent.
 :::
 
 ### Credentials at the edge
 
 :::design[Target design: credentials at the edge, tracked in #489]
-The worklist materialization resolves credentials server-side, so **device secrets travel to the
+Worklist materialization resolves credentials server-side, so **device secrets travel to the
 node** (over TLS), held **decrypt-on-use**: in memory, or encrypted at rest in a scratch dir with
 the key from the [`SecretProvider`](/architecture/variables/), **never persisted in plaintext**,
 scoped to the node's placement, re-fetched on the config-generation bump.
@@ -121,11 +119,11 @@ scoped to the node's placement, re-fetched on the config-generation bump.
 
 ### Enrollment
 
-A node is **created server-side first** (its `node.name` and properties) and the UI mints a **per-node enrollment token**; the node **claims its identity** on first connect, exchanging the token for its **NATS credential** (a per-node JWT signed for its nkey, scoped to the subjects its placement allows, [identity and access](/architecture/identity-access/)).
+A node is **created server-side first** (its `node.name` and properties), the UI mints a **per-node enrollment token**, and the node **claims its identity** on first connect, exchanging the token for its **NATS credential** (a per-node JWT signed for its nkey, scoped to the subjects its placement allows, [identity and access](/architecture/identity-access/)).
 
 :::design[Fleet auto-enrollment over a `discovery_rule`, tracked in #489]
 Later, a **shared enrollment token** plus a **`discovery_rule`** auto-enrolls a fleet: the node's
-own properties (stable facts, selected ENV) derive its name, editable server-side after deploy, so a
+own properties (stable facts, selected ENV) derive its name, editable server-side after deploy; a
 rollout mints no per-node token.
 :::
 
@@ -137,23 +135,23 @@ default to the **edge**; the shaped samples **load** to the server, where resolv
 evaluate default to **central**. Placement is a **cascaded property**
 ([cascade](/architecture/cascade/)): `placement: central` makes the **server itself the node
 target** (cloud APIs, SaaS pollers, inbound webhooks). A listener endpoint lives where placement
-puts it (the on-site node for LAN devices, the server for cloud sources), which is why a registered
-callback URL resolves to the placed listener's address, not a hardcode.
+puts it (the on-site node for LAN devices, the server for cloud sources), so a registered
+callback URL resolves to the placed listener's address, never a hardcode.
 :::
 
 ## Running tasks
 
 :::design[Target design: edge normalization (locate + Expr) and the listen mode, tracked in #489]
-For each task the node runs the protocol over the interface's connection, then **normalizes at the
+Per task the node runs the protocol over the interface's connection, then **normalizes at the
 edge**: the locate + Expr extraction ([collection](/architecture/collection/)) produces samples and
 stamps labels (cascading union + override), keeping the wire bytes as `raw` only on a parse or
 validation failure (for `collection.failed`) or under dev raw-mode. A task runs in one of the two
-[collection](/architecture/collection/) modes (**poll** on the resolved `interval`, or **listen**);
-a held-open connection is a **stateful interface transport**, not a third task type. Both assemble
-the same telemetry payload (below).
+[collection](/architecture/collection/) modes, **poll** (on the resolved `interval`) or **listen**;
+a held-open connection is a **stateful interface transport**, not a third task type. Both modes
+assemble the same telemetry payload (below).
 :::
 
-The built interface types, their per-task params, and the fixed samples each emits are the collection **type catalog**: see [built interface types and their config](/architecture/collection/#built-interface-types-and-their-config). This page covers how the node *executes* them: reachability gating, sessions, the task queue, tick scheduling.
+The built interface types, their per-task params, and the fixed samples each emits are the collection **type catalog** ([built interface types and their config](/architecture/collection/#built-interface-types-and-their-config)); this page covers how the node *executes* them: reachability gating, sessions, the task queue, tick scheduling.
 
 ## Sessions
 
@@ -162,7 +160,7 @@ A stateful interface (`ssh`, `mqtt`, anything held open) becomes a **session** a
 connection keyed by `(node, interface)`, shared by every task and command under it, handshake and
 auth paid once. A pool holds it open across ticks (reconnect, backoff, keepalive); a listener
 runtime wakes on its inbound. The socket is ephemeral on the node, which **reports lifecycle
-transitions as `session_log` rows**; the `session` entity projects current state server-side (a
+transitions as `session_log` rows**; the `session` entity is a server-side projection (a
 view over `session_log`; [storage](/architecture/storage/)).
 
 :::caution[Open question]
@@ -178,22 +176,22 @@ credential risks lockout; a subscription is session-scoped, so a reconnect **re-
 
 **Where failures land.** `session_log` owns **connection health** (cannot connect, auth rejected,
 dropped, timeout); the **data event owns parse health**: a parse failure emits a `collection.failed`
-event carrying the `raw` (plus the `action` row for commands) and surfaces as a collection-health
-sample, alertable. A command timeout can touch both.
+event carrying the `raw` (plus the `action` row for commands), surfacing as an alertable
+collection-health sample. A command timeout can touch both.
 ::::
 
 ## Inbound handling on a shared connection
 
 :::design[Target design: the ordered matcher set, tracked in #489]
-When one connection carries heterogeneous inbound frames, an arriving frame is not self-evidently
-the response to the last command. Frames route through an **ordered matcher set**: every task
+One connection carrying heterogeneous inbound frames cannot assume an arriving frame answers the
+last command. Frames route through an **ordered matcher set**: every task
 contributes a matcher (a poller's awaited-response shape, a listener/stream's `match:` predicate),
 each frame tested **in order**, first match winning. While a poll is **outstanding** its response
 matcher is tried first, then the standing matchers in declared order, so an event arriving mid-poll
-falls through to its stream instead of being mis-eaten as the response; where the protocol frames
-responses vs events (xAPI `*r` vs `*e`, a request id), framing drives routing and the regex only
-extracts within the matched frame. An **unmatched** frame lands as `raw` (orphan, logged), so a
-missing matcher surfaces rather than failing silently.
+falls through to its stream instead of being mis-eaten as the response; where the protocol itself
+frames responses vs events (xAPI `*r` vs `*e`, a request id), framing drives routing and the regex
+only extracts within the matched frame. An **unmatched** frame lands as `raw` (orphan, logged): a
+missing matcher surfaces, never fails silently.
 :::
 
 ## The component task queue
@@ -209,8 +207,8 @@ The node's work is the **component task queue** (distinct from the central **rul
 - **standing receivers** (listen tasks): always-on, event-driven, **not lane-serialized**, sharing a
   held session with pollers (demuxed) or owning their connection.
 
-**Smart-wait gate.** After a disruptive command, the lane blocks until reachability reports the host
-back up, read from the node's **local** copy, not the sample store; a fixed timeout is the backstop.
+**Smart-wait gate.** After a disruptive command the lane blocks until reachability reports the host
+back up, read from the node's **local** copy, not the sample store; a fixed timeout backstops.
 
 Tasks within one interface run serially (one probe, then its tasks in order); only distinct
 interfaces run concurrently.
@@ -223,17 +221,17 @@ protocol.
 The node-side queue is **not** durable: durability lives **server-side** (the JetStream command
 queue, the cascade-configurable telemetry buffer). On reconnect the node re-pulls its worklist,
 resumes its durable consumer on the command queue, and replays unacked telemetry publishes
-(idempotent on `(series, ts)`). See [the node-server protocol](#the-node-server-protocol).
+(idempotent on `(series, ts)`).
 ::::
 
 ## Implicit reachability
 
-Any interface with a host address gets reachability for free: the node pings the host and checks the declared port(s), continuously and out of band; a smart default, **bypassable per interface** (endpoints that drop ICMP or have no port opt out).
+Any interface with a host address gets reachability for free: the node pings the host and checks the declared port(s), continuously and out of band; a smart default, **bypassable per interface** (for endpoints that drop ICMP or have no port).
 
 :::design[Target design: the layered availability gate, tracked in #489]
 The results come back as `reachable` / `port_open` **samples** usable in rules and dashboards, and
-they feed the smart-wait gate from the node's local copy: the connection detector and the dashboard
-signal are the same always-on probe.
+feed the smart-wait gate from the node's local copy: the connection detector and the dashboard
+signal are one always-on probe.
 
 **The layered availability gate** is an **OSI-layered** set of cheap checks run as a **concurrent
 pre-pass** (high concurrency, short timeouts) before a connection-interface's poll tasks. All
@@ -264,9 +262,9 @@ opt-in (a differing liveness credential must not read as down).
 
 The honest limit: a v2c wrong community is a **silent drop**, so a get failure alone cannot separate
 down from wrong-community. Cross-referencing does: host pings + UDP not refused + get silent =
-"reachable, SNMP not answering this community"; with ICMP fully blocked the inference is lost and it
-reads "host down or fully filtered." SSH verifies auth; telnet completes the `login:`/`Password:`
-chain (service-up, not a verified shell). Override the probe OID with `params.liveness_oid`.
+"reachable, SNMP not answering this community"; with ICMP fully blocked the inference is lost,
+reading "host down or fully filtered." SSH verifies auth; telnet completes the `login:`/`Password:`
+chain (service-up, not a verified shell). `params.liveness_oid` overrides the probe OID.
 
 **Poller** tasks run only if the verdict is up; **listener** (`mode=listen`) tasks run ungated,
 never pinged; **inline probes** (`icmp`/`tcp` with the host on the task) *are* the check, ungated. A
@@ -302,9 +300,9 @@ admission -> worker
 ship -> failed: "raw on failure" { style.stroke-dash: 4 }
 ```
 
-The samples are already produced at the edge; an **admission consumer** binds owner (registry
+Samples are already produced at the edge; an **admission consumer** binds owner (registry
 lookup, owner attribution against the node's placement) at **consume time** and republishes to the
-trusted stream the rule engine and persistence read, so a forged owner is dropped before evaluation,
+trusted stream the rule engine and persistence read, so a forged owner drops before evaluation,
 not at the durable write. The server never re-derives observed samples; the node's job ends at the
 ship.
 :::
@@ -317,32 +315,32 @@ host), the gate-verdict pre-pass, the poll phase. The gate pre-passes run at a *
 concurrency** (`gateConcurrency`), the poll phase across the **bounded poll pool** (default 16,
 `--workers`), so the cheap gate is never throttled by a small `--workers` and a node facing many
 dead targets is bounded by concurrency, not the serial sum of probe timeouts (a dead SNMP get costs
-`timeout * (retries+1)`, via `--snmp-timeout` / `--snmp-retries`, default 3s x2). Each poll task
-runs under a per-task deadline (`--task-deadline`, default 30s).
+`timeout * (retries+1)`, via `--snmp-timeout` / `--snmp-retries`, default 3s x2). Each poll task gets
+a per-task deadline (`--task-deadline`, default 30s).
 
 :::caution[Open question]
 Per-task schedule dispatch: the resolved `interval` exists, but honoring distinct per-task cadences
 within one node tick is unsettled.
 :::
 
-The loop is **overrun-aware**: it reschedules relative to each tick's finish rather than a fixed
-ticker that silently drops ticks. A tick exceeding its interval is flagged and the next fires
-immediately, so falling behind **surfaces** rather than stalling silently.
+The loop is **overrun-aware**: it reschedules relative to each tick's finish, not a fixed ticker; a
+tick exceeding its interval is flagged and the next fires immediately, so falling behind
+**surfaces** rather than silently dropping ticks.
 
 Each tick the node publishes a `node.self` envelope: tick duration, task
 attempted/ran/skipped/failed counts, interface probed/up/down counts, the `node.overrun` state. Not
 special-cased: `node.self` is node-owned samples (the seeded `node.*` types) riding the **same
 raw-ingress -> admission -> trusted** path; the self shape is **built into the binary** (no
-operator-authored template), and the admission consumer binds it to the **reporting node**
-(`owner_kind = node`, the `node_id` arm of the exclusive arc), so the rule engine's batching and
+operator-authored template), the admission consumer binds it to the **reporting node**
+(`owner_kind = node`, the `node_id` arm of the exclusive arc), and the rule engine's batching and
 amortized rule refresh apply for free. Self-telemetry is best-effort (a failed report is logged,
 never fatal).
 
 A node that goes dark reports nothing, so a **node-liveness sweep** runs server-side: a node whose
 last heartbeat (or registration, if it never checked in) predates `OMNIGLASS_NODE_DOWN_AFTER`
-(default 90s) gets a node-owned **`node.down` alarm**, auto-resolved on the next heartbeat. It is
-raised directly by the sweep (no event_rule: a dead node emits no sample), keyed by `(node.down,
-node owner)` so it is idempotent across sweeps; this is why the node owner arc reaches `event` and
+(default 90s) gets a node-owned **`node.down` alarm**, auto-resolved on the next heartbeat. The
+sweep raises it directly (no event_rule: a dead node emits no sample), keyed by `(node.down,
+node owner)` for idempotency across sweeps; this is why the node owner arc reaches `event` and
 `alarm`, not just samples.
 
 A degraded-but-alive node alarms through the ordinary **event_rule** path: a rule on a `node.*` key
