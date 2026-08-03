@@ -2,6 +2,7 @@ import { entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import { identityColumn } from "../components/IdentityCell";
 import TreeSelect from "../components/TreeSelect";
 import KVStacked from "../components/KVStacked";
 import FieldRow from "../components/FieldRow";
@@ -43,7 +44,7 @@ function ownerLabel(v: Variable): string {
 }
 
 const columns: FlatColumn<Variable>[] = [
-  { key: "name", label: "Name", sortVal: (v) => v.name, cell: (v) => <span class="font-data font-semibold">{v.name}</span> },
+  identityColumn<Variable>({ label: "Key" }),
   { key: "type", label: "Type", width: "120px", sortVal: (v) => v.value_type, cell: (v) => <span class="badge badge-ghost badge-sm">{v.value_type}</span> },
   { key: "owner", label: "Scope", width: "220px", sortVal: (v) => v.owner_kind, cell: (v) => <span class="text-base-content/70">{ownerLabel(v)}</span> },
   { key: "value", label: "Value", cell: (v) => <span class="font-data text-xs text-base-content/60">{displayValue(v.value)}</span> },

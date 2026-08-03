@@ -1,6 +1,7 @@
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import { identityColumn } from "../components/IdentityCell";
 import TreeSelect from "../components/TreeSelect";
 import FieldRow from "../components/FieldRow";
 import KVStacked from "../components/KVStacked";
@@ -55,7 +56,7 @@ function fieldsPreview(s: Secret): JSX.Element {
 }
 
 const columns: FlatColumn<Secret>[] = [
-  { key: "name", label: "Name", sortVal: (s) => s.name, cell: (s) => <span class="font-data font-semibold">{s.name}</span> },
+  identityColumn<Secret>({ label: "Key" }),
   { key: "type", label: "Type", width: "170px", sortVal: (s) => s.secret_type, cell: (s) => <span class="badge badge-ghost badge-sm">{s.secret_type}</span> },
   { key: "owner", label: "Scope", width: "220px", sortVal: (s) => s.owner_kind, cell: (s) => <span class="text-base-content/70">{ownerLabel(s)}</span> },
   { key: "fields", label: "Fields", cell: (s) => fieldsPreview(s) },
