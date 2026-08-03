@@ -7,62 +7,50 @@ sidebar:
     variant: note
 ---
 
-The UI is where an operator actually does the work, so it is built as one renderer over the same views the rest of the platform reads, with an information architecture organized around the entities you care about. This page covers the renderer / page / dashboard model and the information architecture. The stack, the typed client, the build pipeline, and
-the concrete reusable primitives are the [design system](/contributing/design-system/).
+The console is one renderer over the same views the rest of the platform reads. This page is the renderer / page / dashboard model and the information architecture; the stack and the concrete primitives are the [design system](/contributing/design-system/).
 
 :::note[What shipped vs the model below]
-The console now has roughly 22 live pages spanning inventory, catalog, values, and admin, plus the
-shell. These ship as **config-driven `ListShell` pages (with `FlatList` / `TreeList` bodies) over the typed CRUD client**, not as the
-`ViewResult` renderer described next: an inventory page is CRUD over a scoped resource, so it
-reads the resource directly and renders one configurable shell. The `ViewResult` / views model,
-the renderer library, and composable dashboards below remain the intended **read side** for the
-analytical and dashboard surfaces (alarms, sample history, the cascade view, fleet
-dashboards), which are not built yet. The realized inventory shell and its primitives are in the
-[design system](/contributing/design-system/); how to operate it is the
-[operator guide](/guides/operator/), and the per-slice breakdown is on
+Roughly 22 live pages (inventory, catalog, values, admin, plus the shell) ship as **config-driven
+`ListShell` pages (with `FlatList` / `TreeList` bodies) over the typed CRUD client**, not as the
+`ViewResult` renderer described next: an inventory page is CRUD over a scoped resource. The views
+model, the renderer library, and composable dashboards remain the intended **read side** for the
+analytical surfaces (alarms, sample history, the cascade view, fleet dashboards), not built yet.
+Realized shell: the [design system](/contributing/design-system/); operating it: the
+[operator guide](/guides/operator/); per-slice breakdown:
 [implementation status](/architecture/status/).
 :::
 
 ## The renderer contract: ViewResult and the views BFF
 
 :::design[Target design: the ViewResult contract, tracked in #523]
-The whole console rests on one contract. **All UI reads go through [views](/architecture/views/)**
-(the read-side BFF), CRUD for writes; the operator never queries raw tables. Every view returns a
-uniform **`ViewResult`** (`{columns, rows}`), and the SPA renders any view through **one renderer per
-view**: adding a view does not add a bespoke renderer. This is what decouples the render layer from any
-specific query and keeps the read contract uniform whether a page is coded or a dashboard widget is
-configured.
+**All UI reads go through [views](/architecture/views/)** (the read-side BFF), CRUD for writes; the
+operator never queries raw tables. Every view returns a uniform **`ViewResult`** (`{columns, rows}`),
+rendered through **one renderer per view**: adding a view never adds a bespoke renderer.
 :::
 
-The **dense-ops layout is an architectural pattern**, not a one-off page: list surfaces follow one
-shape (a summary of facets over the full set, then a keyboard chip filter, then a tree/list table,
-then a click-row detail blade plus a full detail page), and the facets drive the filter while the
-summary stays whole so click-to-filter is stable. The inventory tier realizes this pattern as the
-one config-driven `ListShell` (with `FlatList` / `TreeList` bodies, `FilterBar`, `Drawer`, `Donut`, and the faceted-filter
-engine); the concrete shipped primitives live in the [design system](/contributing/design-system/),
-and the pattern is the model the analytical surfaces will reuse.
+The **dense-ops layout is an architectural pattern**: facet summary over the full set, keyboard chip
+filter, tree/list table, click-row detail blade plus a full detail page, the summary staying whole so
+click-to-filter is stable. The inventory tier realizes it as the config-driven `ListShell` and its
+primitives ([design system](/contributing/design-system/)); the analytical surfaces will reuse it.
 
 ## One renderer library, two composition modes
 
 ::::design[Target design: the renderer library and composable dashboards, tracked in #523]
-The factoring avoids both "every screen is hand-coded" and "everything must be a dashboard":
+Neither "every screen is hand-coded" nor "everything must be a dashboard":
 
 - **Renderer library** (coded once): `stat`, `table`, `status-grid`, `timeline`, `heatmap`,
   `line` / `area`. Each takes a **view result plus a field-mapping** (which column is the value /
-  label / time / series key), so a renderer is decoupled from any specific view, and any view of the
-  right shape can feed it. The set is closed but grown reactively, the same discipline as the
-  reducer vocabulary.
+  label / time / series key); the set is closed but grown reactively.
 
   :::caution[Open question]
   The field-mapping contract between a view result and each renderer (the column roles per renderer
   type).
   :::
-- **Coded pages** compose renderers plus custom interaction: the built-in information architecture
-  (overview, drill-downs, config forms, exploration).
-- **Composable dashboards** (config-driven): operator-built grids where each
+- **Coded pages** compose renderers plus custom interaction: the built-in information architecture.
+- **Composable dashboards** (config-driven): operator-built grids, each
   **widget = a view ref + a renderer + a field-mapping + params**, no code per dashboard.
-  Dashboard-level params flow into widget view-params, so one "system overview" dashboard works for
-  any system.
+  Dashboard-level params flow into widget view-params, so one "system overview" dashboard works
+  for any system.
 
   :::caution[Open question]
   The composable-dashboard schema: the widget placement grid, the view binding, and the dashboard
@@ -73,20 +61,14 @@ The factoring avoids both "every screen is hand-coded" and "everything must be a
   Whether dashboards are themselves resources (carrying the `official` boolean, saved like views) or
   a thin layer over saved views.
   :::
-
-The contract underneath both: **all UI reads go through [views](/architecture/views/)**, CRUD
-for writes. The renderer library serves coded pages and dashboard widgets identically; the only
-difference is whether the composition is code or config.
 ::::
 
 ## Coded pages and dashboards share one view layer
 
 :::design[Target design: default views behind coded pages, tracked in #523]
-Coded pages give the complete operator console; composable dashboards are the customization layer on
-top (a grid editor, widget config, and the view-binding UI), and the view layer is what makes them
-cheap. A built-in page **queries a default view, not a raw resource** (the Alarms page reads the
-`firing-now` view, not `GET /alarms` directly), so the read contract is uniform and the same view
-backs a dashboard widget unchanged.
+A built-in page **queries a default view, not a raw resource** (the Alarms page reads the
+`firing-now` view, not `GET /alarms` directly), so the same view backs a dashboard widget unchanged;
+composable dashboards are the customization layer over the complete coded console.
 :::
 
 ## Live updates: polling by default
@@ -94,14 +76,11 @@ backs a dashboard widget unchanged.
 Live data is **query polling** (a refetch interval; slow-changing config uses a long stale time).
 
 ::::design[Views and the SSE live relay, tracked in #523; the unit registry is #430]
-A
-read can also **stream over the view layer (a server-side SSE relay)** where latency or fan-out
-earns it, the same earn-it-with-a-profile discipline. Presentation that depends on config (a severity
-level's id to its label and color) resolves client-side from the config view. A sample
-value resolves the same way: on read the UI converts canonical to the operator's preferred
-display unit, looked up from a future unit registry by the
-[property_type](/architecture/properties/)'s canonical unit, so storage stays single-unit
-while one operator sees Celsius and another Fahrenheit.
+A read can also **stream over the view layer (a server-side SSE relay)** where latency or fan-out
+earns it. Config-dependent presentation (a severity level's id to label and color) resolves
+client-side from the config view; a sample value converts on read to the operator's preferred
+display unit via a future unit registry keyed by the
+[property_type](/architecture/properties/)'s canonical unit, so storage stays single-unit.
 
 :::caution[Open question]
 Which high-frequency surfaces move from polling to the SSE relay, and what latency earns it.
@@ -111,25 +90,22 @@ Which high-frequency surfaces move from polling to the SSE relay, and what laten
 ## Configuration UIs
 
 CRUD forms over the typed resource API, one per primitive (components, templates, types, tags,
-rules, config, groups, schedules, severity levels, and the IAM resources). **Types** is the
-first of these to span several registries rather than one per primitive: a segmented tab per
-kind (location and secret; the system and component kinds moved to Standards and Products), each
-tab its own directory over that registry, CRUD on the location kind, and a read-only view of
-secret ([build log](/architecture/build-log/)). Editing a setting is editing
-**[config](/architecture/variables/)**, an audited mutation, not a separate prop store
-([audit](/architecture/audit/)).
+rules, config, groups, schedules, severity levels, the IAM resources). **Types** spans several
+registries: a tab per kind (location and secret; the system and component kinds moved to Standards
+and Products), CRUD on location, read-only on secret ([build log](/architecture/build-log/)).
+Editing a setting is editing **[config](/architecture/variables/)**, an audited mutation, not a
+separate prop store ([audit](/architecture/audit/)).
 
 :::design[The rule-authoring surface (ADR-0050); the expression editor is #524, the AI seam ADR-0001]
-The standout is the **rule-authoring
-page**:
+The standout is the **rule-authoring page**:
 
-- an **Expr editor** for the predicate or condition, with the prepared-input contract surfaced
+- an **Expr editor** for the predicate or condition, the prepared-input contract surfaced
   ([expressions](/architecture/expressions/));
 - a **live blast-radius preview** (which entities a scope selects, which samples a rule would
-  have fired on), so a rule is validated against reality before it is saved;
+  have fired on);
 - the **AI-suggestion seam** ([AI](/architecture/ai/)): AI may propose a rule pre-filled with
-  provenance; the operator edits and approves, and approval is the ordinary audited create. AI never
-  saves a rule itself.
+  provenance; the operator edits and approves (the ordinary audited create). AI never saves a rule
+  itself.
 :::
 
 ## Exploration UIs
@@ -137,60 +113,54 @@ page**:
 :::design[Target design: the exploration surfaces over views, tracked in #523]
 Coded pages with rich interaction, all reading through views:
 
-- **The cascade resolve view** (the standout): "why did this value win", rendered from the
-  [cascade](/architecture/cascade/) resolve output: the effective value, the winning source, and the
-  ordered shadowed bindings it beat. The feature that makes an opinionated cascade explainable.
-- **Sample history**: a `line` or `heatmap` over a chosen time range, with the stale / unknown
-  distinction surfaced ([time](/architecture/time/)).
-- **Alarm drill-down**: the alarm, its triggering sample and history, the actions it fired, and
+- **The cascade resolve view** (the standout): "why did this value win", from the
+  [cascade](/architecture/cascade/) resolve output: effective value, winning source, the ordered
+  shadowed bindings it beat.
+- **Sample history**: `line` or `heatmap` over a time range, stale / unknown surfaced
+  ([time](/architecture/time/)).
+- **Alarm drill-down**: the alarm, its triggering sample and history, the actions it fired,
   ack / snooze / resolve controls.
-- **Inventory and topology**: the location / system / component trees, navigable, with
+- **Inventory and topology**: navigable location / system / component trees,
   [health](/architecture/health/) (`status-grid`) at each level.
-- **Event exploration**: query the event log by entity / time / category, with the audit trail.
+- **Event exploration**: the event log by entity / time / category, with the audit trail.
 :::
 
 ## Information architecture
 
-The IA has two layers, deliberately decoupled:
+Two layers, deliberately decoupled:
 
 1. **Routes are flat and identity-based.** Every entity page is a top-level path (`/systems`,
-   `/components`, `/templates`, `/config`); a page's URL addresses the *entity*, never its place in
-   the menu. This is the contract we refuse to churn: bookmarks, deep links, and cross-links stay
-   stable however the menu is later reorganized. There are no taxonomy-nested routes and no redirects
-   to maintain.
+   `/components`, `/templates`, `/config`); a URL addresses the *entity*, never its place in the
+   menu, so deep links stay stable however the menu is reorganized. No taxonomy-nested routes, no
+   redirects to maintain.
 2. **The sidebar groups those flat routes into clusters for browsing**: Home, Dashboards, Alarms,
    Inventory (locations, systems, components, nodes), Values (variables, secrets, config, files), Catalog
    (templates, types, standards, properties, event types, command types, tags, vendors, drivers,
    capabilities, products, rules), Explore, Learn, Admin (users, roles, groups, audit, and the
-   Settings leaf). Grouping is pure presentation: a cluster is not a destination and carries no route
-   of its own. It can be rearranged, and is user-customizable, without touching a single route.
+   Settings leaf). A cluster is pure presentation, not a destination: rearrangeable and
+   user-customizable without touching a route.
 
-**Values is its own top-level group**, standing beside Inventory rather than nested inside it as a
-band. Variables, secrets, and config are values an operator sets on estate entities and resolves down
-the cascade, a distinct genus from the estate entities themselves. **Config is the CI store**:
-operator-set desired component and system configuration, optionally observed back from the device to
-detect drift and reconcile ([config, secrets, and variables](/architecture/variables/)), distinct from
-platform Settings (preferences: severity scales, schedules, retention, defaults) and from Variables
-(free interpolated values with no observed side).
+**Values is its own top-level group**, beside Inventory: values set on estate entities and resolved
+down the cascade, a distinct genus from the entities themselves. **Config is the CI store** (desired
+configuration, optionally observed back to detect drift and reconcile), distinct from platform
+Settings (preferences: severity scales, schedules, retention, defaults) and Variables (free
+interpolated values, no observed side); the full split is
+[config, secrets, and variables](/architecture/variables/).
 
-**Inventory holds the estate entities**: locations, systems, components, and **nodes**, the collection
-daemons that gather samples. A node is a monitored, scope-controlled entity like any other estate
-member (live, gated on `node:read` plus ABAC scope), so it stays in Inventory rather than Admin. **Interfaces and tasks are not nav items**: an
-interface is a panel on a component (its device endpoints), and a task is a panel on a node (its
-collection assignments), each a facet of its owning entity's detail page rather than a directory of
-its own.
+**Inventory holds the estate entities**: locations, systems, components, and **nodes**, the
+collection daemons, monitored and scope-controlled (live, gated on `node:read` plus ABAC scope), so
+a node sits in Inventory, not Admin. **Interfaces and tasks are not nav items**: an interface is a
+panel on a component, a task a panel on a node, facets of the owning entity's detail page.
 
-Admin is the renamed Settings group: it holds the platform-administration surfaces (Users, Roles,
-Groups, Audit) plus the live Settings leaf, the platform-preferences page.
+Admin is the renamed Settings group: Users, Roles, Groups, Audit, plus the live Settings leaf, the
+platform-preferences page.
 
 :::design[The Home situation room and the Dashboards tier, tracked in #523]
-**Home is distinct from Dashboards.** Dashboards monitor the *fleet* (property views over the
-inventory). Home monitors the *monitor*: the operator and admin situation room for config lifecycle
-(stale or out-of-date templates), control-plane health (rules failing to evaluate, samples
-dropped with no matching rule), and proactive suggestions. A dashboard cannot model that, so Home
-earns its own slot; "Overview" is the name of the default dashboard, not the landing.
+**Home is distinct from Dashboards.** Dashboards monitor the *fleet*; Home monitors the *monitor*:
+config lifecycle (stale templates), control-plane health (rules failing to evaluate, samples dropped
+with no matching rule), proactive suggestions. A dashboard cannot model that; "Overview" is the
+default dashboard's name, not the landing.
 :::
 
 The theme is **dark-first** (the NOC aesthetic) on the brand palette (teal `#21CAB9`, navy
 `#080c16`), semantic tokens only, no hardcoded colors in components.
-
