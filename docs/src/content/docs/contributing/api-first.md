@@ -46,14 +46,21 @@ and what a body round-trips; the id is the stable handle that survives a rename.
 
 **The segment rule is enforced on every segment-bearing table.** A segment is the one token an
 entity contributes to an address (the `rm215a` in `boi.17c.rm215a`), and the rule is
-`^[a-z0-9][a-z0-9-]*$` with a 100 character ceiling and the uuid shape refused. It runs on
-`component`, `system`, `location`, `node`, `location_type`, `standard`, `vendor`, `driver`, and
-`capability`; a table that stores a keyspace key rather than a segment (`property_type`,
-`event_type`, `command_type`, `tag`, `variable`, `secret`) is deliberately outside it, because
-`icmp.rtt_avg` is a key and not a segment. The exclusions are load-bearing rather than tidy: barring
-`.` keeps one segment from splitting into two path tokens, barring `*` and `>` keeps a segment from
-reading as a NATS subject pattern, and barring `$` is what lets an address use sigil accessors
-without reserving any word.
+`^[a-z0-9][a-z0-9-]*$` with a 100 character ceiling and the uuid shape refused. It lives in the
+contract, not just below it: the create body carries `pattern` and `maxLength`, so the generated
+OpenAPI, the typed client, the CLI, and the YAML JSONSchema all enforce it, and the Storage Gateway
+enforces it again for callers that never touch a route.
+
+A table that stores a **keyspace key** rather than a segment is deliberately outside the rule, because
+`icmp.rtt_avg` is a legitimate key and an illegal segment. Which table is which is not written down
+here, because a hand-copied list is drift waiting to happen: `TestEveryNamedTableIsClassified` reads
+the generated schema, finds every table carrying a `name`, and fails until each one is classified as a
+segment or a key with its reason. A new table joins the guard by existing.
+
+The exclusions are load-bearing rather than tidy. Barring `.` keeps one segment from splitting into
+two path tokens. Barring `*` and `>` keeps a segment from reading as a NATS subject pattern. Barring
+`$` is what lets an address use sigil accessors without reserving any word, so a location may still
+legitimately take the segment `sys`.
 
 The test is a **round trip**: a response body can be fed back to the write that produced it
 (create a component with `{"parent": "rack"}`, read it back as `{"parent": "rack"}`). When that

@@ -22,6 +22,10 @@ func mapTypeErr(err error, kind string) error {
 		return huma.Error409Conflict(kind + " is referenced by existing rows")
 	case errors.Is(err, storage.ErrReservedTypeID):
 		return huma.Error422UnprocessableEntity("\"root\" is a reserved " + kind + " id")
+	case errors.Is(err, storage.ErrSegmentIsUUID):
+		return huma.Error422UnprocessableEntity(kind + " name may not be a uuid")
+	case errors.Is(err, storage.ErrInvalidSegment):
+		return huma.Error422UnprocessableEntity(kind + " name must be lowercase letters, digits, and hyphens, starting with a letter or digit")
 	default:
 		return huma.Error500InternalServerError("type operation failed")
 	}

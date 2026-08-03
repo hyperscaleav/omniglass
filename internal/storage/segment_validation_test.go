@@ -74,6 +74,10 @@ func TestEverySegmentBearingTableValidates(t *testing.T) {
 			_, err := gw.CreateCapability(ctx, "", storage.Capability{Name: s, DisplayName: "X"})
 			return err
 		},
+		"product": func(s string) error {
+			_, err := gw.CreateProduct(ctx, "", storage.Product{Name: s, DisplayName: "X"})
+			return err
+		},
 	}
 
 	// Every one of these violates the segment rule, and each fails for a reason a

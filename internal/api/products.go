@@ -85,7 +85,7 @@ type productPathInput struct {
 
 type createProductInput struct {
 	Body struct {
-		Name            string   `json:"name" minLength:"1" doc:"The globally unique kebab handle; renameable"`
+		Name            string   `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique kebab handle; renameable"`
 		DisplayName     string   `json:"display_name" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		VendorID        string   `json:"vendor_id,omitempty" doc:"The vendor, by handle or uuid"`
 		DriverID        string   `json:"driver_id,omitempty" doc:"The driver that talks to it, by handle or uuid"`

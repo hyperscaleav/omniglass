@@ -63,7 +63,7 @@ type locationTypePathInput struct {
 
 type createLocationTypeInput struct {
 	Body struct {
-		Name               string   `json:"name" minLength:"1" doc:"The globally unique kebab handle (e.g. wing); \"root\" is reserved"`
+		Name               string   `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique kebab handle (e.g. wing); \"root\" is reserved"`
 		DisplayName        string   `json:"display_name" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		Icon               string   `json:"icon,omitempty" doc:"A glyph key; the console falls back to map-pin when empty"`
 		AllowedParentTypes []string `json:"allowed_parent_types,omitempty" doc:"location_type names and/or the reserved root sentinel this type may be placed under; empty means unconstrained"`
@@ -355,6 +355,8 @@ func mapLocationErr(err error) error {
 		return huma.Error409Conflict("location has child locations")
 	case errors.Is(err, storage.ErrLocationExists):
 		return huma.Error409Conflict("location name already exists")
+	case errors.Is(err, storage.ErrSegmentIsUUID):
+		return huma.Error422UnprocessableEntity("location name may not be a uuid: that form is reserved for an entity's id")
 	case errors.Is(err, storage.ErrInvalidSegment):
 		return huma.Error422UnprocessableEntity("invalid name")
 	case errors.Is(err, storage.ErrParentNotFound):

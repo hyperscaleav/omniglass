@@ -228,6 +228,8 @@ func mapComponentErr(err error) error {
 		return huma.Error409Conflict("component is still referenced by another record, for example a system role it staffs")
 	case errors.Is(err, storage.ErrComponentExists):
 		return huma.Error409Conflict("component name already exists")
+	case errors.Is(err, storage.ErrSegmentIsUUID):
+		return huma.Error422UnprocessableEntity("component name may not be a uuid: that form is reserved for an entity's id")
 	case errors.Is(err, storage.ErrInvalidSegment):
 		return huma.Error422UnprocessableEntity("invalid name")
 	case errors.Is(err, storage.ErrParentComponentNotFound):

@@ -74,7 +74,7 @@ type standardPathInput struct {
 
 type createStandardInput struct {
 	Body struct {
-		Name             string `json:"name" minLength:"1" doc:"The globally unique kebab handle; renameable"`
+		Name             string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique kebab handle; renameable"`
 		DisplayName      string `json:"display_name" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		ParentStandardID string `json:"parent_standard_id,omitempty" doc:"A standard this one is a variant of, by handle or uuid"`
 	}
@@ -296,6 +296,8 @@ func mapSystemErr(err error) error {
 		return huma.Error409Conflict("system has child systems")
 	case errors.Is(err, storage.ErrSystemExists):
 		return huma.Error409Conflict("system name already exists")
+	case errors.Is(err, storage.ErrSegmentIsUUID):
+		return huma.Error422UnprocessableEntity("system name may not be a uuid: that form is reserved for an entity's id")
 	case errors.Is(err, storage.ErrInvalidSegment):
 		return huma.Error422UnprocessableEntity("invalid name")
 	case errors.Is(err, storage.ErrParentSystemNotFound):
