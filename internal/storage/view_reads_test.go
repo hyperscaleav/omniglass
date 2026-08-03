@@ -373,3 +373,159 @@ func TestEstateCounts(t *testing.T) {
 		t.Errorf("empty-scope counts = %+v, want zeros", empty)
 	}
 }
+
+// TestSampleHistoryCapKeepsNewest pins which end of a dense series the page cap
+// takes. Capping the ascending order would return the OLDEST rows and leave a
+// chart's right edge hours in the past with nothing saying so; the newest
+// readings are the ones an operator is looking at.
+func TestSampleHistoryCapKeepsNewest(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "disp"}, all)
+
+	// More readings than the requested page, one per second.
+	base := time.Now().UTC().Truncate(time.Second).Add(-time.Hour)
+	writes := make([]storage.MetricSampleWrite, 0, 10)
+	for i := range 10 {
+		writes = append(writes, storage.MetricSampleWrite{
+			OwnerKind: "component", OwnerID: "disp", Key: "icmp.rtt_avg", Instance: "eth0",
+			Value: float64(i), Source: "icmp", TS: base.Add(time.Duration(i) * time.Second),
+		})
+	}
+	if err := gw.InsertMetricSamples(ctx, writes); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	rows, err := gw.ListSampleHistory(ctx, all, storage.SampleHistoryQuery{
+		Owner: "disp", Key: "icmp.rtt_avg", Since: base.Add(-time.Minute), Limit: 3,
+	})
+	if err != nil {
+		t.Fatalf("history: %v", err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("rows = %d, want the 3 asked for", len(rows))
+	}
+	// The newest three (7, 8, 9), still oldest-first within the page.
+	got := []float64{*rows[0].Value, *rows[1].Value, *rows[2].Value}
+	if got[0] != 7 || got[1] != 8 || got[2] != 9 {
+		t.Errorf("capped page = %v, want the newest three (7, 8, 9) in ascending order", got)
+	}
+}
+
+// TestSampleHistoryLaneTieBreak pins the lane discriminator in the order. The
+// metric and state tables have independent id sequences, so a key reported into
+// both lanes at the same instant can tie on (ts, id); without the lane arm the
+// order is not total, and the watch detector reads a re-ordered result as a
+// change, so every watcher refetches every interval forever.
+func TestSampleHistoryLaneTieBreak(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "disp"}, all)
+
+	// One key, both lanes, the same instant: property_type.kind is not enforced
+	// at the write path, so a driver reporting into both is reachable.
+	ts := time.Now().UTC().Truncate(time.Microsecond)
+	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
+		{OwnerKind: "component", OwnerID: "disp", Key: "health", Instance: "eth0", Value: 1, Source: "x", TS: ts},
+	}); err != nil {
+		t.Fatalf("insert metric: %v", err)
+	}
+	if err := gw.InsertStateSamples(ctx, []storage.StateSampleWrite{
+		{OwnerKind: "component", OwnerID: "disp", Key: "health", Instance: "eth0", Value: "ok", Source: "x", TS: ts},
+	}); err != nil {
+		t.Fatalf("insert state: %v", err)
+	}
+
+	// Re-running must return the same order every time: the metric lane (0)
+	// before the state lane (1) at an equal instant.
+	for range 3 {
+		rows, err := gw.ListSampleHistory(ctx, all, storage.SampleHistoryQuery{
+			Owner: "disp", Key: "health", Since: ts.Add(-time.Minute), Limit: 100,
+		})
+		if err != nil {
+			t.Fatalf("history: %v", err)
+		}
+		if len(rows) != 2 {
+			t.Fatalf("rows = %d, want both lanes", len(rows))
+		}
+		if rows[0].Value == nil || rows[1].State != "ok" {
+			t.Fatalf("lane order = %+v, want the metric row first at an equal instant", rows)
+		}
+	}
+}
+
+// TestEventFeedScopeExcludesNodeOwned pins the scope boundary on the owner arc:
+// the scope kinds are the component, system, and location tiers, so a
+// node-owned occurrence is addressable by no rooted grant and must ride only
+// with the all scope. Without this a rooted operator would read another
+// tenant's node chatter.
+func TestEventFeedScopeExcludesNodeOwned(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	disp := mustCreateComponent(t, gw, storage.ComponentSpec{Name: "disp"}, all)
+
+	ts := time.Now().UTC().Truncate(time.Microsecond)
+	if err := gw.InsertEvents(ctx, []storage.EventWrite{
+		{OwnerKind: "component", OwnerID: "disp", Key: "call.started", Message: "component event", Source: "t", TS: ts},
+	}); err != nil {
+		t.Fatalf("insert component event: %v", err)
+	}
+	// A NODE-owned occurrence. The node arc is real (the CHECK requires exactly
+	// one owner), but no scope kind addresses it, so it behaves like a platform
+	// row: all-scope only.
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+	if _, err := conn.Exec(ctx, `insert into principal (kind) values ('service')`); err != nil {
+		t.Fatalf("insert principal: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `insert into node (principal_id, name)
+		values ((select id from principal order by created_at desc limit 1), 'node-1')`); err != nil {
+		t.Fatalf("insert node: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `insert into event (ts, owner_kind, node_id, event_type_id, instance, origin, message, provenance, source)
+		values ($1, 'node', (select principal_id from node where name = 'node-1'),
+			(select id from event_type where name = 'call.started'), '', 'caught', 'node event', 'observed', 't')`, ts); err != nil {
+		t.Fatalf("insert node event: %v", err)
+	}
+
+	// The all scope sees both.
+	every, err := gw.ListEventFeed(ctx, all, storage.EventFeedQuery{Limit: 10})
+	if err != nil || len(every) != 2 {
+		t.Fatalf("all-scope rows = %d, err %v, want 2", len(every), err)
+	}
+	// A rooted scope sees only what its arc addresses.
+	scoped, err := gw.ListEventFeed(ctx, scope.Set{IDs: []string{disp.ID}}, storage.EventFeedQuery{Limit: 10})
+	if err != nil {
+		t.Fatalf("scoped: %v", err)
+	}
+	if len(scoped) != 1 || scoped[0].Message != "component event" {
+		t.Fatalf("rooted-scope rows = %+v, want only the component-owned one", scoped)
+	}
+}

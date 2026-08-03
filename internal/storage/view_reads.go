@@ -123,8 +123,8 @@ type EventFeedRow struct {
 // component, system, and location tiers, so no rooted grant can address them.
 func (p *PG) ListEventFeed(ctx context.Context, read scope.Set, q EventFeedQuery) ([]EventFeedRow, error) {
 	limit := q.Limit
-	if limit <= 0 || limit > maxViewPage {
-		limit = maxViewPage
+	if limit <= 0 || limit > MaxViewPage {
+		limit = MaxViewPage
 	}
 	sel := `
 		select e.id, e.ts, coalesce(c.name, sy.name, l.name, n.name, ''),
@@ -213,21 +213,29 @@ type SampleHistoryRow struct {
 // is not) before calling, exactly as the reachability read does.
 func (p *PG) ListSampleHistory(ctx context.Context, _ scope.Set, q SampleHistoryQuery) ([]SampleHistoryRow, error) {
 	limit := q.Limit
-	if limit <= 0 || limit > maxViewPage {
-		limit = maxViewPage
+	if limit <= 0 || limit > MaxViewPage {
+		limit = MaxViewPage
 	}
+	// The cap takes the NEWEST rows and the result is then re-ordered oldest
+	// first. Capping the ascending order instead would silently return the
+	// oldest page of a dense series and leave the chart's right edge hours in
+	// the past, with nothing in the result saying so.
 	rows, err := p.pool.Query(ctx, `
 		with owner as (select id from component where name = $1),
-		     prop  as (select id from property_type where name = $2)
-		select ts, instance, value, null::text as state, 0 as lane, id from metric
-		where component_id = (select id from owner) and property_type_id = (select id from prop)
-		  and ts >= $3 and ($4 = '' or instance = $4)
-		union all
-		select ts, instance, null::double precision as value, value as state, 1 as lane, id from state
-		where component_id = (select id from owner) and property_type_id = (select id from prop)
-		  and ts >= $3 and ($4 = '' or instance = $4)
-		order by ts asc, lane asc, id asc
-		limit $5`, q.Owner, q.Key, q.Since, q.Instance, limit)
+		     prop  as (select id from property_type where name = $2),
+		     newest as (
+			select ts, instance, value, null::text as state, 0 as lane, id from metric
+			where component_id = (select id from owner) and property_type_id = (select id from prop)
+			  and ts >= $3 and ($4 = '' or instance = $4)
+			union all
+			select ts, instance, null::double precision as value, value as state, 1 as lane, id from state
+			where component_id = (select id from owner) and property_type_id = (select id from prop)
+			  and ts >= $3 and ($4 = '' or instance = $4)
+			order by ts desc, lane desc, id desc
+			limit $5
+		     )
+		select ts, instance, value, state, lane, id from newest
+		order by ts asc, lane asc, id asc`, q.Owner, q.Key, q.Since, q.Instance, limit)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list sample history %s/%s: %w", q.Owner, q.Key, err)
 	}
@@ -328,6 +336,9 @@ func argIndex(placeholder string) int {
 	return n
 }
 
-// maxViewPage caps any view page, so a caller cannot ask for the whole history
-// in one request.
-const maxViewPage = 500
+// MaxViewPage caps any view page, so a caller cannot ask for the whole history
+// in one request. Exported because a view must clamp to the same number before
+// it decides whether to emit a next-page token: comparing a returned row count
+// against an un-clamped requested limit would read a capped page as the last
+// one and silently end the walk with rows still unread.
+const MaxViewPage = 500

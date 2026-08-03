@@ -11,9 +11,9 @@ Writes go through typed resource CRUD; anything richer than one resource's `GET`
 **view**: a named query returning the uniform **`ViewResult`**, executed through the scoped
 [Storage Gateway](/architecture/storage/), a safe backend-for-frontend hit without touching raw
 tables or writing SQL. The foundation is built: the contract, the in-code default registry, the
-directory and run routes, and the first default view. Today's typed CRUD `GET`s and the
-hand-written composed reads (reachability, events, reconciliation, the log reads) stand beside the
-view routes until they migrate, which the [API](/architecture/api/) page's views-exception note
+directory, run, and watch routes, and a default set of four views. Today's typed CRUD `GET`s and
+the hand-written composed reads (reachability, events, reconciliation, the log reads) stand beside
+the view routes until they migrate, which the [API](/architecture/api/) page's views-exception note
 covers.
 
 ## Why a view layer
@@ -89,12 +89,22 @@ typed SPA client and the cobra CLI are generated, never written:
   blade, and folding it in would make the series' last point mean something different from every
   other point.
 - **`estate-counts`** (`component:read`): the stat tiles, components and interfaces in scope with
-  their current verdicts. Component-tier only, which is what keeps a single declared permission
-  honest: a tile counting locations or systems would need a permission this view does not declare.
+  their current verdicts.
 
 Paging is **keyset, not offset**: `next_page_token` carries the last row's sort key, so a row
 written mid-walk cannot shift a page boundary and hide its neighbour. A malformed token is a 400,
-never a silent restart at the newest row.
+never a silent restart at the newest row. A page is capped server-side; a view clamps a caller's
+requested size to the same ceiling, so a capped page still reports there is more. A view with a
+window rather than a cursor (`sample-history`) returns the **newest** readings when the window
+holds more than a page, since a truncated series that silently drops its recent end is worse than
+a short one.
+
+:::design[One permission per view is a known under-declaration, tracked in #548]
+A view declares exactly one permission, so a result composed across resources (the interface
+counts and verdicts inside `estate-counts`, the interface rows inside `component-reachability`) is
+admitted by its subject's permission alone. Both are scope-bounded, so no caller sees an entity
+outside its grant; what is missing is a per-resource **capability** check on a composed read.
+:::
 
 ## How views are consumed
 

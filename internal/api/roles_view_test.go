@@ -140,7 +140,11 @@ func TestRolesViewNetPermissions(t *testing.T) {
 	// platform:<action> rides in on platformGated, so the tier gate a write at the
 	// least-specific cascade level needs is in the universe like any primary gate,
 	// and the roles view can report it held or missing.
-	for _, want := range []string{"component:read", "component:delete", "audit:read:admin", "role:read:admin", "secret:reveal", "platform:create", "platform:update", "platform:delete"} {
+	// view:read is a route stamp; event:read reaches the universe only through
+	// a view's DECLARED permission, which the run and watch handlers enforce.
+	// Without that registration an operator would be refused a view for a
+	// capability the Roles page never showed them.
+	for _, want := range []string{"component:read", "component:delete", "audit:read:admin", "role:read:admin", "secret:reveal", "platform:create", "platform:update", "platform:delete", "view:read", "event:read"} {
 		if !slices.Contains(uni, want) {
 			t.Errorf("permission_universe missing %q; got %v", want, uni)
 		}

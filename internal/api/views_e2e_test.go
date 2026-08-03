@@ -355,6 +355,19 @@ func TestDefaultViewSetAPI(t *testing.T) {
 	// A malformed page token is a clean 400, never a silent restart.
 	c.do(ownerTok, http.MethodGet, "/views/event-feed:run?page_token=not-a-cursor", nil, http.StatusBadRequest)
 
+	// A limit ABOVE the server's page cap still pages. The view clamps to the
+	// same ceiling storage enforces, so a capped page is recognised as full and
+	// keeps emitting a token; comparing the row count against the caller's
+	// un-clamped number would read it as the last page and strand the rest.
+	over, ocol := decode(c.do(ownerTok, http.MethodGet,
+		"/views/event-feed:run?param="+url.QueryEscape("limit=100000"), nil, http.StatusOK))
+	if len(over.Rows) != 6 {
+		t.Errorf("over-cap page rows = %d, want all 6", len(over.Rows))
+	}
+	if _, ok := ocol["message"]; !ok {
+		t.Errorf("over-cap page lost its columns: %+v", over.Columns)
+	}
+
 	// sample-history reads the numeric lane oldest-first, and the same view
 	// reads the categorical lane with a null value.
 	vr, col := decode(c.do(ownerTok, http.MethodGet,

@@ -2326,4 +2326,12 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   same-instant ties on id, and the history read discriminates the two lanes because their id
   sequences are independent. A parameterized target outside the caller's scope is a
   non-disclosing 404, identical to an absent one, so a probe cannot map the estate by watching
-  which names 403.
+  which names 403. The review pass caught two silent data losses in the paging contract before
+  it shipped: the history read capped the ASCENDING order, so a dense series returned its oldest
+  page and left a chart's right edge hours in the past (it now caps the newest and re-orders),
+  and the feed compared its row count against an un-clamped requested limit, so any request above
+  the server's page cap read as the last page and stranded the rest (the view now clamps to the
+  same exported ceiling). A database failure during the scope pre-check also answered 404, telling
+  an operator a component they can see was deleted; only a genuine not-found maps there now.
+  The permission a view declares is enforced but under-declares a composed result, which is
+  documented behind a fence and tracked ([#548](https://github.com/hyperscaleav/omniglass/issues/548)).

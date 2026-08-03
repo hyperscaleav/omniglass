@@ -2,6 +2,7 @@ package views
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -20,8 +21,27 @@ func Defaults() []Definition {
 }
 
 // defaultHistoryWindow is how far sample-history looks back when the caller
-// names no window.
-const defaultHistoryWindow = 24 * time.Hour
+// names no window; defaultFeedPage is the feed's page size when none is asked
+// for.
+const (
+	defaultHistoryWindow = 24 * time.Hour
+	defaultFeedPage      = 50
+)
+
+// requireVisibleComponent verifies a parameterized target is in the caller's
+// read scope. An absent or out-of-scope component is ErrTargetNotFound, which
+// the route answers as one non-disclosing 404 for both. Any OTHER failure is
+// returned as itself, so a database outage surfaces as a 500 rather than
+// telling an operator their component no longer exists.
+func requireVisibleComponent(ctx context.Context, gw storage.Gateway, name string, read scope.Set) error {
+	if _, err := gw.GetComponent(ctx, name, read); err != nil {
+		if errors.Is(err, storage.ErrComponentNotFound) {
+			return ErrTargetNotFound
+		}
+		return err
+	}
+	return nil
+}
 
 // eventFeed is the cursor-paged occurrence feed, newest first, optionally
 // narrowed to one component. The page token carries the last row's keyset, so
@@ -34,7 +54,7 @@ func eventFeed() Definition {
 		ScopeResource: "component",
 		Params: []Param{
 			{Name: "owner", Type: "string", Doc: "Narrow the feed to one component by name"},
-			{Name: "limit", Type: "int", Doc: "Rows per page (default 50)"},
+			{Name: "limit", Type: "int", Doc: "Rows per page (default 50, capped at 500)"},
 		},
 		Columns: []Column{
 			{Name: "ts", Type: "time", Role: "time"},
@@ -51,16 +71,20 @@ func eventFeed() Definition {
 			if err != nil {
 				return nil, "", err
 			}
-			q := storage.EventFeedQuery{Limit: 50, BeforeTS: cur.TS, BeforeID: cur.ID}
+			q := storage.EventFeedQuery{Limit: defaultFeedPage, BeforeTS: cur.TS, BeforeID: cur.ID}
 			if n, ok := params["limit"].(int); ok && n > 0 {
-				q.Limit = n
+				// Clamp HERE, to the same ceiling storage enforces. Passing an
+				// un-clamped limit through would make the full-page test below
+				// compare a capped row count against a bigger number, read the
+				// page as the last one, and end the walk with rows unread.
+				q.Limit = min(n, storage.MaxViewPage)
 			}
 			if owner, ok := params["owner"].(string); ok && owner != "" {
 				// The owner filter is a parameterized target: verify it is in
 				// the caller's scope first, so an out-of-scope name is a
 				// non-disclosing 404 rather than a silently empty feed.
-				if _, err := gw.GetComponent(ctx, owner, read); err != nil {
-					return nil, "", ErrTargetNotFound
+				if err := requireVisibleComponent(ctx, gw, owner, read); err != nil {
+					return nil, "", err
 				}
 				q.Owner = owner
 			}
@@ -116,8 +140,8 @@ func sampleHistory() Definition {
 			key, _ := params["key"].(string)
 			// The owner is a parameterized target: out of scope is a
 			// non-disclosing 404, exactly as on the component's own reads.
-			if _, err := gw.GetComponent(ctx, owner, read); err != nil {
-				return nil, "", ErrTargetNotFound
+			if err := requireVisibleComponent(ctx, gw, owner, read); err != nil {
+				return nil, "", err
 			}
 			window := defaultHistoryWindow
 			if d, ok := params["window"].(time.Duration); ok && d > 0 {
@@ -145,9 +169,10 @@ func sampleHistory() Definition {
 }
 
 // estateCounts is the Home stat tiles: how much estate the caller can see and
-// how it currently reads. Component-tier only, which is what keeps its single
-// declared permission honest: every tile counts something component:read
-// covers.
+// how it currently reads. Its interface tiles read a resource this view does not
+// declare a permission for, which a permission SET per view fixes (#548); scope
+// still bounds every tile, so the gap is a capability under-declaration, not a
+// visibility leak.
 func estateCounts() Definition {
 	return Definition{
 		Name:          "estate-counts",

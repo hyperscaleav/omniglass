@@ -113,8 +113,9 @@ type authenticator struct {
 	index  rbac.RoleIndex
 	idxErr error
 
-	// perms is the set of every capability the route surface declares through
-	// gated(), keyed by the ":"-joined token string ("location:read",
+	// perms is the set of every capability the route surface enforces, whether
+	// declared through gated(), platformGated(), or declarePermission() (a
+	// handler-tier check), keyed by the ":"-joined token string ("location:read",
 	// "audit:read:admin"). It is the permission universe: the read side (the roles
 	// view) reports it so an operator can see held-vs-missing capabilities, and it
 	// is exactly the set stamped onto the OpenAPI operations. Populated once per
