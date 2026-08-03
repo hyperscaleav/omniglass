@@ -2270,3 +2270,15 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   unreachable without deleting claims; the acceptance was amended to the measured floor,
   with the no-claim-lost rule outranking the number. The #429 lint suite guarded every
   identifier through both passes.
+
+- **The segment rule reaches every segment-bearing table** (#552). `ValidateEntityName` guarded
+  `component`, `system`, and `location` and nothing else, so six registries accepted whatever they
+  were handed. The rule now runs on `location_type`, `standard`, `vendor`, `driver`, `capability`,
+  and `node` as well, and its vocabulary moved to the settled word: `ValidateSegment`,
+  `ErrInvalidSegment`, `ErrSegmentIsUUID`, in `segment.go`. The rule itself did not change and every
+  seeded row already satisfied it. Two things surfaced while widening it. The segment rule is
+  strictly stricter than the `node` table's subject-safety CHECK, so it fires first on `CreateNode`
+  and the node error mapping gained cases for both segment sentinels, which would otherwise have
+  turned an invalid node name into a 500 instead of a 422. And no registry patch carries a name
+  field, so the renameable handles ADR-0062 describes are not yet reachable through the update path.
+

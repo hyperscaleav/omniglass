@@ -44,6 +44,17 @@ server.
 resolves to.** `{"parent": "rack", "parent_id": "0198f..."}`. The name is what a human types
 and what a body round-trips; the id is the stable handle that survives a rename.
 
+**The segment rule is enforced on every segment-bearing table.** A segment is the one token an
+entity contributes to an address (the `rm215a` in `boi.17c.rm215a`), and the rule is
+`^[a-z0-9][a-z0-9-]*$` with a 100 character ceiling and the uuid shape refused. It runs on
+`component`, `system`, `location`, `node`, `location_type`, `standard`, `vendor`, `driver`, and
+`capability`; a table that stores a keyspace key rather than a segment (`property_type`,
+`event_type`, `command_type`, `tag`, `variable`, `secret`) is deliberately outside it, because
+`icmp.rtt_avg` is a key and not a segment. The exclusions are load-bearing rather than tidy: barring
+`.` keeps one segment from splitting into two path tokens, barring `*` and `>` keeps a segment from
+reading as a NATS subject pattern, and barring `$` is what lets an address use sigil accessors
+without reserving any word.
+
 The test is a **round trip**: a response body can be fed back to the write that produced it
 (create a component with `{"parent": "rack"}`, read it back as `{"parent": "rack"}`). When that
 fails, every client has to fetch a second collection and join by uuid to render one label, each
