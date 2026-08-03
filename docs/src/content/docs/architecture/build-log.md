@@ -2312,3 +2312,18 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   console back in lockstep. Two limits are documented and tracked rather than hidden:
   the per-connection detector cost ([#546](https://github.com/hyperscaleav/omniglass/issues/546))
   and change detection on a paged view's first page only ([#547](https://github.com/hyperscaleav/omniglass/issues/547)).
+- **The default view set v1 ([#541](https://github.com/hyperscaleav/omniglass/issues/541)).**
+  Three more registry views on the same primitive, so the catalog now covers what Home needs.
+  `event-feed` is the estate's occurrences newest first, **keyset-paged** (the token carries the
+  last row's sort key, so a row written mid-walk cannot shift a page boundary and hide its
+  neighbour; a malformed token is a 400, never a silent restart), optionally narrowed to one
+  component, gated `event:read`. `sample-history` is one component's readings for a key over a
+  window, oldest first, reading **both sample lanes** through one row shape (a numeric reading
+  fills `value`, a categorical one fills `state`, so no column's type depends on its row), and
+  strictly historical by decision. `estate-counts` is the stat tiles, component-tier only, which
+  is what keeps one declared permission honest. Every query carries a **total order** (the
+  requirement the watch detector rests on, now stated on `RunFunc`): the feed breaks its
+  same-instant ties on id, and the history read discriminates the two lanes because their id
+  sequences are independent. A parameterized target outside the caller's scope is a
+  non-disclosing 404, identical to an absent one, so a probe cannot map the estate by watching
+  which names 403.

@@ -65,6 +65,9 @@ typed SPA client and the cobra CLI are generated, never written:
   permission** (`component:read` for the reachability grid), checked in the handler. The
   directory is readable with `view:read` alone (it publishes contracts, not data); running a
   view a caller is not entitled to is a 403 naming the permission.
+- A **parameterized target** the caller cannot see is a non-disclosing **404**, the same answer an
+  absent one gets, so a probe cannot tell "exists but hidden" from "does not exist" by watching
+  which names 403.
 - Every query runs in the gateway's **scoped mode**: the caller's `visible_set`
   ([identity and access](/architecture/identity-access/)) bounds every row with no per-view code.
 - A view is **read-only** by construction (no writes, no side effects), which is what makes
@@ -72,14 +75,26 @@ typed SPA client and the cobra CLI are generated, never written:
 
 ## The default set
 
-- **`component-reachability`**: every in-scope component interface with its latest
-  `interface.reachable` verdict and its observation time; a never-probed interface reports the
-  explicit `unknown` state, so the grid renders the whole fleet, not only the probed part.
+- **`component-reachability`** (`component:read`): every in-scope component interface with its
+  latest `interface.reachable` verdict and its observation time; a never-probed interface reports
+  the explicit `unknown` state, so the grid renders the whole fleet, not only the probed part.
+- **`event-feed`** (`event:read`): the estate's occurrences, newest first, **cursor-paged**, and
+  optionally narrowed to one component. Node-owned and platform-owned occurrences ride only with
+  the all scope, the rule every owner-arc read follows (the scope kinds are the component, system,
+  and location tiers, so no rooted grant addresses them).
+- **`sample-history`** (`component:read`): one component's readings for one property key over a
+  window, oldest first so a chart plots left to right. It reads **both sample lanes**: a numeric
+  reading fills `value`, a categorical one fills `state`, which keeps a column's type fixed
+  regardless of the row. **Strictly historical**: the current value already sits on the component
+  blade, and folding it in would make the series' last point mean something different from every
+  other point.
+- **`estate-counts`** (`component:read`): the stat tiles, components and interfaces in scope with
+  their current verdicts. Component-tier only, which is what keeps a single declared permission
+  honest: a tile counting locations or systems would need a permission this view does not declare.
 
-:::design[The rest of the v1 default set, tracked in #523]
-`event-feed` (cursor-paged, owner-filterable), `sample-history` (one owner and key over a window),
-and `estate-counts` (the Home stat tiles), each a slice-tested named query.
-:::
+Paging is **keyset, not offset**: `next_page_token` carries the last row's sort key, so a row
+written mid-walk cannot shift a page boundary and hide its neighbour. A malformed token is a 400,
+never a silent restart at the newest row.
 
 ## How views are consumed
 

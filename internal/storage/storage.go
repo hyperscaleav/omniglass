@@ -345,6 +345,16 @@ type Gateway interface {
 	// every in-scope component interface with its latest interface.reachable
 	// verdict, scope injected in the query itself like every component read.
 	ListInterfaceReachability(ctx context.Context, read scope.Set) ([]InterfaceReachability, error)
+	// ListEventFeed is the event-feed view's query: a keyset-paged page of the
+	// fleet-wide occurrence feed, newest first, scope injected.
+	ListEventFeed(ctx context.Context, read scope.Set, q EventFeedQuery) ([]EventFeedRow, error)
+	// ListSampleHistory is the sample-history view's query: one component's
+	// readings for a key over a window, across both sample lanes. The caller
+	// verifies the owner is in read scope first.
+	ListSampleHistory(ctx context.Context, read scope.Set, q SampleHistoryQuery) ([]SampleHistoryRow, error)
+	// EstateCounts is the estate-counts view's query: the component-tier stat
+	// tiles, each bounded by the caller's read scope.
+	EstateCounts(ctx context.Context, read scope.Set) (EstateCountSet, error)
 
 	// The observed-log sink: the mirror of the metric and state sinks for log-kind
 	// occurrences. reject-not-project and owner-confinement are applied by the caller

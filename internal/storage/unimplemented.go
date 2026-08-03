@@ -647,3 +647,12 @@ func (UnimplementedGateway) LocationHealth(context.Context, string, time.Time, s
 func (UnimplementedGateway) ListInterfaceReachability(context.Context, scope.Set) ([]InterfaceReachability, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) ListEventFeed(context.Context, scope.Set, EventFeedQuery) ([]EventFeedRow, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ListSampleHistory(context.Context, scope.Set, SampleHistoryQuery) ([]SampleHistoryRow, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) EstateCounts(context.Context, scope.Set) (EstateCountSet, error) {
+	return EstateCountSet{}, nil
+}

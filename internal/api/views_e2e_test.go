@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"testing"
 	"time"
 
@@ -211,4 +212,208 @@ func TestViewsAPI(t *testing.T) {
 	if !bytes.Contains(bad, []byte("bogus")) {
 		t.Errorf("400 body does not name the offending param: %s", bad)
 	}
+}
+
+// TestDefaultViewSetAPI drives the three views the default set adds: the
+// cursor-paged event feed (a page_token walk covers the set with no duplicate
+// and no gap), the sample-history series over both sample lanes, and the
+// estate-counts tiles, each scope-bounded, each 404-ing a parameterized target
+// the caller cannot see. Skipped under -short.
+func TestDefaultViewSetAPI(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatalf("mint owner: %v", err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	all := scope.Set{All: true}
+	for _, name := range []string{"disp-1", "cam-1"} {
+		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: name}, all); err != nil {
+			t.Fatalf("create %s: %v", name, err)
+		}
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+	if _, err := conn.Exec(ctx, `insert into interface (name, type, component, params) values
+		('disp-1-icmp', (select id from interface_type where name = 'icmp'), (select id from component where name = 'disp-1'), '{}'::jsonb),
+		('cam-1-icmp',  (select id from interface_type where name = 'icmp'), (select id from component where name = 'cam-1'),  '{}'::jsonb)`); err != nil {
+		t.Fatalf("insert interfaces: %v", err)
+	}
+
+	// Five occurrences on disp-1, one on cam-1, so a paged walk crosses a page
+	// boundary and the owner filter has something to exclude.
+	base := time.Now().UTC().Truncate(time.Microsecond).Add(-time.Hour)
+	for i := range 5 {
+		if err := gw.InsertEvents(ctx, []storage.EventWrite{{
+			OwnerKind: "component", OwnerID: "disp-1", Key: "call.started",
+			Message: "disp event " + strconv.Itoa(i), Source: "t", TS: base.Add(time.Duration(i) * time.Minute),
+		}}); err != nil {
+			t.Fatalf("insert event %d: %v", i, err)
+		}
+	}
+	if err := gw.InsertEvents(ctx, []storage.EventWrite{{
+		OwnerKind: "component", OwnerID: "cam-1", Key: "call.started", Message: "cam event", Source: "t", TS: base.Add(9 * time.Minute),
+	}}); err != nil {
+		t.Fatalf("insert cam event: %v", err)
+	}
+	ts := time.Now().UTC().Truncate(time.Microsecond)
+	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "icmp.rtt_avg", Instance: "disp-1-icmp", Value: 3.5, Source: "icmp", TS: ts.Add(-2 * time.Minute)},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "icmp.rtt_avg", Instance: "disp-1-icmp", Value: 4.5, Source: "icmp", TS: ts.Add(-time.Minute)},
+	}); err != nil {
+		t.Fatalf("insert metrics: %v", err)
+	}
+	if err := gw.InsertStateSamples(ctx, []storage.StateSampleWrite{
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "interface.reachable", Instance: "disp-1-icmp", Value: "up", Source: "icmp", TS: ts},
+		{OwnerKind: "component", OwnerID: "cam-1", Key: "interface.reachable", Instance: "cam-1-icmp", Value: "down", Source: "icmp", TS: ts},
+	}); err != nil {
+		t.Fatalf("insert verdicts: %v", err)
+	}
+
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	decode := func(raw []byte) (viewResultResp, map[string]int) {
+		t.Helper()
+		var vr viewResultResp
+		if err := json.Unmarshal(raw, &vr); err != nil {
+			t.Fatalf("decode: %v\n%s", err, raw)
+		}
+		col := map[string]int{}
+		for i, cd := range vr.Columns {
+			col[cd.Name] = i
+		}
+		return vr, col
+	}
+
+	// The whole default set is published, each with its declared permission.
+	dirRaw := c.do(ownerTok, http.MethodGet, "/views", nil, http.StatusOK)
+	var dir viewsDirResp
+	if err := json.Unmarshal(dirRaw, &dir); err != nil {
+		t.Fatalf("decode directory: %v", err)
+	}
+	perms := map[string]string{}
+	for _, v := range dir.Views {
+		perms[v.Name] = v.Permission
+	}
+	for name, want := range map[string]string{
+		"component-reachability": "component:read",
+		"event-feed":             "event:read",
+		"sample-history":         "component:read",
+		"estate-counts":          "component:read",
+	} {
+		if perms[name] != want {
+			t.Errorf("%s permission = %q, want %q", name, perms[name], want)
+		}
+	}
+
+	// event-feed pages by cursor: two pages of four then two, walking all six
+	// rows with no duplicate and no gap.
+	seen := map[string]bool{}
+	token := ""
+	for page := 0; page < 5; page++ {
+		path := "/views/event-feed:run?param=" + url.QueryEscape("limit=4")
+		if token != "" {
+			path += "&page_token=" + url.QueryEscape(token)
+		}
+		vr, col := decode(c.do(ownerTok, http.MethodGet, path, nil, http.StatusOK))
+		for _, row := range vr.Rows {
+			msg, _ := row[col["message"]].(string)
+			if seen[msg] {
+				t.Errorf("duplicate row across pages: %s", msg)
+			}
+			seen[msg] = true
+		}
+		token = vr.NextPageToken
+		if token == "" {
+			break
+		}
+	}
+	if len(seen) != 6 {
+		t.Errorf("paged walk saw %d of 6 rows: %v", len(seen), seen)
+	}
+
+	// A malformed page token is a clean 400, never a silent restart.
+	c.do(ownerTok, http.MethodGet, "/views/event-feed:run?page_token=not-a-cursor", nil, http.StatusBadRequest)
+
+	// sample-history reads the numeric lane oldest-first, and the same view
+	// reads the categorical lane with a null value.
+	vr, col := decode(c.do(ownerTok, http.MethodGet,
+		"/views/sample-history:run?param="+url.QueryEscape("owner=disp-1")+"&param="+url.QueryEscape("key=icmp.rtt_avg"), nil, http.StatusOK))
+	if len(vr.Rows) != 2 {
+		t.Fatalf("rtt series rows = %d, want 2", len(vr.Rows))
+	}
+	if vr.Rows[0][col["value"]] != 3.5 || vr.Rows[1][col["value"]] != 4.5 {
+		t.Errorf("series = %v, want 3.5 then 4.5 (oldest first)", vr.Rows)
+	}
+	states, scol := decode(c.do(ownerTok, http.MethodGet,
+		"/views/sample-history:run?param="+url.QueryEscape("owner=disp-1")+"&param="+url.QueryEscape("key=interface.reachable"), nil, http.StatusOK))
+	if len(states.Rows) != 1 || states.Rows[0][scol["state"]] != "up" || states.Rows[0][scol["value"]] != nil {
+		t.Errorf("state series = %v, want one up row with a null value", states.Rows)
+	}
+	// A missing required param is a 400 naming it.
+	bad := c.do(ownerTok, http.MethodGet, "/views/sample-history:run?param="+url.QueryEscape("owner=disp-1"), nil, http.StatusBadRequest)
+	if !bytes.Contains(bad, []byte("key")) {
+		t.Errorf("400 body does not name the missing param: %s", bad)
+	}
+
+	// estate-counts tiles, in their declared order.
+	counts, ccol := decode(c.do(ownerTok, http.MethodGet, "/views/estate-counts:run", nil, http.StatusOK))
+	if len(counts.Rows) != 4 {
+		t.Fatalf("tiles = %d, want 4", len(counts.Rows))
+	}
+	got := map[string]float64{}
+	for _, row := range counts.Rows {
+		name, _ := row[ccol["tile"]].(string)
+		n, _ := row[ccol["count"]].(float64)
+		got[name] = n
+	}
+	if got["components"] != 2 || got["interfaces"] != 2 || got["reachable"] != 1 || got["unreachable"] != 1 {
+		t.Errorf("tiles = %v, want 2/2/1/1", got)
+	}
+
+	// Scope bounds every view, and an out-of-scope parameterized target is a
+	// non-disclosing 404 rather than an empty result or a 403.
+	var camID string
+	if err := conn.QueryRow(ctx, `select id from component where name = 'cam-1'`).Scan(&camID); err != nil {
+		t.Fatalf("cam id: %v", err)
+	}
+	viewerTok := setupScopedViewer(t, ctx, dsn, "viewer-cam-set", "viewer", "component", camID)
+
+	feed, fcol := decode(c.do(viewerTok, http.MethodGet, "/views/event-feed:run", nil, http.StatusOK))
+	if len(feed.Rows) != 1 || feed.Rows[0][fcol["owner"]] != "cam-1" {
+		t.Errorf("scoped feed = %v, want only cam-1's row", feed.Rows)
+	}
+	scopedCounts, sccol := decode(c.do(viewerTok, http.MethodGet, "/views/estate-counts:run", nil, http.StatusOK))
+	for _, row := range scopedCounts.Rows {
+		if row[sccol["tile"]] == "components" && row[sccol["count"]] != float64(1) {
+			t.Errorf("scoped component tile = %v, want 1", row[sccol["count"]])
+		}
+	}
+	c.do(viewerTok, http.MethodGet, "/views/event-feed:run?param="+url.QueryEscape("owner=disp-1"), nil, http.StatusNotFound)
+	c.do(viewerTok, http.MethodGet,
+		"/views/sample-history:run?param="+url.QueryEscape("owner=disp-1")+"&param="+url.QueryEscape("key=icmp.rtt_avg"), nil, http.StatusNotFound)
+	// An absent component is the same 404, so a probe cannot tell "exists but
+	// hidden" from "does not exist".
+	c.do(viewerTok, http.MethodGet,
+		"/views/sample-history:run?param="+url.QueryEscape("owner=ghost")+"&param="+url.QueryEscape("key=icmp.rtt_avg"), nil, http.StatusNotFound)
 }

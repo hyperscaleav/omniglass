@@ -2,8 +2,10 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -105,6 +107,23 @@ func resolveViewRun(ctx context.Context, reg *views.Registry, a *authenticator, 
 	return def, params, a.scopeFor(ctx, def.ScopeResource, "read"), nil
 }
 
+// mapViewRunErr classifies a run failure. Only the two errors a view declares
+// as the caller's fault get a specific status: an out-of-scope or absent
+// parameterized target is a non-disclosing 404 (never a 403, which would
+// confirm the target exists), and a binding the view rejects at run time is a
+// 400. Everything else is a generic 500, so an unclassified failure cannot
+// leak its shape.
+func mapViewRunErr(err error) error {
+	switch {
+	case errors.Is(err, views.ErrTargetNotFound):
+		return huma.Error404NotFound("not found")
+	case errors.Is(err, views.ErrInvalidParam):
+		return huma.Error400BadRequest(err.Error())
+	default:
+		return huma.Error500InternalServerError("run view")
+	}
+}
+
 // registerViewRoutes wires the view directory, the run route, and the watch
 // seam over the default registry. The registry is validated at construction; a
 // misdeclared default view is a boot failure, never a run-time surprise.
@@ -128,6 +147,29 @@ func registerViewRoutes(api huma.API, a *authenticator, gw storage.Gateway, o op
 		lifetime = defaultWatchLifetime
 	}
 	shutdown := o.streamShutdown
+
+	// Each view's declared permission is enforced in the handlers below, so it
+	// belongs in the permission universe: the roles view reports held-versus-
+	// missing against the registry, and the generated spec publishes the set on
+	// the routes that enforce it (x-omniglass-view-permissions), so a permission
+	// a caller can be refused for is never invisible to either.
+	declared := map[string]bool{}
+	for _, d := range reg.All() {
+		a.declarePermission(d.Permission...)
+		declared[d.PermissionString()] = true
+	}
+	viewPermissions := make([]string, 0, len(declared))
+	for p := range declared {
+		viewPermissions = append(viewPermissions, p)
+	}
+	sort.Strings(viewPermissions)
+	withViewPermissions := func(op huma.Operation) huma.Operation {
+		if op.Extensions == nil {
+			op.Extensions = map[string]any{}
+		}
+		op.Extensions["x-omniglass-view-permissions"] = viewPermissions
+		return op
+	}
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-views",
@@ -156,21 +198,21 @@ func registerViewRoutes(api huma.API, a *authenticator, gw storage.Gateway, o op
 		return out, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, withViewPermissions(a.gated(huma.Operation{
 		OperationID: "run-view",
 		Method:      http.MethodGet,
 		Path:        "/views/{name}:run",
 		Summary:     "Run a view",
 		Description: "Runs a named view with its typed params bound from repeated param=name=value pairs, returning the uniform ViewResult. Gated by view:read plus the view's declared permission, enforced here; every query runs in the Gateway's scoped mode, so the rows are bounded by the caller's visible set.",
 		Errors:      []int{http.StatusBadRequest, http.StatusForbidden, http.StatusNotFound},
-	}, "view", "read"), func(ctx context.Context, in *runViewInput) (*runViewOutput, error) {
+	}, "view", "read")), func(ctx context.Context, in *runViewInput) (*runViewOutput, error) {
 		def, params, read, err := resolveViewRun(ctx, reg, a, in.Name, in.Param)
 		if err != nil {
 			return nil, err
 		}
 		rows, next, err := def.Run(ctx, gw, read, params, in.PageToken)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("run view")
+			return nil, mapViewRunErr(err)
 		}
 		if rows == nil {
 			rows = [][]any{}
@@ -180,7 +222,7 @@ func registerViewRoutes(api huma.API, a *authenticator, gw storage.Gateway, o op
 		return out, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, withViewPermissions(a.gated(huma.Operation{
 		OperationID: "watch-view",
 		Method:      http.MethodGet,
 		Path:        "/views/{name}:watch",
@@ -195,7 +237,7 @@ func registerViewRoutes(api huma.API, a *authenticator, gw storage.Gateway, o op
 				},
 			},
 		},
-	}, "view", "read"), func(ctx context.Context, in *watchViewInput) (*huma.StreamResponse, error) {
+	}, "view", "read")), func(ctx context.Context, in *watchViewInput) (*huma.StreamResponse, error) {
 		def, params, read, err := resolveViewRun(ctx, reg, a, in.Name, in.Param)
 		if err != nil {
 			return nil, err

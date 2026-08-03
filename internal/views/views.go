@@ -10,6 +10,7 @@ package views
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -18,6 +19,21 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+)
+
+// The two errors a view's Run may return that are the CALLER's fault, not the
+// server's. Everything else surfaces as a 500, so a view can never leak the
+// shape of a failure it did not classify.
+var (
+	// ErrTargetNotFound reports that a parameterized target does not exist or
+	// is outside the caller's scope. The two are deliberately one error: the
+	// route answers a non-disclosing 404 either way, so a probe cannot map the
+	// estate by watching which names 403 and which 404.
+	ErrTargetNotFound = errors.New("views: target not found")
+	// ErrInvalidParam reports a binding a view rejects at run time, after
+	// BindParams has type-checked it (an unusable page token, a value outside
+	// the range the view accepts). The route answers 400.
+	ErrInvalidParam = errors.New("views: invalid parameter")
 )
 
 // Column describes one ViewResult column: its name, its value type ("string",

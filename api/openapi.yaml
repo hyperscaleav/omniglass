@@ -11165,6 +11165,9 @@ paths:
           description: Internal Server Error
       summary: Run a view
       x-omniglass-permission: view:read
+      x-omniglass-view-permissions:
+        - component:read
+        - event:read
   /views/{name}:watch:
     get:
       description: "Opens an SSE stream with notify-then-refetch semantics: a change event on connect (the baseline, so a reconnecting client always refetches once), a change event whenever the caller's scoped result changes, and heartbeat comments on a quiet stream. No data rides the stream; the client re-runs the view. Gated exactly like :run (view:read plus the view's declared permission), and the change detector re-runs the view under the caller's scope, so a watcher is never notified of out-of-scope changes."
@@ -11228,6 +11231,9 @@ paths:
           description: Internal Server Error
       summary: Watch a view for changes
       x-omniglass-permission: view:read
+      x-omniglass-view-permissions:
+        - component:read
+        - event:read
 servers:
   - url: /api/v1
 

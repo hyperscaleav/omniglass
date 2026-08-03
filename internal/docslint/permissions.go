@@ -30,6 +30,12 @@ func permissionStamps() ([][]string, error) {
 		Paths map[string]map[string]struct {
 			Permission         string `json:"x-omniglass-permission"`
 			PlatformPermission string `json:"x-omniglass-platform-permission"`
+			// ViewPermissions is the set a data-driven route enforces per
+			// target rather than per route: the view registry declares one
+			// permission per view and the run and watch handlers check it, so
+			// the operation publishes them all and the universe stays complete
+			// without a hand-kept list here.
+			ViewPermissions []string `json:"x-omniglass-view-permissions"`
 		} `json:"paths"`
 	}
 	if err := json.Unmarshal(b, &doc); err != nil {
@@ -39,7 +45,8 @@ func permissionStamps() ([][]string, error) {
 	var stamps [][]string
 	for _, ops := range doc.Paths {
 		for _, op := range ops {
-			for _, p := range []string{op.Permission, op.PlatformPermission} {
+			all := append([]string{op.Permission, op.PlatformPermission}, op.ViewPermissions...)
+			for _, p := range all {
 				if p == "" || seen[p] {
 					continue
 				}

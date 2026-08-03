@@ -275,6 +275,18 @@ func (a *authenticator) gated(op huma.Operation, tokens ...string) huma.Operatio
 	return op
 }
 
+// declarePermission records a capability the surface enforces in a HANDLER
+// rather than through gated(), so the permission universe stays complete: the
+// roles view reports held-versus-missing against it, and a capability an
+// operator can actually be refused for must appear there. The view registry
+// uses it for each default view's declared permission, which is checked in the
+// run and watch handlers on top of their view:read stamp.
+func (a *authenticator) declarePermission(tokens ...string) {
+	if a.perms != nil {
+		a.perms[strings.Join(tokens, ":")] = struct{}{}
+	}
+}
+
 // platformTier is the cascade's least-specific owner kind, the install-wide level
 // a write reaches only with platform:<action>.
 const platformTier = "platform"
