@@ -3,6 +3,7 @@ package views_test
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -13,27 +14,49 @@ import (
 // any cell delta, the whole contract the change detector rests on.
 func TestResultHash(t *testing.T) {
 	ts := time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
-	a1, err := views.ResultHash([][]any{{"disp-1", "up", ts}})
-	if err != nil {
-		t.Fatalf("hash: %v", err)
-	}
-	a2, err := views.ResultHash([][]any{{"disp-1", "up", ts}})
-	if err != nil {
-		t.Fatalf("hash: %v", err)
-	}
+	a1 := views.ResultHash([][]any{{"disp-1", "up", ts}})
+	a2 := views.ResultHash([][]any{{"disp-1", "up", ts}})
 	if a1 != a2 {
 		t.Errorf("identical rows hash differently: %s vs %s", a1, a2)
 	}
-	b, err := views.ResultHash([][]any{{"disp-1", "down", ts}})
-	if err != nil {
-		t.Fatalf("hash: %v", err)
-	}
-	if b == a1 {
+	if b := views.ResultHash([][]any{{"disp-1", "down", ts}}); b == a1 {
 		t.Errorf("a changed cell did not move the hash")
 	}
-	empty, err := views.ResultHash([][]any{})
-	if err != nil || empty == "" {
-		t.Errorf("empty rows must hash cleanly, got %q, %v", empty, err)
+	if empty := views.ResultHash([][]any{}); empty == "" {
+		t.Errorf("empty rows must hash cleanly, got %q", empty)
+	}
+	// Row ORDER is content: a re-ordered result is a change a watcher must
+	// see, which is why every view's query owes a total order.
+	rows := [][]any{{"a", "up", ts}, {"b", "down", ts}}
+	swapped := [][]any{{"b", "down", ts}, {"a", "up", ts}}
+	if views.ResultHash(rows) == views.ResultHash(swapped) {
+		t.Errorf("row order does not affect the hash")
+	}
+	// Cell boundaries are real: splitting a value across two cells must not
+	// collide with the joined form.
+	if views.ResultHash([][]any{{"ab", "c"}}) == views.ResultHash([][]any{{"a", "bc"}}) {
+		t.Errorf("cell boundaries collide")
+	}
+	if views.ResultHash([][]any{{"a"}, {"b"}}) == views.ResultHash([][]any{{"a", "b"}}) {
+		t.Errorf("row boundaries collide")
+	}
+	// Values a JSON encoder would refuse but Postgres can legally hold: a NaN
+	// or an infinity in a double column, a year outside 0..9999 in a
+	// timestamptz. The hash must fold them, not fail: an error here would kill
+	// the stream on every re-run.
+	for _, cell := range []any{math.NaN(), math.Inf(1), math.Inf(-1), time.Date(-4000, 1, 1, 0, 0, 0, 0, time.UTC)} {
+		if h := views.ResultHash([][]any{{cell}}); h == "" {
+			t.Errorf("hash of %v is empty", cell)
+		}
+	}
+	// An equal instant in a different location is not a change.
+	loc := time.FixedZone("plus2", 2*3600)
+	if views.ResultHash([][]any{{ts}}) != views.ResultHash([][]any{{ts.In(loc)}}) {
+		t.Errorf("the same instant hashes differently across locations")
+	}
+	// nil is its own value, not the empty string.
+	if views.ResultHash([][]any{{nil}}) == views.ResultHash([][]any{{""}}) {
+		t.Errorf("a null cell hashes as the empty string")
 	}
 }
 

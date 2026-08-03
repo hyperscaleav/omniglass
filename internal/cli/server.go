@@ -96,9 +96,15 @@ func runServer(ctx context.Context, _ string) error {
 		return doc, locks, nil
 	})
 
+	// A streaming response (the view :watch seam) never goes idle, so
+	// http.Server.Shutdown would wait out its whole deadline and then return a
+	// timeout: a rolling restart would stall and exit nonzero for as long as one
+	// console is watching. Closing this channel tells every open stream to end,
+	// after which Shutdown drains the ordinary in-flight requests normally.
+	endStreams := make(chan struct{})
 	srv := &http.Server{
 		Addr:              c.Addr,
-		Handler:           api.NewHandler(gw, api.WithSecureCookies(c.SecureCookies), api.WithNatsURL(c.NatsURL), api.WithSettingsService(settingsSvc), api.WithTelemetryPublisher(busSrv)),
+		Handler:           api.NewHandler(gw, api.WithSecureCookies(c.SecureCookies), api.WithNatsURL(c.NatsURL), api.WithSettingsService(settingsSvc), api.WithTelemetryPublisher(busSrv), api.WithStreamShutdown(endStreams)),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -118,6 +124,7 @@ func runServer(ctx context.Context, _ string) error {
 		return err
 	case <-sig:
 		log.Info("shutting down")
+		close(endStreams)
 		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		return srv.Shutdown(sctx)

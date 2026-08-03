@@ -49,6 +49,15 @@ type options struct {
 	// defaults (tests tighten both).
 	watchDetectorInterval  time.Duration
 	watchHeartbeatInterval time.Duration
+	// watchLifetime bounds how long one watch connection lives. Zero means the
+	// default. Every stream ends at the cap and the client reconnects, which is
+	// what re-runs the full admission path (permission and scope) on a
+	// long-lived surface.
+	watchLifetime time.Duration
+	// streamShutdown, when closed, tells every open stream to end. A streaming
+	// response never goes idle, so without it http.Server.Shutdown would block
+	// until its deadline while any client is watching.
+	streamShutdown <-chan struct{}
 }
 
 // Option configures NewHandler.
@@ -75,6 +84,20 @@ func WithWatchIntervals(detector, heartbeat time.Duration) Option {
 		o.watchDetectorInterval = detector
 		o.watchHeartbeatInterval = heartbeat
 	}
+}
+
+// WithWatchLifetime bounds one watch connection's life. At the cap the stream
+// ends and the client reconnects, which re-runs the full admission path, so a
+// revoked grant or a changed scope cannot outlive one connection. Zero keeps
+// the default.
+func WithWatchLifetime(d time.Duration) Option {
+	return func(o *options) { o.watchLifetime = d }
+}
+
+// WithStreamShutdown supplies the channel whose close ends every open stream,
+// so a graceful shutdown is not blocked by connections that never go idle.
+func WithStreamShutdown(ch <-chan struct{}) Option {
+	return func(o *options) { o.streamShutdown = ch }
 }
 
 // WithSettingsService supplies the settings engine service that backs the

@@ -100,11 +100,26 @@ baked into the result.
 semantics: the server pushes a change event (one on connect, the baseline, then one per delta), the
 client re-runs the view, and `ViewResult` stays the only data shape. A quiet stream carries
 heartbeat comments; a dropped connection reconnects on the stream's retry hint, and the fresh
-baseline covers whatever was missed. Gates match `:run` exactly, and the change detector re-runs
-the view under the **caller's** scope, so a watcher is never notified of out-of-scope changes. V1
-detects change server-side by interval re-run plus result hash, an event only on delta. The
-generated CLI deliberately carries no `watch` command (a one-shot command cannot print an endless
-stream); the console and any SSE client consume it directly.
+baseline covers whatever was missed. The change detector re-runs the view under the **caller's**
+scope, so a watcher is never notified of out-of-scope changes. V1 detects change server-side by
+interval re-run plus result hash, an event only on delta. The generated CLI deliberately carries no
+`watch` command (a one-shot command cannot print an endless stream); the console and any SSE client
+consume it directly.
+
+Admission is **per connection**, not per session: a stream runs the same gates `:run` runs
+(`view:read`, then the view's declared permission), resolves the caller's visible set once, and
+then ends at a **lifetime cap** so the client reconnects through those gates again. That bound is
+what keeps a revoked grant from outliving a connection, and it is why a watched view's query must
+impose a **total order** (a partial order lets Postgres reorder equal-keyed rows between runs, and
+the detector reads order as content, so the hash would flap and every watcher would refetch every
+interval forever).
+
+The cost model is honest and bounded only by that cap: v1 runs **one full view query per open
+connection per interval**, with no cap on watchers and no sharing between two clients watching the
+same view under the same scope ([#546](https://github.com/hyperscaleav/omniglass/issues/546)). That
+is sized for an operator console, not for fan-out, and the detector is what #430's bus feeds
+replace. A watch on a paged view detects change on the **first page** only
+([#547](https://github.com/hyperscaleav/omniglass/issues/547)).
 
 :::design[The bus-fed relay, tracked in #523]
 When the trusted-stream and CDC feeds land (#430), a bus consumer replaces the interval detector

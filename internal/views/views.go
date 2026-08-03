@@ -82,6 +82,13 @@ var paramTypes = map[string]func(raw string) (any, error){
 // and returns the rows (positional against the declared columns) plus the next
 // cursor. Every query it issues MUST run in the Gateway's scoped mode; the
 // scope is resolved by the caller, never inside the view.
+//
+// A view's query MUST impose a TOTAL order (break every tie, ultimately on a
+// unique column), not merely a sort key. Postgres may return equal-keyed rows
+// in any order between runs, and the watch detector reads a re-run's row order
+// as content: a partial order makes the hash flap, so every watcher refetches
+// the whole view every interval forever, which is exactly the load the seam
+// exists to avoid.
 type RunFunc func(ctx context.Context, gw storage.Gateway, read scope.Set, params map[string]any, pageToken string) (rows [][]any, nextPageToken string, err error)
 
 // Definition declares one default view: its addressable name (ADR-0062), the

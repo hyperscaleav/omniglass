@@ -150,3 +150,22 @@ new class appends one. Entries are never silently deleted; a fixed class is mark
 - **Fix:** fixture data that makes the claimed rule the only passing one: a
   late-arriving older-timestamp row after the newer one, a same-instant pair for the
   tie-break, one fixture row that enters the claimed branch, asserted by content.
+
+## unbounded-stream-lifetime (live; found by the #540 review)
+
+- **Cue:** a handler that holds one connection open across many ticks after resolving
+  authorization once: an SSE or websocket stream, a long poll, a tailing reader. Look
+  for a request-scoped permission or scope decision captured in a closure the loop then
+  reuses, and for a server whose `Shutdown` has no way to end the loop.
+- **Failure:** three at once. The authorization decision freezes for the connection's
+  life, so a revoked grant keeps delivering until the client disconnects, while every
+  ordinary route re-decides per request. Graceful shutdown blocks until its deadline
+  and returns a timeout, because a streaming response never goes idle, which turns a
+  rolling restart into a stall and a nonzero exit. And a client that stops reading pins
+  the writer goroutine, its connection, and a pool slot until TCP gives up. Found live
+  on the view `:watch` seam in #540 (all three).
+- **Fix:** a maximum stream lifetime (the client reconnects through the full admission
+  path, which is what re-decides authorization), a per-write deadline through
+  `http.NewResponseController`, and a shutdown channel the handler selects on so
+  `Shutdown` can drain. Pin the shutdown leg with a control case that proves the
+  deadline expires without the signal.

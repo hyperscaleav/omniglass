@@ -67,11 +67,20 @@ type watchViewInput struct {
 
 // Default pacing for the :watch seam. The detector interval bounds how stale a
 // live surface can be (a change notifies within one interval); the heartbeat
-// keeps idle connections alive through proxies. Tests tighten both through
-// WithWatchIntervals.
+// keeps idle connections alive through proxies; the lifetime bounds one
+// connection, so a client re-enters the admission path (permission and scope)
+// often enough that a revocation takes effect without a logout. Tests tighten
+// all three through WithWatchIntervals and WithWatchLifetime.
 const (
 	defaultWatchDetectorInterval  = 5 * time.Second
 	defaultWatchHeartbeatInterval = 15 * time.Second
+	defaultWatchLifetime          = 15 * time.Minute
+	// watchWriteTimeout bounds one frame's write, so a client that stops
+	// reading cannot pin the writer forever.
+	watchWriteTimeout = 10 * time.Second
+	// watchRetryHintMillis is the reconnect delay published to EventSource
+	// clients in the stream's opening frame.
+	watchRetryHintMillis = 3000
 )
 
 // resolveViewRun is the shared admission path of :run and :watch, in gate
@@ -114,6 +123,11 @@ func registerViewRoutes(api huma.API, a *authenticator, gw storage.Gateway, o op
 	if heartbeatInterval <= 0 {
 		heartbeatInterval = defaultWatchHeartbeatInterval
 	}
+	lifetime := o.watchLifetime
+	if lifetime <= 0 {
+		lifetime = defaultWatchLifetime
+	}
+	shutdown := o.streamShutdown
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-views",
@@ -189,26 +203,57 @@ func registerViewRoutes(api huma.API, a *authenticator, gw storage.Gateway, o op
 		return &huma.StreamResponse{Body: func(hctx huma.Context) {
 			hctx.SetHeader("Content-Type", "text/event-stream")
 			hctx.SetHeader("Cache-Control", "no-cache")
+			// Reverse proxies buffer responses by default, which on an endless
+			// stream means the console sees nothing, ever. This is the header
+			// nginx and its kin read to stream through untouched.
+			hctx.SetHeader("X-Accel-Buffering", "no")
 			w := hctx.BodyWriter()
-			flusher, _ := w.(http.Flusher)
-			flush := func() {
-				if flusher != nil {
-					flusher.Flush()
-				}
+
+			// A stream that cannot flush delivers nothing until it ends, which
+			// for this route is never. Say so and close rather than hanging a
+			// client on a silent connection.
+			flusher, canFlush := w.(http.Flusher)
+			if !canFlush {
+				fmt.Fprint(w, "event: error\ndata: {\"error\": \"streaming unavailable\"}\n\n")
+				return
 			}
+			// Per-frame write deadline: a client that stops reading must not pin
+			// the writer, its goroutine, and a pool slot until TCP gives up. Not
+			// every writer supports deadlines; where it does not, the lifetime
+			// cap below is the backstop.
+			rw, _ := w.(http.ResponseWriter)
+			write := func(format string, args ...any) bool {
+				if rw != nil {
+					_ = http.NewResponseController(rw).SetWriteDeadline(time.Now().Add(watchWriteTimeout))
+				}
+				if _, err := fmt.Fprintf(w, format, args...); err != nil {
+					return false
+				}
+				flusher.Flush()
+				return true
+			}
+
+			// Every stream ends at the lifetime cap, and the client reconnects
+			// through the full admission path. That is what keeps a revoked
+			// grant or a narrowed scope from outliving one connection: the
+			// permission and the visible set are resolved per connection, not
+			// once per session.
+			streamCtx, endStream := context.WithTimeout(hctx.Context(), lifetime)
+			defer endStream()
+
 			// The reconnect hint: EventSource clients retry after this delay,
 			// and the baseline event on the fresh stream covers whatever was
 			// missed while disconnected.
-			fmt.Fprint(w, "retry: 3000\n\n")
-			flush()
+			if !write("retry: %d\n\n", watchRetryHintMillis) {
+				return
+			}
 
-			connCtx := hctx.Context()
 			runOnce := func(c context.Context) (string, error) {
 				rows, _, err := def.Run(c, gw, read, params, "")
 				if err != nil {
 					return "", err
 				}
-				return views.ResultHash(rows)
+				return views.ResultHash(rows), nil
 			}
 			detector := time.NewTicker(detectorInterval)
 			defer detector.Stop()
@@ -217,39 +262,45 @@ func registerViewRoutes(api huma.API, a *authenticator, gw storage.Gateway, o op
 
 			// The detector loop runs beside the writer so heartbeats keep
 			// flowing between re-runs; notifications hand off through the
-			// channel and one goroutine owns every write.
+			// channel and one goroutine owns every write. The goroutine ends
+			// with streamCtx, which every return path cancels.
 			changes := make(chan string, 8)
 			watchDone := make(chan error, 1)
 			go func() {
-				watchDone <- views.Watch(connCtx, detector.C, runOnce, func(h string) error {
+				watchDone <- views.Watch(streamCtx, detector.C, runOnce, func(h string) error {
 					select {
 					case changes <- h:
 						return nil
-					case <-connCtx.Done():
-						return connCtx.Err()
+					case <-streamCtx.Done():
+						return streamCtx.Err()
 					}
 				})
 			}()
 			seq := 0
 			for {
 				select {
-				case <-connCtx.Done():
+				case <-streamCtx.Done():
+					return
+				case <-shutdown:
+					// A graceful shutdown: end the stream so the server can
+					// drain. The client reconnects to the next instance.
 					return
 				case err := <-watchDone:
-					if err != nil && connCtx.Err() == nil {
+					if err != nil && streamCtx.Err() == nil {
 						// The view failed mid-stream: say so generically and
 						// close; the client's reconnect gets a fresh baseline.
-						fmt.Fprint(w, "event: error\ndata: {\"error\": \"view run failed\"}\n\n")
-						flush()
+						write("event: error\ndata: {\"error\": \"view run failed\"}\n\n")
 					}
 					return
 				case h := <-changes:
 					seq++
-					fmt.Fprintf(w, "event: change\nid: %d\ndata: {\"hash\": %q}\n\n", seq, h)
-					flush()
+					if !write("event: change\nid: %d\ndata: {\"hash\": %q}\n\n", seq, h) {
+						return
+					}
 				case <-heartbeat.C:
-					fmt.Fprint(w, ": heartbeat\n\n")
-					flush()
+					if !write(": heartbeat\n\n") {
+						return
+					}
 				}
 			}
 		}}, nil

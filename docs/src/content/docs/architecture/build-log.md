@@ -2294,6 +2294,21 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   contract: baseline on connect, notification within a detector interval of a data
   change, heartbeats-only quiet windows, scope-silent out-of-scope flips, 403/404 parity
   with `:run`, and a reconnect baseline. The client half is a fetch-based SSE reader
-  (`watchView`, chunk-safe parser, bearer-carrying, fixed-delay reconnect) that the
-  `useView` hook wires to query invalidation next slice. cligen now skips
-  `text/event-stream` operations (a one-shot command cannot print an endless stream).
+  (`watchView`, chunk-safe parser, bearer-carrying, reconnecting) that the `useView` hook
+  wires to query invalidation next slice. cligen now skips `text/event-stream` operations
+  (a one-shot command cannot print an endless stream). The review pass hardened the
+  lifecycle a long-lived connection needs and the catalog gained
+  `unbounded-stream-lifetime` for the class: admission is per connection, not per session
+  (every stream ends at a lifetime cap so a reconnect re-runs the permission and scope
+  gates, which is what stops a revoked grant outliving a connection), a shutdown signal
+  ends open streams so a rolling restart drains instead of stalling on a deadline and
+  exiting nonzero (pinned with a control leg proving the timeout without it), each frame
+  carries a write deadline so a client that stops reading cannot pin a goroutine and a
+  pool slot, `X-Accel-Buffering: no` stops proxies swallowing the stream, and the result
+  hash became total (a NaN, an infinity, or a year outside 0..9999 is legal in Postgres
+  and would have killed every re-run through a JSON encoder). The client stops rather
+  than hot-looping on a permanent status, raises the session-ended signal on 401 like
+  every other call path, and backs off with jitter so a restart does not bring every
+  console back in lockstep. Two limits are documented and tracked rather than hidden:
+  the per-connection detector cost ([#546](https://github.com/hyperscaleav/omniglass/issues/546))
+  and change detection on a paged view's first page only ([#547](https://github.com/hyperscaleav/omniglass/issues/547)).

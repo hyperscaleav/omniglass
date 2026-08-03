@@ -40,6 +40,15 @@ export function setUnauthorizedHandler(fn: () => void): void {
   onUnauthorized = fn;
 }
 
+// notifyUnauthorized fires the same session-ended signal the response
+// middleware raises, for the call paths that do not go through the typed
+// client. The view watch stream is one: it is a raw fetch (an SSE body is not
+// a typed response), so without this an expired session would leave it
+// reconnecting silently behind a redirect that never fires.
+export function notifyUnauthorized(): void {
+  onUnauthorized?.();
+}
+
 // The auth endpoints handle their own 401s (an anonymous /auth/me, a bad-password
 // /auth/login, the public /auth/status), so a 401 from them is not a "bumped
 // session" and must not trigger the global bounce.

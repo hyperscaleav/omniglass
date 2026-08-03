@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -16,16 +15,33 @@ import (
 // later under the same client contract.
 
 // ResultHash returns a stable content hash of a result's rows. Two runs over
-// identical data hash identically (cells are positional and JSON encoding is
-// deterministic for the cell types views emit), and any cell delta moves the
-// hash, which is the whole signal the detector needs.
-func ResultHash(rows [][]any) (string, error) {
-	b, err := json.Marshal(rows)
-	if err != nil {
-		return "", fmt.Errorf("views: hash rows: %w", err)
+// identical data hash identically and any cell delta moves the hash, which is
+// the whole signal the detector needs.
+//
+// It cannot fail, deliberately: the hash is a change signal, not a
+// serialization, and a JSON encoder would error on values Postgres can legally
+// hold (a NaN or an infinity in a double column, a year outside 0..9999 in a
+// timestamptz). An error there would kill the stream on every re-run, so cells
+// are folded in through a total encoding instead. Times normalize to UTC
+// nanoseconds so an equal instant in a different location hashes equally, and
+// the field and row separators are bytes no rendered value contains.
+func ResultHash(rows [][]any) string {
+	h := sha256.New()
+	for _, row := range rows {
+		for _, cell := range row {
+			switch v := cell.(type) {
+			case nil:
+				h.Write([]byte{0})
+			case time.Time:
+				fmt.Fprintf(h, "%d", v.UTC().UnixNano())
+			default:
+				fmt.Fprintf(h, "%v", v)
+			}
+			h.Write([]byte{0x1f})
+		}
+		h.Write([]byte{0x1e})
 	}
-	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:]), nil
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // Watch is the notify-then-refetch detector loop. The first run notifies
