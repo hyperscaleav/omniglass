@@ -253,6 +253,10 @@ func mapNodeErr(err error) error {
 		return huma.Error401Unauthorized("invalid enrollment token")
 	case errors.Is(err, storage.ErrInvalidNodeName):
 		return huma.Error422UnprocessableEntity("node name must be a single subject token (no dots, whitespace, or wildcards)")
+	case errors.Is(err, storage.ErrSegmentIsUUID):
+		return huma.Error422UnprocessableEntity("node name may not be a uuid")
+	case errors.Is(err, storage.ErrInvalidSegment):
+		return huma.Error422UnprocessableEntity("node name must be lowercase letters, digits, and hyphens, starting with a letter or digit")
 	case errors.Is(err, storage.ErrLocationNotFound):
 		return huma.Error422UnprocessableEntity("location not found")
 	default:

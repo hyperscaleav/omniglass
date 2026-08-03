@@ -241,7 +241,7 @@ func (p *PG) CreateLocationType(ctx context.Context, actorID string, lt Location
 	if lt.Name == RootPlacement {
 		return nil, ErrReservedTypeID
 	}
-	if err := ValidateEntityName(lt.Name); err != nil {
+	if err := ValidateSegment(lt.Name); err != nil {
 		return nil, err
 	}
 	lt.Official = false
@@ -376,7 +376,7 @@ func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSp
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := ValidateEntityName(spec.Name); err != nil {
+	if err := ValidateSegment(spec.Name); err != nil {
 		return nil, err
 	}
 
@@ -444,7 +444,7 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 		return nil, err
 	}
 	if patch.Name != nil {
-		if err := ValidateEntityName(*patch.Name); err != nil {
+		if err := ValidateSegment(*patch.Name); err != nil {
 			return nil, err
 		}
 	}

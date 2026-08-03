@@ -22,8 +22,8 @@ func TestNamesCannotBeUUIDShaped(t *testing.T) {
 		"019F8754-461F-7B82-B5F2-FC4BBE1C3765", // uppercase, already rejected by the slug rule
 	}
 	for _, u := range uuids {
-		if err := storage.ValidateEntityName(u); !errors.Is(err, storage.ErrInvalidName) && !errors.Is(err, storage.ErrNameIsUUID) {
-			t.Errorf("ValidateEntityName(%q) = %v, want a refusal: a name that is also a uuid "+
+		if err := storage.ValidateSegment(u); !errors.Is(err, storage.ErrInvalidSegment) && !errors.Is(err, storage.ErrSegmentIsUUID) {
+			t.Errorf("ValidateSegment(%q) = %v, want a refusal: a name that is also a uuid "+
 				"makes a reference ambiguous", u, err)
 		}
 	}
@@ -41,8 +41,8 @@ func TestHexLookingNamesAreStillFine(t *testing.T) {
 		"rack-1-dsp",
 	}
 	for _, n := range fine {
-		if err := storage.ValidateEntityName(n); err != nil {
-			t.Errorf("ValidateEntityName(%q) = %v, want nil: only the exact uuid shape is refused", n, err)
+		if err := storage.ValidateSegment(n); err != nil {
+			t.Errorf("ValidateSegment(%q) = %v, want nil: only the exact uuid shape is refused", n, err)
 		}
 	}
 }
@@ -51,11 +51,11 @@ func TestHexLookingNamesAreStillFine(t *testing.T) {
 // uuid satisfies the slug rule and the generic message would describe exactly
 // what the operator typed.
 func TestUUIDRefusalIsDistinguishable(t *testing.T) {
-	if err := storage.ValidateEntityName("019f8754-461f-7b82-b5f2-fc4bbe1c3765"); !errors.Is(err, storage.ErrNameIsUUID) {
-		t.Errorf("uuid-shaped name = %v, want ErrNameIsUUID", err)
+	if err := storage.ValidateSegment("019f8754-461f-7b82-b5f2-fc4bbe1c3765"); !errors.Is(err, storage.ErrSegmentIsUUID) {
+		t.Errorf("uuid-shaped name = %v, want ErrSegmentIsUUID", err)
 	}
 	// A genuine slug violation stays the generic error.
-	if err := storage.ValidateEntityName("Not A Slug"); !errors.Is(err, storage.ErrInvalidName) {
-		t.Errorf("bad slug = %v, want ErrInvalidName", err)
+	if err := storage.ValidateSegment("Not A Slug"); !errors.Is(err, storage.ErrInvalidSegment) {
+		t.Errorf("bad slug = %v, want ErrInvalidSegment", err)
 	}
 }

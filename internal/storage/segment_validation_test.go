@@ -98,8 +98,8 @@ func TestEverySegmentBearingTableValidates(t *testing.T) {
 					t.Fatalf("%s accepted the segment %q (%s); every segment-bearing table "+
 						"must refuse it, or the address grammar's `$` sigil is not safe", table, seg, why)
 				}
-				if !errors.Is(err, storage.ErrInvalidName) && !errors.Is(err, storage.ErrNameIsUUID) {
-					t.Fatalf("%s refused %q with %v, want ErrInvalidName or ErrNameIsUUID so the "+
+				if !errors.Is(err, storage.ErrInvalidSegment) && !errors.Is(err, storage.ErrSegmentIsUUID) {
+					t.Fatalf("%s refused %q with %v, want ErrInvalidSegment or ErrSegmentIsUUID so the "+
 						"API maps it to 422 rather than a 500", table, seg, err)
 				}
 			})

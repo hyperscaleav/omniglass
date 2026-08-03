@@ -93,7 +93,7 @@ func (p *PG) GetCapability(ctx context.Context, id string) (*Capability, error) 
 // CreateCapability inserts a custom (official=false) capability and audits it.
 // A duplicate id is ErrTypeExists.
 func (p *PG) CreateCapability(ctx context.Context, actorID string, c Capability) (*Capability, error) {
-	if err := ValidateEntityName(c.Name); err != nil {
+	if err := ValidateSegment(c.Name); err != nil {
 		return nil, err
 	}
 	c.Official = false

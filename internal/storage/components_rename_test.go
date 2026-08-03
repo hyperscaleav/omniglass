@@ -62,15 +62,15 @@ func TestRenameComponent(t *testing.T) {
 		t.Fatalf("dup rename err = %v, want ErrComponentExists", err)
 	}
 
-	// Bad slug -> ErrInvalidName (before touching the DB).
+	// Bad slug -> ErrInvalidSegment (before touching the DB).
 	bad := "Bad Name"
-	if _, err := gw.UpdateComponent(ctx, "", "disp-child", storage.ComponentPatch{Name: &bad}, all, all); !errors.Is(err, storage.ErrInvalidName) {
-		t.Fatalf("bad-format rename err = %v, want ErrInvalidName", err)
+	if _, err := gw.UpdateComponent(ctx, "", "disp-child", storage.ComponentPatch{Name: &bad}, all, all); !errors.Is(err, storage.ErrInvalidSegment) {
+		t.Fatalf("bad-format rename err = %v, want ErrInvalidSegment", err)
 	}
 
 	// Create-tightening: the shared validator gates create too, not just rename.
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "Bad Name"}, all); !errors.Is(err, storage.ErrInvalidName) {
-		t.Fatalf("bad-format create err = %v, want ErrInvalidName", err)
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "Bad Name"}, all); !errors.Is(err, storage.ErrInvalidSegment) {
+		t.Fatalf("bad-format create err = %v, want ErrInvalidSegment", err)
 	}
 
 	// ComponentNameTaken is scope-blind existence.
