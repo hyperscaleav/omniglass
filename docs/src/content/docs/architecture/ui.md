@@ -22,11 +22,12 @@ Realized shell: the [design system](/contributing/design-system/); operating it:
 
 ## The renderer contract: ViewResult and the views BFF
 
-:::design[Target design: the ViewResult contract, tracked in #523]
 **All UI reads go through [views](/architecture/views/)** (the read-side BFF), CRUD for writes; the
-operator never queries raw tables. Every view returns a uniform **`ViewResult`** (`{columns, rows}`),
-rendered through **one renderer per view**: adding a view never adds a bespoke renderer.
-:::
+operator never queries raw tables. Every view returns a uniform **`ViewResult`**
+(`{columns, rows, next_page_token}`), rendered through **one renderer per view**: adding a view
+never adds a bespoke renderer. One hook (`useView`) owns fetch, cache, and liveness for every read
+surface, so a page never builds a request and a renderer never holds a connection; a view's change
+stream drives cache invalidation, and watchers of the same view share one stream.
 
 The **dense-ops layout is an architectural pattern**: facet summary over the full set, keyboard chip
 filter, tree/list table, click-row detail blade plus a full detail page, the summary staying whole so
@@ -35,18 +36,23 @@ primitives ([design system](/contributing/design-system/)); the analytical surfa
 
 ## One renderer library, two composition modes
 
-::::design[Target design: the renderer library and composable dashboards, tracked in #523]
 Neither "every screen is hand-coded" nor "everything must be a dashboard":
 
-- **Renderer library** (coded once): `stat`, `table`, `status-grid`, `timeline`, `heatmap`,
-  `line` / `area`. Each takes a **view result plus a field-mapping** (which column is the value /
-  label / time / series key); the set is closed but grown reactively.
+- **Renderer library** (coded once): each renderer takes a **view result plus a field-mapping**
+  (which column is the value, label, time, or series key), so none of them hardcodes a column name
+  and a view can be re-shaped without touching a component. `stat`, `table`, `status-grid`, and
+  `line` are built; `timeline` and `heatmap` arrive with the views that need them. A mapping that
+  names a column the result does not carry fails **visibly, in that widget**: a wall of blank cells
+  would read as "no data" and hide the broken contract, and a throw would take the page with it.
 
-  :::caution[Open question]
-  The field-mapping contract between a view result and each renderer (the column roles per renderer
-  type).
-  :::
+  Results apply through a store with `reconcile`, so a live update keeps every row's DOM and
+  patches only the cells whose values changed. Rows are keyed by position, the only identity a
+  positional `ViewResult` carries, so an in-place update touches one cell while an insert (the
+  newest-first feed) keeps the nodes and shifts the values down.
+
 - **Coded pages** compose renderers plus custom interaction: the built-in information architecture.
+
+::::design[Composable dashboards, tracked in #523]
 - **Composable dashboards** (config-driven): operator-built grids, each
   **widget = a view ref + a renderer + a field-mapping + params**, no code per dashboard.
   Dashboard-level params flow into widget view-params, so one "system overview" dashboard works

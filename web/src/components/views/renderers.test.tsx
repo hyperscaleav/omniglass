@@ -94,6 +94,9 @@ describe("ViewTable", () => {
     const before = [...container.querySelectorAll("tbody tr")];
     expect(before.length).toBe(3);
 
+    const beforeCells = [...container.querySelectorAll("tbody td")];
+    const beforeHeaders = [...container.querySelectorAll("thead th")];
+
     setResult(reachability(["up", "down", "up"]));
     const after = [...container.querySelectorAll("tbody tr")];
     expect(after.length).toBe(3);
@@ -103,6 +106,35 @@ describe("ViewTable", () => {
     // The changed row kept its node too: only the cell's text was patched.
     expect(after[1]).toBe(before[1]);
     expect(after[1].textContent).toContain("down");
+    // And the CELLS survived. Every refetch parses fresh JSON, so the column
+    // array is new objects each time; keying the cell loop by reference would
+    // rebuild every td while the tr assertions above still passed.
+    const afterCells = [...container.querySelectorAll("tbody td")];
+    const afterHeaders = [...container.querySelectorAll("thead th")];
+    expect(afterCells.length).toBe(beforeCells.length);
+    afterCells.forEach((td, i) => expect(td).toBe(beforeCells[i]));
+    afterHeaders.forEach((th, i) => expect(th).toBe(beforeHeaders[i]));
+  });
+
+  // The honest limit of the guarantee: rows are keyed by POSITION, so a
+  // prepend (the shape event-feed produces, newest first) keeps every node and
+  // shifts every value down. Nodes survive; "only the changed cells re-render"
+  // does not hold for an insert, and the pin says so rather than implying more.
+  it("keeps row nodes across a prepend, shifting values rather than rebuilding", () => {
+    const [result, setResult] = createSignal<ViewResult>(reachability(["up", "down"]));
+    const { container } = render(() => <ViewTable result={result} />);
+    const before = [...container.querySelectorAll("tbody tr")];
+
+    const prepended: ViewResult = {
+      ...reachability([]),
+      rows: [["comp-new", "if-new", "unknown", "2026-08-03T12:00:00Z"], ...(reachability(["up", "down"]).rows ?? [])],
+    };
+    setResult(prepended);
+    const after = [...container.querySelectorAll("tbody tr")];
+    expect(after.length).toBe(3);
+    expect(after[0]).toBe(before[0]);
+    expect(after[1]).toBe(before[1]);
+    expect(after[0].textContent).toContain("comp-new");
   });
 });
 
@@ -123,12 +155,26 @@ describe("StatusGrid", () => {
     expect(getByText("comp-0")).toBeTruthy();
   });
 
-  it("fails loudly when the field-mapping names a column the result lost", () => {
-    expect(() =>
-      render(() => (
-        <StatusGrid result={() => reachability(["up"])} mapping={{ ...reachabilityMap, value: "verdict" }} />
-      )),
-    ).toThrowError(/verdict/);
+  // Loud, but contained: a broken contract must fail THIS widget where an
+  // operator can read why, not throw out of render and blank the console.
+  it("renders a visible error naming the missing column when the mapping breaks", () => {
+    const { getByRole } = render(() => (
+      <StatusGrid result={() => reachability(["up"])} mapping={{ ...reachabilityMap, value: "verdict" }} />
+    ));
+    const alert = getByRole("alert");
+    expect(alert.textContent).toContain("verdict");
+    expect(alert.textContent).toContain("value");
+  });
+
+  it("renders the query's failure rather than an endless loading state", () => {
+    const { getByRole } = render(() => (
+      <StatusGrid
+        result={() => undefined}
+        mapping={reachabilityMap}
+        error={() => new Error("forbidden: component:read")}
+      />
+    ));
+    expect(getByRole("alert").textContent).toContain("forbidden");
   });
 
   it("renders an empty state", () => {
@@ -150,13 +196,56 @@ describe("LineSeries", () => {
   it("draws one polyline per series instance", () => {
     const twoSeries: ViewResult = {
       ...series,
-      rows: [...series.rows, ["2026-08-03T12:00:00Z", "eth1", 9], ["2026-08-03T12:01:00Z", "eth1", 10]],
+      rows: [...(series.rows ?? []), ["2026-08-03T12:00:00Z", "eth1", 9], ["2026-08-03T12:01:00Z", "eth1", 10]],
     };
     const { container } = render(() => <LineSeries result={() => twoSeries} mapping={seriesMap} />);
     expect(container.querySelectorAll("polyline").length).toBe(2);
   });
 
-  it("skips rows with no numeric value, so a categorical lane does not plot as zero", () => {
+  it("breaks the line at a gap rather than drawing straight through an outage", () => {
+    const gapped: ViewResult = {
+      ...series,
+      rows: [
+        ["2026-08-03T12:00:00Z", "eth0", 3],
+        ["2026-08-03T12:01:00Z", "eth0", null],
+        ["2026-08-03T12:02:00Z", "eth0", 4],
+        ["2026-08-03T12:03:00Z", "eth0", 5],
+      ],
+    };
+    const { container } = render(() => <LineSeries result={() => gapped} mapping={seriesMap} />);
+    // Two segments, not one line interpolated across the missing reading: a
+    // connected line reads as "the metric was fine the whole time".
+    const drawn = container.querySelectorAll("polyline, circle");
+    expect(drawn.length).toBe(2);
+  });
+
+  it("draws every series, including past the fourth", () => {
+    const many: ViewResult = {
+      ...series,
+      rows: ["a", "b", "c", "d", "e", "f"].flatMap((k, i) => [
+        ["2026-08-03T12:00:00Z", k, i + 1],
+        ["2026-08-03T12:01:00Z", k, i + 2],
+      ]),
+    };
+    const { container } = render(() => <LineSeries result={() => many} mapping={seriesMap} />);
+    const lines = [...container.querySelectorAll("polyline")];
+    expect(lines.length).toBe(6);
+    // None of them is invisible: an opacity ramp reached zero at the fifth.
+    for (const line of lines) {
+      expect(line.getAttribute("stroke")).toBeTruthy();
+      expect(line.getAttribute("opacity")).toBeNull();
+    }
+  });
+
+  it("renders a lone reading as a point rather than a blank frame", () => {
+    const one: ViewResult = { ...series, rows: [["2026-08-03T12:00:00Z", "eth0", 7]] };
+    const { container } = render(() => <LineSeries result={() => one} mapping={seriesMap} />);
+    expect(container.querySelectorAll("circle").length).toBe(1);
+  });
+
+  it("never plots a non-numeric reading as zero", () => {
+    // sample-history carries both lanes, so a categorical row has no number.
+    // Reading it as 0 would draw a dive to the axis that never happened.
     const mixed: ViewResult = {
       ...series,
       rows: [
@@ -166,7 +255,10 @@ describe("LineSeries", () => {
       ],
     };
     const { container } = render(() => <LineSeries result={() => mixed} mapping={seriesMap} />);
-    expect(container.querySelector("polyline")!.getAttribute("points")!.trim().split(/\s+/).length).toBe(2);
+    // Two readings, two separate marks, and the gap between them is a gap.
+    const marks = [...container.querySelectorAll("polyline, circle")];
+    expect(marks.length).toBe(2);
+    expect(container.querySelectorAll("polyline").length).toBe(0);
   });
 
   it("renders an empty state rather than an empty chart frame", () => {

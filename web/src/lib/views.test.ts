@@ -57,4 +57,9 @@ describe("viewKey", () => {
   it("treats an absent params list as the empty one", () => {
     expect(viewKey("estate-counts")).toEqual(viewKey("estate-counts", []));
   });
+
+  it("keys pages apart, so one page cannot overwrite another's cached rows", () => {
+    expect(viewKey("event-feed", [], "tok-2")).not.toEqual(viewKey("event-feed", []));
+    expect(viewKey("event-feed", [], "tok-2")).not.toEqual(viewKey("event-feed", [], "tok-3"));
+  });
 });

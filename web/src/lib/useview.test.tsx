@@ -67,7 +67,7 @@ describe("useView", () => {
         return <span>{(seen = q.data) ? "ready" : "loading"}</span>;
       }),
     );
-    await waitFor(() => expect(seen?.rows[0][0]).toBe("up"));
+    await waitFor(() => expect(seen?.rows?.[0]?.[0]).toBe("up"));
     const url = requestUrl(fetchMock, 0);
     expect(url).toContain("/views/component-reachability:run");
   });
@@ -95,7 +95,7 @@ describe("useView", () => {
     expect(requestUrl(fetchMock, 1)).toContain("owner%3Dcam-1");
   });
 
-  it("refetches when the watch stream reports a change", async () => {
+  it("ignores the connect baseline on a warm cache, then refetches on a real change", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -109,18 +109,48 @@ describe("useView", () => {
     const { unmount } = render(
       withClient(() => {
         const q = useView("component-reachability");
-        return <span>{q.data ? String(q.data.rows[0][0]) : "loading"}</span>;
+        return <span>{q.data ? String(q.data.rows?.[0]?.[0]) : "loading"}</span>;
       }),
     );
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(notifiers.length).toBe(1);
 
-    // The server says the scoped result changed; the hook re-runs the view and
-    // the surface shows the new cell with no user action.
+    // The server opens every stream with a baseline change event. The query
+    // already holds data newer than this connection, so acting on it would
+    // double-fetch every view on mount and again on every stream renewal.
+    notifiers[0]();
+    await new Promise((r) => setTimeout(r, 30));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // A later notification is a real change, and the surface shows it with no
+    // user action.
     notifiers[0]();
     await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(1));
     await waitFor(() => expect(document.body.textContent).toContain("down"));
     unmount();
+  });
+
+  it("shares one stream between surfaces watching the same view", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(result("up")), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    // Two widgets on one dashboard, same view and params. A browser allows only
+    // a handful of connections per origin, so a stream each would starve the
+    // page's ordinary requests.
+    const { unmount } = render(
+      withClient(() => {
+        useView("component-reachability");
+        useView("component-reachability");
+        return <span>two widgets</span>;
+      }),
+    );
+    await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(0));
+    expect(notifiers.length).toBe(1);
+    unmount();
+    // The last watcher to leave closes it.
+    expect(closed.count).toBe(1);
   });
 
   it("does not open a watch when watching is off, and polls instead", async () => {

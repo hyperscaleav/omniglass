@@ -2335,3 +2335,22 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   an operator a component they can see was deleted; only a genuine not-found maps there now.
   The permission a view declares is enforced but under-declares a composed result, which is
   documented behind a fence and tracked ([#548](https://github.com/hyperscaleav/omniglass/issues/548)).
+- **The renderer library and the useView hook ([#542](https://github.com/hyperscaleav/omniglass/issues/542)).**
+  The console gets one read primitive and four renderers. `useView(name, params)` owns fetch,
+  cache, dedup, and retry through the existing solid-query layer, with the view's change stream
+  driving invalidation and polling as the explicit alternative; params arrive as an accessor, so a
+  surface whose selection is reactive re-keys and refetches with no imperative wiring. Watchers of
+  the same view share one stream, because a browser allows only a handful of connections per origin
+  and a dashboard of widgets opening one each would starve every other request on the page, and the
+  server's connect baseline is ignored on a warm cache rather than double-fetching every view on
+  mount and on every stream renewal. `stat`, `table`, `status-grid`, and `line` each take a
+  `ViewResult` accessor plus the field-mapping, so none hardcodes a column; a mapping naming an
+  absent column, or a view the server refused, fails visibly in that widget instead of rendering
+  blanks forever or throwing out of render and blanking the console. Results apply through a store
+  with `reconcile`: rows keep their DOM across any update and only changed cells re-render, which
+  took two bugs to get right (an eagerly dereferenced store array that killed tracking, and bare
+  arrays that `reconcile` replaces rather than merges), and the review found a third, that the
+  columns array was rebuilding every cell while the row-level pin stayed green. The guarantee is now
+  pinned at cell level and stated at its real limit: keyed by position, so an insert keeps the nodes
+  and shifts the values. The chart breaks its line at a gap rather than interpolating across an
+  outage an operator would read as healthy.

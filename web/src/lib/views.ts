@@ -2,6 +2,7 @@ import { createEffect, createSignal, onCleanup, type Accessor } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { api } from "../api/client";
+import type { components } from "../api/schema.gen";
 import { watchView } from "./viewwatch";
 
 // The client half of the views read side. One shape (`ViewResult`) and one data
@@ -10,19 +11,16 @@ import { watchView } from "./viewwatch";
 // builds a request or holds a socket. The server contract is
 // docs/architecture/views.
 
+// The shapes come from the generated schema, not from a hand-copy: the server
+// owns the contract and `make gen` carries it here, so a column or a field
+// added there cannot silently disagree with what the renderers read.
+export type ViewColumn = NonNullable<components["schemas"]["ViewResult"]["columns"]>[number];
+export type ViewResult = components["schemas"]["ViewResult"];
+
+// ViewCell narrows what a cell can actually hold. The generated type says
+// `unknown` because a row is a heterogeneous tuple; the server only ever emits
+// these four, and every renderer is written against them.
 export type ViewCell = string | number | boolean | null;
-
-export type ViewColumn = {
-  name: string;
-  type: string;
-  role?: string;
-};
-
-export type ViewResult = {
-  columns: ViewColumn[];
-  rows: ViewCell[][];
-  next_page_token?: string;
-};
 
 // A field-mapping names, per renderer role (value, label, time, series), which
 // column carries it. It is published per view in the directory, so a renderer
@@ -31,7 +29,7 @@ export type FieldMapping = Record<string, string>;
 
 // columnIndex resolves a column name to its position in a row, or -1.
 export function columnIndex(result: ViewResult, name: string): number {
-  return result.columns.findIndex((c) => c.name === name);
+  return (result.columns ?? []).findIndex((c) => c.name === name);
 }
 
 // requireRole resolves a renderer role to its cell position through the
@@ -51,11 +49,16 @@ export function requireRole(result: ViewResult, mapping: FieldMapping, role: str
   return at;
 }
 
-// viewKey is the query key for one view run. Params are sorted so the same
-// request keys identically however a caller ordered them, which keeps a
-// re-render from missing the cache and refetching.
-export function viewKey(name: string, params?: string[]) {
-  return ["view", name, [...(params ?? [])].sort()] as const;
+// viewKey is the query key for one view run. Params are sorted because the
+// server treats the bindings as a SET (a duplicate binding is a 400), so two
+// callers that order the same bindings differently are asking one question and
+// should share one cache entry.
+export function viewKey(name: string, params?: string[], pageToken?: string) {
+  // The page token is PART of the key. Two surfaces reading different pages of
+  // one view are two different results; sharing a cache entry would let one
+  // overwrite the other's rows, and a watch invalidation would then replay
+  // whichever page happened to win.
+  return ["view", name, [...(params ?? [])].sort(), pageToken ?? ""] as const;
 }
 
 // runView executes one view through the generated typed client.
@@ -74,8 +77,10 @@ export type UseViewOptions = {
   // watch subscribes to the view's change stream, so the query invalidates on
   // a server-side change instead of on a timer. Default true.
   watch?: boolean;
-  // refetchIntervalMs is the fallback cadence used when watching is off, for a
-  // surface that wants periodic freshness without a stream.
+  // refetchIntervalMs is the fallback cadence used when watching is off. With
+  // watch off and no interval the view is fetched once and never refreshed,
+  // which is the right shape for a one-shot read and the wrong one for a live
+  // surface, so a caller turning watch off should say which it wants.
   refetchIntervalMs?: number;
   // pageToken runs a specific page rather than the first.
   pageToken?: string;
@@ -94,7 +99,7 @@ export function useView(name: string, params?: Accessor<string[]>, options: UseV
   const currentParams = () => params?.() ?? [];
 
   const query = useQuery(() => ({
-    queryKey: viewKey(name, currentParams()),
+    queryKey: viewKey(name, currentParams(), options.pageToken),
     queryFn: () => runView(name, currentParams(), options.pageToken),
     // A watched view is refreshed by its stream; only an unwatched one polls.
     refetchInterval: options.watch === false ? options.refetchIntervalMs : undefined,
@@ -106,26 +111,68 @@ export function useView(name: string, params?: Accessor<string[]>, options: UseV
     // same request: a watcher for the old params would invalidate a key
     // nothing is reading.
     const p = currentParams();
-    const handle = watchView(name, p, () => {
-      void qc.invalidateQueries({ queryKey: viewKey(name, p) });
+    const subscribedAt = Date.now();
+    let baselineSeen = false;
+    const release = shareWatch(name, p, () => {
+      // The server opens every stream with a baseline change event, so a
+      // reconnecting client always refetches once. When the query already
+      // holds data newer than this connection, that baseline says nothing new,
+      // and acting on it would double-fetch every view on mount and again on
+      // every stream renewal.
+      if (!baselineSeen) {
+        baselineSeen = true;
+        const state = qc.getQueryState(viewKey(name, p, options.pageToken));
+        if (state?.dataUpdatedAt && state.dataUpdatedAt >= subscribedAt) return;
+      }
+      void qc.invalidateQueries({ queryKey: viewKey(name, p, options.pageToken) });
     });
-    onCleanup(() => handle.close());
+    onCleanup(release);
   });
 
   return query;
 }
 
-// useViewRows applies a view's rows through a store with `reconcile`, which is
-// what makes a live surface cheap: a one-row delta patches that row's cells in
-// place, so every other row keeps its identity and its DOM, and only the cells
-// that actually changed re-render. Re-assigning the array instead would rebuild
-// the whole table on every notification.
-// ViewRow wraps a result row for the store. The wrapper exists for one reason:
-// reconcile cannot merge bare arrays in place (it replaces them, and every row
-// would lose its identity and its DOM on any update), while it merges keyed
-// OBJECTS cell by cell. The key is the row's position, which is the only
-// identity a positional ViewResult carries; a view that later declares a row
-// key can key on that instead and survive re-ordering too.
+// The shared watch registry. A browser allows only a handful of concurrent
+// connections per origin over HTTP/1.1, and a stream holds one open for its
+// whole life, so a dashboard of widgets that each opened their own would starve
+// every ordinary request on the page. Watchers of the same view with the same
+// params share one stream; the last one to leave closes it.
+type sharedWatch = { close: () => void; listeners: Set<() => void> };
+const sharedWatches = new Map<string, sharedWatch>();
+
+function shareWatch(name: string, params: string[], onChange: () => void): () => void {
+  const key = JSON.stringify(viewKey(name, params));
+  let entry = sharedWatches.get(key);
+  if (!entry) {
+    const listeners = new Set<() => void>();
+    const handle = watchView(name, params, () => {
+      for (const fn of [...listeners]) fn();
+    });
+    entry = { close: handle.close, listeners };
+    sharedWatches.set(key, entry);
+  }
+  const shared = entry;
+  shared.listeners.add(onChange);
+  return () => {
+    shared.listeners.delete(onChange);
+    if (shared.listeners.size === 0) {
+      shared.close();
+      sharedWatches.delete(key);
+    }
+  };
+}
+
+// useViewRows applies a view's rows through a store with `reconcile`, so a
+// live update patches cells in place instead of rebuilding the table.
+//
+// The guarantee, stated honestly: rows keep their DOM nodes across ANY update,
+// and only the cells whose values actually changed re-render. For a view that
+// updates rows in place (component-reachability flipping one verdict) that is
+// one cell. For a view that PREPENDS (event-feed, newest first) it is every
+// cell, because the rows are keyed by POSITION, the only identity a positional
+// ViewResult carries: row 0 now holds what row 1 held. The nodes survive, the
+// values shift down. A view that later declares a row key can key on that and
+// survive insertion and re-ordering too.
 export type ViewRow = { k: string; cells: ViewCell[] };
 
 export function useViewRows(result: Accessor<ViewResult | undefined>): {
@@ -136,7 +183,9 @@ export function useViewRows(result: Accessor<ViewResult | undefined>): {
   const [columns, setColumns] = createSignal<ViewColumn[]>([]);
   createEffect(() => {
     const r = result();
-    const next: ViewRow[] = (r?.rows ?? []).map((cells, i) => ({ k: String(i), cells }));
+    // A null rows array and a null row are both "no rows" on the wire; the
+    // renderers see one shape.
+    const next: ViewRow[] = (r?.rows ?? []).map((cells, i) => ({ k: String(i), cells: (cells ?? []) as ViewCell[] }));
     setStore("rows", reconcile(next, { key: "k" }));
     setColumns(r?.columns ?? []);
   });
