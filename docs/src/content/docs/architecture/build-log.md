@@ -2284,3 +2284,16 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   never-probed interfaces reporting the explicit `unknown`, driven over the API and the
   generated CLI (cligen learned repeatable array query flags for `--param`) with row
   content asserted in both. [Views](/architecture/views/) moves to `Partial`.
+- **The watch seam: SSE notify-then-refetch over the scoped change detector ([#540](https://github.com/hyperscaleav/omniglass/issues/540)).**
+  `GET /views/{name}:watch` streams change events (a baseline on connect, then one per
+  delta) with heartbeat comments and a reconnect hint; no data rides the stream, the
+  client re-runs the view, so `ViewResult` stays the only shape. V1 detects change with
+  the pure detector loop in `internal/views` (interval re-run plus result hash, ticker
+  and query injected), re-running under the caller's scope so a watcher is never
+  notified of out-of-scope changes; gates match `:run` exactly. The live e2e pins the
+  contract: baseline on connect, notification within a detector interval of a data
+  change, heartbeats-only quiet windows, scope-silent out-of-scope flips, 403/404 parity
+  with `:run`, and a reconnect baseline. The client half is a fetch-based SSE reader
+  (`watchView`, chunk-safe parser, bearer-carrying, fixed-delay reconnect) that the
+  `useView` hook wires to query invalidation next slice. cligen now skips
+  `text/event-stream` operations (a one-shot command cannot print an endless stream).

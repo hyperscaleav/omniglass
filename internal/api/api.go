@@ -12,6 +12,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
@@ -42,6 +43,12 @@ type options struct {
 	// the handler runs without a bus, and the push route then answers 503 rather
 	// than pretending to accept telemetry nothing will ever consume.
 	telemetryPub TelemetryPublisher
+	// watchDetectorInterval and watchHeartbeatInterval pace the :watch seam:
+	// how often the scoped change detector re-runs a watched view, and how
+	// often a quiet stream carries a keep-alive comment. Zero means the
+	// defaults (tests tighten both).
+	watchDetectorInterval  time.Duration
+	watchHeartbeatInterval time.Duration
 }
 
 // Option configures NewHandler.
@@ -58,6 +65,16 @@ func WithNatsURL(u string) Option { return func(o *options) { o.natsURL = u } }
 // bus-less deployment cannot silently accept telemetry into a void.
 func WithTelemetryPublisher(p TelemetryPublisher) Option {
 	return func(o *options) { o.telemetryPub = p }
+}
+
+// WithWatchIntervals paces the :watch seam: the detector re-run interval and
+// the quiet-stream heartbeat interval. Zero keeps a default; tests tighten
+// both so the live e2e stays fast.
+func WithWatchIntervals(detector, heartbeat time.Duration) Option {
+	return func(o *options) {
+		o.watchDetectorInterval = detector
+		o.watchHeartbeatInterval = heartbeat
+	}
 }
 
 // WithSettingsService supplies the settings engine service that backs the
@@ -269,7 +286,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerInterfaceRoutes(api, a, gw)
 	registerTaskRoutes(api, a, gw)
 	registerReachabilityRoutes(api, a, gw)
-	registerViewRoutes(api, a, gw)
+	registerViewRoutes(api, a, gw, o)
 	registerReconciliationRoutes(api, a, gw)
 	registerEventRoutes(api, a, gw)
 	registerLogRoutes(api, a, gw)

@@ -3164,6 +3164,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/views/{name}:watch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Watch a view for changes
+         * @description Opens an SSE stream with notify-then-refetch semantics: a change event on connect (the baseline, so a reconnecting client always refetches once), a change event whenever the caller's scoped result changes, and heartbeat comments on a quiet stream. No data rides the stream; the client re-runs the view. Gated exactly like :run (view:read plus the view's declared permission), and the change detector re-runs the view under the caller's scope, so a watcher is never notified of out-of-scope changes.
+         */
+        get: operations["watch-view"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -13204,6 +13224,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ViewResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "watch-view": {
+        parameters: {
+            query?: {
+                /** @description A name=value binding for a declared view parameter; repeat for several */
+                param?: string[] | null;
+            };
+            header?: never;
+            path: {
+                /** @description The view name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The SSE notification stream: change events carrying a result hash, heartbeat comments between them */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
                 };
             };
             /** @description Bad Request */

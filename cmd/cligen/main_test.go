@@ -181,6 +181,44 @@ func TestRenderQueryFlags(t *testing.T) {
 	}
 }
 
+// TestSkipsEventStreamOperations asserts an SSE operation (a 200 whose only
+// content is text/event-stream) generates NO command: a one-shot
+// request-print command would hang forever on an endless stream. The watch
+// route is the worked case; a normal JSON operation on the same path set
+// still generates.
+func TestSkipsEventStreamOperations(t *testing.T) {
+	doc := spec{Paths: map[string]pathItem{
+		"/views/{name}:watch": {"get": {
+			OperationID: "watch-view",
+			Summary:     "Watch a view for changes",
+			Responses: map[string]response{
+				"200": {Content: map[string]struct{}{"text/event-stream": {}}},
+			},
+		}},
+		"/views": {"get": {
+			OperationID: "list-views",
+			Summary:     "List the view directory",
+			Responses: map[string]response{
+				"200": {Content: map[string]struct{}{"application/json": {}}},
+			},
+		}},
+	}}
+	cmds := buildCommands(doc, "/api/v1")
+	var haveList bool
+	for _, c := range cmds {
+		words := strings.Join(c.Words, " ")
+		if words == "view watch" {
+			t.Fatalf("the SSE operation generated %q; event-stream operations must be skipped", words)
+		}
+		if words == "view list" {
+			haveList = true
+		}
+	}
+	if !haveList {
+		t.Fatalf("view list missing (%d commands); the skip must be SSE-only", len(cmds))
+	}
+}
+
 // TestSchemaTypeNullable asserts the schema type field accepts both the plain
 // string form and the nullable array form Huma emits for optional slices
 // (["array","null"]), normalizing to the non-null type.

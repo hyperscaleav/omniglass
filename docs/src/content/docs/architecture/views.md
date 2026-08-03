@@ -96,12 +96,19 @@ baked into the result.
 
 ## Live updates
 
-:::design[The watch seam, tracked in #523]
 `GET /views/{name}:watch` is an [SSE](/architecture/messaging/) stream with **notify-then-refetch**
-semantics: the server pushes a change notification, the client re-runs the view, and `ViewResult`
-stays the only data shape. V1 feeds the stream from a server-side scoped change detector (interval
-re-run plus hash, an event only on delta, heartbeat comments); the trusted-stream and CDC feeds
-(#430) later replace the detector with a bus consumer under the same client contract.
+semantics: the server pushes a change event (one on connect, the baseline, then one per delta), the
+client re-runs the view, and `ViewResult` stays the only data shape. A quiet stream carries
+heartbeat comments; a dropped connection reconnects on the stream's retry hint, and the fresh
+baseline covers whatever was missed. Gates match `:run` exactly, and the change detector re-runs
+the view under the **caller's** scope, so a watcher is never notified of out-of-scope changes. V1
+detects change server-side by interval re-run plus result hash, an event only on delta. The
+generated CLI deliberately carries no `watch` command (a one-shot command cannot print an endless
+stream); the console and any SSE client consume it directly.
+
+:::design[The bus-fed relay, tracked in #523]
+When the trusted-stream and CDC feeds land (#430), a bus consumer replaces the interval detector
+under the same client contract; clients never change.
 :::
 
 ## Versioning

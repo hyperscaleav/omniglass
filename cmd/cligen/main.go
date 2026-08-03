@@ -70,11 +70,30 @@ type server struct {
 type pathItem map[string]operation
 
 type operation struct {
-	OperationID string       `json:"operationId"`
-	Summary     string       `json:"summary"`
-	Description string       `json:"description"`
-	Parameters  []param      `json:"parameters"`
-	RequestBody *requestBody `json:"requestBody"`
+	OperationID string              `json:"operationId"`
+	Summary     string              `json:"summary"`
+	Description string              `json:"description"`
+	Parameters  []param             `json:"parameters"`
+	RequestBody *requestBody        `json:"requestBody"`
+	Responses   map[string]response `json:"responses"`
+}
+
+// response carries only what the generator needs from a response: its content
+// types, so streaming operations can be recognized and skipped.
+type response struct {
+	Content map[string]struct{} `json:"content"`
+}
+
+// isEventStream reports whether the operation's 200 response is an SSE stream
+// (text/event-stream). Such an operation gets NO generated command: a one-shot
+// request-print command would hang forever on an endless stream.
+func (op operation) isEventStream() bool {
+	r, ok := op.Responses["200"]
+	if !ok {
+		return false
+	}
+	_, sse := r.Content["text/event-stream"]
+	return sse
 }
 
 type param struct {
@@ -85,33 +104,11 @@ type param struct {
 	Schema      paramSchema `json:"schema"`
 }
 
+// paramSchema's type reuses jsonType, so a nullable parameter (an optional
+// slice emits `["array", "null"]`) resolves to its non-null type exactly like
+// a body property does.
 type paramSchema struct {
-	Type schemaType `json:"type"`
-}
-
-// schemaType is a JSON Schema type that may arrive as one string or as an
-// array of types (a nullable field emits ["array","null"]). It normalizes to
-// the first non-"null" entry, which is all flag selection needs.
-type schemaType string
-
-func (t *schemaType) UnmarshalJSON(b []byte) error {
-	var one string
-	if err := json.Unmarshal(b, &one); err == nil {
-		*t = schemaType(one)
-		return nil
-	}
-	var many []string
-	if err := json.Unmarshal(b, &many); err != nil {
-		return err
-	}
-	*t = ""
-	for _, s := range many {
-		if s != "null" {
-			*t = schemaType(s)
-			return nil
-		}
-	}
-	return nil
+	Type jsonType `json:"type"`
 }
 
 type requestBody struct {
@@ -248,6 +245,9 @@ func buildCommands(doc spec, base string) []command {
 		for _, method := range httpMethods {
 			op, ok := item[method]
 			if !ok {
+				continue
+			}
+			if op.isEventStream() {
 				continue
 			}
 			cmds = append(cmds, buildCommand(doc, base, p, method, op))
