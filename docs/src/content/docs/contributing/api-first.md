@@ -89,9 +89,9 @@ Every operation lives under `/api/v1/*`. The path shape is derivable, not specia
   `/location-types`, `/types/event`.
 - **official / private namespace** on every registry and rule family (below).
 - **List conventions** (AIP-132 target): `filter` / `orderBy` / `pageSize`+
-  `pageToken` (cursor, never offset) / `fields`. The `filter` runs through the one pluggable
-  expression engine ([Expr by default](/architecture/expressions/)), the same language
-  across rule scopes, dynamic groups, and list filters.
+  `pageToken` (cursor, never offset) / `fields`. The `filter` runs through the one
+  [expression engine](/architecture/expressions/) (Expr, one dialect, not pluggable), the same
+  language across rule scopes, dynamic groups, and list filters.
 
 The API is **self-describing**: the running server serves `GET /api/v1/openapi.json`,
 `/openapi.yaml`, and a human reference page.

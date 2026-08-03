@@ -195,8 +195,9 @@ A handful of patterns hold everywhere:
 
 - **Exclusive-arc ownership**: every sample, event, and alarm names exactly one owner (component,
   system, location, or node), so system- and location-level signals are first-class.
-- **Immutable template versions**: an instance pins a frozen template version (or tracks `latest`);
-  editing mints a new version; re-pointing is explicit.
+- **Templates fork, nothing pins**: creating from a [template](/architecture/templates/) is a
+  one-time clone with no back-pointer, so a template can be rewritten in any release without
+  migrating an install ([ADR-0071](/architecture/decisions/#adr-0071-a-template-is-a-clonable-example-not-a-versioned-shape-an-instance-pins)).
 - **On-row lineage**: a derived row carries its own evidence; there is no separate execution table.
 - **The `official` boolean**: every registry (`property_type`, `event_type`, `command_type`, and the
   catalogs) and rule row carries an `official` boolean: the curated ship-with set, seeded at boot
