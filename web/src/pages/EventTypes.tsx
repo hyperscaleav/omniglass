@@ -1,6 +1,7 @@
 import { Show, createEffect, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
 import { Plus } from "../components/icons";
@@ -28,8 +29,11 @@ function originBadge(official: boolean): JSX.Element {
 }
 
 const columns: FlatColumn<EventTypeRow>[] = [
-  { key: "name", label: "Key", sortVal: (r) => r.name, cell: (r) => <span class="font-data font-semibold">{r.name}</span> },
-  { key: "display_name", label: "Label", sortVal: (r) => r.display_name ?? "", cell: (r) => <span>{r.display_name}</span> },
+  // The header word stays "Key" rather than the primitive's default "Name": an event
+  // type's `name` is a keyspace key (call.started), which is a legal key and an
+  // illegal segment, so calling it a name here would teach the wrong thing. The cell
+  // renders the label above the key, which is why there is no longer a Label column.
+  identityColumn<EventTypeRow>({ label: "Key" }),
   { key: "official", label: "Origin", width: "100px", sortVal: (r) => String(r.official), cell: (r) => originBadge(r.official) },
 ];
 

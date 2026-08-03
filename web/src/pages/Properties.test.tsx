@@ -39,6 +39,16 @@ describe("Properties page", () => {
     expect(screen.getByText("rack_unit")).toBeTruthy();
   });
 
+  it("renders the label and the key in one identity cell, not two columns", () => {
+    mount();
+    // The key is a keyspace key rather than a kebab segment, so the header word stays
+    // "Key"; what changes is that the label now sits above it in the same cell.
+    const cell = screen.getByText("serial_number").closest("td");
+    expect(cell?.textContent).toContain("Serial number");
+    expect(screen.getByRole("columnheader", { name: "Key" })).toBeTruthy();
+    expect(screen.queryByRole("columnheader", { name: "Label" })).toBeNull();
+  });
+
   it("shows New property for a caller holding property:create", () => {
     mount(admin);
     expect(screen.getByText("New property")).toBeTruthy();

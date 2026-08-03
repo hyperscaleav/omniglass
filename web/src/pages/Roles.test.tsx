@@ -105,9 +105,27 @@ describe("Roles page", () => {
     expect(await screen.findByText("platform:update")).toBeTruthy();
   });
 
+  it("renders the label over the segment in one Name column", () => {
+    mount();
+    // The shared identity cell puts the label on the primary line and the API
+    // segment beneath it, so the segment stays readable and selectable for a CLI
+    // call. It is no longer a badge crowded onto the label's line.
+    const cell = screen.getByText("Administrator").closest("td");
+    expect(cell?.textContent).toContain("admin");
+    expect(cell?.querySelector(".badge")).toBeNull();
+  });
+
+  it("keeps the official origin badge, in its own column", () => {
+    mount();
+    // Origin left the name cell rather than the page: a custom role is the whole
+    // reason an operator reads this fact.
+    expect(screen.getByText("Origin")).toBeTruthy();
+    expect(screen.getAllByText("official").length).toBe(seed.length);
+  });
+
   it("shows what a role inherits in its row", () => {
     mount();
-    // viewer appears as its own id badge AND in operator's Inherits cell.
+    // viewer appears as its own identity segment AND in operator's Inherits cell.
     expect(screen.getAllByText("viewer").length).toBeGreaterThanOrEqual(2);
   });
 

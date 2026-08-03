@@ -1,7 +1,9 @@
 import { Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
+import { createIdentity } from "../lib/entities";
 import { useFormActions } from "../lib/formactions";
 import { Plus } from "../components/icons";
 import {
@@ -52,8 +54,7 @@ function kindBadge(kind: string): JSX.Element {
 }
 
 const columns: FlatColumn<Vendor>[] = [
-  { key: "name", label: "Name", sortVal: (m) => m.name, cell: (m) => <span class="font-data font-semibold">{m.name}</span> },
-  { key: "display_name", label: "Display name", sortVal: (m) => m.display_name, cell: (m) => <span>{m.display_name}</span> },
+  identityColumn<Vendor>(),
   { key: "kind", label: "Kind", width: "130px", sortVal: (m) => m.kind, cell: (m) => kindBadge(m.kind) },
   { key: "icon", label: "Icon", width: "110px", cell: (m) => <span class="font-data text-xs text-base-content/60">{m.icon ?? "—"}</span> },
   { key: "official", label: "Origin", width: "100px", sortVal: (m) => String(m.official), cell: (m) => officialBadge(m.official) },
@@ -259,13 +260,14 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
   );
 }
 
-// CreateVendorForm: pick the kebab name (the operator-facing address; the uuid
-// is the database's to mint), set the display name and kind; icon, support
-// phone, and website are optional.
+// CreateVendorForm: type the vendor as it is written on the box and the kebab
+// name follows (the uuid is the database's to mint), then set the kind; icon,
+// support phone, and website are optional.
 export function CreateVendorForm(p: { onCreated: (v: Vendor) => void }): JSX.Element {
   const qc = useQueryClient();
-  const [id, setId] = createSignal("");
-  const [displayName, setDisplayName] = createSignal("");
+  // Display name leads and the name follows it, stopping the moment the operator
+  // edits the name by hand (lib/entities).
+  const { display, setDisplay, name, setName, keyDerived } = createIdentity();
   const [kind, setKind] = createSignal<VendorKind>("manufacturer");
   const [icon, setIcon] = createSignal("");
   const [supportPhone, setSupportPhone] = createSignal("");
@@ -278,7 +280,7 @@ export function CreateVendorForm(p: { onCreated: (v: Vendor) => void }): JSX.Ele
     submitIcon: Plus,
     submit: () => void submit(),
     busy,
-    disabled: () => !id().trim() || !displayName().trim(),
+    disabled: () => !name().trim() || !display().trim(),
   });
 
   async function submit() {
@@ -286,8 +288,8 @@ export function CreateVendorForm(p: { onCreated: (v: Vendor) => void }): JSX.Ele
     setFormErr(null);
     try {
       const created = await createVendor({
-        name: id().trim(),
-        display_name: displayName().trim(),
+        name: name().trim(),
+        display_name: display().trim(),
         kind: kind(),
         icon: icon().trim() || undefined,
         support_phone: supportPhone().trim() || undefined,
@@ -307,11 +309,14 @@ export function CreateVendorForm(p: { onCreated: (v: Vendor) => void }): JSX.Ele
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Name" hint="A kebab name, e.g. crestron.">
-        <input class="input input-bordered w-full font-data" value={id()} placeholder="crestron" onInput={(e) => setId(e.currentTarget.value)} />
+      <Field label="Display name" hint="What an operator reads, e.g. Crestron.">
+        <input class="input input-bordered w-full" value={display()} placeholder="Crestron" onInput={(e) => setDisplay(e.currentTarget.value)} />
       </Field>
-      <Field label="Display name">
-        <input class="input input-bordered w-full" value={displayName()} placeholder="Crestron" onInput={(e) => setDisplayName(e.currentTarget.value)} />
+      <Field
+        label="Name"
+        hint={keyDerived() ? "Derived from the display name. Edit to set your own." : "A kebab name, the address the API and CLI accept."}
+      >
+        <input class="input input-bordered w-full font-data" value={name()} placeholder="crestron" onInput={(e) => setName(e.currentTarget.value)} />
       </Field>
       <Field label="Kind" hint="What role the vendor plays.">
         <select class="select select-bordered w-full" value={kind()} onChange={(e) => setKind(e.currentTarget.value as VendorKind)}>

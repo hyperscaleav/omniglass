@@ -1,6 +1,7 @@
 import { For, Show, createEffect, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
 import { Plus } from "../components/icons";
@@ -40,10 +41,13 @@ function originBadge(official: boolean): JSX.Element {
     : <span class="badge badge-outline badge-sm">custom</span>;
 }
 
+// The identity column keeps the header word "Key" here: this catalog is a keyspace, so
+// `name` holds a dotted key (icmp.rtt_avg) rather than the kebab segment the rest of the
+// estate addresses rows by. The cell is the shared two-line treatment either way, which
+// is what retires the separate "Label" column.
 const columns: FlatColumn<PropertyRow>[] = [
-  { key: "name", label: "Key", sortVal: (r) => r.name, cell: (r) => <span class="font-data font-semibold">{r.name}</span> },
+  identityColumn<PropertyRow>({ label: "Key" }),
   { key: "data_type", label: "Type", width: "90px", sortVal: (r) => r.data_type, cell: (r) => typeBadge(r.data_type) },
-  { key: "display_name", label: "Label", sortVal: (r) => r.display_name ?? "", cell: (r) => <span>{r.display_name}</span> },
   { key: "kind", label: "Kind", width: "90px", cell: (r) => kindBadge(r.kind) },
   { key: "official", label: "Origin", width: "100px", sortVal: (r) => String(r.official), cell: (r) => originBadge(r.official) },
 ];

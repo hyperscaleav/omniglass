@@ -1,6 +1,7 @@
 import { For, Show, createEffect, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
 import ContractEditor from "../components/ContractEditor";
@@ -17,6 +18,7 @@ import {
   deleteType,
 } from "../lib/types";
 import { useMe, can } from "../lib/auth";
+import { createIdentity } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
@@ -46,15 +48,12 @@ function officialBadge(official: boolean): JSX.Element {
     : <span class="badge badge-outline badge-sm">custom</span>;
 }
 
-// Columns for the active kind: every kind shows the kebab name (ADR-0062: the
-// operator-facing address; the uuid stays in the blade), display name, and
-// origin; location alone adds its icon glyph. There is no Kind column because the tab
-// already names the kind.
+// Columns for the active kind: every kind shows its identity (the label above
+// the kebab segment, ADR-0062: the operator-facing address; the uuid stays in
+// the blade) and origin; location alone adds its icon glyph. There is no Kind
+// column because the tab already names the kind.
 function columnsFor(kind: TypeKind): FlatColumn<TypeRow>[] {
-  const cols: FlatColumn<TypeRow>[] = [
-    { key: "name", label: "Name", sortVal: (r) => r.name, cell: (r) => <span class="font-data font-semibold">{r.name}</span> },
-    { key: "display_name", label: "Display name", sortVal: (r) => r.display_name, cell: (r) => <span>{r.display_name}</span> },
-  ];
+  const cols: FlatColumn<TypeRow>[] = [identityColumn<TypeRow>()];
   if (kind === "location") {
     cols.push({ key: "icon", label: "Icon", width: "110px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.icon ?? "—"}</span> });
   }
@@ -307,17 +306,17 @@ function TypeBladeBody(p: { id: string }): JSX.Element {
   );
 }
 
-// CreateTypeForm: pick the kebab name (the operator-facing address; the uuid
-// is the database's to mint) and set the display name for a new custom type of
-// the active kind (the tab decides the kind; secret_type has no write routes
-// this slice, so it never opens this form). A location type also gets an icon
-// glyph key.
+// CreateTypeForm: name a new custom type of the active kind (the tab decides the
+// kind; secret_type has no write routes this slice, so it never opens this
+// form). The display name leads and the kebab name (the operator-facing address;
+// the uuid is the database's to mint) follows it, stopping the moment the
+// operator edits the name by hand (lib/entities). A location type also gets an
+// icon glyph key.
 export function CreateTypeForm(p: { kind: TypeKind; onCreated: (t: TypeRow) => void }): JSX.Element {
   const qc = useQueryClient();
   const types = useQuery(() => ({ queryKey: TYPES_KEY, queryFn: listTypes }));
   const locationTypeOptions = () => (types.data ?? []).filter((r) => r.kind === "location");
-  const [id, setId] = createSignal("");
-  const [displayName, setDisplayName] = createSignal("");
+  const { display, setDisplay, name, setName, keyDerived } = createIdentity();
   const [icon, setIcon] = createSignal("");
   const [allowedParents, setAllowedParents] = createSignal<string[]>([]);
   const [busy, setBusy] = createSignal(false);
@@ -328,7 +327,7 @@ export function CreateTypeForm(p: { kind: TypeKind; onCreated: (t: TypeRow) => v
     submitIcon: Plus,
     submit: () => void submit(),
     busy,
-    disabled: () => !id().trim() || !displayName().trim(),
+    disabled: () => !name().trim() || !display().trim(),
   });
 
   async function submit() {
@@ -336,8 +335,8 @@ export function CreateTypeForm(p: { kind: TypeKind; onCreated: (t: TypeRow) => v
     setFormErr(null);
     try {
       const created = await createType(p.kind, {
-        name: id().trim(),
-        display_name: displayName().trim(),
+        name: name().trim(),
+        display_name: display().trim(),
         ...(p.kind === "location" ? { icon: icon().trim() || "map-pin", allowed_parent_types: allowedParents() } : {}),
       });
       await qc.invalidateQueries({ queryKey: TYPES_KEY });
@@ -358,11 +357,11 @@ export function CreateTypeForm(p: { kind: TypeKind; onCreated: (t: TypeRow) => v
         <span class="eyebrow">Kind</span>
         {kindBadge(p.kind)}
       </div>
-      <Field label="Name" hint="A kebab name, e.g. wing.">
-        <input class="input input-bordered w-full font-data" value={id()} placeholder="wing" onInput={(e) => setId(e.currentTarget.value)} />
+      <Field label="Display name" hint="What an operator reads.">
+        <input class="input input-bordered w-full" value={display()} placeholder="Wing" onInput={(e) => setDisplay(e.currentTarget.value)} />
       </Field>
-      <Field label="Display name">
-        <input class="input input-bordered w-full" value={displayName()} placeholder="Wing" onInput={(e) => setDisplayName(e.currentTarget.value)} />
+      <Field label="Name" hint={keyDerived() ? "Derived from the display name. Edit to set your own." : "A kebab name, e.g. wing. Addressed by the API and CLI."}>
+        <input class="input input-bordered w-full font-data" value={name()} placeholder="wing" onInput={(e) => setName(e.currentTarget.value)} />
       </Field>
       <Show when={p.kind === "location"}>
         <Field label="Icon" hint="A glyph key, e.g. map-pin (the default).">

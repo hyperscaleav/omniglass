@@ -1,6 +1,7 @@
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
 import ContractEditor from "../components/ContractEditor";
@@ -15,6 +16,7 @@ import {
   deleteStandard,
 } from "../lib/standards";
 import { useMe, can } from "../lib/auth";
+import { createIdentity } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
@@ -42,8 +44,7 @@ function refCell(id?: string): JSX.Element {
 }
 
 const columns: FlatColumn<Standard>[] = [
-  { key: "name", label: "Name", sortVal: (s) => s.name, cell: (s) => <span class="font-data font-semibold">{s.name}</span> },
-  { key: "display_name", label: "Display name", sortVal: (s) => s.display_name, cell: (s) => <span>{s.display_name}</span> },
+  identityColumn<Standard>(),
   { key: "parent", label: "Variant of", width: "180px", sortVal: (s) => s.parent_standard ?? "", cell: (s) => refCell(s.parent_standard) },
   { key: "official", label: "Origin", width: "100px", sortVal: (s) => String(s.official), cell: (s) => officialBadge(s.official) },
 ];
@@ -197,13 +198,14 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
   );
 }
 
-// CreateStandardForm: pick the kebab name (the operator-facing address; the
-// uuid is the database's to mint), set the display name; the parent standard
-// is optional (a variant of an existing one).
+// CreateStandardForm: name the standard and let the kebab handle (the
+// operator-facing address; the uuid is the database's to mint) derive from it;
+// the parent standard is optional (a variant of an existing one).
 export function CreateStandardForm(p: { onCreated: (s: Standard) => void }): JSX.Element {
   const qc = useQueryClient();
-  const [id, setId] = createSignal("");
-  const [displayName, setDisplayName] = createSignal("");
+  // Display name leads and the handle follows it, stopping the moment the
+  // operator edits the handle by hand (lib/entities).
+  const { display, setDisplay, name, setName, keyDerived } = createIdentity();
   const [parentId, setParentId] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
@@ -213,7 +215,7 @@ export function CreateStandardForm(p: { onCreated: (s: Standard) => void }): JSX
     submitIcon: Plus,
     submit: () => void submit(),
     busy,
-    disabled: () => !id().trim() || !displayName().trim(),
+    disabled: () => !name().trim() || !display().trim(),
   });
 
   async function submit() {
@@ -221,8 +223,8 @@ export function CreateStandardForm(p: { onCreated: (s: Standard) => void }): JSX
     setFormErr(null);
     try {
       const created = await createStandard({
-        name: id().trim(),
-        display_name: displayName().trim(),
+        name: name().trim(),
+        display_name: display().trim(),
         parent_standard_id: parentId() || undefined,
       });
       await qc.invalidateQueries({ queryKey: STANDARDS_KEY });
@@ -239,11 +241,11 @@ export function CreateStandardForm(p: { onCreated: (s: Standard) => void }): JSX
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Name" hint="A kebab name, e.g. meeting-room.">
-        <input class="input input-bordered w-full font-data" value={id()} placeholder="meeting-room" onInput={(e) => setId(e.currentTarget.value)} />
+      <Field label="Display name" hint="What an operator reads.">
+        <input class="input input-bordered w-full" value={display()} placeholder="Meeting room" onInput={(e) => setDisplay(e.currentTarget.value)} />
       </Field>
-      <Field label="Display name">
-        <input class="input input-bordered w-full" value={displayName()} placeholder="Meeting room" onInput={(e) => setDisplayName(e.currentTarget.value)} />
+      <Field label="Name" hint={keyDerived() ? "Derived from the display name. Edit to set your own." : "A kebab name, e.g. meeting-room."}>
+        <input class="input input-bordered w-full font-data" value={name()} placeholder="meeting-room" onInput={(e) => setName(e.currentTarget.value)} />
       </Field>
       <Field label="Variant of" hint="A standard this one specializes. Optional.">
         <ParentStandardSelect value={parentId()} onChange={setParentId} />

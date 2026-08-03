@@ -1,8 +1,9 @@
-import { entityLabel } from "../lib/entities";
+import { createIdentity, entityLabel } from "../lib/entities";
 import { Show, For, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { Dialog } from "@kobalte/core/dialog";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import { identityColumn } from "../components/IdentityCell";
 import Button from "../components/Button";
 import { useFormActions } from "../lib/formactions";
 import { Check, Copy, Plus, Server } from "../components/icons";
@@ -58,25 +59,12 @@ function StatusPill(props: { node: Node }) {
   return <span class={`badge badge-sm ${STATUS[s()].badge}`}>{STATUS[s()].label}</span>;
 }
 
-// The node columns: Name carries a server glyph + the node name (its address) and
-// an optional description; Status the derived liveness pill; Last heartbeat the
+// The node columns: Name is the shared identity cell (label over address, the
+// address suppressed when it IS the label), so a node reads the way every other
+// entity in the console reads; Status the derived liveness pill; Last heartbeat the
 // relative time (or a muted dash for a node that has never checked in).
 const columns: FlatColumn<Node>[] = [
-  {
-    key: "name", label: "Name", sortVal: (n) => nodeLabel(n).toLowerCase(),
-    cell: (n) => (
-      <div class="flex items-center gap-2.5">
-        <span class="text-base-content/40"><Server size={16} /></span>
-        <div class="min-w-0 leading-tight">
-          <div class="truncate text-sm font-medium">{nodeLabel(n)}</div>
-          <div class="truncate font-data text-[11px] text-base-content/40">
-            {n.name}
-            <Show when={n.location}> · {n.location}</Show>
-          </div>
-        </div>
-      </div>
-    ),
-  },
+  identityColumn<Node>(),
   {
     key: "status", label: "Status", width: "120px", sortVal: (n) => nodeStatus(n),
     cell: (n) => <StatusPill node={n} />,
@@ -361,16 +349,18 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
   );
 }
 
-// CreateNodeForm is the new-node form the create Drawer hosts: name (the node's
-// address, required) and an optional description. Day one, a node is created then
-// enrolled immediately, so on success it invalidates the list and hands the minted
-// token to onEnrolled, which reveals it in the show-once modal (closing this
-// Drawer). The token is never held here.
+// CreateNodeForm is the new-node form the create Drawer hosts: the display name
+// leads, the name (the node's address, required) follows it, plus an optional
+// location and description. Day one, a node is created then enrolled immediately,
+// so on success it invalidates the list and hands the minted token to onEnrolled,
+// which reveals it in the show-once modal (closing this Drawer). The token is never
+// held here.
 function CreateNodeForm(props: { close: () => void; onEnrolled: (out: EnrollOutput) => void }) {
   const qc = useQueryClient();
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: () => listLocations() }));
-  const [name, setName] = createSignal("");
-  const [displayName, setDisplayName] = createSignal("");
+  // Display name leads and the address follows it, stopping the moment the
+  // operator edits the address by hand (lib/entities).
+  const { display, setDisplay, name, setName, keyDerived } = createIdentity();
   const [location, setLocation] = createSignal("");
   const [description, setDescription] = createSignal("");
   const [busy, setBusy] = createSignal(false);
@@ -391,7 +381,7 @@ function CreateNodeForm(props: { close: () => void; onEnrolled: (out: EnrollOutp
     try {
       const created = await createNode({
         name: name().trim(),
-        display_name: displayName().trim() || undefined,
+        display_name: display().trim() || undefined,
         description: description().trim() || undefined,
         location: location() || undefined,
       });
@@ -409,17 +399,18 @@ function CreateNodeForm(props: { close: () => void; onEnrolled: (out: EnrollOutp
 
   return (
     <form class="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
-      <p class="text-xs text-base-content/50">Registers an edge node and mints its enrollment token. The name is the node's address (no dots or whitespace); the token is shown once.</p>
+      <p class="text-xs text-base-content/50">Registers an edge node and mints its enrollment token, which is shown once.</p>
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
       <div>
-        <label class="eyebrow mb-1.5 block" for="new-node-name">Name</label>
-        <input id="new-node-name" autocomplete="off" class="input input-bordered w-full font-data" value={name()} placeholder="edge-hq-1" onInput={(e) => setName(e.currentTarget.value)} disabled={busy()} required />
+        <label class="eyebrow mb-1.5 block" for="new-node-display">Display name</label>
+        <input id="new-node-display" autocomplete="off" class="input input-bordered w-full" value={display()} placeholder="HQ Closet Node" onInput={(e) => setDisplay(e.currentTarget.value)} disabled={busy()} />
       </div>
       <div>
-        <label class="eyebrow mb-1.5 block" for="new-node-display">Display name</label>
-        <input id="new-node-display" autocomplete="off" class="input input-bordered w-full" value={displayName()} placeholder="HQ Closet Node" onInput={(e) => setDisplayName(e.currentTarget.value)} disabled={busy()} />
+        <label class="eyebrow mb-1.5 block" for="new-node-name">Name</label>
+        <input id="new-node-name" autocomplete="off" class="input input-bordered w-full font-data" value={name()} placeholder="edge-hq-1" onInput={(e) => setName(e.currentTarget.value)} disabled={busy()} required />
+        <p class="mt-1 text-xs text-base-content/50">{keyDerived() ? "Derived from the display name. Edit to set your own." : "The node's address, used by the API and CLI."}</p>
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-node-location">Location</label>

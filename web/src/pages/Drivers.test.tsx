@@ -48,6 +48,43 @@ describe("Drivers addressing honesty (#469)", () => {
   });
 });
 
+// The identity primitive: one "Name" column carrying the label over the handle,
+// not a pair of columns that read differently here than on the next page.
+describe("Drivers identity column", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("carries both identities in one Name column", async () => {
+    mount();
+    await screen.findByText("Generic SNMP");
+    expect(screen.getByRole("columnheader", { name: "Name" })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: /display name/i })).toBeNull();
+  });
+});
+
+// The create form's two identity fields are coupled: an operator types the label
+// and the handle follows, which is the only way the kebab constraint stays out of
+// their way. Hand-editing the handle ends the coupling for good.
+describe("Drivers create derives the handle", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("derives the handle from the display name until the operator edits it", async () => {
+    mount();
+    fireEvent.click(await screen.findByRole("button", { name: /new driver/i }));
+    const display = screen.getByPlaceholderText("Generic SNMP") as HTMLInputElement;
+    const handle = screen.getByPlaceholderText("snmp-generic") as HTMLInputElement;
+
+    fireEvent.input(display, { target: { value: "Acme PTZ Camera" } });
+    expect(handle.value).toBe("acme-ptz-camera");
+    expect(screen.getByText(/derived from the display name/i)).toBeInTheDocument();
+
+    fireEvent.input(handle, { target: { value: "acme-ptz" } });
+    fireEvent.input(display, { target: { value: "Acme PTZ Camera v2" } });
+    expect(handle.value).toBe("acme-ptz");
+    // The field stops advertising a coupling it no longer has.
+    expect(screen.queryByText(/derived from the display name/i)).toBeNull();
+  });
+});
+
 // A successful create lands the operator on the new row (#471): FlatList's
 // create ctx exposes select for exactly this, but every catalog page wired
 // onCreated to close, silently discarding the created row.

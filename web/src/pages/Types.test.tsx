@@ -83,6 +83,17 @@ describe("Types page", () => {
     expect(screen.queryByText("New type")).toBeNull();
   });
 
+  // One identity column carries both identities (the label above, the kebab
+  // segment beneath), so the separate display-name column is gone.
+  it("carries the label and the segment in a single Name column", () => {
+    mount();
+    const headers = screen.getAllByRole("columnheader").map((h) => h.textContent?.trim());
+    expect(headers).toContain("Name");
+    expect(headers).not.toContain("Display name");
+    const cell = screen.getByText("server-room").closest("td");
+    expect(cell?.textContent).toContain("Machine hall");
+  });
+
   it("shows New type on a writable tab for a caller holding type:create", () => {
     mount(admin);
     expect(screen.getByText("New type")).toBeTruthy();
@@ -98,6 +109,26 @@ describe("Types page", () => {
     fireEvent.click(screen.getByText("New type"));
     expect(await screen.findByText("Allowed parents")).toBeTruthy();
     expect(screen.getByText("Root (no parent)")).toBeTruthy();
+  });
+
+  // The create form leads with the display name and lets the segment follow it,
+  // so an operator never has to think about the character class. A hand-edit
+  // claims the segment, and relabelling after that leaves it alone.
+  it("derives the segment from the display name until the operator edits it", async () => {
+    mount();
+    fireEvent.click(screen.getByText("New type"));
+    const display = (await screen.findByPlaceholderText("Wing")) as HTMLInputElement;
+    const name = screen.getByPlaceholderText("wing") as HTMLInputElement;
+
+    fireEvent.input(display, { target: { value: "Server Room" } });
+    expect(name.value).toBe("server-room");
+    expect(screen.getByText(/Derived from the display name/)).toBeTruthy();
+
+    fireEvent.input(name, { target: { value: "svr" } });
+    fireEvent.input(display, { target: { value: "Server Room B" } });
+    expect(name.value).toBe("svr");
+    // The field says so too: the segment is the operator's now, not derived.
+    expect(screen.queryByText(/Derived from the display name/)).toBeNull();
   });
 
   it("offers no create form on the read-only Secret tab", async () => {

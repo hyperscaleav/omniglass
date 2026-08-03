@@ -2,6 +2,8 @@ import { Show, createSignal } from "solid-js";
 import { useSearchParams } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import { identityColumn } from "../components/IdentityCell";
+import { createIdentity } from "../lib/entities";
 import type { FilterKey } from "../lib/predicate";
 import { type Group, GROUPS_KEY, groupName, listGroups, createGroup, openGroupInEdit } from "../lib/groups";
 import { identityRegistry } from "../lib/identityBlades";
@@ -18,16 +20,7 @@ import { useFormActions } from "../lib/formactions";
 // principal_group.
 
 const columns: FlatColumn<Group>[] = [
-  {
-    key: "name", label: "Name", sortVal: (g) => groupName(g).toLowerCase(), cell: (g) => (
-      <span>
-        <span class="font-semibold">{groupName(g)}</span>
-        <Show when={g.display_name && g.name !== g.display_name}>
-          <span class="ml-1.5 font-data text-xs text-base-content/40">{g.name}</span>
-        </Show>
-      </span>
-    ),
-  },
+  identityColumn<Group>(),
   { key: "members", label: "Members", width: "110px", sortVal: (g) => g.member_count ?? 0, cell: (g) => <span class="tnum text-base-content/60">{g.member_count ?? 0}</span> },
   { key: "grants", label: "Grants", width: "100px", sortVal: (g) => g.grant_count ?? 0, cell: (g) => <span class="tnum text-base-content/60">{g.grant_count ?? 0}</span> },
   { key: "description", label: "Description", cell: (g) => <span class="text-sm text-base-content/60">{g.description || ""}</span> },
@@ -72,8 +65,9 @@ export default function Groups() {
 // detail blade, so an admin lands on it to add members and grants.
 function CreateGroupForm(props: { onCreated: (g: Group) => void; onClose: () => void }) {
   const qc = useQueryClient();
-  const [name, setName] = createSignal("");
-  const [displayName, setDisplayName] = createSignal("");
+  // Display name leads and the name follows it, stopping the moment the operator
+  // edits the name by hand (lib/entities).
+  const { display, setDisplay, name, setName, keyDerived } = createIdentity();
   const [description, setDescription] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [err, setErr] = createSignal<string | null>(null);
@@ -91,7 +85,7 @@ function CreateGroupForm(props: { onCreated: (g: Group) => void; onClose: () => 
     setBusy(true);
     setErr(null);
     try {
-      const g = await createGroup({ name: name().trim(), display_name: displayName().trim() || undefined, description: description().trim() || undefined });
+      const g = await createGroup({ name: name().trim(), display_name: display().trim() || undefined, description: description().trim() || undefined });
       // Seed the new group's detail caches so its blade opens instantly (no loading
       // flash), and flag it to open in edit mode so members and grants can be added
       // right away, then hand it to the create Drawer's select to open it.
@@ -114,13 +108,18 @@ function CreateGroupForm(props: { onCreated: (g: Group) => void; onClose: () => 
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
       <label class="flex flex-col gap-1">
-        <span class="eyebrow">Name</span>
-        <input class="input input-bordered w-full font-data" classList={{ "input-error": !!handleError(name()) }} value={name()} placeholder="field-crew" onInput={(e) => setName(e.currentTarget.value)} disabled={busy()} required />
-        <Show when={handleError(name())}>{(msg) => <p class="text-[11px] text-error">{msg()}</p>}</Show>
+        <span class="eyebrow">Display name</span>
+        <input class="input input-bordered w-full" value={display()} placeholder="Field Crew" onInput={(e) => setDisplay(e.currentTarget.value)} disabled={busy()} />
       </label>
       <label class="flex flex-col gap-1">
-        <span class="eyebrow">Display name</span>
-        <input class="input input-bordered w-full" value={displayName()} placeholder="Field Crew" onInput={(e) => setDisplayName(e.currentTarget.value)} disabled={busy()} />
+        <span class="eyebrow">Name</span>
+        <input class="input input-bordered w-full font-data" classList={{ "input-error": !!handleError(name()) }} value={name()} placeholder="field-crew" onInput={(e) => setName(e.currentTarget.value)} disabled={busy()} required />
+        <Show
+          when={handleError(name())}
+          fallback={<p class="text-[11px] text-base-content/40">{keyDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."}</p>}
+        >
+          {(msg) => <p class="text-[11px] text-error">{msg()}</p>}
+        </Show>
       </label>
       <label class="flex flex-col gap-1">
         <span class="eyebrow">Description</span>

@@ -1,6 +1,7 @@
 import { Show, createEffect, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
 import { Plus } from "../components/icons";
@@ -33,9 +34,11 @@ function targetCell(target: string | undefined): JSX.Element {
     : <span class="text-base-content/30">fire-and-forget</span>;
 }
 
+// The header stays "Key" rather than the primitive's default "Name": a command
+// type's `name` is a keyspace key (set_input, video.input), not the kebab segment
+// the rest of the estate is addressed by, and calling it a name would be a lie.
 const columns: FlatColumn<CommandTypeRow>[] = [
-  { key: "name", label: "Key", sortVal: (r) => r.name, cell: (r) => <span class="font-data font-semibold">{r.name}</span> },
-  { key: "display_name", label: "Label", sortVal: (r) => r.display_name ?? "", cell: (r) => <span>{r.display_name}</span> },
+  identityColumn<CommandTypeRow>({ label: "Key" }),
   { key: "target", label: "Target", cell: (r) => targetCell(r.target_property_type) },
   { key: "settle", label: "Settle (s)", width: "90px", sortVal: (r) => r.settle_window_seconds, cell: (r) => <span class="tabular-nums text-[12px]">{r.settle_window_seconds}</span> },
   { key: "official", label: "Origin", width: "100px", sortVal: (r) => String(r.official), cell: (r) => originBadge(r.official) },

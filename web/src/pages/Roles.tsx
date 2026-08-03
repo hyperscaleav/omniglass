@@ -1,6 +1,7 @@
 import { Show, createMemo } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import { identityColumn } from "../components/IdentityCell";
 import { type Role, ROLES_KEY, listRoles, roleFilterKeys, effectivePerms } from "../lib/principals";
 import { identityRegistry } from "../lib/identityBlades";
 
@@ -16,15 +17,7 @@ const tierRank = (id: string) => {
 };
 
 const columns: FlatColumn<Role>[] = [
-  {
-    key: "name", label: "Name", sortVal: (r) => tierRank(r.name), cell: (r) => (
-      <span class="inline-flex items-center gap-2">
-        <span class="font-semibold">{r.display_name || r.name}</span>
-        <span class="badge badge-ghost badge-sm font-data">{r.name}</span>
-        <Show when={r.official}><span class="badge badge-soft badge-info badge-sm">official</span></Show>
-      </span>
-    ),
-  },
+  identityColumn<Role>(),
   {
     key: "inherits", label: "Inherits", width: "200px", cell: (r) => (
       <Show when={r.inherits.length} fallback={<span class="text-base-content/30">—</span>}>
@@ -35,6 +28,14 @@ const columns: FlatColumn<Role>[] = [
   {
     key: "perms", label: "Permissions", width: "130px", sortVal: (r) => effectivePerms(r).length,
     cell: (r) => <span class="tnum text-base-content/60">{effectivePerms(r).length}</span>,
+  },
+  // Origin rides its own column now that the name cell is the shared identity
+  // treatment. It is the fact that separates a seeded role from one this estate
+  // wrote, which is what an operator is looking for once custom roles exist, so
+  // it stays on the row rather than retiring with the old name cell.
+  {
+    key: "official", label: "Origin", width: "100px", sortVal: (r) => String(r.official),
+    cell: (r) => <Show when={r.official}><span class="badge badge-soft badge-info badge-sm">official</span></Show>,
   },
 ];
 

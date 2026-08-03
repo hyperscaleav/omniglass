@@ -40,6 +40,18 @@ describe("Command Types page", () => {
     expect(screen.getByText("fire-and-forget")).toBeTruthy();
   });
 
+  // One identity column carries both identities, so the separate label column is
+  // gone. The header stays "Key" because this catalog stores a keyspace key
+  // (set_input, icmp.rtt_avg), which is not the kebab segment other entities use.
+  it("carries the label and the key in a single Key column", () => {
+    mount();
+    const headers = screen.getAllByRole("columnheader").map((h) => h.textContent?.trim());
+    expect(headers).toContain("Key");
+    expect(headers).not.toContain("Label");
+    expect(screen.getByText("Set input")).toBeTruthy();
+    expect(screen.getByText("set_input")).toBeTruthy();
+  });
+
   it("shows New command type for a caller holding command_type:create", () => {
     mount(admin);
     expect(screen.getByText("New command type")).toBeTruthy();

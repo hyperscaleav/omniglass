@@ -47,3 +47,35 @@ describe("Capabilities addressing honesty (#469)", () => {
     expect(screen.queryByText("Audio capture")).toBeNull();
   });
 });
+
+// The registry reads its identity the way every other list does: one Name column
+// carrying the label over the handle (components/IdentityCell), and a create form
+// where the handle follows what the operator types (lib/entities).
+describe("Capabilities identity", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("carries both identities in one Name column, with no separate Display name column", async () => {
+    mount();
+    await screen.findByText("Touchscreen control");
+    const heads = screen.getAllByRole("columnheader").map((h) => h.textContent?.trim());
+    expect(heads).toContain("Name");
+    expect(heads).not.toContain("Display name");
+    const row = screen.getByText("Touchscreen control").closest("tr")!;
+    expect(within(row).getByText("touch-screen")).toBeInTheDocument();
+  });
+
+  it("derives the create form's name from the display name until the operator edits it", async () => {
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: /new capability/i }));
+    const display = (await screen.findByPlaceholderText("Microphone")) as HTMLInputElement;
+    const name = screen.getByPlaceholderText("microphone") as HTMLInputElement;
+
+    fireEvent.input(display, { target: { value: "Audio Capture" } });
+    expect(name.value).toBe("audio-capture");
+
+    // A hand-edited handle is the operator's, so relabelling stops rewriting it.
+    fireEvent.input(name, { target: { value: "mic-in" } });
+    fireEvent.input(display, { target: { value: "Audio Capture 2" } });
+    expect(name.value).toBe("mic-in");
+  });
+});
