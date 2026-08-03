@@ -7,7 +7,7 @@ sidebar:
     variant: note
 ---
 
-This is the **authoritative glossary**: every official term in the architecture, defined once. The other pages introduce these terms in **bold** as the story reaches them; this is where you look any of them up. A term the code does not implement yet is not a plain row here: design-only terms live inside the `:::design` fences at the bottom of this page, or on the sketch page that owns their domain ([templates](/architecture/templates/), [calculations](/architecture/calculations/), [expressions](/architecture/expressions/), [time](/architecture/time/), [views](/architecture/views/), [AI](/architecture/ai/)).
+The **authoritative glossary**: every official term in the architecture, defined once; the other pages introduce them in **bold** as the story reaches them. A term the code does not implement yet is not a plain row here: design-only terms live in the `:::design` fences at the bottom, or on the sketch page that owns their domain ([templates](/architecture/templates/), [calculations](/architecture/calculations/), [expressions](/architecture/expressions/), [time](/architecture/time/), [views](/architecture/views/), [AI](/architecture/ai/)).
 
 | Term | Definition |
 |---|---|
@@ -93,7 +93,7 @@ This is the **authoritative glossary**: every official term in the architecture,
 
 ## Design-only terms
 
-Every term below is committed architecture that nothing in the code implements yet: no live table, column, route, or seeded registry row carries it. Each fence names the tracker that owns the gap. Design terms whose domain has its own sketch page are defined there instead: the calc rule family on [calculations](/architecture/calculations/) (`calc_rule`, with `event_rule` / `action_rule` summarized below because their home pages are not sketches), `convert()` and `disagree()` on [expressions](/architecture/expressions/), `schedule` and `timer` on [time](/architecture/time/), the `view` and `ViewResult` contract on [views](/architecture/views/), and the template catalog, signature, and capability manifest on [templates](/architecture/templates/).
+Every term below is committed architecture nothing in the code implements yet: no live table, column, route, or seeded registry row carries it; each fence names the tracker that owns the gap. Terms whose domain has its own sketch page are defined there instead: `calc_rule` on [calculations](/architecture/calculations/) (`event_rule` / `action_rule` stay below because their home pages are not sketches), `convert()` and `disagree()` on [expressions](/architecture/expressions/), `schedule` and `timer` on [time](/architecture/time/), the `view` and `ViewResult` contract on [views](/architecture/views/), and the template catalog, signature, and capability manifest on [templates](/architecture/templates/).
 
 :::design[Data-plane terms, tracked in #430]
 | Term | Definition |

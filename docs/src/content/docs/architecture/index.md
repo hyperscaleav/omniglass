@@ -4,45 +4,41 @@ description: "The architecture told as one journey, following a single reading f
 ---
 
 Monitoring, stripped down, is one shape: **collect the data, evaluate it, see it, act on it.** The
-whole reason to do it is to **know your systems**, and the one question that matters most is
-deceptively simple:
+point is to **know your systems**, and the question that matters most:
 
 > Is this system working right now?
 
-Omniglass is built around that question. This page follows a **single reading through its whole
-life**, top to bottom, from the gear to the answer and the action on it. Each **bold word** is an
-official term; the linked ones open their deep dive, and every one is defined in the
-[glossary](/architecture/glossary/).
+This page follows a **single reading through its whole life**, gear to answer to action. Each
+**bold word** is an official term; the linked ones open their deep dive, and every one is defined
+in the [glossary](/architecture/glossary/).
 
 :::note[A proposed architecture]
-This is a **proposed, forward-looking architecture**: where we intend to take Omniglass, written in
-present tense as the target design, not a promise that every detail ships unchanged. Expect it to adjust
-as we build. Each page carries a status badge, **Design** (specified, little or none built), **Partial**
-(some capabilities shipped), **Built** (all shipped and tested), or **Diverged** (built, but the
-implementation differs from this design, see the page's note); the badge is the page's floor. The
-per-capability breakdown and what is actually shipped live on
+This is a **proposed, forward-looking architecture**: the target design, written in present tense,
+not a promise that every detail ships unchanged. Each page carries a status badge, **Design**
+(specified, little or none built), **Partial** (some capabilities shipped), **Built** (all shipped
+and tested), or **Diverged** (built, but differing from this design, see the page's note); the
+badge is the page's floor. The per-capability breakdown lives on
 [implementation status](/architecture/status/); undecided design points are flagged inline as
-`Open question` asides; how a call was made or reversed and where the build diverges lives in the
-[decision log](/architecture/decisions/); and the epics and the arc ahead are indexed on the
+`Open question` asides; how a call was made or reversed, and where the build diverges, lives in the
+[decision log](/architecture/decisions/); the epics and the arc ahead are indexed on the
 [roadmap](/architecture/roadmap/). Unbuilt prose inside a page sits in a marked **design fence**,
 and the pages that are *entirely* unbuilt live in the sidebar's own **Design sketches** group, a
 working queue that empties as subsystems land, so a page's place in the nav tells you whether any
-of it exists. Every prose architecture page is also published as one machine-readable file at
-[/llms-full.txt](/llms-full.txt) (with a curated index at [/llms.txt](/llms.txt)) for LLM tools (the interactive `.mdx` pages are not included).
+of it exists. Every prose architecture page is also published machine-readable at
+[/llms-full.txt](/llms-full.txt) (curated index: [/llms.txt](/llms.txt)); the interactive `.mdx`
+pages are not included.
 :::
 
 ## The estate
 
 Three nouns describe what you operate.
 
-- A **[component](/architecture/core-entities/)** is a deployed device, app, or service: a display, a
-  codec, a DSP, a control processor, a cloud UCC service.
-- A **system** is a set of components that work together to do one job. A meeting room is a system.
-  So is a classroom, a video wall, a broadcast chain. The word is deliberately universal: a system
-  is the unit you actually care about, whatever shape it takes.
+- A **[component](/architecture/core-entities/)** is a deployed device, app, or service: a display,
+  a DSP, a cloud UCC service.
+- A **system** is a set of components that work together to do one job: a meeting room, a
+  classroom, a broadcast chain. The word is deliberately universal: a system is the unit you
+  actually care about, whatever shape it takes.
 - A **location** ties systems and components to a physical place (campus, building, floor, room).
-
-A component belongs to a system; a system sits in a location.
 
 ```d2
 direction: down
@@ -58,47 +54,40 @@ system -> c2
 system -> c3
 ```
 
-## Something happens
-
-A display drops off the network. A codec changes input. A meeting starts, or a fan stalls. The gear
-changes state, and that change is what the rest of the architecture exists to catch and make sense
-of.
-
 ## Collect
 
-AV gear is **agentless**: you cannot install something inside it, so the reading has to come from
-the outside. Sometimes the component **pushes** it to Omniglass; usually Omniglass **polls** for it
-on an interval. Either way, a **[node](/architecture/nodes/)** running close to the gear reaches a
+AV gear is **agentless**: nothing can be installed inside it, so the reading comes from outside.
+Sometimes the component **pushes** it to Omniglass; usually Omniglass **polls** on an interval. Either way, a **[node](/architecture/nodes/)** running close to the gear reaches a
 component over an **[interface](/architecture/collection/)** (whatever the device speaks: SNMP, HTTP,
 SSH, a control processor's own command language) and reads.
 
 How to reach a class of device, and what to read from it, is declared once in the component's
-**[template](/architecture/templates/)**, the reusable device shape. The node runs that and, crucially, **parses the answer
-right there at the edge**, turning a vendor's raw response into a normalized reading on the spot.
+**[template](/architecture/templates/)**, the reusable device shape. The node runs that and
+**parses the answer at the edge**, turning a vendor's raw response into a normalized reading on
+the spot.
 
 That normalized reading is a **sample**.
 
 ## The sample
 
 A **[sample](/architecture/properties/)** is one value of one **canonical signal** (`power.state`,
-`audio.level`), owned by exactly one entity through the **exclusive arc**: one owner, a component or
-a system or a location, never more than one. It carries a **provenance** (how we know it: **observed**
+`audio.level`), owned by exactly one entity through the **exclusive arc**: a component or a system
+or a location, never more than one. It carries a **provenance** (how we know it: **observed**
 from the device, **[calculated](/architecture/calculations/)** by Omniglass, or **intended** by a
 **[command](/architecture/commands/)** we sent) and a **source** (which sensor or path told us).
 
 The meaning of each signal (its kind, unit, and validation) lives in a governed **registry**, and
-a template *references* a registered signal rather than inventing one. That is the whole trick: two
-displays from different manufacturers answer the same question the same way, because the
-**measurement** is named, not the device. One canonical name, one comparable signal across the whole
-fleet.
+a template *references* a registered signal rather than inventing one, so two displays from
+different manufacturers answer the same question the same way: the **measurement** is named, not
+the device.
 
 ## What it should be
 
 Not every value is measured. Some are **declared**, set by an operator rather than read from a
-device: a setting that should hold (this input should be HDMI1), or a value that rides down the tree
-(this system polls every 30 seconds). A declared value is **[config](/architecture/variables/)** when
-it is bound to a signal, or a plain **variable** when it just rides down the tree, both resolved down
-a **[cascade](/architecture/cascade/)**: set once high, overridden exactly where it matters. The same
+device: **[config](/architecture/variables/)** when bound to a signal (this input should be HDMI1),
+a plain **variable** when it just rides down the tree (this system polls every 30 seconds), both
+resolved down a **[cascade](/architecture/cascade/)**: set once high, overridden exactly where it
+matters. The same
 cascade resolves **[tags](/architecture/tags/)** (the governed label vocabulary), encrypted secrets,
 and platform **[settings](/architecture/settings/)**, and **[files](/architecture/files/)** attach
 alongside them as searchable handles over a content-addressed blob store. Config has an observed side,
@@ -109,42 +98,39 @@ back.
 
 An **[event_rule](/architecture/alarms-actions/)** watches a sample and fires when its condition, an
 **[expression](/architecture/expressions/)**, is met, recording an
-**[event](/architecture/events/)**: our assertion, in our own words, that something happened. Pair a fire
+**[event](/architecture/events/)**: our assertion that something happened. Pair a fire
 with a clear and the two events open and resolve an **alarm**, the stateful incident, one row per
 occurrence, the thing an operator works and a ticket binds to. An alarm names the **capabilities it
-degrades**, which is what turns a detection into a verdict on the system.
+degrades**, turning a detection into a verdict on the system.
 
 ## Model health
 
 A single alarm is rarely the point. The headline is **[health](/architecture/health/)**: a verdict on
-the **system**, carried as a calculated sample. The chain is one hop per question: an alarm degrades
+the **system**, carried as a calculated sample. The chain: an alarm degrades
 a **capability**, so the component that had it no longer **satisfies** the **role** it was filling; a
 role below its **quorum** is impaired and contributes its declared **impact** (outage, degraded, or
-none); the system takes the worst contribution, and a location the worst of its systems. That is the
-answer to "is the system working?", and a target on it over time is a real uptime **SLA**.
+none); the system takes the worst contribution, and a location the worst of its systems. A target
+on that verdict over time is a real uptime **SLA**.
 
 The other half is "since when". Health is recorded as a **transition**, written by the change that
 caused it rather than by whoever opens a page, so the edges are exact weeks later.
 
 The rollup ships **opinionated by default**, a first-class model rather than a byproduct of the rules
-engine, with an escape hatch for the systems the defaults get wrong. The health model always runs;
-the only question is whether it runs *as a system* against real signal, or in the operator's head
-against half of it.
+engine, with an escape hatch for the systems the defaults get wrong.
 
 ## Act
 
 An **action_rule** subscribes to events and alarms and runs an **[action](/architecture/alarms-actions/)**.
 An action can be one step (notify the right person) or many (remediate, wait, re-check the real
 sample, escalate if it did not take; or open and close a ticket as the alarm opens and clears).
-The loop closes where it started, at the gear.
 
 ## See it
 
 The operator never queries raw tables. Reads go through **[views](/architecture/views/)** (a named
 query returning a uniform `{columns, rows}`), rendered in the **[console](/architecture/ui/)**: the
-fleet-health grid, the alarm drill-down, the "why did this value win" cascade explainer. The console
+fleet-health grid, the "why did this value win" cascade explainer. The console
 is one client of the **[API](/architecture/api/)**, the same contract the generated CLI and the
-**[AI](/architecture/ai/)** seams (MCP included) drive. The whole journey is visible the entire time.
+**[AI](/architecture/ai/)** seams (MCP included) drive.
 
 ## The journey, end to end
 
@@ -182,7 +168,7 @@ health -> views
 
 ## Underneath
 
-The journey rides on a few foundations, named once:
+The journey rides on a few foundations:
 
 - the **[Storage Gateway](/architecture/storage/)** is the one door to the database; every read and
   write goes through it, which is where **scope** ([identity and access](/architecture/identity-access/))
@@ -197,15 +183,15 @@ The journey rides on a few foundations, named once:
   the rest of the pipeline stays purely event-driven.
 - **[scaling and deployment](/architecture/scaling/)**: the single binary is a modular monolith with run
   modes, deployed as one container for a small estate or scaled out on Kubernetes with a distributed
-  edge. One binary is the packaging, not a scale ceiling.
+  edge.
 
-Samples are parsed and emitted at the edge, so they are not re-derived from a raw store. Raw
-payloads are a debugging aid (a raw mode you turn on while developing, plus failure logging on
-collection); how much of that to persist, and for how long, is still being settled.
+Samples are parsed and emitted at the edge, not re-derived from a raw store. Raw payloads are a
+debugging aid (a dev raw mode plus failure logging on collection); how much of that to persist, and
+for how long, is still being settled.
 
 ## The invariants
 
-A handful of patterns hold everywhere, and they are why the model stays coherent:
+A handful of patterns hold everywhere:
 
 - **Exclusive-arc ownership**: every sample, event, and alarm names exactly one owner (component,
   system, location, or node), so system- and location-level signals are first-class.
@@ -213,8 +199,8 @@ A handful of patterns hold everywhere, and they are why the model stays coherent
   editing mints a new version; re-pointing is explicit.
 - **On-row lineage**: a derived row carries its own evidence; there is no separate execution table.
 - **The `official` boolean**: every registry (`property_type`, `event_type`, `command_type`, and the
-  catalogs) and rule row carries an `official` boolean. `official` is the curated ship-with set,
-  seeded at boot and authoritative; the rest is operator-authored and local to a deployment.
+  catalogs) and rule row carries an `official` boolean: the curated ship-with set, seeded at boot
+  and authoritative; the rest is operator-authored and local to a deployment.
 - **Views by default**: current-state reads are plain views, materialized only when a profile proves
   it necessary.
 - **Not event-sourced**: stateful entities (alarm, action) hold their state directly.
@@ -222,10 +208,7 @@ A handful of patterns hold everywhere, and they are why the model stays coherent
 
 ## Look up any term
 
-Every official term is defined once in the **[glossary](/architecture/glossary/)**. The deep
-pages in the sidebar follow this same journey: collection, the device shape, the data model,
-config and credentials, the cascade, health, alarms and actions, then the foundations underneath.
-
-Omniglass is built greenfield, one vertical slice per PR; the physical schema lives in
+Every official term is defined once in the **[glossary](/architecture/glossary/)**, and the deep
+pages in the sidebar follow this same journey. The physical schema lives in
 [storage](/architecture/storage/), and the generated ERD over it in the
 [data model](/architecture/data-model/).
