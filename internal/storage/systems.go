@@ -199,6 +199,9 @@ type StandardPatch struct {
 // CreateStandard inserts a custom (official=false) standard and audits it. A
 // duplicate id is ErrTypeExists; an unknown parent is ErrParentStandardNotFound.
 func (p *PG) CreateStandard(ctx context.Context, actorID string, st Standard) (*Standard, error) {
+	if err := ValidateEntityName(st.Name); err != nil {
+		return nil, err
+	}
 	st.Official = false
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {

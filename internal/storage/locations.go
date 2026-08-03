@@ -241,6 +241,9 @@ func (p *PG) CreateLocationType(ctx context.Context, actorID string, lt Location
 	if lt.Name == RootPlacement {
 		return nil, ErrReservedTypeID
 	}
+	if err := ValidateEntityName(lt.Name); err != nil {
+		return nil, err
+	}
 	lt.Official = false
 	lt.AllowedParentTypes = normalizeAllowedParentTypes(lt.AllowedParentTypes)
 	tx, err := p.pool.Begin(ctx)
