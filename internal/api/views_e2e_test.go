@@ -92,9 +92,12 @@ func TestViewsAPI(t *testing.T) {
 		t.Fatalf("connect: %v", err)
 	}
 	defer conn.Close(ctx)
+	// cam-1 gets a second, never-probed interface so the run must surface the
+	// explicit unknown state, not drop the row.
 	if _, err := conn.Exec(ctx, `insert into interface (name, type, component, params) values
 		('disp-1-icmp', (select id from interface_type where name = 'icmp'), (select id from component where name = 'disp-1'), '{"target":"10.0.0.1"}'::jsonb),
-		('cam-1-icmp',  (select id from interface_type where name = 'icmp'), (select id from component where name = 'cam-1'),  '{"target":"10.0.0.2"}'::jsonb)`); err != nil {
+		('cam-1-icmp',  (select id from interface_type where name = 'icmp'), (select id from component where name = 'cam-1'),  '{"target":"10.0.0.2"}'::jsonb),
+		('cam-1-tcp',   (select id from interface_type where name = 'tcp'),  (select id from component where name = 'cam-1'),  '{"target":"10.0.0.2","port":5000}'::jsonb)`); err != nil {
 		t.Fatalf("insert interfaces: %v", err)
 	}
 	// A view:read-only role, inserted BEFORE the first request so the lazily
@@ -147,8 +150,8 @@ func TestViewsAPI(t *testing.T) {
 	if err := json.Unmarshal(run, &vr); err != nil {
 		t.Fatalf("decode run: %v", err)
 	}
-	if len(vr.Rows) != 2 {
-		t.Fatalf("all-scope rows = %d, want 2: %s", len(vr.Rows), run)
+	if len(vr.Rows) != 3 {
+		t.Fatalf("all-scope rows = %d, want 3: %s", len(vr.Rows), run)
 	}
 	col := map[string]int{}
 	for i, cdef := range vr.Columns {
@@ -159,13 +162,19 @@ func TestViewsAPI(t *testing.T) {
 			t.Fatalf("run columns missing %q: %+v", need, vr.Columns)
 		}
 	}
-	// Rows are component-ordered: cam-1 up, then disp-1 down. Cells are
-	// asserted by CONTENT through the column index, the renderer's own path.
+	// Rows are component-then-interface ordered: cam-1's probed icmp, cam-1's
+	// never-probed tcp, then disp-1. Cells are asserted by CONTENT through the
+	// column index, the renderer's own path.
 	if vr.Rows[0][col["component"]] != "cam-1" || vr.Rows[0][col["state"]] != "up" {
 		t.Errorf("row 0 = %v, want cam-1 up", vr.Rows[0])
 	}
-	if vr.Rows[1][col["component"]] != "disp-1" || vr.Rows[1][col["state"]] != "down" {
-		t.Errorf("row 1 = %v, want disp-1 down", vr.Rows[1])
+	// The never-probed interface is the explicit unknown state with a null
+	// since, not a dropped row and not an empty cell.
+	if vr.Rows[1][col["interface"]] != "cam-1-tcp" || vr.Rows[1][col["state"]] != "unknown" || vr.Rows[1][col["since"]] != nil {
+		t.Errorf("row 1 = %v, want cam-1-tcp unknown with null since", vr.Rows[1])
+	}
+	if vr.Rows[2][col["component"]] != "disp-1" || vr.Rows[2][col["state"]] != "down" {
+		t.Errorf("row 2 = %v, want disp-1 down", vr.Rows[2])
 	}
 
 	// A valid run is deterministic: a re-run changes nothing.
@@ -186,8 +195,8 @@ func TestViewsAPI(t *testing.T) {
 	if err := json.Unmarshal(scoped, &svr); err != nil {
 		t.Fatalf("decode scoped run: %v", err)
 	}
-	if len(svr.Rows) != 1 || svr.Rows[0][col["component"]] != "cam-1" {
-		t.Fatalf("scoped rows = %v, want only cam-1", svr.Rows)
+	if len(svr.Rows) != 2 || svr.Rows[0][col["component"]] != "cam-1" || svr.Rows[1][col["component"]] != "cam-1" {
+		t.Fatalf("scoped rows = %v, want only cam-1's two interfaces", svr.Rows)
 	}
 
 	// view:read admits the directory but NOT a view whose declared permission

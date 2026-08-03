@@ -57,9 +57,28 @@ func TestListInterfaceReachability(t *testing.T) {
 	}
 	if err := gw.InsertStateSamples(ctx, []storage.StateSampleWrite{
 		{OwnerKind: "component", OwnerID: "disp", Key: "interface.reachable", Instance: "disp-icmp", Value: "down", Source: "icmp", TS: t1},
-		{OwnerKind: "component", OwnerID: "disp", Key: "interface.reachable", Instance: "disp-tcp", Value: "up", Source: "tcp", TS: t1},
 	}); err != nil {
 		t.Fatalf("insert verdicts: %v", err)
+	}
+	// A LATE ARRIVAL: an older observation written after the current verdict
+	// (newer id, older ts). Observation time must win, so down stays latest;
+	// an id-ordered read would wrongly resurrect this row.
+	if err := gw.InsertStateSamples(ctx, []storage.StateSampleWrite{
+		{OwnerKind: "component", OwnerID: "disp", Key: "interface.reachable", Instance: "disp-icmp", Value: "up", Source: "icmp", TS: t0.Add(-time.Minute)},
+	}); err != nil {
+		t.Fatalf("insert late arrival: %v", err)
+	}
+	// A same-instant pair on disp-tcp: the higher id (the later write) must
+	// win the tie, LatestState's exact rule.
+	if err := gw.InsertStateSamples(ctx, []storage.StateSampleWrite{
+		{OwnerKind: "component", OwnerID: "disp", Key: "interface.reachable", Instance: "disp-tcp", Value: "down", Source: "tcp", TS: t1},
+	}); err != nil {
+		t.Fatalf("insert tcp first: %v", err)
+	}
+	if err := gw.InsertStateSamples(ctx, []storage.StateSampleWrite{
+		{OwnerKind: "component", OwnerID: "disp", Key: "interface.reachable", Instance: "disp-tcp", Value: "up", Source: "tcp", TS: t1},
+	}); err != nil {
+		t.Fatalf("insert tcp tie-breaker: %v", err)
 	}
 
 	// The all scope sees every interface, ordered component then interface.
@@ -81,10 +100,13 @@ func TestListInterfaceReachability(t *testing.T) {
 		t.Errorf("cam-icmp: want no verdict, got %q at %v", rows[0].Value, rows[0].TS)
 	}
 	if rows[1].Value != "down" {
-		t.Errorf("disp-icmp latest = %q, want down (the newer row wins)", rows[1].Value)
+		t.Errorf("disp-icmp latest = %q, want down (observation time wins over the late arrival)", rows[1].Value)
 	}
 	if rows[1].TS == nil || !rows[1].TS.Equal(t1) {
 		t.Errorf("disp-icmp ts = %v, want %v", rows[1].TS, t1)
+	}
+	if rows[2].Value != "up" {
+		t.Errorf("disp-tcp latest = %q, want up (the higher id wins the same-instant tie)", rows[2].Value)
 	}
 	if rows[1].Type != "icmp" || rows[2].Type != "tcp" {
 		t.Errorf("interface types = %s,%s, want icmp,tcp", rows[1].Type, rows[2].Type)

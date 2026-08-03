@@ -135,3 +135,18 @@ new class appends one. Entries are never silently deleted; a fixed class is mark
 - **Fix:** gate outside the render path: a pre-build script wired into `pnpm build`
   (exemplar: `docs/scripts/check-design-fences.mjs`) or a lint in `internal/docslint`,
   and verify the exit code, not the log line.
+
+## unpinned-claimed-behavior (live; found by the #539 review)
+
+- **Cue:** a comment, doc line, or commit message claims an ordering, tie-break, or
+  mapping rule, and the test fixture's data cannot distinguish that rule from a wrong
+  implementation (insertion order equals timestamp order, every fixture row is probed,
+  the branch under claim is never entered).
+- **Failure:** the claimed rule can be deleted or inverted while every test stays green;
+  the claim ships as documentation of behavior nothing enforces. Found live twice in
+  #539: the latest-verdict `ts desc, id desc` rule (ascending-ts fixtures made id order
+  indistinguishable) and the never-probed `unknown` mapping (every fixture interface was
+  probed).
+- **Fix:** fixture data that makes the claimed rule the only passing one: a
+  late-arriving older-timestamp row after the newer one, a same-instant pair for the
+  tie-break, one fixture row that enters the claimed branch, asserted by content.

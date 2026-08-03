@@ -62,8 +62,9 @@ typed SPA client and the cobra CLI are generated, never written:
 ## Scope and safety
 
 - All view routes are gated **`view:read`**; a run additionally requires the view's **declared
-  permission** (`component:read` for the reachability grid), checked in the handler, so a caller
-  sees and runs exactly the views its grants entitle it to.
+  permission** (`component:read` for the reachability grid), checked in the handler. The
+  directory is readable with `view:read` alone (it publishes contracts, not data); running a
+  view a caller is not entitled to is a 403 naming the permission.
 - Every query runs in the gateway's **scoped mode**: the caller's `visible_set`
   ([identity and access](/architecture/identity-access/)) bounds every row with no per-view code.
 - A view is **read-only** by construction (no writes, no side effects), which is what makes
