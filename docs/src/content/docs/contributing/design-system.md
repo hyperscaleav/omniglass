@@ -125,10 +125,33 @@ themes at the same weight as the soft hues. The same reason keeps `type` values 
 ## Primitives (the reuse target)
 
 `ListShell` (with its `FlatList` / `TreeList` bodies), `FilterBar`, `Drawer`, `PanelFooter`,
-`Donut`, `Badge`, `Fact`, `Page`, `DataTable`,
+`Donut`, `Badge`, `Fact`, `Page`, `DataTable`, `IdentityCell`,
 `CommandPalette`, plus the `Sidebar` / `TopBar` shell. New inventory pages consume these; new
 surface *classes* (dashboards, alarms, explore, learn) add their own primitive rather than
 bending `ListShell`.
+
+### How an entity's identity reads
+
+Every entity carries two identities an operator cares about: a **segment** (the kebab token the API
+and CLI address it by) and an optional **label**. `IdentityCell` states the rule once, and
+`identityColumn` is the `FlatList` column every page uses:
+
+- the label is the primary line;
+- the segment sits beneath it, in the data face;
+- the segment is suppressed when it equals the label, so the same string never renders twice;
+- an id is never a list column.
+
+This is the same two-line treatment `TreeList` renders, so a tree and a flat list of the same entity
+look like the same product. It replaced sixteen hand-written name columns written in four
+incompatible idioms, which is why the header word for one fact used to be "Name" on one page, "Key"
+on another, and "Display name" beside it.
+
+A page whose identifier is a **keyspace key** rather than a segment (`property_type`, `event_type`,
+`command_type`, `tag`) passes `identityColumn({ label: "Key" })` and does not derive its key from the
+label: `icmp.rtt_avg` is a legal key and an illegal segment. The write side has the same split.
+`createIdentity` derives a segment from the label as an operator types and stops the moment they edit
+the segment by hand, and an edit form seeds it with the existing segment so relabelling can never
+rewrite a live address. Keyspace pages do not wire it at all.
 
 ## Build and embed
 
