@@ -4,6 +4,7 @@ import FlatList, { type FlatColumn } from "../components/FlatList";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { createIdentity } from "../lib/entities";
+import { entityLabel } from "../lib/entities";
 import { useFormActions } from "../lib/formactions";
 import { Plus } from "../components/icons";
 import {
@@ -84,7 +85,8 @@ function useCapabilityRow(id: string): () => Capability | undefined {
 
 function CapabilityBladeTitle(p: { id: string }): JSX.Element {
   const row = useCapabilityRow(p.id);
-  return <span class="font-data">{row()?.name ?? p.id}</span>;
+  const r = row();
+  return <span>{r ? entityLabel(r) : p.id}</span>;
 }
 
 function CapabilityBladeBody(p: { id: string }): JSX.Element {
@@ -149,7 +151,7 @@ function CapabilityBladeBody(p: { id: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <KVStacked label="Name" value={<span class="font-data">{r().name}</span>} />
+            <KVStacked label="Technical name" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Origin" value={officialBadge(r().official)} />
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>

@@ -262,7 +262,7 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
           </Show>
 
           <div class="grid grid-cols-2 gap-4">
-            <KVStacked label="Name" value={<span class="font-data">{node().name}</span>} />
+            <KVStacked label="Technical name" value={<span class="font-data">{node().name}</span>} />
             <KVStacked label="Status" value={STATUS[nodeStatus(node())].label} />
             <KVStacked label="Last heartbeat" value={node().last_heartbeat_at ? rel(node().last_heartbeat_at!) : <span class="text-base-content/40">never</span>} />
             <KVStacked label="Enrolled" value={node().enrolled ? (node().enrolled_at ? rel(node().enrolled_at!) : "yes") : <span class="text-base-content/40">not yet</span>} />

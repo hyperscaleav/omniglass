@@ -150,7 +150,7 @@ export function GroupDetail(props: { id: string }) {
       </Show>
 
       <div class="grid grid-cols-2 gap-3">
-        <KVStacked label="Name" value={<span class="font-data">{group.data?.name}</span>} />
+        <KVStacked label="Technical name" value={<span class="font-data">{group.data?.name}</span>} />
         <KVStacked label="Members" value={<span class="tnum text-sm">{memberItems().length}</span>} />
       </div>
 

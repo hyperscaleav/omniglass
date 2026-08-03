@@ -4,6 +4,7 @@ import FlatList, { type FlatColumn } from "../components/FlatList";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
+import { entityLabel } from "../lib/entities";
 import { Plus } from "../components/icons";
 import {
   type Driver,
@@ -85,7 +86,8 @@ function useDriverRow(id: string): () => Driver | undefined {
 
 function DriverBladeTitle(p: { id: string }): JSX.Element {
   const row = useDriverRow(p.id);
-  return <span class="font-data">{row()?.name ?? p.id}</span>;
+  const r = row();
+  return <span>{r ? entityLabel(r) : p.id}</span>;
 }
 
 function DriverBladeBody(p: { id: string }): JSX.Element {
@@ -153,7 +155,7 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <KVStacked label="Name" value={<span class="font-data">{r().name}</span>} />
+            <KVStacked label="Technical name" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Origin" value={officialBadge(r().official)} />
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
