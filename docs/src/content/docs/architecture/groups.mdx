@@ -12,41 +12,35 @@ import SchemaTable from '../../../components/SchemaTable.astro';
 :::note[Implementation status]
 Built end to end: the **principal** kind of group (`principal_group` plus membership,
 group-targeted grants via `principal_grant.group_id`, the effective-grant union in the loader,
-`/principal-groups` CRUD gated by `principal_group:*`, and the console Groups pages). Note the
-distinction: the built group is a grant **subject** (members inherit the grants targeted at the
-group), while group as a **scope** (`scope_kind=group`) is refused today with a 422.
+`/principal-groups` CRUD gated by `principal_group:*`, and the console Groups pages), as a grant
+**subject** only (see below).
 :::
 
-A group lets an operator gather entities that the structural trees keep apart, so you can configure or grant access to "all AV displays" or "everything in this pilot" by attribute or by hand. A **group** is a named set of entities that cuts
-across the structural trees. The structural tree handles config by position and kind; groups handle
-config by attribute or by a hand-picked set. One "set of entities" primitive serves two jobs: a
-[cascade](/architecture/cascade/) overlay and an [access](/architecture/identity-access/) scope, which
-an anonymous predicate never could.
+A **group** is a named set of entities cutting across the structural trees: the tree handles config
+by position and kind, groups by attribute or hand-picked set ("all AV displays"). One primitive
+serves two jobs, a [cascade](/architecture/cascade/) overlay and an
+[access](/architecture/identity-access/) scope, which an anonymous predicate never could.
 
 ## What a group is
 
 :::design[The general group table, tracked in #10]
 A group:
 
-- is **component / system / location / principal** kind (matching the structural levels, plus
-  principals for access);
-- has **static** membership (an explicit list) or **dynamic** membership (a filter, re-evaluated live
-  as attributes change, so a device leaves the moment it stops matching);
-- has a **weight** (its specificity on the shared scale, see *Placement*; the only weights in the
+- is **component / system / location / principal** kind;
+- has **static** membership (an explicit list) or **dynamic** membership (a filter, re-evaluated
+  live, so a device leaves the moment it stops matching);
+- has a **weight**, its specificity on the shared scale (see *Placement*; the only weights in the
   system);
 - carries **variable / tag / rule** bindings, with the same per-kind combinators the cascade uses;
-- is also the unit of **access control**: a visibility / permission scope (see
-  [identity and access](/architecture/identity-access/)).
+- is also the unit of **access control**: a visibility / permission scope
+  ([identity and access](/architecture/identity-access/)).
 
-The general `group` table carries the id, the kind (component/system/location/principal), the
-static-list or dynamic-filter membership, and the **weight** that places it on the cascade's
-specificity scale ([cascade](/architecture/cascade/),
-[identity and access](/architecture/identity-access/)).
+The general `group` table carries the id, kind, membership, and **weight**.
 :::
 
 What is **built** is the principal arm: `principal_group` and its membership, a **grant subject**
-(grants attach to the group and reach its members), not an access scope
-(`scope_kind='group'` is refused today).
+(grants attach to the group and reach its members), not an access scope (`scope_kind='group'` is
+refused today with a 422).
 
 <SchemaTable table="principal_group" />
 
@@ -55,44 +49,42 @@ What is **built** is the principal arm: `principal_group` and its membership, a 
 :::design[Entity groups on the cascade: weights, dynamic membership, and group-as-scope, tracked in #10]
 ## Placement: one specificity scale
 
-A group is placed on the cascade's one specificity scale by its **weight**, the only weights in the
-system: a high weight sits above deployment (a must-apply override), a low weight below it (a default
-that deployment overrides). The scale itself, the segmented precedence key behind it, and the worked
-example are stated once, on
+A group is placed on the cascade's one specificity scale by its **weight**: a high weight sits
+above deployment (a must-apply override), a low weight below it. The scale, the segmented precedence
+key, and the worked example are stated once, on
 [cascade](/architecture/cascade/#groups-overlay-the-cascade-placed-by-weight).
 
 ## Multiple membership
 
-An entity belongs to a flat **set** of groups; there is no second precedence axis. However many groups
-an entity is in, their bindings fold by weight on that one shared scale
-([cascade](/architecture/cascade/#groups-overlay-the-cascade-placed-by-weight)), and the
+An entity belongs to a flat **set** of groups, no second precedence axis: their bindings fold by
+weight on the one shared scale, and the
 [resolve view](/architecture/cascade/#the-resolve-view) names the winner.
 
 ## No nesting
 
-Groups do not contain groups. A dynamic filter already expresses a union (`type in (codec, display)`)
-and multiple membership covers the rest, so nesting would earn only a narrow "DRY union of static
-sets" case, not worth its transitive-membership and cycle-guard cost. Whether to add it is an open
-question, gated on that case actually biting.
+Groups do not contain groups: a dynamic filter already expresses a union
+(`type in (codec, display)`) and multiple membership covers the rest, so nesting would earn only a
+narrow "DRY union of static sets" case, not worth its transitive-membership and cycle-guard cost.
+An open question, gated on that case actually biting.
 
 ## Types are not layers
 
-A `_type` (device/app, AV-System, room) is a classification attribute, never a tree position: instead
-of a type layer in the tree, you author a dynamic group filtered on type (`type == X`) and place it by
-weight ([cascade](/architecture/cascade/#groups-overlay-the-cascade-placed-by-weight)).
+A `_type` (device/app, AV-System, room) is a classification attribute, never a tree position: author
+a dynamic group filtered on type (`type == X`) and place it by weight
+([cascade](/architecture/cascade/#groups-overlay-the-cascade-placed-by-weight)).
 
 ## What groups are for
 
-In operator terms, the same user stories the cascade serves, the group-specific ones:
+The group-specific operator stories:
 
-- **A fleet-wide fix that auto-clears.** Cisco firmware 11.2 has a memory leak, so I make a dynamic
-  group `model == "Room Kit Pro" && firmware < "11.5"` at high weight, slow its poll and suppress the
-  false high-memory alarm; the 23 affected codecs across 6 floors get it at once, and each drops out
-  the moment it upgrades. *(dynamic group above deployment, live membership, rule suppression)*
-- **A broad policy as a floor, not a ceiling.** I put baseline stricter thresholds on a low-weight
-  "PCI-scope" group, so a lab on Floor 3 that needs its own values still wins; the policy is a default
-  the specific deployment overrides. *(low-weight group below deployment, the shared specificity scale)*
-- **A hand-picked set no filter can name.** I drop the 5 executive briefing rooms into a static "Exec
-  Rooms" group for premium escalation, and grant the exec-support team visibility to that same group.
+- **A fleet-wide fix that auto-clears.** A dynamic group
+  `model == "Room Kit Pro" && firmware < "11.5"` at high weight slows the poll and suppresses the
+  false high-memory alarm; the affected codecs get it at once, and each drops out the moment it
+  upgrades. *(dynamic group above deployment, live membership, rule suppression)*
+- **A broad policy as a floor, not a ceiling.** Baseline stricter thresholds on a low-weight
+  "PCI-scope" group, so a lab that needs its own values still wins. *(low-weight group below
+  deployment)*
+- **A hand-picked set no filter can name.** The executive briefing rooms in a static "Exec Rooms"
+  group for premium escalation, with the exec-support team granted visibility to that same group.
   *(static membership; groups double as the access scope)*
 :::

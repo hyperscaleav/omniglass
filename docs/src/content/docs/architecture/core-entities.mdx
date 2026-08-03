@@ -9,68 +9,46 @@ sidebar:
 
 import SchemaTable from '../../../components/SchemaTable.astro';
 
-Core entities are the things an operator actually manages, the component, system, location, and node, and giving each its own identity is what lets every sample, event, alarm, and config name exactly one of them as its owner. This page covers the structural entities, how they
-nest, and how everything else names one of them as owner. The shapes these entities pin are [templates](/architecture/templates/); the data they own is
+Core entities are the things an operator manages, component, system, location, and node, each with
+its own identity so that every sample, event, alarm, and config names exactly one owner. The shapes
+they pin are [templates](/architecture/templates/); the data they own is
 [samples](/architecture/properties/); the physical tables are [storage](/architecture/storage/).
 
 :::note[Partial]
 Built today: `component`, `system`, and `location` as name-addressable, variable-depth (`parent_id`)
 trees with full scoped CRUD; a delete is refused while a structural child remains. **Placement and
 classification are mutable, not fixed at create** ([ADR-0064](/architecture/decisions/#adr-0064-placement-and-classification-are-mutable-after-create)):
-a component re-parents, relocates, and re-classifies onto a different product; a system re-parents and
-relocates; each field also clears (to a root, an unplaced entity, or a one-off). A re-parent is
-cycle-guarded against moving an entity under its own subtree, and a product swap keeps hand-set property
-values while the new contract's defaults take over. Each of the three
-carries an **optional classifier** that declares what its instances expose: a component points at its
-**`product`**, a system conforms to a **`standard`**, a location is typed by its **`location_type`**
-(the `component_type` registry retired,
-[ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value); the
-`system_type` registry was promoted to `standard`,
-[ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)). The
-**exclusive-arc** owner columns are now real, carrying the sample sinks, the **`event`** log sink
-(see [The event sink](#the-event-sink-the-first-arc-owned-occurrence) below), and **`property`**
-(see [Declared properties](#declared-properties-the-classifier-contracts-and-the-value-store) below); a
-component, system, and location each own a recorded **[health](/architecture/health/)** series on that
-same arc. A system also declares the **roles** it needs filled, staffed by components whose **resolved
-capabilities** cover what the role requires, each role carrying the **impact** an impaired one has on the
-system (see [System roles](#system-roles-the-slots-a-system-needs-filled) below).
-See [implementation status](/architecture/status/).
+re-parent (cycle-guarded), relocate, re-classify, or clear each field; a product swap keeps hand-set
+property values while the new contract's defaults take over. Each entity carries an **optional
+classifier** (`product` / `standard` / `location_type`; the `component_type` registry retired,
+[ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value);
+`system_type` was promoted to `standard`,
+[ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)).
+The **exclusive-arc** owner columns are real, carrying the sample sinks, **`event`**, **`property`**,
+and a recorded **[health](/architecture/health/)** series per component, system, and location. A
+system declares **roles** staffed by components whose **resolved capabilities** cover them, each role
+carrying an **impact**. See [implementation status](/architecture/status/).
 :::
 
 ## The estate: four structural entities
 
-Three nouns describe what you operate, plus the edge process that collects for them.
-
-- A **component** is a deployed device, app, or service: a display, a codec, a DSP, a control
-  processor, a cloud UCC service. It owns samples, points at the `product` it is, and points
-  at the **`product`** it is, which is where its shape comes from (its vendor, its driver, the
-  capabilities it provides, and the properties it declares). The pointer is optional: a productless
-  component is legal, it simply carries no contract.
-- A **system** is a set of components that work together to do one job. A meeting room is a system.
-  So is a classroom, a video wall, a broadcast chain. The word is deliberately universal: a system
-  is the unit you actually care about, whatever shape it takes. It **conforms to** a `standard`,
-  is located at a location, and **conforms to a `standard`**, the blueprint it is built against. The
-  pointer is optional, mirroring `component.product_id`: a one-off system conforms to no standard and
-  simply carries no contract.
-- A **location** ties systems and components to a physical place (campus, building, floor, room).
-  It is classified by `location_type` and, unlike component and system, has **no template**: for a
-  location the type is the only shape-definer. A starter `location_type` set ships seeded (and is
-  operator-owned, see [the seed model](#the-seed-model-forked-templates-versus-canonical-catalogs)),
-  readable at `GET /location-types` (alphabetically by display name), which is what the type picker on the location form
-  lists so a location is classified by a known type rather than a free-typed string. Each type also
-  carries an `icon` (a glyph key like `building` or `landmark`) that the console renders as the
-  leading glyph on every location of that type, so a campus reads differently from a building at a
-  glance in the tree; an unknown key falls back to `map-pin`. Each type also carries
-  `allowed_parent_types` (a set of `location_type` ids and/or the reserved `root` sentinel), the
-  placement constraint: empty means unconstrained, a non-empty set is enforced on create and move,
-  and the four shipped types carry it seeded (`campus={root}`, `building={root,campus}`,
-  `floor={building,campus}`, `room={floor,building,campus}`).
+- A **component** is a deployed device, app, or service (a display, a DSP, a cloud UCC service). It
+  owns samples and points at the **`product`** it is, the source of its shape; the pointer is
+  optional, so a productless component simply carries no contract.
+- A **system** is a set of components doing one job: a meeting room, a classroom, a video wall. It is
+  located at a location and **conforms to a `standard`**, the blueprint it is built against; the
+  pointer is optional, mirroring `component.product_id`.
+- A **location** ties systems and components to a physical place, classified by `location_type`, its
+  only shape-definer (no template). A starter type set ships seeded, operator-owned (see
+  [the seed model](#the-seed-model-forked-templates-versus-canonical-catalogs)), read at
+  `GET /location-types` to feed the location form's type picker. Each type carries an `icon` (a glyph
+  key like `building`; unknown keys fall back to `map-pin`) rendered in the tree, and
+  `allowed_parent_types` (a set of `location_type` ids and/or the reserved `root` sentinel): empty is
+  unconstrained, a non-empty set is enforced on create and move, seeded as `campus={root}`,
+  `building={root,campus}`, `floor={building,campus}`, `room={floor,building,campus}`.
 - A **node** is the edge process (`omniglass node run`) that pulls work, reaches components over
   interfaces, and ships results ([nodes](/architecture/nodes/)). It is structural because it is a
-  first-class **owner**: a node owns its own self-health telemetry and can carry a node-owned alarm.
-
-A component belongs to one or more systems (see
-[membership](#membership-what-a-role-attaches-to)); a system sits in a location.
+  first-class **owner** of its own self-health telemetry and node-owned alarms.
 
 ```d2
 direction: down
@@ -87,12 +65,11 @@ system -> c3
 ```
 
 :::design[The `global` estate owner (ADR-0057)]
-Above the four, the design places a singleton **`global`** estate owner: the top owner above every location where
-estate-wide health and KPIs roll up. One per deployment, no FK. No built table
-carries a `global` arm today (every arc CHECK admits exactly `component | system | location | node`).
-It is an **owner**, nothing else: it is
-not a location (the location tree is a forest of N unparented tops with no root) and it is not the
-[cascade](/architecture/cascade/)'s least-specific binding tier, which is **`platform`**
+Above the four sits a singleton **`global`** estate owner where estate-wide health and KPIs roll up:
+one per deployment, no FK, no built table carrying a `global` arm today (every arc CHECK admits
+exactly `component | system | location | node`). An **owner** only: not a location (the location tree
+is a forest of N unparented tops, no root) and not the [cascade](/architecture/cascade/)'s
+least-specific tier, **`platform`**
 ([ADR-0057](/architecture/decisions/#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier)).
 :::
 
@@ -141,87 +118,74 @@ The column mechanics render from the generated schema facts:
 
 ### Catalog reference data: vendor, driver, capability
 
-The **component-classification catalogs** are flat, seed-and-custom registries, not structural
-entities: each names a reusable fact the `product` layer pins, on the same official/custom
-pattern as the `*_type` registries ([Types guide](/guides/admin/types/)). Three leaf catalogs ship
-here; the **`product`** catalog (below) sits above them as the concrete SKU a `component` points at:
+The **component-classification catalogs** are flat, seed-and-custom registries on the same
+official/custom pattern as the `*_type` registries ([Types guide](/guides/admin/types/)); the
+**`product`** catalog (below) sits above them as the concrete SKU a `component` points at:
 
-- A **`vendor`** (Crestron, Biamp, QSC, ...) names an organization in the estate model, carrying a
-  **`kind`** of `manufacturer`, `integrator`, or `developer` (default `manufacturer`). It is the
-  generalization of the former manufacturer-only `component_make`.
-- A **`driver`** (Generic SNMP, Cisco xAPI, ...) names the implementation that gets, emits, or sets
-  a product's signals, carrying an optional **`version`**.
-- A **`capability`** (Microphone, Display, ...) names what a component can do. It is claimed in two
-  places, a **product** (the default for its instances) and a **component** (its own facts, which add to
-  or suppress the product's), and it is what a
-  [system role](#system-roles-the-slots-a-system-needs-filled) requires.
+- A **`vendor`** (Crestron, Biamp, ...) names an organization, with a **`kind`** of `manufacturer`,
+  `integrator`, or `developer` (default `manufacturer`); the generalization of the former
+  manufacturer-only `component_make`.
+- A **`driver`** (Generic SNMP, Cisco xAPI, ...) names the implementation that gets, emits, or sets a
+  product's signals, with an optional **`version`**.
+- A **`capability`** (Microphone, Display, ...) names what a component can do, claimed by a
+  **product** (the default for its instances) and by a **component** (its own facts, layered over the
+  product's); it is what a [system role](#system-roles-the-slots-a-system-needs-filled) requires.
 
 See the [Vendors guide](/guides/admin/vendors/) for the operator surface.
 
 ### Catalog reference data: `product`
 
-A **`product`** (Cisco Room Bar, Samsung QM55, ...) is the concrete **SKU** that ties the three leaf
-catalogs together: a stable `id` and `display_name`, a **`kind`** (`device` / `app` / `service` / `vm`,
-default `device`, a fixed enum checked in the DB and at the API edge), an optional **`vendor_id`** (who
-makes it) and **`driver_id`** (what talks to it), an optional **`parent_product_id`** (a self-reference:
-a variant points at its base product), and the `official` boolean. The capabilities a product provides
-are a many-to-many set carried in the **`product_capability`** join (`product_id`, `capability_id`); a
-video bar provides microphone, speaker, camera, and codec. The vendor, driver, and parent FKs are
-**`on delete set null`** (deleting a vendor nulls the pointer, it does not block).
+A **`product`** (Cisco Room Bar, Samsung QM55, ...) is the concrete **SKU**: a stable `id` and
+`display_name`, a **`kind`** (`device` / `app` / `service` / `vm`, default `device`, a fixed enum
+checked in the DB and at the API edge), optional **`vendor_id`** and **`driver_id`**, an optional
+**`parent_product_id`** (a variant points at its base), and the `official` boolean. Its capabilities
+live in the **`product_capability`** join (`product_id`, `capability_id`). The vendor, driver, and
+parent FKs are **`on delete set null`**.
 
 A **`component`** points at the product it **is** through **`component.product_id`**
-(**`on delete restrict`**): the product is the source of a component's shape (its vendor, driver, and
-capabilities), replacing the old `component_type`-as-shape notion. The restrict FK is the referential
-guard the leaf catalogs deferred, so a product still referenced by a component cannot be deleted (409).
-See the [Products guide](/guides/admin/products/) for the operator surface.
+(**`on delete restrict`**): the referential guard the leaf catalogs deferred, so a product still
+referenced by a component cannot be deleted (409). See the [Products guide](/guides/admin/products/).
 
 ### Catalog reference data: `standard`
 
-A **`standard`** (Huddle Room, Classroom, Auditorium, ...) is the **blueprint a system conforms to**: the
-system-side counterpart of `product`. It carries a stable `id` and `display_name`, an optional
-**`parent_standard_id`** (a self-reference: a variant points at its base standard, exactly as
-`parent_product_id` does), and the `official` boolean. It is the promotion of the former `system_type`
-label registry, which had nothing to declare
+A **`standard`** (Huddle Room, Classroom, ...) is the **blueprint a system conforms to**: a stable
+`id` and `display_name`, an optional **`parent_standard_id`** (a variant points at its base, as
+`parent_product_id` does), and the `official` boolean; the promotion of the former `system_type`
+label registry
 ([ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)).
 
-A **`system`** conforms to a standard through **`system.standard_id`**, and the pointer is **optional**,
-mirroring `component.product_id`: a **one-off system** that matches no blueprint is first-class and simply
-carries no contract. Conformance is **not** a copy: the standard's contract defaults resolve **live** for
-every system that conforms, until that system overrides one. See the
-[Standards guide](/guides/admin/standards/) for the operator surface.
+A **`system`** conforms through the optional **`system.standard_id`**; a **one-off system** is
+first-class and carries no contract. Conformance is **not** a copy: the standard's contract defaults
+resolve **live** for every conforming system until it overrides one. See the
+[Standards guide](/guides/admin/standards/).
 
 ### Declared properties: the classifier contracts and the value store
 
-A classifier does not only classify, it **declares what its instances expose**. Three tables carry that
-declaration, one per classifier, all the same shape: **`product_property`** (a component's), **`standard_property`**
-(a system's), and **`location_type_property`** (a location's). Each is one row per declared property
-(`<classifier>_id`, a **`property_type_id`** FK referencing the [`property_type` catalog](/architecture/variables/),
-an optional `default_value` in jsonb, and a `required` flag), unique per `(classifier, property)`; the API
-body carries `property_type_name`, resolved to the FK at the edge. Type and
-validation are deliberately **not** repeated here: they live on the property, which stays the single
-source for what a name means.
+A classifier also **declares what its instances expose**, in three tables of one shape:
+**`product_property`**, **`standard_property`**, and **`location_type_property`**, one row per
+declared property (`<classifier>_id`, a **`property_type_id`** FK into the
+[`property_type` catalog](/architecture/variables/), an optional `default_value` in jsonb, a
+`required` flag), unique per `(classifier, property)`; the API body carries `property_type_name`,
+resolved to the FK at the edge. Type and validation live on the property, never repeated here.
 
-The value lives in **`property`**, which carries the **same owner exclusive-arc** as the sample
-sinks and `event` (`owner_kind` plus `component_id` / `system_id` / `location_id` / `node_id`, one-set
-CHECK), plus the **`property_type_id`** FK, an `instance` discriminator, a **`provenance`**, and the jsonb
-`value`.
-Provenance is what makes the fold work: the same table holds a value an operator **declared**, a value a
-device **observed**, a value a rule **calculated**, and a value config **intended**, and only the
-provenance says which. The declared write path fills `provenance=declared`; ingest upserts `observed`
-and the command pillar upserts `intended` latest values into the same table, leaving only `calculated`
-without a producer.
+The value lives in **`property`**, on the **same owner exclusive-arc** as the sample sinks and
+`event` (`owner_kind` plus `component_id` / `system_id` / `location_id` / `node_id`, one-set CHECK),
+plus the **`property_type_id`** FK, an `instance` discriminator, a **`provenance`**, and the jsonb
+`value`. Provenance makes the fold work: one table holds values an operator **declared**, a device
+**observed**, a rule **calculated**, and config **intended**; the per-provenance producers are on
+[config, secrets, and variables](/architecture/variables/#property-one-typed-name-a-classifier-contract-a-stored-value).
 
-The read is **`EffectiveProperties(ownerKind, ownerID)`**, one query with two arms:
+The read is **`EffectiveProperties(ownerKind, ownerID)`**, one query with two arms: the **contract
+arm** (every property the classifier declares, resolved to
+`coalesce(the instance's declared value, the contract default)`, marked `from_contract`) and the
+**off-contract arm** (values set directly on the instance); an instance with no classifier set (a
+**productless** component, a **one-off** system) resolves to its off-contract arm alone, and a
+**node**, with no classifier, always does.
 
-- the **contract arm**: every property the instance's classifier declares, resolved to
-  `coalesce(the instance's declared value, the contract default)`, marked `from_contract`;
-- the **off-contract arm**: the values set directly on the instance for properties its contract does
-  not declare.
-
-**One resolver serves all four owner kinds.** The three classifier/instance pairs differ only in *where*
-the instance names its classifier and *which* table that classifier declares into, so those five
-identifiers (instance table, classifier column, contract table, contract key, arc column) are data in an
-`ownerContract` table and the SQL is written **once**:
+**One resolver serves all four owner kinds.** The pairs differ only in five identifiers (instance
+table, classifier column, contract table, contract key, arc column), held as data in an
+`ownerContract` table, so the SQL is written **once**, the primitive-first move
+([ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)):
 
 | Owner kind | Classifier column | Contract table |
 |---|---|---|
@@ -230,29 +194,25 @@ identifiers (instance table, classifier column, contract table, contract key, ar
 | `location` | `location.location_type` | `location_type_property` |
 | `node` | (none) | (none) |
 
-An instance whose classifier is unset (a **productless** component, a **one-off** system) resolves to its
-off-contract arm alone, and a **node** has no classifier at all, so it always does. Writing the resolution
-three times would let the three drift; writing it once is the primitive-first move
-([ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)).
-Every arc is **scope-checked on the write**, so setting a value on a system or location outside your scope
-is a non-disclosing 404, not a silent success.
+Every arc is **scope-checked on the write**: setting a value outside your scope is a non-disclosing
+404.
 
-This pair replaces the retired `field_definition` / `field_value` feature: a "field" was always a property
-with **declared** provenance, and the catalog it hung off is now the classifier's contract
-([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)). See
-the [Properties guide](/guides/admin/properties/) for the operator surface.
+This pair replaces the retired `field_definition` / `field_value` feature: a "field" was always a
+property with **declared** provenance
+([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)).
+See the [Properties guide](/guides/admin/properties/).
 
 ### System roles: the slots a system needs filled
 
-A contract says what a system **carries**. A **system role** says what it **needs filled**: a table
-microphone, a main display, a confidence monitor. A role is a **slot**, not a component, so the system can
-state its shape before anything is assigned to it, and an **unfilled slot is visible** rather than absent.
+A contract says what a system **carries**; a **system role** says what it **needs filled**: a table
+microphone, a main display. A role is a **slot**, not a component, so an **unfilled slot is visible**
+rather than absent.
 
 :::note[Not the IAM role]
-A **system role** is a slot in a system. An **[IAM role](/architecture/identity-access/)**
-(viewer / operator / admin / owner) is a capability set granted to a principal. They share only the word;
-nothing crosses between them. The storage methods are deliberately `ListSystemRoles` / `SetSystemRole` /
-`DeleteSystemRole` so they cannot be mistaken for RBAC's `ListRoles` / `UpsertRole`.
+A **system role** is a slot in a system; an **[IAM role](/architecture/identity-access/)**
+(viewer / operator / admin / owner) is a capability set granted to a principal. They share only the
+word. The storage methods are deliberately `ListSystemRoles` / `SetSystemRole` / `DeleteSystemRole`,
+never mistakable for RBAC's `ListRoles` / `UpsertRole`.
 :::
 
 Five tables carry it. `system_member` is the **membership** binding a role attaches to, many-valued
@@ -280,56 +240,43 @@ what the role requires, **conjunctive** (a component must provide **every** list
 
 ### Membership: what a role attaches to
 
-**A component that does a job in a system is a member of it, and the role is what that membership does.**
-Belonging and job are one attachment seen at two levels, not two facts that can drift apart.
+**A component doing a job in a system is a member of it, and the role is what that membership does**:
+one attachment seen at two levels. Membership is **many-valued**: a rack DSP feeding three rooms is a
+member of all three.
 
-Membership is **many-valued on purpose**. A shared device belongs to every system it serves: a rack DSP
-feeding three rooms is a member of all three, and each of them depends on it. That a component is in this
-system *and two others* is exactly the kind of thing an operator needs to know before touching it.
-
-**Staffing a role creates the membership.** A component filling a job in a system that the system does not
-count as a member is a contradiction, so assignment binds it rather than asking an operator to say it twice.
-The reverse is deliberately **not** symmetric: giving up a role does not end membership, because the device
-is still in the room. A member carrying no role at all is ordinary and useful, and it is how the power
-conditioner, the rack shelf, and the spare on the shelf are accounted for.
+**Staffing a role creates the membership**, so nobody says it twice. The reverse is not symmetric:
+giving up a role does not end membership, and a member carrying no role is ordinary (the spare on the
+shelf).
 
 **`is_primary`** marks which membership seeds the
 [cascade](/architecture/cascade/#structural-multi-membership-a-component-in-n-systems) for a caller
-*without a system in hand*, a default and never a rule that overrides a caller who named a system (the
-cascade page owns that contract). A component's first membership takes the default with nobody asking,
-and a partial unique index makes a second primary impossible rather than merely unlikely.
+*without a system in hand*: a default, never a rule overriding a caller who named a system. The
+first membership takes it automatically; a partial unique index forbids a second primary.
 
-Membership **cascades from both ends**, since a binding is meaningless once either side is gone. It
-deliberately does not restrict the component the way `system_role_assignment` does: that restrict is load-bearing,
-because deleting a component that fills a job would silently break a system's health, but a membership
-carrying no role is an inventory fact, and refusing the delete for it would add a step to every component
-removal while protecting nothing the role table does not already protect.
+Membership **cascades from both ends**, and does not restrict the component the way
+`system_role_assignment` does: that restrict is load-bearing (deleting a filler would silently break
+health); a role-less membership is not worth blocking a delete over.
 
-**A role is declared on a standard or on a system**, the same exclusive arc the property value store uses.
-Declared on a **standard**, every conforming system **inherits it live**, exactly as a contract default does:
-add a role to Meeting Room and every meeting room is short one component until it is staffed. Declared on a
-**system**, it is ad-hoc, which is both how a **one-off system** gets roles at all and how a conforming system
-adds what its standard does not cover. A role also carries a **`quorum`**, how many components should fill it
-(a room wanting two ceiling mics has one role with quorum 2, not two roles), at least one, because a role no
-component need fill is not a role.
+**A role is declared on a standard or on a system**, the same exclusive arc the value store uses:
+standard-declared roles are **inherited live** by every conforming system, like a contract default;
+system-declared ones are ad-hoc, how a one-off system gets roles and a conforming system adds beyond
+its standard. A role carries a **`quorum`** (two ceiling mics is one role with quorum 2), at least
+one.
 
-**A capability is a fact about a component, not only about its product.** `component_capability` layers over
-the product's set: `present=true` adds a capability the product does not claim (a unit with a mic pod nobody
-modeled), `present=false` suppresses one it does (a bar whose camera is dead or removed). The resolver
-**`EffectiveCapabilities(component)`** is then:
+**A capability is a fact about a component, not only its product.** `component_capability` layers
+over the product's set: `present=true` adds a capability the product does not claim, `present=false`
+suppresses one it does. The resolver **`EffectiveCapabilities(component)`** is:
 
 > the **product's** capabilities, UNION the component's **`present=true`** rows, MINUS its **`present=false`**
 > rows.
 
-A **productless** component resolves to just its own declarations. This is the single definition of "what this
-component can do" for the whole platform, and it is the same **contract-plus-override** shape the declared
-properties above already use, applied to capabilities instead of values.
+A **productless** component resolves to just its own declarations: the platform's single definition
+of "what this component can do".
 
-The read side is **`EffectiveRoles(system)`**: the roles its standard declares (marked `from_standard`) UNION
-those declared on it directly, each with its required capabilities, its quorum, and the components filling it
-**here**. It serves **assigned** and **understaffed** (quorum minus assignments, floored at zero) rather than
-leaving each surface to do the arithmetic, so an under-staffed room reads the same way in the console, the
-CLI, and the API.
+The read side is **`EffectiveRoles(system)`**: the standard's roles (marked `from_standard`) UNION
+those declared directly, each with its required capabilities, quorum, and fillers **here**, serving
+**assigned** and **understaffed** (quorum minus assignments, floored at zero) so every surface reads
+the same.
 
 **Assignment is refused when the component cannot fill the role**, with the missing capabilities **named**:
 
@@ -337,58 +284,44 @@ CLI, and the API.
 component "panel-1" cannot fill role "table-mic": missing microphone, speaker
 ```
 
-This is a refusal on **modeled** grounds, the same class as the location placement constraint, and naming the
-gap is the point. A bare refusal leaves an operator guessing; a named one tells them to either fix the
-component's capabilities or pick a different component. It is also why capabilities had to become a
-**resolved** set at all: `product` is optional, so a strict guard over a product-only fact would have locked
-every productless component out of every role
+A refusal on **modeled** grounds; the named gap tells the operator what to fix. It is also why
+capabilities are a **resolved** set: `product` is optional, so a product-only guard would lock every
+productless component out of every role
 ([ADR-0049](/architecture/decisions/#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)).
 
-**A role also declares its `impact`**: `outage`, `degraded`, or `none`, what an **impaired** role (fewer
-satisfying components than its quorum) means for its system. It lives on the role rather than on the
-component or the alarm because the same broken box matters differently depending on the slot it was filling:
-a dead confidence monitor is not a dead main display. Impact is the one input the
-**[health](/architecture/health/)** rollup takes from the declaration side, and **quorum is the redundancy
-knob** underneath it: a role wanting one component with two assigned tolerates a failure, a role wanting two
-with two assigned does not.
-
-Staffing stays readable **without** any of that: a role wanting two components with one assigned is
-under-staffed **today**, on data the operator entered, with nothing collecting. Health adds the second
-question (of the components that **are** assigned, how many can currently do the job) and routes the answer
-up the tree
+**A role also declares its `impact`**: `outage`, `degraded`, or `none`, what an **impaired** role
+(fewer satisfying components than quorum) means for its system. It lives on the role because the same
+broken box matters differently per slot: a dead confidence monitor is not a dead main display. Impact
+is the one input [health](/architecture/health/) takes from the declaration side; **quorum is the
+redundancy knob** beneath it. Staffing stays readable **without** health (a role wanting two with one
+assigned is under-staffed today); health adds whether the assigned components can currently do the job
 ([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).
 
 ### The seed model: forked templates versus canonical catalogs
 
-Not everything the binary ships with is the same **kind** of thing, and conflating the two kinds is what
-makes seeded defaults painful. Omniglass splits them:
+Shipped content is two kinds, never conflated:
 
 - **Example content** (a `standard`, a `location_type`) is created by **forking an in-code template**
-  (the fork mechanism itself is tracked as
-  [#317](https://github.com/hyperscaleav/omniglass/issues/317); today the shipped boot seeds stand in). The
-  fork is **one-time, with no inheritance**: nothing in an estate points back at the template, so the
-  template can be improved in any release without touching a single tenant. What lands is an ordinary
-  **operator-owned** row (`official: false`), freely editable and deletable, and the boot seed installs it
-  **only if absent** (`ON CONFLICT DO NOTHING`). Re-seeding never reasserts over an edit; if it did, an
-  operator's rename of "Huddle Room" would silently revert on the next restart. The **roles** a shipped
-  standard declares ride the same lane, so retuning a seeded role's quorum survives the next boot.
-- **Canonical vocabulary** (the [`property_type` catalog](/architecture/variables/), plus the
-  `event_type` and `command_type` registries, all seeded today) is the shared namespace a driver maps
-  onto, so it must stay identical install to install.
-  It seeds as `official: true` through an **authoritative upsert** (`ON CONFLICT DO UPDATE`), read-only in
-  the API, so a release can correct it. The classification catalogs (`vendor`, `driver`, `capability`,
-  `product`) sit on that same authoritative path today.
+  ([#317](https://github.com/hyperscaleav/omniglass/issues/317); shipped boot seeds stand in today).
+  The fork is **one-time, no inheritance**: nothing points back at the template, so it can improve
+  per release without touching a tenant. What lands is an **operator-owned** row (`official: false`),
+  installed **only if absent** (`ON CONFLICT DO NOTHING`) so re-seeding never reverts an edit; a
+  shipped standard's **roles** ride the same lane.
+- **Canonical vocabulary** (the [`property_type` catalog](/architecture/variables/), the `event_type`
+  and `command_type` registries) is the shared namespace a driver maps onto, identical install to
+  install: seeded `official: true` through an **authoritative upsert** (`ON CONFLICT DO UPDATE`),
+  read-only in the API. The classification catalogs (`vendor`, `driver`, `capability`, `product`)
+  ride that path today.
 
-The distinction is worth internalizing: **forking applies to template -> row, never to classifier ->
-instance**. A system does not fork its standard; it **conforms** to it and inherits **live**, so revising a
-standard's default moves every conforming system that has not overridden it.
+**Forking applies to template -> row, never to classifier -> instance**: a system conforms, never
+forks.
 
 ## The variable-depth trees
 
-`component`, `system`, and `location` are each a **variable-depth tree**: a `parent_id` self-reference
-that nests to arbitrary depth (campus -> building -> floor -> room; parent system -> subsystem; chassis
--> card). The trees are the structural backbone of the [cascade](/architecture/cascade/), which
-resolves over an entity's containment path; the precedence rules are stated once, there.
+`component`, `system`, and `location` are each a **variable-depth tree**: a `parent_id`
+self-reference nesting to arbitrary depth (campus -> building -> floor -> room). The trees are the
+structural backbone of the [cascade](/architecture/cascade/), which resolves over an entity's
+containment path; the precedence rules are stated once, there.
 
 ```d2
 direction: right
@@ -408,27 +341,17 @@ location -> location: parent (tree)
 
 ### Sub-components and sub-systems
 
-The `parent_id` self-reference is **same-kind nesting**: a **system may have a parent system**
-(sub-system nesting) and a **component a parent component** (sub-component nesting), both over the same
-variable-depth `parent_id` trees. A chassis with line cards is a parent component over child
-components; a building-wide AV system composed of room subsystems is a parent system over child
-systems.
-
-This nesting feeds two mechanisms: the [cascade](/architecture/cascade/), where the deeper node wins,
-and the **health rollup**, where a **sub-system's health rolls into its parent system** and a
-**sub-component's into its parent component**, the same role-aware composition that runs up the rest
-of the tree.
-
-The **practical starting depth is 3 levels** (parent / child / grandchild) for both trees, a guidance
-default, **not a hard cap**: the `parent_id` trees support arbitrary depth, and we revisit the
-guidance if a use case needs more. The depth-resolution and rollup semantics themselves live in
-[cascade](/architecture/cascade/) and [health](/architecture/health/).
+The `parent_id` self-reference is **same-kind nesting**: a chassis with line cards is a parent
+component over children, and likewise a parent system over room subsystems. The nesting feeds the
+[cascade](/architecture/cascade/) (deeper wins) and the **health rollup** (a sub-system's health
+rolls into its parent system, a sub-component's into its parent component,
+[health](/architecture/health/)). The **practical starting depth is 3 levels**, a guidance default,
+**not a hard cap**.
 
 ## Ownership: the exclusive-arc
 
-Everything observed, asserted, or set in Omniglass attaches to exactly one structural entity, through
-the **exclusive-arc**. Every sample table, plus `event`, `property`, `alarm`, and `variable`,
-carries:
+Everything observed, asserted, or set attaches to exactly one structural entity through the
+**exclusive-arc**. Every sample table, plus `event`, `property`, `alarm`, and `variable`, carries:
 
 - an **`owner_kind`** enum, plus
 - the **matching typed FK** (`component_id` / `system_id` / `location_id` / `node_id`), plus
@@ -440,83 +363,62 @@ Every built CHECK admits exactly `component | system | location | node`.
 The singleton `global` owner rides the same arc as an all-null arm: none of the four owner columns set.
 :::
 
-This makes **system-, location-, and node-level samples first-class** (e.g. `health` is a
-`state` owned by a system, and a node's
-self-health is owned by the node), the fix for a monitoring tool that can only put state on a single
-host; estate-wide samples owned by `global` are the designed extension. It is also what carries a recorded [health](/architecture/health/) verdict: a component, a system,
-and a location each own their own transition series under the same `health` key, and the **owner** is what
-gives a reading its level. The same arc owns the `event` rows a sample produces, and is the design for
-`alarm` (component-local today), so a system-owned sample will yield a system-owned alarm. The full
-pattern and the storage DDL are on [storage](/architecture/storage/).
+This makes **system-, location-, and node-level samples first-class** (`health` is a `state` owned by
+a system; a node's self-health is owned by the node); estate-wide samples owned by `global` are the
+designed extension. The **owner** gives a recorded [health](/architecture/health/) verdict its level:
+component, system, and location each own a transition series under the same `health` key. The same
+arc owns the `event` rows a sample produces, and is the design for `alarm` (component-local today),
+so a system-owned sample will yield a system-owned alarm. The full pattern and DDL are on
+[storage](/architecture/storage/).
 
 ### The event sink: the first arc-owned occurrence
 
-The arc's first built sink beyond the sample tables is **`event`**, the **occurrence sink** of the
-collection pipeline. Where a `metric` or `state` records a **sampled present value**
-(a reading that has a value *now*, `last()` is meaningful), an `event` records a **past occurrence**:
-something that *happened* and whose "what is it now?" is meaningless (the
-[has-a-value-now razor](/architecture/properties/#the-has-a-value-now-razor-sample-vs-event)). A
-component that publishes an event natively (an xAPI event, an SNMP trap) routes it to `event`, carrying a
-**`message`** (its text, from `string_value`) and optional structured **`attributes`** (jsonb, from
-`json_value`). Raw log lines are a **separate ingest lane**, not events
-([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)): the `log_line`
-table is **built**, read back through `GET /components/{name}/logs` and `GET /nodes/{name}/logs`; only
-the derivation that turns a log line into an event is a later slice.
+The arc's first built sink beyond the sample tables is **`event`**, the **occurrence sink**: a
+**past occurrence** with no "what is it now?", against a `metric` or `state`'s sampled present value
+(the [has-a-value-now razor](/architecture/properties/#the-has-a-value-now-razor-sample-vs-event)).
 
 An `event` row carries the **identical owner exclusive-arc** as a sample (`owner_kind` plus the
-matching `component_id` / `system_id` / `location_id` / `node_id`, under the same CHECK that exactly one
-is set) and the **same provenance** vocabulary (`observed` / `calculated` / `intended` / `declared`,
-default `observed`), so a log occurrence is owned, addressed, and confined exactly like the value
-samples beside it: the **same** owner-confinement and reject-not-project gates apply at ingest. Each
-row also names its occurrence key through a NOT NULL **`event_type_id`** FK into the `event_type`
-registry, and carries the lineage columns **`source_event_id`**, **`source_log_line_id`**, and
-**`derived_by_rule_id`**, so a derived occurrence names what produced it. This
-is why the ownership pattern above already named `event` alongside the sample tables; it is the same
-arc, now with a built sink on it.
-
-Closing the loop, the reserved **`event_id`** columns on `metric` and `state` are
-now **real foreign keys** to `event(id)` (`on delete set null`): an **intended**-provenance sample (a
-value a command set) references the `event` that produced it, so a sample's lineage can point at the
-occurrence behind it. See [samples](/architecture/properties/) for the value sinks and
-[events](/architecture/events/) for the normalized-occurrence model layered above the raw log sink.
+matching `component_id` / `system_id` / `location_id` / `node_id`, same one-set CHECK) and the **same
+provenance** vocabulary (`observed` / `calculated` / `intended` / `declared`, default `observed`), so
+the same owner-confinement and reject-not-project gates apply at ingest. The occurrence key
+(`event_type_id`), the lineage columns, and the separate raw `log_line` lane
+([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)) are the
+[events](/architecture/events/) page's model. Closing the loop, the reserved **`event_id`** columns
+on `metric` and `state` are now **real foreign keys** to `event(id)` (`on delete set null`): an
+**intended**-provenance sample references the `event` that produced it
+([samples](/architecture/properties/)).
 
 ## Structural multi-membership (a component in N systems)
 
-A shared device legitimately belongs to more than one system, and
-[`system_member`](#membership-what-a-role-attaches-to) says so directly: it is many-valued, and a rack DSP
-serving three rooms holds three memberships.
-
-What stays single-valued is **which system chain seeds the cascade**. Why the seed must be
-single-valued, how `is_primary` picks it for context-free callers, and the per-system effective views
-that answer the genuine "config differs per system" case are stated once, on
+[`system_member`](#membership-what-a-role-attaches-to) is many-valued; what stays single-valued is
+**which system chain seeds the cascade**. Why, how `is_primary` picks it, and the per-system
+effective views are stated once, on
 [cascade](/architecture/cascade/#structural-multi-membership-a-component-in-n-systems).
 
 :::note[Superseded]
-This page previously said a truly shared device **skips the system layer**, which was the best available
-answer while the only binding was a single pointer on the component. It no longer holds: a shared device is
-a member of every system it serves.
+This page previously said a truly shared device **skips the system layer**, the best available answer
+while the only binding was a single pointer on the component. It no longer holds: a shared device is a
+member of every system it serves.
 :::
 
-The binding itself is the **`system_member`** table, which is **built**: `(system_id, component_id,
-is_primary)`, described under [membership](#membership-what-a-role-attaches-to). The design below layered
-the role onto that same row and pinned it to a frozen template BOM; what shipped keeps the row to the
-binding alone and lets `system_role_assignment` carry the role, so a member can exist without one.
+The design below layered the role onto the `system_member` row and pinned it to a frozen template
+BOM; what shipped keeps the row to the binding alone and lets `system_role_assignment` carry the
+role.
 
 :::design[Template pinning, tracked in #317]
-A [system role](#system-roles-the-slots-a-system-needs-filled) declares, per slot, a **requirement** (the capabilities a
-member must provide) plus its `health_role`; any component whose template meets the requirement can fill
-the role, validated on assignment. Detailed on [templates](/architecture/templates/).
+A [system role](#system-roles-the-slots-a-system-needs-filled) declares, per slot, a **requirement**
+(the capabilities a member must provide) plus its `health_role`; any component whose template meets
+the requirement can fill the role, validated on assignment. Detailed on
+[templates](/architecture/templates/).
 :::
 
 :::note[What is built is the role model above]
-`system_member` is **built** as the plain binding above, without the frozen template BOM. The **built** slot is
-[`system_role`](#system-roles-the-slots-a-system-needs-filled), declared on a standard or a system rather
-than frozen into a versioned shape, requiring a **capability** set rather than canonical
-samples and commands, and assigned through `system_role_assignment`. Its **`impact`** also replaces the
-`health_role` tag above: `required` / `redundant` / `informational` are expressed by quorum plus impact,
-with no fourth vocabulary
-([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).
-The two models are reconciled when template pinning is built
+The **built** slot is [`system_role`](#system-roles-the-slots-a-system-needs-filled): declared on a
+standard or a system, requiring a **capability** set, assigned through `system_role_assignment`. Its
+**`impact`** replaces the `health_role` tag above (`required` / `redundant` / `informational` are
+quorum plus impact, no fourth vocabulary,
+[ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain));
+the models reconcile when template pinning is built
 ([ADR-0049](/architecture/decisions/#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)).
 :::
 
@@ -524,65 +426,54 @@ The two models are reconciled when template pinning is built
 
 ## Operational mode: active, maintenance, disabled
 
-Every entity has an **operational mode**, a cascade-resolved state that says how much the platform backs
-off, set on the entity or inherited from a parent ([cascade](/architecture/cascade/)):
+Every entity has an **operational mode**, cascade-resolved (set on the entity or inherited,
+[cascade](/architecture/cascade/)):
 
-- **active** (default): collect, evaluate, act, enforce drift, count toward SLA. Normal.
-- **maintenance**: **keep collecting**, but **suppress the consequences** of what is seen. Planned work:
-  watch, but do not act.
-- **disabled**: **stop collecting and interacting** with the device entirely (the Zabbix host-disable).
-  The entity stays in the model, dormant, until re-enabled.
+- **active** (default): collect, evaluate, act, enforce drift, count toward SLA.
+- **maintenance**: **keep collecting**, but **suppress the consequences**.
+- **disabled**: **stop collecting and interacting** entirely (the Zabbix host-disable); dormant until
+  re-enabled.
 
-Maintenance and disabled are the **same suppression**, differing on one knob, **collection**: maintenance
-suppresses consequences but keeps watching (so an operator can verify the work); disabled also goes dark
-(no polling, no commands). Both suppress the same four consequences:
+Maintenance and disabled are the **same suppression**, differing only on the **collection** knob. Both
+suppress four consequences:
 
-- **action dispatch is held**: an alarm may still open (you see it), but no `action_rule` pages or opens a
-  ticket ([alarms and actions](/architecture/alarms-actions/)).
+- **action dispatch is held**: an alarm may open, but no `action_rule` pages or opens a ticket
+  ([alarms and actions](/architecture/alarms-actions/));
 - **drift is observed, not enforced**: the set function never fires, so a tech mid-swap is not fought
-  ([config](/architecture/variables/)). The device-swap case (a brief declared-identity authority,
-  [samples](/architecture/properties/)) is just maintenance suppressing drift.
-- **health rolls up no impact**: a member in maintenance or disabled does not sink its parent's
-  [health](/architecture/health/); it surfaces as "outage (maintenance)", the truth plus the mode, not a
-  fourth verdict value.
+  ([config](/architecture/variables/));
+- **health rolls up no impact**: the member does not sink its parent's
+  [health](/architecture/health/); it surfaces as "outage (maintenance)", the truth plus the mode;
 - **SLA does not count it**: the window is excluded from availability and the SLO.
 
-Maintenance is **time-bound**: a window (start / end, [time](/architecture/time/)) that **auto-exits**, or
-open-ended until cleared, with a recurring window expressed as a schedule. Disabled is held until
-re-enabled. Entering or exiting either is an **audited** operator action ([audit](/architecture/audit/)),
-so "no page at 2am, it was in the patch window" is always explainable. Because the mode is
-cascade-resolved, maintenance on a system covers its components.
+Maintenance is **time-bound**: a window (start / end, [time](/architecture/time/)) that
+**auto-exits**, or open-ended until cleared, recurring as a schedule; disabled holds until re-enabled.
+Either transition is **audited** ([audit](/architecture/audit/)), so "no page at 2am, it was in the
+patch window" is explainable. Cascade resolution means maintenance on a system covers its components.
 :::
 
 :::design[Decommission, purge, and the delete cascade, tracked in #528]
 
 ## Decommission and delete
 
-"Delete" is **decommission** by default, a **soft delete**: the entity is tombstoned, drops out of
-placement, worklists, and default views, but its **history is retained** (samples, events, alarms,
-audit), attributed to the tombstone and aging out by [retention](/architecture/storage/). An observability
-and control plane must not let "remove this projector" erase the incident record, and a decommissioned
-entity can be **re-commissioned** if the device returns. **Purge** is the privileged, audited hard erase
-for a genuine mistake (a test component); for a high-volume entity it runs as a background job over the
-partitions, while the cheap path is decommission plus letting retention age the firehose out.
+"Delete" is **decommission** by default, a **soft delete**: tombstoned, out of placement, worklists,
+and default views, with **history retained** (samples, events, alarms, audit) and aging out by
+[retention](/architecture/storage/); re-commissionable. **Purge** is the privileged, audited hard
+erase for a genuine mistake, a background job over the partitions for a high-volume entity.
 
-Decommissioning runs the **in-flight cleanup**, reusing mechanisms that already exist: collection stops
-(the worklist drops it, sessions close), **open alarms auto-resolve** (reason "decommissioned"),
-**pending commands and running flows cancel** (the durable command queue, and flows are already gated on
-their alarm staying open), and config / tag / credential / group bindings drop. The entity leaves its
-parent's health rollup.
+Decommissioning runs the **in-flight cleanup** with existing mechanisms: collection stops, **open
+alarms auto-resolve** (reason "decommissioned"), **pending commands and running flows cancel**, and
+config / tag / credential / group bindings drop. The entity leaves its parent's health rollup.
 
 The cascade is **not** "delete everything below", because containers do not own their members:
 
 - a **component** (leaf) decommissions as above;
-- a **system** delete **unbinds its members** (the `system_member` rows) but **does not delete the
-  components**; they become standalone, re-homeable;
-- a **location** delete is **refused by the API while occupied**; today the occupancy check counts only
-  child locations (`parent_id` children), while a system or component still placed there surfaces as the
-  generic referenced error rather than a placement inventory; the console offers re-homing before the
-  delete (move the systems and components, then delete the empty location);
-- a **node** delete **re-places its tasks** (to the server or another node, or surfaces the components as
-  uncollected) and revokes the node credential ([identity and access](/architecture/identity-access/));
-  `node.*` history is retained.
+- a **system** delete **unbinds its members** (the `system_member` rows) but keeps the components,
+  standalone and re-homeable;
+- a **location** delete is **refused by the API while occupied**; today the occupancy check counts
+  only child locations (`parent_id` children), a still-placed system or component surfacing as the
+  generic referenced error; the console offers re-homing first;
+- a **node** delete **re-places its tasks** (to the server or another node, or surfaces the
+  components as uncollected) and revokes the node credential
+  ([identity and access](/architecture/identity-access/)); `node.*` history is retained.
 
 :::
