@@ -167,7 +167,7 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
             <KVStacked label="Unit" value={<span class="font-data">{r().unit ?? "—"}</span>} />
           </div>
           <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Display name</span>
+            <span class="eyebrow">Name</span>
             <Show when={edit.editing()} fallback={<div class="input input-bordered flex items-center text-sm">{r().display_name}</div>}>
               <input class="input input-bordered w-full" value={displayName()} onInput={(e) => setDisplayName(e.currentTarget.value)} />
             </Show>
@@ -255,7 +255,7 @@ export function CreatePropertyForm(p: { onCreated: (r: PropertyRow) => void }): 
           <For each={PROPERTY_DATA_TYPES}>{(t) => <option value={t}>{t}</option>}</For>
         </select>
       </Field>
-      <Field label="Display name">
+      <Field label="Name">
         <input class="input input-bordered w-full" value={displayName()} placeholder="Serial number" onInput={(e) => setDisplayName(e.currentTarget.value)} />
       </Field>
       <Field label="Description">

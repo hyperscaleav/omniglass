@@ -69,7 +69,7 @@ describe("Products page", () => {
     // create is available to an admin. The label match is anchored because the
     // Name field's hint mentions the display name too.
     fireEvent.click(screen.getByRole("button", { name: /new product/i }));
-    expect(screen.getByLabelText(/^Display name$/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Name/)).toBeInTheDocument();
   });
 
   it("a custom (non-official) row carries edit and delete", async () => {
@@ -176,7 +176,7 @@ describe("Products reference honesty (#470)", () => {
 
 // The catalog wears the shared identity cell (components/IdentityCell): one
 // "Name" header whose cell carries the label over the handle, so a product reads
-// the same here as it does on every other list. The separate "Display name"
+// the same here as it does on every other list. The separate "Name"
 // column went with it: the cell already renders both.
 describe("Products identity column", () => {
   it("carries both identities under one Name header", async () => {
@@ -184,7 +184,7 @@ describe("Products identity column", () => {
     expect(await screen.findByText("Acme Panel")).toBeInTheDocument();
     const heads = screen.getAllByRole("columnheader").map((h) => h.textContent);
     expect(heads).toContain("Name");
-    expect(heads).not.toContain("Display name");
+    expect(heads.filter((h) => h === "Name")).toHaveLength(1);
     // Every other column survives, in order.
     expect(heads).toEqual(["Name", "Vendor", "Driver", "Kind", "Origin", ""]);
 

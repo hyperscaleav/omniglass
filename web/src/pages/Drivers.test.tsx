@@ -75,13 +75,13 @@ describe("Drivers create derives the handle", () => {
 
     fireEvent.input(display, { target: { value: "Acme PTZ Camera" } });
     expect(handle.value).toBe("acme-ptz-camera");
-    expect(screen.getByText(/derived from the display name/i)).toBeInTheDocument();
+    expect(screen.getByText(/derived from the name/i)).toBeInTheDocument();
 
     fireEvent.input(handle, { target: { value: "acme-ptz" } });
     fireEvent.input(display, { target: { value: "Acme PTZ Camera v2" } });
     expect(handle.value).toBe("acme-ptz");
     // The field stops advertising a coupling it no longer has.
-    expect(screen.queryByText(/derived from the display name/i)).toBeNull();
+    expect(screen.queryByText(/derived from the name/i)).toBeNull();
   });
 });
 

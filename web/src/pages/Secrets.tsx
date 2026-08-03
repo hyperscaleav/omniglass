@@ -305,7 +305,7 @@ function CreateSecretForm(p: { onCreated: (s: Secret) => void }): JSX.Element {
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow label="Name" hint="The cascade key; unique per owner.">
+      <FieldRow label="Key" hint="The cascade key; unique per owner.">
         <input class="input input-bordered w-full font-data" value={name()} placeholder="poll-community" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Type">

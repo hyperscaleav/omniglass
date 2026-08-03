@@ -12,7 +12,7 @@ import { entityLabel, hasDisplayName, type Labelled } from "../lib/entities";
 // That rule was previously written sixteen times, in four mutually incompatible
 // idioms, one per FlatList page:
 //
-//   - separate "Name" and "Display name" columns  (Vendors, Drivers, Capabilities,
+//   - separate "Name" and "Display name" columns (Vendors, Drivers, Capabilities,
 //     Products, Standards, Types)
 //   - "Key" and "Label" columns                    (Properties, EventTypes,
 //     CommandTypes, Tags)
@@ -20,8 +20,9 @@ import { entityLabel, hasDisplayName, type Labelled } from "../lib/entities";
 //   - the segment alone                            (Secrets, Variables)
 //
 // Four idioms is why the same estate reads four different ways depending on which
-// page an operator is on, and why the column header for the same fact is "Name"
-// here, "Key" there, and "Display name" somewhere else.
+// page an operator is on, and why the column header for the same fact was "Name"
+// here, "Key" there, and "Display name" beside it. Both retired words are named
+// here because this comment is the history; the guard forbids them everywhere else.
 //
 // The two-line treatment matches what TreeList already renders, so a tree and a
 // flat list of the same entity look like the same product.

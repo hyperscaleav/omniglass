@@ -155,12 +155,12 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <KVStacked label="Technical name" value={<span class="font-data">{r().name}</span>} />
+            <KVStacked label="Segment" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Origin" value={officialBadge(r().official)} />
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
           <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Display name</span>
+            <span class="eyebrow">Name</span>
             <Show
               when={edit.editing()}
               fallback={<div class="input input-bordered flex items-center text-sm">{r().display_name}</div>}
@@ -227,10 +227,10 @@ export function CreateDriverForm(p: { onCreated: (d: Driver) => void }): JSX.Ele
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Display name">
+      <Field label="Name">
         <input class="input input-bordered w-full" value={display()} placeholder="Generic SNMP" onInput={(e) => setDisplay(e.currentTarget.value)} />
       </Field>
-      <Field label="Name" hint={keyDerived() ? "Derived from the display name. Edit to set your own." : "A kebab name, e.g. snmp-generic."}>
+      <Field label="Segment" hint={keyDerived() ? "Derived from the name. Edit to set your own." : "A kebab name, e.g. snmp-generic."}>
         <input class="input input-bordered w-full font-data" value={name()} placeholder="snmp-generic" onInput={(e) => setName(e.currentTarget.value)} />
       </Field>
       <Field label="Version" hint="A version string, e.g. 1.0.0. Optional.">

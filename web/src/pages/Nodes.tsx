@@ -262,14 +262,14 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
           </Show>
 
           <div class="grid grid-cols-2 gap-4">
-            <KVStacked label="Technical name" value={<span class="font-data">{node().name}</span>} />
+            <KVStacked label="Segment" value={<span class="font-data">{node().name}</span>} />
             <KVStacked label="Status" value={STATUS[nodeStatus(node())].label} />
             <KVStacked label="Last heartbeat" value={node().last_heartbeat_at ? rel(node().last_heartbeat_at!) : <span class="text-base-content/40">never</span>} />
             <KVStacked label="Enrolled" value={node().enrolled ? (node().enrolled_at ? rel(node().enrolled_at!) : "yes") : <span class="text-base-content/40">not yet</span>} />
           </div>
 
           <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Display name</span>
+            <span class="eyebrow">Name</span>
             <Show
               when={edit.editing()}
               fallback={<div class="input input-bordered flex items-center text-sm">{node().display_name || <span class="text-base-content/40">{node().name}</span>}</div>}
@@ -404,13 +404,13 @@ function CreateNodeForm(props: { close: () => void; onEnrolled: (out: EnrollOutp
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
       <div>
-        <label class="eyebrow mb-1.5 block" for="new-node-display">Display name</label>
+        <label class="eyebrow mb-1.5 block" for="new-node-display">Name</label>
         <input id="new-node-display" autocomplete="off" class="input input-bordered w-full" value={display()} placeholder="HQ Closet Node" onInput={(e) => setDisplay(e.currentTarget.value)} disabled={busy()} />
       </div>
       <div>
-        <label class="eyebrow mb-1.5 block" for="new-node-name">Name</label>
+        <label class="eyebrow mb-1.5 block" for="new-node-name">Segment</label>
         <input id="new-node-name" autocomplete="off" class="input input-bordered w-full font-data" value={name()} placeholder="edge-hq-1" onInput={(e) => setName(e.currentTarget.value)} disabled={busy()} required />
-        <p class="mt-1 text-xs text-base-content/50">{keyDerived() ? "Derived from the display name. Edit to set your own." : "The node's address, used by the API and CLI."}</p>
+        <p class="mt-1 text-xs text-base-content/50">{keyDerived() ? "Derived from the name. Edit to set your own." : "The node's address, used by the API and CLI."}</p>
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-node-location">Location</label>

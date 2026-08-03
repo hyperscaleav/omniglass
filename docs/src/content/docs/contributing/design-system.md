@@ -146,6 +146,16 @@ look like the same product. It replaced sixteen hand-written name columns writte
 incompatible idioms, which is why the header word for one fact used to be "Name" on one page, "Key"
 on another, and "Display name" beside it.
 
+**Two words, no synonyms.** The friendly label an operator types is the **Name**. The kebab token an
+address is built from is the **Segment** (in prose, a topic segment). "Display name" and "Technical
+name" are both retired, and `identity-vocabulary-guard.test.ts` fails the build on either appearing in
+operator-visible text. The one boundary is the CLI reference, which is generated from the Huma `doc:`
+tags: its flag is still `--display-name` because the wire field is still `display_name`, and a help
+string calling it the name while the flag says otherwise would be worse than the inconsistency. Both
+move together when the field renames.
+
+A page whose identifier is a keyspace key says **Key**, not Segment, on both the column and the form.
+
 A page whose identifier is a **keyspace key** rather than a segment (`property_type`, `event_type`,
 `command_type`, `tag`) passes `identityColumn({ label: "Key" })` and does not derive its key from the
 label: `icmp.rtt_avg` is a legal key and an illegal segment. The write side has the same split.

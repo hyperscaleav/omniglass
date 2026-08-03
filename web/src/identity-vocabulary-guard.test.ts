@@ -1,45 +1,64 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-// "Name" means one thing, and it is the thing an operator typed.
+// Two words, two meanings, and no synonyms.
 //
-// A list column renders the label on its primary line, so its header is "Name".
-// A blade shows the kebab address on its own, and that is NOT the name: it is the
-// technical name. Using the same word for both put "Name" on two surfaces two
-// clicks apart meaning different things, which is exactly the confusion the
-// identity work exists to end.
+//   Name     the friendly label an operator types and reads.
+//   Segment  the kebab token an address is built from, what the API and CLI take.
 //
-// This is a source guard rather than a rendering test on purpose. The failure
-// mode is a NEW page reaching for the wrong word, and no per-page test catches
-// that, because the page nobody wrote a test for is the page that drifts.
+// The console used to say four things. A list column header said "Name" for the
+// address on some pages and for the label on others. A blade said "Technical name"
+// on three pages and "Name" on seven. Every label field said "Display name". The
+// same fact answered to three words and the same word meant two facts, which is
+// the confusion the identity work exists to end.
 //
-// Scope, deliberately: detail FACTS only, not form fields. A create form still
-// labels the kebab address "Name" on every page, which is the repo's pre-existing
-// convention and predates this guard. It is a real remaining inconsistency (a form
-// says "Name" for the address while a list column says "Name" for the label) and
-// it is settled by the display_name to name rename in #545 part two, which moves
-// both words at once. Widening this guard to forms before that rename would fail
-// on eleven pages it has no fix for.
-const PAGES = join(__dirname, "pages");
+// "Display name" and "Technical name" are retired. They are allowed in a comment
+// (IdentityCell's header names both, because that comment IS the history) but not
+// in anything an operator reads.
+//
+// This is a source guard rather than a rendering test on purpose. The failure mode
+// is a NEW page reaching for a retired word, and no per-page test catches that,
+// because the page nobody wrote a test for is the page that drifts.
+const SRC = join(__dirname);
+const RETIRED = ["Display name", "Technical name"];
+
+function walk(dir: string, out: string[] = []): string[] {
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) walk(full, out);
+    else if (/\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry)) out.push(full);
+  }
+  return out;
+}
+
+// A line is prose if it is a comment. The rename is about operator-visible text,
+// not about whether history may be described.
+function isComment(line: string): boolean {
+  const t = line.trim();
+  return t.startsWith("//") || t.startsWith("*") || t.startsWith("/*") || t.startsWith("{/*");
+}
 
 describe("identity vocabulary", () => {
-  it("never labels the technical name 'Name' on a detail fact", () => {
+  it("uses no retired word in operator-visible text", () => {
     const offenders: string[] = [];
-    for (const file of readdirSync(PAGES)) {
-      if (!file.endsWith(".tsx") || file.endsWith(".test.tsx")) continue;
-      const src = readFileSync(join(PAGES, file), "utf8");
-      src.split("\n").forEach((line, i) => {
-        if (/<KVStacked\s+label="Name"/.test(line)) {
-          offenders.push(`${file}:${i + 1}`);
-        }
-      });
+    for (const file of walk(SRC)) {
+      readFileSync(file, "utf8")
+        .split("\n")
+        .forEach((line, i) => {
+          if (isComment(line)) return;
+          for (const word of RETIRED) {
+            if (line.includes(word)) {
+              offenders.push(`${file.replace(SRC + "/", "")}:${i + 1}  ${word}`);
+            }
+          }
+        });
     }
     expect(
       offenders,
-      `\nThese label the kebab address "Name" on a detail surface:\n  ${offenders.join("\n  ")}\n\n` +
-        `A list column header is "Name" and renders the label. A detail field showing the kebab\n` +
-        `address is "Technical name". One word, one meaning.\n`,
+      `\nThese carry a retired word in operator-visible text:\n  ${offenders.join("\n  ")}\n\n` +
+        `The label an operator types is "Name". The kebab address is "Segment".\n` +
+        `"Display name" and "Technical name" are both retired.\n`,
     ).toEqual([]);
   });
 });

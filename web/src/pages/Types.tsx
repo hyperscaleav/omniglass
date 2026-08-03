@@ -225,7 +225,7 @@ function TypeBladeBody(p: { id: string }): JSX.Element {
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
           <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Display name</span>
+            <span class="eyebrow">Name</span>
             <Show
               when={edit.editing()}
               fallback={<div class="input input-bordered flex items-center text-sm">{r().display_name}</div>}
@@ -357,10 +357,10 @@ export function CreateTypeForm(p: { kind: TypeKind; onCreated: (t: TypeRow) => v
         <span class="eyebrow">Kind</span>
         {kindBadge(p.kind)}
       </div>
-      <Field label="Display name" hint="What an operator reads.">
+      <Field label="Name" hint="What an operator reads.">
         <input class="input input-bordered w-full" value={display()} placeholder="Wing" onInput={(e) => setDisplay(e.currentTarget.value)} />
       </Field>
-      <Field label="Name" hint={keyDerived() ? "Derived from the display name. Edit to set your own." : "A kebab name, e.g. wing. Addressed by the API and CLI."}>
+      <Field label="Segment" hint={keyDerived() ? "Derived from the name. Edit to set your own." : "A kebab name, e.g. wing. Addressed by the API and CLI."}>
         <input class="input input-bordered w-full font-data" value={name()} placeholder="wing" onInput={(e) => setName(e.currentTarget.value)} />
       </Field>
       <Show when={p.kind === "location"}>

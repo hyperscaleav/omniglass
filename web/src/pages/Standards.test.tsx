@@ -134,7 +134,7 @@ describe("Standards page", () => {
   // One Name column carries both identities (components/IdentityCell), so the
   // catalog reads the same way as every other list rather than spending a second
   // column on the fact.
-  it("carries both identities in one Name column, with no separate Display name column", async () => {
+  it("carries both identities in one Name column, and no retired second column", async () => {
     mount();
     await screen.findByText("Huddle space");
     const heads = Array.from(document.querySelectorAll("thead th")).map((th) => th.textContent?.trim());

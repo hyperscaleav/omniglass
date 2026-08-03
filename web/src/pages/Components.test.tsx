@@ -46,7 +46,7 @@ describe("Components create-as-route", () => {
     expect(screen.getByText("Draft")).toBeTruthy();
     expect(screen.getByText("Create component")).toBeTruthy();
     // Identity + Placement fields present; the binding sections are locked.
-    expect(screen.getByText("Name")).toBeTruthy();
+    expect(screen.getByText("Segment")).toBeTruthy();
     expect(screen.getByText("System")).toBeTruthy();
     expect(screen.getByText(/Available once the component is created/)).toBeTruthy();
   });
@@ -54,7 +54,7 @@ describe("Components create-as-route", () => {
   it("shows an existing component read-only in view: no tag add control, an Edit affordance", async () => {
     mount("/components/mic-2");
     // The detail resolves and renders the read-only facts.
-    await waitFor(() => expect(screen.getByText("Technical name")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Segment")).toBeTruthy());
     // No in-body mutation control in view: the TagAdder add row is absent.
     expect(screen.queryByPlaceholderText(/Add a tag/)).toBeNull();
     // The view footer offers Edit (which would flip the accordion to edit mode).
@@ -74,7 +74,7 @@ describe("Components create-as-route", () => {
 
   it("a fresh detail view keeps the technical name read-only", async () => {
     mount("/components/mic-2");
-    await waitFor(() => expect(screen.getByText("Technical name")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Segment")).toBeTruthy());
     // No check button until edit begins: the name is a read-only fact.
     expect(screen.queryByLabelText("Check name")).toBeNull();
   });

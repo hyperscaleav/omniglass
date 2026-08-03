@@ -191,7 +191,7 @@ describe("Nodes page", () => {
     const nameInput = (await screen.findByLabelText("Name")) as HTMLInputElement;
     fireEvent.input(nameInput, { target: { value: "edge-2" } });
     // The create form also carries display_name + location (parity with components).
-    expect(screen.getByLabelText("Display name")).toBeTruthy();
+    expect(screen.getByLabelText("Name")).toBeTruthy();
     expect(screen.getByLabelText("Location")).toBeTruthy();
     fireEvent.click(screen.getByText("Create node"));
 
@@ -205,8 +205,8 @@ describe("Nodes page", () => {
   it("derives the node name from the display name until the name is hand-edited", async () => {
     mount(owner);
     fireEvent.click(screen.getByText("New node"));
-    const display = (await screen.findByLabelText("Display name")) as HTMLInputElement;
-    const name = screen.getByLabelText("Name") as HTMLInputElement;
+    const display = (await screen.findByLabelText("Name")) as HTMLInputElement;
+    const name = screen.getByLabelText("Segment") as HTMLInputElement;
 
     fireEvent.input(display, { target: { value: "HQ Closet Node" } });
     expect(name.value).toBe("hq-closet-node");

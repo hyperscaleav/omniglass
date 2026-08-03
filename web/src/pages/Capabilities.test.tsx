@@ -54,12 +54,12 @@ describe("Capabilities addressing honesty (#469)", () => {
 describe("Capabilities identity", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("carries both identities in one Name column, with no separate Display name column", async () => {
+  it("carries both identities in one Name column, and no retired second column", async () => {
     mount();
     await screen.findByText("Touchscreen control");
     const heads = screen.getAllByRole("columnheader").map((h) => h.textContent?.trim());
     expect(heads).toContain("Name");
-    expect(heads).not.toContain("Display name");
+    expect(heads.filter((h) => h === "Name")).toHaveLength(1);
     const row = screen.getByText("Touchscreen control").closest("tr")!;
     expect(within(row).getByText("touch-screen")).toBeInTheDocument();
   });

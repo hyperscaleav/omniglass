@@ -146,7 +146,7 @@ function EventTypeBladeBody(p: { name: string }): JSX.Element {
             <KVStacked label="Origin" value={originBadge(r().official)} />
           </div>
           <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Display name</span>
+            <span class="eyebrow">Name</span>
             <Show when={edit.editing()} fallback={<div class="input input-bordered flex items-center text-sm">{r().display_name}</div>}>
               <input class="input input-bordered w-full" value={displayName()} onInput={(e) => setDisplayName(e.currentTarget.value)} />
             </Show>
@@ -216,7 +216,7 @@ export function CreateEventTypeForm(p: { onCreated: (r: EventTypeRow) => void })
       <Field label="Key" hint="A lowercase, dot-hierarchied name, e.g. call.started or cable.unplugged.">
         <input class="input input-bordered w-full font-data" value={name()} placeholder="call.started" onInput={(e) => setName(e.currentTarget.value)} />
       </Field>
-      <Field label="Display name">
+      <Field label="Name">
         <input class="input input-bordered w-full" value={displayName()} placeholder="Call started" onInput={(e) => setDisplayName(e.currentTarget.value)} />
       </Field>
       <Field label="Description">

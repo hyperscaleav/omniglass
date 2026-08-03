@@ -89,7 +89,7 @@ describe("Types page", () => {
     mount();
     const headers = screen.getAllByRole("columnheader").map((h) => h.textContent?.trim());
     expect(headers).toContain("Name");
-    expect(headers).not.toContain("Display name");
+    expect(headers.filter((h) => h === "Name")).toHaveLength(1);
     const cell = screen.getByText("server-room").closest("td");
     expect(cell?.textContent).toContain("Machine hall");
   });
@@ -122,13 +122,13 @@ describe("Types page", () => {
 
     fireEvent.input(display, { target: { value: "Server Room" } });
     expect(name.value).toBe("server-room");
-    expect(screen.getByText(/Derived from the display name/)).toBeTruthy();
+    expect(screen.getByText(/Derived from the name/)).toBeTruthy();
 
     fireEvent.input(name, { target: { value: "svr" } });
     fireEvent.input(display, { target: { value: "Server Room B" } });
     expect(name.value).toBe("svr");
     // The field says so too: the segment is the operator's now, not derived.
-    expect(screen.queryByText(/Derived from the display name/)).toBeNull();
+    expect(screen.queryByText(/Derived from the name/)).toBeNull();
   });
 
   it("offers no create form on the read-only Secret tab", async () => {

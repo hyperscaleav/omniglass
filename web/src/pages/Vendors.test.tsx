@@ -53,7 +53,7 @@ describe("Vendors page", () => {
     // create is available to an admin. Anchored, because the Name field's hint
     // mentions the display name it derives from.
     fireEvent.click(screen.getByRole("button", { name: /new vendor/i }));
-    expect(screen.getByLabelText(/^Display name/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Name/)).toBeInTheDocument();
   });
 
   it("a custom (non-official) row carries edit and delete", async () => {
@@ -126,7 +126,7 @@ describe("Vendors addressing honesty (#469)", () => {
 describe("Vendors identity column", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("carries both identities under one Name header, with no separate Display name column", async () => {
+  it("carries both identities under one Name header, and no retired second column", async () => {
     mount();
     expect(await screen.findByText("Acme AV")).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /^Name$/ })).toBeInTheDocument();
@@ -145,18 +145,18 @@ describe("Vendors create form identity", () => {
   it("derives the handle from the display name until the operator edits the handle", () => {
     mount();
     fireEvent.click(screen.getByRole("button", { name: /new vendor/i }));
-    const display = screen.getByLabelText(/^Display name/) as HTMLInputElement;
-    const handle = screen.getByLabelText(/^Name/) as HTMLInputElement;
+    const display = screen.getByLabelText(/^Name/) as HTMLInputElement;
+    const handle = screen.getByLabelText(/^Segment/) as HTMLInputElement;
 
     fireEvent.input(display, { target: { value: "Acme AV" } });
     expect(handle.value).toBe("acme-av");
-    expect(screen.getByText(/Derived from the display name/)).toBeInTheDocument();
+    expect(screen.getByText(/Derived from the name/)).toBeInTheDocument();
 
     fireEvent.input(handle, { target: { value: "acme" } });
     fireEvent.input(display, { target: { value: "Acme AV Holdings" } });
     expect(handle.value).toBe("acme");
     // And the field says so, so the operator is not left guessing whether it
     // still follows.
-    expect(screen.queryByText(/Derived from the display name/)).toBeNull();
+    expect(screen.queryByText(/Derived from the name/)).toBeNull();
   });
 });

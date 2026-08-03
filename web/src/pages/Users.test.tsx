@@ -515,7 +515,7 @@ describe("Users create identity", () => {
   const fields = async () => {
     mount();
     fireEvent.click(screen.getByText("New user"));
-    const display = (await screen.findByLabelText("Display name")) as HTMLInputElement;
+    const display = (await screen.findByLabelText("Name")) as HTMLInputElement;
     const username = screen.getByLabelText("Username") as HTMLInputElement;
     return { display, username };
   };

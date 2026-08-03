@@ -108,15 +108,15 @@ function CreateGroupForm(props: { onCreated: (g: Group) => void; onClose: () => 
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
       <label class="flex flex-col gap-1">
-        <span class="eyebrow">Display name</span>
+        <span class="eyebrow">Name</span>
         <input class="input input-bordered w-full" value={display()} placeholder="Field Crew" onInput={(e) => setDisplay(e.currentTarget.value)} disabled={busy()} />
       </label>
       <label class="flex flex-col gap-1">
-        <span class="eyebrow">Name</span>
+        <span class="eyebrow">Segment</span>
         <input class="input input-bordered w-full font-data" classList={{ "input-error": !!handleError(name()) }} value={name()} placeholder="field-crew" onInput={(e) => setName(e.currentTarget.value)} disabled={busy()} required />
         <Show
           when={handleError(name())}
-          fallback={<p class="text-[11px] text-base-content/40">{keyDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."}</p>}
+          fallback={<p class="text-[11px] text-base-content/40">{keyDerived() ? "Derived from the name. Edit to set your own." : "Globally unique address, used by the API and CLI."}</p>}
         >
           {(msg) => <p class="text-[11px] text-error">{msg()}</p>}
         </Show>
