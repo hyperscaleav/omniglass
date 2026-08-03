@@ -46,3 +46,81 @@ test.describe("operator console", () => {
     await expect(page.locator("main")).not.toContainText(name);
   });
 });
+
+// Home, the situation room. This is the one place the view path runs end to end
+// against the real binary: the browser's query serialization, the server's
+// param binding, the scoped query, and the renderers. The unit tests stub fetch,
+// so a serialization mismatch between the generated client and the route's
+// declared explode form would pass every one of them and fail only here.
+test.describe("home, the situation room", () => {
+  test.skip(!USER || !PASSWORD, "set OG_E2E_USER/OG_E2E_PASSWORD (run via `make test-e2e`)");
+
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/web/login");
+    await page.locator("#login-username").fill(USER as string);
+    await page.locator("#login-password").fill(PASSWORD as string);
+    await page.getByRole("button", { name: /sign in/i }).click();
+    await page.waitForURL((url) => !url.pathname.endsWith("/login"));
+  });
+
+  test("renders the estate through views, with real rows in every panel", async ({ page }) => {
+    // Every read Home makes must be a view run; a bespoke resource read would
+    // mean the page had drifted off the read side it is meant to prove.
+    const viewRuns: string[] = [];
+    page.on("request", (req) => {
+      const u = new URL(req.url());
+      if (u.pathname.startsWith("/api/v1/views/")) viewRuns.push(u.pathname + u.search);
+    });
+
+    await page.goto("/web/");
+
+    // The tiles come from estate-counts and carry the dev estate's real
+    // numbers, so an empty or failed run is visible rather than a zero.
+    const tiles = page.locator(".stat");
+    await expect(tiles.first()).toBeVisible();
+    await expect(page.getByText("components", { exact: true })).toBeVisible();
+    const componentCount = await page.locator(".stat", { hasText: "components" }).locator(".stat-value").innerText();
+    expect(Number(componentCount)).toBeGreaterThan(0);
+
+    // The reachability grid carries a verdict per interface, readable as state
+    // rather than only as colour.
+    const states = page.locator("[data-state]");
+    await expect(states.first()).toBeVisible();
+    expect(await states.count()).toBeGreaterThan(0);
+
+    // The feed carries occurrences from the seeded estate.
+    await expect(page.getByRole("heading", { name: /recent occurrences/i })).toBeVisible();
+    await expect(page.locator("table tbody tr").first()).toBeVisible();
+
+    // No panel failed: a refused or broken view renders an alert.
+    await expect(page.getByRole("alert")).toHaveCount(0);
+
+    // The param binding survived the round trip. The feed asks for limit=8 as a
+    // repeated param= pair, which is the form the route declares; a client that
+    // serialized it any other way would have produced a 400 and an alert above.
+    expect(viewRuns.some((r) => r.includes("event-feed:run"))).toBe(true);
+    expect(viewRuns.some((r) => r.includes("param=limit%3D8"))).toBe(true);
+    await expect(page.locator("table tbody tr")).toHaveCount(8);
+  });
+
+  test("streams a change into the page without a reload", async ({ page, request }) => {
+    const token = process.env.OG_TOKEN;
+    test.skip(!token, "set OG_TOKEN for the live-update leg");
+
+    await page.goto("/web/");
+    const componentTile = page.locator(".stat", { hasText: "components" }).locator(".stat-value");
+    await expect(componentTile).toBeVisible();
+    const before = Number(await componentTile.innerText());
+
+    // Add a component through the API, the way an integration would, and watch
+    // the tile move on its own: no reload, no click. This is the watch seam
+    // proving itself against the real server.
+    const created = await request.post("/api/v1/components", {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { name: `e2e-live-${Date.now()}` },
+    });
+    expect(created.ok()).toBeTruthy();
+
+    await expect(componentTile).toHaveText(String(before + 1), { timeout: 20000 });
+  });
+});

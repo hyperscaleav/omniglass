@@ -218,7 +218,10 @@ func componentReachability() Definition {
 			{Name: "state", Type: "string", Role: "value"},
 			{Name: "since", Type: "time", Role: "time"},
 		},
-		FieldMapping: map[string]string{"value": "state", "label": "component", "time": "since"},
+		// sublabel distinguishes rows sharing a label: a component with two
+		// interfaces renders as two chips, and without the interface name they
+		// would be indistinguishable, so a grid could not say which one is down.
+		FieldMapping: map[string]string{"value": "state", "label": "component", "sublabel": "interface", "time": "since"},
 		Run: func(ctx context.Context, gw storage.Gateway, read scope.Set, _ map[string]any, _ string) ([][]any, string, error) {
 			recs, err := gw.ListInterfaceReachability(ctx, read)
 			if err != nil {

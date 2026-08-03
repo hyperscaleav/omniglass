@@ -2354,3 +2354,18 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   pinned at cell level and stated at its real limit: keyed by position, so an insert keeps the nodes
   and shifts the values. The chart breaks its line at a gap rather than interpolating across an
   outage an operator would read as healthy.
+- **Home v1, the situation room ([#543](https://github.com/hyperscaleav/omniglass/issues/543)).**
+  The stub Home becomes the first coded page of the views tier: `estate-counts` tiles, the
+  `component-reachability` grid, and the `event-feed` table, each a renderer over a watched view,
+  with the page holding no query of its own. The component blade gains the `sample-history` chart
+  through the same renderer. Driving it against a real server rather than a fixture found four
+  things no unit test had: the screenshot tooling waited for `networkidle`, which a page holding a
+  stream never reaches, so every shot of a live surface timed out; two interfaces on one component
+  rendered as two identical chips, fixed by a `sublabel` role the view declares rather than a
+  renderer guessing which column disambiguates; the feed showed raw ISO timestamps, now formatted
+  from the column's declared `time` type, so the fix generalizes to any view; and the dev fixture
+  carried a single timing reading per interface, which is a number an operator already has, so it
+  now seeds a deterministic series (phase-shifted per interface) and the chart has something to be
+  a chart about. The e2e drives the whole path against the real binary, which is the first
+  execution of the browser's query serialization against the route's declared explode form: every
+  unit test stubs fetch, so a mismatch there would have passed all of them.

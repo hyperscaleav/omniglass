@@ -1,5 +1,5 @@
 import { For, Show, createMemo, type Accessor } from "solid-js";
-import { requireRole, useViewRows, type FieldMapping, type ViewResult } from "../../lib/views";
+import { columnIndex, requireRole, useViewRows, type FieldMapping, type ViewResult } from "../../lib/views";
 import ViewEmpty from "./ViewEmpty";
 import ViewError, { describeViewError } from "./ViewError";
 
@@ -23,17 +23,25 @@ export default function StatusGrid(props: { result: Accessor<ViewResult | undefi
   // The mapping resolves against the live result. A broken contract must fail
   // THIS widget visibly, not throw out of render and blank the console, so the
   // failure is captured and rendered rather than propagated.
-  const at = createMemo<{ label: number; value: number } | Error | null>(() => {
+  const at = createMemo<{ label: number; value: number; sublabel: number } | Error | null>(() => {
     const r = props.result();
     if (!r) return null;
     try {
-      return { label: requireRole(r, props.mapping, "label"), value: requireRole(r, props.mapping, "value") };
+      return {
+        label: requireRole(r, props.mapping, "label"),
+        value: requireRole(r, props.mapping, "value"),
+        // Optional: a second column that distinguishes rows sharing a label.
+        // A component with two interfaces would otherwise render two
+        // identical chips, which tells an operator nothing about which one is
+        // down.
+        sublabel: props.mapping.sublabel ? columnIndex(r, props.mapping.sublabel) : -1,
+      };
     } catch (err) {
       return err instanceof Error ? err : new Error(String(err));
     }
   });
   const failure = () => props.error?.() ?? (at() instanceof Error ? at() : undefined);
-  const idx = () => at() as { label: number; value: number };
+  const idx = () => at() as { label: number; value: number; sublabel: number };
   return (
     <Show when={!failure()} fallback={<ViewError message={describeViewError(failure())} />}>
       <Show when={at()} fallback={<ViewEmpty message="Loading..." />}>
@@ -42,13 +50,17 @@ export default function StatusGrid(props: { result: Accessor<ViewResult | undefi
             <For each={rows()}>
               {(row) => {
                 const state = () => String(row.cells[idx().value] ?? "unknown");
+                const label = (r: typeof row) =>
+                  idx().sublabel >= 0
+                    ? `${String(r.cells[idx().label])} / ${String(r.cells[idx().sublabel])}`
+                    : String(r.cells[idx().label]);
                 return (
                   <div
                     data-state={state()}
                     class={`rounded px-2 py-1 text-xs ${TONE.get(state()) ?? UNKNOWN_TONE}`}
-                    title={`${String(row.cells[idx().label])}: ${state()}`}
+                    title={`${label(row)}: ${state()}`}
                   >
-                    {String(row.cells[idx().label])}
+                    {label(row)}
                   </div>
                 );
               }}

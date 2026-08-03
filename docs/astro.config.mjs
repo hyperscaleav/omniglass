@@ -154,6 +154,7 @@ export default defineConfig({
           items: [
             { label: 'Overview', slug: 'guides/operator' },
             { label: 'Sign in and your profile', slug: 'guides/operator/sign-in' },
+            { label: 'Home, the situation room', slug: 'guides/operator/home' },
             { label: 'Find things in your estate', slug: 'guides/operator/inventory' },
             { label: 'Work with an entity', slug: 'guides/operator/entities' },
             { label: 'Nodes and reachability', slug: 'guides/operator/collection' },

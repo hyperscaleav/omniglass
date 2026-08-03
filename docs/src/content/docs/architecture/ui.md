@@ -71,10 +71,15 @@ Neither "every screen is hand-coded" nor "everything must be a dashboard":
 
 ## Coded pages and dashboards share one view layer
 
-:::design[Target design: default views behind coded pages, tracked in #523]
-A built-in page **queries a default view, not a raw resource** (the Alarms page reads the
-`firing-now` view, not `GET /alarms` directly), so the same view backs a dashboard widget unchanged;
-composable dashboards are the customization layer over the complete coded console.
+A built-in page **queries a default view, not a raw resource**, so the same view backs a dashboard
+widget unchanged. Home is the worked example: its tiles, its reachability grid, and its occurrence
+feed are three default views through three renderers, and the page holds no query of its own.
+
+:::design[Composable dashboards as the customization layer, tracked in #523]
+Composable dashboards are the customization layer over the complete coded console, and a page that
+reads a view the operator can also place on a dashboard is what makes the two the same surface.
+The Alarms page reading a `firing-now` view is the next instance, once alarm production lands
+(ADR-0050).
 :::
 
 ## Live updates: polling by default

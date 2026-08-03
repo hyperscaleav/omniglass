@@ -22,7 +22,11 @@ const b = await chromium.launch();
 const ctx = await b.newContext({ viewport: { width: 1320, height: 860 }, deviceScaleFactor: 2 });
 const page = await ctx.newPage();
 if (token) await page.addInitScript(t => localStorage.setItem('og-token', t), token);
-await page.goto(url, { waitUntil: 'networkidle' });
+// A live surface holds a stream open (the view :watch seam), so the network is
+// never idle and `networkidle` would wait out its timeout on every such page.
+// Wait for `load` and let the explicit settle delay below cover the first
+// render, which is what the delay was always for.
+await page.goto(url, { waitUntil: 'load' });
 for (const [kind, arg] of steps) {
   if (kind === 'click') await page.click(arg);
   else if (kind === 'hover') await page.hover(arg);

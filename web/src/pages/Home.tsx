@@ -1,50 +1,86 @@
-import { Suspense } from "solid-js";
-import { Dynamic } from "solid-js/web";
-import { useQuery } from "@tanstack/solid-query";
-import { useNavigate } from "@solidjs/router";
+import { type JSX } from "solid-js";
 import Page from "../components/Page";
-import { listLocations, LOCATIONS_KEY } from "../lib/locations";
+import LineSeries from "../components/views/LineSeries";
+import StatTiles from "../components/views/StatTiles";
+import StatusGrid from "../components/views/StatusGrid";
+import ViewTable from "../components/views/ViewTable";
 import { useMe } from "../lib/auth";
+import { useView } from "../lib/views";
 
-// Home is the situation room. It shows real signal where the platform has it
-// (locations, this slice) and honest "coming soon" cards for the metrics whose
-// collection backends land later, rather than mock data.
+// Home is the situation room, and the first coded page of the views tier. Every
+// panel names a default view, a renderer, and the view's field-mapping, and owns
+// no query of its own. That is the argument for the views layer made concrete: a
+// page that reached for /components and /events directly would be one more
+// bespoke read to keep in step with the estate, while this one gains whatever a
+// view gains.
+//
+// Every panel is live. useView subscribes to each view's change stream, so a
+// verdict that flips or an occurrence that lands appears here with no reload and
+// no poll loop per widget.
 export default function Home() {
-  const navigate = useNavigate();
   const me = useMe();
-  const locs = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
   const who = () => me.data?.human?.username ?? me.data?.service?.label ?? "operator";
 
+  const counts = useView("estate-counts");
+  const reachability = useView("component-reachability");
+  // A short feed: the situation room wants the last few occurrences, not the
+  // paged history an events surface is for.
+  const feed = useView("event-feed", () => ["limit=8"]);
+
   return (
-    <Page title={`Welcome, ${who()}`}>
-      <div class="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-4">
-        <Suspense fallback={<Stat label="Locations" value="…" unit="in scope" />}>
-          <Stat label="Locations" value={String(locs.data?.length ?? 0)} unit="in your scope" tone="text-primary" onClick={() => navigate("/locations")} />
-        </Suspense>
-        <Stat label="Open alarms" value="—" unit="collection pending" />
-        <Stat label="Systems" value="—" unit="collection pending" />
-        <Stat label="Collectors" value="—" unit="collection pending" />
+    <Page title={`Welcome, ${who()}`} subtitle="Your estate right now, live.">
+      <div class="og-stack flex flex-col">
+        <StatTiles result={() => counts.data} error={() => counts.error} mapping={TILE_MAP} />
+
+        <Panel
+          title="Reachability"
+          hint="Every interface in your scope with its latest verdict. A never-probed interface reads unknown, so this is the whole fleet, not only the answered part."
+        >
+          <StatusGrid result={() => reachability.data} error={() => reachability.error} mapping={REACH_MAP} />
+        </Panel>
+
+        <Panel title="Recent occurrences" hint="The newest events across your scope, newest first.">
+          <ViewTable result={() => feed.data} error={() => feed.error} />
+        </Panel>
       </div>
     </Page>
   );
 }
 
-function Stat(props: { label: string; value: string; unit: string; tone?: string; onClick?: () => void }) {
-  // A clickable stat renders as a real <button> (keyboard-operable); a static one
-  // stays a plain div.
+// The field-mappings the default views publish. They sit beside the page that
+// binds them until the console reads them from the view directory, which is what
+// will let a view be re-shaped without touching either.
+const TILE_MAP = { label: "tile", value: "count" };
+const REACH_MAP = { label: "component", sublabel: "interface", value: "state", time: "since" };
+const HISTORY_MAP = { time: "ts", series: "instance", value: "value" };
+
+function Panel(props: { title: string; hint?: string; children: JSX.Element }) {
   return (
-    <Dynamic
-      component={props.onClick ? "button" : "div"}
-      type={props.onClick ? "button" : undefined}
-      class="card w-full border border-base-300 bg-base-200 text-left"
-      classList={{ "cursor-pointer hover:border-base-content/20": !!props.onClick }}
-      onClick={props.onClick}
-    >
-      <div class="card-body gap-1 p-5">
-        <div class="eyebrow">{props.label}</div>
-        <div class="tnum text-3xl font-semibold leading-none" classList={{ [props.tone ?? ""]: !!props.tone, "text-base-content/30": !props.tone }}>{props.value}</div>
-        <div class="text-xs text-base-content/50">{props.unit}</div>
+    <section class="card border border-base-300 bg-base-200">
+      <div class="card-body gap-2 p-4">
+        <div>
+          <h2 class="text-sm font-semibold">{props.title}</h2>
+          {props.hint ? <p class="text-xs text-base-content/60">{props.hint}</p> : null}
+        </div>
+        {props.children}
       </div>
-    </Dynamic>
+    </section>
+  );
+}
+
+// SampleHistoryPanel is the component blade's chart: one property key's readings
+// over a window, plotted through the same renderer Home uses. Strictly
+// historical, so the current value stays where it already is (the properties
+// panel) rather than being restated as the last point of a series.
+export function SampleHistoryPanel(props: { component: string; propertyKey: string; instance?: string }) {
+  const history = useView("sample-history", () => {
+    const params = [`owner=${props.component}`, `key=${props.propertyKey}`];
+    if (props.instance) params.push(`instance=${props.instance}`);
+    return params;
+  });
+  return (
+    <Panel title={props.propertyKey} hint="The last 24 hours of readings.">
+      <LineSeries result={() => history.data} error={() => history.error} mapping={HISTORY_MAP} />
+    </Panel>
   );
 }

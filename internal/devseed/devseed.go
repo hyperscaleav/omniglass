@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/auth"
@@ -697,15 +698,54 @@ func seedReachSamples(ctx context.Context, gw storage.Gateway, iface string, fla
 	if err := gw.InsertStateSamples(ctx, states); err != nil {
 		return fmt.Errorf("devseed: insert %s state samples: %w", iface, err)
 	}
-	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
+	metrics := []storage.MetricSampleWrite{
 		{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp.reachable", Instance: iface, Value: 1, Source: "icmp", TS: recovered},
-		{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp.rtt_avg", Instance: iface, Value: rttMs, Source: "icmp", TS: recovered},
 		{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp.open", Instance: iface, Value: 1, Source: "tcp", TS: recovered},
-		{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp.connect_time", Instance: iface, Value: connMs, Source: "tcp", TS: recovered},
-	}); err != nil {
+	}
+	// A timing SERIES, not a single reading. One point is a number an operator
+	// already has on the interface row; a series is the thing a chart is for, and
+	// the sample-history view and its renderer are only demonstrable against one.
+	// Deterministic, so re-seeding an existing dev database is idempotent and the
+	// screenshot gate stays stable.
+	metrics = append(metrics, timingSeries("icmp.rtt_avg", "icmp", iface, rttMs, recovered)...)
+	metrics = append(metrics, timingSeries("tcp.connect_time", "tcp", iface, connMs, recovered)...)
+	if err := gw.InsertMetricSamples(ctx, metrics); err != nil {
 		return fmt.Errorf("devseed: insert %s metric samples: %w", iface, err)
 	}
 	return nil
+}
+
+// timingSeriesPoints is how many readings back a seeded timing series carries,
+// at seriesStep apart: a few hours of history, enough to read as a trend.
+const (
+	timingSeriesPoints = 24
+	timingSeriesStep   = 10 * time.Minute
+)
+
+// timingSeries builds a plausible timing history ending at the latest reading:
+// a gentle wander around the baseline rather than random noise, so the chart
+// shows a shape an operator would recognize without pretending to be real data.
+// The wobble is a fixed function of the point index, so two runs seed the same
+// series and the screenshot gate does not see churn.
+func timingSeries(key, source, iface string, baseline float64, latest time.Time) []storage.MetricSampleWrite {
+	out := make([]storage.MetricSampleWrite, 0, timingSeriesPoints)
+	// A per-interface phase, derived from its name, so two interfaces on one
+	// component trace visibly different shapes rather than one apparent line.
+	phase := 0.0
+	for _, r := range iface {
+		phase += float64(r)
+	}
+	phase = math.Mod(phase, 6.28)
+	for i := timingSeriesPoints - 1; i >= 0; i-- {
+		// A slow sine over the window plus a small step, both index-derived.
+		wobble := math.Sin(float64(i)/3.5+phase)*0.18 + float64(i%5)*0.02
+		value := math.Round(baseline*(1+wobble)*100) / 100
+		out = append(out, storage.MetricSampleWrite{
+			OwnerKind: "component", OwnerID: reachComponent, Key: key, Instance: iface,
+			Value: value, Source: source, TS: latest.Add(-time.Duration(i) * timingSeriesStep),
+		})
+	}
+	return out
 }
 
 // The example events the dev seed installs on a boardroom video bar: a conferencing

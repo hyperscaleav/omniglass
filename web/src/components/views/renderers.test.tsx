@@ -11,10 +11,11 @@ const reachability = (states: string[]): ViewResult => ({
   columns: [
     { name: "component", type: "string", role: "label" },
     { name: "interface", type: "string" },
+    { name: "interface_type", type: "string" },
     { name: "state", type: "string", role: "value" },
     { name: "since", type: "time", role: "time" },
   ],
-  rows: states.map((s, i) => [`comp-${i}`, `if-${i}`, s, "2026-08-03T12:00:00Z"]),
+  rows: states.map((s, i) => [`comp-${i}`, `if-${i}`, "icmp", s, "2026-08-03T12:00:00Z"]),
 });
 
 const reachabilityMap = { label: "component", value: "state", time: "since" };
@@ -45,6 +46,15 @@ const series: ViewResult = {
 };
 const seriesMap = { time: "ts", series: "instance", value: "value" };
 
+const feedResult: ViewResult = {
+  columns: [
+    { name: "ts", type: "time", role: "time" },
+    { name: "owner", type: "string", role: "label" },
+    { name: "event_type", type: "string" },
+  ],
+  rows: [["2026-08-03T12:00:00Z", "bar-1", "call.started"]],
+};
+
 describe("StatTiles", () => {
   it("renders one tile per row with its label and value", () => {
     const { getByText } = render(() => <StatTiles result={() => counts} mapping={countsMap} />);
@@ -65,9 +75,21 @@ describe("StatTiles", () => {
 describe("ViewTable", () => {
   it("renders a header per column and a row per result row", () => {
     const { container } = render(() => <ViewTable result={() => reachability(["up", "down"])} />);
-    expect(container.querySelectorAll("thead th").length).toBe(4);
+    expect(container.querySelectorAll("thead th").length).toBe(5);
     expect(container.querySelectorAll("tbody tr").length).toBe(2);
     expect(container.querySelectorAll("tbody tr")[1].textContent).toContain("down");
+  });
+
+  // The column's declared TYPE is what makes generic formatting safe: the
+  // renderer reads the contract rather than guessing from the value, so a raw
+  // ISO string never reaches an operator.
+  it("formats a time column as a time and humanizes the header", () => {
+    const { container } = render(() => <ViewTable result={() => feedResult} />);
+    const headers = [...container.querySelectorAll("thead th")].map((h) => h.textContent);
+    expect(headers).toContain("event type");
+    const cells = [...container.querySelectorAll("tbody td")].map((c) => c.textContent ?? "");
+    expect(cells.some((c) => c.includes("2026-08-03T12:00:00Z"))).toBe(false);
+    expect(cells.some((c) => /\d/.test(c) && !c.includes("T"))).toBe(true);
   });
 
   it("renders an empty state when the result carries no rows", () => {
@@ -146,6 +168,23 @@ describe("StatusGrid", () => {
     const cells = container.querySelectorAll("[data-state]");
     expect(cells.length).toBe(3);
     expect([...cells].map((c) => c.getAttribute("data-state"))).toEqual(["up", "down", "unknown"]);
+  });
+
+  // Two interfaces on one component would otherwise render two identical
+  // chips, which cannot tell an operator which one is down.
+  it("distinguishes rows sharing a label using the mapped sublabel column", () => {
+    const twoOnOne: ViewResult = {
+      ...reachability([]),
+      rows: [
+        ["bar-1", "bar-1-icmp", "icmp", "up", "2026-08-03T12:00:00Z"],
+        ["bar-1", "bar-1-tcp", "tcp", "down", "2026-08-03T12:00:00Z"],
+      ],
+    };
+    const { container } = render(() => (
+      <StatusGrid result={() => twoOnOne} mapping={{ ...reachabilityMap, sublabel: "interface" }} />
+    ));
+    const labels = [...container.querySelectorAll("[data-state]")].map((c) => c.textContent);
+    expect(labels).toEqual(["bar-1 / bar-1-icmp", "bar-1 / bar-1-tcp"]);
   });
 
   it("labels each cell with the mapped label column", () => {

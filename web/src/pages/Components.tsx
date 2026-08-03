@@ -33,6 +33,7 @@ import PropertiesPanel, { propertyResolutionBlade, propertyBladeId } from "../co
 import ResolutionPanel from "../components/ResolutionPanel";
 import CapabilitiesPanel from "../components/CapabilitiesPanel";
 import AlarmsPanel from "../components/AlarmsPanel";
+import { SampleHistoryPanel } from "./Home";
 
 // Components: the device inventory, the first page built on the generic TreeList.
 // Components form a tree (parent_id) and each is bound to a primary system and a
@@ -312,6 +313,11 @@ export default function Components() {
             immediately (like tags), so the controls appear only in edit mode,
             which keeps view read-only. */}
         <AlarmsPanel component={n().raw.name} canUpdate={editing() && canUpdate()} />
+        {/* The reachability series as a chart: the same sample-history view
+            Home's renderers read, so the blade gains a trend without a bespoke
+            read. Strictly historical, which is why the current verdict stays on
+            the reachability panel above rather than being restated here. */}
+        <SampleHistoryPanel component={n().raw.name} propertyKey="icmp.rtt_avg" />
         <EventsPanel name={n().raw.name} />
         <LogsPanel name={n().raw.name} />
         {/* What we want vs what the device reports: the provenance pivot

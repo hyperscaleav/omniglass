@@ -1,5 +1,6 @@
 import { For, Index, Show, type Accessor } from "solid-js";
-import { useViewRows, type ViewCell, type ViewResult } from "../../lib/views";
+import { fmtTime } from "../../lib/format";
+import { useViewRows, type ViewCell, type ViewColumn, type ViewResult } from "../../lib/views";
 import ViewEmpty from "./ViewEmpty";
 import ViewError, { describeViewError } from "./ViewError";
 
@@ -24,14 +25,14 @@ export default function ViewTable(props: { result: Accessor<ViewResult | undefin
           <table class="table table-sm">
             <thead>
               <tr>
-                <Index each={columns()}>{(c) => <th>{c().name}</th>}</Index>
+                <Index each={columns()}>{(c) => <th class="whitespace-nowrap">{headerLabel(c().name)}</th>}</Index>
               </tr>
             </thead>
             <tbody>
               <For each={rows()}>
                 {(row) => (
                   <tr>
-                    <Index each={columns()}>{(_, i) => <td>{renderCell(row.cells[i])}</td>}</Index>
+                    <Index each={columns()}>{(c, i) => <td>{renderCell(row.cells[i], c())}</td>}</Index>
                   </tr>
                 )}
               </For>
@@ -49,6 +50,20 @@ export default function ViewTable(props: { result: Accessor<ViewResult | undefin
 // renderCell prints a cell without inventing a value: a null stays visibly
 // absent rather than becoming an empty string that reads as "we know it is
 // blank". The em dash matches every other placeholder in the console.
-function renderCell(cell: ViewCell) {
-  return cell === null || cell === undefined ? "—" : String(cell);
+//
+// A time column formats as a time. The column's declared TYPE is what makes
+// that safe to do generically: the renderer is not guessing from the value's
+// shape, it is reading the contract the view published, so a raw ISO string
+// never reaches an operator's eyes.
+function renderCell(cell: ViewCell, column: ViewColumn) {
+  if (cell === null || cell === undefined) return "—";
+  if (column.type === "time") return fmtTime(String(cell));
+  return String(cell);
+}
+
+// headerLabel renders a column name for a human. The name stays the contract
+// (a field-mapping addresses it, a test asserts on it); only the heading is
+// humanized.
+function headerLabel(name: string) {
+  return name.replace(/_/g, " ");
 }

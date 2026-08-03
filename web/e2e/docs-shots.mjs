@@ -78,7 +78,10 @@ for (const spec of specs) {
   if ((spec.auth ?? true) && TOKEN) {
     await page.addInitScript((t) => localStorage.setItem('og-token', t), TOKEN);
   }
-  await page.goto(BASE + spec.path, { waitUntil: 'networkidle' });
+  // A live surface (the view :watch seam) keeps a stream open, so the network
+  // never goes idle; `load` plus the per-spec settle wait below is what a
+  // streaming page needs and is no weaker for a static one.
+  await page.goto(BASE + spec.path, { waitUntil: 'load' });
   for (const step of spec.steps ?? []) {
     if (step.action === 'click') await page.click(step.selector);
     else if (step.action === 'hover') await page.hover(step.selector);
