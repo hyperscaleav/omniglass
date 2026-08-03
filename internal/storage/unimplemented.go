@@ -644,3 +644,6 @@ func (UnimplementedGateway) SystemHealth(context.Context, string, time.Time, sco
 func (UnimplementedGateway) LocationHealth(context.Context, string, time.Time, scope.Set) (*HealthReport, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) ListInterfaceReachability(context.Context, scope.Set) ([]InterfaceReachability, error) {
+	return nil, nil
+}

@@ -5363,5 +5363,62 @@ func generatedCommands() []*cobra.Command {
 		}())
 		return parent
 	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
+			Use:   "view",
+			Short: "Commands for the view resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "List the view directory",
+					Long:    "Lists every default view with its whole client contract: params, columns, field-mapping, and the permission a run requires. Gated by view:read.",
+					Example: "  omniglass view list",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/views")
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var qParam []string
+				var qPageToken string
+				cmd := &cobra.Command{
+					Use:     "run <name>",
+					Short:   "Run a view",
+					Long:    "Runs a named view with its typed params bound from repeated param=name=value pairs, returning the uniform ViewResult. Gated by view:read plus the view's declared permission, enforced here; every query runs in the Gateway's scoped mode, so the rows are bounded by the caller's visible set.",
+					Example: "  omniglass view run <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/views/%s:run", url.PathEscape(args[0]))
+						q := url.Values{}
+						if cmd.Flags().Changed("param") {
+							for _, v := range qParam {
+								q.Add("param", v)
+							}
+						}
+						if cmd.Flags().Changed("page-token") {
+							q.Set("page_token", fmt.Sprintf("%v", qPageToken))
+						}
+						if enc := q.Encode(); enc != "" {
+							path += "?" + enc
+						}
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				cmd.Flags().StringArrayVar(&qParam, "param", nil, "A name=value binding for a declared view parameter; repeat for several")
+				cmd.Flags().StringVar(&qPageToken, "page-token", "", "The cursor from a previous page's next_page_token")
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
 	return roots
 }

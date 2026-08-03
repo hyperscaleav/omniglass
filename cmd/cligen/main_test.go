@@ -181,6 +181,51 @@ func TestRenderQueryFlags(t *testing.T) {
 	}
 }
 
+// TestSchemaTypeNullable asserts the schema type field accepts both the plain
+// string form and the nullable array form Huma emits for optional slices
+// (["array","null"]), normalizing to the non-null type.
+func TestSchemaTypeNullable(t *testing.T) {
+	var s paramSchema
+	if err := json.Unmarshal([]byte(`{"type":"integer"}`), &s); err != nil || s.Type != "integer" {
+		t.Errorf(`plain form: type = %q, err %v, want integer`, s.Type, err)
+	}
+	if err := json.Unmarshal([]byte(`{"type":["array","null"]}`), &s); err != nil || s.Type != "array" {
+		t.Errorf(`nullable form: type = %q, err %v, want array`, s.Type, err)
+	}
+}
+
+// TestRenderQueryFlagArray asserts an array query parameter becomes a
+// REPEATABLE flag (StringArrayVar) whose every value is appended to the query
+// string, not collapsed into one. The view run route's param pairs
+// (--param name=value, repeatable) are the worked case.
+func TestRenderQueryFlagArray(t *testing.T) {
+	op := operation{
+		OperationID: "run-view",
+		Summary:     "Run a view",
+		Parameters: []param{
+			{Name: "param", In: "query", Description: "A name=value binding for a declared view parameter", Schema: paramSchema{Type: "array"}},
+		},
+	}
+	cmd := buildCommand(spec{}, "/api/v1", "/views/{name}:run", "get", op)
+	if len(cmd.Query) != 1 || cmd.Query[0].GoType != "[]string" || cmd.Query[0].FlagFunc != "StringArrayVar" || !cmd.Query[0].Multi {
+		t.Fatalf("array param field = %+v, want []string StringArrayVar multi", cmd.Query)
+	}
+	out, err := render(tree([]command{cmd}))
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	src := string(out)
+	for _, want := range []string{
+		`cmd.Flags().StringArrayVar(&qParam, "param", nil,`,
+		`for _, v := range qParam {`,
+		`q.Add("param", v)`,
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("generated source missing %q\n---\n%s", want, src)
+		}
+	}
+}
+
 // TestTypeRegistryCommandNames pins the naming rule on the registries: a resource
 // is ONE kebab-case noun, and a space beneath it means the thing it owns. So the
 // registry and its property contract share `location-type`, and neither needs an

@@ -2270,3 +2270,17 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   unreachable without deleting claims; the acceptance was amended to the measured floor,
   with the no-claim-lost rule outranking the number. The #429 lint suite guarded every
   identifier through both passes.
+- **The ViewResult contract, the view registry, and the run routes ([#539](https://github.com/hyperscaleav/omniglass/issues/539)).**
+  The read-side primitive lands: `ViewResult` (`{columns, rows, next_page_token}`, columns
+  with name, type, and role hints, a field-mapping per view), the in-code default-view
+  registry (name-addressed, typed params, a declared permission, the scoped query,
+  validated at boot so a misdeclared view cannot ship), and the first routes: `GET /views`
+  publishes each view's whole client contract and `GET /views/{name}:run` binds typed
+  params from repeated `param=` pairs (an undeclared, duplicate, malformed, or
+  missing-required binding is a 400 naming the parameter). Both are gated `view:read`, a
+  run additionally enforces the view's declared permission in the handler, and every query
+  runs in the Gateway's scoped mode. `component-reachability` proves the seam end to end:
+  a fleet-wide scoped join to each interface's latest `interface.reachable` verdict, with
+  never-probed interfaces reporting the explicit `unknown`, driven over the API and the
+  generated CLI (cligen learned repeatable array query flags for `--param`) with row
+  content asserted in both. [Views](/architecture/views/) moves to `Partial`.

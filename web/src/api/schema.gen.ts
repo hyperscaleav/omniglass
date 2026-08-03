@@ -3124,6 +3124,46 @@ export interface paths {
         patch: operations["update-vendor"];
         trace?: never;
     };
+    "/views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the view directory
+         * @description Lists every default view with its whole client contract: params, columns, field-mapping, and the permission a run requires. Gated by view:read.
+         */
+        get: operations["list-views"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/views/{name}:run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Run a view
+         * @description Runs a named view with its typed params bound from repeated param=name=value pairs, returning the uniform ViewResult. Gated by view:read plus the view's declared permission, enforced here; every query runs in the Gateway's scoped mode, so the rows are bounded by the caller's visible set.
+         */
+        get: operations["run-view"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3287,6 +3327,14 @@ export interface components {
             password: string;
             /** @description The node's NATS username (its node name) */
             username: string;
+        };
+        Column: {
+            /** @description The column name, the key a field-mapping addresses */
+            name: string;
+            /** @description An optional role hint: value, label, time, or series */
+            role?: string;
+            /** @description The cell value type: string, number, or time */
+            type: string;
         };
         CommandOutputBody: {
             /**
@@ -6014,6 +6062,56 @@ export interface components {
             official: boolean;
             support_phone?: string;
             website?: string;
+        };
+        ViewDescriptorBody: {
+            /** @description The result columns, in cell order */
+            columns: components["schemas"]["Column"][] | null;
+            /** @description Renderer role to column name (value, label, time, series) */
+            field_mapping: {
+                [key: string]: string;
+            };
+            /** @description The view's addressable name */
+            name: string;
+            /** @description The declared run-time parameters */
+            params: components["schemas"]["ViewParamBody"][] | null;
+            /** @description The declared permission a run requires on top of view:read */
+            permission: string;
+            /** @description What the view answers */
+            summary: string;
+        };
+        ViewParamBody: {
+            /** @description What the parameter selects */
+            doc?: string;
+            /** @description The parameter name, the key of a param binding */
+            name: string;
+            /** @description Whether a run without this parameter is a 400 */
+            required: boolean;
+            /** @description The value type: string, int, duration, or time */
+            type: string;
+        };
+        ViewResult: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ViewResult.json
+             */
+            readonly $schema?: string;
+            /** @description The columns, in cell order */
+            columns: components["schemas"]["Column"][] | null;
+            /** @description The cursor for the next page; absent on the last page */
+            next_page_token?: string;
+            /** @description The result rows; each cell is positional against columns */
+            rows: (unknown[] | null)[] | null;
+        };
+        ViewsListOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ViewsListOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The default views, in name order */
+            views: components["schemas"]["ViewDescriptorBody"][] | null;
         };
     };
     responses: never;
@@ -13044,6 +13142,108 @@ export interface operations {
             };
             /** @description Error */
             default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ViewsListOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "run-view": {
+        parameters: {
+            query?: {
+                /** @description A name=value binding for a declared view parameter; repeat for several */
+                param?: string[] | null;
+                /** @description The cursor from a previous page's next_page_token */
+                page_token?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The view name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ViewResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

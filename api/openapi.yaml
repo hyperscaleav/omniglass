@@ -292,6 +292,22 @@ components:
         - username
         - password
       type: object
+    Column:
+      additionalProperties: false
+      properties:
+        name:
+          description: The column name, the key a field-mapping addresses
+          type: string
+        role:
+          description: "An optional role hint: value, label, time, or series"
+          type: string
+        type:
+          description: "The cell value type: string, number, or time"
+          type: string
+      required:
+        - name
+        - type
+      type: object
     CommandOutputBody:
       additionalProperties: false
       properties:
@@ -5217,6 +5233,119 @@ components:
         - display_name
         - kind
         - official
+      type: object
+    ViewDescriptorBody:
+      additionalProperties: false
+      properties:
+        columns:
+          description: The result columns, in cell order
+          items:
+            $ref: "#/components/schemas/Column"
+          type:
+            - array
+            - "null"
+        field_mapping:
+          additionalProperties:
+            type: string
+          description: Renderer role to column name (value, label, time, series)
+          type: object
+        name:
+          description: The view's addressable name
+          type: string
+        params:
+          description: The declared run-time parameters
+          items:
+            $ref: "#/components/schemas/ViewParamBody"
+          type:
+            - array
+            - "null"
+        permission:
+          description: The declared permission a run requires on top of view:read
+          type: string
+        summary:
+          description: What the view answers
+          type: string
+      required:
+        - name
+        - summary
+        - permission
+        - params
+        - columns
+        - field_mapping
+      type: object
+    ViewParamBody:
+      additionalProperties: false
+      properties:
+        doc:
+          description: What the parameter selects
+          type: string
+        name:
+          description: The parameter name, the key of a param binding
+          type: string
+        required:
+          description: Whether a run without this parameter is a 400
+          type: boolean
+        type:
+          description: "The value type: string, int, duration, or time"
+          type: string
+      required:
+        - name
+        - type
+        - required
+      type: object
+    ViewResult:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ViewResult.json
+          format: uri
+          readOnly: true
+          type: string
+        columns:
+          description: The columns, in cell order
+          items:
+            $ref: "#/components/schemas/Column"
+          type:
+            - array
+            - "null"
+        next_page_token:
+          description: The cursor for the next page; absent on the last page
+          type: string
+        rows:
+          description: The result rows; each cell is positional against columns
+          items:
+            items: {}
+            type:
+              - array
+              - "null"
+          type:
+            - array
+            - "null"
+      required:
+        - columns
+        - rows
+      type: object
+    ViewsListOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ViewsListOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        views:
+          description: The default views, in name order
+          items:
+            $ref: "#/components/schemas/ViewDescriptorBody"
+          type:
+            - array
+            - "null"
+      required:
+        - views
       type: object
 info:
   title: Omniglass
@@ -10948,6 +11077,94 @@ paths:
           description: Error
       summary: Update a vendor
       x-omniglass-permission: vendor:update
+  /views:
+    get:
+      description: "Lists every default view with its whole client contract: params, columns, field-mapping, and the permission a run requires. Gated by view:read."
+      operationId: list-views
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ViewsListOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List the view directory
+      x-omniglass-permission: view:read
+  /views/{name}:run:
+    get:
+      description: Runs a named view with its typed params bound from repeated param=name=value pairs, returning the uniform ViewResult. Gated by view:read plus the view's declared permission, enforced here; every query runs in the Gateway's scoped mode, so the rows are bounded by the caller's visible set.
+      operationId: run-view
+      parameters:
+        - description: The view name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The view name
+            type: string
+        - description: A name=value binding for a declared view parameter; repeat for several
+          explode: true
+          in: query
+          name: param
+          schema:
+            description: A name=value binding for a declared view parameter; repeat for several
+            items:
+              type: string
+            type:
+              - array
+              - "null"
+        - description: The cursor from a previous page's next_page_token
+          explode: false
+          in: query
+          name: page_token
+          schema:
+            description: The cursor from a previous page's next_page_token
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ViewResult"
+          description: OK
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Bad Request
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Internal Server Error
+      summary: Run a view
+      x-omniglass-permission: view:read
 servers:
   - url: /api/v1
 

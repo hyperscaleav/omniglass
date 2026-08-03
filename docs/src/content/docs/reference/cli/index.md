@@ -4208,3 +4208,44 @@ Example:
 omniglass vendor update <id>
 ```
 
+## `omniglass view`
+
+Commands for the view resource
+
+### `omniglass view list`
+
+List the view directory
+
+```
+omniglass view list
+```
+
+Lists every default view with its whole client contract: params, columns, field-mapping, and the permission a run requires. Gated by view:read.
+
+Example:
+
+```sh
+omniglass view list
+```
+
+### `omniglass view run`
+
+Run a view
+
+```
+omniglass view run <name> [flags]
+```
+
+Runs a named view with its typed params bound from repeated param=name=value pairs, returning the uniform ViewResult. Gated by view:read plus the view's declared permission, enforced here; every query runs in the Gateway's scoped mode, so the rows are bounded by the caller's visible set.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--page-token` | string | (none) | The cursor from a previous page's next_page_token |
+| `--param` | stringArray | `[]` | A name=value binding for a declared view parameter; repeat for several |
+
+Example:
+
+```sh
+omniglass view run <name>
+```
+

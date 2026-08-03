@@ -340,6 +340,12 @@ type Gateway interface {
 	LatestState(ctx context.Context, componentName, key, instance string) (*StateSample, error)
 	StateTransitions(ctx context.Context, componentName, key, instance string, since time.Time) ([]StateSample, error)
 
+	// The view reads: fleet-wide scoped queries backing the default views.
+	// ListInterfaceReachability is the component-reachability view's query:
+	// every in-scope component interface with its latest interface.reachable
+	// verdict, scope injected in the query itself like every component read.
+	ListInterfaceReachability(ctx context.Context, read scope.Set) ([]InterfaceReachability, error)
+
 	// The observed-log sink: the mirror of the metric and state sinks for log-kind
 	// occurrences. reject-not-project and owner-confinement are applied by the caller
 	// before the write. ListComponentEvents backs the component event log panel.

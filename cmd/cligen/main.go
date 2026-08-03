@@ -86,7 +86,32 @@ type param struct {
 }
 
 type paramSchema struct {
-	Type string `json:"type"`
+	Type schemaType `json:"type"`
+}
+
+// schemaType is a JSON Schema type that may arrive as one string or as an
+// array of types (a nullable field emits ["array","null"]). It normalizes to
+// the first non-"null" entry, which is all flag selection needs.
+type schemaType string
+
+func (t *schemaType) UnmarshalJSON(b []byte) error {
+	var one string
+	if err := json.Unmarshal(b, &one); err == nil {
+		*t = schemaType(one)
+		return nil
+	}
+	var many []string
+	if err := json.Unmarshal(b, &many); err != nil {
+		return err
+	}
+	*t = ""
+	for _, s := range many {
+		if s != "null" {
+			*t = schemaType(s)
+			return nil
+		}
+	}
+	return nil
 }
 
 type requestBody struct {
@@ -171,9 +196,12 @@ type queryField struct {
 	Name     string // OpenAPI param name (snake_case), the query-string key
 	Flag     string // kebab-case flag name
 	Var      string // generated Go variable name
-	GoType   string // Go flag variable type: string, bool, int
-	FlagFunc string // cobra flag setter: StringVar, BoolVar, IntVar
-	Zero     string // Go source for the flag default: "", false, 0
+	GoType   string // Go flag variable type: string, bool, int, []string
+	FlagFunc string // cobra flag setter: StringVar, BoolVar, IntVar, StringArrayVar
+	Zero     string // Go source for the flag default: "", false, 0, nil
+	// Multi marks a repeatable flag (an array param): every value is Add-ed to
+	// the query string instead of Set collapsing them to one.
+	Multi    bool
 	Desc     string
 	Required bool
 }
@@ -261,20 +289,24 @@ func buildCommand(doc spec, base, path, method string, op operation) command {
 
 // queryFields maps an operation's OpenAPI query parameters (in: query) to
 // optional cobra flags, in spec order. The OpenAPI type selects the flag setter
-// (string -> StringVar, boolean -> BoolVar, integer -> IntVar); any other type
-// falls back to a string flag. Path and other parameter locations are ignored.
+// (string -> StringVar, boolean -> BoolVar, integer -> IntVar, array -> a
+// REPEATABLE StringArrayVar whose values are each appended to the query
+// string); any other type falls back to a string flag. Path and other
+// parameter locations are ignored.
 func queryFields(op operation) []queryField {
 	var out []queryField
 	for _, p := range op.Parameters {
 		if p.In != "query" {
 			continue
 		}
-		goType, flagFunc, zero := "string", "StringVar", `""`
+		goType, flagFunc, zero, multi := "string", "StringVar", `""`, false
 		switch p.Schema.Type {
 		case "boolean":
 			goType, flagFunc, zero = "bool", "BoolVar", "false"
 		case "integer":
 			goType, flagFunc, zero = "int", "IntVar", "0"
+		case "array":
+			goType, flagFunc, zero, multi = "[]string", "StringArrayVar", "nil", true
 		}
 		out = append(out, queryField{
 			Name:     p.Name,
@@ -283,6 +315,7 @@ func queryFields(op operation) []queryField {
 			GoType:   goType,
 			FlagFunc: flagFunc,
 			Zero:     zero,
+			Multi:    multi,
 			Desc:     p.Description,
 			Required: p.Required,
 		})
@@ -631,7 +664,13 @@ func generatedCommands() []*cobra.Command {
 				q := url.Values{}
 				{{- range $qp := .Query}}
 				if cmd.Flags().Changed({{quote $qp.Flag}}) {
+					{{- if $qp.Multi}}
+					for _, v := range {{$qp.Var}} {
+						q.Add({{quote $qp.Name}}, v)
+					}
+					{{- else}}
 					q.Set({{quote $qp.Name}}, fmt.Sprintf("%v", {{$qp.Var}}))
+					{{- end}}
 				}
 				{{- end}}
 				if enc := q.Encode(); enc != "" {
