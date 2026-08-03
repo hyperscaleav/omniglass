@@ -9,9 +9,7 @@ sidebar:
 
 Omniglass is **one Go binary**, and that is a packaging decision, not a scale ceiling. The same artifact
 runs an all-in-one container on a laptop and a horizontally-scaled fleet on Kubernetes; you scale by
-**topology**, not by swapping products. This page is the deployment and scale model: the two run modes,
-the embedded services, what replicates, the coordination substrate, platform configuration, high
-availability, and multi-tenancy.
+**topology**, not by swapping products.
 
 :::note[Partial]
 Built today: the single Go binary (hand-written commands: `server`, `migrate`, `bootstrap`, `token`,
@@ -26,28 +24,28 @@ design fences below mark the parts of this page that are target design, each nam
 
 The binary is a **modular monolith**: one codebase, one artifact, modules behind clean seams (the Storage
 Gateway is the only path to the database, coordination rides NATS, collection runs at the edge). It runs
-two ways, the **same binary**, no fork:
+two ways, no fork:
 
 - **All-in-one (the modular monolith).** One process runs every role, with **Postgres and NATS embedded**
-  (below), against nothing external. The desktop, single-binary, small-estate case: download, run, done.
+  (below), against nothing external. The small-estate case: download, run, done.
 - **Split by run mode (Kubernetes).** The same binary launched **per mode** as separate Deployments,
   against an **external** Postgres and an external NATS cluster. A Helm chart wires it up, and each role
   scales independently.
 
-Splitting a mode onto its own pods is a **deployment choice, not a rewrite**, because the modules already
-talk over NATS and the gateway rather than in-process calls that would need untangling. The roles:
+Splitting a mode onto its own pods is a **deployment choice, not a rewrite**: the modules already talk
+over NATS and the gateway. The roles:
 
 - **server**: the public HTTP API ([API](/architecture/api/)) and the views read path; it serves the
   **SPA embedded in the binary** (`go:embed`), so the web UI is not a separate service. Stateless.
 :::design[Target design, tracked in #57]
 - **worker**: the **JetStream consumers** (rule engine, reconcile, notify, [workers](/architecture/workers/)).
-  Stateless competing consumers; add replicas for throughput.
+  Stateless competing consumers.
 - **controller**: the leader-elected **singletons** (the clock and the CDC publisher, below). A role, not
   necessarily its own pod.
 :::
 
-- **node**: collection; at the edge it runs **at the sites** (outside the cluster) and connects back, with
-  a central `node` for cloud-API and SaaS sources (`placement: central`, [nodes](/architecture/nodes/)).
+- **node**: collection; runs **at the sites** (outside the cluster) and connects back, plus a central
+  `node` for cloud-API and SaaS sources (`placement: central`, [nodes](/architecture/nodes/)).
 
 ## Embedded services (single-binary mode)
 
@@ -62,14 +60,11 @@ zero external setup**:
   exclusive-arc CHECK constraints behave identically to at-scale. Pinned to **Postgres 18.3.0 or newer**
   for ARM and x86. **Not SQLite**, which has no logical replication and would fork the data layer into a
   second, lesser architecture.
-
-So "single binary" is the binary orchestrating a real Postgres and NATS for you, not a different
-datastore. The data and coordination architecture is identical at any size.
 :::
 
 ## Coordination: NATS moves, Postgres remembers
 
-The split is firm. **Postgres is the relational system of record** (entities, samples, events and
+**Postgres is the relational system of record** (entities, samples, events and
 alarms, audit, and the queries the cascade, fusion, views, and scope need). **NATS (JetStream) is the
 nervous system**: work distribution, the durable command queue, the telemetry buffer, and fan-out.
 
@@ -80,10 +75,9 @@ Postgres-backed), not the object store.
 :::
 
 :::design[Target design, tracked in #430]
-The two meet through **change data capture**: Postgres tells us *what changed*, and NATS carries the
-queue. A single **leader-elected CDC publisher** bridges committed Postgres changes onto JetStream;
-**Postgres is never a message bus**, it only emits its changes. The mechanism (logical decoding of
-the WAL, the per-change idempotency key, the boot-phase replication slot) is described once, on
+The two meet through **change data capture**: a single **leader-elected CDC publisher** bridges
+committed Postgres changes onto JetStream; **Postgres is never a message bus**, it only emits its
+changes. The mechanism is described once, on
 [messaging](/architecture/messaging/#two-lanes-one-bus).
 :::
 
@@ -91,10 +85,9 @@ the WAL, the per-change idempotency key, the boot-phase replication slot) is des
 
 ### Inter-service communication
 
-Service-to-service traffic rides **two lanes on the one JetStream bus**, by what is moving: the
+Service-to-service traffic rides **two lanes on the one JetStream bus**: the
 NATS-native **data lane** for samples, and the Postgres-first, CDC-out **record and state lane** for
-events, alarms, actions, and operator mutations. The lane model (the admission consumer, the trusted
-stream, the persistence consumer, the CDC publisher, and the ingest paths) is described once, on
+events, alarms, actions, and operator mutations. The lane model is described once, on
 [messaging](/architecture/messaging/#two-lanes-one-bus); here is how the pieces deploy:
 
 ```d2
@@ -145,39 +138,35 @@ binary.nats -- ext: "swap embedded for BYO" { style.stroke-dash: 4 }
 
 - **server** is **stateless**: replicate it behind a load balancer; state lives in Postgres.
 - **workers** are **JetStream consumers**: a work-queue stream delivers each message to exactly one
-  consumer, so adding replicas adds throughput with no leader and no cross-worker chatter (NATS is the
-  coordinator, [workers](/architecture/workers/)).
-- **edge nodes**: distribution is the design, one or many per site, connecting back; adding sites adds
-  nodes ([nodes](/architecture/nodes/)).
-- **singletons** (the clock and the CDC publisher) are **leader-elected via a NATS KV lock**: exactly one
-  active, the rest stand by and take over on failure. One mechanism, no separate election service.
+  consumer, so adding replicas adds throughput (NATS is the coordinator,
+  [workers](/architecture/workers/)).
+- **edge nodes**: one or many per site, connecting back; adding sites adds nodes
+  ([nodes](/architecture/nodes/)).
+- **singletons** (the clock and the CDC publisher): **leader-elected via a NATS KV lock**, exactly one
+  active, failover by re-election. No separate election service.
 
 :::
 
 ## Platform configuration
 
-Configuration is **two tiers**, and platform settings are deliberately **centralized**, not scattered
-across dozens of tables and APIs:
+Configuration is **two tiers**, and platform settings are deliberately **centralized**:
 
 - **Bootstrap (env, optional).** The irreducible minimum needed before the database exists: the Postgres
   DSN, the NATS embed-or-external choice and address, the `SecretProvider` key, the run mode, and the
   listen address. In all-in-one mode these have working defaults, so a desktop run needs **no configuration
-  at all**; env vars override when you need them.
-- **The platform settings store (one place).** Everything else lives in a single, audited **settings
-  store**: feature flags, the buffer and retention defaults, CDC routing, integration settings, UI
-  defaults, official-registry overrides. This is now the [settings engine](/architecture/settings/), which
-  generalizes "one place" from a flat table into ordered layers resolved most-specific-wins down the
-  principal hierarchy (platform to group to user), with per-key provenance and top-down locks. An operator
-  **settings file** (`settings.json` or YAML) is the GitOps layer, read into memory at boot and mounting
-  cleanly as a **Kubernetes ConfigMap** (and a future operator); only the **override** an operator sets
-  through the API is persisted in Postgres (audited), while the file and the embedded defaults are
-  recomputed each boot, so restore is a delete and the file never drifts into a second authoritative copy
+  at all**; env vars override.
+- **The platform settings store (one place).** Everything else lives in the single, audited
+  [settings engine](/architecture/settings/): feature flags, buffer and retention defaults, CDC routing,
+  integration settings, UI defaults, official-registry overrides, resolved most-specific-wins down the
+  principal hierarchy. An operator **settings file** (`settings.json` or YAML) is the GitOps layer, read
+  into memory at boot and mounting cleanly as a **Kubernetes ConfigMap** (and a future operator); only
+  the **override** an operator sets through the API is persisted in Postgres (audited), while the file
+  and the embedded defaults are recomputed each boot, so restore is a delete and the file never drifts
+  into a second authoritative copy
   ([ADR-0033](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory)).
-  The same declarative source drives a laptop and a fleet.
 
 This is distinct from estate [config and variables](/architecture/variables/), which describe the
-*estate* and resolve down the cascade. The settings store describes the **platform itself**, and there is
-exactly one home for it, the single source of truth core settings deserve.
+*estate* and resolve down the cascade; the settings store describes the **platform itself**.
 
 :::note[Partial: the settings engine's platform level]
 The settings store is built at the **platform** level (the install-wide rung, renamed from `global` by
@@ -193,12 +182,11 @@ fast-follow.
 
 ## Vertical scale and high availability
 
-Replicas are the **HA** story: the server and worker tiers have no single point of failure (any replica
-can serve or consume), the singletons fail over by re-electing on the NATS KV lock, Postgres HA is the
-database's concern (CNPG, a managed cluster), NATS HA is the JetStream cluster's, and the **edge survives a
-WAN outage on its own** (the bounded buffer plus the durable command queue, [nodes](/architecture/nodes/)).
-Vertical scale is the simple first lever (a bigger Postgres, more worker CPU); horizontal removes the
-ceiling.
+Replicas are the **HA** story: the server and worker tiers have no single point of failure, the
+singletons re-elect on the NATS KV lock, Postgres HA is the database's concern (CNPG, a managed
+cluster), NATS HA is the JetStream cluster's, and the **edge survives a WAN outage on its own** (the
+bounded buffer plus the durable command queue, [nodes](/architecture/nodes/)). Vertical scale is the
+simple first lever; horizontal removes the ceiling.
 
 :::
 
@@ -208,11 +196,5 @@ Tenant isolation is **physical, not a row predicate**: a tenant is **one databas
 one deployment**. There is no `tenant_id` column anywhere, no shared row store, and no shared subjects, so
 per-database isolation (storage) and per-account isolation (messaging) are the **same boundary**. The data
 model stays single-tenant-shaped; multi-tenancy lives at the orchestration layer (CNPG-per-tenant). One
-noisy or compromised tenant cannot reach another because there is nothing shared to reach across
+noisy or compromised tenant cannot reach another: there is nothing shared to reach across
 ([identity and access](/architecture/identity-access/)).
-
-## The one-binary promise
-
-The same binary and the same code paths run the demo and the fleet. You do not adopt a different product
-to scale: you run more roles, on more pods, against an external Postgres and NATS, with more edge nodes.
-Simplicity at the small end, a real horizontal ceiling at the large end, one artifact across the range.

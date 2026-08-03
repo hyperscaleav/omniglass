@@ -13,35 +13,29 @@ An AI tool authenticates with a **bearer token or password as a `human` or `serv
 
 :::design[Target design (ADR-0001): AI as a governed capability]
 
-AI in Omniglass is a **capability that spans from assistive to operational**, governed exactly like any other actor: at the assistive end it enriches and explains, at the operational end it proposes and acts.
+AI in Omniglass is a **capability spanning assistive to operational**, governed exactly like any other actor: it enriches and explains at one end, proposes and acts at the other.
 
 ## The capability spectrum
 
-What AI does, from the assistive end toward the operational end:
+From assistive toward operational:
 
-- **Enrichment.** Event and alarm enrichment: context, a likely cause, a suggested next step on an occurrence the operator is already looking at. Read-only, surfaced inline.
-- **Diagnosis and reporting.** Troubleshooting support, root-cause analysis across correlated signals, and report generation (health summaries, incident write-ups, period reviews).
-- **Natural-language surfaces.** NL business query ("which rooms had the most ghost meetings last month"), NL configuration (authoring dashboards, rules, and alarms from a description), and NL template development (drafting a component template from a device's behavior).
-- **Operational actions.** Acting on the platform on an operator's behalf: room and meeting rebooking, and general platform configuration, under that operator's grants.
-- **Closed-loop automation.** Diagnose-and-fix flows that close the loop on a known failure class. **Human-in-the-loop is the default**: a mutating action is gated until the class has earned looser handling.
+- **Enrichment**: context, a likely cause, a suggested next step on the occurrence in front of the operator. Read-only, inline.
+- **Diagnosis and reporting**: troubleshooting, root-cause analysis across correlated signals, report generation (health summaries, incident write-ups, period reviews).
+- **Natural-language surfaces**: NL business query ("which rooms had the most ghost meetings last month"), NL configuration, NL template development.
+- **Operational actions**: acting on an operator's behalf (room and meeting rebooking, platform configuration), under that operator's grants.
+- **Closed-loop automation**: diagnose-and-fix for a known failure class. **Human-in-the-loop is the default**: a mutating action is gated until the class has earned looser handling.
 
 ## AI acts through the same seams as any principal
 
-AI is **not a side channel**. It reaches the estate through the same three seams every actor uses:
+AI is **not a side channel**. It reaches the estate through the same three seams every actor uses: the **API** (no private back door, no direct database path), **IAM permissions** (`<resource>:<action>` on every route), and the **Storage Gateway scope** (the ABAC visible-set on every applicable query). What stops a human stops the AI; there is no elevated AI lane.
 
-- the **API** (no private back door, no direct database path),
-- **IAM permissions** (the `<resource>:<action>` capability checked on every route), and
-- the **Storage Gateway scope** (the ABAC visible-set injected on every applicable query).
-
-The richest AI seam is the **generated [MCP server](/architecture/api/)**: an MCP tool call is a call to a real API operation, so an external model drives Omniglass through the same routes, permissions, scope, and [audit](/architecture/audit/) as the SPA or the CLI, carrying the **acting user or service principal's** credential, never a parallel surface. It is a generated client like the others (a curated tool catalog, the [views](/architecture/views/) exposed as search tools, not a raw one-method-per-tool dump).
-
-If a permission or a scope would stop a human from doing something, it stops the AI doing it too. There is no elevated AI lane.
+The richest seam is the **generated [MCP server](/architecture/api/)**: an MCP tool call is a call to a real API operation, carrying the **acting user or service principal's** credential through the same routes, permissions, scope, and [audit](/architecture/audit/) as the SPA or the CLI. A generated client like the others: a curated tool catalog, the [views](/architecture/views/) exposed as search tools, not a raw one-method-per-tool dump.
 
 ## Provenance and audit
 
-Every AI-produced output, an enrichment, a calculated value, a configuration change, is **marked as AI-sourced and audited**. The marking is what keeps the capability assistive-not-authoritative: a reader can always tell what came from AI, weigh it accordingly, and trace it. The audit half is native: the write attributes to the **acting principal** (the human or service the AI authenticated as) in [`audit_log`](/architecture/audit/), and the AI-sourced marking rides alongside, so the trail names a responsible actor on every move. Nothing AI touches is anonymous or unattributable.
+Every AI-produced output is **marked as AI-sourced and audited**, keeping the capability assistive, not authoritative: a reader can always tell what came from AI, weigh it, and trace it. The write attributes to the **acting principal** in [`audit_log`](/architecture/audit/), the marking riding alongside, so the trail names a responsible actor on every move.
 
 ## Human-in-the-loop gating
 
-Mutating AI actions can require **operator sign-off**: the AI surfaces a proposed change, an operator approves it, then it executes, and the approval lands in the audit trail. Read and diagnostic actions run within the acting principal's scope without a gate. This is a **policy on AI-sourced mutations**, not a separate authorization model: the AI never exceeds the grants of the principal it acts as, and the gate is an extra confirmation on top of that boundary.
+Mutating AI actions can require **operator sign-off**: propose, approve, execute, the approval landing in the audit trail; read and diagnostic actions run ungated within the acting principal's scope. A **policy on AI-sourced mutations**, not a separate authorization model: the gate is an extra confirmation on top of the principal's grants, never beyond them.
 :::

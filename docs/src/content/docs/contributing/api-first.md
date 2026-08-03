@@ -13,8 +13,8 @@ cannot drift from the implementation.
 Request/response types are Go structs (Huma). The OpenAPI 3.1 document is *generated* from
 them, server-less, and committed. Everything downstream is generated from that document.
 This is the rule: **you change a Go route or shape, you regenerate, you commit the derived
-artifacts.** The `gen-drift` workflow (`.github/workflows/gen-drift.yml`) enforces it in CI:
-it runs `make gen` and fails the PR on any diff in the committed generated artifacts.
+artifacts.** The `gen-drift` workflow (`.github/workflows/gen-drift.yml`) enforces it in CI,
+failing the PR on any diff in the committed generated artifacts.
 
 ## The generation pipeline
 
@@ -30,8 +30,8 @@ it runs `make gen` and fails the PR on any diff in the committed generated artif
 | `gen-proto` | `proto/og/v1/*.proto` | committed `*.pb.go` | the NATS `TelemetryBatch` telemetry message |
 
 Two more stages are planned but have **no generator yet**: an MCP tool catalog for AI agents
-over the [API contract](/architecture/api/), and a JSONSchema for YAML editor validation.
-Neither exists today; they land with their consuming slices.
+over the [API contract](/architecture/api/), and a JSONSchema for YAML editor validation. They
+land with their consuming slices.
 
 One command runs them all (`make gen`); two focused targets regenerate a subset
 (`make gen-proto` for the protobuf wire, `make gen-web` for the spec plus the typed SPA
@@ -42,13 +42,12 @@ server.
 
 **Every response carries both forms of a reference: the name an operator reads and the id it
 resolves to.** `{"parent": "rack", "parent_id": "0198f..."}`. The name is what a human types
-and what a body round-trips; the id is the stable handle that survives a rename. A response
-that carries only the uuid is the failure this rule names.
+and what a body round-trips; the id is the stable handle that survives a rename.
 
-The test is a **round trip**: a response body can be fed back to the write that produced it.
-Create a component with `{"parent": "rack"}` and read it back as `{"parent": "rack"}`, not as
-`{"parent_id": "0198f2c4-..."}`. When that fails, every client has to fetch a second
-collection and join by uuid to render one label, and they each do it slightly differently.
+The test is a **round trip**: a response body can be fed back to the write that produced it
+(create a component with `{"parent": "rack"}`, read it back as `{"parent": "rack"}`). When that
+fails, every client has to fetch a second collection and join by uuid to render one label, each
+slightly differently.
 
 One exception, narrow: **an entity with no name** is legitimately addressed by id, an interface
 (its name is unique only within its component), a stored property value, an audit row, a grant, a
@@ -57,21 +56,20 @@ name (`product_id: "cisco-room-bar"`); that is gone. Every registry now has a uu
 a renameable `name` ([ADR-0062](/architecture/decisions/#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle)),
 so it obeys the rule like any estate entity.
 
-**Every foreign key stores the target's primary key**, a uuid, with no exception. A rename then
-has nothing to rewrite: the friendly name is free to change precisely because nothing points at
-it. A `_id` column holding a name, kept alive by `on update cascade`, is the shape this rule
-exists to prevent; the cascade is machinery that only exists to fund the wrong choice. That
-machinery is now retired everywhere, including the last place it lived, the registries.
+**Every foreign key stores the target's primary key**, a uuid, with no exception: a rename then
+has nothing to rewrite, because nothing points at the friendly name. A `_id` column holding a
+name, kept alive by `on update cascade`, is the shape this rule exists to prevent; that machinery
+is now retired everywhere, including the last place it lived, the registries.
 
 **A path or a join field accepts either form.** `GET /components/{ref}` and a body's
 `{"parent": "..."}` both take a uuid or a name; the uuid is tried first, so an id never
-collides with a name. Operators type names, scripts hold ids, and neither has to convert.
+collides with a name.
 
 `TestReferencesCarryBothForms` enforces this over the generated OpenAPI in both directions, so a body
 cannot silently reintroduce a uuid-only reference (a `*_id` with no name) nor a name-only registry
-reference (a registry handle with no id). Its exempt list is the whole of the remaining
-exception (the nameless entities and a still-slug-keyed taxonomy), and adding to it is a decision:
-if the target has a name, carry the name.
+reference. Its exempt list is the whole of the remaining exception (the nameless entities and a
+still-slug-keyed taxonomy), and adding to it is a decision: if the target has a name, carry the
+name.
 
 ## Conventions (AIP-style)
 
@@ -91,9 +89,9 @@ Every operation lives under `/api/v1/*`. The path shape is derivable, not specia
   `/location-types`, `/types/event`.
 - **official / private namespace** on every registry and rule family (below).
 - **List conventions** (AIP-132 target): `filter` / `orderBy` / `pageSize`+
-  `pageToken` (cursor, never offset) / `fields`. The `filter` runs through the one pluggable
-  expression engine ([Expr by default](/architecture/expressions/)), the same language
-  across rule scopes, dynamic groups, and list filters.
+  `pageToken` (cursor, never offset) / `fields`. The `filter` runs through the one
+  [expression engine](/architecture/expressions/) (Expr, one dialect, not pluggable), the same
+  language across rule scopes, dynamic groups, and list filters.
 
 The API is **self-describing**: the running server serves `GET /api/v1/openapi.json`,
 `/openapi.yaml`, and a human reference page.
@@ -104,18 +102,13 @@ Writes go through resource CRUD (each emitting an `audit_log` row in the same tr
 
 :::design[Target design: the ViewResult contract, tracked in #523]
 
-**Reads beyond a single resource go through views**, and views are part of the public API:
-
-- a **view** is a named query backing a page or widget, returning a uniform `ViewResult`
-  (`{columns, rows}`) so one renderer contract serves every view;
-- **default views** ship with the binary (curated, may be Postgres-view-backed, PR-
-  governed); **private views** are operator-saved *structured* queries (filter + order +
-  fields), never raw SQL;
-- `GET /views/{id}:run?param=` binds declared params; undeclared or missing-required
-  params are a clean 400;
-- views execute through the **scoped Storage Gateway**, so IAM scope applies to a view's
-  results exactly as to any read. This is the safety boundary that lets the read side be a
-  public BFF without handing operators raw SQL.
+**Reads beyond a single resource go through views**, and views are part of the public API: a
+**view** is a named query returning a uniform `ViewResult` (`{columns, rows}`), so one renderer
+contract serves every view; **default views** ship with the binary, **private views** are
+operator-saved *structured* queries, never raw SQL; `GET /views/{id}:run?param=` binds declared
+params (undeclared or missing-required is a clean 400); and every view executes through the
+**scoped Storage Gateway**, the safety boundary that lets the read side be a public BFF without
+handing operators raw SQL. The full contract is [views](/architecture/views/).
 
 :::
 

@@ -10,36 +10,25 @@ sidebar:
 ::::design[Target design, tracked in #317]
 
 A template is an **example configuration an operator clones**. It ships inside the binary as a menu,
-never as data: nothing is inserted until somebody picks one, and what they get is an ordinary row
-they then own outright.
-
-The property that makes this worth having is what happens next: **nothing points back at the
-template**. Forking is one-time, with no inheritance and no back-pointer, so a template can be
-rewritten in any release without migrating a single install. Improving the examples we ship costs
-nothing, because no instance is watching.
+never as data: nothing is inserted until somebody picks one, and the fork is an ordinary row they
+own outright. **Nothing points back at the template**: forking is one-time, no
+inheritance, no back-pointer, so a template can be rewritten in any release without migrating a
+single install.
 
 :::caution[Design]
-Nothing on this page is built. The interim state is that standards and location types **seed as
-ordinary rows** (`official: false`, inserted only if absent, so an operator's edit is never reverted
-on the next boot). The template loader, the catalog it exposes, and the create-from-template flow are
-tracked by [#317](https://github.com/hyperscaleav/omniglass/issues/317).
+Nothing on this page is built. Interim: standards and location types **seed as ordinary rows**
+(`official: false`, inserted only if absent, so an operator's edit is never reverted on boot). The
+template loader, its catalog, and the create-from-template flow are tracked by
+[#317](https://github.com/hyperscaleav/omniglass/issues/317).
 :::
 
 ## Fork, not pin
 
-This page used to describe the opposite model, and the contrast is the fastest way to understand the
-current one.
-
-The old model was **immutable versioned shapes that instances pin**: a component pinned a versioned
-device shape, a system pinned a versioned composition shape with a frozen bill of materials, editing
-one minted a new version, and an instance tracked `latest` or followed a `stable` / `beta` channel.
-The whole point of the pin was that **the shape could not change under an instance**.
-
-The current model inverts that. A template is not a shape an instance holds on to; it is a starting
-point an instance is copied from and then forgets. The point of the fork is that **a template can
-change freely, because no instance is watching**. Same word, opposite purpose, which is why the two
-were never reconcilable and why holding both made every page hedge
-([ADR-0071](/architecture/decisions/#adr-0071-a-template-is-a-clonable-example-not-a-versioned-shape-an-instance-pins)).
+This page used to describe the opposite model, **immutable versioned shapes that instances pin**,
+retired by
+[ADR-0071](/architecture/decisions/#adr-0071-a-template-is-a-clonable-example-not-a-versioned-shape-an-instance-pins).
+The current model inverts it: a template is a starting point an instance copies and then forgets,
+so **a template can change freely, because no instance is watching**. Same word, opposite purpose.
 
 What replaced the pinned shapes is not a template at all:
 
@@ -48,69 +37,57 @@ What replaced the pinned shapes is not a template at all:
 | component | [`product`](/architecture/core-entities/), with its `product_property` contract | a pointer, `component.product_id` |
 | system | [`standard`](/architecture/core-entities/) | **conformance**, with live inheritance |
 
-**Forking applies template to row. Conformance applies row to instance.** They are different
-mechanisms and only the second is live: a standard's contract default resolves for every conforming
-system until that system overrides it, and that link is real and permanent. A template's link is
-severed at creation.
+**Forking applies template to row. Conformance applies row to instance.** Only the second is live:
+a standard's contract default resolves for every conforming system until that system overrides it.
+A template's link is severed at creation.
 
 ## What a template can create
 
 Anything an operator would otherwise build from nothing, at three sizes:
 
-- **A [location type](/architecture/core-entities/)**, so a new install can start from Campus,
-  Building, Floor rather than inventing a hierarchy vocabulary on day one.
-- **A [standard](/architecture/core-entities/)**, the composition shape a system conforms to: a
-  huddle room, an auditorium, a training room.
-- **A system**, instantiated whole. This is the operator-facing one: "start from: huddle room" should
-  produce a working system, not merely the standard it conforms to.
+- **A [location type](/architecture/core-entities/)**: start from Campus, Building, Floor rather
+  than inventing a hierarchy vocabulary on day one.
+- **A [standard](/architecture/core-entities/)**: a huddle room, an auditorium, a training room.
+- **A system**, instantiated whole: "start from: huddle room" should produce a working system, not
+  merely the standard it conforms to.
 
-The first two generalize the fork-seed model already recorded in
+The first two generalize the fork-seed model of
 [ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model);
-the third is the reason the model is worth building rather than only worth writing down.
+the third is the reason the model is worth building.
 
 ## How a template ships
 
-A template is **authored as YAML in the repo and `go:embed`ed into the binary**, exactly like today's
-seed files. Same authoring format, same git-diffable review. The difference is not the format, it is
-what the loader does with it:
-
-- a **seed** inserts rows whether or not anyone wanted them;
-- a **template** inserts nothing. It sits in the binary as a catalog the create-from-template flow
-  reads, and writes exactly one row when an operator forks it.
-
-Offered, not applied. A template must never be addressable as a row, and must never be inserted
-wholesale, or it stops being a template and becomes shipped data carrying every
-update-versus-local-edit problem the model exists to avoid.
+**Authored as YAML in the repo and `go:embed`ed into the binary**, exactly like today's seed files;
+the difference is the loader. A **seed** inserts rows unasked; a **template** inserts nothing, a
+catalog the create-from-template flow reads, writing exactly one row on fork. Offered, not
+applied: a template addressable as a row, or inserted
+wholesale, becomes shipped data carrying every update-versus-local-edit problem the model exists to
+avoid.
 
 ## Why this dissolves the shipped-defaults problem
 
-The thing the vendor updates and the thing the operator owns are **never the same object**. That is
-the whole trick, and it is why a template change never needs a migration.
-
-Both alternatives fail on the same point. Shipping standards as authoritative rows means a release
-either overwrites an operator's edits or gives up on improving the defaults. Shipping them as pinned
-versions means every install carries a version pointer, and improving the example means persuading
-people to re-point at something that may not be compatible. Forking has neither problem, because
-there is nothing to reconcile.
+The thing the vendor updates and the thing the operator owns are **never the same object**, so a
+template change never needs a migration. Authoritative rows either overwrite operator edits or
+freeze the defaults; pinned versions mean persuading every install to re-point. Forking has nothing
+to reconcile.
 
 ## What a template carries
 
-Open, and the answer decides how much a fork scaffolds in one write. A template that carries only the
-row's own attributes is trivial to build. A template that also carries a **property contract**, and
-later **[system roles](/architecture/health/)**, would let "start from: huddle room" scaffold the
-slots a room needs filled as well as the row itself, which is most of the operator value. Tracked as
-the open question on [#317](https://github.com/hyperscaleav/omniglass/issues/317).
+Open, and the answer decides how much a fork scaffolds in one write: only the row's own attributes
+(trivial), or also a **property contract** and later **[system roles](/architecture/health/)**,
+letting "start from: huddle room" scaffold the slots a room needs filled, most of the operator
+value. Tracked as the open question on
+[#317](https://github.com/hyperscaleav/omniglass/issues/317).
 
 ## Trust: the signature and the capability manifest
 
-Two glossary terms cover the trust surface of a template catalog that accepts templates from
-outside the binary (the hosted / marketplace path):
+The trust surface of a catalog accepting templates from outside the binary (the hosted /
+marketplace path), two glossary terms:
 
-- **template signature / attestation**: an optional author signature on a template, verified on
-  import. It answers authenticity (who authored it), distinct from the content-hash integrity
-  check (that it is unaltered). The hosted / marketplace path verifies signatures regardless of
-  the self-host runtime stance.
-- **capability manifest**: a declaration on a template of which write-commands and credential
-  shapes it exercises, shown and approved when an operator forks it, so a device-mutating
-  template never gains powers the operator did not see at the moment of the fork.
+- **template signature / attestation**: an optional author signature verified on import;
+  authenticity, distinct from the content-hash integrity check. Verified on the hosted /
+  marketplace path regardless of the self-host runtime stance.
+- **capability manifest**: which write-commands and credential shapes a template exercises, shown
+  and approved at fork time, so a device-mutating template never gains powers the operator did not
+  see.
 ::::

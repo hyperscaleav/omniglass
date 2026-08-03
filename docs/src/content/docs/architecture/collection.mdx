@@ -10,44 +10,33 @@ sidebar:
 import SchemaTable from '../../../components/SchemaTable.astro';
 
 :::note[Partial]
-The first collection path is live end to end: an edge node runs real **reachability probes** against a
-component's interfaces (each an **API named by the protocol it speaks** and typed by its **transport**: `tcp`,
-`ssh`, and `http` interfaces reach by opening the tcp port, `icmp` pings), ships the result as a protobuf
-`TelemetryBatch` over a JetStream durable consumer, and the `tcp.open` / `tcp.connect_time` and `icmp.reachable` /
-`icmp.rtt_avg` samples land in `metric` owned by the target component. The owner is
-bound **server-side** from the task's interface (the node stamps no component identity), and the ingest consumer
-confines a node to its own tasks (a TelemetryBatch carrying another node's `task_id` is orphan-dropped) and rejects
-unregistered sample names. The icmp probe rides the same pipeline unchanged (the consumer does not branch on
-probe type); a target that does not answer is DATA (`icmp.reachable=0` with a reason), and an error is reserved
-for a node that cannot do ICMP at all, told apart by a once-cached loopback capability self-check. On top of the
-raw probe metrics the node now computes the per-interface **reachability verdict** `interface.reachable` (up/down,
-the AND of that interface's probe results) and emits it as a built-in **state** sample; the ingest consumer
-**routes by the registry kind** (metric to `metric`, state to `state`, and a **log** to the raw-log
-lane's `log_line` sink per [ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events);
-the [ADR-0046](/architecture/decisions/#adr-0046-the-event-log-kind-sink) log-to-event promotion is superseded)
-under the same confinement, and the state series is **transition-only** (one row per flip, guarded both at the
-node and at ingest). The TelemetryBatch also carries a node's own **self-logs** as raw `LogLine`s (untyped, no registry name,
-no task): the ingest consumer lands them in `log_line` owner-bound to the node ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)),
-the raw log lane the node narrates itself on (connected, worklist pulled, a task skipped), distinct from the typed
-samples above and routed before the task owner-confinement so a logs-only TelemetryBatch lands without a `task_id`. The node
-half is a **node-wide emitter**: the run loop installs a capturing `slog` handler as the process default, so any node
-code emits a self-log with a plain `slog.Info(...)` (conventionally carrying a `facility`, and optionally a `source`,
-which the mapping lifts into the `log_line` columns), with no logger threaded down to it. The buffer between ticks is
-bounded, dropping the oldest lines and reporting the count, so a chatty stretch cannot grow the edge process without
-bound. Of the two collection primitives this pipeline reads, the **interface** is the authored one and the
-**task** is **derived**. An interface has an operator **CRUD API** (gateway + Huma routes at `/interfaces`,
-generated into the OpenAPI document, the cobra CLI, and the typed client); it is **named by its protocol** (the
-name derives from its `interface_type`, unique within its component, never a hand-typed label), so create takes a
-type, not a name. A **task** is **read-only plumbing**: creating an interface **derives its one poll task**, so
-there are no operator create/update/delete task routes, only `GET /tasks` and `GET /tasks/{id}`. A task carries
-**no node column**; its placement **projects from its interface** (the worklist and telemetry owner-confinement
-join the interface), and a **node purge cascades** its interfaces and their derived tasks. Both surfaces carry
-the two authorization layers, with **scope cascading through the owning component** (the interface and its derived
-task inherit the component's read/action scope, so an out-of-scope component's interface or task is a
-non-disclosing 404, reusing the component tier with no new scope kind). What is built is the reach gate
-over four transports (`tcp`/`ssh`/`http` open the port, `icmp` pings). The
-protocol **drivers** that collect a normalized menu of samples and functions over a transport are the next
-slices. See
+The first collection path is live end to end: an edge node runs **reachability probes** against a
+component's interfaces (each an **API named by the protocol it speaks**, typed by its **transport**:
+`tcp`, `ssh`, and `http` reach by opening the tcp port, `icmp` pings), ships a protobuf
+`TelemetryBatch` over a JetStream durable consumer, and `tcp.open` / `tcp.connect_time` and
+`icmp.reachable` / `icmp.rtt_avg` land in `metric` owned by the target component. The owner is bound
+**server-side** from the task's interface (the node stamps no component identity); the ingest
+consumer confines a node to its own tasks (another node's `task_id` is orphan-dropped) and rejects
+unregistered sample names. A non-answering icmp target is DATA (`icmp.reachable=0` with a reason);
+an error means the node cannot do ICMP at all (a once-cached loopback self-check tells them apart).
+The node computes the per-interface verdict `interface.reachable` (the AND of its probe results) as
+a built-in **state**; the consumer **routes by the registry kind** (metric / state / log to
+`log_line` per [ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events),
+superseding the [ADR-0046](/architecture/decisions/#adr-0046-the-event-log-kind-sink) log-to-event
+promotion) under the same confinement, the state series **transition-only** (one row per flip,
+guarded at the node and at ingest). The batch also carries the node's **self-logs** as raw
+`LogLine`s (untyped, no registry name, no task), landed in `log_line` owner-bound to the node before
+the task confinement (a logs-only batch needs no `task_id`); the run loop installs a capturing
+`slog` handler as the process default, so plain `slog.Info(...)` anywhere in node code emits a
+self-log (`facility` / `source` lift into the `log_line` columns), the between-ticks buffer bounded,
+dropping oldest. The **interface** is authored, the **task** derived: an interface has a CRUD
+API (gateway + Huma routes at `/interfaces`, generated into the OpenAPI document, the cobra CLI, and
+the typed client) and is named by its protocol (derived from its `interface_type`, unique per
+component), so create takes a type, not a name; a task is **read-only plumbing** (only `GET /tasks`
+and `GET /tasks/{id}`) with **no node column** (placement **projects from its interface**), and a **node purge cascades** interfaces and derived
+tasks. Both surfaces carry the two authorization layers, **scope cascading through the
+owning component** (out-of-scope = non-disclosing 404, no new scope kind). Built: the reach gate
+over four transports; the protocol **drivers** come next. See
 [ADR-0037](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer),
 [ADR-0038](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state),
 [ADR-0039](/architecture/decisions/#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver),
@@ -58,13 +47,12 @@ and [ADR-0040](/architecture/decisions/#adr-0040-the-task-is-derived-read-only-p
 
 Collection is built from **functions**. A versioned `ComponentTemplate` declares how to reach a
 class of device (its interfaces) and a set of **functions**, each a discrete unit of device logic
-that runs on the edge node, reaches the device over an interface, and parses the answer right
-there into samples. One authoring schema covers everything from a single SNMP read to a
-multi-step, cross-interface, branching procedure.
+that runs on the edge node and parses the answer on the spot into samples; one authoring schema
+covers everything from a single SNMP read to a multi-step branching procedure.
 
 ## Model overview
 
-Three strongly decoupled levels, plus a typed parameter surface and template metadata:
+The shape:
 
 ```text
 ComponentTemplate (apiVersion, kind, metadata.labels)
@@ -74,38 +62,25 @@ ComponentTemplate (apiVersion, kind, metadata.labels)
     steps      typed operations (kind), gated by an interface, schema-validated
 ```
 
-- **Authoring compiles to a runtime unit.** The hand-authored template is the contract. A
-  compiler lowers it to the per-node execution unit the node runs: it resolves inputs and
-  variables, validates the DAG, and bakes each sample's `kind` into the unit so the edge
-  routes to the right table with no runtime registry lookup, the kind riding the published
-  sample. The runtime unit is internal, never hand-authored.
-- **Edge-local execution.** A function runs per component on the node, in one tick, with zero
-  server round trips: every interface sits on the one component, all reachable from the node,
-  so a step can branch on a value a prior step just collected, straight from node memory.
-- **Two data planes, split by access pattern.** Timeseries [samples](/architecture/properties/)
-  (observed and calculated) are append-heavy and history-bearing. Current-value config and
-  credentials live in the separate [config and credentials](/architecture/variables/) store (sargable
-  point-lookups); config is keyed to a sample as its observed side.
-- **Kubernetes-style versioning.** `apiVersion: collection.omniglass.dev/v1alpha1` plus a
-  `kind` (`ComponentTemplate`, with `SystemTemplate` / `LocationTemplate` reserved in the same
-  apiVersion). The parser gates on `apiVersion` and converts older versions forward.
+- **Authoring compiles to a runtime unit**: the compiler resolves inputs and variables, validates
+  the DAG, and bakes each sample's `kind` into the per-node unit (no runtime registry lookup); the
+  unit is internal, never hand-authored.
+- **Edge-local execution**: a function runs per component on the node, in one tick, zero server
+  round trips; a step can branch on a value a prior step just collected.
+- **Two data planes**: append-heavy timeseries [samples](/architecture/properties/) versus
+  point-lookup [config and credentials](/architecture/variables/), config keyed to a sample as its
+  observed side.
+- **Kubernetes-style versioning**: `apiVersion: collection.omniglass.dev/v1alpha1` plus `kind`
+  (`ComponentTemplate`; `SystemTemplate` / `LocationTemplate` reserved); the parser gates on
+  `apiVersion`, converting older versions forward.
 
-A **function** is the device-level unit. The platform-level workflow that *responds* to data,
-the thing that opens tickets, notifies, and orchestrates, is a [flow](/architecture/alarms-actions/);
-a flow can call a function, but the two live at different layers.
+A **function** is the device-level unit; the platform workflow that responds to data is a
+[flow](/architecture/alarms-actions/), which can call a function.
 :::
 
 ## Interfaces: the device's APIs, declared once
 
-An **interface is an API we intend to call** on a component (its `web`, `qrc`, `ttp`, `snmp`
-endpoint), **not** a network interface; a host or IP is a variable it consumes, not its identity. It
-is **named by the protocol it speaks**, unique within its component (so a device has one `web`, one
-`qrc`), never a hand-typed label. Reachability is the **first gate of a ladder** (reach, then auth,
-then responds, then collecting), and it needs only the interface's transport. A top-level
-`interfaces` array declares each one; the connection is **decoupled from the work**: a function's
-steps reference an interface by `id`, the interface owns the connection, not the step. Declaring it
-once removes per-step duplication, and the decoupling lets a **persistent session outlive any single
-function run**, so subscriptions and inbound streams attach to a connection established once.
+An **interface is an API we intend to call** on a component (its `web`, `qrc`, `ttp`, `snmp` endpoint), **not** a network interface; a host or IP is a variable it consumes, not its identity. It is **named by the protocol it speaks**, unique within its component. Reachability is the **first gate of a ladder** (reach, auth, responds, collecting), needing only the transport. The top-level `interfaces` array declares each once; steps reference one by `id`, the interface owns the connection, and a **persistent session outlives any single function run**, so subscriptions and inbound streams attach to a connection established once.
 
 ```yaml
 interfaces:
@@ -122,34 +97,18 @@ interfaces:
     persistent: true               # stateful session, outlives function runs
 ```
 
-- **Type is the `interface_type`, which is the transport**: the wire the interface speaks over, not
-  the protocol driver. The registry covers `snmp`, `http`, `ssh`, `telnet`, `tcp`, `icmp`, `webhook`,
-  `mqtt`, `syslog`, and `websocket`, and carries each transport's connection-param schema and its
-  default reachability probe. The protocol handler that turns a device's API into a normalized menu of
-  samples and functions (the OIDs, the commands, the parse) is a separate **driver** layer, so the
-  same protocol can run over several transports and a device's OIDs live in its driver, never on a
-  template. See [ADR-0039](/architecture/decisions/#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver).
-- **`liveness`** is the per-interface reachability gate; it decides whether the interface's
-  functions run. See [nodes](/architecture/nodes/).
-- **`persistent: true`** keeps a session open across function runs (interface lifecycle contains
-  a function run, which contains a step). Scheduled functions borrow it to send; listen functions
-  wake on its inbound.
-- **Codec and framing.** Raw-TCP AV control planes wrap payloads non-trivially (line
-  terminators, length prefixes, NUL framing, JSON-RPC or TTP envelopes). An interface carries
-  encode/decode controls that lock raw to shape: the codec frames outbound payloads and parses
-  inbound ones to the declared envelope, so a step sees structured content, not wire bytes.
-- **Node placement is not declared here.** It is server-assigned from the component's location.
+- **Type is the `interface_type`, which is the transport**, not the protocol driver: the registry covers `snmp`, `http`, `ssh`, `telnet`, `tcp`, `icmp`, `webhook`, `mqtt`, `syslog`, and `websocket`, each with a connection-param schema and default reachability probe. The protocol handler turning a device's API into a normalized menu of samples and functions is a separate **driver** layer, so a device's OIDs live in its driver, never on a template ([ADR-0039](/architecture/decisions/#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver)).
+- **`liveness`**: the per-interface reachability gate deciding whether its functions run ([nodes](/architecture/nodes/)).
+- **`persistent: true`** keeps a session open across runs; scheduled functions borrow it to send, listen functions wake on its inbound.
+- **Codec and framing**: raw-TCP AV control planes wrap payloads (line terminators, length prefixes, NUL framing, JSON-RPC or TTP envelopes); the interface's codec frames outbound and parses inbound to the declared envelope, so a step sees structure, not wire bytes.
+- **Node placement is not declared here**; it is server-assigned from the component's location.
 
 :::design[Functions: a trigger plus a step DAG, tracked in #489]
 
 ## Functions: a trigger plus a step DAG
 
-A top-level `functions` array. Each **function** is one trigger and a DAG of steps, from trivial
-(one SNMP step reading 20 OIDs) to a multi-step branching procedure. A function is a discrete
-unit of device logic: it does one thing to or for a component.
-
-A function's **trigger** is one of three kinds, and the three unify what used to be separate
-primitives, a poller, a listener, and a command:
+A top-level `functions` array: each **function** is one trigger plus a DAG of steps. The trigger
+unifies what used to be a poller, a listener, and a command:
 
 | Kind | Fires when | This is |
 |---|---|---|
@@ -157,51 +116,37 @@ primitives, a poller, a listener, and a command:
 | `listen` | inbound data arrives on a `source` (`webhook` / `trap` / `syslog`, or `subscribe` / `stderr` / `session-line` on a persistent interface) | a listener for pushed data |
 | `command` | invoked on demand, by an operator or by a [flow](/architecture/alarms-actions/) | an action you run against the device (`reboot`, `set-input`) |
 
-A `command` function takes typed `args` and is the imperative path: it is how the platform *acts*
-on a device, and how a reconcile pushes a declared config back (the **set** function, see [config](/architecture/variables/)).
-A function has exactly one trigger. `triggers` is modeled as a list to admit the multi-trigger
-case, a scheduled function that is also command-invocable for a targeted refetch.
+A `command` function takes typed `args`: the imperative path, and how a reconcile pushes declared
+config back (the **set** function, [config](/architecture/variables/)). Exactly one trigger per
+function; `triggers` is a list only to admit a scheduled function that is also command-invocable
+for a targeted refetch.
 :::
 
 ### Two axes: task mode and interface transport
 
-A **task** is a node's unit of collection work. Two independent axes describe it, and keeping them
-separate is what keeps the model clean.
+A **task** is a node's unit of collection work, described by two independent axes:
 
-- **Task mode** (a property of the task): **poll** (we ask for each datum) or **listen** (we wait
-  for it to arrive). Stated from *our* perspective on purpose: "pull/push" inverts depending on
-  whose frame you take, because the component pushes exactly when we pull. `poll` and `listen` are
-  verbs *we* perform.
-- **Transport** (a property of the interface): **stateless** (a throwaway connection per shot) or
-  **stateful** (a held-open connection, which becomes a `session` and emits `session_log` rows for
-  connect/auth/drop/reconnect).
+- **Task mode** (on the task): **poll** (we ask) or **listen** (we wait), stated from *our* perspective on purpose, since "pull/push" inverts with the frame.
+- **Transport** (on the interface): **stateless** (a throwaway connection per shot) or **stateful** (a held-open connection, a `session` emitting `session_log` rows for connect/auth/drop/reconnect).
 
-These are orthogonal. All four cells are real:
+All four cells are real:
 
 | | **poll** (we ask) | **listen** (we wait) |
 |---|---|---|
 | **stateless** | SNMP get, HTTP GET | webhook, SNMP trap, syslog |
 | **stateful** | SSH-exec or xAPI `xStatus` on a held session | MQTT subscribe, xAPI feedback |
 
-Waiting for a frame is a single mode (**listen**) regardless of transport; a held-open connection
-is a property of the interface, not a separate mode. So there are two task modes, and statefulness
-lives on the interface.
+Waiting for a frame is one mode (**listen**) regardless of transport; statefulness lives on the interface.
 
-**Native push.** First-class data pushed by smart senders (control-system programmers instrumenting
-directly) is self-describing (it carries its key), so its edge parse is a near-identity
-pass-through, marked `shape=native`. As with any function, a failed parse keeps the raw on a
-`collection.failed` event.
+**Native push**: data pushed by smart senders is self-describing (it carries its key), its edge parse a near-identity pass-through marked `shape=native`; a failed parse keeps the raw on a `collection.failed` event.
 
 ## Interface types and their config
 
-The poll types and listeners in the `interface_type` registry and the operator config they read.
-The node translates each stored task + interface into a poller the collection engine runs; how the
-node *executes* these (tick scheduling, reachability gating, the task queue) is [nodes](/architecture/nodes/).
+The poll types and listeners in the `interface_type` registry and the operator config they read. How the node *executes* these (tick scheduling, reachability gating, the task queue) is [nodes](/architecture/nodes/).
 
 ### Poll protocols and their config
 
-Built today: the `icmp` and `tcp` probes (with `ssh` and `http` probing as tcp-connect). A
-probe's config rides the interface's `params` JSON, unmarshalled on the node:
+Built today: the `icmp` and `tcp` probes (with `ssh` and `http` probing as tcp-connect). A probe's config rides the interface's `params` JSON, unmarshalled on the node:
 
 | interface type | shape | config (`interface.params`) | samples |
 |---|---|---|---|
@@ -220,76 +165,37 @@ probe's config rides the interface's `params` JSON, unmarshalled on the node:
 
 :::
 
-`icmp`/`tcp` are inline probes whose config (target, timeout) rides the interface's
-`params`. In the design model above, `snmp`, `http`, and the text transports
-(`raw-tcp`/`telnet`/`ssh`) are held connections: the connection lives on the
-interface and the task names what to read.
-
-The ship-with registry seeds the 11 real `property_type` rows
-(`internal/seed/properties.yaml`), including the probe built-ins the node emits today
-(`icmp.reachable`/`icmp.rtt_avg`, `tcp.open`/`tcp.connect_time`, `interface.reachable`),
-so probe/liveness results persist as samples, not only as raw wire
-bytes; the wider per-transport name set (`udp.open`, `snmp.reachable`, the http trio, and
-`<proto>.reachable`/`<proto>.response_time` for the text family) is Design. They are
-owner-agnostic measurements like any other: unregistered,
-reject-not-project would drop them at ingest.
+`icmp`/`tcp` are inline probes (config on `interface.params`); the rest, in the design model, are held connections: the connection lives on the interface, the task names what to read. The ship-with registry seeds the 11 real `property_type` rows (`internal/seed/properties.yaml`), including the probe built-ins above plus `interface.reachable`; the wider per-transport set (`udp.open`, `snmp.reachable`, the http trio, `<proto>.reachable`/`<proto>.response_time` for the text family) is Design, and unregistered names would be reject-not-project dropped at ingest.
 
 :::design[The held-connection transports in detail, tracked in #489]
 
-For `snmp`, each OID is carried in its **native SNMP type**: numeric OIDs as
-numbers, string OIDs (OctetString / IPAddress / OID) as text, so a string-valued
-OID (an enum or label) lands as a `state` sample and a numeric one as
-`metric`. The owning table is decided at ingest from the key's `property_type`
-kind. Per-OID declared typing and richer collection specs live on the component
-template (the template declares the OID set, demoting `task.params.oids` to an
-override). SNMP runs v2c with a plaintext community or v3 with auth/priv; the
-community resolves from the interface params directly or through an `auth_secret`
-credential.
+For `snmp`, each OID keeps its **native SNMP type**: numeric OIDs land as `metric`, string OIDs
+(OctetString / IPAddress / OID) as `state`, the table decided at ingest from the key's
+`property_type` kind; the component template will declare the OID set, demoting `task.params.oids`
+to an override. v2c plaintext community or v3 auth/priv, resolved from interface params or an
+`auth_secret` credential.
 
-Every extract spec (`oids`, the http/text `extract`) shares one name grammar: a
-name may carry a trailing **`key[instance]`** suffix to distinguish several values
-of the *same* canonical key on one owner (`fan.speed[intake]=<oid>`,
-`fan.speed[exhaust]=<oid2>`). The bracket is stripped into the sample's
-reserved `instance` label, so the canonical registry still matches the bare key
-and the value lands in the `instance` column ([the instance dimension](/architecture/properties/#the-instance-dimension-many-values-of-one-key-on-one-owner)). A name without a bracket is a singleton (`instance = ''`).
+Every extract spec shares one name grammar: a trailing **`key[instance]`** suffix
+(`fan.speed[intake]=<oid>`) strips into the sample's reserved `instance` label so the registry
+matches the bare key
+([the instance dimension](/architecture/properties/#the-instance-dimension-many-values-of-one-key-on-one-owner));
+no bracket = singleton (`instance = ''`).
 
-For `http`, `http.reachable` is `1` whenever the request completes a round trip
-(`0` on a transport failure: DNS, refused, timeout, TLS), and `http.status_code`
-carries the HTTP status separately, so reachability and a `>= 500` status are
-distinct alarm signals (a non-2xx response is still reachable). `extract` pulls
-values from a JSON body by dot-path (`name=json:data.0.temp`): a number or bool
-leaf becomes a `metric`, a string leaf a `state`; a missing path, a
-container/`null` leaf, or an unreachable endpoint yields no sample. Auth rides
-as `header_*` interface params (e.g. `header_authorization: Bearer ...`), resolved
-from a plaintext param or an `auth_secret` credential. Carry auth in
-`header_*`, never in the URL or body: the request `body` param is **not** stamped
-as a sample label, and the `target` label is the request URL with its query
-string (and any userinfo) stripped, so a token placed in the path query does not
-leak into attributes (but is still a bad idea). `method`/`body` support POST/PUT.
-
-For the **text family** (`raw-tcp`/`telnet`/`ssh`), the poll is one ephemeral
-round trip: connect, optionally authenticate, send `task.params.command` followed
-by the line ending, read the reply (to the `read_delim` for raw-tcp/telnet, to
-EOF for ssh's `exec`, bounded by `read_timeout`), extract, close. `<proto>.reachable`
-is `1` once the transport opened and the command round-tripped (`0` on a transport
-failure: refused, timeout, or rejected credentials, which are connection health, not
-errors), and `<proto>.response_time` is absent when unreachable. `extract` pulls
-values by **regex named capture** (`name=re:<pattern>`, parallel to http's
-`json:`): each named group routes to the sample of the same name, or to the lone
-sample when the pattern has exactly one group; a captured value that parses as a
-number becomes a `metric`, otherwise a `state`; a non-matching pattern (or an
-unreachable endpoint) yields no sample, while a pattern that fails to compile is
-a configuration error. Auth resolves from interface params (telnet/ssh `password`,
-ssh inline `private_key`) or an `auth_secret` credential, the same posture as snmp's
-community and http's `header_*`, and ssh pins the host key. Credentials live on the
-interface and are never labelled; the `target` label is the command. The transport is
-swappable behind one boundary, so a `raw-udp` request/response poll (datagram in,
-reply out) slots in as a fourth kind without new machinery; UDP **listen**
-(unsolicited inbound: syslog, snmp-trap) is a different shape and belongs to the
-listener runtime. A held session (the stateful transport) carries the same text
-family over a persistent connection, with multi-line prompt-expect beyond the first
-delimiter, command echo handling, and Q-SYS-style frame/checksum framing; ssh runs
-its commands as a one-shot `exec`.
+Extraction is typed by value: a number/bool leaf or numeric capture -> `metric`, a string ->
+`state`; a missing path, non-matching pattern, or unreachable endpoint yields no sample, while a
+non-compiling regex is a configuration error. The http `extract` dot-paths a JSON body, the text
+family (`raw-tcp`/`telnet`/`ssh`, one ephemeral round trip: connect, authenticate, send
+`task.params.command`, read, extract, close) uses **regex named capture**, each named group routing
+to the same-name sample. `http.reachable` (did the round trip complete; `0` on
+DNS/refused/timeout/TLS) and `http.status_code` are separate, so reachability and a `>= 500` status
+are distinct alarm signals; the text family counts rejected credentials as connection health, not
+errors, and `<proto>.response_time` is absent when unreachable. Auth resolves from interface params
+or an `auth_secret` credential everywhere (http via `header_*`, never the URL or body; ssh pins the
+host key); credentials are never labelled, and the `target` label strips query string and userinfo
+(http) or is the command (text). The transport swaps behind one boundary (`raw-udp` poll slots in as
+a fourth kind; UDP **listen** belongs to the listener runtime), and a held session carries the same
+text family persistently (prompt-expect, echo handling, Q-SYS-style framing), ssh as one-shot
+`exec`.
 
 :::
 
@@ -297,14 +203,11 @@ its commands as a one-shot `exec`.
 
 :::design[Server-hosted listeners, tracked in #489]
 
-A **listener** is inbound: rather than us polling, **we wait for pushed data**
-(`mode: listen`). That data can arrive several ways, a webhook POST, an
-MQTT/subscribe stream, an SNMP trap or syslog line, or a line on a held stateful
-session; a webhook is one transport, not the definition. A `webhook` listener is
-**server-hosted**: `placement: central` makes the server the
-endpoint for inbound external webhooks, so a webhook listen-task is **server-executed
-and unassigned** (`node_name IS NULL`); the server's `POST /webhooks/{path}` route is
-its runtime, not a node tick.
+A **listener** waits for pushed data (`mode: listen`): a webhook POST, an MQTT/subscribe stream, an
+SNMP trap or syslog line, or a line on a held session; a webhook is one transport, not the
+definition. A `webhook` listener is **server-hosted**: `placement: central` makes the listen-task
+**server-executed and unassigned** (`node_name IS NULL`), its runtime the server's
+`POST /webhooks/{path}` route, not a node tick.
 
 | field | where | meaning |
 |---|---|---|
@@ -314,33 +217,24 @@ its runtime, not a node tick.
 | `extract` | `task.params.extract` | comma-separated `name=json:dot.path`; number/bool -> metric, string -> state (same extractor as the http poller) |
 | `raw_log` | `task.params.raw_log` | optional key to store the whole raw frame under (as JSON when the body parses, else text), the holding-pen an event_rule can later promote |
 
-One or more `mode: listen` tasks bind to a webhook interface; each inbound POST
-runs every enabled one, parsing its points under that task's id and **publishing**
-them to the JetStream [samples](/architecture/properties/) stream, the same data
-lane the node publishes to (so owner attribution resolves server-side, and the rule
-engine and calc rollups react from the stream). The ingest is **owner-confined by the
-admission consumer** against the interface's **declared owner**, keyed off the trusted
-server-set `interface` label (not a payload claim), so a leaked path secret can publish
-only under that interface's owner, never an arbitrary one
-([identity and access](/architecture/identity-access/)).
+Each inbound POST runs every enabled listen task bound to the interface, **publishing** under that
+task's id to the JetStream [samples](/architecture/properties/) stream, the same data lane the node
+uses. Ingest is **owner-confined by the admission consumer** against the interface's declared owner,
+keyed off the trusted server-set `interface` label, never a payload claim: a leaked path secret
+publishes only under that interface's owner ([identity and access](/architecture/identity-access/)).
 
-**Response contract** (webhook senders retry on non-2xx): **202** = durably
-accepted; **401** bad/absent secret, **404** unknown path, **413** body over the
-1 MiB cap (4xx = sender fault, don't retry); **5xx** = our fault, please retry. A
-`GET`/`HEAD` to the path answers the endpoint-verification ping some providers
-send, echoing a `?challenge=` value. The body cap, JSON-only parsing, and
-"non-JSON body makes declared extractions absent (not an error)" mirror the http
-poller.
+**Response contract** (senders retry on non-2xx): **202** durably accepted; **401** bad/absent
+secret, **404** unknown path, **413** over the 1 MiB cap (4xx = sender fault, don't retry);
+**5xx** = our fault, retry. `GET`/`HEAD` answers the endpoint-verification ping, echoing
+`?challenge=`; JSON-only parsing mirrors the http poller (a non-JSON body makes declared extractions
+absent, not an error).
 
-**Auth and spoofing**: the shared secret resolves from a plaintext `interface.params`
-value or an `auth_secret` credential (same posture as snmp's community), and the
-sender may instead present an HMAC signature verified behind the auth seam. The route
-stamps a trusted, server-set `interface` label on every sample and copies body
-fields into attributes **only** via the declared `extract` set, so a body field cannot
-impersonate another interface; shared-interface ingress should scope on
-`event.labels.interface`, and per-component interfaces (server-assigned owner)
-are preferred for high-trust sources. A listener also runs node-hosted for
-LAN-local sources, with idempotency/dedup and form-encoded bodies.
+**Auth and spoofing**: the secret is a plaintext `interface.params` value or an `auth_secret`
+credential, or the sender presents an HMAC signature verified behind the auth seam. Body fields copy
+into attributes **only** via the declared `extract` set, so a body field cannot impersonate another
+interface; shared ingress scopes on `event.labels.interface`, per-component interfaces preferred for
+high-trust sources. A node-hosted variant covers LAN-local sources (idempotency/dedup, form-encoded
+bodies).
 
 :::
 
@@ -348,8 +242,8 @@ LAN-local sources, with idempotency/dedup and form-encoded bodies.
 
 ## Steps: the DAG
 
-A step is a typed **operation**: a `kind` (the operation it performs) that runs on a referenced
-`interface` and, for a read, produces samples through a typed extractor.
+A step is a typed **operation**: a `kind` that runs on a referenced `interface` and, for a read,
+produces samples through a typed extractor.
 
 ```yaml
 steps:
@@ -362,37 +256,27 @@ steps:
         - { key: cpu.utilization, oid: 1.3.6.1.4.1.55540.2.1.0, value: "raw / 100.0" }
 ```
 
-- **Dependencies are data references, not array order.** A step reads `$steps.<id>.*`
-  (ephemeral scratch: a session id, a token, a list element, never emitted) or `$dp.<key>` (a
-  real measurement, emitted and readable for branching). The set of references *is* the DAG;
-  array order is cosmetic, so a function editor can round-trip the graph.
-- **`when`** is the explicit branch: an expression guard over the in-scope context. A false
-  guard skips the step and its dependents.
-- **`forEach`** is the step-level fan-out: a step iterates a located collection, the element
-  bound as `$steps.<id>.item`, and downstream steps run per element (a list-then-detail chain).
-  Distinct from an extractor's `each`, which fans one response's array into many samples
-  inside a single step.
-- **`kind` is interface-gated and registry-driven.** Valid kinds depend on the target
-  `interface_type` (`snmp.get`, `snmp.walk`, `http.request`, `ssh.send`, `ssh.subscribe`, the
-  interface-agnostic `extract` and `blend`). Each kind's param schema lives in the registry,
-  one entry per adapter.
+- **Dependencies are data references, not array order**: a step reads `$steps.<id>.*` (ephemeral
+  scratch, never emitted) or `$dp.<key>` (a real measurement, readable for branching); the
+  reference set *is* the DAG, array order cosmetic, so an editor can round-trip the graph.
+- **`when`**: an expression guard, the explicit branch; false skips the step and its dependents.
+- **`forEach`**: step-level fan-out (element bound as `$steps.<id>.item`), downstream steps running
+  per element; distinct from an extractor's `each`, which fans one response's array into many
+  samples in one step.
+- **`kind` is interface-gated and registry-driven** (`snmp.get`, `snmp.walk`, `http.request`,
+  `ssh.send`, `ssh.subscribe`, the interface-agnostic `extract` and `blend`), each kind's param
+  schema in the registry.
 
-In-scope reference namespaces within a function run: `$var:<key>` (config and secret values,
-resolved through the [cascade](/architecture/cascade/)), `$dp.<key>` (samples), `$steps.<id>.*`
-(ephemeral scratch), `$event` (the inbound payload of a `listen` function), and the
-extractor-local inputs a step prepares for its `value` leaf (`raw`, `groups`, `node`, `item`).
+In-scope namespaces: `$var:<key>` (config and secrets via the [cascade](/architecture/cascade/)),
+`$dp.<key>` (samples), `$steps.<id>.*` (scratch), `$event` (a `listen` function's inbound payload),
+and the extractor-local `raw`, `groups`, `node`, `item`.
 
 ### Extractors: locate, then optionally transform
 
-Each extractor is a typed section that locates a raw value with its protocol-specific field,
-then optionally transforms it with a single [Expr](/architecture/expressions/) expression in
-`value` (default identity).
-
-**One interpolation convention.** Wherever a config, label, or template field could hold either a
-computed value or a fixed one, an **interpolated** value (an expression evaluated against the
-in-scope context) is wrapped `${...}`, and a **literal** is a bare string. So `${node.index}` reads
-the current element's index, while `"main-display"` is the literal text. The `value` leaf is always
-an Expr expression by definition, so it needs no wrapper.
+An extractor locates a raw value with its protocol-specific field, then optionally transforms it
+with one [Expr](/architecture/expressions/) expression in `value` (default identity). **One
+interpolation convention**: `${...}` is interpolated, a bare string is literal; `value` is always an
+Expr expression by definition, so it needs no wrapper.
 
 ```yaml
 samples:
@@ -405,24 +289,22 @@ samples:
         labels: { channel: ${node.index}, name: ${node.name}, role: "main-display" } }
 ```
 
-The extractor names a `key`. What that key *means* (kind, value type, unit, validation,
-fusion) lives on the [`property_type`](/architecture/properties/#the-property_type-registry) registry at some
-[scope](/architecture/properties/#key-scope-template-org-official): a template declares its own keys at
-**template** scope (no registry friction), or references an **org** / **official** key. Compile-time
-validation resolves every key to a reachable scope (template keys self-resolve; referenced org/official
-keys must exist); an unresolved key is reject-not-project at ingest, so a template never silently
-collects a measurement no scope knows.
+The extractor names a `key`; what it *means* lives on
+[`property_type`](/architecture/properties/#the-property_type-registry) at some
+[scope](/architecture/properties/#key-scope-template-org-official): a template declares its own keys
+at **template** scope (no registry friction) or references an **org** / **official** key.
+Compile-time validation resolves every key to a reachable scope; an unresolved key is
+reject-not-project at ingest, so a template never silently collects a measurement no scope knows.
 :::
 
 :::design[Template inputs, tracked in #489]
 
 ## Inputs: the template's typed parameters
 
-A template takes typed `inputs`: shape-typed parameters it references internally, never a
-hardcoded `$var:`. That is the decoupling, a template needs an `ssh_credential`, not specifically
-`$var:crestron.ssh`. At `:apply` each input is **bound** to a value, either a literal or a
-[variable](/architecture/variables/) reference (`$var:<name>`), with an optional default the
-template ships. Required inputs are the apply gate; the UI renders the form.
+A template takes typed `inputs`, never a hardcoded `$var:`: it needs an `ssh_credential`, not
+specifically `$var:crestron.ssh`. At `:apply` each input binds to a literal or a
+[variable](/architecture/variables/) reference (`$var:<name>`), with an optional shipped default;
+required inputs are the apply gate, and the UI renders the form.
 
 ```yaml
 inputs:
@@ -435,146 +317,54 @@ inputs:
       - { key: ssh,  type: ssh_credential, default: $var:crestron.ssh, label: "SSH login" }
 ```
 
-The template body references `${input.snmp}` / `${input.ssh}`; the bindings resolve at apply
-and are overridable per component. So `$var:` lives at the **binding layer** (apply, and input
-defaults), not scattered through the template body, and the template stays reusable with any
-value of the right shape. Each input `type` is a `variable_type`, so per-field secrecy comes
-from the shape.
+The body references `${input.snmp}` / `${input.ssh}`; bindings resolve at apply, overridable per
+component, so `$var:` lives only at the binding layer and the template stays reusable with any value
+of the right shape. Each input `type` is a `variable_type`, so per-field secrecy comes from the
+shape.
 :::
 
 ## Execution: parse at the edge
 
 A function runs the parse at the **edge**, not server-side:
 
-- **Function steps parse, extract, and normalize on the node** and **publish** resolved
-  samples to the JetStream [samples](/architecture/properties/) stream (the data lane),
-  not to the typed tables directly. The node is a NATS client publishing observed samples;
-  a [persistence consumer](/architecture/properties/) batch-writes them to the typed tables as
-  an async sink, idempotent on `(series, ts)`, while the [rule engine](/architecture/alarms-actions/)
-  consumes the same stream live. The compiler still bakes each sample's `kind` into the
-  runtime unit, so the routing to `metric` versus `state` is decided at the
-  edge with no runtime registry lookup, and rides on the published message.
-- **Raw payloads are not stored**, the sample is the source: a dev raw-mode taps the wire bytes
-  live while developing, and a parse or validation failure emits a `collection.failed` event
-  carrying the raw. There is no telemetry table.
-- **Owner attribution:** a single-owner function lands its samples on its own component,
-  identity stamped at the edge (the component is known, the function runs for it). A function
-  that reports for many devices (a management platform) publishes samples for multiple owners,
-  resolved server-side from the emitted identity labels (below).
-- **Placement-scoped writes.** A node publishes only the owners in its **placement visible_set**
-  (the owners of the tasks assigned to it). That visible_set expresses as **NATS subject
-  permissions** on the node's account, the `node` gateway mode in
-  [identity and access](/architecture/identity-access/). At ingest, an emitted owner label
-  **outside** that visible_set is **never an authoritative write**: it is treated as an
-  **orphan / discovery candidate** and feeds the `discovery_rule` stream (below), so a
-  compromised node cannot manufacture writes for owners it was never placed on. The
-  perspectives / `disagree` model is the backstop for the other case, a legitimately-placed but
-  compromised node reporting bad values for owners it **does** cover; bounding the visible_set
-  and corroborating across perspectives are complementary, not the same defense.
-- Because parsing is the edge step, there is **no separately authored transform rule**. Routing
-  is the template's fan-out, and cross-entity rollups are [calc](/architecture/calculations/)
-  samples on system and location templates. The server-side work that remains is
-  shared-interface owner-binding and untemplated raw ingress.
+- **Steps parse, extract, and normalize on the node**, **publishing** resolved samples to the JetStream [samples](/architecture/properties/) stream, not the typed tables; the [persistence consumer](/architecture/properties/) batch-writes them async, idempotent on `(series, ts)`, while the [rule engine](/architecture/alarms-actions/) consumes the same stream live. The compiler-baked `kind` rides the published message, routing `metric` versus `state`.
+- **Raw payloads are not stored**: a dev raw-mode taps the wire live, a failed parse emits a `collection.failed` event carrying the raw, and there is no telemetry table.
+- **Owner attribution:** a single-owner function stamps identity at the edge; a many-device function publishes for multiple owners, resolved server-side from identity labels (below).
+- **Placement-scoped writes.** A node publishes only the owners in its **placement visible_set** (the owners of its assigned tasks), expressed as **NATS subject permissions** (the `node` gateway mode, [identity and access](/architecture/identity-access/)). An owner label outside the set is never an authoritative write, only an **orphan / discovery candidate** for the `discovery_rule` stream, so a compromised node cannot manufacture writes for owners it was never placed on; the perspectives / `disagree` model backstops a legitimately-placed node reporting bad values.
+- **No separately authored transform rule**: routing is the template's fan-out, cross-entity rollups are [calc](/architecture/calculations/) samples on system and location templates; the server-side remainder is shared-interface owner-binding and untemplated raw ingress.
 
 ### Raw sampling: an opt-in re-parsable window
 
-The default is that raw payloads are not retained. An opt-in **`raw_sample`** policy keeps a
-bounded window of raw frames so a corrected extractor can re-derive its samples over that
-window, without reintroducing a telemetry table.
-
-`raw_sample` is **cascade-resolved**, settable on an interface, a task, or a template, and
-resolves to one of three values:
-
-- **`off`** (default): no raw retained.
-- **`all`**: every frame the matched task collects is buffered.
-- **`1-in-N`**: one frame in every N is buffered (sampled), bounding volume on a high-cadence
-  source.
-
-The kept frames carry the **immutable function version** that parsed them, so the buffer is
-**re-parsable against that exact version**: a corrected extractor re-runs over the retained
-window and re-derives the samples, retroactively correcting them. The residual is stated
-honestly. **Outside** the kept window a wrong-but-conforming parse (one that produced a valid
-sample from a misread frame) is **forward-fixable only**: the fix applies to new collection,
-the already-parsed history is not retroactively corrected because the raw is gone.
-
-The buffer preserves the no-telemetry-table economics: off by default, bounded, sampled, and
-short-lived. It is a short-TTL holding pen, range-partitioned and cold-tierable like the
-[metric](/architecture/properties/) partitions and the [storage](/architecture/storage/) layout
-describe, not a parallel history of record.
+An opt-in **`raw_sample`** policy keeps a bounded window of raw frames so a corrected extractor can re-derive its samples over that window, without reintroducing a telemetry table. It is **cascade-resolved** (settable on an interface, task, or template) to **`off`** (default, no raw retained), **`all`** (every frame buffered), or **`1-in-N`** (sampled, bounding a high-cadence source). Kept frames carry the **immutable function version** that parsed them, so the window re-parses against that exact version and corrects retroactively; outside it, a wrong-but-conforming parse is **forward-fixable only**, the raw being gone. A short-TTL holding pen, range-partitioned and cold-tierable ([storage](/architecture/storage/)), not a parallel history of record.
 
 ## Shared-API collection: one component, many owners
 
-Some sources describe **many entities at once**: a SaaS / UCC platform (Zoom, Teams), a controller
-fronting many devices, a building gateway. Modeling each described entity as its own component is the
-legacy-platform reflex. Here the API is **one component** (one interface, one credential) and its data
-**fans out** to the entities it describes.
+Some sources describe **many entities at once**: a SaaS / UCC platform (Zoom, Teams), a controller fronting many devices, a building gateway. The API is **one component** (one interface, one credential) whose data **fans out** to the entities it describes, not one component per described entity.
 
-- The API component's function pulls the batch (all rooms, all devices) in one call and **labels each
-  emitted sample with the external identity** it belongs to (a Zoom Room ID).
-- The function does **not** stamp the owner, it is the conduit, not the owner. Ownership is **resolved
-  server-side**: the identity is matched against a declared **identity config** (`zoom.room_id` on the
-  target) and the sample is bound to that entity. This is the same shared-ingress owner-binding the
-  model uses for webhooks and traps; a pull-side batch is the same shape.
-- **The owner can be a system, not only a component.** SaaS state that is telemetry *of* a room (no
-  physical device) maps to **system-owned samples** directly. Reserve a virtual component for the
-  genuine *member* case (its own node in the topology, a `health_role`, a lifecycle). Rule of thumb:
-  **member -> component, telemetry -> system.**
-- **Unmatched identities are orphans**, a discovery candidate. The `discovery_rule` is the
-  onboarding win: point it at the API and it auto-creates the entities and sets their identity, so you
-  never hand-map.
+- Its function pulls the batch in one call, **labeling each emitted sample with the external identity** it belongs to (a Zoom Room ID).
+- The function is the conduit, not the owner: ownership resolves **server-side** against a declared **identity config** (`zoom.room_id` on the target), the same shared-ingress owner-binding used for webhooks and traps.
+- **The owner can be a system.** SaaS state that is telemetry *of* a room maps to **system-owned samples**; a virtual component is for the genuine *member* case (its own topology node, a `health_role`, a lifecycle). **Member -> component, telemetry -> system.**
+- **Unmatched identities are orphans**, discovery candidates (below).
 
-**Best practice.** Map SaaS / cloud telemetry to **system-owned samples**, and **wire it into
-system health** with a system-scoped `event_rule`. Treat the vendor's own status as an **input to that
-judgment, not the verdict**: a UCC platform reporting "offline" is one source's opinion, so corroborate
-it (against the codec, occupancy) before downing the room. See [health](/architecture/health/).
+**Best practice**: map SaaS / cloud telemetry to system-owned samples wired into system health via a system-scoped `event_rule`; the vendor's own status is an input to that judgment, not the verdict, so corroborate a reported "offline" before downing the room ([health](/architecture/health/)).
 
 ### Identity binding: the value-to-owner index
 
-A multiplexed source emits a row tagged with an external identity (a Zoom Room ID, a controller's
-slot number); binding that row to an Omniglass owner is a lookup against a **value-to-owner index**.
-The index is an **identity arc** on identity config: a `(property_type, value) -> owner` mapping,
-where `property_type` is the **match key** (the canonical identity key, e.g. `zoom.room_id`) and
-`value` is the external identity the source emitted. The index resolves **in the cascade scope** the
-identity config is set at, so an identity declared at a system or location scope binds the rows of
-every member below it.
-
-Two sides can supply the match value, and **precedence** is explicit:
-
-- A **declared identity config value** (an identity the operator set on the target) **wins**.
-- It falls back to the **observed identity sample** that shares the same key (a value the device
-  itself reported under that `property_type`).
-
-So ownership resolution reads the **resolved identity** for the key (declared over observed), matches
-the emitted `(property_type, value)` against the index, and binds the row to the owner the index
-names. The [samples](/architecture/properties/) ownership-resolution machinery reads this same
-index.
+Binding an externally-tagged row to an Omniglass owner is a lookup against the **value-to-owner index**: an **identity arc** on identity config, a `(property_type, value) -> owner` mapping where `property_type` is the **match key** (`zoom.room_id`) and `value` the emitted identity. The index resolves **in the cascade scope** the identity config is set at, so an identity declared at a system or location binds every member below it. A **declared identity config value wins**, falling back to the **observed identity sample** sharing the key; the [samples](/architecture/properties/) ownership-resolution machinery reads this same index.
 
 ### discovery_rule: orphans become candidates
 
-A `discovery_rule` turns the **orphan / unmatched stream** into proposed entities. Its **input** is
-every emitted identity that the value-to-owner index does **not** resolve: an unmatched
-`(property_type, value)` from a shared-API batch, plus the **out-of-placement labels** a node emits
-for owners outside its placement visible_set (above). Pointing a `discovery_rule` at a source is the
-onboarding win: it auto-creates the entities and sets their identity, so you never hand-map.
+A `discovery_rule` turns the orphan stream, every emitted identity the index does not resolve (an unmatched shared-API `(property_type, value)`, plus a node's out-of-placement labels), into proposed entities: the onboarding win, no hand-mapping.
 
-- **What it creates.** Candidate components or owners, each seeded with the identity that surfaced it
-  (the `(property_type, value)` becomes the new entity's identity arc), so the next batch from the
-  same source resolves through the index instead of orphaning.
-- **Idempotent on re-discovery.** Re-seeing an identity the rule already materialized does **not**
-  create a duplicate: the rule keys on the `(property_type, value)` it already bound, so a steady
-  stream of the same orphan resolves to one candidate.
-- **Scope and standing.** A `discovery_rule` carries a cascade **scope** and an `official` / private
-  standing like the other rule families (`event_rule`, calc), so a ship-with `official` rule and an
-  operator's private rule compose without colliding.
+- **Creates** candidate components or owners, each seeded with the identity that surfaced it (it becomes the new entity's identity arc), so the next batch resolves through the index.
+- **Idempotent on re-discovery**: keyed on the `(property_type, value)` already bound, so a steady stream of the same orphan resolves to one candidate.
+- **Scope and standing**: a cascade **scope** and an `official` / private standing like the other rule families (`event_rule`, calc).
 
 ## Storage
 
 The connection registry, the declared connections, and the node's units of work; the physical layout lives on [storage](/architecture/storage/).
 
-`interface_type` is the **transport** registry, decided to become a **code** registry (one package
-per transport), retiring this table and its FK
-([ADR-0073](/architecture/decisions/#adr-0073-a-driver-consumes-transports-a-transport-is-code-not-a-row));
-still a table today.
+`interface_type` is the **transport** registry, decided to become a **code** registry (one package per transport), retiring this table and its FK ([ADR-0073](/architecture/decisions/#adr-0073-a-driver-consumes-transports-a-transport-is-code-not-a-row)); still a table today.
 
 <SchemaTable
   table="interface_type"
@@ -584,10 +374,7 @@ still a table today.
   }}
 />
 
-`interface` is the connection, the **authored** primitive ([nodes](/architecture/nodes/)): its name
-derives from the interface type (unique per component, never hand-typed), a set `component_id` means
-pre-bound while NULL means shared/match-key, and placement cascades from the node so a node purge
-drops its interfaces.
+`interface` is the connection, the **authored** primitive ([nodes](/architecture/nodes/)): name derived from the interface type, a set `component_id` means pre-bound while NULL means shared/match-key, and placement cascades from the node so a node purge drops its interfaces.
 
 <SchemaTable
   table="interface"
@@ -598,9 +385,7 @@ drops its interfaces.
   }}
 />
 
-`task` is a **derived** unit of collection work: created with its interface, read-only (no operator
-CRUD), its id a content hash. There is **no node column**; placement **projects from the
-interface**. Parsing to samples is the **edge function**, not the task's job.
+`task` is a **derived** unit of collection work: created with its interface, read-only (no operator CRUD), its id a content hash. There is **no node column**; placement **projects from the interface**. Parsing to samples is the **edge function**, not the task's job.
 
 <SchemaTable
   table="task"

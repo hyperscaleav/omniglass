@@ -7,39 +7,32 @@ sidebar:
     variant: success
 ---
 
-This is the whole platform's relational shape in one diagram: every table, its
-primary and foreign keys, and the references between them. It is **generated from
-the live schema**, not drawn by hand, so it cannot fall out of step with the
-tables. When a migration adds or changes a table, the next `make gen` redraws
-this page, and a schema change that forgets to regenerate is caught by the ERD
-drift test, the same way a stale generated client is.
+The whole platform's relational shape in one diagram: every table, its primary
+and foreign keys, and the references between them. It is **generated from the
+live schema** by `make gen`, so it cannot fall out of step with the tables; a
+schema change that forgets to regenerate is caught by the ERD drift test.
 
 ## How to read it
 
-The diagram groups tables into **subsystem containers**. Each table is a node
-showing only its **primary-key and foreign-key columns**, the relational
-skeleton, so a forty-plus-table platform stays legible; the full column list of
-any table lives in its migration and its Storage Gateway type, not here. Each
-edge is a **foreign key**, drawn from the referencing column to the row it
-points at. Edges that cross container borders are the seams between subsystems:
-`estate.component.product_id` pointing at `catalog.product.id`, or
-`catalog.product_property.property_type_id` pointing at
-`telemetry.property_type.id`.
+Tables are grouped into **subsystem containers**. Each table shows only its
+**primary-key and foreign-key columns**, the relational skeleton; the full
+column list lives in its migration and its Storage Gateway type. Each edge is a
+**foreign key**, drawn from the referencing column to the row it points at;
+edges that cross container borders are the seams between subsystems
+(`estate.component.product_id` pointing at `catalog.product.id`).
 
-The generator would render a table not yet assigned to a subsystem in an
-`unclustered` container, but a committed diagram never shows one: the
-introspection test hard-fails on any unmapped table, so the failure is the
-prompt to add a one-line entry for the new table to the cluster map in
+A table not yet assigned to a subsystem would render in an `unclustered`
+container, but the introspection test hard-fails on any unmapped table, so the
+failure is the prompt to add the table to the cluster map in
 `internal/erd/cluster.go` (`cmd/erdgen` only calls it).
 
 :::note[Generated: do not edit the diagram]
 The D2 between the markers below is written by `cmd/erdgen` (it applies the
-embedded migrations to a throwaway Postgres, introspects the catalog, and renders
-the diagram). Edit the generator or the subsystem map, never the region; even the
-marker comment text itself is emitted by `cmd/erdgen`, so it is fixed there when
-the generator changes. After a
-schema change: `make gen` to redraw the D2, then `pnpm diagrams` to re-render the
-committed SVG.
+embedded migrations to a throwaway Postgres, introspects the catalog, and
+renders the diagram). Edit the generator or the subsystem map, never the region;
+even the marker comment text is emitted by `cmd/erdgen`. After a schema change:
+`make gen` to redraw the D2, then `pnpm diagrams` to re-render the committed
+SVG.
 :::
 
 ## The platform ERD
