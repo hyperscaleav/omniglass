@@ -19,7 +19,9 @@ for (let i = 2; i < a.length; i++) {
   else if (a[i] === '--full') full = true;
 }
 const b = await chromium.launch();
-const ctx = await b.newContext({ viewport: { width: 1320, height: 860 }, deviceScaleFactor: 2 });
+// Locale and timezone pinned for the same reason the docs capture pins them:
+// a formatted timestamp must not depend on the machine taking the shot.
+const ctx = await b.newContext({ viewport: { width: 1320, height: 860 }, deviceScaleFactor: 2, locale: 'en-US', timezoneId: 'UTC' });
 const page = await ctx.newPage();
 if (token) await page.addInitScript(t => localStorage.setItem('og-token', t), token);
 // A live surface holds a stream open (the view :watch seam), so the network is

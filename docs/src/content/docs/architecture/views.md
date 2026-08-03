@@ -44,7 +44,7 @@ structured grammar is shared with the API list filter language ([expressions](/a
 ## ViewResult: the uniform shape
 
 `ViewResult` is `{columns, rows, next_page_token}`: columns carry a name, a type, and a role hint,
-and the view's **field-mapping** tells a renderer which column is the value, label, time, or
+and the view's **field-mapping** tells a renderer which column is the value, label, sublabel, time, or
 series key ([UI](/architecture/ui/)). Rows are positional cells against the column order.
 **Cursor-paginated** where a view feeds, the [API](/architecture/api/) list convention
 (`page_token` in, `next_page_token` out). Every view is a live scoped query; a hot view becomes a
@@ -111,12 +111,15 @@ outside its grant; what is missing is a per-resource **capability** check on a c
 The API serves every view at `GET /views/{name}:run`, and the generated CLI mirrors it; both are
 clients of the same OpenAPI contract.
 
-:::design[The console binding and the MCP surface, tracked in #523]
-Coded pages and dashboard widgets bind `view ref + renderer + field-mapping + params` through the
-renderer library ([UI](/architecture/ui/)). An AI agent reaches the same views as tools on the
-[MCP surface](/architecture/api/), scoped and audited like any caller. Config-dependent
-presentation (a severity level's label and color) resolves client-side from the config view, not
-baked into the result.
+The console binds `view ref + renderer + field-mapping + params` through the renderer library
+([UI](/architecture/ui/)): Home is three views through three renderers, and the page holds no query
+of its own.
+
+:::design[Dashboard widgets and the MCP surface, tracked in #523]
+An operator-composed dashboard binds a widget the same way a coded page does. An AI agent reaches
+the same views as tools on the [MCP surface](/architecture/api/), scoped and audited like any
+caller. Config-dependent presentation (a severity level's label and color) resolves client-side
+from the config view, not baked into the result.
 :::
 
 ## Live updates

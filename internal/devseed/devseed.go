@@ -705,8 +705,10 @@ func seedReachSamples(ctx context.Context, gw storage.Gateway, iface string, fla
 	// A timing SERIES, not a single reading. One point is a number an operator
 	// already has on the interface row; a series is the thing a chart is for, and
 	// the sample-history view and its renderer are only demonstrable against one.
-	// Deterministic, so re-seeding an existing dev database is idempotent and the
-	// screenshot gate stays stable.
+	// Deterministic, so the screenshot gate sees the same shape every capture.
+	// Re-running the seed is safe because the interface sentinel above returns
+	// before reaching here; these inserts carry no conflict key of their own, so
+	// calling them twice WOULD duplicate every point.
 	metrics = append(metrics, timingSeries("icmp.rtt_avg", "icmp", iface, rttMs, recovered)...)
 	metrics = append(metrics, timingSeries("tcp.connect_time", "tcp", iface, connMs, recovered)...)
 	if err := gw.InsertMetricSamples(ctx, metrics); err != nil {

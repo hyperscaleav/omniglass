@@ -18,6 +18,15 @@ make build-web
 ./bin/omniglass migrate
 # Idempotent per username: a fresh DB creates the owner with this password.
 ./bin/omniglass bootstrap "$E2E_USER" --password "$E2E_PASSWORD" >/dev/null 2>&1 || true
+# The example estate, idempotently. The view-backed surfaces assert on real rows
+# (counts, verdicts, occurrences), so a runner with an empty database would fail
+# them for lack of data rather than for a defect. The docs capture seeds for the
+# same reason.
+./bin/omniglass seed-dev >/dev/null
+
+# A token for the legs that drive the API directly (the live-update spec pushes a
+# change and watches the page move on its own).
+E2E_TOKEN="$(./bin/omniglass token "$E2E_USER" --description "e2e" | tr -d '[:space:]')"
 
 ./bin/omniglass server >/tmp/og-e2e-server.log 2>&1 &
 SRV=$!
@@ -25,4 +34,4 @@ trap 'kill "$SRV" 2>/dev/null || true' EXIT
 until curl -fsS http://localhost:8080/api/v1/healthz >/dev/null 2>&1; do sleep 0.5; done
 
 cd web
-OG_E2E_USER="$E2E_USER" OG_E2E_PASSWORD="$E2E_PASSWORD" OG_E2E_BASE="http://localhost:8080" npx playwright test "$@"
+OG_E2E_USER="$E2E_USER" OG_E2E_PASSWORD="$E2E_PASSWORD" OG_E2E_BASE="http://localhost:8080" OG_TOKEN="$E2E_TOKEN" npx playwright test "$@"

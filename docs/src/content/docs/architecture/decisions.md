@@ -110,6 +110,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0073](#adr-0073-a-driver-consumes-transports-a-transport-is-code-not-a-row) | 2026-07-31 | Accepted | a driver consumes transports; a transport is code, not a row |
 | [ADR-0074](#adr-0074-an-approved-definition-rolls-up-to-one-pr-slices-cascade-on-an-integration-branch) | 2026-08-01 | Accepted | loop-executed work rolls up to one PR per approved definition; slices cascade through per-slice gates on an integration branch |
 | [ADR-0075](#adr-0075-an-alarms-condition-identity-is-a-raiser-supplied-dedup-key) | 2026-08-01 | Accepted | alarm gains dedup_key and the one-open-per-condition partial unique index; RaiseAlarm becomes a guarded conditional insert |
+| [ADR-0076](#adr-0076-home-v1-answers-the-fleet-question-first) | 2026-08-03 | Accepted | Home ships fleet-facing panels first (estate counts, reachability, occurrences); the monitor-the-monitor tier waits for the subsystems that produce it |
 
 ## Entries
 
@@ -2578,3 +2579,24 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   as a singleton. The table had no column naming WHICH condition was open, so the documented `(event_rule, owner)`
   key was unrepresentable before the rule table exists; the raiser-supplied key works today and does not block on
   the engine. Shipped by [#465](https://github.com/hyperscaleav/omniglass/issues/465) in the #431 loop.
+
+### ADR-0076: Home v1 answers the fleet question first
+
+- **Date:** 2026-08-03 | **Status:** Accepted | **Pages:** [UI](/architecture/ui/), [views](/architecture/views/)
+- **Decision:** Home v1 ships **fleet-facing** panels: estate counts, reachability across every in-scope
+  interface, and the recent-occurrence feed, each a default view through a renderer. The
+  monitor-the-monitor tier the UI page describes (config lifecycle, control-plane health, proactive
+  suggestions) stays fenced design and arrives with the subsystems that produce it.
+- **Context:** ui.md drew Home against Dashboards as "dashboards monitor the fleet; Home monitors the
+  monitor", and that distinction still holds as the destination. It could not be built first: every
+  signal it names comes from a subsystem that does not exist yet (the rule engine, template lifecycle,
+  the suggestion surface), while the read side that #523 built can answer the fleet question today. A
+  landing page that showed only what the control plane knows about itself would have been empty on the
+  day it shipped, and the operator question it leaves unanswered ("is my estate up") is the one asked
+  most. The fleet panels are also the working proof of the views tier end to end, which is what the
+  epic exists to establish. Shipped by [#543](https://github.com/hyperscaleav/omniglass/issues/543) in
+  the #523 loop.
+- **Consequences:** Home and the future Dashboards tier overlap on fleet content until dashboards ship,
+  and the boundary is then drawn by composition (an operator-built grid) rather than by subject. The
+  monitor-the-monitor panels join Home as their subsystems land, and no dashboard is required to see
+  them.

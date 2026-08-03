@@ -37,12 +37,12 @@ var (
 )
 
 // Column describes one ViewResult column: its name, its value type ("string",
-// "number", or "time"), and an optional role hint ("value", "label", "time",
-// "series") the field-mapping anchors for renderers.
+// "number", or "time"), and an optional role hint the field-mapping anchors for
+// renderers. The role vocabulary is rendererRoles below.
 type Column struct {
 	Name string `json:"name" doc:"The column name, the key a field-mapping addresses"`
 	Type string `json:"type" doc:"The cell value type: string, number, or time"`
-	Role string `json:"role,omitempty" doc:"An optional role hint: value, label, time, or series"`
+	Role string `json:"role,omitempty" doc:"An optional role hint: value, label, sublabel, time, or series"`
 }
 
 // ViewResult is the uniform shape every view run returns: the declared
@@ -168,6 +168,18 @@ func (r *Registry) All() []Definition {
 	return out
 }
 
+// rendererRoles is the closed set of roles a field-mapping may place. A role
+// outside it is a typo: the renderer looks up the role it knows, finds nothing,
+// and silently renders without it, which is exactly the quiet failure the
+// mapping's loud column check exists to prevent.
+var rendererRoles = map[string]bool{
+	"value":    true,
+	"label":    true,
+	"sublabel": true,
+	"time":     true,
+	"series":   true,
+}
+
 // validate is the per-definition declaration check behind NewRegistry.
 func validate(d Definition) error {
 	if d.Name == "" {
@@ -187,6 +199,9 @@ func validate(d Definition) error {
 		cols[c.Name] = true
 	}
 	for role, col := range d.FieldMapping {
+		if !rendererRoles[role] {
+			return fmt.Errorf("view %q maps unknown renderer role %q", d.Name, role)
+		}
 		if !cols[col] {
 			return fmt.Errorf("view %q maps role %q onto absent column %q", d.Name, role, col)
 		}

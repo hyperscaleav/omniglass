@@ -299,7 +299,7 @@ components:
           description: The column name, the key a field-mapping addresses
           type: string
         role:
-          description: "An optional role hint: value, label, time, or series"
+          description: "An optional role hint: value, label, sublabel, time, or series"
           type: string
         type:
           description: "The cell value type: string, number, or time"
@@ -5247,7 +5247,7 @@ components:
         field_mapping:
           additionalProperties:
             type: string
-          description: Renderer role to column name (value, label, time, series)
+          description: Renderer role to column name (value, label, sublabel, time, series)
           type: object
         name:
           description: The view's addressable name

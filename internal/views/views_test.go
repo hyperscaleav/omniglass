@@ -192,3 +192,21 @@ func TestDefaults(t *testing.T) {
 		t.Errorf("the view has no Run")
 	}
 }
+
+// TestRegistryRejectsUnknownRole proves a typo in a renderer role is a boot
+// failure, not a silent omission. A mapping key the renderers do not know would
+// otherwise register cleanly and simply never be read, which is the quiet
+// failure the mapping's column check exists to prevent.
+func TestRegistryRejectsUnknownRole(t *testing.T) {
+	d := minimalDef("typo")
+	d.FieldMapping = map[string]string{"sublable": "state"}
+	_, err := views.NewRegistry(d)
+	if err == nil || !strings.Contains(err.Error(), "sublable") {
+		t.Fatalf("NewRegistry with a misspelled role = %v, want an error naming it", err)
+	}
+	// The real role registers.
+	d.FieldMapping = map[string]string{"sublabel": "state"}
+	if _, err := views.NewRegistry(d); err != nil {
+		t.Fatalf("NewRegistry with a known role: %v", err)
+	}
+}

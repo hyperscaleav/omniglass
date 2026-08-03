@@ -3351,7 +3351,7 @@ export interface components {
         Column: {
             /** @description The column name, the key a field-mapping addresses */
             name: string;
-            /** @description An optional role hint: value, label, time, or series */
+            /** @description An optional role hint: value, label, sublabel, time, or series */
             role?: string;
             /** @description The cell value type: string, number, or time */
             type: string;
@@ -6086,7 +6086,7 @@ export interface components {
         ViewDescriptorBody: {
             /** @description The result columns, in cell order */
             columns: components["schemas"]["Column"][] | null;
-            /** @description Renderer role to column name (value, label, time, series) */
+            /** @description Renderer role to column name (value, label, sublabel, time, series) */
             field_mapping: {
                 [key: string]: string;
             };

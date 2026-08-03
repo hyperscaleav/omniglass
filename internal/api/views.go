@@ -38,7 +38,7 @@ type viewDescriptorBody struct {
 	Permission   string            `json:"permission" doc:"The declared permission a run requires on top of view:read"`
 	Params       []viewParamBody   `json:"params" doc:"The declared run-time parameters"`
 	Columns      []views.Column    `json:"columns" doc:"The result columns, in cell order"`
-	FieldMapping map[string]string `json:"field_mapping" doc:"Renderer role to column name (value, label, time, series)"`
+	FieldMapping map[string]string `json:"field_mapping" doc:"Renderer role to column name (value, label, sublabel, time, series)"`
 }
 
 type viewsListOutput struct {

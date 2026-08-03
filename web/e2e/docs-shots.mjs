@@ -73,6 +73,12 @@ for (const spec of specs) {
     viewport: { width: 1320, height: 860 },
     deviceScaleFactor: 2,
     reducedMotion: 'reduce',
+    // Pin locale and timezone. The console formats times through
+    // toLocaleString, so an unpinned runner renders "3 Aug, 13:05" where
+    // another renders "Aug 3, 01:05 PM": the raster differs, and any mask
+    // written against one form silently covers nothing in the other.
+    locale: 'en-US',
+    timezoneId: 'UTC',
   });
   const page = await ctx.newPage();
   if ((spec.auth ?? true) && TOKEN) {

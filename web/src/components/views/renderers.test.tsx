@@ -87,9 +87,12 @@ describe("ViewTable", () => {
     const { container } = render(() => <ViewTable result={() => feedResult} />);
     const headers = [...container.querySelectorAll("thead th")].map((h) => h.textContent);
     expect(headers).toContain("event type");
+    // Assert the TIME cell specifically. "some cell contains a digit" is
+    // satisfied by the owner column, so it would pass against a renderer that
+    // dropped the timestamp entirely.
     const cells = [...container.querySelectorAll("tbody td")].map((c) => c.textContent ?? "");
-    expect(cells.some((c) => c.includes("2026-08-03T12:00:00Z"))).toBe(false);
-    expect(cells.some((c) => /\d/.test(c) && !c.includes("T"))).toBe(true);
+    expect(cells[0]).not.toContain("2026-08-03T12:00:00Z");
+    expect(cells[0]).toMatch(/^[A-Z][a-z]{2} \d/);
   });
 
   it("renders an empty state when the result carries no rows", () => {

@@ -47,9 +47,10 @@ export default function Home() {
   );
 }
 
-// The field-mappings the default views publish. They sit beside the page that
-// binds them until the console reads them from the view directory, which is what
-// will let a view be re-shaped without touching either.
+// The field-mappings the default views publish, restated here until the console
+// reads them from the directory (#550). Restated is the right word and the known
+// cost: rename a mapped column server-side and this copy resolves to nothing,
+// silently, which is why closing that gap has its own issue rather than a note.
 const TILE_MAP = { label: "tile", value: "count" };
 const REACH_MAP = { label: "component", sublabel: "interface", value: "state", time: "since" };
 const HISTORY_MAP = { time: "ts", series: "instance", value: "value" };

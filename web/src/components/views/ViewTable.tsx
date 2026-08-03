@@ -25,14 +25,14 @@ export default function ViewTable(props: { result: Accessor<ViewResult | undefin
           <table class="table table-sm">
             <thead>
               <tr>
-                <Index each={columns()}>{(c) => <th class="whitespace-nowrap">{headerLabel(c().name)}</th>}</Index>
+                <Index each={columns()}>{(c) => <th class={headerClass(c())}>{headerLabel(c().name)}</th>}</Index>
               </tr>
             </thead>
             <tbody>
               <For each={rows()}>
                 {(row) => (
                   <tr>
-                    <Index each={columns()}>{(c, i) => <td>{renderCell(row.cells[i], c())}</td>}</Index>
+                    <Index each={columns()}>{(c, i) => <td class={cellClass(c())}>{renderCell(row.cells[i], c())}</td>}</Index>
                   </tr>
                 )}
               </For>
@@ -66,4 +66,19 @@ function renderCell(cell: ViewCell, column: ViewColumn) {
 // humanized.
 function headerLabel(name: string) {
   return name.replace(/_/g, " ");
+}
+
+// A time column gets a FIXED width and tabular figures. Formatted timestamps
+// change width with the calendar ("Aug 3" against "Aug 12"), and an auto-layout
+// table redistributes every other column when one of them moves, so a table of
+// times would re-flow on a date boundary. That is invisible day to day and
+// breaks the screenshot freshness gate, which compares rasters.
+const TIME_COL = "w-[150px] min-w-[150px] tnum whitespace-nowrap";
+
+function headerClass(column: ViewColumn) {
+  return column.type === "time" ? TIME_COL : "whitespace-nowrap";
+}
+
+function cellClass(column: ViewColumn) {
+  return column.type === "time" ? TIME_COL : "";
 }

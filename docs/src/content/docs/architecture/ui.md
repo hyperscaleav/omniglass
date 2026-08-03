@@ -39,7 +39,7 @@ primitives ([design system](/contributing/design-system/)); the analytical surfa
 Neither "every screen is hand-coded" nor "everything must be a dashboard":
 
 - **Renderer library** (coded once): each renderer takes a **view result plus a field-mapping**
-  (which column is the value, label, time, or series key), so none of them hardcodes a column name
+  (which column is the value, label, sublabel, time, or series key), so none of them hardcodes a column name
   and a view can be re-shaped without touching a component. `stat`, `table`, `status-grid`, and
   `line` are built; `timeline` and `heatmap` arrive with the views that need them. A mapping that
   names a column the result does not carry fails **visibly, in that widget**: a wall of blank cells
@@ -82,20 +82,19 @@ The Alarms page reading a `firing-now` view is the next instance, once alarm pro
 (ADR-0050).
 :::
 
-## Live updates: polling by default
+## Live updates: streaming by default
 
-Live data is **query polling** (a refetch interval; slow-changing config uses a long stale time).
+A view-backed surface is **live by default**: it opens the view's SSE change stream and refetches on
+notification, with polling (a refetch interval) the explicit alternative for a surface that wants a
+timer instead ([views](/architecture/views/)). Surfaces reading the same view with the same
+parameters share one stream, since a browser allows only a handful of connections per origin.
+Slow-changing reads that are not view-backed still use a long stale time.
 
-::::design[Views and the SSE live relay, tracked in #523; the unit registry is #430]
-A read can also **stream over the view layer (a server-side SSE relay)** where latency or fan-out
-earns it. Config-dependent presentation (a severity level's id to label and color) resolves
-client-side from the config view; a sample value converts on read to the operator's preferred
-display unit via a future unit registry keyed by the
-[property_type](/architecture/properties/)'s canonical unit, so storage stays single-unit.
-
-:::caution[Open question]
-Which high-frequency surfaces move from polling to the SSE relay, and what latency earns it.
-:::
+::::design[Config-dependent presentation and unit conversion on read, tracked in #523; the unit registry is #430]
+Config-dependent presentation (a severity level's id to label and color) resolves client-side from
+the config view; a sample value converts on read to the operator's preferred display unit via a
+future unit registry keyed by the [property_type](/architecture/properties/)'s canonical unit, so
+storage stays single-unit.
 ::::
 
 ## Configuration UIs
@@ -166,11 +165,15 @@ panel on a component, a task a panel on a node, facets of the owning entity's de
 Admin is the renamed Settings group: Users, Roles, Groups, Audit, plus the live Settings leaf, the
 platform-preferences page.
 
-:::design[The Home situation room and the Dashboards tier, tracked in #523]
-**Home is distinct from Dashboards.** Dashboards monitor the *fleet*; Home monitors the *monitor*:
-config lifecycle (stale templates), control-plane health (rules failing to evaluate, samples dropped
-with no matching rule), proactive suggestions. A dashboard cannot model that; "Overview" is the
-default dashboard's name, not the landing.
+**Home is distinct from Dashboards**, though v1 starts on the fleet side of that line: it ships
+estate counts, fleet reachability, and the occurrence feed, because those are what a live read side
+could answer first and what an operator signing in needs immediately (ADR-0076).
+
+:::design[Home as the monitor of the monitor, tracked in #523]
+Home's own tier is monitoring the *monitor*: config lifecycle (stale templates), control-plane
+health (rules failing to evaluate, samples dropped with no matching rule), proactive suggestions. A
+dashboard cannot model that, and "Overview" is the default dashboard's name, not the landing. Those
+panels arrive as the subsystems that produce them do.
 :::
 
 The theme is **dark-first** (the NOC aesthetic) on the brand palette (teal `#21CAB9`, navy

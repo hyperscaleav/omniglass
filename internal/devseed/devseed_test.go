@@ -2,6 +2,7 @@ package devseed_test
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -516,5 +517,55 @@ func assertGrant(t *testing.T, conn *pgx.Conn, ctx context.Context, username, ro
 	}
 	if gotScopeID == nil || *gotScopeID != wantID {
 		t.Errorf("%s grant scope_id = %v, want %s (%s)", username, gotScopeID, wantID, scopeName)
+	}
+}
+
+// TestSeededTimingSeriesIsAChart pins what the dev fixture owes the chart it
+// exists to demonstrate: a SERIES per interface (a single reading is a number
+// the interface row already shows), and two interfaces on one component tracing
+// DIFFERENT shapes. Without the per-interface phase they trace one apparent
+// line, and a renderer bug that dropped a series would look identical.
+func TestSeededTimingSeriesIsAChart(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("boot seed: %v", err)
+	}
+	if err := devseed.Run(ctx, gw, ""); err != nil {
+		t.Fatalf("devseed run: %v", err)
+	}
+
+	rows, err := gw.ListSampleHistory(ctx, scope.Set{All: true}, storage.SampleHistoryQuery{
+		Owner: "hq-boardroom-dsp", Key: "icmp.rtt_avg",
+		Since: time.Now().UTC().Add(-24 * time.Hour), Limit: 500,
+	})
+	if err != nil {
+		t.Fatalf("history: %v", err)
+	}
+	byInstance := map[string][]float64{}
+	for _, r := range rows {
+		if r.Value != nil {
+			byInstance[r.Instance] = append(byInstance[r.Instance], *r.Value)
+		}
+	}
+	if len(byInstance) < 2 {
+		t.Fatalf("instances = %d, want at least 2 so the chart shows more than one series", len(byInstance))
+	}
+	var series [][]float64
+	for inst, vals := range byInstance {
+		if len(vals) < 10 {
+			t.Errorf("%s has %d readings, want a series rather than a point", inst, len(vals))
+		}
+		series = append(series, vals)
+	}
+	// Two series must not be the same numbers: identical values render as one
+	// line, which is the thing the phase shift exists to prevent.
+	if len(series) >= 2 && slices.Equal(series[0], series[1]) {
+		t.Errorf("two interfaces seeded identical series; they would draw as one line")
 	}
 }
