@@ -314,7 +314,7 @@ func (p *PG) UpdateLocationType(ctx context.Context, actorID, id string, patch L
 	if err != nil {
 		return nil, fmt.Errorf("storage: audit image location_type %q: %w", id, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "location_type", id, before, after); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "location_type", lt.ID, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {

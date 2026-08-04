@@ -274,18 +274,18 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 	if err != nil {
 		return err
 	}
-	var id string
+	var assignmentID string
 	if err := tx.QueryRow(ctx, `
 		delete from system_role_assignment
 		where system_id = (select id from system where name = $1) and role_id = $2
 		  and component_id = (select id from component where name = $3)
-		returning id`, systemName, roleID, componentName).Scan(&id); err != nil {
+		returning id`, systemName, roleID, componentName).Scan(&assignmentID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrAssignmentMissing
 		}
 		return fmt.Errorf("storage: unassign role: %w", err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "system_role_assignment", id, nil, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "system_role_assignment", assignmentID, nil, nil); err != nil {
 		return err
 	}
 	// The assignment row is already gone, so walking the component's assignments

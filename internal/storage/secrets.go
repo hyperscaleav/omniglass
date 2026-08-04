@@ -446,7 +446,10 @@ func (p *PG) decryptSecret(ctx context.Context, actorID, id, verb string, read, 
 		}
 		out[f.Name] = string(pt)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, verb, "secret", row.id, nil, nil); err != nil {
+	// The decrypt is audited against the secret's primary key, taken from the row
+	// that was fetched, never against the reference the caller reached it by.
+	secretID := row.id
+	if err := writeAuditRes(ctx, tx, actorID, verb, "secret", secretID, nil, nil); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {

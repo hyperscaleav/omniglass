@@ -114,7 +114,7 @@ func (p *PG) CreateCapability(ctx context.Context, actorID string, c Capability)
 		}
 		return nil, fmt.Errorf("storage: insert capability %q: %w", c.Name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "create", "capability", c.Name, nil, c); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "create", "capability", c.ID, nil, c); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -160,7 +160,7 @@ func (p *PG) UpdateCapability(ctx context.Context, actorID, id string, patch Cap
 	if err != nil {
 		return nil, fmt.Errorf("storage: audit image capability %q: %w", id, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "capability", id, before, after); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "capability", c.ID, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -192,7 +192,7 @@ func (p *PG) DeleteCapability(ctx context.Context, actorID, id string) error {
 	if _, err := tx.Exec(ctx, `delete from capability where `+registryRefCol(id)+` = $1`, id); err != nil {
 		return fmt.Errorf("storage: delete capability %q: %w", id, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "capability", id, before, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "capability", auditImageID(before), before, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

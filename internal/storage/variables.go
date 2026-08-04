@@ -205,11 +205,14 @@ func (p *PG) DeleteVariable(ctx context.Context, actorID, id string, read, actio
 	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `delete from variable where id = $1`, row.id); err != nil {
+	// Named so the delete and the audit row visibly key on the same thing, the
+	// variable's primary key, rather than on whatever the caller passed in.
+	variableID := row.id
+	if _, err := tx.Exec(ctx, `delete from variable where id = $1`, variableID); err != nil {
 		return fmt.Errorf("storage: delete variable: %w", err)
 	}
-	before := &Variable{ID: row.id, Name: row.name, ValueType: row.valueType, OwnerKind: row.ownerKind, OwnerID: row.ownerID, Value: row.value}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "variable", row.id, auditVariable(before), nil); err != nil {
+	before := &Variable{ID: variableID, Name: row.name, ValueType: row.valueType, OwnerKind: row.ownerKind, OwnerID: row.ownerID, Value: row.value}
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "variable", variableID, auditVariable(before), nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

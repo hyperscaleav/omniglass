@@ -155,7 +155,7 @@ func (p *PG) GetGroup(ctx context.Context, id string, read scope.Set) (*Group, e
 
 // UpdateGroup patches a group's name and presentational fields, audited. A
 // duplicate name is ErrGroupExists; an unknown id is ErrGroupNotFound.
-func (p *PG) UpdateGroup(ctx context.Context, actorID, id string, patch GroupPatch, action scope.Set) (*Group, error) {
+func (p *PG) UpdateGroup(ctx context.Context, actorID, groupID string, patch GroupPatch, action scope.Set) (*Group, error) {
 	if !action.All {
 		return nil, ErrPrincipalForbidden
 	}
@@ -170,7 +170,7 @@ func (p *PG) UpdateGroup(ctx context.Context, actorID, id string, patch GroupPat
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	before, err := scanGroup(tx.QueryRow(ctx, `select `+groupCols+` from principal_group where id = $1 for update`, id))
+	before, err := scanGroup(tx.QueryRow(ctx, `select `+groupCols+` from principal_group where id = $1 for update`, groupID))
 	if err != nil {
 		return nil, notFoundOr(err, ErrGroupNotFound)
 	}
@@ -186,11 +186,11 @@ func (p *PG) UpdateGroup(ctx context.Context, actorID, id string, patch GroupPat
 	}
 	after, err := scanGroup(tx.QueryRow(ctx,
 		`update principal_group set name = $2, display_name = $3, description = $4, updated_at = now() where id = $1 returning `+groupCols,
-		id, name, nullize(display), nullize(desc)))
+		groupID, name, nullize(display), nullize(desc)))
 	if err != nil {
 		return nil, mapGroupWriteErr(err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "principal_group", id, before, after); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "principal_group", groupID, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -202,7 +202,7 @@ func (p *PG) UpdateGroup(ctx context.Context, actorID, id string, patch GroupPat
 // DeleteGroup removes a group (and, by cascade, its memberships and group
 // grants), audited. Requires an all-scope grant; an unknown id is
 // ErrGroupNotFound.
-func (p *PG) DeleteGroup(ctx context.Context, actorID, id string, action scope.Set) error {
+func (p *PG) DeleteGroup(ctx context.Context, actorID, groupID string, action scope.Set) error {
 	if !action.All {
 		return ErrPrincipalForbidden
 	}
@@ -212,14 +212,14 @@ func (p *PG) DeleteGroup(ctx context.Context, actorID, id string, action scope.S
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	before, err := scanGroup(tx.QueryRow(ctx, `select `+groupCols+` from principal_group where id = $1`, id))
+	before, err := scanGroup(tx.QueryRow(ctx, `select `+groupCols+` from principal_group where id = $1`, groupID))
 	if err != nil {
 		return notFoundOr(err, ErrGroupNotFound)
 	}
-	if _, err := tx.Exec(ctx, `delete from principal_group where id = $1`, id); err != nil {
+	if _, err := tx.Exec(ctx, `delete from principal_group where id = $1`, groupID); err != nil {
 		return fmt.Errorf("storage: delete group: %w", err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "principal_group", id, before, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "principal_group", groupID, before, nil); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)

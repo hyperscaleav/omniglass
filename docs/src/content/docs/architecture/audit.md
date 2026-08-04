@@ -23,6 +23,14 @@ drawer. See [implementation status](/architecture/status/).
 
 - **Write-time mandatory.** Every API write emits one `audit_log` in the **same transaction**
   as the data write, a storage-layer responsibility, so it cannot be forgotten or bypassed.
+- **`resource_id` is the primary key, never the name.** A named entity is addressable two ways
+  ([ADR-0062](/architecture/decisions/)), by its uuid or by its renameable handle, so recording
+  whichever reference the caller happened to use would give one entity two audit keys and orphan
+  every row keyed on a name the moment somebody renamed it. The name at the time of the action is
+  not lost: it is in the `old` and `new` images, which is a point-in-time snapshot rather than a
+  lookup key, exactly as `actor_username` is snapshotted beside `actor_principal_id`. A guard reads
+  every `writeAuditRes` call site and fails on an argument that is not the primary key, so this
+  holds by construction rather than by review.
 - **The actor** is resolved by IAM ([identity and access](/architecture/identity-access/)): the
   human, service, or node. The read side resolves a **human** actor to a username; a service or
   node actor surfaces as its principal id.

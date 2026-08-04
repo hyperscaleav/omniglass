@@ -129,7 +129,7 @@ func (p *PG) CreateNode(ctx context.Context, actorID string, spec NodeSpec, crea
 	if err != nil {
 		return nil, mapNodeWriteErr(err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "create", "node", n.Name, nil, n); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "create", "node", n.PrincipalID, nil, n); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -175,7 +175,7 @@ func (p *PG) UpdateNode(ctx context.Context, actorID, name string, patch NodePat
 	if err != nil {
 		return nil, mapNodeWriteErr(err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "node", after.Name, before, after); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "node", after.PrincipalID, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -190,8 +190,8 @@ func (p *PG) UpdateNode(ctx context.Context, actorID, name string, patch NodePat
 // bindings, and its enrollment credential (every referencing FK is ON DELETE
 // CASCADE). A node is estate-wide, so this requires an all scope, like create. An
 // unknown name is ErrNodeNotFound. Audited before the row is gone; the actor is
-// the deleter (unaffected by the cascade) and the node name is a plain text
-// resource id, not a foreign key.
+// the deleter (unaffected by the cascade) and audit_log.resource_id is plain
+// text, not a foreign key, so the deleted node's principal id survives there.
 func (p *PG) DeleteNode(ctx context.Context, actorID, name string, read, action scope.Set) error {
 	if !read.All || !action.All {
 		return ErrNodeForbidden
@@ -209,7 +209,7 @@ func (p *PG) DeleteNode(ctx context.Context, actorID, name string, read, action 
 	} else if err != nil {
 		return fmt.Errorf("storage: delete node lookup %q: %w", name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "node", name, nil, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "node", pid, nil, nil); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `delete from principal where id = $1`, pid); err != nil {
@@ -268,7 +268,7 @@ func (p *PG) SetEnrollmentToken(ctx context.Context, actorID, name, tokenHashHex
 	}
 	// The token hash itself is never written to the audit diff (it is a secret);
 	// the audit records that an enroll happened on the node.
-	if err := writeAuditRes(ctx, tx, actorID, "enroll", "node", name, before, after); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "enroll", "node", after.PrincipalID, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {

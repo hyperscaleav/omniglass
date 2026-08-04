@@ -157,16 +157,20 @@ func (p *PG) CreateEventType(ctx context.Context, actorID string, spec EventType
 		return nil, ErrEventTypeExists
 	}
 
-	if _, err := tx.Exec(ctx,
+	// The insert returns the generated id so the audit row can key on the primary
+	// key, which survives a later rename, rather than on the name.
+	var etID string
+	if err := tx.QueryRow(ctx,
 		`insert into event_type (name, display_name, description, payload_schema, official)
-		 values ($1, $2, $3, $4, false)`,
-		spec.Name, spec.DisplayName, spec.Description, schemaArg(spec.PayloadSchema)); err != nil {
+		 values ($1, $2, $3, $4, false)
+		 returning id`,
+		spec.Name, spec.DisplayName, spec.Description, schemaArg(spec.PayloadSchema)).Scan(&etID); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrEventTypeExists
 		}
 		return nil, fmt.Errorf("storage: insert event type %q: %w", spec.Name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "create", "event_type", spec.Name, nil, spec); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "create", "event_type", etID, nil, spec); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -220,7 +224,7 @@ func (p *PG) UpdateEventType(ctx context.Context, actorID, name string, patch Ev
 	if err != nil {
 		return nil, fmt.Errorf("storage: audit image event_type %q: %w", name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "event_type", name, before, after); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "event_type", et.ID, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -251,7 +255,7 @@ func (p *PG) DeleteEventType(ctx context.Context, actorID, name string) error {
 	if _, err := tx.Exec(ctx, `delete from event_type where name = $1`, name); err != nil {
 		return fmt.Errorf("storage: delete event type %q: %w", name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "event_type", name, before, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "event_type", auditImageID(before), before, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

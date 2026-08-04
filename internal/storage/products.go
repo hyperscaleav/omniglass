@@ -454,7 +454,9 @@ func (p *PG) UpdateProduct(ctx context.Context, actorID, id string, patch Produc
 	if err != nil {
 		return nil, err
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "product", id, before, after); err != nil {
+	// The caller addressed the product by uuid or by name; the audit row keys on
+	// the uuid the before-image already carries, so a later rename cannot orphan it.
+	if err := writeAuditRes(ctx, tx, actorID, "update", "product", auditImageID(before), before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -506,7 +508,7 @@ func (p *PG) DeleteProduct(ctx context.Context, actorID, id string) error {
 		}
 		return fmt.Errorf("storage: delete product %q: %w", id, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "product", id, before, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "product", auditImageID(before), before, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

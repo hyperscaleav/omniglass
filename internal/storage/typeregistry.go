@@ -41,6 +41,16 @@ func registryAuditImage(ctx context.Context, tx pgx.Tx, table, ref string) (map[
 	return img, nil
 }
 
+// auditImageID reads the primary key out of a row image the caller already
+// holds. An audit row must key on the entity, never on whichever reference the
+// caller used to address it, or a rename orphans every row keyed on the old
+// name. Delete paths fetch the before image but no typed struct, so this reuses
+// the id already in hand instead of spending a second round trip on it.
+func auditImageID(img map[string]any) string {
+	id, _ := img["id"].(string)
+	return id
+}
+
 // typeRef names the parent table and column that reference a type id, for the
 // delete-in-use guard (e.g. {"location", "location_type"}).
 type typeRef struct {
@@ -130,7 +140,7 @@ func deleteTypeRow(ctx context.Context, p *PG, table, resource string, ref typeR
 	if _, err := tx.Exec(ctx, `delete from `+table+` where id = $1`, uid); err != nil {
 		return fmt.Errorf("storage: delete %s %q: %w", table, id, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", resource, id, before, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", resource, uid, before, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

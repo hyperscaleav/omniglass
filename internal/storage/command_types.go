@@ -177,16 +177,20 @@ func (p *PG) CreateCommandType(ctx context.Context, actorID string, spec Command
 	if err != nil {
 		return nil, err
 	}
-	if _, err := tx.Exec(ctx,
+	// The insert returns the generated id so the audit row can key on the primary
+	// key, which survives a later rename, rather than on the name.
+	var ctID string
+	if err := tx.QueryRow(ctx,
 		`insert into command_type (name, display_name, description, params_schema, settle_window_seconds, target_property_type_id, official)
-		 values ($1, $2, $3, $4, $5, $6, false)`,
-		spec.Name, spec.DisplayName, spec.Description, schemaArg(spec.ParamsSchema), spec.SettleWindowSeconds, target); err != nil {
+		 values ($1, $2, $3, $4, $5, $6, false)
+		 returning id`,
+		spec.Name, spec.DisplayName, spec.Description, schemaArg(spec.ParamsSchema), spec.SettleWindowSeconds, target).Scan(&ctID); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrCommandTypeExists
 		}
 		return nil, fmt.Errorf("storage: insert command type %q: %w", spec.Name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "create", "command_type", spec.Name, nil, spec); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "create", "command_type", ctID, nil, spec); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -247,7 +251,7 @@ func (p *PG) UpdateCommandType(ctx context.Context, actorID, name string, patch 
 	if err != nil {
 		return nil, fmt.Errorf("storage: audit image command_type %q: %w", name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "command_type", name, before, after); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "command_type", ct.ID, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -277,7 +281,7 @@ func (p *PG) DeleteCommandType(ctx context.Context, actorID, name string) error 
 	if _, err := tx.Exec(ctx, `delete from command_type where name = $1`, name); err != nil {
 		return fmt.Errorf("storage: delete command type %q: %w", name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "command_type", name, before, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "command_type", auditImageID(before), before, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

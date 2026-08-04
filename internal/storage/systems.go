@@ -270,7 +270,7 @@ func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch Stand
 	if err != nil {
 		return nil, fmt.Errorf("storage: audit image standard %q: %w", id, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "standard", id, before, after); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "standard", st.ID, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {

@@ -150,7 +150,7 @@ func (p *PG) CreateVendor(ctx context.Context, actorID string, m Vendor) (*Vendo
 		}
 		return nil, fmt.Errorf("storage: insert vendor %q: %w", m.Name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "create", "vendor", m.Name, nil, m); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "create", "vendor", m.ID, nil, m); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -200,7 +200,9 @@ func (p *PG) UpdateVendor(ctx context.Context, actorID, id string, patch VendorP
 	if err != nil {
 		return nil, fmt.Errorf("storage: audit image vendor %q: %w", id, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "vendor", id, before, after); err != nil {
+	// The caller addressed the vendor by uuid or by name; the audit row keys on the
+	// uuid the before-image already carries, so a later rename cannot orphan it.
+	if err := writeAuditRes(ctx, tx, actorID, "update", "vendor", auditImageID(before), before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -232,7 +234,7 @@ func (p *PG) DeleteVendor(ctx context.Context, actorID, id string) error {
 	if _, err := tx.Exec(ctx, `delete from vendor where `+registryRefCol(id)+` = $1`, id); err != nil {
 		return fmt.Errorf("storage: delete vendor %q: %w", id, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "vendor", id, before, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "vendor", auditImageID(before), before, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
