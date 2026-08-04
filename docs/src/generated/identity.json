@@ -114,8 +114,7 @@
     },
     {
       "table": "principal_group",
-      "shape": "key-bearing",
-      "proved_elsewhere": "validated at the API layer with a looser pattern (^[a-z0-9][a-z0-9._-]*$), which admits the . and _ the address grammar reads as separators; tightening it is a behaviour change for existing groups, tracked with the rename work"
+      "shape": "key-bearing"
     },
     {
       "table": "principal_group_member",

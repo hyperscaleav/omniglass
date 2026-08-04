@@ -99,9 +99,6 @@ var KeyProvedElsewhere = map[string]string{
 	"secret_type":    "seeded only, no create path on the gateway",
 	"interface": "the key is server-derived, not operator-typed: InterfaceSpec carries no Name " +
 		"and the column is set from spec.Type, an already-validated interface_type key",
-	"principal_group": "validated at the API layer with a looser pattern (^[a-z0-9][a-z0-9._-]*$), " +
-		"which admits the . and _ the address grammar reads as separators; tightening it is a " +
-		"behaviour change for existing groups, tracked with the rename work",
 }
 
 // IdentityShapesJSON renders the declaration for the docs, the same way

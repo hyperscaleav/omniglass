@@ -755,10 +755,10 @@ components:
           maxLength: 200
           type: string
         name:
-          description: Unique group name (lowercase letters, digits, and . _ -)
-          maxLength: 200
+          description: Unique group name (lowercase letters, digits, and hyphens)
+          maxLength: 100
           minLength: 1
-          pattern: ^[a-z0-9][a-z0-9._-]*$
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
       required:
         - name
@@ -4836,10 +4836,10 @@ components:
           maxLength: 200
           type: string
         name:
-          description: Group name (lowercase letters, digits, and . _ -); renaming is safe
-          maxLength: 200
+          description: Group name (lowercase letters, digits, and hyphens); renaming is safe
+          maxLength: 100
           minLength: 1
-          pattern: ^[a-z0-9][a-z0-9._-]*$
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
       type: object
     UpdateInterfaceInputBody:

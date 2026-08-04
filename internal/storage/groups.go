@@ -95,6 +95,9 @@ func (p *PG) CreateGroup(ctx context.Context, actorID string, spec GroupSpec, ac
 	if !action.All {
 		return nil, ErrPrincipalForbidden
 	}
+	if err := ValidateName("principal_group", spec.Name); err != nil {
+		return nil, err
+	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin create group: %w", err)
@@ -155,6 +158,11 @@ func (p *PG) GetGroup(ctx context.Context, id string, read scope.Set) (*Group, e
 func (p *PG) UpdateGroup(ctx context.Context, actorID, id string, patch GroupPatch, action scope.Set) (*Group, error) {
 	if !action.All {
 		return nil, ErrPrincipalForbidden
+	}
+	if patch.Name != nil {
+		if err := ValidateName("principal_group", *patch.Name); err != nil {
+			return nil, err
+		}
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {

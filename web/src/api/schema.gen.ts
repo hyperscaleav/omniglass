@@ -3561,7 +3561,7 @@ export interface components {
             description?: string;
             /** @description What an operator reads in lists */
             display_name?: string;
-            /** @description Unique group name (lowercase letters, digits, and . _ -) */
+            /** @description Unique group name (lowercase letters, digits, and hyphens) */
             name: string;
         };
         CreateInterfaceInputBody: {
@@ -5770,7 +5770,7 @@ export interface components {
             description?: string;
             /** @description Display name; empty clears it */
             display_name?: string;
-            /** @description Group name (lowercase letters, digits, and . _ -); renaming is safe */
+            /** @description Group name (lowercase letters, digits, and hyphens); renaming is safe */
             name?: string;
         };
         UpdateInterfaceInputBody: {

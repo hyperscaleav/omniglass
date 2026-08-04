@@ -2405,7 +2405,7 @@ Creates a principal group. Gated by principal_group:create (all-scope). A duplic
 |---|---|---|---|
 | `--description` | string | (none) | Free-form notes on what the group is for |
 | `--display-name` | string | (none) | What an operator reads in lists |
-| `--name` | string | (none) | Unique group name (lowercase letters, digits, and . _ -) |
+| `--name` | string | (none) | Unique group name (lowercase letters, digits, and hyphens) |
 
 Example:
 
@@ -2590,7 +2590,7 @@ Updates a group's name and presentational fields. Gated by principal_group:updat
 |---|---|---|---|
 | `--description` | string | (none) | Description; empty clears it |
 | `--display-name` | string | (none) | Display name; empty clears it |
-| `--name` | string | (none) | Group name (lowercase letters, digits, and . _ -); renaming is safe |
+| `--name` | string | (none) | Group name (lowercase letters, digits, and hyphens); renaming is safe |
 
 Example:
 

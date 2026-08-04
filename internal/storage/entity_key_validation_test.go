@@ -79,6 +79,13 @@ func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key str
 			_, err := gw.SetSystemRole(ctx, "", "system", "sysrole-host", storage.SystemRoleSpec{Name: s, Quorum: 1})
 			return err
 		},
+		// A group name was validated only by the Huma pattern, on a looser rule that
+		// admitted . and _, and the gateway accepted anything at all. Both are now the
+		// entity rule, so the refusal is proved here like every other table's.
+		"principal_group": func(s string) error {
+			_, err := gw.CreateGroup(ctx, "", storage.GroupSpec{Name: s}, all)
+			return err
+		},
 	}
 }
 

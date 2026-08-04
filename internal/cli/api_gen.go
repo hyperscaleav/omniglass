@@ -3062,7 +3062,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fDescription, "description", "", "Free-form notes on what the group is for")
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads in lists")
-				cmd.Flags().StringVar(&fName, "name", "", "Unique group name (lowercase letters, digits, and . _ -)")
+				cmd.Flags().StringVar(&fName, "name", "", "Unique group name (lowercase letters, digits, and hyphens)")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
@@ -3293,7 +3293,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fDescription, "description", "", "Description; empty clears it")
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "Display name; empty clears it")
-				cmd.Flags().StringVar(&fName, "name", "", "Group name (lowercase letters, digits, and . _ -); renaming is safe")
+				cmd.Flags().StringVar(&fName, "name", "", "Group name (lowercase letters, digits, and hyphens); renaming is safe")
 				return cmd
 			}()
 			return cmd

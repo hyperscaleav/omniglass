@@ -717,6 +717,10 @@ func mapPrincipalErr(err error) error {
 		return huma.Error404NotFound("group not found")
 	case errors.Is(err, storage.ErrGroupExists):
 		return huma.Error409Conflict("that group name already exists")
+	case errors.Is(err, storage.ErrEntityKeyIsUUID):
+		return huma.Error422UnprocessableEntity("group name may not be a uuid")
+	case errors.Is(err, storage.ErrInvalidEntityKey):
+		return huma.Error422UnprocessableEntity("group name must be lowercase letters, digits, and hyphens, starting with a letter or digit")
 	default:
 		return huma.Error500InternalServerError("principal operation failed")
 	}
