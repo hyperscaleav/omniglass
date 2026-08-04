@@ -46,7 +46,7 @@ func TestCommandIssueAPI(t *testing.T) {
 	}
 	// A settleable command with a zero window, so settlement is immediate.
 	if _, err := gw.CreateCommandType(ctx, "", storage.CommandTypeSpec{
-		Name: "set_input_now", DisplayName: "Set input (now)", TargetPropertyType: "video.input", SettleWindowSeconds: 0,
+		Name: "set-input-now", DisplayName: "Set input (now)", TargetPropertyType: "video.input", SettleWindowSeconds: 0,
 	}); err != nil {
 		t.Fatalf("create command type: %v", err)
 	}
@@ -62,14 +62,14 @@ func TestCommandIssueAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	// Issue set_input_now to hdmi2: the observed value already matches, so past the
+	// Issue set-input-now to hdmi2: the observed value already matches, so past the
 	// zero window it settles. The response carries the caused event id.
 	var settled struct {
 		CausedEventID int64  `json:"caused_event_id"`
 		Settlement    string `json:"settlement"`
 	}
 	json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components/disp-1/commands:issue", map[string]any{
-		"command_type": "set_input_now", "value": "hdmi2",
+		"command_type": "set-input-now", "value": "hdmi2",
 	}, http.StatusOK), &settled)
 	if settled.Settlement != "settled" || settled.CausedEventID == 0 {
 		t.Fatalf("issue to matching value: want settled with a caused event, got %+v", settled)
@@ -99,7 +99,7 @@ func TestCommandIssueAPI(t *testing.T) {
 		Settlement string `json:"settlement"`
 	}
 	json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components/disp-1/commands:issue", map[string]any{
-		"command_type": "set_input_now", "value": "hdmi3",
+		"command_type": "set-input-now", "value": "hdmi3",
 	}, http.StatusOK), &failed)
 	if failed.Settlement != "failed" {
 		t.Fatalf("issue to mismatched value: want failed, got %q", failed.Settlement)

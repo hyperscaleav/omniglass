@@ -10,13 +10,13 @@ import { ME_KEY, type Me } from "../lib/auth";
 // each defaults to. Data is seeded into the query cache so no server is needed; the
 // PUT / DELETE fetches are faked where a test drives them.
 const contract: ProductProperty[] = [
-  { property_type_name: "serial_number", property_type_id: "serial_number-id", required: true },
-  { property_type_name: "firmware_version", property_type_id: "firmware_version-id", default_value: "1.4.2", required: false },
+  { property_type_name: "serial-number", property_type_id: "serial-number-id", required: true },
+  { property_type_name: "firmware-version", property_type_id: "firmware-version-id", default_value: "1.4.2", required: false },
 ];
 
 const catalog: PropertyRow[] = [
-  { name: "serial_number", data_type: "string", display_name: "Serial number", official: true },
-  { name: "firmware_version", data_type: "string", display_name: "Firmware version", official: true },
+  { name: "serial-number", data_type: "string", display_name: "Serial number", official: true },
+  { name: "firmware-version", data_type: "string", display_name: "Firmware version", official: true },
   { name: "port_count", data_type: "int", display_name: "Port count", official: true },
 ];
 
@@ -45,13 +45,13 @@ describe("ProductContractEditor", () => {
   it("lists each declared property with its default and required marker", () => {
     const { getByText, getAllByText } = mount();
     expect(getByText("Declared properties")).toBeTruthy();
-    expect(getByText("serial_number")).toBeTruthy();
+    expect(getByText("serial-number")).toBeTruthy();
     expect(getByText("Serial number")).toBeTruthy();
-    expect(getByText("firmware_version")).toBeTruthy();
+    expect(getByText("firmware-version")).toBeTruthy();
     // The line with a default shows it; the line without reads "no default".
     expect(getByText("1.4.2")).toBeTruthy();
     expect(getByText("no default")).toBeTruthy();
-    // serial_number is required, firmware_version is not.
+    // serial-number is required, firmware-version is not.
     expect(getByText("required")).toBeTruthy();
     expect(getByText("optional")).toBeTruthy();
     expect(getAllByText("string").length).toBe(2); // the data_type badge per line
@@ -59,19 +59,19 @@ describe("ProductContractEditor", () => {
 
   it("renders an official product's contract read-only (no declare, edit, or withdraw)", () => {
     const { getByText, queryByLabelText } = mount({ official: true });
-    expect(getByText("serial_number")).toBeTruthy(); // the list still renders
+    expect(getByText("serial-number")).toBeTruthy(); // the list still renders
     expect(getByText("seed-owned, read-only")).toBeTruthy();
     expect(queryByLabelText("Property to declare")).toBeNull();
-    expect(queryByLabelText("Edit serial_number")).toBeNull();
-    expect(queryByLabelText("Withdraw serial_number")).toBeNull();
+    expect(queryByLabelText("Edit serial-number")).toBeNull();
+    expect(queryByLabelText("Withdraw serial-number")).toBeNull();
   });
 
   it("hides the write controls from a principal without product:update", () => {
     const { getByText, queryByLabelText } = mount({ me: reader });
-    expect(getByText("serial_number")).toBeTruthy();
+    expect(getByText("serial-number")).toBeTruthy();
     expect(queryByLabelText("Property to declare")).toBeNull();
-    expect(queryByLabelText("Edit serial_number")).toBeNull();
-    expect(queryByLabelText("Withdraw serial_number")).toBeNull();
+    expect(queryByLabelText("Edit serial-number")).toBeNull();
+    expect(queryByLabelText("Withdraw serial-number")).toBeNull();
   });
 
   it("declares a picked catalog property, PUTting the default and required flag", async () => {
@@ -102,21 +102,21 @@ describe("ProductContractEditor", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const method = typeof input === "string" ? "GET" : req.method;
-      if (method === "PUT") return json({ property_type_name: "firmware_version", property_type_id: "firmware_version-id", default_value: "2.0.0", required: false });
+      if (method === "PUT") return json({ property_type_name: "firmware-version", property_type_id: "firmware-version-id", default_value: "2.0.0", required: false });
       return json({ properties: contract });
     });
 
     const { getByLabelText } = mount();
-    fireEvent.click(getByLabelText("Edit firmware_version"));
-    const input = getByLabelText("Default for firmware_version") as HTMLInputElement;
+    fireEvent.click(getByLabelText("Edit firmware-version"));
+    const input = getByLabelText("Default for firmware-version") as HTMLInputElement;
     expect(input.value).toBe("1.4.2"); // seeded from the declared default
     fireEvent.input(input, { target: { value: "2.0.0" } });
-    fireEvent.click(getByLabelText("Save firmware_version"));
+    fireEvent.click(getByLabelText("Save firmware-version"));
 
     await waitFor(() => {
       const put = vi.mocked(fetch).mock.calls.find(([i]) => (i as Request)?.method === "PUT");
       expect(put).toBeTruthy();
-      expect((put![0] as Request).url).toContain("/products/tsw-1070/properties/firmware_version");
+      expect((put![0] as Request).url).toContain("/products/tsw-1070/properties/firmware-version");
     });
   });
 
@@ -130,13 +130,13 @@ describe("ProductContractEditor", () => {
     });
 
     const { getByLabelText } = mount();
-    fireEvent.click(getByLabelText("Withdraw serial_number"));
+    fireEvent.click(getByLabelText("Withdraw serial-number"));
 
     await waitFor(() => {
       expect(confirmSpy).toHaveBeenCalled();
       const del = vi.mocked(fetch).mock.calls.find(([i]) => (i as Request)?.method === "DELETE");
       expect(del).toBeTruthy();
-      expect((del![0] as Request).url).toContain("/products/tsw-1070/properties/serial_number");
+      expect((del![0] as Request).url).toContain("/products/tsw-1070/properties/serial-number");
     });
   });
 

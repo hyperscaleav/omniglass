@@ -54,7 +54,7 @@ func TestEffectiveVariablesAPI(t *testing.T) {
 	var winner *resolvedValueResp
 	shadowed := 0
 	for i := range got {
-		if got[i].Name != "poll_interval" {
+		if got[i].Name != "poll-interval" {
 			continue
 		}
 		if got[i].Winner {
@@ -64,10 +64,10 @@ func TestEffectiveVariablesAPI(t *testing.T) {
 		}
 	}
 	if winner == nil {
-		t.Fatal("poll_interval has no winner in the resolved set")
+		t.Fatal("poll-interval has no winner in the resolved set")
 	}
 	if winner.OwnerKind != "component" {
-		t.Errorf("poll_interval winner owned by %q, want the component (the most specific binding)", winner.OwnerKind)
+		t.Errorf("poll-interval winner owned by %q, want the component (the most specific binding)", winner.OwnerKind)
 	}
 	if shadowed == 0 {
 		t.Error("no shadowed candidate reported: the cascade should show what it overrode, not only the answer")
@@ -171,12 +171,12 @@ func newCascadeFixture(t *testing.T) (*apiClient, string, string, string) {
 		t.Fatalf("decode component: %v", err)
 	}
 
-	// poll_interval at two tiers: the room's value is shadowed by the component's.
+	// poll-interval at two tiers: the room's value is shadowed by the component's.
 	c.do(tok, http.MethodPost, "/variables", map[string]any{
-		"name": "poll_interval", "value_type": "int", "owner_kind": "location",
+		"name": "poll-interval", "value_type": "int", "owner_kind": "location",
 		"owner": "room", "value": 60}, http.StatusCreated)
 	c.do(tok, http.MethodPost, "/variables", map[string]any{
-		"name": "poll_interval", "value_type": "int", "owner_kind": "component",
+		"name": "poll-interval", "value_type": "int", "owner_kind": "component",
 		"owner": "codec-1", "value": 30}, http.StatusCreated)
 	c.do(tok, http.MethodPost, "/secrets", map[string]any{
 		"name": "device-login", "secret_type": "basic-auth", "owner_kind": "location", "owner": "room",

@@ -28,10 +28,10 @@ func TestNodeTags(t *testing.T) {
 
 	mustTag(t, gw, "environment", nil, true)                  // applies to all kinds, cascades
 	mustTag(t, gw, "rack", []string{"node"}, false)           // node-only, flat
-	mustTag(t, gw, "room_only", []string{"component"}, false) // NOT allowed on a node
+	mustTag(t, gw, "room-only", []string{"component"}, false) // NOT allowed on a node
 
 	// applies_to gate: a component-only key cannot bind to a node.
-	if _, err := gw.SetTagBinding(ctx, "", "room_only", "node", strptr("edge-1"), "x", all, all); !errors.Is(err, storage.ErrTagKindNotAllowed) {
+	if _, err := gw.SetTagBinding(ctx, "", "room-only", "node", strptr("edge-1"), "x", all, all); !errors.Is(err, storage.ErrTagKindNotAllowed) {
 		t.Fatalf("bind component-only key to node: want ErrTagKindNotAllowed, got %v", err)
 	}
 	// Estate-wide: a node bind without all-scope is forbidden; an unknown node is not found.

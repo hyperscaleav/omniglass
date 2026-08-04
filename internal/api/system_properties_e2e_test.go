@@ -62,7 +62,7 @@ func TestSystemPropertiesAPI(t *testing.T) {
 	// The shipped standards are operator-owned, so huddle-room can carry the
 	// contract under test directly; the system conforming to it is what resolves
 	// against that contract.
-	c.do(ownerTok, http.MethodPut, "/standards/huddle-room/properties/serial_number",
+	c.do(ownerTok, http.MethodPut, "/standards/huddle-room/properties/serial-number",
 		map[string]any{"default_value": "SN-DEFAULT", "required": true}, http.StatusOK)
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{
 		"name": "huddle-1", "standard_id": "huddle-room",
@@ -82,56 +82,56 @@ func TestSystemPropertiesAPI(t *testing.T) {
 	if got.System != "huddle-1" || len(got.Properties) != 1 {
 		t.Fatalf("effective read = %+v, want huddle-1 with one contract property", got)
 	}
-	sn := got.find(t, "serial_number")
+	sn := got.find(t, "serial-number")
 	if sn.IsSet || !sn.FromContract || !sn.Required || sn.DataType != "string" {
-		t.Fatalf("unset serial_number = %+v, want from-contract required string, is_set=false", sn)
+		t.Fatalf("unset serial-number = %+v, want from-contract required string, is_set=false", sn)
 	}
 	if string(sn.Value) != `"SN-DEFAULT"` || string(sn.DefaultValue) != `"SN-DEFAULT"` || len(sn.SetValue) != 0 || sn.ValueID != "" {
-		t.Fatalf("unset serial_number values = %+v, want the contract default with no override", sn)
+		t.Fatalf("unset serial-number values = %+v, want the contract default with no override", sn)
 	}
 
 	// The override wins, and the read reports it as set.
-	c.do(ownerTok, http.MethodPut, "/systems/huddle-1/properties/serial_number",
+	c.do(ownerTok, http.MethodPut, "/systems/huddle-1/properties/serial-number",
 		map[string]any{"value": "SN-123"}, http.StatusOK)
-	sn = read(ownerTok, "huddle-1").find(t, "serial_number")
+	sn = read(ownerTok, "huddle-1").find(t, "serial-number")
 	if !sn.IsSet || !sn.FromContract || sn.ValueID == "" {
-		t.Fatalf("set serial_number = %+v, want is_set with a value id", sn)
+		t.Fatalf("set serial-number = %+v, want is_set with a value id", sn)
 	}
 	if string(sn.Value) != `"SN-123"` || string(sn.SetValue) != `"SN-123"` || string(sn.DefaultValue) != `"SN-DEFAULT"` {
-		t.Fatalf("set serial_number values = %+v, want SN-123 over the SN-DEFAULT default", sn)
+		t.Fatalf("set serial-number values = %+v, want SN-123 over the SN-DEFAULT default", sn)
 	}
 
 	// A property the contract does not declare is still settable, and reads back
 	// beside the contract ones as an off-contract addition.
-	c.do(ownerTok, http.MethodPut, "/systems/huddle-1/properties/firmware_version",
+	c.do(ownerTok, http.MethodPut, "/systems/huddle-1/properties/firmware-version",
 		map[string]any{"value": "1.2.3"}, http.StatusOK)
 	got = read(ownerTok, "huddle-1")
 	if len(got.Properties) != 2 {
 		t.Fatalf("effective read = %+v, want the contract property plus the off-contract one", got.Properties)
 	}
-	fw := got.find(t, "firmware_version")
+	fw := got.find(t, "firmware-version")
 	if fw.FromContract || fw.Required || !fw.IsSet || string(fw.Value) != `"1.2.3"` {
-		t.Fatalf("firmware_version = %+v, want an off-contract set value", fw)
+		t.Fatalf("firmware-version = %+v, want an off-contract set value", fw)
 	}
 	if len(fw.DefaultValue) != 0 {
-		t.Fatalf("firmware_version default = %s, want none (no contract line)", fw.DefaultValue)
+		t.Fatalf("firmware-version default = %s, want none (no contract line)", fw.DefaultValue)
 	}
 
 	// A property the catalog does not know, and a system that does not exist, are
 	// request faults rather than 500s.
 	c.do(ownerTok, http.MethodPut, "/systems/huddle-1/properties/not_a_property",
 		map[string]any{"value": "x"}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodPut, "/systems/nope-1/properties/serial_number",
+	c.do(ownerTok, http.MethodPut, "/systems/nope-1/properties/serial-number",
 		map[string]any{"value": "x"}, http.StatusNotFound)
 
 	// Clearing the override falls back to the contract default; clearing it twice
 	// is an explicit miss.
-	c.do(ownerTok, http.MethodDelete, "/systems/huddle-1/properties/serial_number", nil, http.StatusNoContent)
-	sn = read(ownerTok, "huddle-1").find(t, "serial_number")
+	c.do(ownerTok, http.MethodDelete, "/systems/huddle-1/properties/serial-number", nil, http.StatusNoContent)
+	sn = read(ownerTok, "huddle-1").find(t, "serial-number")
 	if sn.IsSet || string(sn.Value) != `"SN-DEFAULT"` || len(sn.SetValue) != 0 {
-		t.Fatalf("cleared serial_number = %+v, want the contract default back", sn)
+		t.Fatalf("cleared serial-number = %+v, want the contract default back", sn)
 	}
-	c.do(ownerTok, http.MethodDelete, "/systems/huddle-1/properties/serial_number", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodDelete, "/systems/huddle-1/properties/serial-number", nil, http.StatusNotFound)
 
 	// A viewer scoped to another system reads its own but gets a non-disclosing
 	// 404 on huddle-1: the *:read floor passes the gate, scope injection hides it.

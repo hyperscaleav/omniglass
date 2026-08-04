@@ -9,8 +9,8 @@ import { RECONCILIATION_KEY, type Reconciliation } from "../lib/reconciliation";
 const seed: Reconciliation = {
   component: "disp-1",
   properties: [
-    { property: "firmware_version", want: "1.0.0", told: null, is: "2.0.0", drift: true },
-    { property: "serial_number", want: "SN-1", told: null, is: "SN-1", drift: false },
+    { property: "firmware-version", want: "1.0.0", told: null, is: "2.0.0", drift: true },
+    { property: "serial-number", want: "SN-1", told: null, is: "SN-1", drift: false },
   ],
 };
 
@@ -27,8 +27,8 @@ function mount(data: Reconciliation = seed) {
 describe("ReconciliationPanel", () => {
   it("renders a want/is row per property with the values", () => {
     const { getByText } = mount();
-    expect(getByText("firmware_version")).toBeTruthy();
-    expect(getByText("serial_number")).toBeTruthy();
+    expect(getByText("firmware-version")).toBeTruthy();
+    expect(getByText("serial-number")).toBeTruthy();
     expect(getByText("1.0.0")).toBeTruthy();
     expect(getByText("2.0.0")).toBeTruthy();
   });

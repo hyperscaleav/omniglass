@@ -15,12 +15,15 @@ import (
 	"unicode/utf8"
 )
 
-// keyPattern is the normalized-key rule: a lowercase identifier (a leading
-// letter, then lowercase letters, digits, or underscores). Enforcing one
+// keyPattern is the normalized-key rule: lowercase letters, digits, and
+// hyphens, the platform's single key character set. Enforcing one
 // canonical spelling is the whole point of a governed vocabulary: it stops
 // `env` beside `environment` beside `Environment` from all being minted as
 // distinct keys.
-var keyPattern = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+// A tag key is one segment on the platform's single key character set: lowercase
+// letters, digits, and hyphens. Same shape as an entity key and as one segment of a
+// keyspace key, so an operator learns one rule.
+var keyPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 // MaxKeyLen and MaxValueLen bound a key and a bound value. A key is a short
 // identifier; a value is a free-text label, generous but not unbounded so a
@@ -41,7 +44,7 @@ func ValidateKey(name string) error {
 		return fmt.Errorf("tag: key exceeds %d characters", MaxKeyLen)
 	}
 	if !keyPattern.MatchString(name) {
-		return fmt.Errorf("tag: key %q must be a lowercase identifier (a leading letter, then lowercase letters, digits, or underscores)", name)
+		return fmt.Errorf("tag: key %q must be lowercase letters, digits, and hyphens", name)
 	}
 	return nil
 }

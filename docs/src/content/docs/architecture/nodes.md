@@ -241,8 +241,8 @@ their AND.
 
 | Layer | Check | Sample | Notes |
 |---|---|---|---|
-| L3 network | ICMP ping, **batched once per host** per tick | `icmp.reachable` / `icmp.rtt_avg` | **informational** (see verdict below); shared by every interface on the host |
-| L4 transport | TCP connect (tcp-family) **or** UDP presence (snmp/UDP) | `tcp.open`/`tcp.connect_time` · `udp.open` | a closed UDP port answers ICMP port-unreachable, so absence of that is "present"; this is why SNMP's transport check is L4, not its auth-dependent get |
+| L3 network | ICMP ping, **batched once per host** per tick | `icmp.reachable` / `icmp.rtt-avg` | **informational** (see verdict below); shared by every interface on the host |
+| L4 transport | TCP connect (tcp-family) **or** UDP presence (snmp/UDP) | `tcp.open`/`tcp.connect-time` · `udp.open` | a closed UDP port answers ICMP port-unreachable, so absence of that is "present"; this is why SNMP's transport check is L4, not its auth-dependent get |
 | L7 app | protocol handshake: SNMP `sysUpTime` get (**`snmp.reachable`**, default-on) · SSH handshake+auth · telnet login chain | (verdict) | the SNMP get is the **primary, default** SNMP liveness (ICMP-independent); SSH/telnet are **opt-in** (`ssh_check`/`telnet_check="on"`) because their liveness credential can differ from the device's |
 
 **The verdict respects each layer's definitiveness.** A TCP connect and any L7 handshake are

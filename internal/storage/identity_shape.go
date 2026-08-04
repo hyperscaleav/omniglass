@@ -58,12 +58,12 @@ var IdentityShapes = map[string]TableIdentity{
 	"system_role": {Shape: ShapeKeyBearing}, "vendor": {Shape: ShapeKeyBearing},
 
 	// Keyspace: a key, on the other rule.
-	"property_type": {ShapeKeyspace, "icmp.rtt_avg, a signal key referenced from drivers and templates"},
+	"property_type": {ShapeKeyspace, "icmp.rtt-avg, a signal key referenced from drivers and templates"},
 	"event_type":    {ShapeKeyspace, "call.started, an occurrence key"},
-	"command_type":  {ShapeKeyspace, "set_input, a command key"},
-	"tag":           {ShapeKeyspace, "asset_id, a tag key; the console has always called it a key"},
-	"variable":      {ShapeKeyspace, "poll_interval, a cascade key referenced from expressions"},
-	"secret":        {ShapeKeyspace, "og_session, a cascade key referenced from expressions"},
+	"command_type":  {ShapeKeyspace, "set-input, a command key"},
+	"tag":           {ShapeKeyspace, "asset-id, a tag key; the console has always called it a key"},
+	"variable":      {ShapeKeyspace, "poll-interval, a cascade key referenced from expressions"},
+	"secret":        {ShapeKeyspace, "og-session, a cascade key referenced from expressions"},
 
 	// A human identifier that is not a key. These are the exceptions worth stating.
 	"human": {ShapeHumanNotAKey, "a username: its own rule, its own uniqueness, and not an " +

@@ -35,8 +35,8 @@ func TestVariableCreateRoundTrip(t *testing.T) {
 	gw := variableGateway(t)
 	ctx := context.Background()
 
-	mustVar(t, gw, "poll_interval", "int", "platform", nil, `30`)
-	mustVar(t, gw, "base_url", "string", "platform", nil, `"https://api.example"`)
+	mustVar(t, gw, "poll-interval", "int", "platform", nil, `30`)
+	mustVar(t, gw, "base-url", "string", "platform", nil, `"https://api.example"`)
 	mustVar(t, gw, "opts", "json", "platform", nil, `{"retries":3,"backoff":"1s"}`)
 
 	list, err := gw.ListVariables(ctx, all)
@@ -50,8 +50,8 @@ func TestVariableCreateRoundTrip(t *testing.T) {
 	for _, v := range list {
 		byName[v.Name] = v
 	}
-	if byName["poll_interval"].ValueType != "int" || string(byName["poll_interval"].Value) != "30" {
-		t.Errorf("poll_interval = %+v, want int 30", byName["poll_interval"])
+	if byName["poll-interval"].ValueType != "int" || string(byName["poll-interval"].Value) != "30" {
+		t.Errorf("poll-interval = %+v, want int 30", byName["poll-interval"])
 	}
 	// The json object round-trips (compare structurally, key order is not fixed).
 	var got, want map[string]any
@@ -130,7 +130,7 @@ func TestVariableUpdate(t *testing.T) {
 	gw := variableGateway(t)
 	ctx := context.Background()
 
-	v := mustVar(t, gw, "poll_interval", "int", "platform", nil, `30`)
+	v := mustVar(t, gw, "poll-interval", "int", "platform", nil, `30`)
 	// A value that does not match the fixed type is refused.
 	if _, err := gw.UpdateVariable(ctx, "", v.ID, json.RawMessage(`"nope"`), all, all, true); !errors.Is(err, storage.ErrVariableValueInvalid) {
 		t.Errorf("update with bad value = %v, want ErrVariableValueInvalid", err)

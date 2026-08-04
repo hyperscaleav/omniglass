@@ -18,7 +18,7 @@ import { uuidFor } from "../lib/testids";
 // read which capability it is missing rather than earn a 403. Data is seeded into
 // the query cache so no server is needed.
 const seed: Variable[] = [
-  { id: uuidFor("v-tier"), name: "poll_interval", value_type: "int", owner_kind: "platform", value: 60 },
+  { id: uuidFor("v-tier"), name: "poll-interval", value_type: "int", owner_kind: "platform", value: 60 },
   { id: uuidFor("v-below"), name: "room_poll", value_type: "int", owner_kind: "location", owner_name: "room", value: 30 },
 ];
 
@@ -58,7 +58,7 @@ describe("Variables page platform-tier authority", () => {
 
   it("offers the Platform scope to a principal that holds the install-wide permission", async () => {
     mount(owner);
-    expect(await screen.findByText("poll_interval")).toBeInTheDocument();
+    expect(await screen.findByText("poll-interval")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /new variable/i }));
     expect(scopeOptions()).toContain("platform");
     expect((screen.getByLabelText("Scope") as HTMLSelectElement).value).toBe("platform");
@@ -66,7 +66,7 @@ describe("Variables page platform-tier authority", () => {
 
   it("withholds the Platform scope from an estate writer and names the missing capability", async () => {
     mount(estateWriter);
-    expect(await screen.findByText("poll_interval")).toBeInTheDocument();
+    expect(await screen.findByText("poll-interval")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /new variable/i }));
     // The control the server would refuse is not offered, and the default falls to
     // the most specific tier the caller may actually write at.
@@ -77,8 +77,8 @@ describe("Variables page platform-tier authority", () => {
 
   it("hides Edit and Delete on a platform-tier row from an estate writer and says why", async () => {
     mount(estateWriter);
-    expect(await screen.findByText("poll_interval")).toBeInTheDocument();
-    const blade = await openBlade("poll_interval");
+    expect(await screen.findByText("poll-interval")).toBeInTheDocument();
+    const blade = await openBlade("poll-interval");
     expect(within(blade).queryByLabelText("Edit")).not.toBeInTheDocument();
     expect(within(blade).queryByRole("button", { name: /delete/i })).not.toBeInTheDocument();
     expect(within(blade).getByText(/platform:update/)).toBeInTheDocument();
@@ -97,8 +97,8 @@ describe("Variables page platform-tier authority", () => {
 
   it("keeps Edit and Delete on a platform-tier row for an owner", async () => {
     mount(owner);
-    expect(await screen.findByText("poll_interval")).toBeInTheDocument();
-    const blade = await openBlade("poll_interval");
+    expect(await screen.findByText("poll-interval")).toBeInTheDocument();
+    const blade = await openBlade("poll-interval");
     expect(within(blade).getByLabelText("Edit")).toBeInTheDocument();
     expect(within(blade).queryByText(/platform:update/)).not.toBeInTheDocument();
   });

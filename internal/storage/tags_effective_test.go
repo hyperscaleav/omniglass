@@ -48,14 +48,14 @@ func TestEffectiveTagsComponent(t *testing.T) {
 
 	mustTag(t, gw, "environment", nil, true) // cascades
 	mustTag(t, gw, "compliance", nil, true)  // cascades
-	mustTag(t, gw, "asset_id", nil, false)   // non-propagating (flat)
+	mustTag(t, gw, "asset-id", nil, false)   // non-propagating (flat)
 
 	mustBind(t, gw, "environment", "platform", nil, "prod")
 	mustBind(t, gw, "environment", "location", strptr("campus"), "staging")
 	mustBind(t, gw, "environment", "system", strptr("av"), "dev") // most specific band for this key
 	mustBind(t, gw, "compliance", "location", strptr("campus"), "pci")
-	mustBind(t, gw, "asset_id", "system", strptr("av"), "SYS-1") // must NOT reach the component
-	mustBind(t, gw, "asset_id", "component", strptr("codec"), "C-42")
+	mustBind(t, gw, "asset-id", "system", strptr("av"), "SYS-1") // must NOT reach the component
+	mustBind(t, gw, "asset-id", "component", strptr("codec"), "C-42")
 
 	got, err := gw.EffectiveTags(ctx, "component", []string{compID})
 	if err != nil {
@@ -68,8 +68,8 @@ func TestEffectiveTagsComponent(t *testing.T) {
 	if m["compliance"] != "pci" {
 		t.Errorf("compliance = %q, want pci (inherited from campus location)", m["compliance"])
 	}
-	if m["asset_id"] != "C-42" {
-		t.Errorf("asset_id = %q, want C-42 (own binding; the non-propagating system value must not reach here)", m["asset_id"])
+	if m["asset-id"] != "C-42" {
+		t.Errorf("asset-id = %q, want C-42 (own binding; the non-propagating system value must not reach here)", m["asset-id"])
 	}
 }
 
@@ -82,12 +82,12 @@ func TestEffectiveTagsSystem(t *testing.T) {
 
 	mustTag(t, gw, "environment", nil, true)
 	mustTag(t, gw, "compliance", nil, true)
-	mustTag(t, gw, "asset_id", nil, false)
+	mustTag(t, gw, "asset-id", nil, false)
 
 	mustBind(t, gw, "environment", "platform", nil, "prod")
 	mustBind(t, gw, "compliance", "location", strptr("campus"), "pci") // only at the location
-	mustBind(t, gw, "asset_id", "location", strptr("campus"), "LOC-1") // non-propagating: must NOT reach the system
-	mustBind(t, gw, "asset_id", "system", strptr("av"), "SYS-1")       // own binding: resolves
+	mustBind(t, gw, "asset-id", "location", strptr("campus"), "LOC-1") // non-propagating: must NOT reach the system
+	mustBind(t, gw, "asset-id", "system", strptr("av"), "SYS-1")       // own binding: resolves
 
 	got, err := gw.EffectiveTags(ctx, "system", []string{sysID})
 	if err != nil {
@@ -100,8 +100,8 @@ func TestEffectiveTagsSystem(t *testing.T) {
 	if m["compliance"] != "pci" {
 		t.Errorf("compliance = %q, want pci: a placed system inherits its location's tags", m["compliance"])
 	}
-	if m["asset_id"] != "SYS-1" {
-		t.Errorf("asset_id = %q, want SYS-1 (own; the non-propagating location value must not reach the system)", m["asset_id"])
+	if m["asset-id"] != "SYS-1" {
+		t.Errorf("asset-id = %q, want SYS-1 (own; the non-propagating location value must not reach the system)", m["asset-id"])
 	}
 }
 

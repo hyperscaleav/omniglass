@@ -105,27 +105,27 @@ func TestComponentProductSwapKeepsSetValues(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	// Two products declaring firmware_version with different defaults; prod-b also
-	// declares serial_number, which prod-a does not.
+	// Two products declaring firmware-version with different defaults; prod-b also
+	// declares serial-number, which prod-a does not.
 	for _, p := range []struct{ name, def string }{{"prod-a", `"A-default"`}, {"prod-b", `"B-default"`}} {
 		if _, err := gw.CreateProduct(ctx, "", storage.Product{Name: p.name, DisplayName: p.name, Kind: "device"}); err != nil {
 			t.Fatalf("create %s: %v", p.name, err)
 		}
 		if _, err := gw.SetProductProperty(ctx, "", p.name, storage.ProductPropertySpec{
-			PropertyTypeName: "firmware_version", DefaultValue: json.RawMessage(p.def),
+			PropertyTypeName: "firmware-version", DefaultValue: json.RawMessage(p.def),
 		}); err != nil {
 			t.Fatalf("contract %s: %v", p.name, err)
 		}
 	}
-	if _, err := gw.SetProductProperty(ctx, "", "prod-b", storage.ProductPropertySpec{PropertyTypeName: "serial_number"}); err != nil {
+	if _, err := gw.SetProductProperty(ctx, "", "prod-b", storage.ProductPropertySpec{PropertyTypeName: "serial-number"}); err != nil {
 		t.Fatalf("prod-b serial contract: %v", err)
 	}
 
 	pa := "prod-a"
 	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "dev", ProductName: &pa}, all)
 
-	// Pin firmware_version on the component, overriding prod-a's default.
-	if _, err := gw.SetProperty(ctx, "", "component", "dev", "firmware_version", "", json.RawMessage(`"pinned-1.2.3"`), all); err != nil {
+	// Pin firmware-version on the component, overriding prod-a's default.
+	if _, err := gw.SetProperty(ctx, "", "component", "dev", "firmware-version", "", json.RawMessage(`"pinned-1.2.3"`), all); err != nil {
 		t.Fatalf("set firmware: %v", err)
 	}
 
@@ -140,12 +140,12 @@ func TestComponentProductSwapKeepsSetValues(t *testing.T) {
 	idx := byName(got)
 
 	// The pinned value survives the product swap untouched.
-	if fw := idx["firmware_version"]; string(fw.Value) != `"pinned-1.2.3"` || !fw.IsSet {
+	if fw := idx["firmware-version"]; string(fw.Value) != `"pinned-1.2.3"` || !fw.IsSet {
 		t.Fatalf("firmware after swap = %+v, want pinned-1.2.3, is_set=true", fw)
 	}
 	// prod-b's new contract property resolves from B's contract, unset.
-	if sn, ok := idx["serial_number"]; !ok || sn.IsSet || !sn.FromContract {
-		t.Fatalf("serial_number after swap = %+v, want from_contract unset", sn)
+	if sn, ok := idx["serial-number"]; !ok || sn.IsSet || !sn.FromContract {
+		t.Fatalf("serial-number after swap = %+v, want from_contract unset", sn)
 	}
 }
 

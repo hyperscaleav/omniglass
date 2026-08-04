@@ -16,7 +16,7 @@ import { uuidFor } from "../lib/testids";
 // itself or pairing it with a redundant label column.
 const seed: Tag[] = [
   { id: uuidFor("tag-environment"), name: "environment", applies_to: [], propagates: true, allowed_values: ["prod", "dev"] },
-  { id: uuidFor("tag-icmp-rtt-avg"), name: "icmp.rtt_avg", applies_to: ["component"], propagates: false, allowed_values: [] },
+  { id: uuidFor("tag-icmp-rtt-avg"), name: "icmp.rtt-avg", applies_to: ["component"], propagates: false, allowed_values: [] },
 ];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
@@ -39,7 +39,7 @@ describe("Tags page", () => {
   it("lists the seeded tag keys", () => {
     mount();
     expect(screen.getByText("environment")).toBeTruthy();
-    expect(screen.getByText("icmp.rtt_avg")).toBeTruthy();
+    expect(screen.getByText("icmp.rtt-avg")).toBeTruthy();
   });
 
   // "Key" rather than "Name": a dotted keyspace key is not a segment, and calling
@@ -55,7 +55,7 @@ describe("Tags page", () => {
   it("renders each key exactly once", () => {
     mount();
     expect(screen.getAllByText("environment")).toHaveLength(1);
-    expect(screen.getAllByText("icmp.rtt_avg")).toHaveLength(1);
+    expect(screen.getAllByText("icmp.rtt-avg")).toHaveLength(1);
   });
 
   it("keeps the governance columns beside the key", () => {
@@ -63,7 +63,7 @@ describe("Tags page", () => {
     const head = screen.getAllByRole("columnheader").map((th) => th.textContent?.trim());
     expect(head.some((h) => h?.includes("Applies to"))).toBe(true);
     expect(head.some((h) => h?.includes("Binding"))).toBe(true);
-    const row = screen.getByText("icmp.rtt_avg").closest("tr")!;
+    const row = screen.getByText("icmp.rtt-avg").closest("tr")!;
     expect(within(row).getByText("component")).toBeTruthy();
     expect(within(row).getByText("flat")).toBeTruthy();
   });

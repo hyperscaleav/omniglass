@@ -30,13 +30,13 @@ const verdictKey = "interface.reachable"
 type reachLayer struct {
 	Layer     string // the layer word: "ping" (L3) or "port" (L4)
 	SignalKey string // the primary metric key (icmp.reachable / tcp.open)
-	TimingKey string // the companion timing metric (icmp.rtt_avg / tcp.connect_time)
+	TimingKey string // the companion timing metric (icmp.rtt-avg / tcp.connect-time)
 }
 
 // reachLayers is the fixed probe-layer order, L3 then L4.
 var reachLayers = []reachLayer{
-	{Layer: "ping", SignalKey: "icmp.reachable", TimingKey: "icmp.rtt_avg"},
-	{Layer: "port", SignalKey: "tcp.open", TimingKey: "tcp.connect_time"},
+	{Layer: "ping", SignalKey: "icmp.reachable", TimingKey: "icmp.rtt-avg"},
+	{Layer: "port", SignalKey: "tcp.open", TimingKey: "tcp.connect-time"},
 }
 
 type reachVerdictBody struct {

@@ -89,13 +89,13 @@ func TestPasswordLoginCookieSession(t *testing.T) {
 	}
 	var session *http.Cookie
 	for _, c := range ok.Cookies() {
-		if c.Name == "og_session" {
+		if c.Name == "og-session" {
 			session = c
 		}
 	}
 	ok.Body.Close()
 	if session == nil || session.Value == "" {
-		t.Fatal("expected an og_session cookie")
+		t.Fatal("expected an og-session cookie")
 	}
 	if !session.HttpOnly {
 		t.Fatal("the session cookie must be HttpOnly")

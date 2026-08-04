@@ -156,12 +156,12 @@ dot-separated component of a key. So `boi.17c.rm215a` is three segments, and the
 value in the third. That makes "segment" right in prose about topic structure and wrong on a form,
 where the operator is typing a value and not choosing a position.
 
-**There are two key rules, deliberately.** An entity key is kebab (`crestron`, `rm215a`), validated by
-`storage.ValidateEntityKey`. A keyspace key is snake_case with an optional dot hierarchy
-(`icmp.rtt_avg`), validated by `internal/key`. They are not merged, because a keyspace key
-legitimately carries a dot and an underscore while an entity key legitimately carries a hyphen. The
-console says "Key" for both, because an operator types one identifier either way and the differing
-character set surfaces as a validation message, not as a second word. The one boundary is the CLI reference, which is generated from the Huma `doc:`
+**There are two key rules on one character set, deliberately.** An entity key is kebab (`crestron`,
+`rm215a`), validated by `storage.ValidateEntityKey`. A keyspace key is that same kebab segment with an
+optional dot hierarchy (`icmp.rtt-avg`), validated by `internal/key`. They stay two validators because
+only a keyspace key may carry the dot: a key is a dot-joined path of segments and an entity key is a
+path of one. The console says "Key" for both, because an operator types one identifier either way and
+that one difference surfaces as a validation message, not as a second word. The one boundary is the CLI reference, which is generated from the Huma `doc:`
 tags: its flag is still `--display-name` because the wire field is still `display_name`, and a help
 string calling it the name while the flag says otherwise would be worse than the inconsistency. Both
 move together when the field renames.
@@ -170,7 +170,7 @@ A page whose identifier is a keyspace key says **Key**, not Segment, on both the
 
 A page whose identifier is a **keyspace key** rather than a segment (`property_type`, `event_type`,
 `command_type`, `tag`) passes `identityColumn({ label: "Key" })` and does not derive its key from the
-label: `icmp.rtt_avg` is a legal key and an illegal segment. The write side has the same split.
+label: `icmp.rtt-avg` is a legal key and an illegal segment. The write side has the same split.
 `createIdentity` derives a segment from the label as an operator types and stops the moment they edit
 the segment by hand, and an edit form seeds it with the existing segment so relabelling can never
 rewrite a live address. Keyspace pages do not wire it at all.

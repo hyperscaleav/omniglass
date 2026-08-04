@@ -63,7 +63,7 @@ func TestLocationPropertiesAPI(t *testing.T) {
 	// The shipped location types are operator-owned, so room can carry the contract
 	// under test directly. A room may not sit at the top (its allowed_parent_types
 	// exclude root), so a campus goes in first.
-	c.do(ownerTok, http.MethodPut, "/location-types/room/properties/serial_number",
+	c.do(ownerTok, http.MethodPut, "/location-types/room/properties/serial-number",
 		map[string]any{"default_value": "SN-DEFAULT", "required": true}, http.StatusOK)
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{
 		"name": "hq", "location_type": "campus",
@@ -86,56 +86,56 @@ func TestLocationPropertiesAPI(t *testing.T) {
 	if got.Location != "room-1" || len(got.Properties) != 1 {
 		t.Fatalf("effective read = %+v, want room-1 with one contract property", got)
 	}
-	sn := got.find(t, "serial_number")
+	sn := got.find(t, "serial-number")
 	if sn.IsSet || !sn.FromContract || !sn.Required || sn.DataType != "string" {
-		t.Fatalf("unset serial_number = %+v, want from-contract required string, is_set=false", sn)
+		t.Fatalf("unset serial-number = %+v, want from-contract required string, is_set=false", sn)
 	}
 	if string(sn.Value) != `"SN-DEFAULT"` || string(sn.DefaultValue) != `"SN-DEFAULT"` || len(sn.SetValue) != 0 || sn.ValueID != "" {
-		t.Fatalf("unset serial_number values = %+v, want the contract default with no override", sn)
+		t.Fatalf("unset serial-number values = %+v, want the contract default with no override", sn)
 	}
 
 	// The override wins, and the read reports it as set.
-	c.do(ownerTok, http.MethodPut, "/locations/room-1/properties/serial_number",
+	c.do(ownerTok, http.MethodPut, "/locations/room-1/properties/serial-number",
 		map[string]any{"value": "SN-123"}, http.StatusOK)
-	sn = read(ownerTok, "room-1").find(t, "serial_number")
+	sn = read(ownerTok, "room-1").find(t, "serial-number")
 	if !sn.IsSet || !sn.FromContract || sn.ValueID == "" {
-		t.Fatalf("set serial_number = %+v, want is_set with a value id", sn)
+		t.Fatalf("set serial-number = %+v, want is_set with a value id", sn)
 	}
 	if string(sn.Value) != `"SN-123"` || string(sn.SetValue) != `"SN-123"` || string(sn.DefaultValue) != `"SN-DEFAULT"` {
-		t.Fatalf("set serial_number values = %+v, want SN-123 over the SN-DEFAULT default", sn)
+		t.Fatalf("set serial-number values = %+v, want SN-123 over the SN-DEFAULT default", sn)
 	}
 
 	// A property the contract does not declare is still settable, and reads back
 	// beside the contract ones as an off-contract addition.
-	c.do(ownerTok, http.MethodPut, "/locations/room-1/properties/model_number",
+	c.do(ownerTok, http.MethodPut, "/locations/room-1/properties/model-number",
 		map[string]any{"value": "MN-9"}, http.StatusOK)
 	got = read(ownerTok, "room-1")
 	if len(got.Properties) != 2 {
 		t.Fatalf("effective read = %+v, want the contract property plus the off-contract one", got.Properties)
 	}
-	mn := got.find(t, "model_number")
+	mn := got.find(t, "model-number")
 	if mn.FromContract || mn.Required || !mn.IsSet || string(mn.Value) != `"MN-9"` {
-		t.Fatalf("model_number = %+v, want an off-contract set value", mn)
+		t.Fatalf("model-number = %+v, want an off-contract set value", mn)
 	}
 	if len(mn.DefaultValue) != 0 {
-		t.Fatalf("model_number default = %s, want none (no contract line)", mn.DefaultValue)
+		t.Fatalf("model-number default = %s, want none (no contract line)", mn.DefaultValue)
 	}
 
 	// A property the catalog does not know, and a location that does not exist,
 	// are request faults rather than 500s.
 	c.do(ownerTok, http.MethodPut, "/locations/room-1/properties/not_a_property",
 		map[string]any{"value": "x"}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodPut, "/locations/nope-1/properties/serial_number",
+	c.do(ownerTok, http.MethodPut, "/locations/nope-1/properties/serial-number",
 		map[string]any{"value": "x"}, http.StatusNotFound)
 
 	// Clearing the override falls back to the contract default; clearing it twice
 	// is an explicit miss.
-	c.do(ownerTok, http.MethodDelete, "/locations/room-1/properties/serial_number", nil, http.StatusNoContent)
-	sn = read(ownerTok, "room-1").find(t, "serial_number")
+	c.do(ownerTok, http.MethodDelete, "/locations/room-1/properties/serial-number", nil, http.StatusNoContent)
+	sn = read(ownerTok, "room-1").find(t, "serial-number")
 	if sn.IsSet || string(sn.Value) != `"SN-DEFAULT"` || len(sn.SetValue) != 0 {
-		t.Fatalf("cleared serial_number = %+v, want the contract default back", sn)
+		t.Fatalf("cleared serial-number = %+v, want the contract default back", sn)
 	}
-	c.do(ownerTok, http.MethodDelete, "/locations/room-1/properties/serial_number", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodDelete, "/locations/room-1/properties/serial-number", nil, http.StatusNotFound)
 
 	// A viewer scoped to another location reads its own but gets a non-disclosing
 	// 404 on room-1: the *:read floor passes the gate, scope injection hides it.

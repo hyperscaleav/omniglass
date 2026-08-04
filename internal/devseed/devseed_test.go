@@ -207,7 +207,7 @@ func TestRunIdempotent(t *testing.T) {
 		t.Fatalf("count contract lines: %v", err)
 	}
 	if contractLines != 4 {
-		t.Errorf("qm55 contract lines = %d, want 4 (3 boot-seed + mac_address)", contractLines)
+		t.Errorf("qm55 contract lines = %d, want 4 (3 boot-seed + mac-address)", contractLines)
 	}
 	if err := conn.QueryRow(ctx, `select count(*) from component where name = 'lobby-display'`).Scan(&comps); err != nil {
 		t.Fatalf("count property-seed components: %v", err)
@@ -222,7 +222,7 @@ func TestRunIdempotent(t *testing.T) {
 		t.Fatalf("count property values: %v", err)
 	}
 	if propVals != 2 {
-		t.Errorf("property values = %d, want 2 (serial_number, firmware_version)", propVals)
+		t.Errorf("property values = %d, want 2 (serial-number, firmware-version)", propVals)
 	}
 
 	// The tree links resolve: the west building hangs under the hq campus.

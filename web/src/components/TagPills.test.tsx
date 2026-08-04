@@ -5,11 +5,11 @@ import { tagHue } from "../lib/tagcolor";
 
 describe("TagPills", () => {
   it("renders one chip per key, sorted, as key=value", () => {
-    const { container } = render(() => <TagPills tags={{ environment: "prod", asset_id: "A-42" }} />);
+    const { container } = render(() => <TagPills tags={{ environment: "prod", "asset-id": "A-42" }} />);
     const chips = container.querySelectorAll(".tag-pill");
     expect(chips.length).toBe(2);
-    // sorted: asset_id before environment
-    expect(chips[0].textContent).toBe("asset_id=A-42");
+    // sorted: asset-id before environment
+    expect(chips[0].textContent).toBe("asset-id=A-42");
     expect(chips[1].textContent).toBe("environment=prod");
   });
 

@@ -33,7 +33,7 @@ func TestRegistrySeed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list properties: %v", err)
 	}
-	want := map[string]string{"icmp.reachable": "metric", "icmp.rtt_avg": "metric", "tcp.open": "metric", "tcp.connect_time": "metric"}
+	want := map[string]string{"icmp.reachable": "metric", "icmp.rtt-avg": "metric", "tcp.open": "metric", "tcp.connect-time": "metric"}
 	got := map[string]string{}
 	official := map[string]bool{}
 	for _, prop := range props {
@@ -48,11 +48,11 @@ func TestRegistrySeed(t *testing.T) {
 		}
 	}
 	// The declared attribute properties seed with no kind and official=true.
-	if _, ok := got["serial_number"]; ok {
-		t.Errorf("serial_number: want no kind (declared-only), got %q", got["serial_number"])
+	if _, ok := got["serial-number"]; ok {
+		t.Errorf("serial-number: want no kind (declared-only), got %q", got["serial-number"])
 	}
-	if !official["serial_number"] {
-		t.Errorf("serial_number: want official=true")
+	if !official["serial-number"] {
+		t.Errorf("serial-number: want official=true")
 	}
 
 	its, err := gw.ListInterfaceTypes(ctx)

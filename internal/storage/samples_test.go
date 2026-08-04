@@ -36,7 +36,7 @@ func TestInsertMetricSamples(t *testing.T) {
 	now := time.Now().UTC()
 	err = gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp.open", Value: 1, Source: "tcp", TS: now},
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp.connect_time", Value: 3.2, Source: "tcp", TS: now},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp.connect-time", Value: 3.2, Source: "tcp", TS: now},
 	})
 	if err != nil {
 		t.Fatalf("insert samples: %v", err)

@@ -42,7 +42,7 @@ function originBadge(official: boolean): JSX.Element {
 }
 
 // The identity column keeps the header word "Key" here: this catalog is a keyspace, so
-// `name` holds a dotted key (icmp.rtt_avg) rather than the kebab segment the rest of the
+// `name` holds a dotted key (icmp.rtt-avg) rather than the kebab segment the rest of the
 // estate addresses rows by. The cell is the shared two-line treatment either way, which
 // is what retires the separate "Label" column.
 const columns: FlatColumn<PropertyRow>[] = [
@@ -247,8 +247,8 @@ export function CreatePropertyForm(p: { onCreated: (r: PropertyRow) => void }): 
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Key" hint="A lowercase, dot-hierarchied name, e.g. serial_number or interface.reachable.">
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="serial_number" onInput={(e) => setName(e.currentTarget.value)} />
+      <Field label="Key" hint="A lowercase, dot-hierarchied name, e.g. serial-number or interface.reachable.">
+        <input class="input input-bordered w-full font-data" value={name()} placeholder="serial-number" onInput={(e) => setName(e.currentTarget.value)} />
       </Field>
       <Field label="Data type">
         <select class="select select-bordered w-full" value={dataType()} onChange={(e) => setDataType(e.currentTarget.value as PropertyDataType)}>

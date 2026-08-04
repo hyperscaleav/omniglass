@@ -58,14 +58,14 @@ func TestProductPropertiesAPI(t *testing.T) {
 	}, http.StatusCreated)
 
 	// PUT declares the line. The property must already exist in the catalog
-	// (serial_number is seeded); the contract only names it.
+	// (serial-number is seeded); the contract only names it.
 	var set productPropertyWire
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/products/acme-panel/properties/serial_number",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/products/acme-panel/properties/serial-number",
 		map[string]any{"default_value": "SN-UNSET", "required": true}, http.StatusOK), &set); err != nil {
 		t.Fatalf("decode set: %v", err)
 	}
-	if set.PropertyTypeName != "serial_number" || !set.Required || string(set.DefaultValue) != `"SN-UNSET"` {
-		t.Fatalf("set = %+v, want serial_number required with default \"SN-UNSET\"", set)
+	if set.PropertyTypeName != "serial-number" || !set.Required || string(set.DefaultValue) != `"SN-UNSET"` {
+		t.Fatalf("set = %+v, want serial-number required with default \"SN-UNSET\"", set)
 	}
 
 	// GET lists the contract.
@@ -73,12 +73,12 @@ func TestProductPropertiesAPI(t *testing.T) {
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/products/acme-panel/properties", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode list: %v", err)
 	}
-	if len(listed.Properties) != 1 || listed.Properties[0].PropertyTypeName != "serial_number" {
-		t.Fatalf("contract = %+v, want one serial_number line", listed.Properties)
+	if len(listed.Properties) != 1 || listed.Properties[0].PropertyTypeName != "serial-number" {
+		t.Fatalf("contract = %+v, want one serial-number line", listed.Properties)
 	}
 
 	// A second PUT revises the same line rather than adding another.
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/products/acme-panel/properties/serial_number",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/products/acme-panel/properties/serial-number",
 		map[string]any{"default_value": "SN-REVISED"}, http.StatusOK), &set); err != nil {
 		t.Fatalf("decode revise: %v", err)
 	}
@@ -93,20 +93,20 @@ func TestProductPropertiesAPI(t *testing.T) {
 	}
 
 	// DELETE withdraws the line; withdrawing it twice is an explicit miss.
-	c.do(ownerTok, http.MethodDelete, "/products/acme-panel/properties/serial_number", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/products/acme-panel/properties/serial-number", nil, http.StatusNoContent)
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/products/acme-panel/properties", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode list after delete: %v", err)
 	}
 	if len(listed.Properties) != 0 {
 		t.Fatalf("contract after delete = %+v, want empty", listed.Properties)
 	}
-	c.do(ownerTok, http.MethodDelete, "/products/acme-panel/properties/serial_number", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodDelete, "/products/acme-panel/properties/serial-number", nil, http.StatusNotFound)
 
 	// The seeded official product ships its contract with the release, so both
 	// writes are refused (the official read-only rule, not a permission fault).
-	c.do(ownerTok, http.MethodPut, "/products/cisco-room-bar/properties/serial_number",
+	c.do(ownerTok, http.MethodPut, "/products/cisco-room-bar/properties/serial-number",
 		map[string]any{"required": true}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodDelete, "/products/cisco-room-bar/properties/serial_number", nil, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodDelete, "/products/cisco-room-bar/properties/serial-number", nil, http.StatusUnprocessableEntity)
 
 	// A property the catalog does not know is a request fault, not a 500.
 	c.do(ownerTok, http.MethodPut, "/products/acme-panel/properties/not_a_property",

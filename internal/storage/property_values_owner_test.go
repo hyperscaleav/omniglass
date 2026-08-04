@@ -34,7 +34,7 @@ func TestEffectivePropertiesByOwnerKind(t *testing.T) {
 	// --- system: resolves against its standard's contract ---------------------
 
 	if _, err := gw.SetStandardProperty(ctx, "", "huddle-room", storage.StandardPropertySpec{
-		PropertyTypeName: "model_number", DefaultValue: json.RawMessage(`"HR-1"`),
+		PropertyTypeName: "model-number", DefaultValue: json.RawMessage(`"HR-1"`),
 	}); err != nil {
 		t.Fatalf("declare on standard: %v", err)
 	}
@@ -44,25 +44,25 @@ func TestEffectivePropertiesByOwnerKind(t *testing.T) {
 	}
 
 	sys := byName(mustResolveOwner(t, gw, "system", "hq-huddle", all))
-	if got := sys["model_number"]; string(got.Value) != `"HR-1"` || got.IsSet || !got.FromContract {
+	if got := sys["model-number"]; string(got.Value) != `"HR-1"` || got.IsSet || !got.FromContract {
 		t.Fatalf("system inherits the standard default: want HR-1 unset from-contract, got %+v", got)
 	}
 
 	// The system's own value overrides the standard's default.
-	if _, err := gw.SetProperty(ctx, "", "system", "hq-huddle", "model_number", "", json.RawMessage(`"HR-2"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "system", "hq-huddle", "model-number", "", json.RawMessage(`"HR-2"`), all); err != nil {
 		t.Fatalf("override on system: %v", err)
 	}
 	sys = byName(mustResolveOwner(t, gw, "system", "hq-huddle", all))
-	if got := sys["model_number"]; string(got.Value) != `"HR-2"` || !got.IsSet {
+	if got := sys["model-number"]; string(got.Value) != `"HR-2"` || !got.IsSet {
 		t.Fatalf("system override: want HR-2 set, got %+v", got)
 	}
 
 	// A property the standard does not declare still resolves, flagged off-contract.
-	if _, err := gw.SetProperty(ctx, "", "system", "hq-huddle", "serial_number", "", json.RawMessage(`"S-1"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "system", "hq-huddle", "serial-number", "", json.RawMessage(`"S-1"`), all); err != nil {
 		t.Fatalf("ad-hoc on system: %v", err)
 	}
 	sys = byName(mustResolveOwner(t, gw, "system", "hq-huddle", all))
-	if got := sys["serial_number"]; !got.IsSet || got.FromContract {
+	if got := sys["serial-number"]; !got.IsSet || got.FromContract {
 		t.Fatalf("system ad-hoc: want set and off-contract, got %+v", got)
 	}
 
@@ -71,18 +71,18 @@ func TestEffectivePropertiesByOwnerKind(t *testing.T) {
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "one-off"}, all); err != nil {
 		t.Fatalf("create one-off system: %v", err)
 	}
-	if _, err := gw.SetProperty(ctx, "", "system", "one-off", "serial_number", "", json.RawMessage(`"S-9"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "system", "one-off", "serial-number", "", json.RawMessage(`"S-9"`), all); err != nil {
 		t.Fatalf("set on one-off: %v", err)
 	}
 	oneOff := mustResolveOwner(t, gw, "system", "one-off", all)
-	if len(oneOff) != 1 || oneOff[0].PropertyTypeName != "serial_number" || oneOff[0].FromContract {
-		t.Fatalf("one-off system: want a single ad-hoc serial_number, got %+v", oneOff)
+	if len(oneOff) != 1 || oneOff[0].PropertyTypeName != "serial-number" || oneOff[0].FromContract {
+		t.Fatalf("one-off system: want a single ad-hoc serial-number, got %+v", oneOff)
 	}
 
 	// --- location: resolves against its location_type's contract --------------
 
 	if _, err := gw.SetLocationTypeProperty(ctx, "", "room", storage.LocationTypePropertySpec{
-		PropertyTypeName: "model_number", DefaultValue: json.RawMessage(`"ROOM"`), Required: true,
+		PropertyTypeName: "model-number", DefaultValue: json.RawMessage(`"ROOM"`), Required: true,
 	}); err != nil {
 		t.Fatalf("declare on location_type: %v", err)
 	}
@@ -95,13 +95,13 @@ func TestEffectivePropertiesByOwnerKind(t *testing.T) {
 		t.Fatalf("create location: %v", err)
 	}
 	loc := byName(mustResolveOwner(t, gw, "location", "hq-room-1", all))
-	if got := loc["model_number"]; string(got.Value) != `"ROOM"` || got.IsSet || !got.FromContract || !got.Required {
+	if got := loc["model-number"]; string(got.Value) != `"ROOM"` || got.IsSet || !got.FromContract || !got.Required {
 		t.Fatalf("location inherits the type default: want ROOM unset from-contract required, got %+v", got)
 	}
 
 	// --- the component path is unchanged (the PR5 shape still holds) ----------
 
-	if _, err := gw.SetProperty(ctx, "", "component", "ghost-x", "serial_number", "", json.RawMessage(`"x"`), all); err == nil {
+	if _, err := gw.SetProperty(ctx, "", "component", "ghost-x", "serial-number", "", json.RawMessage(`"x"`), all); err == nil {
 		t.Fatal("unknown component owner: want a not-found error, got nil")
 	}
 }

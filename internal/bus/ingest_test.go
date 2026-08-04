@@ -121,7 +121,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 		t.Fatalf("tcp.open row = %+v, want component/observed/tcp", dp)
 	}
 	// connect_time landed too (the port was open).
-	waitMetric(t, ctx, gw, "disp-1", "tcp.connect_time", func(d *storage.MetricSample) bool { return d != nil })
+	waitMetric(t, ctx, gw, "disp-1", "tcp.connect-time", func(d *storage.MetricSample) bool { return d != nil })
 
 	// A node client to publish crafted Events (only its OWN telemetry subject).
 	permErrs := make(chan error, 16)
@@ -158,9 +158,9 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId:  "t-a",
 		NodeId:  "node-a",
-		Samples: []*ogv1.Sample{{Name: "tcp.connect_time", Value: &ogv1.Sample_DoubleValue{DoubleValue: 42}}},
+		Samples: []*ogv1.Sample{{Name: "tcp.connect-time", Value: &ogv1.Sample_DoubleValue{DoubleValue: 42}}},
 	})
-	waitMetric(t, ctx, gw, "disp-1", "tcp.connect_time", func(d *storage.MetricSample) bool { return d != nil && d.Value == 42 })
+	waitMetric(t, ctx, gw, "disp-1", "tcp.connect-time", func(d *storage.MetricSample) bool { return d != nil && d.Value == 42 })
 
 	// Confinement held: disp-2 (node-b's component) has NO sample from node-a.
 	if got, err := gw.LatestMetric(ctx, "disp-2", "tcp.open"); err != nil {
@@ -294,9 +294,9 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	// dropped rather than merely still in flight.
 	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId:  "t-a",
-		Samples: []*ogv1.Sample{{Name: "tcp.connect_time", Value: &ogv1.Sample_DoubleValue{DoubleValue: 42}}},
+		Samples: []*ogv1.Sample{{Name: "tcp.connect-time", Value: &ogv1.Sample_DoubleValue{DoubleValue: 42}}},
 	})
-	waitMetric(t, ctx, gw, "disp-1", "tcp.connect_time", func(d *storage.MetricSample) bool {
+	waitMetric(t, ctx, gw, "disp-1", "tcp.connect-time", func(d *storage.MetricSample) bool {
 		return d != nil && d.Value == 42
 	})
 	if dp, err := gw.LatestMetric(ctx, "disp-2", "tcp.open"); err != nil {

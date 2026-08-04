@@ -48,7 +48,7 @@ func TestPasswordChangeRevokesSessions(t *testing.T) {
 			t.Fatalf("login %s: want 204, got %d", username, resp.StatusCode)
 		}
 		for _, c := range resp.Cookies() {
-			if c.Name == "og_session" {
+			if c.Name == "og-session" {
 				return c.Value
 			}
 		}
@@ -57,7 +57,7 @@ func TestPasswordChangeRevokesSessions(t *testing.T) {
 	}
 	meStatus := func(cookie string) int {
 		req, _ := http.NewRequest("GET", base+"/api/v1/auth/me", nil)
-		req.AddCookie(&http.Cookie{Name: "og_session", Value: cookie})
+		req.AddCookie(&http.Cookie{Name: "og-session", Value: cookie})
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatalf("me: %v", err)
@@ -69,7 +69,7 @@ func TestPasswordChangeRevokesSessions(t *testing.T) {
 		b, _ := json.Marshal(map[string]string{"current_password": current, "new_password": next})
 		req, _ := http.NewRequest("POST", base+"/api/v1/auth/me:changePassword", bytes.NewReader(b))
 		req.Header.Set("Content-Type", "application/json")
-		req.AddCookie(&http.Cookie{Name: "og_session", Value: cookie})
+		req.AddCookie(&http.Cookie{Name: "og-session", Value: cookie})
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatalf("change password: %v", err)

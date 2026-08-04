@@ -36,7 +36,7 @@ function propagatesBadge(t: Tag): JSX.Element {
 
 const columns: FlatColumn<Tag>[] = [
   // The shared identity cell, under the honest header word: a tag's name is a
-  // keyspace key (icmp.rtt_avg is a legal key and an illegal segment), not the
+  // keyspace key (icmp.rtt-avg is a legal key and an illegal segment), not the
   // kebab segment every other list heads "Name". A tag carries no display name,
   // so the cell collapses to the key alone in the data face, which is the same
   // rule the labelled pages follow rather than an exception to it.

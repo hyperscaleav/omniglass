@@ -20,7 +20,7 @@ func TestDeriveSamples(t *testing.T) {
 	metric := "metric"
 	reg := collection.NewRegistry([]storage.PropertyType{
 		{Name: "tcp.open", Kind: &metric},
-		{Name: "tcp.connect_time", Kind: &metric},
+		{Name: "tcp.connect-time", Kind: &metric},
 	}, nil)
 	owner := storage.TaskOwner{Component: "disp-1", InterfaceName: "disp-1-tcp", InterfaceType: "tcp"}
 	ev := &ogv1.TelemetryBatch{
@@ -28,7 +28,7 @@ func TestDeriveSamples(t *testing.T) {
 		NodeId: "node-a",
 		Samples: []*ogv1.Sample{
 			{Name: "tcp.open", Value: &ogv1.Sample_DoubleValue{DoubleValue: 1}},
-			{Name: "tcp.connect_time", Value: &ogv1.Sample_DoubleValue{DoubleValue: 3.5}},
+			{Name: "tcp.connect-time", Value: &ogv1.Sample_DoubleValue{DoubleValue: 3.5}},
 			{Name: "not.registered", Value: &ogv1.Sample_DoubleValue{DoubleValue: 9}},
 		},
 	}

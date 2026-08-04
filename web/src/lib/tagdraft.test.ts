@@ -8,7 +8,7 @@ const registry: Tag[] = [
   tag("environment"),
   tag("category", ["component"]),
   tag("rack_position", ["location"]),
-  tag("asset_id", [], false),
+  tag("asset-id", [], false),
 ];
 
 describe("keyApplies", () => {
@@ -25,7 +25,7 @@ describe("keyApplies", () => {
 describe("keySuggestions", () => {
   it("offers only keys that apply to the kind and are not already bound", () => {
     const s = keySuggestions(registry, "component", ["environment"], "");
-    expect(s.map((t) => t.name)).toEqual(["asset_id", "category"]); // environment bound out, rack_position wrong kind
+    expect(s.map((t) => t.name)).toEqual(["asset-id", "category"]); // environment bound out, rack_position wrong kind
   });
   it("filters by a case-insensitive substring query", () => {
     const s = keySuggestions(registry, "location", [], "RACK");

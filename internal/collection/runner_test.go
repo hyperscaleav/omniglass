@@ -45,12 +45,12 @@ func TestCollectTCPOpen(t *testing.T) {
 	}
 	ct, ok := got[collection.SignalTCPConnectTime]
 	if !ok || ct.Value != 4 {
-		t.Fatalf("tcp.connect_time: want present val=4, got %+v (present=%v)", ct, ok)
+		t.Fatalf("tcp.connect-time: want present val=4, got %+v (present=%v)", ct, ok)
 	}
 }
 
 // TestCollectTCPClosed: a refused port yields tcp.open=0 with a reason, and
-// tcp.connect_time is ABSENT.
+// tcp.connect-time is ABSENT.
 func TestCollectTCPClosed(t *testing.T) {
 	r := &collection.Runner{TCP: fakeTCP{reach: collection.Refused}}
 	dps, err := r.CollectTCP(context.Background(), collection.TCPTask{Target: "10.0.0.5:22"})
@@ -66,7 +66,7 @@ func TestCollectTCPClosed(t *testing.T) {
 		t.Fatalf("tcp.open reason: want refused, got %q", open.Labels[collection.ReasonLabel])
 	}
 	if _, ok := got[collection.SignalTCPConnectTime]; ok {
-		t.Fatal("tcp.connect_time must be absent when the port is closed")
+		t.Fatal("tcp.connect-time must be absent when the port is closed")
 	}
 }
 

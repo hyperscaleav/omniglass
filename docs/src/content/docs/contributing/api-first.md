@@ -63,9 +63,9 @@ it into [core entities](/architecture/core-entities/). An earlier version of tha
 tables carrying a `name` column, which made it blind to 28 of the 51: absence of a `name` is not
 evidence of absence of an identifier, and a username and a content hash both escaped.
 
-A table on the **keyspace** rule (`internal/key`, snake_case with an optional dot hierarchy) is
+A table on the **keyspace** rule (`internal/key`, a kebab segment with an optional dot hierarchy) is
 deliberately outside this one, because
-`icmp.rtt_avg` is a legitimate keyspace key and an illegal entity key. Which table is which is not written down
+`icmp.rtt-avg` is a legitimate keyspace key and an illegal entity key. Which table is which is not written down
 here, because a hand-copied list is drift waiting to happen: `TestEveryNamedTableIsClassified` reads
 the generated schema, finds every table carrying a `name`, and fails until each one is classified onto
 one rule or the other with its reason. A new table joins the guard by existing.

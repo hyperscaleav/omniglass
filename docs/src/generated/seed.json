@@ -215,7 +215,7 @@
    "description": "ICMP inline probe result (1 = at least one echo returned, 0 = none)."
   },
   {
-   "name": "icmp.rtt_avg",
+   "name": "icmp.rtt-avg",
    "kind": "metric",
    "data_type": "float",
    "unit": "ms",
@@ -230,7 +230,7 @@
    "description": "TCP-connect probe result (1 = the port accepted a connection, 0 = refused/timeout)."
   },
   {
-   "name": "tcp.connect_time",
+   "name": "tcp.connect-time",
    "kind": "metric",
    "data_type": "float",
    "unit": "ms",
@@ -256,28 +256,28 @@
    "kind": "state",
    "data_type": "string",
    "display_name": "Video Input",
-   "description": "The selected video input on a display or switcher. A settable state: the set_input command tells the device which input to select (opening an intended value), and the device reports the observed input, so the two reconcile."
+   "description": "The selected video input on a display or switcher. A settable state: the set-input command tells the device which input to select (opening an intended value), and the device reports the observed input, so the two reconcile."
   },
   {
-   "name": "serial_number",
+   "name": "serial-number",
    "data_type": "string",
    "display_name": "Serial number",
    "description": "The manufacturer serial number of the device."
   },
   {
-   "name": "mac_address",
+   "name": "mac-address",
    "data_type": "string",
    "display_name": "MAC address",
    "description": "The primary hardware (MAC) address, lowercase colon-separated."
   },
   {
-   "name": "firmware_version",
+   "name": "firmware-version",
    "data_type": "string",
    "display_name": "Firmware version",
    "description": "The installed firmware or software version."
   },
   {
-   "name": "model_number",
+   "name": "model-number",
    "data_type": "string",
    "display_name": "Model number",
    "description": "The manufacturer model number."
@@ -297,7 +297,7 @@
  ],
  "command_types": [
   {
-   "name": "set_input",
+   "name": "set-input",
    "display_name": "Set Input",
    "description": "Tell a display or switcher which video input to select. A settleable command: it opens an intended video.input and settles when the device reports that input within the settle window."
   },
@@ -580,13 +580,13 @@
    ],
    "properties": [
     {
-     "name": "serial_number"
+     "name": "serial-number"
     },
     {
-     "name": "firmware_version"
+     "name": "firmware-version"
     },
     {
-     "name": "model_number",
+     "name": "model-number",
      "default": "\"Room Bar\""
     }
    ]
@@ -601,13 +601,13 @@
    ],
    "properties": [
     {
-     "name": "serial_number"
+     "name": "serial-number"
     },
     {
-     "name": "firmware_version"
+     "name": "firmware-version"
     },
     {
-     "name": "model_number",
+     "name": "model-number",
      "default": "\"QM55\""
     }
    ]

@@ -10,9 +10,9 @@ import { ME_KEY, type Me } from "../lib/auth";
 // caller holds property:create / property:update. Data is seeded into the query cache
 // so no server is needed.
 const seed: PropertyRow[] = [
-  { name: "serial_number", data_type: "string", display_name: "Serial number", official: true },
+  { name: "serial-number", data_type: "string", display_name: "Serial number", official: true },
   { name: "icmp.reachable", data_type: "int", display_name: "ICMP Reachable", kind: "metric", official: true },
-  { name: "rack_unit", data_type: "int", display_name: "Rack unit", official: false },
+  { name: "rack-unit", data_type: "int", display_name: "Rack unit", official: false },
 ];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
@@ -34,16 +34,16 @@ describe("Properties page", () => {
 
   it("lists the seeded properties", () => {
     mount();
-    expect(screen.getByText("serial_number")).toBeTruthy();
+    expect(screen.getByText("serial-number")).toBeTruthy();
     expect(screen.getByText("icmp.reachable")).toBeTruthy();
-    expect(screen.getByText("rack_unit")).toBeTruthy();
+    expect(screen.getByText("rack-unit")).toBeTruthy();
   });
 
   it("renders the label and the key in one identity cell, not two columns", () => {
     mount();
     // The key is a keyspace key rather than a kebab segment, so the header word stays
     // "Key"; what changes is that the label now sits above it in the same cell.
-    const cell = screen.getByText("serial_number").closest("td");
+    const cell = screen.getByText("serial-number").closest("td");
     expect(cell?.textContent).toContain("Serial number");
     expect(screen.getByRole("columnheader", { name: "Key" })).toBeTruthy();
     expect(screen.queryByRole("columnheader", { name: "Label" })).toBeNull();

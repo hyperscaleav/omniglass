@@ -76,7 +76,7 @@ say what the product can **do**, the contract says what it **carries**.
   property already on the contract revises that line in place rather than adding a second.
 - **The default is typed by the catalog, not here.** The panel labels the input with the property's
   data type, coerces what you type to it, and refuses a value that will not parse. Type and validation
-  live on the property, so a product cannot redefine what `serial_number` means, only what a fresh
+  live on the property, so a product cannot redefine what `serial-number` means, only what a fresh
   instance of that product starts with.
 - **Required** means an instance must resolve the property to a value. A component of the product
   cannot save with a required property empty (see
@@ -85,8 +85,8 @@ say what the product can **do**, the contract says what it **carries**.
   **keep** any value they set for it; the value simply reads as **off contract** from then on, since
   nothing declares it any more.
 - An **official** (seed-owned) product's contract is read-only, like the rest of the row: the seeded
-  Cisco Room Bar and Samsung QM55 ship declaring `serial_number`, `firmware_version`, and
-  `model_number`, and those declarations come with the release.
+  Cisco Room Bar and Samsung QM55 ship declaring `serial-number`, `firmware-version`, and
+  `model-number`, and those declarations come with the release.
 
 From the CLI the contract is `omniglass product property list <id>`,
 `omniglass product property update <id> <property>`, and

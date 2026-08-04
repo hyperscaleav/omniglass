@@ -5,7 +5,7 @@ import { uuidFor } from "./testids";
 describe("mergeResolved and byName", () => {
   const tag = { key: "environment", value: "prod", owner_kind: "location", owner_name: "hq", band: 1, depth: 0, winner: true };
   const tagShadow = { key: "environment", value: "dev", owner_kind: "platform", band: 0, depth: 0, winner: false };
-  const variable = { id: uuidFor("v1"), name: "poll_interval", value_type: "int", value: 30, owner_kind: "component", owner_name: "codec-1", band: 3, depth: 0, winner: true };
+  const variable = { id: uuidFor("v1"), name: "poll-interval", value_type: "int", value: 30, owner_kind: "component", owner_name: "codec-1", band: 3, depth: 0, winner: true };
   const secret = { id: uuidFor("s1"), name: "device-login", secret_type: "basic-auth", owner_kind: "location", owner_name: "hq", band: 1, depth: 0, winner: true, fields: [] };
 
   it("carries the kind explicitly, because the three cascades have different bands", () => {

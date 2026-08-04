@@ -29,7 +29,7 @@
     {
       "table": "command_type",
       "shape": "keyspace",
-      "reason": "set_input, a command key"
+      "reason": "set-input, a command key"
     },
     {
       "table": "component",
@@ -140,7 +140,7 @@
     {
       "table": "property_type",
       "shape": "keyspace",
-      "reason": "icmp.rtt_avg, a signal key referenced from drivers and templates"
+      "reason": "icmp.rtt-avg, a signal key referenced from drivers and templates"
     },
     {
       "table": "role",
@@ -150,7 +150,7 @@
     {
       "table": "secret",
       "shape": "keyspace",
-      "reason": "og_session, a cascade key referenced from expressions"
+      "reason": "og-session, a cascade key referenced from expressions"
     },
     {
       "table": "secret_type",
@@ -200,7 +200,7 @@
     {
       "table": "tag",
       "shape": "keyspace",
-      "reason": "asset_id, a tag key; the console has always called it a key"
+      "reason": "asset-id, a tag key; the console has always called it a key"
     },
     {
       "table": "tag_binding",
@@ -214,7 +214,7 @@
     {
       "table": "variable",
       "shape": "keyspace",
-      "reason": "poll_interval, a cascade key referenced from expressions"
+      "reason": "poll-interval, a cascade key referenced from expressions"
     },
     {
       "table": "vendor",

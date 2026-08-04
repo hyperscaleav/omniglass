@@ -12,7 +12,7 @@ import (
 //
 // This is the ENTITY key rule, and it is not the only key rule. `internal/key` owns
 // the canonical keyspace that `property_type`, `event_type`, and `command_type`
-// share (`icmp.rtt_avg`, `interface.reachable`): lowercase snake_case, optionally
+// share (`icmp.rtt-avg`, `interface.reachable`): lowercase snake_case, optionally
 // dot-hierarchied. The two must not be merged by accident, because a keyspace key
 // legitimately carries a dot and an underscore while an entity key legitimately
 // carries a hyphen.

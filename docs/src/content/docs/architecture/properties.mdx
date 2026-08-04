@@ -15,7 +15,7 @@ Vocabulary is [ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-i
 
 :::note[Partial]
 Built observed **metric** path (reachability): the tcp probe produces `tcp.open` /
-`tcp.connect_time`, the icmp (ping) probe `icmp.reachable` / `icmp.rtt_avg`; the ingest consumer
+`tcp.connect-time`, the icmp (ping) probe `icmp.reachable` / `icmp.rtt-avg`; the ingest consumer
 writes them to `metric` with `provenance=observed`, owner bound server-side from the task's
 interface (`owner_kind=component`), reject-not-project against the `property_type` registry.
 First observed **state** producer: the node computes the per-interface verdict `interface.reachable`
@@ -88,7 +88,7 @@ An unnormalized raw occurrence (a syslog line, a raw webhook frame) is neither: 
 
 A sample and an event are different shapes, so each has its own registry: [`event_type`](/architecture/events/) for occurrences, `property_type` for sample keys. **`property_type`** describes every key as `(name, official, kind, data_type, unit, precision, fusion_policy, validation)`: the name globally unique, **`official`** deciding authority (the `scope` / `template_id` ladder is future design, [Key scope](#key-scope-template-org-official)). The kind is compiled into the edge unit, so a value routes to the right table with no runtime lookup; `fusion_policy` is a read-time **default** ([Fusion](#fusion)).
 
-**Property naming is owner-agnostic**: a key names a **measurement, never its owner** (`temperature`, not `room.temperature`): snake_case dot segments, the canonical unit in the `unit` field (`fan.speed` + `unit: rpm`, not `fan_rpm`), no `system.` / `device.` / `room.` prefix, grouped by domain (`cpu.utilization`, `power.state`, `video.input`, `audio.level`, `network.icmp.rtt`). One canonical path is one comparable signal across vendors, the normalization cross-fleet dashboards and AI hinge on. The official set seeds from `internal/seed/properties.yaml`: today the eleven types the built collection vertical uses (`icmp.reachable`, `icmp.rtt_avg`, `tcp.open`, `tcp.connect_time`, `interface.reachable`, `health`, `video.input`, `serial_number`, `mac_address`, `firmware_version`, `model_number`); the OpenTelemetry-semconv-aligned IT leaves and the [OpenAV minimum-device-functionality guidelines](https://github.com/OpenAVCloud/specifications/blob/main/min-device-functionality/OAVC-AV-Device-Minimum-Functionality-Guidelines.md) set are still to come.
+**Property naming is owner-agnostic**: a key names a **measurement, never its owner** (`temperature`, not `room.temperature`): kebab dot segments, the canonical unit in the `unit` field (`fan.speed` + `unit: rpm`, not `fan_rpm`), no `system.` / `device.` / `room.` prefix, grouped by domain (`cpu.utilization`, `power.state`, `video.input`, `audio.level`, `network.icmp.rtt`). One canonical path is one comparable signal across vendors, the normalization cross-fleet dashboards and AI hinge on. The official set seeds from `internal/seed/properties.yaml`: today the eleven types the built collection vertical uses (`icmp.reachable`, `icmp.rtt-avg`, `tcp.open`, `tcp.connect-time`, `interface.reachable`, `health`, `video.input`, `serial-number`, `mac-address`, `firmware-version`, `model-number`); the OpenTelemetry-semconv-aligned IT leaves and the [OpenAV minimum-device-functionality guidelines](https://github.com/OpenAVCloud/specifications/blob/main/min-device-functionality/OAVC-AV-Device-Minimum-Functionality-Guidelines.md) set are still to come.
 
 ### One identity, three shapes
 

@@ -99,10 +99,10 @@ func TestTagBindingLifecycle(t *testing.T) {
 	seedTree(t, gw)
 
 	mustTag(t, gw, "category", []string{"component"}, true)
-	mustTag(t, gw, "rack_only", []string{"location"}, true) // does not apply to a component
+	mustTag(t, gw, "rack-only", []string{"location"}, true) // does not apply to a component
 
 	// A key that does not apply to the owner kind is refused.
-	if _, err := gw.SetTagBinding(ctx, "", "rack_only", "component", strptr("codec-1"), "x", all, all); !errors.Is(err, storage.ErrTagKindNotAllowed) {
+	if _, err := gw.SetTagBinding(ctx, "", "rack-only", "component", strptr("codec-1"), "x", all, all); !errors.Is(err, storage.ErrTagKindNotAllowed) {
 		t.Errorf("kind not allowed = %v, want ErrTagKindNotAllowed", err)
 	}
 	// An empty value is refused.
@@ -190,16 +190,16 @@ func TestTagCascadeResolve(t *testing.T) {
 	comp := seedTree(t, gw)
 
 	mustTag(t, gw, "environment", nil, true) // cascades
-	mustTag(t, gw, "asset_id", nil, false)   // flat, per-entity only
+	mustTag(t, gw, "asset-id", nil, false)   // flat, per-entity only
 
 	// environment overridden most-specific-wins down the cascade.
 	mustBind(t, gw, "environment", "platform", nil, "prod")
 	mustBind(t, gw, "environment", "location", strptr("campus"), "staging")
 	mustBind(t, gw, "environment", "component", strptr("codec-1"), "dev")
-	// asset_id bound above the component (should NOT resolve, it is non-propagating)
+	// asset-id bound above the component (should NOT resolve, it is non-propagating)
 	// and directly on the component (should resolve).
-	mustBind(t, gw, "asset_id", "location", strptr("campus"), "LOC-1")
-	mustBind(t, gw, "asset_id", "component", strptr("codec-1"), "A-42")
+	mustBind(t, gw, "asset-id", "location", strptr("campus"), "LOC-1")
+	mustBind(t, gw, "asset-id", "component", strptr("codec-1"), "A-42")
 
 	resolved, err := gw.ResolveTags(ctx, comp.ID, "", all)
 	if err != nil {
@@ -216,14 +216,14 @@ func TestTagCascadeResolve(t *testing.T) {
 	if w := winners["environment"]; w.Value != "dev" || w.OwnerKind != "component" {
 		t.Errorf("environment winner = %+v, want dev on component", w)
 	}
-	// asset_id: only the component binding resolves; the location one is dropped
+	// asset-id: only the component binding resolves; the location one is dropped
 	// by the non-propagating rule, so the component value wins uncontested.
-	if w := winners["asset_id"]; w.Value != "A-42" || w.OwnerKind != "component" {
-		t.Errorf("asset_id winner = %+v, want A-42 on component", w)
+	if w := winners["asset-id"]; w.Value != "A-42" || w.OwnerKind != "component" {
+		t.Errorf("asset-id winner = %+v, want A-42 on component", w)
 	}
 	// The non-propagating location binding must not appear as a candidate at all.
 	for _, r := range resolved {
-		if r.Key == "asset_id" && r.OwnerKind == "location" {
+		if r.Key == "asset-id" && r.OwnerKind == "location" {
 			t.Errorf("non-propagating location binding leaked into resolve: %+v", r)
 		}
 	}

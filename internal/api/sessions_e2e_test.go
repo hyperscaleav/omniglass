@@ -73,7 +73,7 @@ func TestSelfServiceSessions(t *testing.T) {
 			t.Fatalf("login %s: want 204, got %d", user, resp.StatusCode)
 		}
 		for _, c := range resp.Cookies() {
-			if c.Name == "og_session" {
+			if c.Name == "og-session" {
 				return c.Value
 			}
 		}
@@ -83,7 +83,7 @@ func TestSelfServiceSessions(t *testing.T) {
 	listSessions := func(cookie string) []sessionRow {
 		t.Helper()
 		req, _ := http.NewRequest("GET", base+"/api/v1/auth/me/sessions", nil)
-		req.AddCookie(&http.Cookie{Name: "og_session", Value: cookie})
+		req.AddCookie(&http.Cookie{Name: "og-session", Value: cookie})
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatalf("list sessions: %v", err)
@@ -103,7 +103,7 @@ func TestSelfServiceSessions(t *testing.T) {
 	revoke := func(cookie, id string) int {
 		t.Helper()
 		req, _ := http.NewRequest("POST", base+"/api/v1/auth/me/sessions/"+id+":revoke", nil)
-		req.AddCookie(&http.Cookie{Name: "og_session", Value: cookie})
+		req.AddCookie(&http.Cookie{Name: "og-session", Value: cookie})
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatalf("revoke: %v", err)
@@ -114,7 +114,7 @@ func TestSelfServiceSessions(t *testing.T) {
 	meStatus := func(cookie string) int {
 		t.Helper()
 		req, _ := http.NewRequest("GET", base+"/api/v1/auth/me", nil)
-		req.AddCookie(&http.Cookie{Name: "og_session", Value: cookie})
+		req.AddCookie(&http.Cookie{Name: "og-session", Value: cookie})
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatalf("me: %v", err)
@@ -271,7 +271,7 @@ func TestSelfServiceRevokeAll(t *testing.T) {
 		}
 		defer resp.Body.Close()
 		for _, c := range resp.Cookies() {
-			if c.Name == "og_session" {
+			if c.Name == "og-session" {
 				return c.Value
 			}
 		}
@@ -280,7 +280,7 @@ func TestSelfServiceRevokeAll(t *testing.T) {
 	}
 	meStatus := func(cookie string) int {
 		req, _ := http.NewRequest("GET", base+"/api/v1/auth/me", nil)
-		req.AddCookie(&http.Cookie{Name: "og_session", Value: cookie})
+		req.AddCookie(&http.Cookie{Name: "og-session", Value: cookie})
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatalf("me: %v", err)
@@ -290,7 +290,7 @@ func TestSelfServiceRevokeAll(t *testing.T) {
 	}
 	kinds := func(cookie string) (sessions, tokens int) {
 		req, _ := http.NewRequest("GET", base+"/api/v1/auth/me/sessions", nil)
-		req.AddCookie(&http.Cookie{Name: "og_session", Value: cookie})
+		req.AddCookie(&http.Cookie{Name: "og-session", Value: cookie})
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatalf("list: %v", err)
@@ -314,7 +314,7 @@ func TestSelfServiceRevokeAll(t *testing.T) {
 		b, _ := json.Marshal(map[string]string{"purpose": purpose})
 		req, _ := http.NewRequest("POST", base+"/api/v1/auth/me/sessions:revokeAll", bytes.NewReader(b))
 		req.Header.Set("Content-Type", "application/json")
-		req.AddCookie(&http.Cookie{Name: "og_session", Value: cookie})
+		req.AddCookie(&http.Cookie{Name: "og-session", Value: cookie})
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatalf("revokeAll: %v", err)
@@ -407,7 +407,7 @@ func TestSelfServiceCreateToken(t *testing.T) {
 	}
 	var cookie string
 	for _, c := range resp.Cookies() {
-		if c.Name == "og_session" {
+		if c.Name == "og-session" {
 			cookie = c.Value
 		}
 	}
@@ -417,7 +417,7 @@ func TestSelfServiceCreateToken(t *testing.T) {
 		raw, _ := json.Marshal(body)
 		req, _ := http.NewRequest("POST", base+"/api/v1/auth/me/tokens", bytes.NewReader(raw))
 		req.Header.Set("Content-Type", "application/json")
-		req.AddCookie(&http.Cookie{Name: "og_session", Value: cookie})
+		req.AddCookie(&http.Cookie{Name: "og-session", Value: cookie})
 		r, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatalf("create token: %v", err)
@@ -456,7 +456,7 @@ func TestSelfServiceCreateToken(t *testing.T) {
 
 	// It shows in the session list as a described token.
 	req, _ = http.NewRequest("GET", base+"/api/v1/auth/me/sessions", nil)
-	req.AddCookie(&http.Cookie{Name: "og_session", Value: cookie})
+	req.AddCookie(&http.Cookie{Name: "og-session", Value: cookie})
 	r, _ = http.DefaultClient.Do(req)
 	var listed struct {
 		Sessions []struct {

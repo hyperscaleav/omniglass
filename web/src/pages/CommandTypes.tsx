@@ -19,7 +19,7 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Command Types: the "do" catalog (Catalog > Command Types), the twin of the
 // Properties and Event Types catalogs. A command type names what a component can be
-// told (set_input, reboot); a settleable one targets a property and carries a settle
+// told (set-input, reboot); a settleable one targets a property and carries a settle
 // window, a fire-and-forget one neither. Official (seed-owned) types are read-only.
 
 function originBadge(official: boolean): JSX.Element {
@@ -35,7 +35,7 @@ function targetCell(target: string | undefined): JSX.Element {
 }
 
 // The header stays "Key" rather than the primitive's default "Name": a command
-// type's `name` is a keyspace key (set_input, video.input), not the kebab segment
+// type's `name` is a keyspace key (set-input, video.input), not the kebab segment
 // the rest of the estate is addressed by, and calling it a name would be a lie.
 const columns: FlatColumn<CommandTypeRow>[] = [
   identityColumn<CommandTypeRow>({ label: "Key" }),
@@ -229,8 +229,8 @@ export function CreateCommandTypeForm(p: { onCreated: (r: CommandTypeRow) => voi
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Key" hint="A lowercase, dot-hierarchied name, e.g. set_input or reboot.">
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="set_input" onInput={(e) => setName(e.currentTarget.value)} />
+      <Field label="Key" hint="A lowercase, dot-hierarchied name, e.g. set-input or reboot.">
+        <input class="input input-bordered w-full font-data" value={name()} placeholder="set-input" onInput={(e) => setName(e.currentTarget.value)} />
       </Field>
       <Field label="Name">
         <input class="input input-bordered w-full" value={displayName()} placeholder="Set input" onInput={(e) => setDisplayName(e.currentTarget.value)} />

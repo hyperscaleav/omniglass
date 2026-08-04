@@ -10,18 +10,19 @@ func TestValidateKey(t *testing.T) {
 		name, key string
 		ok        bool
 	}{
-		{"flat", "serial_number", true},
+		{"flat", "serial-number", true},
 		{"dotted", "interface.reachable", true},
-		{"multi_dot", "icmp.rtt_avg", true},
-		{"digits", "tcp_open2", true},
+		{"multi_dot", "icmp.rtt-avg", true},
+		{"digits", "tcp-open2", true},
 		{"empty", "", false},
 		{"leading_dot", ".a", false},
 		{"trailing_dot", "a.", false},
 		{"double_dot", "a..b", false},
-		{"upper", "Serial_Number", false},
+		{"upper", "Serial-Number", false},
 		{"space", "serial number", false},
-		{"hyphen", "serial-number", false},
-		{"leading_digit_segment", "9lives", false},
+		{"underscore", "serial_number", false},
+		{"leading_digit_segment", "9lives", true},
+		{"leading_hyphen_segment", "-lives", false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

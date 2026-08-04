@@ -49,14 +49,14 @@ func TestEffectiveProperties(t *testing.T) {
 		t.Fatalf("create product: %v", err)
 	}
 	if _, err := gw.SetProductProperty(ctx, "", "acme-panel", storage.ProductPropertySpec{
-		PropertyTypeName: "firmware_version", DefaultValue: json.RawMessage(`"1.0.0"`),
+		PropertyTypeName: "firmware-version", DefaultValue: json.RawMessage(`"1.0.0"`),
 	}); err != nil {
-		t.Fatalf("set contract firmware_version: %v", err)
+		t.Fatalf("set contract firmware-version: %v", err)
 	}
 	if _, err := gw.SetProductProperty(ctx, "", "acme-panel", storage.ProductPropertySpec{
-		PropertyTypeName: "serial_number", Required: true,
+		PropertyTypeName: "serial-number", Required: true,
 	}); err != nil {
-		t.Fatalf("set contract serial_number: %v", err)
+		t.Fatalf("set contract serial-number: %v", err)
 	}
 
 	product := "acme-panel"
@@ -75,44 +75,44 @@ func TestEffectiveProperties(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("want the 2 contract properties, got %d: %+v", len(got), got)
 	}
-	fw := idx["firmware_version"]
+	fw := idx["firmware-version"]
 	if string(fw.Value) != `"1.0.0"` || fw.IsSet || !fw.FromContract {
-		t.Fatalf("firmware_version unset: want default 1.0.0, is_set=false, from_contract=true, got %+v", fw)
+		t.Fatalf("firmware-version unset: want default 1.0.0, is_set=false, from_contract=true, got %+v", fw)
 	}
-	sn := idx["serial_number"]
+	sn := idx["serial-number"]
 	if !sn.Required || sn.IsSet || len(sn.Value) != 0 {
-		t.Fatalf("serial_number unset: want required, unset, no value, got %+v", sn)
+		t.Fatalf("serial-number unset: want required, unset, no value, got %+v", sn)
 	}
 
 	// Override a contract property: the set value wins and is marked.
-	if _, err := gw.SetProperty(ctx, "", "component", "panel-1", "firmware_version", "", json.RawMessage(`"2.5.1"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "component", "panel-1", "firmware-version", "", json.RawMessage(`"2.5.1"`), all); err != nil {
 		t.Fatalf("set firmware override: %v", err)
 	}
 	idx = byName(mustResolve(t, gw, "panel-1", all))
-	fw = idx["firmware_version"]
+	fw = idx["firmware-version"]
 	if string(fw.Value) != `"2.5.1"` || !fw.IsSet || fw.ValueID == "" || string(fw.DefaultValue) != `"1.0.0"` {
-		t.Fatalf("firmware_version override: want 2.5.1 set over default 1.0.0, got %+v", fw)
+		t.Fatalf("firmware-version override: want 2.5.1 set over default 1.0.0, got %+v", fw)
 	}
 
 	// A repeat set of the same series updates in place (idempotent save), it does
 	// not conflict or add a second row.
-	if _, err := gw.SetProperty(ctx, "", "component", "panel-1", "firmware_version", "", json.RawMessage(`"2.5.2"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "component", "panel-1", "firmware-version", "", json.RawMessage(`"2.5.2"`), all); err != nil {
 		t.Fatalf("re-set firmware override: %v", err)
 	}
 	idx = byName(mustResolve(t, gw, "panel-1", all))
-	if string(idx["firmware_version"].Value) != `"2.5.2"` || len(mustResolve(t, gw, "panel-1", all)) != 2 {
-		t.Fatalf("re-set: want a single updated row at 2.5.2, got %+v", idx["firmware_version"])
+	if string(idx["firmware-version"].Value) != `"2.5.2"` || len(mustResolve(t, gw, "panel-1", all)) != 2 {
+		t.Fatalf("re-set: want a single updated row at 2.5.2, got %+v", idx["firmware-version"])
 	}
 
 	// An ad-hoc property the contract does not declare still resolves, flagged
 	// off-contract.
-	if _, err := gw.SetProperty(ctx, "", "component", "panel-1", "mac_address", "", json.RawMessage(`"aa:bb:cc:dd:ee:ff"`), all); err != nil {
-		t.Fatalf("set ad-hoc mac_address: %v", err)
+	if _, err := gw.SetProperty(ctx, "", "component", "panel-1", "mac-address", "", json.RawMessage(`"aa:bb:cc:dd:ee:ff"`), all); err != nil {
+		t.Fatalf("set ad-hoc mac-address: %v", err)
 	}
 	idx = byName(mustResolve(t, gw, "panel-1", all))
-	mac := idx["mac_address"]
+	mac := idx["mac-address"]
 	if !mac.IsSet || mac.FromContract || string(mac.Value) != `"aa:bb:cc:dd:ee:ff"` {
-		t.Fatalf("ad-hoc mac_address: want set, from_contract=false, got %+v", mac)
+		t.Fatalf("ad-hoc mac-address: want set, from_contract=false, got %+v", mac)
 	}
 	if len(idx) != 3 {
 		t.Fatalf("want 2 contract + 1 ad-hoc, got %d", len(idx))
@@ -120,14 +120,14 @@ func TestEffectiveProperties(t *testing.T) {
 
 	// Clearing an override falls back to the contract default; clearing again is an
 	// explicit miss.
-	if err := gw.ClearProperty(ctx, "", "component", "panel-1", "firmware_version", "", all); err != nil {
+	if err := gw.ClearProperty(ctx, "", "component", "panel-1", "firmware-version", "", all); err != nil {
 		t.Fatalf("clear firmware override: %v", err)
 	}
 	idx = byName(mustResolve(t, gw, "panel-1", all))
-	if fw = idx["firmware_version"]; string(fw.Value) != `"1.0.0"` || fw.IsSet {
+	if fw = idx["firmware-version"]; string(fw.Value) != `"1.0.0"` || fw.IsSet {
 		t.Fatalf("after clear: want the default back and is_set=false, got %+v", fw)
 	}
-	if err := gw.ClearProperty(ctx, "", "component", "panel-1", "firmware_version", "", all); !errors.Is(err, storage.ErrPropertyNotFound) {
+	if err := gw.ClearProperty(ctx, "", "component", "panel-1", "firmware-version", "", all); !errors.Is(err, storage.ErrPropertyNotFound) {
 		t.Fatalf("clear an unset property: want ErrPropertyNotFound, got %v", err)
 	}
 
@@ -135,12 +135,12 @@ func TestEffectiveProperties(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "loose-1"}, all); err != nil {
 		t.Fatalf("create productless component: %v", err)
 	}
-	if _, err := gw.SetProperty(ctx, "", "component", "loose-1", "serial_number", "", json.RawMessage(`"SN-9"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "component", "loose-1", "serial-number", "", json.RawMessage(`"SN-9"`), all); err != nil {
 		t.Fatalf("set on productless: %v", err)
 	}
 	loose := mustResolve(t, gw, "loose-1", all)
-	if len(loose) != 1 || loose[0].PropertyTypeName != "serial_number" || loose[0].FromContract {
-		t.Fatalf("productless component: want a single ad-hoc serial_number, got %+v", loose)
+	if len(loose) != 1 || loose[0].PropertyTypeName != "serial-number" || loose[0].FromContract {
+		t.Fatalf("productless component: want a single ad-hoc serial-number, got %+v", loose)
 	}
 
 	// A value naming a property outside the catalog trips the property FK.
@@ -148,7 +148,7 @@ func TestEffectiveProperties(t *testing.T) {
 		t.Fatalf("unknown property: want ErrPropertyRefNotFound, got %v", err)
 	}
 	// An unknown component is the non-disclosing not-found, never an opaque FK error.
-	if _, err := gw.SetProperty(ctx, "", "component", "ghost", "serial_number", "", json.RawMessage(`"x"`), all); !errors.Is(err, storage.ErrComponentNotFound) {
+	if _, err := gw.SetProperty(ctx, "", "component", "ghost", "serial-number", "", json.RawMessage(`"x"`), all); !errors.Is(err, storage.ErrComponentNotFound) {
 		t.Fatalf("unknown component: want ErrComponentNotFound, got %v", err)
 	}
 }

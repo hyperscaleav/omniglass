@@ -17,12 +17,15 @@ import (
 // MaxKeyLen bounds a canonical key name.
 const MaxKeyLen = 128
 
-// segment is one dot-separated component of a key: a lowercase identifier.
-var segment = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+// segment is one dot-separated component of a key. It is the SAME shape as an
+// entity key (storage.ValidateEntityKey): lowercase letters, digits, and hyphens.
+// One character set across the platform, so a key is a dot-joined path of segments
+// and an entity key is a path of one.
+var segment = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
-// ValidateKey accepts a lowercase snake_case key, optionally dot-hierarchied
-// (serial_number, interface.reachable). Each dot segment is a lowercase identifier
-// (a leading letter, then lowercase letters, digits, or underscores).
+// ValidateKey accepts a kebab key, optionally dot-hierarchied (serial-number,
+// interface.reachable, icmp.rtt-avg). Each dot segment is lowercase letters, digits,
+// and hyphens.
 func ValidateKey(name string) error {
 	if name == "" {
 		return fmt.Errorf("key: name is empty")
@@ -32,7 +35,7 @@ func ValidateKey(name string) error {
 	}
 	for _, seg := range strings.Split(name, ".") {
 		if !segment.MatchString(seg) {
-			return fmt.Errorf("key: %q must be lowercase dot-separated identifiers (a leading letter, then lowercase letters, digits, or underscores)", name)
+			return fmt.Errorf("key: %q must be lowercase dot-separated segments (letters, digits, and hyphens)", name)
 		}
 	}
 	return nil

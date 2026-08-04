@@ -13,8 +13,8 @@ import SchemaTable from '../../../components/SchemaTable.astro';
 The first collection path is live end to end: an edge node runs **reachability probes** against a
 component's interfaces (each an **API named by the protocol it speaks**, typed by its **transport**:
 `tcp`, `ssh`, and `http` reach by opening the tcp port, `icmp` pings), ships a protobuf
-`TelemetryBatch` over a JetStream durable consumer, and `tcp.open` / `tcp.connect_time` and
-`icmp.reachable` / `icmp.rtt_avg` land in `metric` owned by the target component. The owner is bound
+`TelemetryBatch` over a JetStream durable consumer, and `tcp.open` / `tcp.connect-time` and
+`icmp.reachable` / `icmp.rtt-avg` land in `metric` owned by the target component. The owner is bound
 **server-side** from the task's interface (the node stamps no component identity); the ingest
 consumer confines a node to its own tasks (another node's `task_id` is orphan-dropped) and rejects
 unregistered sample names. A non-answering icmp target is DATA (`icmp.reachable=0` with a reason);
@@ -150,8 +150,8 @@ Built today: the `icmp` and `tcp` probes (with `ssh` and `http` probing as tcp-c
 
 | interface type | shape | config (`interface.params`) | samples |
 |---|---|---|---|
-| `icmp` | inline probe | `target` (host or IP), `count`, `timeout` | `icmp.reachable`, `icmp.rtt_avg` (fixed) |
-| `tcp` | inline probe | `target` (`host:port`), `timeout` | `tcp.open`, `tcp.connect_time` (fixed) |
+| `icmp` | inline probe | `target` (host or IP), `count`, `timeout` | `icmp.reachable`, `icmp.rtt-avg` (fixed) |
+| `tcp` | inline probe | `target` (`host:port`), `timeout` | `tcp.open`, `tcp.connect-time` (fixed) |
 
 :::design[The remaining transports and their per-task spec, tracked in #489]
 

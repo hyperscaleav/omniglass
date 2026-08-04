@@ -1,5 +1,5 @@
 # The official property_type canon, seeded idempotently at boot. A property type is a
-# typed, owner-agnostic signal keyed by name (snake_case, dot-hierarchied) that a
+# typed, owner-agnostic signal keyed by name (kebab-case, dot-hierarchied) that a
 # sample observes and a field declares. Observed property types carry a kind
 # (metric/state) and unit; declared attribute property types carry neither. validation
 # is a JSON Schema fragment.
@@ -10,7 +10,7 @@ properties:
     validation: { minimum: 0, maximum: 1 }
     display_name: ICMP Reachable
     description: ICMP inline probe result (1 = at least one echo returned, 0 = none).
-  - name: icmp.rtt_avg
+  - name: icmp.rtt-avg
     kind: metric
     data_type: float
     unit: ms
@@ -23,7 +23,7 @@ properties:
     validation: { minimum: 0, maximum: 1 }
     display_name: TCP Port Open
     description: TCP-connect probe result (1 = the port accepted a connection, 0 = refused/timeout).
-  - name: tcp.connect_time
+  - name: tcp.connect-time
     kind: metric
     data_type: float
     unit: ms
@@ -57,23 +57,23 @@ properties:
     display_name: Video Input
     description: >-
       The selected video input on a display or switcher. A settable state: the
-      set_input command tells the device which input to select (opening an intended
+      set-input command tells the device which input to select (opening an intended
       value), and the device reports the observed input, so the two reconcile.
   # Declared attribute properties: no kind (not observed), the starter set a field draws from.
-  - name: serial_number
+  - name: serial-number
     data_type: string
     display_name: Serial number
     description: The manufacturer serial number of the device.
-  - name: mac_address
+  - name: mac-address
     data_type: string
     validation: { pattern: "^([0-9a-f]{2}:){5}[0-9a-f]{2}$" }
     display_name: MAC address
     description: The primary hardware (MAC) address, lowercase colon-separated.
-  - name: firmware_version
+  - name: firmware-version
     data_type: string
     display_name: Firmware version
     description: The installed firmware or software version.
-  - name: model_number
+  - name: model-number
     data_type: string
     display_name: Model number
     description: The manufacturer model number.
