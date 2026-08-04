@@ -59,13 +59,13 @@ func ValidateName(table, name string) error {
 // position in a topic and can never split into two.
 func validateEntityName(name string) error {
 	if len(name) > MaxEntityNameLen {
-		return fmt.Errorf("%w: %q exceeds %d characters", ErrInvalidEntityKey, name, MaxEntityNameLen)
+		return fmt.Errorf("%w: %q exceeds %d characters", ErrInvalidEntityName, name, MaxEntityNameLen)
 	}
-	if !entityKeyRe.MatchString(name) {
-		return fmt.Errorf("%w: %q must be lowercase letters, digits, and hyphens", ErrInvalidEntityKey, name)
+	if !entityNameRe.MatchString(name) {
+		return fmt.Errorf("%w: %q must be lowercase letters, digits, and hyphens", ErrInvalidEntityName, name)
 	}
 	if isUUID(name) {
-		return fmt.Errorf("%w: %q", ErrEntityKeyIsUUID, name)
+		return fmt.Errorf("%w: %q", ErrEntityNameIsUUID, name)
 	}
 	return nil
 }
@@ -75,22 +75,22 @@ func validateEntityName(name string) error {
 // on the segment rule rather than needing a case of its own.
 func validateKeyspaceName(name string) error {
 	if name == "" {
-		return fmt.Errorf("%w: name is empty", ErrInvalidEntityKey)
+		return fmt.Errorf("%w: name is empty", ErrInvalidEntityName)
 	}
 	if len(name) > MaxKeyspaceNameLen {
-		return fmt.Errorf("%w: %q exceeds %d characters", ErrInvalidEntityKey, name, MaxKeyspaceNameLen)
+		return fmt.Errorf("%w: %q exceeds %d characters", ErrInvalidEntityName, name, MaxKeyspaceNameLen)
 	}
 	for _, seg := range strings.Split(name, ".") {
-		if !entityKeyRe.MatchString(seg) {
+		if !entityNameRe.MatchString(seg) {
 			return fmt.Errorf("%w: %q must be lowercase dot-separated segments of letters, digits, and hyphens",
-				ErrInvalidEntityKey, name)
+				ErrInvalidEntityName, name)
 		}
 	}
 	// A keyspace name may not be a uuid either. key.ValidateKey never checked this,
 	// so a uuid-shaped property key was legal; the reason to forbid it is the same as
 	// for an entity name, since both are resolved against a uuid first.
 	if isUUID(name) {
-		return fmt.Errorf("%w: %q", ErrEntityKeyIsUUID, name)
+		return fmt.Errorf("%w: %q", ErrEntityNameIsUUID, name)
 	}
 	return nil
 }

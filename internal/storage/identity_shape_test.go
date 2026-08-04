@@ -89,10 +89,10 @@ func TestEveryTableHasADeclaredIdentityShape(t *testing.T) {
 	for _, table := range undeclared {
 		t.Errorf("%q has no declared identity shape in internal/storage/identity_shape.go.\n"+
 			"Pick one and, for the last two, say why:\n"+
-			"  ShapeKeyBearing    an operator types its key, on the entity-key rule\n"+
-			"  ShapeKeyspace      an operator types its key, on internal/key's rule\n"+
-			"  ShapeHumanNotAKey  a human identifier that is not a key: a username, a filename,\n"+
-			"                     a content hash. Each looks key-shaped from a distance\n"+
+			"  ShapeKeyBearing    an operator types its name, on the entity name rule\n"+
+			"  ShapeKeyspace      an operator types its name, on the dotted rule\n"+
+			"  ShapeHumanNotAKey  a human identifier that is not a name: a username, a filename,\n"+
+			"                     a content hash. Each looks name-shaped from a distance\n"+
 			"  ShapeIDOnly        nobody names it; it is addressed by uuid", table)
 	}
 

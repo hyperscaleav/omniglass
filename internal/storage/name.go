@@ -5,10 +5,15 @@ import (
 	"regexp"
 )
 
-// An entity's key is the human-readable machine identifier an operator types and an
-// address carries: the `rm215a` in `boi.17c.rm215a`. It is not the uuid, which is
-// identity and survives a rename, and it is not the name, which is the free-text
-// label a human reads.
+// The identity triad, in the order an operator meets it:
+//
+//	id            a uuid. immutable, the primary key and every foreign key target.
+//	name          the human-readable machine identifier an operator types and an
+//	              address carries: the `rm215a` in `boi.17c.rm215a`. renameable.
+//	display_name  an optional friendly string a human reads ("HQ Boardroom DSP").
+//
+// A rename moves the name and never the id, which is why every reference stores the
+// id and why an audit row keys on it.
 //
 // This is the ENTITY name rule: one segment, no dot. The other rule, the keyspace
 // one, is the same character set joined by dots (`icmp.rtt-avg`). They are two rules
@@ -23,36 +28,36 @@ import (
 // The word **segment** means one dot-separated component of a name. A segment is a
 // position in a path; a name is the value at one.
 
-// ErrInvalidEntityKey is returned when a proposed key does not match the entity-key
-// rule. The API maps it to 422.
-var ErrInvalidEntityKey = errors.New("storage: invalid entity key")
+// ErrInvalidEntityName is returned when a proposed name does not match the entity
+// name rule. The API maps it to 422.
+var ErrInvalidEntityName = errors.New("storage: invalid entity name")
 
-// ErrEntityKeyIsUUID is the narrower refusal for a key shaped exactly like a uuid.
-// It is separate from ErrInvalidEntityKey because the two need different words: a
-// uuid satisfies the entity-key rule completely, so telling an operator to use
+// ErrEntityNameIsUUID is the narrower refusal for a name shaped exactly like a uuid.
+// It is separate from ErrInvalidEntityName because the two need different words: a
+// uuid satisfies the entity name rule completely, so telling an operator to use
 // lowercase letters, digits, and hyphens describes what they already did.
-var ErrEntityKeyIsUUID = errors.New("storage: entity key may not be a uuid")
+var ErrEntityNameIsUUID = errors.New("storage: entity name may not be a uuid")
 
-// entityKeyRe is the entity-key rule: lowercase letters and digits and hyphens,
+// entityNameRe is the entity name rule: lowercase letters and digits and hyphens,
 // starting with a letter or digit. Shared by create and rename so both surfaces
 // agree; mirrored client-side for the inline check.
 //
 // The exclusions carry weight beyond tidiness. It rejects `$`, which is what lets
 // the address grammar use `$comp` / `$sys` / `$role` as accessors without reserving
-// any word: a location may still legitimately take the key `sys`, because
-// `boi.17c.sys.$sys.av` cannot be misread. It rejects `.`, which would split one key
-// into two segments. And it rejects `*` and `>`, which are NATS wildcards, so a key
+// any word: a location may still legitimately take the name `sys`, because
+// `boi.17c.sys.$sys.av` cannot be misread. It rejects `.`, which would split one name
+// into two segments. And it rejects `*` and `>`, which are NATS wildcards, so a name
 // can never be mistaken for a subject pattern.
-var entityKeyRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+var entityNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
-// uuidRe is the exact canonical uuid shape, which the entity-key rule above does NOT
+// uuidRe is the exact canonical uuid shape, which the entity name rule above does NOT
 // exclude: a uuid is lowercase hex and hyphens, so it satisfies that rule perfectly.
 // The check is deliberately narrow, matching the full 8-4-4-4-12 form and nothing
-// else, so ordinary hyphenated keys that merely look hex-ish ("019f8754", "ab-cd-ef")
+// else, so ordinary hyphenated names that merely look hex-ish ("019f8754", "ab-cd-ef")
 // keep working.
 var uuidRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 // isUUID reports whether a reference is the canonical uuid form. It is the whole of
-// the dual-accept disambiguation: a key cannot take this shape, so a match here
+// the dual-accept disambiguation: a name cannot take this shape, so a match here
 // means the caller gave an id.
 func isUUID(ref string) bool { return uuidRe.MatchString(ref) }

@@ -52,7 +52,7 @@ OpenAPI, the typed client, the CLI, and the YAML JSONSchema all enforce it, and 
 enforces it again for callers that never touch a route.
 
 **Every exception is named, in code.** `internal/storage/identity_shape.go` declares one of four
-identity shapes for every table: key-bearing (an operator types its key, on the entity-key rule),
+identity shapes for every table: key-bearing (an operator types its name, on the entity name rule),
 keyspace (an operator types its key, on the dotted rule), a human identifier that is not a key,
 and id-only. The last two carry a written reason, and the guard refuses an exception without one.
 

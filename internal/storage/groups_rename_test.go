@@ -48,7 +48,7 @@ func TestGroupRenameObeysTheNameRule(t *testing.T) {
 		t.Run(why, func(t *testing.T) {
 			name := bad
 			_, err := gw.UpdateGroup(ctx, "", g.ID, storage.GroupPatch{Name: &name}, all)
-			if !errors.Is(err, storage.ErrInvalidEntityKey) && !errors.Is(err, storage.ErrEntityKeyIsUUID) {
+			if !errors.Is(err, storage.ErrInvalidEntityName) && !errors.Is(err, storage.ErrEntityNameIsUUID) {
 				t.Fatalf("rename to %q = %v, want a name refusal so the API maps it to 422", bad, err)
 			}
 		})

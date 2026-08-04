@@ -181,7 +181,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 			out.Body.Valid = false
 			// A uuid passes the slug rule, so the generic reason would describe
 			// exactly what the operator typed and explain nothing.
-			if errors.Is(err, storage.ErrEntityKeyIsUUID) {
+			if errors.Is(err, storage.ErrEntityNameIsUUID) {
 				out.Body.Reason = "A name cannot be a uuid: that form is reserved for an entity's id."
 			} else {
 				out.Body.Reason = "Use lowercase letters, digits, and hyphens."
@@ -228,9 +228,9 @@ func mapComponentErr(err error) error {
 		return huma.Error409Conflict("component is still referenced by another record, for example a system role it staffs")
 	case errors.Is(err, storage.ErrComponentExists):
 		return huma.Error409Conflict("component name already exists")
-	case errors.Is(err, storage.ErrEntityKeyIsUUID):
+	case errors.Is(err, storage.ErrEntityNameIsUUID):
 		return huma.Error422UnprocessableEntity("component name may not be a uuid: that form is reserved for an entity's id")
-	case errors.Is(err, storage.ErrInvalidEntityKey):
+	case errors.Is(err, storage.ErrInvalidEntityName):
 		return huma.Error422UnprocessableEntity("invalid name")
 	case errors.Is(err, storage.ErrParentComponentNotFound):
 		return huma.Error422UnprocessableEntity("parent component not found")

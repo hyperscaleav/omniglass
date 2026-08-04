@@ -15,8 +15,8 @@ func TestTheEntityNameRule(t *testing.T) {
 	}
 	invalid := []string{"", "-lead", "Uppercase", "has space", "under_score", "tab\t", "dot.name", strings.Repeat("a", 101)}
 	for _, n := range invalid {
-		if err := ValidateName("component", n); !errors.Is(err, ErrInvalidEntityKey) {
-			t.Errorf("ValidateName(component, %q) = %v, want ErrInvalidEntityKey", n, err)
+		if err := ValidateName("component", n); !errors.Is(err, ErrInvalidEntityName) {
+			t.Errorf("ValidateName(component, %q) = %v, want ErrInvalidEntityName", n, err)
 		}
 	}
 }

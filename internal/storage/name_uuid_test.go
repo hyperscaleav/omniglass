@@ -22,7 +22,7 @@ func TestNamesCannotBeUUIDShaped(t *testing.T) {
 		"019F8754-461F-7B82-B5F2-FC4BBE1C3765", // uppercase, already rejected by the slug rule
 	}
 	for _, u := range uuids {
-		if err := storage.ValidateName("component", u); !errors.Is(err, storage.ErrInvalidEntityKey) && !errors.Is(err, storage.ErrEntityKeyIsUUID) {
+		if err := storage.ValidateName("component", u); !errors.Is(err, storage.ErrInvalidEntityName) && !errors.Is(err, storage.ErrEntityNameIsUUID) {
 			t.Errorf("ValidateName(component, %q) = %v, want a refusal: a name that is also a uuid "+
 				"makes a reference ambiguous", u, err)
 		}
@@ -51,11 +51,11 @@ func TestHexLookingNamesAreStillFine(t *testing.T) {
 // uuid satisfies the slug rule and the generic message would describe exactly
 // what the operator typed.
 func TestUUIDRefusalIsDistinguishable(t *testing.T) {
-	if err := storage.ValidateName("component", "019f8754-461f-7b82-b5f2-fc4bbe1c3765"); !errors.Is(err, storage.ErrEntityKeyIsUUID) {
-		t.Errorf("uuid-shaped name = %v, want ErrEntityKeyIsUUID", err)
+	if err := storage.ValidateName("component", "019f8754-461f-7b82-b5f2-fc4bbe1c3765"); !errors.Is(err, storage.ErrEntityNameIsUUID) {
+		t.Errorf("uuid-shaped name = %v, want ErrEntityNameIsUUID", err)
 	}
 	// A genuine slug violation stays the generic error.
-	if err := storage.ValidateName("component", "Not A Slug"); !errors.Is(err, storage.ErrInvalidEntityKey) {
-		t.Errorf("bad slug = %v, want ErrInvalidEntityKey", err)
+	if err := storage.ValidateName("component", "Not A Slug"); !errors.Is(err, storage.ErrInvalidEntityName) {
+		t.Errorf("bad slug = %v, want ErrInvalidEntityName", err)
 	}
 }

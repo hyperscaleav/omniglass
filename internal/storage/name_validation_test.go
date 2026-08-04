@@ -185,8 +185,8 @@ func TestEveryKeyBearingTableValidates(t *testing.T) {
 					t.Fatalf("%s accepted the key %q (%s); every key-bearing table "+
 						"must refuse it, or the address grammar's `$` sigil is not safe", table, seg, why)
 				}
-				if !errors.Is(err, storage.ErrInvalidEntityKey) && !errors.Is(err, storage.ErrEntityKeyIsUUID) {
-					t.Fatalf("%s refused %q with %v, want ErrInvalidEntityKey or ErrEntityKeyIsUUID so the "+
+				if !errors.Is(err, storage.ErrInvalidEntityName) && !errors.Is(err, storage.ErrEntityNameIsUUID) {
+					t.Fatalf("%s refused %q with %v, want ErrInvalidEntityName or ErrEntityNameIsUUID so the "+
 						"API maps it to 422 rather than a 500", table, seg, err)
 				}
 			})
@@ -233,9 +233,9 @@ func TestEveryKeyspaceTableValidates(t *testing.T) {
 				// The keyspace tables each wrap the rule error in their own sentinel
 				// (ErrPropertyTypeInvalid and siblings) so their handlers keep mapping
 				// to 422, so unwrapping to the rule sentinel is what matters here.
-				if !errors.Is(err, storage.ErrInvalidEntityKey) && !errors.Is(err, storage.ErrEntityKeyIsUUID) {
-					t.Fatalf("%s refused %q with %v, want the error to wrap ErrInvalidEntityKey or "+
-						"ErrEntityKeyIsUUID so a handler cannot map it to a 500", table, name, err)
+				if !errors.Is(err, storage.ErrInvalidEntityName) && !errors.Is(err, storage.ErrEntityNameIsUUID) {
+					t.Fatalf("%s refused %q with %v, want the error to wrap ErrInvalidEntityName or "+
+						"ErrEntityNameIsUUID so a handler cannot map it to a 500", table, name, err)
 				}
 			})
 		}

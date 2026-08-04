@@ -4,10 +4,14 @@ import "encoding/json"
 
 // Identity across the platform is three things:
 //
-//	id    a uuid. immutable, the primary key and every foreign key target.
-//	key   the human-readable machine identifier, what a URL, a CLI argument, and a
-//	      topic carry. mutable. today the column is `name`.
-//	name  an optional free-text label. today the column is `display_name`.
+//	id            a uuid. immutable, the primary key and every foreign key target.
+//	name          the human-readable machine identifier, what a URL, a CLI argument,
+//	              and a topic carry. renameable.
+//	display_name  an optional friendly string a human reads.
+//
+// The columns have always been called this. An earlier pass renamed the console's
+// words instead and briefly called the identifier a "key", which is why some history
+// reads that way.
 //
 // Every exception is declared here, with its reason, because an exception nobody
 // wrote down is indistinguishable from an oversight. This is the single source: the
@@ -19,7 +23,7 @@ import "encoding/json"
 type IdentityShape string
 
 const (
-	// ShapeKeyBearing: an operator types its key, on the entity-key rule
+	// ShapeKeyBearing: an operator types its name, on the entity name rule
 	// (^[a-z0-9][a-z0-9-]*$), enforced by ValidateName.
 	ShapeKeyBearing IdentityShape = "key-bearing"
 
@@ -30,8 +34,9 @@ const (
 	// different character sets, which stopped being true when they were unified.
 	ShapeKeyspace IdentityShape = "keyspace"
 
-	// ShapeHumanNotAKey: it carries a human-readable identifier that is NOT a key and
-	// must never acquire the key rule. Each of these looks key-shaped from a distance.
+	// ShapeHumanNotAKey: it carries a human-readable identifier that is NOT a name in
+	// the triad sense and must never acquire the name rule. Each looks name-shaped
+	// from a distance: a username, a filename, a content hash.
 	ShapeHumanNotAKey IdentityShape = "human identifier, not a key"
 
 	// ShapeIDOnly: nobody names it, so it is addressed by uuid. A join row and a
@@ -47,7 +52,8 @@ type TableIdentity struct {
 }
 
 // IdentityShapes is every table in the schema, by shape. The guard fails on a table
-// that is missing from it or declared twice, so it stays complete by construction.
+// that is missing from it, so it stays complete by construction, and ValidateName
+// reads it to pick the rule, so the declaration is load-bearing and not a comment.
 var IdentityShapes = map[string]TableIdentity{
 	// Key-bearing. The shape is the whole explanation.
 	"capability": {Shape: ShapeKeyBearing}, "component": {Shape: ShapeKeyBearing},
@@ -91,7 +97,7 @@ var IdentityShapes = map[string]TableIdentity{
 	"tag_binding": {Shape: ShapeIDOnly},
 }
 
-// KeyProvedElsewhere excuses a key-bearing table from the behavioural create sweep,
+// KeyProvedElsewhere excuses a name-bearing table from the behavioural create sweep,
 // with the reason it cannot be reached that way. Classification without proof is a
 // claim and not a guard, so the excuse is written down rather than inferred.
 var KeyProvedElsewhere = map[string]string{

@@ -197,8 +197,8 @@ func TestNodeNameSubjectSafety(t *testing.T) {
 	// gateway refuses cleanly and writes no row; which of the two refusals fires is
 	// an implementation detail, and both map to 422.
 	for _, bad := range []string{"bad.name", "*", ">", "has space", "tab\tname"} {
-		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: bad, Description: "subject-unsafe"}, all); !errors.Is(err, storage.ErrInvalidNodeName) && !errors.Is(err, storage.ErrInvalidEntityKey) {
-			t.Fatalf("create node %q: want ErrInvalidNodeName or ErrInvalidEntityKey, got %v", bad, err)
+		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: bad, Description: "subject-unsafe"}, all); !errors.Is(err, storage.ErrInvalidNodeName) && !errors.Is(err, storage.ErrInvalidEntityName) {
+			t.Fatalf("create node %q: want ErrInvalidNodeName or ErrInvalidEntityName, got %v", bad, err)
 		}
 		if _, err := gw.GetNode(ctx, bad, all); !errors.Is(err, storage.ErrNodeNotFound) {
 			t.Fatalf("get node %q after rejected create: want ErrNodeNotFound (no row), got %v", bad, err)

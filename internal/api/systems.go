@@ -247,7 +247,7 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			out.Body.Valid = false
 			// A uuid passes the slug rule, so the generic reason would describe
 			// exactly what the operator typed and explain nothing.
-			if errors.Is(err, storage.ErrEntityKeyIsUUID) {
+			if errors.Is(err, storage.ErrEntityNameIsUUID) {
 				out.Body.Reason = "A name cannot be a uuid: that form is reserved for an entity's id."
 			} else {
 				out.Body.Reason = "Use lowercase letters, digits, and hyphens."
@@ -296,9 +296,9 @@ func mapSystemErr(err error) error {
 		return huma.Error409Conflict("system has child systems")
 	case errors.Is(err, storage.ErrSystemExists):
 		return huma.Error409Conflict("system name already exists")
-	case errors.Is(err, storage.ErrEntityKeyIsUUID):
+	case errors.Is(err, storage.ErrEntityNameIsUUID):
 		return huma.Error422UnprocessableEntity("system name may not be a uuid: that form is reserved for an entity's id")
-	case errors.Is(err, storage.ErrInvalidEntityKey):
+	case errors.Is(err, storage.ErrInvalidEntityName):
 		return huma.Error422UnprocessableEntity("invalid name")
 	case errors.Is(err, storage.ErrParentSystemNotFound):
 		return huma.Error422UnprocessableEntity("parent system not found")
