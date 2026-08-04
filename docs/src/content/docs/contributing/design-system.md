@@ -186,7 +186,9 @@ the two live words is typed on a page at all: a field or a fact that shows one o
 fact it is bound to (`<BladeField bind="display_name">`) and takes its label from `IDENTITY_LABELS`
 in `lib/entities`, with `label` refused alongside `bind` at the type level. The pairing used to be
 checked by a regex over four call forms with an eight-line lookahead, after eleven blades shipped
-showing two fields both called "Name". The console's
+showing two fields both called "Name"; it is now a type, and what remains of that check is a
+backstop for the one failure a type cannot catch, a page bypassing the components and hand-typing
+one of the words. The console's
 words are the column names, so an operator reading the UI, the CLI reference, and the schema reads
 one vocabulary.
 

@@ -526,31 +526,41 @@ export default function Locations() {
         <div class="flex flex-col gap-1.5">
           <span class="eyebrow">Identity</span>
           <div class="flex flex-col gap-3">
-            {field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Conf Room 301" onInput={(e) => setDisplay(e.currentTarget.value)} />, "What an operator reads. Optional.")}
-            {field("Name", <input class="input input-bordered w-full font-data" value={name()} placeholder="hq-a-301" onInput={(e) => setName(e.currentTarget.value)} />, () => (nameDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."))}
-            {field(
-              "Location type",
+            <FieldRow
+              bind="display_name"
+              hint="What an operator reads. Optional."
+            >
+              <input class="input input-bordered w-full" value={display()} placeholder="Conf Room 301" onInput={(e) => setDisplay(e.currentTarget.value)} />
+            </FieldRow>
+            <FieldRow
+              bind="name"
+              hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."}
+            >
+              <input class="input input-bordered w-full font-data" value={name()} placeholder="hq-a-301" onInput={(e) => setName(e.currentTarget.value)} />
+            </FieldRow>
+            <FieldRow
+              label="Location type"
+              hint="A location_type name."
+            >
               <select class="select select-bordered w-full" value={type()} onChange={(e) => setType(e.currentTarget.value)}>
                 <option value="" disabled>Select a type…</option>
                 <For each={locationTypes.data}>{(t) => <option value={t.name}>{t.display_name}</option>}</For>
-              </select>,
-              "A location_type name.",
-            )}
+              </select>
+            </FieldRow>
           </div>
         </div>
 
         <div class="flex flex-col gap-1.5">
           <span class="eyebrow">Placement</span>
           <div class="grid grid-cols-2 gap-3">
-            {field(
-              "Parent",
+            <FieldRow label="Parent">
               <TreeSelect
                 items={(locations.data ?? []).map((l) => ({ id: l.name, value: l.name, label: entityLabel(l), parentId: l.parent, rank: TYPE_RANK[l.location_type] ?? 9 }))}
                 value={parent()}
                 onChange={setParent}
                 rootLabel="Root (no parent)"
-              />,
-            )}
+              />
+            </FieldRow>
           </div>
         </div>
 
@@ -565,17 +575,6 @@ export default function Locations() {
           <span class="text-sm text-base-content/40">Available once the location is created.</span>
         </div>
       </form>
-    );
-  }
-
-  // A labelled field for the create surface (the detail accordion uses ctx.field).
-  function field(labelText: string, control: JSX.Element, hint?: string | (() => string)): JSX.Element {
-    return (
-      <label class="flex flex-col gap-1">
-        <span class="text-[12px] font-medium text-base-content/70">{labelText}</span>
-        {control}
-        <Show when={hint}><span class="text-[11px] text-base-content/40">{typeof hint === "function" ? hint() : hint}</span></Show>
-      </label>
     );
   }
 

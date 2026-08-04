@@ -423,24 +423,39 @@ export default function Systems() {
         <div class="flex flex-col gap-1.5">
           <span class="eyebrow">Identity</span>
           <div class="flex flex-col gap-3">
-            {field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Executive Boardroom" onInput={(e) => setDisplay(e.currentTarget.value)} />, "What an operator reads. Optional.")}
-            {field("Name", <input class="input input-bordered w-full font-data" value={name()} placeholder="exec-boardroom" onInput={(e) => setName(e.currentTarget.value)} />, () => (nameDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."))}
-            {field(
-              "Standard",
+            <FieldRow
+              bind="display_name"
+              hint="What an operator reads. Optional."
+            >
+              <input class="input input-bordered w-full" value={display()} placeholder="Executive Boardroom" onInput={(e) => setDisplay(e.currentTarget.value)} />
+            </FieldRow>
+            <FieldRow
+              bind="name"
+              hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."}
+            >
+              <input class="input input-bordered w-full font-data" value={name()} placeholder="exec-boardroom" onInput={(e) => setName(e.currentTarget.value)} />
+            </FieldRow>
+            <FieldRow
+              label="Standard"
+              hint="The blueprint this system conforms to. Optional."
+            >
               <select class="select select-bordered w-full" value={standard()} onChange={(e) => setStandard(e.currentTarget.value)}>
                 <option value="">None (a one-off system)</option>
                 <For each={standardOptions()}>{(s) => <option value={s.name}>{s.display_name}</option>}</For>
-              </select>,
-              "The blueprint this system conforms to. Optional.",
-            )}
+              </select>
+            </FieldRow>
           </div>
         </div>
 
         <div class="flex flex-col gap-1.5">
           <span class="eyebrow">Placement</span>
           <div class="grid grid-cols-2 gap-3">
-            {field("Location", <TreeSelect items={locationItems()} value={location()} onChange={setLocation} rootLabel="None" />)}
-            {field("Parent system", <TreeSelect items={systemItems()} value={parent()} onChange={setParent} rootLabel="Root (no parent)" />)}
+            <FieldRow label="Location">
+              <TreeSelect items={locationItems()} value={location()} onChange={setLocation} rootLabel="None" />
+            </FieldRow>
+            <FieldRow label="Parent system">
+              <TreeSelect items={systemItems()} value={parent()} onChange={setParent} rootLabel="Root (no parent)" />
+            </FieldRow>
           </div>
         </div>
 
@@ -455,17 +470,6 @@ export default function Systems() {
           <span class="text-sm text-base-content/40">Available once the system is created.</span>
         </div>
       </form>
-    );
-  }
-
-  // A labelled field for the create surface (the detail accordion uses ctx.field).
-  function field(labelText: string, control: JSX.Element, hint?: string | (() => string)): JSX.Element {
-    return (
-      <label class="flex flex-col gap-1">
-        <span class="text-[12px] font-medium text-base-content/70">{labelText}</span>
-        {control}
-        <Show when={hint}><span class="text-[11px] text-base-content/40">{typeof hint === "function" ? hint() : hint}</span></Show>
-      </label>
     );
   }
 

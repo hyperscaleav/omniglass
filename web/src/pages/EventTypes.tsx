@@ -155,7 +155,7 @@ function EventTypeBladeBody(p: { name: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <KVStacked label="Name" value={<span class="font-data">{r().name}</span>} />
+            <KVStacked bind="name" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Origin" value={originBadge(r().official)} />
           </div>
           <BladeField

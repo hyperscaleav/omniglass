@@ -316,7 +316,7 @@ function CreateVariableForm(p: { onCreated: (v: Variable) => void }): JSX.Elemen
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow label="Name" hint="What the cascade resolves by; unique per owner.">
+      <FieldRow bind="name" hint="What the cascade resolves by; unique per owner.">
         <input class="input input-bordered w-full font-data" value={name()} placeholder="poll-interval" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>
       <div class="grid grid-cols-2 gap-3">

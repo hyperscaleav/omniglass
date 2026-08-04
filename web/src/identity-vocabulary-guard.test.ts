@@ -135,68 +135,90 @@ describe("identity vocabulary", () => {
   });
 });
 
-// A field bound to display_name must be labelled "Display name", and a field bound
-// to name must be labelled "Name".
+// A field or a fact that shows one of the two identity words takes its label from
+// `IDENTITY_LABELS` in lib/entities, by naming the fact it is bound to:
 //
-// This is the failure that keeps getting through. Twice now a sweep has fixed the
-// create forms (`<Field label=...>`) and left the detail blades, which label with a
-// bare `<span class="eyebrow">`, so eleven blades rendered two fields both called
-// "Name": the identifier and the friendly string, indistinguishable. Tests did not
-// catch it because no test reads a label and its binding together, and 812 of them
-// were green while the blades were wrong.
+//   <BladeField bind="display_name" .../>   labels itself "Display name"
+//   <KVStacked  bind="name" .../>           labels itself "Name"
 //
-// So the check is on the pairing, not on the vocabulary list. A label is only wrong
-// relative to what it labels.
-describe("a label matches the field it labels", () => {
-  // A label reaches the screen four ways in this console, and the guard has to know
-  // all four or it is vacuous exactly where it matters. An eyebrow span; a Field's
-  // `label` prop (often on its own line, because Fields wrap, so match it standalone
-  // or the window below runs past the end of this field into the next one's
-  // binding); and the `field(...)` / `fact(...)` helpers, which take the label as
-  // their first positional argument and are what Components, Systems, Locations, and
-  // Files use. An earlier version of this guard matched only the first two, which
-  // left 13 label sites unguarded, including every create form where `name` and
-  // `display_name` sit adjacent. That is the precise shape of the bug it exists for.
-  const LABEL = /class="eyebrow">([^<]+)<\/span>|\blabel="([^"]+)"|\b(?:ctx\.)?(?:field|fact)\(\s*"([^"]+)"/g;
+// `label` and `bind` are mutually exclusive on all three components, so there is
+// no prop through which a caller can pair the wrong word with a binding. That
+// makes the pairing a type, and the rule itself is a unit test on the component
+// (BladeField.test.tsx, "the identity pairing").
+//
+// What is left here is the one failure a type cannot catch: a page BYPASSING the
+// primitive and hand-typing one of the two words as a label. That is exactly the
+// failure this guard was written for, so it shrinks rather than being deleted.
+//
+// What it replaced was much bigger and much weaker: a four-alternate regex over
+// every call form (an eyebrow span, a `label=` prop, and the positional
+// `field(...)` / `fact(...)` helpers), an eight-line lookahead window to find the
+// binding, a second terminator so the window would not run into the next field,
+// and a `display()` / `setDisplay(` heuristic to recognise the display-name
+// signal. All of that existed only because a label and its binding were paired by
+// hand at 74 sites. Its first version knew only two of the four forms and was
+// therefore vacuous on the four biggest pages, which is the shape of the bug it
+// was written to catch.
+describe("the identity words are written in exactly one place", () => {
+  // The components that render a labelled field or fact. A `label` prop carrying
+  // an identity word on any of them means the caller went around `bind`.
+  const LABELLED = ["BladeField", "FieldRow", "KVStacked"];
+  const IDENTITY_WORDS = ["Name", "Display name"];
 
-  it("never labels display_name as Name, or name as Display name", () => {
+  // The opening tag of every `<Component ...>` in a file, attributes included.
+  // Angle brackets are balanced by hand rather than matched with a regex, so a
+  // multi-line tag (the common case once a field carries a hint) is one span and
+  // not several.
+  function openingTags(src: string, component: string): string[] {
+    const out: string[] = [];
+    const mention = new RegExp(`<${component}\\b`, "g");
+    let m: RegExpExecArray | null;
+    while ((m = mention.exec(src)) !== null) {
+      let i = m.index + m[0].length;
+      let brace = 0;
+      for (; i < src.length; i++) {
+        if (src[i] === "{") brace++;
+        else if (src[i] === "}") brace--;
+        else if (src[i] === ">" && brace === 0) break;
+      }
+      out.push(src.slice(m.index, i));
+    }
+    return out;
+  }
+
+  it("no page hand-types an identity word as a field or fact label", () => {
+    const offenders: string[] = [];
     for (const file of walk(SRC, { tests: false })) {
-      const lines = readFileSync(file, "utf8").split("\n");
-      lines.forEach((line, i) => {
-        LABEL.lastIndex = 0;
-        const m = LABEL.exec(line);
-        if (!m) return;
-        const label = (m[1] ?? m[2] ?? m[3]).trim();
-        // The binding shows up within a few lines: the input, or the read-only
-        // span. Stop at the NEXT label, or the window bleeds into the adjacent
-        // field and reads its binding as this one's.
-        const rest = lines.slice(i + 1, i + 8);
-        // A wrapped `field(` puts its label on the NEXT line, so a bare quoted
-        // string also ends this field's window; without it the window swallows the
-        // following field and reads its binding as this one's.
-        const next = rest.findIndex(
-          (l) => LABEL.test((LABEL.lastIndex = 0, l)) || /^\s*"[^"]+",\s*$/.test(l),
-        );
-        const window = [lines[i], ...rest.slice(0, next === -1 ? rest.length : next)].join("\n");
-        // `display()` and `setDisplay(` are the console's shorthand for the
-        // display_name signal, so a check that only knows the column name reads a
-        // correct field as unbound and then blames the neighbour.
-        const bindsDisplay = /display_name|displayName|\bdisplay\(\)|setDisplay\(/.test(window);
-        const bindsName = /\bname\(\)|\.name\b|setName\(/.test(window);
+      const src = readFileSync(file, "utf8");
+      for (const component of LABELLED) {
+        for (const tag of openingTags(src, component)) {
+          for (const word of IDENTITY_WORDS) {
+            if (new RegExp(`\\blabel=["']${word}["']`).test(tag)) {
+              offenders.push(`${file.replace(SRC + "/", "")}  <${component} label="${word}" ...>`);
+            }
+          }
+        }
+      }
+    }
+    expect(
+      offenders,
+      `\nThese label a field or fact with an identity word by hand:\n  ${offenders.join("\n  ")}\n\n` +
+        `Say which fact it is bound to instead: bind="name" or bind="display_name".\n` +
+        `The label then comes from IDENTITY_LABELS in lib/entities, which is the only\n` +
+        `place either word is written, so the two cannot be swapped again.\n`,
+    ).toEqual([]);
+  });
 
-        if (label === "Name" && bindsDisplay && !bindsName) {
-          throw new Error(
-            `${file}:${i + 1} labels display_name as "Name". The identifier is the name; ` +
-              `the friendly string is the display name. A blade showing both under one word ` +
-              `is the bug this guard exists for.`,
-          );
-        }
-        if (label === "Display name" && bindsName && !bindsDisplay) {
-          throw new Error(
-            `${file}:${i + 1} labels name as "Display name", which is backwards.`,
-          );
-        }
-      });
+  it("the identity map is the only source of the two words", () => {
+    // The rule above is only worth anything while the map is where the words
+    // live. If someone inlines them back into a component, `bind` keeps working
+    // and the guard keeps passing while the single source is gone.
+    const entities = readFileSync(join(SRC, "lib", "entities.ts"), "utf8");
+    expect(entities).toContain('name: "Name"');
+    expect(entities).toContain('display_name: "Display name"');
+    for (const component of ["BladeField", "FieldRow", "KVStacked"]) {
+      const src = readFileSync(join(SRC, "components", `${component}.tsx`), "utf8");
+      expect(src, `${component} should take the words from IDENTITY_LABELS`).toContain("IDENTITY_LABELS");
     }
   });
 });
