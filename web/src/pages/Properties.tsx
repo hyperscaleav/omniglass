@@ -41,12 +41,13 @@ function originBadge(official: boolean): JSX.Element {
     : <span class="badge badge-outline badge-sm">custom</span>;
 }
 
-// The identity column keeps the header word "Key" here: this catalog is a keyspace, so
-// `name` holds a dotted key (icmp.rtt-avg) rather than the kebab segment the rest of the
-// estate addresses rows by. The cell is the shared two-line treatment either way, which
-// is what retires the separate "Label" column.
+// This catalog is a keyspace, so `name` holds a dotted value (icmp.rtt-avg) rather
+// than the kebab the rest of the estate addresses rows by. That is a validation
+// difference, not a different concept, so the header is the one word every list
+// uses. The cell is the shared two-line treatment either way, which is what retires
+// the separate "Label" column.
 const columns: FlatColumn<PropertyRow>[] = [
-  identityColumn<PropertyRow>({ label: "Key" }),
+  identityColumn<PropertyRow>(),
   { key: "data_type", label: "Type", width: "90px", sortVal: (r) => r.data_type, cell: (r) => typeBadge(r.data_type) },
   { key: "kind", label: "Kind", width: "90px", cell: (r) => kindBadge(r.kind) },
   { key: "official", label: "Origin", width: "100px", sortVal: (r) => String(r.official), cell: (r) => originBadge(r.official) },
@@ -71,7 +72,7 @@ export default function Properties(): JSX.Element {
             { key: "type", type: "string", hint: "exact", get: (r) => r.data_type, values: () => PROPERTY_DATA_TYPES },
             { key: "official", type: "string", hint: "exact", get: (r) => (r.official ? "official" : "custom"), values: () => ["official", "custom"] },
           ],
-          filterPlaceholder: "filter properties by name, label…",
+          filterPlaceholder: "filter properties by name, display name…",
           columns,
           empty: "No properties.",
           rowId: (r) => r.name,
@@ -167,7 +168,7 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
             <KVStacked label="Unit" value={<span class="font-data">{r().unit ?? "—"}</span>} />
           </div>
           <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Name</span>
+            <span class="eyebrow">Display name</span>
             <Show when={edit.editing()} fallback={<div class="input input-bordered flex items-center text-sm">{r().display_name}</div>}>
               <input class="input input-bordered w-full" value={displayName()} onInput={(e) => setDisplayName(e.currentTarget.value)} />
             </Show>
@@ -247,7 +248,7 @@ export function CreatePropertyForm(p: { onCreated: (r: PropertyRow) => void }): 
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Key" hint="A lowercase, dot-hierarchied name, e.g. serial-number or interface.reachable.">
+      <Field label="Name" hint="A lowercase, dot-hierarchied name, e.g. serial-number or interface.reachable.">
         <input class="input input-bordered w-full font-data" value={name()} placeholder="serial-number" onInput={(e) => setName(e.currentTarget.value)} />
       </Field>
       <Field label="Data type">
@@ -255,7 +256,7 @@ export function CreatePropertyForm(p: { onCreated: (r: PropertyRow) => void }): 
           <For each={PROPERTY_DATA_TYPES}>{(t) => <option value={t}>{t}</option>}</For>
         </select>
       </Field>
-      <Field label="Name">
+      <Field label="Display name">
         <input class="input input-bordered w-full" value={displayName()} placeholder="Serial number" onInput={(e) => setDisplayName(e.currentTarget.value)} />
       </Field>
       <Field label="Description">

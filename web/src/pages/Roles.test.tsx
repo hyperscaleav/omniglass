@@ -105,11 +105,11 @@ describe("Roles page", () => {
     expect(await screen.findByText("platform:update")).toBeTruthy();
   });
 
-  it("renders the label over the segment in one Name column", () => {
+  it("renders the display name over the name in one Name column", () => {
     mount();
-    // The shared identity cell puts the label on the primary line and the API
-    // segment beneath it, so the segment stays readable and selectable for a CLI
-    // call. It is no longer a badge crowded onto the label's line.
+    // The shared identity cell puts the display name on the primary line and the
+    // name beneath it, so the name stays readable and selectable for a CLI call.
+    // It is no longer a badge crowded onto the display name's line.
     const cell = screen.getByText("Administrator").closest("td");
     expect(cell?.textContent).toContain("admin");
     expect(cell?.querySelector(".badge")).toBeNull();
@@ -125,7 +125,7 @@ describe("Roles page", () => {
 
   it("shows what a role inherits in its row", () => {
     mount();
-    // viewer appears as its own identity segment AND in operator's Inherits cell.
+    // viewer appears as its own identity row AND in operator's Inherits cell.
     expect(screen.getAllByText("viewer").length).toBeGreaterThanOrEqual(2);
   });
 

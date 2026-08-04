@@ -19,11 +19,11 @@ import { ChevronRight } from "./icons";
 //    collapsed shared-edge hover all come from join/join-item rather than a
 //    hand-rolled border group. Slot children opt into the group with `join-item`.
 export default function KVRow(props: {
-  // The label. Prose by default (a display name); the raw key otherwise belongs
-  // in the drill-in. Consumers whose label IS the technical key with no separate
+  // The label. Prose by default (a display name); the raw name otherwise belongs
+  // in the drill-in. Consumers whose label IS the entity's name with no separate
   // display name (Variables, Secrets) set `labelMono` to render it font-data.
   label: string;
-  // Render the label font-data (mono), for key-style labels. Default prose.
+  // Render the label font-data (mono), for identifier labels. Default prose.
   labelMono?: boolean;
   // Optional type badge (value_type / secret_type) shown right after the label.
   // Fields pass nothing; Variables and Secrets pass their declared type.

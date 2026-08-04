@@ -46,12 +46,12 @@ describe("Event Types page", () => {
     expect(screen.getAllByText("Call Started")).toHaveLength(1);
   });
 
-  // The header word stays "Key" because this table's name is a keyspace key
-  // (call.started), not a kebab segment. The separate Label column goes: the cell
-  // already renders the label, so the column only repeated it.
-  it("keeps the Key header and drops the redundant Label column", () => {
+  // One header word everywhere, "Name", even though this table's name is dotted
+  // (call.started) rather than kebab. The separate Label column goes: the cell
+  // already renders the display name, so the column only repeated it.
+  it("keeps the Name header and drops the redundant Label column", () => {
     mount();
-    expect(screen.getByRole("columnheader", { name: "Key" })).toBeTruthy();
+    expect(screen.getByRole("columnheader", { name: "Name" })).toBeTruthy();
     expect(screen.queryByRole("columnheader", { name: "Label" })).toBeNull();
   });
 

@@ -73,7 +73,7 @@ describe("Locations create-as-route", () => {
     // Identity + Placement fields present; the binding sections are locked.
     expect(screen.getByText("Identity")).toBeTruthy();
     expect(screen.getByText("Placement")).toBeTruthy();
-    expect(screen.getByText("Key")).toBeTruthy();
+    expect(screen.getByText("Name")).toBeTruthy();
     expect(screen.getByText("Location type")).toBeTruthy();
     expect(screen.getByText("Parent")).toBeTruthy();
     expect(screen.getByText(/Available once the location is created/)).toBeTruthy();
@@ -82,7 +82,7 @@ describe("Locations create-as-route", () => {
   it("shows an existing location read-only in view: no tag add control, an Edit affordance", async () => {
     mount("/locations/hq");
     // The detail resolves and renders the read-only facts.
-    await waitFor(() => expect(screen.getByText("Key")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     // No in-body mutation control in view: the TagAdder add row is absent.
     expect(screen.queryByPlaceholderText(/Add a tag/)).toBeNull();
     // The view footer offers Edit (which would flip the accordion to edit mode).
@@ -91,7 +91,7 @@ describe("Locations create-as-route", () => {
 
   it("edit mode narrows the parent picker to the type's allowed_parent_types and excludes the node's own subtree", async () => {
     mount("/locations/hq-b1");
-    await waitFor(() => expect(screen.getByText("Key")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     // building's allowed_parent_types is [root, campus]: both campuses (HQ, Lab)
     // are offered; hq-b1 itself never appears (self-exclusion); there is no
@@ -106,7 +106,7 @@ describe("Locations create-as-route", () => {
 
   it("offers only the current-root placeholder when the type's allowed set has no real matching location", async () => {
     mount("/locations/hq");
-    await waitFor(() => expect(screen.getByText("Key")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     // campus's allowed_parent_types is [root]: no location is of type "root" (it
     // is not a real location_type), so the only option is the current-root
@@ -118,7 +118,7 @@ describe("Locations create-as-route", () => {
 
   it("selecting a different parent updates the picker's value, seeded from the current parent", async () => {
     mount("/locations/hq-b1");
-    await waitFor(() => expect(screen.getByText("Key")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     const select = (await screen.findByLabelText("Parent")) as HTMLSelectElement;
     expect(select.value).toBe("hq");
@@ -135,7 +135,7 @@ describe("Locations create-as-route", () => {
     // parent to compare against.
     const b2: Location = { id: uuidFor("l-b2"), name: "b2", display_name: "B2", location_type: "building", effective_tags: {} };
     mount("/locations/b2", [b2]);
-    await waitFor(() => expect(screen.getByText("Key")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     const select = (await screen.findByLabelText("Parent")) as HTMLSelectElement;
     const optionLabels = Array.from(select.options).map((o) => o.textContent?.trim());
@@ -161,7 +161,7 @@ describe("Locations create-as-route", () => {
 
   it("saving a rejected move surfaces the 422 through the existing inline alert and stays in edit mode", async () => {
     mount("/locations/hq-b1");
-    await waitFor(() => expect(screen.getByText("Key")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     const select = (await screen.findByLabelText("Parent")) as HTMLSelectElement;
     fireEvent.change(select, { target: { value: "lab" } });
@@ -188,7 +188,7 @@ describe("Locations create-as-route", () => {
     const area1: Location = { id: uuidFor("l-area1"), name: "area1", display_name: "Area 1", location_type: "area", effective_tags: {} };
     const area2: Location = { id: uuidFor("l-area2"), name: "area2", display_name: "Area 2", location_type: "area", parent: "area1", effective_tags: {} };
     mount("/locations/area1", [area1, area2]);
-    await waitFor(() => expect(screen.getByText("Key")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     const select = (await screen.findByLabelText("Parent")) as HTMLSelectElement;
     const optionLabels = Array.from(select.options).map((o) => o.textContent?.trim());
@@ -232,20 +232,20 @@ describe("Locations create-as-route", () => {
     expect(row.querySelector('path[d^="M20 10c0 6-8 12"]')).toBeNull();
   });
 
-  it("edit mode exposes an editable technical name with a check button", async () => {
+  it("edit mode exposes an editable name with a check button", async () => {
     mount("/locations/hq");
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
-    // The technical name becomes an editable input seeded from the row.
+    // The name becomes an editable input seeded from the row.
     const nameInput = (await screen.findByDisplayValue("hq")) as HTMLInputElement;
     expect(nameInput.disabled).toBe(false);
     // An inline check button sits beside it.
     expect(screen.getByLabelText("Check name")).toBeTruthy();
   });
 
-  it("a fresh detail view keeps the technical name read-only", async () => {
+  it("a fresh detail view keeps the name read-only", async () => {
     mount("/locations/hq");
-    await waitFor(() => expect(screen.getByText("Key")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     // No check button until edit begins: the name is a read-only fact.
     expect(screen.queryByLabelText("Check name")).toBeNull();
   });

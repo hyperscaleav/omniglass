@@ -34,11 +34,11 @@ function targetCell(target: string | undefined): JSX.Element {
     : <span class="text-base-content/30">fire-and-forget</span>;
 }
 
-// The header stays "Key" rather than the primitive's default "Name": a command
-// type's `name` is a keyspace key (set-input, video.input), not the kebab segment
-// the rest of the estate is addressed by, and calling it a name would be a lie.
+// A command type's `name` may be dot-segmented (set-input, video.input) where the
+// rest of the estate is kebab. That is a validation difference, not a different
+// concept, so the header is the one word every list uses.
 const columns: FlatColumn<CommandTypeRow>[] = [
-  identityColumn<CommandTypeRow>({ label: "Key" }),
+  identityColumn<CommandTypeRow>(),
   { key: "target", label: "Target", cell: (r) => targetCell(r.target_property_type) },
   { key: "settle", label: "Settle (s)", width: "90px", sortVal: (r) => r.settle_window_seconds, cell: (r) => <span class="tabular-nums text-[12px]">{r.settle_window_seconds}</span> },
   { key: "official", label: "Origin", width: "100px", sortVal: (r) => String(r.official), cell: (r) => originBadge(r.official) },
@@ -62,7 +62,7 @@ export default function CommandTypes(): JSX.Element {
             { key: "name", type: "string", hint: "substring", get: (r) => `${r.name} ${r.display_name ?? ""}`, values: () => [] },
             { key: "official", type: "string", hint: "exact", get: (r) => (r.official ? "official" : "custom"), values: () => ["official", "custom"] },
           ],
-          filterPlaceholder: "filter command types by name, label…",
+          filterPlaceholder: "filter command types by name, display name…",
           columns,
           empty: "No command types.",
           rowId: (r) => r.name,
@@ -158,7 +158,7 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
             <KVStacked label="Origin" value={originBadge(r().official)} />
           </div>
           <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Name</span>
+            <span class="eyebrow">Display name</span>
             <Show when={edit.editing()} fallback={<div class="input input-bordered flex items-center text-sm">{r().display_name}</div>}>
               <input class="input input-bordered w-full" value={displayName()} onInput={(e) => setDisplayName(e.currentTarget.value)} />
             </Show>
@@ -229,10 +229,10 @@ export function CreateCommandTypeForm(p: { onCreated: (r: CommandTypeRow) => voi
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Key" hint="A lowercase, dot-hierarchied name, e.g. set-input or reboot.">
+      <Field label="Name" hint="A lowercase, dot-hierarchied name, e.g. set-input or reboot.">
         <input class="input input-bordered w-full font-data" value={name()} placeholder="set-input" onInput={(e) => setName(e.currentTarget.value)} />
       </Field>
-      <Field label="Name">
+      <Field label="Display name">
         <input class="input input-bordered w-full" value={displayName()} placeholder="Set input" onInput={(e) => setDisplayName(e.currentTarget.value)} />
       </Field>
       <Field label="Description">

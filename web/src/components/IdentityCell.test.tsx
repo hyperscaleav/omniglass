@@ -6,20 +6,20 @@ import { IdentityCell, identityColumn } from "./IdentityCell";
 // FlatList column arrays across four idioms, which is why the same estate read
 // four different ways depending on the page, and why nothing could assert it.
 describe("IdentityCell", () => {
-  it("shows the label on top and the segment beneath it", () => {
+  it("shows the display name on top and the name beneath it", () => {
     render(() => <IdentityCell entity={{ name: "hq-boardroom-dsp", display_name: "HQ Boardroom DSP" }} />);
     expect(screen.getByText("HQ Boardroom DSP")).toBeTruthy();
     expect(screen.getByText("hq-boardroom-dsp")).toBeTruthy();
   });
 
-  // The anti-duplication rule. Showing a segment that is identical to the label
-  // renders the same string twice and reads as a bug.
-  it("shows the segment exactly once when there is no label", () => {
+  // The anti-duplication rule. Showing a name that is identical to the display
+  // name renders the same string twice and reads as a bug.
+  it("shows the name exactly once when there is no display name", () => {
     render(() => <IdentityCell entity={{ name: "hq-boardroom-nvx-tx" }} />);
     expect(screen.getAllByText("hq-boardroom-nvx-tx")).toHaveLength(1);
   });
 
-  it("treats a blank label as absent", () => {
+  it("treats a blank display name as absent", () => {
     for (const blank of ["", "   ", "\t"]) {
       const { unmount } = render(() => <IdentityCell entity={{ name: "codec-1", display_name: blank }} />);
       expect(screen.getAllByText("codec-1")).toHaveLength(1);
@@ -27,16 +27,16 @@ describe("IdentityCell", () => {
     }
   });
 
-  // A label that happens to equal the segment is the same case as no label: one
-  // line, not two identical ones.
-  it("collapses when the label equals the segment", () => {
+  // A display name that happens to equal the name is the same case as no display
+  // name: one line, not two identical ones.
+  it("collapses when the display name equals the name", () => {
     render(() => <IdentityCell entity={{ name: "codec-1", display_name: "codec-1" }} />);
     expect(screen.getAllByText("codec-1")).toHaveLength(1);
   });
 
-  // The segment is not re-cased into a pseudo-label: this domain is acronyms, and
-  // "Hq boardroom dsp" is worse than the honest identifier.
-  it("never derives a label from the segment", () => {
+  // The name is not re-cased into a pseudo display name: this domain is acronyms,
+  // and "Hq boardroom dsp" is worse than the honest identifier.
+  it("never derives a display name from the name", () => {
     render(() => <IdentityCell entity={{ name: "hq-boardroom-dsp" }} />);
     expect(screen.queryByText("Hq boardroom dsp")).toBeNull();
     expect(screen.queryByText("Hq Boardroom Dsp")).toBeNull();
@@ -44,14 +44,17 @@ describe("IdentityCell", () => {
 });
 
 describe("identityColumn", () => {
-  it("sorts on the label, not the segment", () => {
+  it("sorts on the display name, not the name", () => {
     const col = identityColumn<{ name: string; display_name?: string | null }>();
     expect(col.sortVal({ name: "zzz-1", display_name: "Alpha" })).toBe("Alpha");
-    // No label means the segment IS the label, so that is what sorts.
+    // No display name means the name IS the label, so that is what sorts.
     expect(col.sortVal({ name: "aaa-1" })).toBe("aaa-1");
   });
 
-  it("uses one header word by default so every page agrees", () => {
+  // One header word, and no seam through which a page could introduce a second.
+  // identity-vocabulary-guard.test.ts holds the other half of that, a source scan
+  // for anyone trying to pass a label option back in.
+  it("uses one header word so every page agrees", () => {
     expect(identityColumn().label).toBe("Name");
     expect(identityColumn().key).toBe("name");
   });

@@ -155,12 +155,12 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <KVStacked label="Key" value={<span class="font-data">{r().name}</span>} />
+            <KVStacked label="Name" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Origin" value={officialBadge(r().official)} />
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
           <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Name</span>
+            <span class="eyebrow">Display name</span>
             <Show
               when={edit.editing()}
               fallback={<div class="input input-bordered flex items-center text-sm">{r().display_name}</div>}
@@ -191,7 +191,7 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
 // takes the name over by hand. Version is optional.
 export function CreateDriverForm(p: { onCreated: (d: Driver) => void }): JSX.Element {
   const qc = useQueryClient();
-  const { display, setDisplay, name, setName, keyDerived } = createIdentity();
+  const { display, setDisplay, name, setName, nameDerived } = createIdentity();
   const [version, setVersion] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
@@ -227,10 +227,10 @@ export function CreateDriverForm(p: { onCreated: (d: Driver) => void }): JSX.Ele
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Name">
+      <Field label="Display name">
         <input class="input input-bordered w-full" value={display()} placeholder="Generic SNMP" onInput={(e) => setDisplay(e.currentTarget.value)} />
       </Field>
-      <Field label="Key" hint={keyDerived() ? "Derived from the name. Edit to set your own." : "A kebab name, e.g. snmp-generic."}>
+      <Field label="Name" hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "A kebab name, e.g. snmp-generic."}>
         <input class="input input-bordered w-full font-data" value={name()} placeholder="snmp-generic" onInput={(e) => setName(e.currentTarget.value)} />
       </Field>
       <Field label="Version" hint="A version string, e.g. 1.0.0. Optional.">

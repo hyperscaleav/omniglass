@@ -46,7 +46,7 @@ describe("Groups page", () => {
   it("renders a directory row per group with its member and grant counts", () => {
     mount();
     expect(screen.getByText("Help Desk")).toBeTruthy();
-    expect(screen.getByText("help-desk")).toBeTruthy(); // the technical name beneath the label
+    expect(screen.getByText("help-desk")).toBeTruthy(); // the name beneath the display name
     expect(screen.getByText("Support crew")).toBeTruthy();
   });
 

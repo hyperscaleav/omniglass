@@ -137,7 +137,7 @@ export default function Components() {
   }
 
   // ComponentDetail: the entity accordion, read-only in view, editable in edit. Own
-  // fields (display name, technical name) are editable; placement and product are
+  // fields (name, display name) are editable; placement and product are
   // fixed at creation. The Tags section is the shared TagAdder, whose write controls
   // appear only in edit (canUpdate gates them), so view carries no mutation. The
   // Properties section is the component's value surface, resolved against its
@@ -222,15 +222,15 @@ export default function Components() {
             when={editing()}
             fallback={
               <div class="grid grid-cols-2 gap-5">
-                {ctx.fact("Key", <span class="font-data text-sm">{n().raw.name}</span>)}
+                {ctx.fact("Name", <span class="font-data text-sm">{n().raw.name}</span>)}
                 {ctx.fact("ID", <span class="font-data text-xs text-base-content/50">{n().raw.id}</span>)}
               </div>
             }
           >
             <div class="flex flex-col gap-3">
-              {ctx.field("Name", <input class="input input-bordered w-full" value={display()} placeholder="Ceiling Mic 2" onInput={(e) => setDisplay(e.currentTarget.value)} />)}
+              {ctx.field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Ceiling Mic 2" onInput={(e) => setDisplay(e.currentTarget.value)} />)}
               {ctx.field(
-                "Key",
+                "Name",
                 <>
                   <div class="join w-full">
                     <input
@@ -372,7 +372,7 @@ export default function Components() {
   function ComponentCreate(): JSX.Element {
     // Display name leads and the key follows it, stopping the moment the
     // operator edits the key by hand (lib/entities).
-    const { display, setDisplay, name, setName, keyDerived } = createIdentity();
+    const { display, setDisplay, name, setName, nameDerived } = createIdentity();
     const [system, setSystem] = createSignal("");
     const [location, setLocation] = createSignal("");
     const [parent, setParent] = createSignal("");
@@ -414,8 +414,8 @@ export default function Components() {
         <div class="flex flex-col gap-1.5">
           <span class="eyebrow">Identity</span>
           <div class="flex flex-col gap-3">
-            {field("Name", <input class="input input-bordered w-full" value={display()} placeholder="Ceiling Mic 2" onInput={(e) => setDisplay(e.currentTarget.value)} />, "What an operator reads. Optional.")}
-            {field("Key", <input class="input input-bordered w-full font-data" value={name()} placeholder="mic-2" onInput={(e) => setName(e.currentTarget.value)} />, () => (keyDerived() ? "Derived from the name. Edit to set your own." : "Globally unique address, used by the API and CLI."))}
+            {field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Ceiling Mic 2" onInput={(e) => setDisplay(e.currentTarget.value)} />, "What an operator reads. Optional.")}
+            {field("Name", <input class="input input-bordered w-full font-data" value={name()} placeholder="mic-2" onInput={(e) => setName(e.currentTarget.value)} />, () => (nameDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."))}
           </div>
         </div>
 

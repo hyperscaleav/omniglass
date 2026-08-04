@@ -64,9 +64,9 @@ describe("Users page", () => {
   });
 
   it("shows the username once for a user who has no display name", () => {
-    // bob's username is his whole identity, so printing it as both the label line
-    // and the segment beneath it said the same thing twice. The shared identity
-    // cell suppresses the segment when it equals the label.
+    // bob's username is his whole identity, so printing it as both the primary
+    // line and the line beneath said the same thing twice. The shared identity
+    // cell suppresses the second line when the two are equal.
     mount();
     expect(screen.getAllByText("bob")).toHaveLength(1);
   });
@@ -515,7 +515,7 @@ describe("Users create identity", () => {
   const fields = async () => {
     mount();
     fireEvent.click(screen.getByText("New user"));
-    const display = (await screen.findByLabelText("Name")) as HTMLInputElement;
+    const display = (await screen.findByLabelText("Display name")) as HTMLInputElement;
     const username = screen.getByLabelText("Username") as HTMLInputElement;
     return { display, username };
   };

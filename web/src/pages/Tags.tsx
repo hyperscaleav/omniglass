@@ -20,7 +20,7 @@ import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
-// Tags: the governed key vocabulary on the FlatList surface. A tag key is a
+// Tags: the governed vocabulary on the FlatList surface. A tag is a
 // tenant-wide, normalized label name; this page is the admin directory (mint,
 // inspect, edit its governance fields, delete). Minting and editing a key is an
 // admin action (tag:create / tag:update); binding a value onto an entity is that
@@ -35,12 +35,13 @@ function propagatesBadge(t: Tag): JSX.Element {
 }
 
 const columns: FlatColumn<Tag>[] = [
-  // The shared identity cell, under the honest header word: a tag's name is a
-  // keyspace key (icmp.rtt-avg is a legal key and an illegal segment), not the
-  // kebab segment every other list heads "Name". A tag carries no display name,
-  // so the cell collapses to the key alone in the data face, which is the same
-  // rule the labelled pages follow rather than an exception to it.
-  identityColumn<Tag>({ label: "Key" }),
+  // The shared identity cell, under the one header word every list uses. A tag's
+  // name is validated as a keyspace key (icmp.rtt-avg is legal here and not in a
+  // kebab name), but that is a validation difference, not a different concept: it
+  // is still the row's name. A tag carries no display name, so the cell collapses
+  // to the name alone in the data face, which is the same rule the pages with a
+  // display name follow rather than an exception to it.
+  identityColumn<Tag>(),
   { key: "applies_to", label: "Applies to", width: "220px", sortVal: (t) => appliesToLabel(t.applies_to), cell: (t) => <span class="text-base-content/70">{appliesToLabel(t.applies_to)}</span> },
   { key: "propagates", label: "Binding", width: "120px", sortVal: (t) => String(t.propagates), cell: (t) => propagatesBadge(t) },
 ];
@@ -63,15 +64,15 @@ export default function Tags() {
           { key: "applies_to", type: "string", hint: "exact", get: (t) => appliesToLabel(t.applies_to), values: (rs) => [...new Set(rs.map((r) => appliesToLabel(r.applies_to)))].sort() },
           { key: "binding", type: "string", hint: "exact", get: (t) => (t.propagates ? "cascades" : "flat"), values: () => ["cascades", "flat"] },
         ],
-        filterPlaceholder: "filter tags by key, applies-to…",
+        filterPlaceholder: "filter tags by name, applies-to…",
         columns,
-        empty: "No tag keys yet.",
+        empty: "No tags yet.",
         // Address a row by its key name: the blade and the update/delete paths key
         // on the name (the tag is written by name, not id), and the name is unique.
         rowId: (t) => t.name,
         blades: { registry: { tag: tagBlade }, rootKind: "tag" },
         create: can(me.data, "tag", "create")
-          ? { label: "New tag key", can: () => can(me.data, "tag", "create"), body: (ctx) => <CreateTagForm onCreated={ctx.select} /> }
+          ? { label: "New tag", can: () => can(me.data, "tag", "create"), body: (ctx) => <CreateTagForm onCreated={ctx.select} /> }
           : undefined,
       }}
     />
@@ -121,7 +122,7 @@ function TagBladeBody(p: { name: string }): JSX.Element {
   async function removeTag() {
     const t = tag();
     if (!t) return;
-    if (!confirm(`Delete tag key "${t.name}"? Its bindings across the estate are removed too.`)) return;
+    if (!confirm(`Delete tag "${t.name}"? Its bindings across the estate are removed too.`)) return;
     setErr(null);
     try {
       await deleteTag(t.name);
@@ -233,7 +234,7 @@ export function CreateTagForm(p: { onCreated: (t: Tag) => void; initialName?: st
   const [formErr, setFormErr] = createSignal<string | null>(null);
 
   useFormActions().bind({
-    submitLabel: "Create tag key",
+    submitLabel: "Create tag",
     submitIcon: Plus,
     submit: () => void submit(),
     busy,
@@ -264,7 +265,7 @@ export function CreateTagForm(p: { onCreated: (t: Tag) => void; initialName?: st
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Key" hint="A lowercase identifier, unique tenant-wide (e.g. environment, cost_center).">
+      <Field label="Name" hint="A lowercase identifier, unique tenant-wide (e.g. environment, cost_center).">
         <input class="input input-bordered w-full font-data" value={name()} placeholder="environment" onInput={(e) => setName(e.currentTarget.value)} />
       </Field>
       <Field label="Applies to">

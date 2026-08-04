@@ -56,7 +56,7 @@ function fieldsPreview(s: Secret): JSX.Element {
 }
 
 const columns: FlatColumn<Secret>[] = [
-  identityColumn<Secret>({ label: "Key" }),
+  identityColumn<Secret>(),
   { key: "type", label: "Type", width: "170px", sortVal: (s) => s.secret_type, cell: (s) => <span class="badge badge-ghost badge-sm">{s.secret_type}</span> },
   { key: "owner", label: "Scope", width: "220px", sortVal: (s) => s.owner_kind, cell: (s) => <span class="text-base-content/70">{ownerLabel(s)}</span> },
   { key: "fields", label: "Fields", cell: (s) => fieldsPreview(s) },
@@ -305,7 +305,7 @@ function CreateSecretForm(p: { onCreated: (s: Secret) => void }): JSX.Element {
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow label="Key" hint="The cascade key; unique per owner.">
+      <FieldRow label="Name" hint="What the cascade resolves by; unique per owner.">
         <input class="input input-bordered w-full font-data" value={name()} placeholder="poll-community" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Type">

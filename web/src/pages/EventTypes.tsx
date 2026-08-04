@@ -29,11 +29,11 @@ function originBadge(official: boolean): JSX.Element {
 }
 
 const columns: FlatColumn<EventTypeRow>[] = [
-  // The header word stays "Key" rather than the primitive's default "Name": an event
-  // type's `name` is a keyspace key (call.started), which is a legal key and an
-  // illegal segment, so calling it a name here would teach the wrong thing. The cell
-  // renders the label above the key, which is why there is no longer a Label column.
-  identityColumn<EventTypeRow>({ label: "Key" }),
+  // The shared identity cell under the one header word, "Name". An event type's
+  // `name` is dot-segmented (call.started) where most of the estate is kebab, but
+  // that is a validation difference, not a different concept. The cell renders the
+  // display name above the name, which is why there is no longer a Label column.
+  identityColumn<EventTypeRow>(),
   { key: "official", label: "Origin", width: "100px", sortVal: (r) => String(r.official), cell: (r) => originBadge(r.official) },
 ];
 
@@ -55,7 +55,7 @@ export default function EventTypes(): JSX.Element {
             { key: "name", type: "string", hint: "substring", get: (r) => `${r.name} ${r.display_name ?? ""}`, values: () => [] },
             { key: "official", type: "string", hint: "exact", get: (r) => (r.official ? "official" : "custom"), values: () => ["official", "custom"] },
           ],
-          filterPlaceholder: "filter event types by name, label…",
+          filterPlaceholder: "filter event types by name, display name…",
           columns,
           empty: "No event types.",
           rowId: (r) => r.name,
@@ -146,7 +146,7 @@ function EventTypeBladeBody(p: { name: string }): JSX.Element {
             <KVStacked label="Origin" value={originBadge(r().official)} />
           </div>
           <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Name</span>
+            <span class="eyebrow">Display name</span>
             <Show when={edit.editing()} fallback={<div class="input input-bordered flex items-center text-sm">{r().display_name}</div>}>
               <input class="input input-bordered w-full" value={displayName()} onInput={(e) => setDisplayName(e.currentTarget.value)} />
             </Show>
@@ -213,10 +213,10 @@ export function CreateEventTypeForm(p: { onCreated: (r: EventTypeRow) => void })
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Key" hint="A lowercase, dot-hierarchied name, e.g. call.started or cable.unplugged.">
+      <Field label="Name" hint="A lowercase, dot-hierarchied name, e.g. call.started or cable.unplugged.">
         <input class="input input-bordered w-full font-data" value={name()} placeholder="call.started" onInput={(e) => setName(e.currentTarget.value)} />
       </Field>
-      <Field label="Name">
+      <Field label="Display name">
         <input class="input input-bordered w-full" value={displayName()} placeholder="Call started" onInput={(e) => setDisplayName(e.currentTarget.value)} />
       </Field>
       <Field label="Description">
