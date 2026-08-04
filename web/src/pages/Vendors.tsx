@@ -3,6 +3,8 @@ import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
+import BladeField, { EMPTY_VALUE } from "../components/BladeField";
+import FieldRow from "../components/FieldRow";
 import { createIdentity } from "../lib/entities";
 import { entityLabel } from "../lib/entities";
 import { useFormActions } from "../lib/formactions";
@@ -189,70 +191,50 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <KVStacked label="Name" value={<span class="font-data">{r().name}</span>} />
+            <KVStacked bind="name" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Origin" value={officialBadge(r().official)} />
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Display name</span>
-            <Show
-              when={edit.editing()}
-              fallback={<div class="input input-bordered flex items-center text-sm">{r().display_name}</div>}
-            >
-              <input class="input input-bordered w-full" value={displayName()} onInput={(e) => setDisplayName(e.currentTarget.value)} />
-            </Show>
-          </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Kind</span>
-            <Show
-              when={edit.editing()}
-              fallback={<div class="input input-bordered flex items-center text-sm">{kindBadge(r().kind)}</div>}
-            >
-              <select class="select select-bordered w-full" value={kind()} onChange={(e) => setKind(e.currentTarget.value as VendorKind)}>
-                {VENDOR_KINDS.map((k) => <option value={k}>{k}</option>)}
-              </select>
-            </Show>
-          </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Icon</span>
-            <Show
-              when={edit.editing()}
-              fallback={<div class="input input-bordered flex items-center text-sm font-data">{r().icon || "—"}</div>}
-            >
-              <input class="input input-bordered w-full font-data" placeholder="crestron-logo" value={icon()} onInput={(e) => setIcon(e.currentTarget.value)} />
-            </Show>
-          </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Support phone</span>
-            <Show
-              when={edit.editing()}
-              fallback={<div class="input input-bordered flex items-center text-sm">{r().support_phone || "—"}</div>}
-            >
-              <input class="input input-bordered w-full" placeholder="+1 800 555 0100" value={supportPhone()} onInput={(e) => setSupportPhone(e.currentTarget.value)} />
-            </Show>
-          </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Website</span>
-            <Show
-              when={edit.editing()}
-              fallback={
-                <Show when={r().website} fallback={<div class="input input-bordered flex items-center text-sm">—</div>}>
-                  <Show
-                    when={safeUrl(r().website)}
-                    fallback={<div class="input input-bordered flex items-center text-sm">{r().website}</div>}
-                  >
-                    {(href) => (
-                      <a class="link input input-bordered flex items-center text-sm" href={href()} target="_blank" rel="noreferrer">
-                        {r().website}
-                      </a>
-                    )}
-                  </Show>
-                </Show>
-              }
-            >
-              <input class="input input-bordered w-full" placeholder="https://example.com" value={website()} onInput={(e) => setWebsite(e.currentTarget.value)} />
-            </Show>
-          </div>
+          <BladeField
+            bind="display_name"
+            value={() => r().display_name ?? ""}
+            draft={displayName}
+            onInput={setDisplayName}
+          />
+          <BladeField label="Kind" read={kindBadge(r().kind)}>
+            <select class="select select-bordered w-full" value={kind()} onChange={(e) => setKind(e.currentTarget.value as VendorKind)}>
+              {VENDOR_KINDS.map((k) => <option value={k}>{k}</option>)}
+            </select>
+          </BladeField>
+          <BladeField
+            label="Icon"
+            mono
+            placeholder="crestron-logo"
+            value={() => r().icon ?? ""}
+            draft={icon}
+            onInput={setIcon}
+          />
+          <BladeField
+            label="Support phone"
+            placeholder="+1 800 555 0100"
+            value={() => r().support_phone ?? ""}
+            draft={supportPhone}
+            onInput={setSupportPhone}
+          />
+          <BladeField
+            label="Website"
+            placeholder="https://example.com"
+            value={() => r().website ?? ""}
+            draft={website}
+            onInput={setWebsite}
+            read={
+              <Show when={safeUrl(r().website)} fallback={<span>{r().website || EMPTY_VALUE}</span>}>
+                {(href) => (
+                  <a class="link" href={href()} target="_blank" rel="noreferrer">{r().website}</a>
+                )}
+              </Show>
+            }
+          />
           <Show when={r().official}>
             <div role="alert" class="alert alert-soft text-sm"><span>Seed-owned, read-only.</span></div>
           </Show>
@@ -311,39 +293,29 @@ export function CreateVendorForm(p: { onCreated: (v: Vendor) => void }): JSX.Ele
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Display name" hint="What an operator reads, e.g. Crestron.">
+      <FieldRow bind="display_name" hint="What an operator reads, e.g. Crestron.">
         <input class="input input-bordered w-full" value={display()} placeholder="Crestron" onInput={(e) => setDisplay(e.currentTarget.value)} />
-      </Field>
-      <Field
-        label="Name"
+      </FieldRow>
+      <FieldRow
+        bind="name"
         hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "A kebab name, the address the API and CLI accept."}
       >
         <input class="input input-bordered w-full font-data" value={name()} placeholder="crestron" onInput={(e) => setName(e.currentTarget.value)} />
-      </Field>
-      <Field label="Kind" hint="What role the vendor plays.">
+      </FieldRow>
+      <FieldRow label="Kind" hint="What role the vendor plays.">
         <select class="select select-bordered w-full" value={kind()} onChange={(e) => setKind(e.currentTarget.value as VendorKind)}>
           {VENDOR_KINDS.map((k) => <option value={k}>{k}</option>)}
         </select>
-      </Field>
-      <Field label="Icon" hint="A glyph key, e.g. crestron-logo. Optional.">
+      </FieldRow>
+      <FieldRow label="Icon" hint="A glyph key, e.g. crestron-logo. Optional.">
         <input class="input input-bordered w-full font-data" value={icon()} placeholder="crestron-logo" onInput={(e) => setIcon(e.currentTarget.value)} />
-      </Field>
-      <Field label="Support phone" hint="Optional.">
+      </FieldRow>
+      <FieldRow label="Support phone" hint="Optional.">
         <input class="input input-bordered w-full" value={supportPhone()} placeholder="+1 800 555 0100" onInput={(e) => setSupportPhone(e.currentTarget.value)} />
-      </Field>
-      <Field label="Website" hint="Optional.">
+      </FieldRow>
+      <FieldRow label="Website" hint="Optional.">
         <input class="input input-bordered w-full" value={website()} placeholder="https://example.com" onInput={(e) => setWebsite(e.currentTarget.value)} />
-      </Field>
+      </FieldRow>
     </form>
-  );
-}
-
-function Field(p: { label: string; hint?: string; children: JSX.Element }): JSX.Element {
-  return (
-    <label class="flex flex-col gap-1">
-      <span class="text-[12px] font-medium text-base-content/70">{p.label}</span>
-      {p.children}
-      <Show when={p.hint}><span class="text-[11px] text-base-content/40">{p.hint}</span></Show>
-    </label>
   );
 }

@@ -20,6 +20,22 @@ import { createSignal } from "solid-js";
 // how the Components list ended up showing a name where its neighbours showed a
 // display name.
 
+// The two operator-facing words of the triad, and the only place either one is
+// written as a field label. A field says which fact it is bound to and takes its
+// label from here (see BladeField's `bind` prop), so the pairing cannot be got
+// wrong: there is no prop by which a caller labels one of these two at all.
+//
+// This map replaced a source guard that paired a label to its binding with a
+// regex over four call forms and an eight-line lookahead window. The rule is the
+// same rule; it is enforced by the type instead. What survives of that guard is a
+// backstop asserting these strings appear as a field label only in this file.
+export const IDENTITY_LABELS = {
+  name: "Name",
+  display_name: "Display name",
+} as const;
+
+export type IdentityBinding = keyof typeof IDENTITY_LABELS;
+
 // Labelled is the shape of anything the console labels: the name, plus the
 // optional display name. It is deliberately structural rather than a union of
 // entity types, so a generated body satisfies it without a cast.

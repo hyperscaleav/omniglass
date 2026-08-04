@@ -125,10 +125,41 @@ themes at the same weight as the soft hues. The same reason keeps `type` values 
 ## Primitives (the reuse target)
 
 `ListShell` (with its `FlatList` / `TreeList` bodies), `FilterBar`, `Drawer`, `PanelFooter`,
-`Donut`, `Badge`, `Fact`, `Page`, `DataTable`, `IdentityCell`,
+`Donut`, `Badge`, `Page`, `DataTable`, `IdentityCell`, `KVStacked` / `KVRow` / `FieldRow` / `BladeField`,
 `CommandPalette`, plus the `Sidebar` / `TopBar` shell. New inventory pages consume these; new
 surface *classes* (dashboards, alarms, explore, learn) add their own primitive rather than
 bending `ListShell`.
+
+### A field, a fact, and what read-only looks like
+
+Three primitives cover every labelled thing on a detail surface, and nothing else may render one.
+
+- **`KVStacked`** is a **fact**: an eyebrow label above a value. It is what a detail grid cell is,
+  and it is also the read state of a field.
+- **`FieldRow`** is a **form field**: the same eyebrow label above a control, with an optional
+  `(i)` tooltip beside the label and a hint below. It generates the control's id and points
+  `<label for>` at it, keeping the tooltip trigger outside the `<label>` so a labelable button
+  never steals the control's accessible name.
+- **`BladeField`** is a **blade field**: a fact when the blade is being read, a `FieldRow` when it
+  is being edited, with the switch made once rather than per field. It takes the edit slot from
+  `BladeEditContext`, or from an explicit `edit` prop for a detail body that also renders outside a
+  provider (the tree pages render one body in both places).
+
+**A read-only field renders as a fact, never as a box.** A bordered input that rejects typing reads
+as broken rather than as read-only, and a seed-owned blade rendered five of them at once, directly
+below three plain facts, so the same read-only state had two appearances on one panel
+([ADR-0078](/architecture/decisions/)). A blade the operator cannot edit now contains nothing shaped
+like a control. Both states label with the eyebrow, so the label does not change style when the
+pencil is clicked.
+
+**Free text declares itself.** `multiline` reads wrapped with its newlines preserved and edits in a
+`textarea`. It is a prop rather than a second component because a component means every new page
+re-decides which one to reach for.
+
+These exist because the blade *shell* was a primitive and the blade *contents* were not. Eleven
+pages defined a byte-identical local `Field`, four more went through positional `ctx.field(...)`
+helpers, and the read-only box was hand-rolled 24 times, so every blade defect was an N-place
+defect: a description that would not wrap was one bug in 24 fields.
 
 ### How an entity's identity reads
 
@@ -150,7 +181,12 @@ incompatible idioms, which is why the header word for one fact used to be "Name"
 **Three fields, no synonyms.** The identifier is the **Name**, on every column header and every
 form. The friendly string is the **Display name**. The id is never labelled because it is never
 shown outside a drill-in. "Technical name" and "Segment" are retired as field labels, and
-`identity-vocabulary-guard.test.ts` fails the build on either appearing in label text. The console's
+`identity-vocabulary-guard.test.ts` fails the build on either appearing in label text. Neither of
+the two live words is typed on a page at all: a field or a fact that shows one of them says which
+fact it is bound to (`<BladeField bind="display_name">`) and takes its label from `IDENTITY_LABELS`
+in `lib/entities`, with `label` refused alongside `bind` at the type level. The pairing used to be
+checked by a regex over four call forms with an eight-line lookahead, after eleven blades shipped
+showing two fields both called "Name". The console's
 words are the column names, so an operator reading the UI, the CLI reference, and the schema reads
 one vocabulary.
 

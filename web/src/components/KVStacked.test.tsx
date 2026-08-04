@@ -22,6 +22,20 @@ describe("KVStacked", () => {
     expect(container.querySelector(".text-sm")!.className).toContain("font-data");
   });
 
+  it("labels a bound fact from the identity map rather than from a prop", () => {
+    // A fact carries the same two words a field does, so it derives them the
+    // same way. Otherwise "Name" stays hand-typed on 20 surfaces and the rule
+    // holds in only half the places it has to.
+    const { getByText } = render(() => (
+      <>
+        <KVStacked bind="name" value="crestron" />
+        <KVStacked bind="display_name" value="Crestron" />
+      </>
+    ));
+    expect(getByText("Name")).toBeTruthy();
+    expect(getByText("Display name")).toBeTruthy();
+  });
+
   it("renders the label even when no value is given", () => {
     const { getByText } = render(() => <KVStacked label="Parent" />);
     expect(getByText("Parent")).toBeTruthy();
