@@ -105,7 +105,7 @@ func (p *PG) CreateNode(ctx context.Context, actorID string, spec NodeSpec, crea
 	if !create.All {
 		return nil, ErrNodeForbidden
 	}
-	if err := ValidateEntityKey(spec.Name); err != nil {
+	if err := ValidateName("node", spec.Name); err != nil {
 		return nil, err
 	}
 	tx, err := p.pool.Begin(ctx)

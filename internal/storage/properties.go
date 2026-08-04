@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/hyperscaleav/omniglass/internal/key"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -84,7 +83,7 @@ func guardPropertyMutable(ctx context.Context, q querier, name string) error {
 // must be a valid canonical key and the validation must be well-formed JSON. A
 // duplicate name is ErrPropertyTypeExists.
 func (p *PG) CreatePropertyType(ctx context.Context, actorID string, spec PropertyTypeSpec) (*PropertyType, error) {
-	if err := key.ValidateKey(spec.Name); err != nil {
+	if err := ValidateName("property_type", spec.Name); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrPropertyTypeInvalid, err)
 	}
 	if len(spec.Validation) > 0 && !json.Valid(spec.Validation) {

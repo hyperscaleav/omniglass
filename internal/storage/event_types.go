@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/hyperscaleav/omniglass/internal/key"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -132,7 +131,7 @@ func schemaArg(b []byte) any {
 // name must be a valid canonical key and the payload_schema must be well-formed
 // JSON. A duplicate name is ErrEventTypeExists.
 func (p *PG) CreateEventType(ctx context.Context, actorID string, spec EventTypeSpec) (*EventType, error) {
-	if err := key.ValidateKey(spec.Name); err != nil {
+	if err := ValidateName("event_type", spec.Name); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrEventTypeInvalid, err)
 	}
 	if len(spec.PayloadSchema) > 0 && !json.Valid(spec.PayloadSchema) {

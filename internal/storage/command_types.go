@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/hyperscaleav/omniglass/internal/key"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -162,7 +161,7 @@ func resolveTarget(ctx context.Context, q querier, name string) (*string, error)
 // name must be a valid key, the params_schema well-formed JSON, and the target (when
 // set) a registered property. A duplicate name is ErrCommandTypeExists.
 func (p *PG) CreateCommandType(ctx context.Context, actorID string, spec CommandTypeSpec) (*CommandType, error) {
-	if err := key.ValidateKey(spec.Name); err != nil {
+	if err := ValidateName("command_type", spec.Name); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrCommandTypeInvalid, err)
 	}
 	if len(spec.ParamsSchema) > 0 && !json.Valid(spec.ParamsSchema) {

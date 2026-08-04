@@ -177,7 +177,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Description: "Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.",
 	}, "component", "update"), func(ctx context.Context, in *checkNameInput) (*checkNameOutput, error) {
 		out := &checkNameOutput{}
-		if err := storage.ValidateEntityKey(in.Body.Name); err != nil {
+		if err := storage.ValidateName("component", in.Body.Name); err != nil {
 			out.Body.Valid = false
 			// A uuid passes the slug rule, so the generic reason would describe
 			// exactly what the operator typed and explain nothing.
