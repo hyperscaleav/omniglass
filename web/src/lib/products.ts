@@ -12,7 +12,7 @@ import { api } from "../api/client";
 export type ProductKind = "device" | "app" | "service" | "vm";
 
 // References arrive in both forms (api/products.go): vendor/driver/
-// parent_product are the kebab handles an operator reads, vendor_id/driver_id/
+// parent_product are the name an operator reads, vendor_id/driver_id/
 // parent_product_id the uuids they resolve to. capabilities is a list of
 // capability NAMES.
 export type Product = {
@@ -39,7 +39,7 @@ export async function listProducts(): Promise<Product[]> {
 }
 
 export type CreateProduct = {
-  // The kebab handle. The uuid is the database\'s to mint.
+  // The name. The uuid is the database\'s to mint.
   name: string;
   display_name: string;
   kind: ProductKind;

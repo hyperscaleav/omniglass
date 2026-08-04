@@ -10,7 +10,7 @@ a specific model (a **Cisco Room Bar**, a **Samsung QM55**), not an organization
 unit. It is where the three leaf catalogs converge: the [vendor](/guides/admin/vendors/) that makes
 it, the [driver](/guides/admin/drivers/) that speaks to it, and the
 [capabilities](/guides/admin/capabilities/) it provides, classified by a **kind**. Each row shows the
-**name** (the operator-facing kebab handle, for example `cisco-room-bar`), the **display name**, its
+**name** (for example `cisco-room-bar`), the **display name**, its
 **vendor**, **driver**, **kind**, and its **origin** (**official**, seed-owned, or **custom**). A
 product also carries an `id`, a uuid minted by the database, the internal address the handle resolves
 to ([ADR-0062](/architecture/decisions/)); the handle is what you type and read.
@@ -42,12 +42,12 @@ a separate genus. The system side has the same arrangement one level up: a syste
   with `parent_product_id` (a trim or regional variant of the same model). A product with no parent is
   a base product.
 - **New product** (with `product:create`, an admin permission) opens a create drawer: give it a
-  **name** (the kebab handle, unique tenant-wide, e.g. `cisco-room-bar`) and a **display name**, pick
+  **name** (unique tenant-wide, e.g. `cisco-room-bar`) and a **display name**, pick
   its **kind** (defaults to device), and, optionally, its **vendor**, **driver**, **parent product**,
   and **capabilities**.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `product:update`) edits the
-  display name, vendor, driver, kind, parent, and capabilities; the uuid `id` is database-minted and
-  never edited. **Delete** (with `product:delete`) removes the row, behind a confirm.
+  display name, vendor, driver, kind, parent, and capabilities; the **name** is fixed, since a catalog
+  row carries no rename. **Delete** (with `product:delete`) removes the row, behind a confirm.
 - An **official** (seed-owned) row is always read-only: no Edit, no Delete, and the blade marks it
   "Seed-owned, read-only." Omniglass ships a starter set of official products (Cisco Room Bar, Samsung
   QM55, Shure MXA920, Crestron TSS-1070), upserted idempotently at boot so the shared set cannot drift

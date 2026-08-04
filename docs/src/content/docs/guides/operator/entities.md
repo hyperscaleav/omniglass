@@ -41,33 +41,44 @@ available, with no need to enter edit mode: a red **Delete** for a group (a user
 **Disable / Enable** and the stronger steps sit in the kebab), each behind a confirm. Secondary actions like **Impersonate** fold into a
 **⋯** menu. Edit appears only if your grants allow it, and a read-only blade (a role) shows no bar at all.
 
-The same bar carries **create**. A form that opens in a slide-over (New user, New tag key, Upload
+The same bar carries **create**. A form that opens in a slide-over (New user, New tag, Upload
 file) or as its own blade (New interface) puts its **Create** button in the bar at the foot of the
 panel, never floating after the last field, and greys it out until the form is complete. **Cancel**
 sits beside it on the forms that offer one; where it does not, the header **x** closes the panel.
 
 ## Create, edit, delete
 
-- **New** opens a **draft** at the entity's own `/create` address (a form for name, classifier,
-  placement, and where applicable a parent). The classifier is the entity's shape: a component
+- **New** opens a **draft** at the entity's own `/create` address (a form for display name, name,
+  classifier, placement, and where applicable a parent). Identity is two fields you fill and one you
+  never see: the **display name** is the friendly string a human reads ("HQ Boardroom DSP"), the
+  **name** is the identifier the API, the CLI, and the URL carry (`hq-boardroom-dsp`, lowercase
+  letters, digits, and hyphens, changeable later, see Edit), and the `id` is a uuid the platform mints
+  and keeps internally. The name fills itself in from the display name until you edit it, so most of
+  the time you type one field and check the other. The classifier is the entity's shape: a component
   picks its [product](/guides/admin/products/), a system the
   [standard](/guides/admin/standards/) it conforms to, a location its
   [type](/guides/admin/types/). On a component and a system the classifier is **optional**, so a
   one-off unit or a system that matches no blueprint is legitimate; a location's type is
-  required, since for a location the type is the only shape-definer. The name is the entity's address: lowercase
-  letters, digits, and hyphens (it can be changed later, see Edit). **Create** commits it and
+  required, since for a location the type is the only shape-definer. **Create** commits it and
   drops you straight into the new entity's detail in **edit mode**, so you can tag it and finish
   configuring in place instead of hunting for it back in the list. Bindings like tags need the
   entity to exist, so they unlock the moment it is created. On a location, the type you pick may
   restrict which parent types it can sit under (or require no parent at all); a placement outside
   that set is refused with a message naming both types, right on the create form.
 - **Edit** (the pencil on a row, or the button in the detail) flips that same detail into edit
-  mode: the fields become inputs and the tag editor goes live. The **technical name** (the
-  address) is editable here too, with an inline **Check** button that reports whether a proposed
-  name is a valid slug and still free before you save; renaming changes the entity's URL, and
-  existing links to the old name stop resolving. **Save** commits the changes, **Cancel** discards
-  them. In **view** the detail is read-only, so tags and other bindings are shown but not editable
-  until you enter edit.
+  mode: the fields become inputs and the tag editor goes live. The **Name** is editable here on a
+  component, a system, and a location, with an inline **Check** button that reports whether a
+  proposed name is valid and still free before you save. **Save** commits the changes, **Cancel**
+  discards them. In **view** the detail is read-only, so tags and other bindings are shown but not
+  editable until you enter edit.
+- **Renaming is a separate act from an update, and separately granted.** It is its own call,
+  `<resource>:rename` rather than `<resource>:update`, and **Save** patches the other fields first
+  and sends the rename last: an operator holding update but not rename keeps the rest of the edit
+  and leaves the name where it was ([ADR-0076](/architecture/decisions/)). A **group**'s name is
+  read-only in the console and moves from the API or the CLI. Renaming changes the entity's URL, so
+  bookmarks, runbooks, and integration config holding the old name stop resolving. Nothing inside
+  Omniglass breaks: every reference holds the entity's `id`, so its tags, grants, alarms, and
+  recorded history follow the rename, and the audit trail stays attributable across it.
 - A **location**'s edit mode also makes its **Parent** editable: the Placement section swaps its
   read-only fact for a picker narrowed to the location type's allowed parents (or, when
   unconstrained, every location), excluding the location's own subtree. Moving back to root is

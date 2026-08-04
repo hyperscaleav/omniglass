@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-// Guard (#474): a test fixture that puts the kebab handle in a row's `id` slot
+// Guard (#474): a test fixture that puts the name in a row's `id` slot
 // re-creates the pre-ADR-0062 world, where the id WAS the handle, and lets a
 // real uuid-vs-name join break ship green. That is exactly how the #432
 // console regressions shipped: the icon map, the allowed-parent filter, and

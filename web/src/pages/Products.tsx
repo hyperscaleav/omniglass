@@ -44,13 +44,13 @@ function kindBadge(kind: string): JSX.Element {
   return <span class="badge badge-ghost badge-sm">{kind}</span>;
 }
 
-// refCell prints a reference's kebab handle (never the uuid; ADR-0062).
+// refCell prints a reference's name (never the uuid; ADR-0062).
 function refCell(handle?: string): JSX.Element {
   return <span class="font-data text-xs text-base-content/60">{handle || "—"}</span>;
 }
 
 const columns: FlatColumn<Product>[] = [
-  // One identity column, the shared cell: the label leads and the kebab handle
+  // One identity column, the shared cell: the label leads and the name
   // sits beneath it. A product whose label IS its handle renders it once.
   identityColumn<Product>(),
   { key: "vendor", label: "Vendor", width: "150px", sortVal: (p) => p.vendor ?? "", cell: (p) => refCell(p.vendor) },
@@ -333,7 +333,7 @@ export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.E
 }
 
 // VendorSelect: a vendor picker over the vendor registry, with a "None" option
-// (a product need not name a vendor). Stores the vendor's kebab handle (the
+// (a product need not name a vendor). Stores the vendor's name (the
 // write path resolves either form).
 function VendorSelect(p: { value: string; onChange: (v: string) => void }): JSX.Element {
   const vendors = useQuery(() => ({ queryKey: VENDORS_KEY, queryFn: listVendors }));
@@ -349,7 +349,7 @@ function VendorSelect(p: { value: string; onChange: (v: string) => void }): JSX.
 }
 
 // DriverSelect: a driver picker over the driver registry, with a "None" option.
-// Stores the driver's kebab handle (the write path resolves either form).
+// Stores the driver's name (the write path resolves either form).
 function DriverSelect(p: { value: string; onChange: (v: string) => void }): JSX.Element {
   const drivers = useQuery(() => ({ queryKey: DRIVERS_KEY, queryFn: listDrivers }));
   const options = createMemo(() =>

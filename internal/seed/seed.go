@@ -338,7 +338,7 @@ func seedVendors(ctx context.Context, gw storage.Gateway) error {
 	}
 	for _, v := range doc.Vendors {
 		if err := gw.UpsertVendor(ctx, storage.Vendor{
-			// The seed ships kebab handles, never uuids: the row's id is the
+			// The seed ships name, never uuids: the row's id is the
 			// database's to mint and must survive a re-seed.
 			Name:        v.ID,
 			Official:    true,

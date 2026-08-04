@@ -37,7 +37,7 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   the uuid primary key is the server's to mint and cannot collide), `GET` reads, `PATCH`
   partial-updates (AIP-134), `DELETE` removes. No upsert shortcuts.
 - **Every name-bearing body carries both handles**: a uuid **`id`** (stable identity, the target every
-  foreign key stores) and a unique, renameable **`name`** (the kebab handle an operator reads and
+  foreign key stores) and a unique, renameable **`name`** (the identifier an operator reads and
   types). A create takes the `name`; the uuid is the database's to mint, and **every write returns
   it**, so a client stores the id and detects a rename by diffing the id it holds
   ([ADR-0076](/architecture/decisions/#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)).
@@ -65,7 +65,7 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   `<entity>:rename`). Its availability answer is **scope-blind**: the `name` uniqueness
   constraint is global, so a scope-filtered answer would report a name held outside the caller's
   scope as free and then 409 at save. A bounded exception to the ABAC-scope-on-every-query rule (it
-  discloses only that a technical name is taken somewhere), not a license to skip scope elsewhere.
+  discloses only that a name is taken somewhere), not a license to skip scope elsewhere.
 - **A principal is addressable by uuid or username.** Every `/principals/{id}` route resolves either
   server-side (a value that parses as a uuid is used directly, else a username lookup, an unknown one
   a 404). The uuid stays the stable identity (a username is mutable, nothing keys on it); service
@@ -218,7 +218,8 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
 - `GET /components/{name}/events` is the log-kind mirror: the component's recent **log occurrences**
   (the [`event` log sink](/architecture/core-entities/#the-event-sink-the-first-arc-owned-occurrence)),
   newest first, bounded to the last 24 hours and capped at 200 rows; each row carries `ts`, the
-  `event_type` `key` (e.g. `call.started`), `origin` (caught/caused/derived/scheduled), `instance`,
+  `event_type` name it is typed by (on the wire as `key`, e.g. `call.started`) with its
+  `event_type_id` beside it, `origin` (caught/caused/derived/scheduled), `instance`,
   `message`, optional `attributes`, `provenance` (`observed` for direct collection), and the `source`
   interface type.
 - `GET /components/{name}/reconciliation` pivots want/told/is over the property cache: per declared

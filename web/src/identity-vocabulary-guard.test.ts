@@ -11,13 +11,13 @@ import { describe, expect, it } from "vitest";
 //
 // The console used to say four things. A list column header said "Name" for the
 // identifier on some pages and for the friendly string on others. A blade said
-// "Technical name" on three pages and "Name" on seven. A later pass swapped the
+// "Name" on three pages and "Name" on seven. A later pass swapped the
 // two words rather than settling them, so the identifier answered to "Key". The
 // same fact answering to three words, and the same word meaning two facts, is the
 // confusion the identity work exists to end. The words are now "Name" and
 // "Display name", matching the columns.
 //
-// "Technical name" and "Segment" stay retired as field labels. A segment is one
+// "Name" and "Segment" stay retired as field labels. A segment is one
 // dot-separated component of a name (internal/key fixes that meaning), so it names
 // a position in a path and never the value at one. That makes it a fine word in
 // prose about topics and a wrong one on a form. Both are allowed in a comment
@@ -106,7 +106,7 @@ describe("identity vocabulary", () => {
       offenders,
       `\nThese carry a retired word in operator-visible text:\n  ${offenders.join("\n  ")}\n\n` +
         `The identifier is "Name". The friendly string is "Display name".\n` +
-        `"Technical name" and "Segment" are retired as labels.\n`,
+        `"Name" and "Segment" are retired as labels.\n`,
     ).toEqual([]);
   });
 

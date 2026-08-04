@@ -8,7 +8,7 @@ is the directory of **drivers**: the implementation that gets, emits, and sets a
 on the same flat-registry pattern as [Types](/guides/admin/types/) and [Tags](/guides/admin/tags/).
 Where a [vendor](/guides/admin/vendors/) names who a device comes from, a driver names how it is
 talked to (for example `Generic SNMP` or `Cisco xAPI`). Each row shows the **name** (the
-operator-facing kebab handle, for example `snmp-generic`), the **display name**, an optional
+operator-facing name, for example `snmp-generic`), the **display name**, an optional
 **version**, and its **origin** (**official**, seed-owned, or **custom**). A driver also carries
 an `id`, a uuid minted by the database, the internal address the handle resolves to
 ([ADR-0062](/architecture/decisions/)); the handle is what you type and read.
@@ -21,7 +21,7 @@ driver this way. It is a leaf catalog beside the vendor and
 [core entities](/architecture/core-entities/) for where it sits in the estate model.
 
 - **New driver** (with `driver:create`, an admin permission) opens a create drawer: give it a
-  **name** (the kebab handle, unique tenant-wide, e.g. `snmp-generic`), a **display name**, and,
+  **name** (unique tenant-wide, e.g. `snmp-generic`), a **display name**, and,
   optionally, a **version**.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `driver:update`) edits
   the display name and version; the **name** is fixed, since a catalog row carries no rename

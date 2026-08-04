@@ -5673,11 +5673,11 @@ export interface components {
             standard_id?: string;
         };
         SystemMemberBody: {
-            /** @description Technical name of the component */
+            /** @description Name of the component */
             component: string;
             /** @description Whether this membership is the component's default when no system is given */
             primary: boolean;
-            /** @description Technical name of the system */
+            /** @description Name of the system */
             system: string;
             /**
              * Format: int64
@@ -7536,7 +7536,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Technical name of the component */
+                /** @description Name of the component */
                 name: string;
             };
             cookie?: never;
@@ -12136,7 +12136,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Technical name of the system */
+                /** @description Name of the system */
                 name: string;
             };
             cookie?: never;
@@ -12168,9 +12168,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Technical name of the system */
+                /** @description Name of the system */
                 name: string;
-                /** @description Technical name of the component */
+                /** @description Name of the component */
                 component: string;
             };
             cookie?: never;
@@ -12200,9 +12200,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Technical name of the system */
+                /** @description Name of the system */
                 name: string;
-                /** @description Technical name of the component */
+                /** @description Name of the component */
                 component: string;
             };
             cookie?: never;
@@ -12232,9 +12232,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Technical name of the system */
+                /** @description Name of the system */
                 name: string;
-                /** @description Technical name of the component */
+                /** @description Name of the component */
                 component: string;
             };
             cookie?: never;

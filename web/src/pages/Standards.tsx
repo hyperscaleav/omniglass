@@ -200,7 +200,7 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
   );
 }
 
-// CreateStandardForm: name the standard and let the kebab handle (the
+// CreateStandardForm: name the standard and let the name (the
 // operator-facing address; the uuid is the database's to mint) derive from it;
 // the parent standard is optional (a variant of an existing one).
 export function CreateStandardForm(p: { onCreated: (s: Standard) => void }): JSX.Element {

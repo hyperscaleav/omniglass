@@ -225,7 +225,7 @@ func replaceProductCapabilities(ctx context.Context, tx pgx.Tx, productRef strin
 }
 
 // UpsertProduct installs or updates a product by HANDLE and sets its capability
-// set, the boot-seed phase's write. The seed ships kebab handles, not uuids, so
+// set, the boot-seed phase's write. The seed ships name, not uuids, so
 // the conflict target is the handle: re-seeding `cisco-room-bar` updates that row
 // in place, re-establishes its capabilities, and its id never moves.
 func (p *PG) UpsertProduct(ctx context.Context, m Product) error {

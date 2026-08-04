@@ -13,7 +13,7 @@ export type System = {
   name: string;
   display_name?: string;
   // The standard it conforms to, in both forms (api/systems.go): standard is
-  // the kebab handle an operator reads, standard_id the uuid it resolves to.
+  // the name an operator reads, standard_id the uuid it resolves to.
   standard?: string;
   standard_id?: string;
   location?: string;

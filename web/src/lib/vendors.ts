@@ -29,7 +29,7 @@ export async function listVendors(): Promise<Vendor[]> {
 }
 
 export type CreateVendor = {
-  // The kebab handle. The uuid is the database\'s to mint.
+  // The name. The uuid is the database\'s to mint.
   name: string;
   display_name: string;
   kind: VendorKind;

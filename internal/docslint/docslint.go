@@ -38,6 +38,16 @@ type BannedTerm struct {
 // Banned is the denylist. Order is presentation only.
 var Banned = []BannedTerm{
 	{
+		// Two synonyms the corpus invented for the identifier. Neither is a symbol,
+		// so nothing else catches them, and both survived the first vocabulary sweep
+		// on ten pages: "technical name" appeared 21 times in the generated CLI
+		// reference alone, from a Huma doc: tag. A third word for the identifier is
+		// exactly what the triad exists to stop (ADR-0076).
+		Pattern:     regexp.MustCompile(`(?i)\btechnical names?\b|\bkebab handles?\b`),
+		Replacement: "name (the identifier), or display name (the friendly string)",
+		Origin:      "ADR-0076",
+	},
+	{
 		// The identity triad settled on id / name / display_name (ADR-0076). These
 		// two validators were the platform's other name rules and are DELETED, not
 		// renamed: ValidateName picks the rule from the table's declared identity

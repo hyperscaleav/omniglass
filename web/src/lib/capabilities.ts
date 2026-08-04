@@ -22,7 +22,7 @@ export async function listCapabilities(): Promise<Capability[]> {
 }
 
 export type CreateCapability = {
-  // The kebab handle. The uuid is the database\'s to mint.
+  // The name. The uuid is the database\'s to mint.
   name: string;
   display_name: string;
 };

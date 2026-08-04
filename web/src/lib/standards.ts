@@ -28,7 +28,7 @@ export async function listStandards(): Promise<Standard[]> {
 }
 
 export type CreateStandard = {
-  // The kebab handle. The uuid is the database\'s to mint.
+  // The name. The uuid is the database\'s to mint.
   name: string;
   display_name: string;
   parent_standard_id?: string;

@@ -14,10 +14,10 @@ the node ships back. This page walks the console surfaces; the model behind them
 
 **Inventory > Nodes** (with `node:read`, which must be **all-scope**, since a node is
 estate-wide, so a location-scoped operator cannot list nodes) is the collection-daemon
-inventory. Each row is labelled by the node's **display name** (falling back to its name/key),
-with the key and its location as the subtitle, a **liveness pill** (up, down, or never, derived
-from its last heartbeat against the server's down window), and the relative last-heartbeat time.
-A row opens the node's detail.
+inventory. Each row reads the way every list in the console reads: the node's **display name** on the
+first line and its **name** beneath it (shown only when the two differ), then a **liveness pill** (up,
+down, or never, derived from its last heartbeat against the server's down window), the relative
+last-heartbeat time, and its tags. A row opens the node's detail.
 
 - With `node:create` and `node:enroll`, **New node** registers a node (the name is its
   estate address) and mints its **enrollment token**. The form also takes an optional
@@ -99,8 +99,8 @@ standalone Interfaces page).
 Alongside sampled readings, a component carries two occurrence panels, both read-only and gated by
 `component:read`. The **Events** panel shows the most recent typed **events**, newest first, over the
 last 24 hours (capped at 200): discrete things that *happened* (a `call.started`) that a component
-published natively or a rule derived, each row showing its **time**, the **event key**, the **message**,
-and any structured **attributes**. Below it, the **Logs** panel shows the component's raw **log lines**
+published natively or a rule derived, each row showing its **time**, the **event type** it is typed by,
+the **message**, and any structured **attributes**. Below it, the **Logs** panel shows the component's raw **log lines**
 (the ingest lane, [ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)):
 untyped device text a rule may later derive events from, each row showing its **time**, a **severity**
 badge, the **facility** and **source**, the **message**, and its structured **fields** on demand. Most

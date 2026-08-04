@@ -256,7 +256,7 @@ function CreateSecretForm(p: { onCreated: (s: Secret) => void }): JSX.Element {
     if (!ownerKinds().includes(ownerKind())) setOwnerKind(ownerKinds()[0]);
   });
 
-  // typeId holds the kebab handle (ADR-0062: the name is the address the API resolves).
+  // typeId holds the name (ADR-0062: the name is the address the API resolves).
   const shape = createMemo(() => (types.data ?? []).find((t) => t.name === typeId()));
   // The fields the operator fills (lifecycle-origin fields are set by the secret's
   // own machinery, never at creation).

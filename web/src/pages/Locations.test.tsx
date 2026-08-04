@@ -20,7 +20,7 @@ const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: 
 const hq: Location = { id: uuidFor("l-hq"), name: "hq", display_name: "HQ", location_type: "campus", effective_tags: {} };
 const lab: Location = { id: uuidFor("l-lab"), name: "lab", display_name: "Lab", location_type: "campus", effective_tags: {} };
 const hqB1: Location = { id: uuidFor("l-b1"), name: "hq-b1", display_name: "HQ B1", location_type: "building", parent: "hq", effective_tags: {} };
-// Registry rows carry a uuid id and the kebab handle in name (ADR-0062); the
+// Registry rows carry a uuid id and the name in name (ADR-0062); the
 // server stores and compares the handle everywhere a location references its
 // type, so a fixture with the handle in the id slot would hide a uuid-vs-name
 // join bug (that is how #466 shipped).
@@ -216,7 +216,7 @@ describe("Locations create-as-route", () => {
     fireEvent.change(typeSelect, { target: { value: typeSelect.options[1].value } });
     fireEvent.click(screen.getByText("Create location"));
     await waitFor(() => expect(captured).toBeTruthy());
-    // The server resolves the kebab handle (storage joins location_type by
+    // The server resolves the name (storage joins location_type by
     // name); a uuid here inserts NULL and the create 500s on a live install.
     expect((captured as { location_type: string }).location_type).toBe("campus");
   });
