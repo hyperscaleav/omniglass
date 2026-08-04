@@ -1,4 +1,5 @@
 import { Show, createEffect, createSignal, on, type JSX } from "solid-js";
+import { entityLabel } from "../lib/entities";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import { identityColumn } from "../components/IdentityCell";
@@ -72,9 +73,18 @@ export default function EventTypes(): JSX.Element {
 // eventTypeBlade renders one event type on the shared blade stack. The title is the
 // mono key; official event types are read-only (no pencil, no delete).
 export const eventTypeBlade: BladeDef = {
-  Title: (p) => <span class="font-data">{p.id}</span>,
+  Title: (p) => <EventTypeBladeTitle name={p.id} />,
   Body: (p) => <EventTypeBladeBody name={p.id} />,
 };
+
+// The blade heading is the display name, falling back to the name, so opening a row
+// lands on the same words the row showed. It rendered the bare name before, so
+// clicking "ICMP RTT (avg)" opened a panel headed icmp.rtt-avg.
+function EventTypeBladeTitle(p: { name: string }): JSX.Element {
+  const row = useEventTypeRow(p.name);
+  const r = row();
+  return <span classList={{ "font-data": !r?.display_name }}>{r ? entityLabel(r) : p.name}</span>;
+}
 
 function useEventTypeRow(name: string): () => EventTypeRow | undefined {
   const eventTypes = useQuery(() => ({ queryKey: EVENT_TYPES_KEY, queryFn: listEventTypes }));
@@ -143,6 +153,7 @@ function EventTypeBladeBody(p: { name: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
+            <KVStacked label="Name" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Origin" value={originBadge(r().official)} />
           </div>
           <div class="flex flex-col gap-1.5">

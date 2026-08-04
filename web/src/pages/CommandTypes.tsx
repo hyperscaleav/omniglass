@@ -1,4 +1,5 @@
 import { Show, createEffect, createSignal, on, type JSX } from "solid-js";
+import { entityLabel } from "../lib/entities";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import { identityColumn } from "../components/IdentityCell";
@@ -77,9 +78,18 @@ export default function CommandTypes(): JSX.Element {
 }
 
 export const commandTypeBlade: BladeDef = {
-  Title: (p) => <span class="font-data">{p.id}</span>,
+  Title: (p) => <CommandTypeBladeTitle name={p.id} />,
   Body: (p) => <CommandTypeBladeBody name={p.id} />,
 };
+
+// The blade heading is the display name, falling back to the name, so opening a row
+// lands on the same words the row showed. It rendered the bare name before, so
+// clicking "ICMP RTT (avg)" opened a panel headed icmp.rtt-avg.
+function CommandTypeBladeTitle(p: { name: string }): JSX.Element {
+  const row = useCommandTypeRow(p.name);
+  const r = row();
+  return <span classList={{ "font-data": !r?.display_name }}>{r ? entityLabel(r) : p.name}</span>;
+}
 
 function useCommandTypeRow(name: string): () => CommandTypeRow | undefined {
   const commandTypes = useQuery(() => ({ queryKey: COMMAND_TYPES_KEY, queryFn: listCommandTypes }));
@@ -153,6 +163,7 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
+            <KVStacked label="Name" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Target property" value={targetCell(r().target_property_type)} />
             <KVStacked label="Settle window" value={<span class="tabular-nums">{r().settle_window_seconds}s</span>} />
             <KVStacked label="Origin" value={originBadge(r().official)} />

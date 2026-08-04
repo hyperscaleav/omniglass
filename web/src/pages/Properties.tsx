@@ -1,4 +1,5 @@
 import { For, Show, createEffect, createSignal, on, type JSX } from "solid-js";
+import { entityLabel } from "../lib/entities";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import { identityColumn } from "../components/IdentityCell";
@@ -86,12 +87,22 @@ export default function Properties(): JSX.Element {
   );
 }
 
-// propertyBlade renders one property on the shared blade stack. The title is the mono
-// property key; official properties are read-only (no pencil, no delete).
+// propertyBlade renders one property on the shared blade stack. The title is what the
+// list shows, the display name, falling back to the name; official properties are
+// read-only (no pencil, no delete).
 export const propertyBlade: BladeDef = {
-  Title: (p) => <span class="font-data">{p.id}</span>,
+  Title: (p) => <PropertyBladeTitle name={p.id} />,
   Body: (p) => <PropertyBladeBody name={p.id} />,
 };
+
+// The blade heading is the display name, falling back to the name, so opening a row
+// lands on the same words the row showed. It rendered the bare name before, so
+// clicking "ICMP RTT (avg)" opened a panel headed icmp.rtt-avg.
+function PropertyBladeTitle(p: { name: string }): JSX.Element {
+  const row = usePropertyRow(p.name);
+  const r = row();
+  return <span classList={{ "font-data": !r?.display_name }}>{r ? entityLabel(r) : p.name}</span>;
+}
 
 function usePropertyRow(name: string): () => PropertyRow | undefined {
   const properties = useQuery(() => ({ queryKey: PROPERTIES_KEY, queryFn: listProperties }));
@@ -162,6 +173,7 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
+            <KVStacked label="Name" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Type" value={typeBadge(r().data_type)} />
             <KVStacked label="Kind" value={kindBadge(r().kind)} />
             <KVStacked label="Origin" value={originBadge(r().official)} />

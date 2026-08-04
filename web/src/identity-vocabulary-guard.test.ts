@@ -200,3 +200,32 @@ describe("a label matches the field it labels", () => {
     }
   });
 });
+
+// A blade's heading must resolve the display name, not render the raw blade id.
+//
+// A blade is opened from a row, and the row shows the display name over the name.
+// If the heading renders the id, clicking "ICMP RTT (avg)" opens a panel headed
+// `icmp.rtt-avg`, so the operator cannot tell they opened the thing they clicked.
+// Three pages did exactly that while 813 tests were green, because no test reads a
+// blade heading: the id IS the name for these entities, so the wrong value is a
+// plausible-looking string rather than an obvious defect.
+//
+// The rule is about resolution, not about text: a Title that renders `p.id` straight
+// through has not looked the row up, whatever it wraps it in.
+describe("a blade heading resolves the display name", () => {
+  it("never renders the blade id as the whole heading", () => {
+    const bare = /Title:\s*\(p\)\s*=>\s*(?:<[^>]*>)?\{p\.id\}(?:<\/[^>]*>)?,/;
+    for (const file of walk(SRC, { tests: false })) {
+      const src = readFileSync(file, "utf8");
+      src.split("\n").forEach((line, i) => {
+        if (bare.test(line)) {
+          throw new Error(
+            `${file}:${i + 1} renders the blade id as the heading. Look the row up and use ` +
+              `entityLabel(row), falling back to the id, so the heading matches the row the ` +
+              `operator clicked.`,
+          );
+        }
+      });
+    }
+  });
+});
