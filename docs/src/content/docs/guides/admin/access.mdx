@@ -30,7 +30,7 @@ word and nothing else, and neither one can grant or deny the other.
 :::
 
 **Admin > Roles** (with `role:read:admin`) is the catalog of the built-in roles on the same list surface as Users
-and Groups: a directory row per role (its id, whether it is **official**, what it inherits, and how many
+and Groups: a directory row per role (its **name**, whether it is **official**, what it inherits, and how many
 permissions it confers), ordered least to most powerful (viewer, operator, deploy, admin, owner). Open a row for
 its read-only **blade**, which shows the role's permissions as a **net** view against the full set of
 capabilities the platform enforces (the **permission universe**). A `Held / Missing / All` toggle switches
@@ -54,8 +54,11 @@ the read floor resolved exactly as the authorizer resolves them at runtime:
 user. Pick a row to open the group's **blade**: its **members** (add any principal, remove one, or open a member to
 stack that user's blade over the group) and its **grants**, built with the same grant builder the user detail uses. A grant added to the group takes effect for every member
 immediately, and is bounded by the same rule as a direct grant (you cannot grant a role above your own tier).
-**New group** creates one (name, display name, description); the **name** is a lowercase handle (the same
-rule as a username, validated inline), while the display name is free text. The new group then opens
+**New group** creates one (name, display name, description); the **name** is an ordinary entity name
+(lowercase letters, digits, and hyphens, no dots and no underscores), while the display name is free
+text. The name is not patchable once the group exists: moving it is `POST /principal-groups/{id}:rename`,
+gated by `principal_group:rename` rather than `:update` ([ADR-0077](/architecture/decisions/)), and the
+console's group blade shows the name read-only. The new group then opens
 **directly in edit mode**, so you add its members and grants right away and one **Save** commits them (they
 are attached to the group once it exists, so creating and populating stay one flow). Deleting a group drops
 the memberships and the inherited grants, but members keep their own direct grants.
@@ -64,7 +67,8 @@ On a **user's** detail, grants split into two: the ones you granted the user **d
 builder) and the ones **inherited from a group** (shown read-only, tagged `from <group>`), so it is always clear
 where a user's access comes from. To change an inherited grant, edit the group, not the user.
 
-From the CLI the surface is `omniglass principal-group list` / `get` / `create` / `update` / `delete`, plus its
+From the CLI the surface is `omniglass principal-group list` / `get` / `create` / `update` / `rename` /
+`delete`, plus its
 member and grant subcommands (see the [CLI reference](/reference/cli/)).
 
 ## The grant builder

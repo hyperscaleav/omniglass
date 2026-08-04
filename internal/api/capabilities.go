@@ -12,7 +12,7 @@ import (
 // lists alphabetically by display_name, like the product catalog.
 type capabilityBody struct {
 	ID          string `json:"id" doc:"The capability's uuid, the stable handle that survives a rename"`
-	Name        string `json:"name" doc:"The kebab handle an operator reads and types; renameable"`
+	Name        string `json:"name" doc:"The name an operator reads and types; renameable"`
 	DisplayName string `json:"display_name"`
 	Official    bool   `json:"official"`
 }
@@ -33,7 +33,7 @@ type capabilityPathInput struct {
 
 type createCapabilityInput struct {
 	Body struct {
-		Name        string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique kebab handle; renameable"`
+		Name        string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique name; renameable"`
 		DisplayName string `json:"display_name" minLength:"1" doc:"What an operator reads in pickers and lists"`
 	}
 }

@@ -26,13 +26,14 @@ type and read.
   **display name**, an **icon** glyph key (defaults to `map-pin`), and its **allowed parents**: a
   checkbox list of the other location types plus a **Root** option, the set of parent types (or
   the top of the tree) a location of this type may be placed under. Leave every box unchecked for
-  **unconstrained** (any parent, or root), the default; `root` is a reserved id no real type may
+  **unconstrained** (any parent, or root), the default; `root` is a reserved **name** no real type may
   take.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `type:update`) edits
-  the display name, the icon, and the allowed parents; the kind and id are fixed. **Delete** (with
-  `type:delete`) removes the row, behind a confirm.
+  the display name, the icon, and the allowed parents; the kind and the **name** are fixed, since a
+  catalog row carries no rename (`:rename` is a component, system, location, and principal group
+  affordance). **Delete** (with `type:delete`) removes the row, behind a confirm.
 - **The shipped location types are yours to change.** They arrive as ordinary **operator-owned**
-  rows (origin **custom**, not official), so rename them, re-parent them, or delete the ones your
+  rows (origin **custom**, not official), so relabel them, re-parent them, or delete the ones your
   estate does not use. They are forked from a template in the code, once, with no inheritance, and
   the boot seed installs them **only if absent**, so a restart never reverts your edits. See
   [the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs).

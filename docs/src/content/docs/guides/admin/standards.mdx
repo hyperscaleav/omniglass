@@ -72,7 +72,7 @@ defaults to. It is the same editor as a product's contract, on the system side.
   [Catalog > Properties](/guides/admin/properties/) first. Declaring is **idempotent**, so declaring a
   property already on the contract revises that line in place.
 - **The default is typed by the catalog, not here.** Type and validation live on the property, so a
-  standard cannot redefine what `room_capacity` means, only what a system conforming to it starts with.
+  standard cannot redefine what `room-capacity` means, only what a system conforming to it starts with.
 - **Conformance is live, not a copy.** A system does **not** fork its standard. Change a contract
   default and every conforming system that has not overridden that property picks up the new value
   immediately. Only a system's own override survives the change.

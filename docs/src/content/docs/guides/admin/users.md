@@ -38,7 +38,10 @@ users. Because a principal is not part of any location or system tree, that gran
   email, and **username**, or adjust its grants, and **Save** commits the lot; **Disable / Enable** sits in the
   footer's left slot, available without entering edit.
   Renaming is safe: their credentials and grants follow the account (they key on an internal id,
-  not the username), so a renamed user keeps their password and access. Only an administrator can
+  not the username), so a renamed user keeps their password and access. A username is a sign-in
+  handle, not the identity triad's **name**: a principal carries no name column and is addressed by
+  its uuid, which is why a username moves on the ordinary update rather than through the `:rename`
+  custom method a component, system, location, or group is renamed by. Only an administrator can
   change a username; the user cannot change their own.
 - A user has a **lifecycle** in the blade footer, escalating from reversible to permanent, and reads
   pause to remove to destroy. The left slot is the reversible toggle: **Disable** (`principal:update`)

@@ -29,7 +29,7 @@
     {
       "table": "command_type",
       "shape": "keyspace",
-      "reason": "set-input, a command key"
+      "reason": "set-input, a command name"
     },
     {
       "table": "component",
@@ -54,7 +54,7 @@
     {
       "table": "event_type",
       "shape": "keyspace",
-      "reason": "call.started, an occurrence key"
+      "reason": "call.started, an occurrence name"
     },
     {
       "table": "file",
@@ -73,7 +73,7 @@
     {
       "table": "interface",
       "shape": "key-bearing",
-      "proved_elsewhere": "the key is server-derived, not operator-typed: InterfaceSpec carries no Name and the column is set from spec.Type, an already-validated interface_type key"
+      "proved_elsewhere": "the name is server-derived, not operator-typed: InterfaceSpec carries no Name and the column is set from spec.Type, an already-validated interface_type name"
     },
     {
       "table": "interface_type",
@@ -139,7 +139,7 @@
     {
       "table": "property_type",
       "shape": "keyspace",
-      "reason": "icmp.rtt-avg, a signal key referenced from drivers and templates"
+      "reason": "icmp.rtt-avg, a signal name referenced from drivers and templates"
     },
     {
       "table": "role",
@@ -206,7 +206,7 @@
     {
       "table": "task",
       "shape": "human identifier, not a name",
-      "reason": "content-addressed, the id IS hash(interface, kind, schedule, params), so a key would be a second identity for the same row"
+      "reason": "content-addressed, the id IS hash(interface, kind, schedule, params), so a name would be a second identity for the same row"
     },
     {
       "table": "variable",

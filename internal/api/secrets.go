@@ -28,7 +28,7 @@ type secretTypeFieldBody struct {
 
 type secretTypeBody struct {
 	ID                    string                `json:"id" doc:"The secret type's uuid, the stable handle that survives a rename"`
-	Name                  string                `json:"name" doc:"The kebab handle an operator reads and types; renameable"`
+	Name                  string                `json:"name" doc:"The name an operator reads and types; renameable"`
 	DisplayName           string                `json:"display_name"`
 	Official              bool                  `json:"official"`
 	DefaultAdminSensitive bool                  `json:"default_admin_sensitive" doc:"The admin_sensitive value the create form seeds for this type"`

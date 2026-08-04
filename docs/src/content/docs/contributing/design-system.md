@@ -179,6 +179,12 @@ name so relabelling can never rewrite a live address. The keyspace pages (`prope
 prose. `tag`, `variable`, and `secret` read as keyspace because their prose calls them keys, but
 none of them carries a dot, so all three are on the entity rule.
 
+**A Save that changed the name is two calls, not one.** The update goes first and the `:rename`
+custom method goes last, because the rename is separately gated by `<resource>:rename` and is the
+one call that can be refused on its own. Last means a refusal leaves the rest of the edit saved and
+the name unchanged, rather than the reverse. On success the page navigates to the entity's new
+address, since the old one no longer resolves ([ADR-0076](/architecture/decisions/)).
+
 ## Build and embed
 
 The SPA builds with Vite (`npm run build`, into `internal/webui/dist`) and is embedded into the

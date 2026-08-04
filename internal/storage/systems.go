@@ -31,7 +31,7 @@ var (
 // product.parent_product_id does. The registry lists alphabetically by
 // display_name; there is no ordering field.
 type Standard struct {
-	// ID is the uuid primary key and Name the renameable kebab handle (ADR-0062).
+	// ID is the uuid primary key and Name the renameable name (ADR-0062).
 	ID                 string
 	Name               string
 	Official           bool

@@ -67,18 +67,18 @@ var IdentityShapes = map[string]TableIdentity{
 	"tag": {Shape: ShapeKeyBearing}, "variable": {Shape: ShapeKeyBearing},
 	"vendor": {Shape: ShapeKeyBearing},
 
-	// Keyspace: a key, on the other rule.
-	"property_type": {ShapeKeyspace, "icmp.rtt-avg, a signal key referenced from drivers and templates"},
-	"event_type":    {ShapeKeyspace, "call.started, an occurrence key"},
-	"command_type":  {ShapeKeyspace, "set-input, a command key"},
+	// Keyspace: a name, on the other rule.
+	"property_type": {ShapeKeyspace, "icmp.rtt-avg, a signal name referenced from drivers and templates"},
+	"event_type":    {ShapeKeyspace, "call.started, an occurrence name"},
+	"command_type":  {ShapeKeyspace, "set-input, a command name"},
 
-	// A human identifier that is not a key. These are the exceptions worth stating.
+	// A human identifier that is not a name. These are the exceptions worth stating.
 	"human": {ShapeHumanNotAKey, "a username: its own rule, its own uniqueness, and not an " +
 		"address, since a principal is addressed by uuid"},
 	"file": {ShapeHumanNotAKey, "a filename with an extension (codec-firmware-2.1.4.txt): not " +
 		"unique, already the label, and addressed by uuid"},
 	"task": {ShapeHumanNotAKey, "content-addressed, the id IS hash(interface, kind, schedule, " +
-		"params), so a key would be a second identity for the same row"},
+		"params), so a name would be a second identity for the same row"},
 	"blob": {ShapeHumanNotAKey, "content-addressed by sha256, for the same reason"},
 
 	// Id only.
@@ -104,8 +104,8 @@ var KeyProvedElsewhere = map[string]string{
 	"interface_type": "seeded only, no create path on the gateway",
 	"role":           "seeded only, no create path on the gateway",
 	"secret_type":    "seeded only, no create path on the gateway",
-	"interface": "the key is server-derived, not operator-typed: InterfaceSpec carries no Name " +
-		"and the column is set from spec.Type, an already-validated interface_type key",
+	"interface": "the name is server-derived, not operator-typed: InterfaceSpec carries no Name " +
+		"and the column is set from spec.Type, an already-validated interface_type name",
 }
 
 // IdentityShapesJSON renders the declaration for the docs, the same way

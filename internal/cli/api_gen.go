@@ -343,7 +343,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads in pickers and lists")
 				_ = cmd.MarkFlagRequired("display-name")
-				cmd.Flags().StringVar(&fName, "name", "", "The globally unique kebab handle; renameable")
+				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name; renameable")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
@@ -441,7 +441,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a command type",
-					Long:    "Registers a custom command type (official=false). The name must be a valid key; a target property, when set, must be registered. Gated by command_type:create.",
+					Long:    "Registers a custom command type (official=false). The name must be a valid keyspace name (dot-joined kebab segments); a target property, when set, must be registered. Gated by command_type:create.",
 					Example: "  omniglass command-type create --name name",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -739,8 +739,8 @@ func generatedCommands() []*cobra.Command {
 				var fName string
 				cmd := &cobra.Command{
 					Use:     "checkName",
-					Short:   "Check a component technical name",
-					Long:    "Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.",
+					Short:   "Check a component name",
+					Long:    "Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.",
 					Example: "  omniglass component checkName --name name",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -752,7 +752,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fName, "name", "", "The proposed technical name to check")
+				cmd.Flags().StringVar(&fName, "name", "", "The proposed name to check")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
@@ -842,7 +842,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads; the technical name is the address")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads; the name is the address")
 				cmd.Flags().StringVar(&fLocation, "location", "", "Location name this component is placed at")
 				cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address; lowercase letters, digits, hyphens)")
 				_ = cmd.MarkFlagRequired("name")
@@ -1217,7 +1217,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "rename <name>",
 					Short:   "Rename a component",
-					Long:    "Moves the component's technical name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by component:rename; read and rename scopes drive the 404 versus 403 split.",
+					Long:    "Moves the component's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by component:rename; read and rename scopes drive the 404 versus 403 split.",
 					Example: "  omniglass component rename <name> --name name",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1229,7 +1229,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fName, "name", "", "The new globally unique technical name (lowercase letters, digits, hyphens)")
+				cmd.Flags().StringVar(&fName, "name", "", "The new globally unique name (lowercase letters, digits, hyphens)")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
@@ -1274,7 +1274,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a component",
-					Long:    "Patches a component's display_name, product, location, or parent. The technical name is not patchable: renaming is the :rename custom method. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
+					Long:    "Patches a component's display_name, product, location, or parent. The name is not patchable: renaming is the :rename custom method. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
 					Example: "  omniglass component update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1338,7 +1338,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads in pickers and lists")
 				_ = cmd.MarkFlagRequired("display-name")
-				cmd.Flags().StringVar(&fName, "name", "", "The globally unique kebab handle; renameable")
+				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name; renameable")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fVersion, "version", "", "A free-form version string, e.g. 1.0.0")
 				return cmd
@@ -1440,7 +1440,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create an event type",
-					Long:    "Registers a custom event type (official=false). The name must be a valid event key. Gated by event_type:create.",
+					Long:    "Registers a custom event type (official=false). The name must be a valid keyspace name (dot-joined kebab segments). Gated by event_type:create.",
 					Example: "  omniglass event-type create --name name",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1824,8 +1824,8 @@ func generatedCommands() []*cobra.Command {
 				var fName string
 				cmd := &cobra.Command{
 					Use:     "checkName",
-					Short:   "Check a location technical name",
-					Long:    "Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.",
+					Short:   "Check a location name",
+					Long:    "Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.",
 					Example: "  omniglass location checkName --name name",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1837,7 +1837,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fName, "name", "", "The proposed technical name to check")
+				cmd.Flags().StringVar(&fName, "name", "", "The proposed name to check")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
@@ -1873,7 +1873,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads; the technical name is the address")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads; the name is the address")
 				cmd.Flags().StringVar(&fLocationType, "location-type", "", "The location_type, by name or uuid (campus, building, ...)")
 				_ = cmd.MarkFlagRequired("location-type")
 				cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address; lowercase letters, digits, hyphens)")
@@ -2070,7 +2070,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "rename <name>",
 					Short:   "Rename a location",
-					Long:    "Moves the location's technical name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by location:rename; the read and rename scopes drive the 404 versus 403 split.",
+					Long:    "Moves the location's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by location:rename; the read and rename scopes drive the 404 versus 403 split.",
 					Example: "  omniglass location rename <name> --name name",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2082,7 +2082,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fName, "name", "", "The new globally unique technical name (lowercase letters, digits, hyphens)")
+				cmd.Flags().StringVar(&fName, "name", "", "The new globally unique name (lowercase letters, digits, hyphens)")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
@@ -2126,7 +2126,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a location",
-					Long:    "Patches a location's display_name, location_type, or parent (a move). The technical name is not patchable: renaming is the :rename custom method. Gated by location:update; the read and update scopes drive the 404 versus 403 split.",
+					Long:    "Patches a location's display_name, location_type, or parent (a move). The name is not patchable: renaming is the :rename custom method. Gated by location:update; the read and update scopes drive the 404 versus 403 split.",
 					Example: "  omniglass location update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2192,7 +2192,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads in pickers and lists")
 				_ = cmd.MarkFlagRequired("display-name")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A glyph key; the console falls back to map-pin when empty")
-				cmd.Flags().StringVar(&fName, "name", "", "The globally unique kebab handle (e.g. wing); \"root\" is reserved")
+				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name (e.g. wing); \"root\" is reserved")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
@@ -2404,7 +2404,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDescription, "description", "", "Free-form operator notes about the node")
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "Operator label; falls back to the name when empty")
 				cmd.Flags().StringVar(&fLocation, "location", "", "Optional location the node sits in, by name or id (descriptive placement, not scope)")
-				cmd.Flags().StringVar(&fName, "name", "", "Globally unique node name (also its NATS subject token, so no dots or whitespace)")
+				cmd.Flags().StringVar(&fName, "name", "", "Globally unique node name (lowercase letters, digits, and hyphens); it is also the node's NATS subject token, which is why the rule forbids a dot")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
@@ -3040,7 +3040,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <id>",
 					Short:   "Update a principal",
-					Long:    "Updates a human principal's display name, email, and username. Gated by principal:update (all-scope). Renaming is safe: nothing keys on the username.",
+					Long:    "Updates a human principal's display name, email, and username. Gated by principal:update (all-scope). A username is not an entity name and is patchable here rather than through a :rename method: it is the sign-in identifier, on its own rule, and nothing keys on it.",
 					Example: "  omniglass principal update <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3409,7 +3409,7 @@ func generatedCommands() []*cobra.Command {
 				_ = cmd.MarkFlagRequired("display-name")
 				cmd.Flags().StringVar(&fDriverId, "driver-id", "", "The driver that talks to it, by handle or uuid")
 				cmd.Flags().StringVar(&fKind, "kind", "", "What class of thing the product is")
-				cmd.Flags().StringVar(&fName, "name", "", "The globally unique kebab handle; renameable")
+				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name; renameable")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParentProductId, "parent-product-id", "", "The parent product, by handle or uuid")
 				cmd.Flags().StringVar(&fVendorId, "vendor-id", "", "The vendor, by handle or uuid")
@@ -3439,7 +3439,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "get <id>",
 					Short:   "Get a product",
-					Long:    "Fetches a product by id, with its capabilities. Gated by product:read.",
+					Long:    "Fetches a product by its name or its uuid, with its capabilities. Either form resolves, so `omniglass product get acme-soundbar` and the uuid are interchangeable. Gated by product:read.",
 					Example: "  omniglass product get <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4134,7 +4134,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads in pickers and lists")
 				_ = cmd.MarkFlagRequired("display-name")
-				cmd.Flags().StringVar(&fName, "name", "", "The globally unique kebab handle; renameable")
+				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name; renameable")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParentStandardId, "parent-standard-id", "", "A standard this one is a variant of, by handle or uuid")
 				return cmd
@@ -4380,8 +4380,8 @@ func generatedCommands() []*cobra.Command {
 				var fName string
 				cmd := &cobra.Command{
 					Use:     "checkName",
-					Short:   "Check a system technical name",
-					Long:    "Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.",
+					Short:   "Check a system name",
+					Long:    "Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.",
 					Example: "  omniglass system checkName --name name",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4393,7 +4393,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fName, "name", "", "The proposed technical name to check")
+				cmd.Flags().StringVar(&fName, "name", "", "The proposed name to check")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
@@ -4433,7 +4433,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads; the technical name is the address")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads; the name is the address")
 				cmd.Flags().StringVar(&fLocation, "location", "", "Location name this system is placed at")
 				cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address; lowercase letters, digits, hyphens)")
 				_ = cmd.MarkFlagRequired("name")
@@ -4705,7 +4705,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "rename <name>",
 					Short:   "Rename a system",
-					Long:    "Moves the system's technical name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by system:rename; read and rename scopes drive the 404 versus 403 split.",
+					Long:    "Moves the system's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by system:rename; read and rename scopes drive the 404 versus 403 split.",
 					Example: "  omniglass system rename <name> --name name",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4717,7 +4717,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fName, "name", "", "The new globally unique technical name (lowercase letters, digits, hyphens)")
+				cmd.Flags().StringVar(&fName, "name", "", "The new globally unique name (lowercase letters, digits, hyphens)")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
@@ -4882,7 +4882,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a system",
-					Long:    "Patches a system's display_name, standard, location, or parent. The technical name is not patchable: renaming is the :rename custom method. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+					Long:    "Patches a system's display_name, standard, location, or parent. The name is not patchable: renaming is the :rename custom method. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 					Example: "  omniglass system update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5335,7 +5335,7 @@ func generatedCommands() []*cobra.Command {
 				_ = cmd.MarkFlagRequired("display-name")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A glyph key, e.g. crestron-logo")
 				cmd.Flags().StringVar(&fKind, "kind", "", "The role the organization plays")
-				cmd.Flags().StringVar(&fName, "name", "", "The globally unique kebab handle; renameable")
+				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name; renameable")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fSupportPhone, "support-phone", "", "The vendor's support line")
 				cmd.Flags().StringVar(&fWebsite, "website", "", "The vendor's website (http or https)")

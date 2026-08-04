@@ -50,7 +50,7 @@ func validProductKind(s string) bool {
 // ids. The registry lists alphabetically by display_name; there is no ordering
 // field.
 type Product struct {
-	// ID is the uuid primary key, Name the renameable kebab handle. Its two
+	// ID is the uuid primary key, Name the renameable name. Its two
 	// references carry both forms for the same reason the estate bodies do: the
 	// id is what the row points at, the name is what an operator reads and types.
 	ID                string

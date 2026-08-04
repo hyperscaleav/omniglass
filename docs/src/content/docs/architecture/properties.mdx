@@ -46,7 +46,7 @@ on [messaging](/architecture/messaging/#two-lanes-one-bus); this page owns what 
 
 ## Property, sample, current value
 
-A **property** is a canonical signal on one owning entity (component, system, location, or node): `fan.speed` on a switch. A **sample** is one timestamped observation of a property, `(owner, key, instance, ts, value, provenance, source, lineage)`. The **current value** is the latest sample per series, held in the [`property` cache](#the-current-value-cache): one lookup, not a scan.
+A **property** is a canonical signal on one owning entity (component, system, location, or node): `fan.speed` on a switch. A **sample** is one timestamped observation of a property, `(owner, property_type, instance, ts, value, provenance, source, lineage)`. The **current value** is the latest sample per series, held in the [`property` cache](#the-current-value-cache): one lookup, not a scan.
 
 Samples land in one of two physical tables by the property's **kind**, split only because they index and retain differently:
 

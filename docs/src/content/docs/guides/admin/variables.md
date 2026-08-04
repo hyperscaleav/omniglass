@@ -19,7 +19,9 @@ attaches to), and the **value in the clear** (no mask, no reveal).
 
 ::screenshot{#variables}
 
-- **New variable** (with `variable:create`) opens a create **drawer**: name the key, pick a **type** and
+- **New variable** (with `variable:create`) opens a create **drawer**: give it a **name** (lowercase
+  letters, digits, and hyphens, no dots and no underscores, unique per owner, and what the cascade
+  resolves by), pick a **type** and
   a **scope**, choose the entity from the shared tree picker, then enter the value in a
   **type-aware editor** (a number input, a toggle for a bool, a textarea for json). A **platform**
   variable is install-wide, so it needs an all-scope grant plus `platform:create` on top of

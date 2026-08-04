@@ -265,7 +265,7 @@ target, and compliance over the contractual window is itself an SLI.
 event_rule:
   scope: 'system.standard == "meeting-room"'
   property: system.availability
-  when: "value < $var:availability.slo"   # the SLO target, a config value
+  when: "value < $var:availability-slo"   # the SLO target, a config value
   severity: high
 ```
 

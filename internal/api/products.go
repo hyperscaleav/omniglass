@@ -15,7 +15,7 @@ import (
 // provides. The registry lists alphabetically by display_name.
 type productBody struct {
 	ID              string   `json:"id" doc:"The product's uuid, the stable handle that survives a rename"`
-	Name            string   `json:"name" doc:"The kebab handle an operator reads and types; renameable"`
+	Name            string   `json:"name" doc:"The name an operator reads and types; renameable"`
 	DisplayName     string   `json:"display_name"`
 	Vendor          string   `json:"vendor,omitempty" doc:"The vendor's handle"`
 	VendorID        string   `json:"vendor_id,omitempty" doc:"The vendor's uuid; the stable form of vendor"`
@@ -85,7 +85,7 @@ type productPathInput struct {
 
 type createProductInput struct {
 	Body struct {
-		Name            string   `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique kebab handle; renameable"`
+		Name            string   `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique name; renameable"`
 		DisplayName     string   `json:"display_name" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		VendorID        string   `json:"vendor_id,omitempty" doc:"The vendor, by handle or uuid"`
 		DriverID        string   `json:"driver_id,omitempty" doc:"The driver that talks to it, by handle or uuid"`
@@ -192,7 +192,7 @@ func registerProductRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/products/{id}",
 		Summary:     "Get a product",
-		Description: "Fetches a product by id, with its capabilities. Gated by product:read.",
+		Description: "Fetches a product by its name or its uuid, with its capabilities. Either form resolves, so `omniglass product get acme-soundbar` and the uuid are interchangeable. Gated by product:read.",
 	}, "product", "read"), func(ctx context.Context, in *productPathInput) (*productOutput, error) {
 		m, err := gw.GetProduct(ctx, in.ID)
 		if err != nil {

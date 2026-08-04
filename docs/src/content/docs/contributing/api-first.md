@@ -40,21 +40,24 @@ server.
 
 ## A name is the address, a uuid is identity
 
-**Every response carries both forms of a reference: the name an operator reads and the id it
-resolves to.** `{"parent": "rack", "parent_id": "0198f..."}`. The name is what a human types
-and what a body round-trips; the id is the stable handle that survives a rename.
+**Every response carries both forms of a reference: the name an operator types and the id it
+resolves to.** `{"parent": "rack", "parent_id": "0198f..."}`. The name is what a body round-trips;
+the id is the stable handle that survives a rename.
 
-**The entity-key rule is enforced on every key-bearing table.** An entity's key is the identifier an
-operator types and an address carries (the `rm215a` in `boi.17c.rm215a`), and the rule is
-`^[a-z0-9][a-z0-9-]*$` with a 100 character ceiling and the uuid shape refused. It lives in the
-contract, not just below it: the create body carries `pattern` and `maxLength`, so the generated
-OpenAPI, the typed client, the CLI, and the YAML JSONSchema all enforce it, and the Storage Gateway
-enforces it again for callers that never touch a route.
+**The entity name rule is enforced on every table declared key-bearing.** An entity's name is the
+identifier an operator types and an address carries (the `rm215a` in `boi.17c.rm215a`): one segment
+on `^[a-z0-9][a-z0-9-]*$`, a 100 character ceiling, the uuid shape refused. One validator enforces
+it, `storage.ValidateName(table, name)`, which picks the rule from the table's declared identity
+shape rather than from whoever wrote the call site. The rule lives in the contract, not just below
+it: the create body carries `pattern` and `maxLength`, so the generated OpenAPI, the typed client,
+the CLI, and the YAML JSONSchema all enforce it, and the Storage Gateway enforces it again for
+callers that never touch a route.
 
 **Every exception is named, in code.** `internal/storage/identity_shape.go` declares one of four
 identity shapes for every table: key-bearing (an operator types its name, on the entity name rule),
-keyspace (an operator types its key, on the dotted rule), a human identifier that is not a key,
-and id-only. The last two carry a written reason, and the guard refuses an exception without one.
+keyspace (an operator types its name there too, on the dotted rule), a human identifier that is not
+a name, and id-only. The last two carry a written reason, and the guard refuses an exception without
+one.
 
 Which table is which is **not written down here**, because a hand-copied list is the drift class the
 generate-first rule exists for. `identity_shape_test.go` checks the declaration against the generated
@@ -63,26 +66,25 @@ it into [core entities](/architecture/core-entities/). An earlier version of tha
 tables carrying a `name` column, which made it blind to 28 of the 51: absence of a `name` is not
 evidence of absence of an identifier, and a username and a content hash both escaped.
 
-A table on the **keyspace** rule (a kebab segment with an optional dot hierarchy) is
-deliberately outside this one, because
-`icmp.rtt-avg` is a legitimate keyspace key and an illegal entity key. Which table is which is not written down
-here, because a hand-copied list is drift waiting to happen: `TestEveryNamedTableIsClassified` reads
-the generated schema, finds every table carrying a `name`, and fails until each one is classified onto
-one rule or the other with its reason. A new table joins the guard by existing.
+The **keyspace** rule is not an exception to that one, it is the second of the two. `icmp.rtt-avg`
+is a legal keyspace name and an illegal entity name, and that is the whole of the difference: one
+character set and one segment shape, a dot-joined path of segments rather than a path of one, and a
+128 character ceiling rather than 100.
 
-The exclusions are load-bearing rather than tidy. Barring `.` keeps one key from splitting into two
-segments. Barring `*` and `>` keeps a key from reading as a NATS subject pattern. Barring
+The exclusions are load-bearing rather than tidy. Barring `.` keeps one name from splitting into two
+segments. Barring `*` and `>` keeps a name from reading as a NATS subject pattern. Barring
 `$` is what lets an address use sigil accessors without reserving any word, so a location may still
-legitimately take the key `sys`.
+legitimately take the name `sys`.
 
 The test is a **round trip**: a response body can be fed back to the write that produced it
 (create a component with `{"parent": "rack"}`, read it back as `{"parent": "rack"}`). When that
 fails, every client has to fetch a second collection and join by uuid to render one label, each
 slightly differently.
 
-One exception, narrow: **an entity with no name** is legitimately addressed by id, an interface
-(its name is unique only within its component), a stored property value, an audit row, a grant, a
-principal. A **registry** used to be a second exception, a slug-keyed catalog whose id *was* its
+One exception, narrow: **an entity addressed by id**, either because nobody names it (a stored
+property value, an audit row, a grant, a principal) or because its name is not unique estate-wide
+(an interface, named after its interface_type and unique only within its component). A **registry**
+used to be a second exception, a slug-keyed catalog whose id *was* its
 name (`product_id: "cisco-room-bar"`); that is gone. Every registry now has a uuid primary key and
 a renameable `name` ([ADR-0062](/architecture/decisions/#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle)),
 so it obeys the rule like any estate entity.
@@ -111,11 +113,17 @@ versioning, and the authorization status mapping) is the architecture of record.
 Every operation lives under `/api/v1/*`. The path shape is derivable, not special-cased:
 
 - **Plural collections**, standard CRUD by primary key: `POST` creates (409 on PK
-  collision), `GET` reads, `PATCH` updates by PK (AIP-134, partial), `DELETE` removes.
-  No upsert/register shortcuts.
-- **`:verb` (not `/verb`) for non-CRUD custom methods**: `/components/{name}/commands:issue`,
-  `/auth/me:changePassword`, `/auth/me/sessions/{id}:revoke`, `/nodes:claim`,
-  `/principals/{id}:disable`.
+  collision), `GET` reads, `PATCH` updates by PK (AIP-134, partial) but never the `name`,
+  `DELETE` removes. No upsert/register shortcuts.
+- **`:verb` (not `/verb`) for non-CRUD custom methods**: `/components/{name}:rename`,
+  `/components/{name}/commands:issue`, `/auth/me:changePassword`,
+  `/auth/me/sessions/{id}:revoke`, `/nodes:claim`, `/principals/{id}:disable`.
+- **A rename is a custom method, not a field write.** Every renameable collection carries a
+  `:rename`, gated `<resource>:rename` and not `<resource>:update`, because moving a name breaks the
+  bookmarks, runbooks, and integration config held outside the platform while nothing inside it
+  breaks (every reference stores the uuid). That is why `name` is absent from the `PATCH` body of a
+  component, a system, a location, and a principal group
+  ([ADR-0076](/architecture/decisions/)).
 - **Singular kind sub-segments**: `/rules/calc`, `/property-types`,
   `/location-types`, `/types/event`.
 - **official / private namespace** on every registry and rule family (below).

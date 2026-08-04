@@ -52,7 +52,7 @@ expressions run.
 
 ## In-scope bindings
 
-Within a function run the engine environment exposes: `$var:<key>` (config/secret through the
+Within a function run the engine environment exposes: `$var:<name>` (config/secret through the
 cascade), `$prop.<key>` (properties, emitted and readable for branching; was `$dp.<key>`,
 renamed with the ADR-0065 vocabulary), `$steps.<id>.*` (ephemeral scratch), `$event` (a listen
 payload), and the

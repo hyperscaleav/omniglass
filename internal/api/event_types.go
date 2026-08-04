@@ -107,7 +107,7 @@ func registerEventTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Path:          "/event-types",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create an event type",
-		Description:   "Registers a custom event type (official=false). The name must be a valid event key. Gated by event_type:create.",
+		Description:   "Registers a custom event type (official=false). The name must be a valid keyspace name (dot-joined kebab segments). Gated by event_type:create.",
 	}, "event_type", "create"), func(ctx context.Context, in *createEventTypeInput) (*eventTypeOutput, error) {
 		schema, err := marshalValidation(in.Body.PayloadSchema)
 		if err != nil {

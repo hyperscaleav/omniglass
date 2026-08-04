@@ -36,7 +36,7 @@ differ in what they are keyed to and what lifecycle they carry:
 | | **config** | **secret** | **variable** (macro) |
 |---|---|---|---|
 | what it is | a declared device setting | an access secret, encrypted at rest | a free interpolated value |
-| keyed by | a canonical signal (`property_type`) | its own `secret_type` shape name | an org config key (cascade namespace) |
+| keyed by | a canonical signal (`property_type`) | its own `secret_type` shape name | its own `name`, an org-local cascade namespace |
 | has an observed side? | yes, a sample via a get function | its **validity**, not the secret value | no |
 | lifecycle | drift → reconcile (a set function) | refresh + rotation + expiry (deferred) | none; resolved and interpolated |
 | example | `video.input = HDMI1` | an `snmp-community`, a `basic-auth` | `poll-interval = 30s`, a base URL, a label |
@@ -210,10 +210,11 @@ A **variable** is the leftover, and the most familiar: a value spliced into beha
 label). Zabbix-style **macros**, resolved down the same [cascade](/architecture/cascade/) and
 interpolated as `$var:<name>` into functions, interface definitions, and rule scopes.
 
-- **Names are org-specific config keys, not canonical signals**, the one place the
-  "operator-defined, not curated" namespace applies: no registry, no pre-registration; sprawl is
-  controlled by a creation **role-gate** ([IAM](/architecture/identity-access/)) and by every
-  variable being **surfaced in the tree**.
+- **A name is org-specific, not a canonical signal**, the one place the "operator-defined, not
+  curated" namespace applies: no registry, no pre-registration. The ordinary entity name rule still
+  holds, though (one segment of lowercase letters, digits, and hyphens, no dot), so `crestron-ssh`
+  names a variable and `crestron.ssh` is refused. Sprawl is controlled by a creation **role-gate**
+  ([IAM](/architecture/identity-access/)) and by every variable being **surfaced in the tree**.
 - **Install-wide and template-local are the same primitive at different scopes** (a company-wide NTP
   server versus a device class's poll interval).
 - **No observed side and no reconcile**, exactly what separates it from config.

@@ -37,7 +37,7 @@ func validVendorKind(s string) bool {
 // and no in-use delete guard in this slice (product will reference it). The
 // registry lists alphabetically by display_name; there is no ordering field.
 type Vendor struct {
-	// ID is the uuid primary key and Name the renameable kebab handle, the shape
+	// ID is the uuid primary key and Name the renameable name, the shape
 	// tag has and every estate entity has after ADR-0056. A vendor is addressable
 	// by either, so `crestron` keeps working and a rename does not break a caller
 	// holding the id.

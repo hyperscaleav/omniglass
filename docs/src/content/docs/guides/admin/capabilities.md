@@ -24,7 +24,7 @@ what makes those two sides line up.
   it a **name** (the kebab handle, unique tenant-wide, e.g. `microphone`) and a **display
   name**.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `capability:update`)
-  edits the display name; the uuid `id` is database-minted and never edited. **Delete** (with
+  edits the display name; the **name** is fixed, since a catalog row carries no rename. **Delete** (with
   `capability:delete`) removes the row, behind a confirm.
 - An **official** (seed-owned) row is always read-only: no Edit, no Delete, and the blade marks it
   "Seed-owned, read-only." Omniglass ships a starter set of official capabilities (Microphone,

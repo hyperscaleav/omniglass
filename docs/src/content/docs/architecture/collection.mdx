@@ -267,7 +267,7 @@ steps:
   `ssh.send`, `ssh.subscribe`, the interface-agnostic `extract` and `blend`), each kind's param
   schema in the registry.
 
-In-scope namespaces: `$var:<key>` (config and secrets via the [cascade](/architecture/cascade/)),
+In-scope namespaces: `$var:<name>` (config and secrets via the [cascade](/architecture/cascade/)),
 `$dp.<key>` (samples), `$steps.<id>.*` (scratch), `$event` (a `listen` function's inbound payload),
 and the extractor-local `raw`, `groups`, `node`, `item`.
 
@@ -302,7 +302,7 @@ reject-not-project at ingest, so a template never silently collects a measuremen
 ## Inputs: the template's typed parameters
 
 A template takes typed `inputs`, never a hardcoded `$var:`: it needs an `ssh_credential`, not
-specifically `$var:crestron.ssh`. At `:apply` each input binds to a literal or a
+specifically `$var:crestron-ssh`. At `:apply` each input binds to a literal or a
 [variable](/architecture/variables/) reference (`$var:<name>`), with an optional shipped default;
 required inputs are the apply gate, and the UI renders the form.
 
@@ -314,7 +314,7 @@ inputs:
   - group: auth
     fields:
       - { key: snmp, type: snmp_community, required: true, label: "SNMP community" }
-      - { key: ssh,  type: ssh_credential, default: $var:crestron.ssh, label: "SSH login" }
+      - { key: ssh,  type: ssh_credential, default: $var:crestron-ssh, label: "SSH login" }
 ```
 
 The body references `${input.snmp}` / `${input.ssh}`; bindings resolve at apply, overridable per
@@ -380,7 +380,7 @@ The connection registry, the declared connections, and the node's units of work;
   table="interface"
   notes={{
     component_id: 'Set: pre-bound to the component; NULL: shared, resolved by match key',
-    node_name: 'Placement; ON DELETE CASCADE so a purged node takes its interfaces',
+    node_name: 'Placement: holds the node primary key (principal_id), not a name, despite the column name; ON DELETE CASCADE so a purged node takes its interfaces',
     params: 'The transport parameters the authoring schema validated',
   }}
 />

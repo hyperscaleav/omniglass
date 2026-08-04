@@ -48,7 +48,7 @@ type nodePathInput struct {
 
 type createNodeInput struct {
 	Body struct {
-		Name        string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Globally unique node name (also its NATS subject token, so no dots or whitespace)"`
+		Name        string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Globally unique node name (lowercase letters, digits, and hyphens); it is also the node's NATS subject token, which is why the rule forbids a dot"`
 		DisplayName string  `json:"display_name,omitempty" doc:"Operator label; falls back to the name when empty"`
 		Description string  `json:"description,omitempty" doc:"Free-form operator notes about the node"`
 		Location    *string `json:"location,omitempty" doc:"Optional location the node sits in, by name or id (descriptive placement, not scope)"`

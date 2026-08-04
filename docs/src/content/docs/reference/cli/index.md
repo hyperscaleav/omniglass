@@ -285,7 +285,7 @@ Creates a custom (non-official) capability. Gated by capability:create.
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) | What an operator reads in pickers and lists |
-| `--name` | string | (none) | The globally unique kebab handle; renameable |
+| `--name` | string | (none) | The globally unique name; renameable |
 
 Example:
 
@@ -373,7 +373,7 @@ Create a command type
 omniglass command-type create [flags]
 ```
 
-Registers a custom command type (official=false). The name must be a valid key; a target property, when set, must be registered. Gated by command_type:create.
+Registers a custom command type (official=false). The name must be a valid keyspace name (dot-joined kebab segments); a target property, when set, must be registered. Gated by command_type:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -587,17 +587,17 @@ omniglass component capability update <name> <capability> --present present
 
 ### `omniglass component checkName`
 
-Check a component technical name
+Check a component name
 
 ```
 omniglass component checkName [flags]
 ```
 
-Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.
+Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | string | (none) | The proposed technical name to check |
+| `--name` | string | (none) | The proposed name to check |
 
 Example:
 
@@ -644,7 +644,7 @@ Creates a component, optionally under a parent (a root needs an all-scoped grant
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) | What an operator reads; the technical name is the address |
+| `--display-name` | string | (none) | What an operator reads; the name is the address |
 | `--location` | string | (none) | Location name this component is placed at |
 | `--name` | string | (none) | Globally unique name (the address; lowercase letters, digits, hyphens) |
 | `--parent` | string | (none) | Parent component name; omit for a root component |
@@ -969,11 +969,11 @@ Rename a component
 omniglass component rename <name> [flags]
 ```
 
-Moves the component's technical name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by component:rename; read and rename scopes drive the 404 versus 403 split.
+Moves the component's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by component:rename; read and rename scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | string | (none) | The new globally unique technical name (lowercase letters, digits, hyphens) |
+| `--name` | string | (none) | The new globally unique name (lowercase letters, digits, hyphens) |
 
 Example:
 
@@ -1010,7 +1010,7 @@ Update a component
 omniglass component update <name> [flags]
 ```
 
-Patches a component's display_name, product, location, or parent. The technical name is not patchable: renaming is the :rename custom method. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+Patches a component's display_name, product, location, or parent. The name is not patchable: renaming is the :rename custom method. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1042,7 +1042,7 @@ Creates a custom (non-official) driver. Gated by driver:create.
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) | What an operator reads in pickers and lists |
-| `--name` | string | (none) | The globally unique kebab handle; renameable |
+| `--name` | string | (none) | The globally unique name; renameable |
 | `--version` | string | (none) | A free-form version string, e.g. 1.0.0 |
 
 Example:
@@ -1132,7 +1132,7 @@ Create an event type
 omniglass event-type create [flags]
 ```
 
-Registers a custom event type (official=false). The name must be a valid event key. Gated by event_type:create.
+Registers a custom event type (official=false). The name must be a valid keyspace name (dot-joined kebab segments). Gated by event_type:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1426,17 +1426,17 @@ Commands for the location resource
 
 ### `omniglass location checkName`
 
-Check a location technical name
+Check a location name
 
 ```
 omniglass location checkName [flags]
 ```
 
-Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.
+Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | string | (none) | The proposed technical name to check |
+| `--name` | string | (none) | The proposed name to check |
 
 Example:
 
@@ -1456,7 +1456,7 @@ Creates a location, optionally under a parent (a root needs an all-scoped grant)
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) | What an operator reads; the technical name is the address |
+| `--display-name` | string | (none) | What an operator reads; the name is the address |
 | `--location-type` | string | (none) | The location_type, by name or uuid (campus, building, ...) |
 | `--name` | string | (none) | Globally unique name (the address; lowercase letters, digits, hyphens) |
 | `--parent` | string | (none) | Parent location name; omit for a root location |
@@ -1635,11 +1635,11 @@ Rename a location
 omniglass location rename <name> [flags]
 ```
 
-Moves the location's technical name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by location:rename; the read and rename scopes drive the 404 versus 403 split.
+Moves the location's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by location:rename; the read and rename scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | string | (none) | The new globally unique technical name (lowercase letters, digits, hyphens) |
+| `--name` | string | (none) | The new globally unique name (lowercase letters, digits, hyphens) |
 
 Example:
 
@@ -1676,7 +1676,7 @@ Update a location
 omniglass location update <name> [flags]
 ```
 
-Patches a location's display_name, location_type, or parent (a move). The technical name is not patchable: renaming is the :rename custom method. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
+Patches a location's display_name, location_type, or parent (a move). The name is not patchable: renaming is the :rename custom method. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1709,7 +1709,7 @@ Creates a custom (non-official) location_type. Gated by type:create.
 | `--allowed-parent-types` | string | (none) | location_type names and/or the reserved root sentinel this type may be placed under; empty means unconstrained |
 | `--display-name` | string | (none) | What an operator reads in pickers and lists |
 | `--icon` | string | (none) | A glyph key; the console falls back to map-pin when empty |
-| `--name` | string | (none) | The globally unique kebab handle (e.g. wing); "root" is reserved |
+| `--name` | string | (none) | The globally unique name (e.g. wing); "root" is reserved |
 
 Example:
 
@@ -1876,7 +1876,7 @@ Registers an edge node server-side (day-one enrollment: create, then :enroll to 
 | `--description` | string | (none) | Free-form operator notes about the node |
 | `--display-name` | string | (none) | Operator label; falls back to the name when empty |
 | `--location` | string | (none) | Optional location the node sits in, by name or id (descriptive placement, not scope) |
-| `--name` | string | (none) | Globally unique node name (also its NATS subject token, so no dots or whitespace) |
+| `--name` | string | (none) | Globally unique node name (lowercase letters, digits, and hyphens); it is also the node's NATS subject token, which is why the rule forbids a dot |
 
 Example:
 
@@ -2411,7 +2411,7 @@ Update a principal
 omniglass principal update <id> [flags]
 ```
 
-Updates a human principal's display name, email, and username. Gated by principal:update (all-scope). Renaming is safe: nothing keys on the username.
+Updates a human principal's display name, email, and username. Gated by principal:update (all-scope). A username is not an entity name and is patchable here rather than through a :rename method: it is the sign-in identifier, on its own rule, and nothing keys on it.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2675,7 +2675,7 @@ Creates a custom (non-official) product and sets its capabilities. Gated by prod
 | `--display-name` | string | (none) | What an operator reads in pickers and lists |
 | `--driver-id` | string | (none) | The driver that talks to it, by handle or uuid |
 | `--kind` | string | (none) | What class of thing the product is |
-| `--name` | string | (none) | The globally unique kebab handle; renameable |
+| `--name` | string | (none) | The globally unique name; renameable |
 | `--parent-product-id` | string | (none) | The parent product, by handle or uuid |
 | `--vendor-id` | string | (none) | The vendor, by handle or uuid |
 
@@ -2709,7 +2709,7 @@ Get a product
 omniglass product get <id>
 ```
 
-Fetches a product by id, with its capabilities. Gated by product:read.
+Fetches a product by its name or its uuid, with its capabilities. Either form resolves, so `omniglass product get acme-soundbar` and the uuid are interchangeable. Gated by product:read.
 
 Example:
 
@@ -3262,7 +3262,7 @@ Creates a custom (non-official) standard, optionally as a variant of another. Ga
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) | What an operator reads in pickers and lists |
-| `--name` | string | (none) | The globally unique kebab handle; renameable |
+| `--name` | string | (none) | The globally unique name; renameable |
 | `--parent-standard-id` | string | (none) | A standard this one is a variant of, by handle or uuid |
 
 Example:
@@ -3462,17 +3462,17 @@ Commands for the system resource
 
 ### `omniglass system checkName`
 
-Check a system technical name
+Check a system name
 
 ```
 omniglass system checkName [flags]
 ```
 
-Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.
+Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | string | (none) | The proposed technical name to check |
+| `--name` | string | (none) | The proposed name to check |
 
 Example:
 
@@ -3492,7 +3492,7 @@ Creates a system, optionally under a parent (a root needs an all-scoped grant) a
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) | What an operator reads; the technical name is the address |
+| `--display-name` | string | (none) | What an operator reads; the name is the address |
 | `--location` | string | (none) | Location name this system is placed at |
 | `--name` | string | (none) | Globally unique name (the address; lowercase letters, digits, hyphens) |
 | `--parent` | string | (none) | Parent system name; omit for a root system |
@@ -3740,11 +3740,11 @@ Rename a system
 omniglass system rename <name> [flags]
 ```
 
-Moves the system's technical name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by system:rename; read and rename scopes drive the 404 versus 403 split.
+Moves the system's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by system:rename; read and rename scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | string | (none) | The new globally unique technical name (lowercase letters, digits, hyphens) |
+| `--name` | string | (none) | The new globally unique name (lowercase letters, digits, hyphens) |
 
 Example:
 
@@ -3876,7 +3876,7 @@ Update a system
 omniglass system update <name> [flags]
 ```
 
-Patches a system's display_name, standard, location, or parent. The technical name is not patchable: renaming is the :rename custom method. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+Patches a system's display_name, standard, location, or parent. The name is not patchable: renaming is the :rename custom method. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -4202,7 +4202,7 @@ Creates a custom (non-official) vendor. Gated by vendor:create.
 | `--display-name` | string | (none) | What an operator reads in pickers and lists |
 | `--icon` | string | (none) | A glyph key, e.g. crestron-logo |
 | `--kind` | string | (none) | The role the organization plays |
-| `--name` | string | (none) | The globally unique kebab handle; renameable |
+| `--name` | string | (none) | The globally unique name; renameable |
 | `--support-phone` | string | (none) | The vendor's support line |
 | `--website` | string | (none) | The vendor's website (http or https) |
 

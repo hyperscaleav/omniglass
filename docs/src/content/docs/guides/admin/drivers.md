@@ -1,6 +1,6 @@
 ---
 title: Drivers
-description: "The Drivers catalog: the implementations that get, emit, and set a product's signals (id, display name, version), seed-owned official rows read-only, admin-gated custom ones."
+description: "The Drivers catalog: the implementations that get, emit, and set a product's signals (name, display name, version), seed-owned official rows read-only, admin-gated custom ones."
 ---
 
 **Catalog > Drivers** (`/drivers`, with `driver:read`, covered by every viewer's `*:read` floor)
@@ -24,7 +24,8 @@ driver this way. It is a leaf catalog beside the vendor and
   **name** (the kebab handle, unique tenant-wide, e.g. `snmp-generic`), a **display name**, and,
   optionally, a **version**.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `driver:update`) edits
-  the display name and version; the uuid `id` is database-minted and never edited. **Delete**
+  the display name and version; the **name** is fixed, since a catalog row carries no rename
+  (`:rename` is a component, system, location, and principal group affordance). **Delete**
   (with `driver:delete`) removes the row, behind a confirm.
 - An **official** (seed-owned) row is always read-only: no Edit, no Delete, and the blade marks it
   "Seed-owned, read-only." Omniglass ships a starter set of official drivers (Generic SNMP, Cisco
