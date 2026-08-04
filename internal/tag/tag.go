@@ -10,44 +10,18 @@ package tag
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 	"unicode/utf8"
 )
 
-// keyPattern is the normalized-key rule: lowercase letters, digits, and
-// hyphens, the platform's single key character set. Enforcing one
-// canonical spelling is the whole point of a governed vocabulary: it stops
-// `env` beside `environment` beside `Environment` from all being minted as
-// distinct keys.
-// A tag key is one segment on the platform's single key character set: lowercase
-// letters, digits, and hyphens. Same shape as an entity key and as one segment of a
-// keyspace key, so an operator learns one rule.
-var keyPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
-
-// MaxKeyLen and MaxValueLen bound a key and a bound value. A key is a short
-// identifier; a value is a free-text label, generous but not unbounded so a
-// binding cannot smuggle a blob.
-const (
-	MaxKeyLen   = 64
-	MaxValueLen = 256
-)
-
-// ValidateKey reports whether name is a well-formed, normalized tag key: a
-// lowercase identifier within the length bound. A name with uppercase,
-// whitespace, or punctuation is rejected so the vocabulary stays canonical.
-func ValidateKey(name string) error {
-	if name == "" {
-		return fmt.Errorf("tag: key is empty")
-	}
-	if len(name) > MaxKeyLen {
-		return fmt.Errorf("tag: key exceeds %d characters", MaxKeyLen)
-	}
-	if !keyPattern.MatchString(name) {
-		return fmt.Errorf("tag: key %q must be lowercase letters, digits, and hyphens", name)
-	}
-	return nil
-}
+// MaxValueLen bounds a bound value: a free-text label, generous but not unbounded
+// so a binding cannot smuggle a blob.
+//
+// The key rule that used to live here is gone. It was a fourth name rule, identical
+// in character set to the entity rule but carrying its own ceiling and its own error
+// text, with nothing tying it to the other three. A tag name is an entity name now,
+// checked through storage.ValidateName like every other named table.
+const MaxValueLen = 256
 
 // ValidateValue reports whether v is a well-formed bound value: non-empty after
 // trimming and within the length bound. Free text otherwise; whether a key may
