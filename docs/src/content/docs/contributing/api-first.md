@@ -51,21 +51,17 @@ contract, not just below it: the create body carries `pattern` and `maxLength`, 
 OpenAPI, the typed client, the CLI, and the YAML JSONSchema all enforce it, and the Storage Gateway
 enforces it again for callers that never touch a route.
 
-**Every exception is named, in code.** `internal/storage/identity_shape_test.go` declares which of
-the four identity shapes each table has, and fails the build on any table that has none or more than
-one. It reads the generated schema, so a new table is a failing test until somebody classifies it.
-The four shapes, and the exceptions worth stating out loud:
+**Every exception is named, in code.** `internal/storage/identity_shape.go` declares one of four
+identity shapes for every table: key-bearing (an operator types its key, on the entity-key rule),
+keyspace (an operator types its key, on `internal/key`'s rule), a human identifier that is not a key,
+and id-only. The last two carry a written reason, and the guard refuses an exception without one.
 
-| shape | meaning | the exceptions |
-|---|---|---|
-| key-bearing | an operator types its key, on the entity-key rule | |
-| keyspace | an operator types its key, on `internal/key`'s rule | `property_type`, `event_type`, `command_type`, `tag`, `variable`, `secret` |
-| a human identifier that is not a key | looks key-shaped, must never take the key rule | `human` (a username), `file` (a filename), `task` and `blob` (content-addressed) |
-| id only | nobody names it, so it is addressed by uuid | every join and telemetry row |
-
-An earlier version of that guard only inspected tables carrying a `name` column, which made it blind
-to 28 of the 51. Absence of a `name` is not evidence of absence of an identifier: a username and a
-content hash are both identifiers, and both escaped.
+Which table is which is **not written down here**, because a hand-copied list is the drift class the
+generate-first rule exists for. `identity_shape_test.go` checks the declaration against the generated
+schema, so a new table is a failing test until somebody classifies it, and `cmd/identitygen` renders
+it into [core entities](/architecture/core-entities/). An earlier version of that guard only inspected
+tables carrying a `name` column, which made it blind to 28 of the 51: absence of a `name` is not
+evidence of absence of an identifier, and a username and a content hash both escaped.
 
 A table on the **keyspace** rule (`internal/key`, snake_case with an optional dot hierarchy) is
 deliberately outside this one, because

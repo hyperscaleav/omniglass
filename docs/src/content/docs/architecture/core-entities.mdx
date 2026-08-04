@@ -8,6 +8,7 @@ sidebar:
 ---
 
 import SchemaTable from '../../../components/SchemaTable.astro';
+import IdentityShapes from '../../../components/IdentityShapes.astro';
 
 Core entities are the things an operator manages, component, system, location, and node, each with
 its own identity so that every sample, event, alarm, and config names exactly one owner. The shapes
@@ -470,3 +471,35 @@ The cascade is **not** "delete everything below", because containers do not own 
   ([identity and access](/architecture/identity-access/)); `node.*` history is retained.
 
 :::
+
+## How an entity is identified
+
+Three things, and no fourth:
+
+- **id**, a uuid. Immutable, the primary key, and what every foreign key stores, so a rename has
+  nothing to rewrite.
+- **key**, the machine identifier an operator types and a URL, a CLI argument, and a topic carry.
+  Mutable, which is the point: `cisco-room-bar` is a typo or a rebrand away from being wrong forever
+  if it cannot change.
+- **name**, an optional free-text label. Absent is normal: `crestron` needs no label, and a tag never
+  has one.
+
+Every exception is declared in `internal/storage/identity_shape.go` and rendered below, so this page
+cannot drift from the code. Most tables are key-bearing and the shape explains itself. The two that
+need a reason are the ones where an identifier exists but is not a key.
+
+A **keyspace** table carries a key on the other key rule, the one `internal/key` owns (lowercase
+snake_case, optionally dot-hierarchied). The two rules are not merged, because each legitimately
+carries a character the other forbids; the console still says Key for both, and the differing
+character set surfaces as a validation message rather than as a second word.
+
+<IdentityShapes shape="keyspace" />
+
+A **human identifier that is not a key** is the set worth stating out loud, because each looks
+key-shaped from a distance and must never acquire the key rule.
+
+<IdentityShapes shape="human identifier, not a key" />
+
+Everything else is **id-only**: a join row and a telemetry row are addressed by uuid because nobody
+names them. An operator names the component, not the metric.
+
