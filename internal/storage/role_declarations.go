@@ -116,6 +116,9 @@ func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]
 // An owner or capability that does not exist is ErrRoleRefNotFound (a request
 // fault), never a server error.
 func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID string, spec SystemRoleSpec) (*SystemRole, error) {
+	if err := ValidateEntityKey(spec.Name); err != nil {
+		return nil, err
+	}
 	col, err := roleOwnerColumn(ownerKind)
 	if err != nil {
 		return nil, err

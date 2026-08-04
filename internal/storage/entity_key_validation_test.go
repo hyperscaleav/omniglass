@@ -23,21 +23,16 @@ import (
 //
 // This test is the enforcement. Each case creates through the real gateway with a
 // segment the rule forbids and requires a refusal.
-func TestEveryKeyBearingTableValidates(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
-	ctx := context.Background()
-	gw, err := storage.NewPG(ctx, dsn)
-	if err != nil {
-		t.Fatalf("open gateway: %v", err)
-	}
-	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-
-	// Each entry creates one entity with the given segment and returns the error.
-	// A nil error means the table accepted an illegal key.
-	creates := map[string]func(seg string) error{
+// provedByCreate is the set of key-bearing tables whose refusal this suite actually
+// drives through the gateway, keyed by table name. It is package level on purpose:
+// TestEveryKeyBearingTableIsProved reads the same map, so the classification and the
+// proof cannot drift apart. Adding a table to keyBearing without adding it here (or
+// excusing it) fails the build.
+//
+// Each entry creates one entity with the given key and returns the error. A nil error
+// means the table accepted an illegal key.
+func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key string) error {
+	return map[string]func(key string) error{
 		"component": func(s string) error {
 			_, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: s}, all)
 			return err
@@ -78,8 +73,38 @@ func TestEveryKeyBearingTableValidates(t *testing.T) {
 			_, err := gw.CreateProduct(ctx, "", storage.Product{Name: s, DisplayName: "X"})
 			return err
 		},
+		// A role's key arrives as a bare {role} path param on PUT
+		// /systems/{name}/roles/{role}, so an operator types it directly.
+		"system_role": func(s string) error {
+			_, err := gw.SetSystemRole(ctx, "", "system", "sysrole-host", storage.SystemRoleSpec{Name: s, Quorum: 1})
+			return err
+		},
+	}
+}
+
+// provedByCreateTables is the same key set, without needing a live gateway, so the
+// cross-check can run as a unit test.
+func provedByCreateTables() map[string]bool {
+	out := map[string]bool{}
+	for k := range provedByCreate(context.Background(), nil) {
+		out[k] = true
+	}
+	return out
+}
+
+func TestEveryKeyBearingTableValidates(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
 	}
 
+	creates := provedByCreate(ctx, gw)
 	// Every one of these violates the key rule, and each fails for a reason a
 	// caller might otherwise talk themselves into allowing.
 	bad := map[string]string{

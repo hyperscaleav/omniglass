@@ -59,6 +59,48 @@ var (
 	}
 )
 
+// keyBearing declares which tables carry a key. TestEveryKeyBearingTableValidates
+// PROVES the behaviour for the ones it can reach through the gateway. Those are two
+// lists, and two lists that must agree with nothing making them agree is the exact
+// shape that let six tables go unvalidated in the first place.
+//
+// So this cross-checks them. A table classified key-bearing is either proved by the
+// behavioural test or named here with the reason it cannot be, and adding one to
+// keyBearing without doing either fails the build.
+var provedElsewhere = map[string]string{
+	"interface_type": "seeded only, no create path on the gateway",
+	"role":           "seeded only, no create path on the gateway",
+	"secret_type":    "seeded only, no create path on the gateway",
+	"interface": "the name is server-derived from the interface type (interfaces.go sets it from " +
+		"spec.Type, an already-validated interface_type key); InterfaceSpec carries no Name, so an " +
+		"operator never types one",
+	"principal_group": "validated at the API layer with a looser pattern (^[a-z0-9][a-z0-9._-]*$), " +
+		"which admits the . and _ the address grammar reads as separators; tightening it is a " +
+		"behaviour change for existing groups, tracked with the rename work",
+}
+
+// TestEveryKeyBearingTableIsProved is the cross-check: classification without proof
+// is a claim, not a guard.
+func TestEveryKeyBearingTableIsProved(t *testing.T) {
+	for table := range keyBearing {
+		proved := provedByCreateTables()[table]
+		_, excused := provedElsewhere[table]
+		switch {
+		case proved && excused:
+			t.Errorf("%q is both proved by the create sweep and excused from it; pick one", table)
+		case !proved && !excused:
+			t.Errorf("%q is classified key-bearing but nothing proves it rejects an illegal key.\n"+
+				"Either add it to the create map in entity_key_validation_test.go so the behaviour is "+
+				"proved, or name it in provedElsewhere with the reason it cannot be reached that way.", table)
+		}
+	}
+	for table := range provedElsewhere {
+		if !keyBearing[table] {
+			t.Errorf("provedElsewhere names %q, which is not classified key-bearing", table)
+		}
+	}
+}
+
 func TestEveryNamedTableIsClassified(t *testing.T) {
 	raw, err := os.ReadFile("../../docs/src/generated/schema.json")
 	if err != nil {
