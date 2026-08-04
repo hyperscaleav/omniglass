@@ -50,6 +50,29 @@ func liveTables(t *testing.T) map[string]bool {
 	return live
 }
 
+// TestIdentityShapesMatchesCommitted is the drift gate for the generated reference,
+// mirroring TestConfigFactsMatchesCommitted: the committed
+// docs/src/generated/identity.json must equal a fresh render of the declaration.
+//
+// CI already diffs docs/src/generated/ after make gen, so a stale file cannot merge.
+// This catches it in make test instead, because the repo validates locally rather
+// than leaning on CI, and because a contributor who edits the declaration should
+// learn it needs regenerating before they push.
+func TestIdentityShapesMatchesCommitted(t *testing.T) {
+	fresh, err := storage.IdentityShapesJSON()
+	if err != nil {
+		t.Fatalf("IdentityShapesJSON: %v", err)
+	}
+	committed, err := os.ReadFile("../../docs/src/generated/identity.json")
+	if err != nil {
+		t.Fatalf("read committed identity.json (run make gen and commit it): %v", err)
+	}
+	if string(committed) != string(fresh)+"\n" {
+		t.Error("docs/src/generated/identity.json drifted from internal/storage/identity_shape.go: " +
+			"run make gen and commit the result")
+	}
+}
+
 func TestEveryTableHasADeclaredIdentityShape(t *testing.T) {
 	live := liveTables(t)
 
