@@ -961,6 +961,26 @@ Example:
 omniglass component removeTag <name> --key key
 ```
 
+### `omniglass component rename`
+
+Rename a component
+
+```
+omniglass component rename <name> [flags]
+```
+
+Moves the component's technical name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by component:rename; read and rename scopes drive the 404 versus 403 split.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | The new globally unique technical name (lowercase letters, digits, hyphens) |
+
+Example:
+
+```sh
+omniglass component rename <name> --name name
+```
+
 ### `omniglass component setTag`
 
 Set a tag value on a component
@@ -990,13 +1010,12 @@ Update a component
 omniglass component update <name> [flags]
 ```
 
-Patches a component's technical name, display_name, product, location, or parent. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+Patches a component's display_name, product, location, or parent. The technical name is not patchable: renaming is the :rename custom method. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) | A new operator-facing label |
 | `--location` | string | (none) | Relocates the component to this location name. An empty string clears its placement. |
-| `--name` | string | (none) | A new globally unique technical name (rename) |
 | `--parent` | string | (none) | Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component. |
 | `--product` | string | (none) | Re-classifies the component to this product (catalog SKU). An empty string clears it. Explicitly-set property values persist; the new product's contract defaults follow. |
 
@@ -1608,6 +1627,26 @@ Example:
 omniglass location removeTag <name> --key key
 ```
 
+### `omniglass location rename`
+
+Rename a location
+
+```
+omniglass location rename <name> [flags]
+```
+
+Moves the location's technical name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by location:rename; the read and rename scopes drive the 404 versus 403 split.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | The new globally unique technical name (lowercase letters, digits, hyphens) |
+
+Example:
+
+```sh
+omniglass location rename <name> --name name
+```
+
 ### `omniglass location setTag`
 
 Set a tag value on a location
@@ -1637,13 +1676,12 @@ Update a location
 omniglass location update <name> [flags]
 ```
 
-Patches a location's display_name, location_type, or parent (a move). Gated by location:update; the read and update scopes drive the 404 versus 403 split.
+Patches a location's display_name, location_type, or parent (a move). The technical name is not patchable: renaming is the :rename custom method. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) | A new operator-facing label |
 | `--location-type` | string | (none) | Re-types the location: a location_type, by name or uuid |
-| `--name` | string | (none) | A new globally unique technical name (rename) |
 | `--parent` | string | (none) | Re-parents the location (a tree move) to this location name, cycle-guarded and placement-validated. Moving to root is not supported via update this slice. |
 
 Example:
@@ -2576,6 +2614,26 @@ Example:
 omniglass principal-group member list <id>
 ```
 
+### `omniglass principal-group rename`
+
+Rename a principal group
+
+```
+omniglass principal-group rename <id> [flags]
+```
+
+Moves the group's name. A separate act from an update, and a separately grantable one, because it breaks the references stored outside this system; inside it nothing breaks, since membership and grants both key on the group's uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by principal_group:rename (all-scope).
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | The new unique group name (lowercase letters, digits, hyphens) |
+
+Example:
+
+```sh
+omniglass principal-group rename <id> --name name
+```
+
 ### `omniglass principal-group update`
 
 Update a principal group
@@ -2584,13 +2642,12 @@ Update a principal group
 omniglass principal-group update <id> [flags]
 ```
 
-Updates a group's name and presentational fields. Gated by principal_group:update (all-scope). A duplicate name is 409.
+Updates a group's presentational fields. The name is not patchable: renaming is the :rename custom method. Gated by principal_group:update (all-scope).
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | Description; empty clears it |
 | `--display-name` | string | (none) | Display name; empty clears it |
-| `--name` | string | (none) | Group name (lowercase letters, digits, and hyphens); renaming is safe |
 
 Example:
 
@@ -3675,6 +3732,26 @@ Example:
 omniglass system removeTag <name> --key key
 ```
 
+### `omniglass system rename`
+
+Rename a system
+
+```
+omniglass system rename <name> [flags]
+```
+
+Moves the system's technical name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by system:rename; read and rename scopes drive the 404 versus 403 split.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | The new globally unique technical name (lowercase letters, digits, hyphens) |
+
+Example:
+
+```sh
+omniglass system rename <name> --name name
+```
+
 ### `omniglass system role`
 
 Commands for the role resource
@@ -3799,13 +3876,12 @@ Update a system
 omniglass system update <name> [flags]
 ```
 
-Patches a system's display_name, standard, location, or parent. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+Patches a system's display_name, standard, location, or parent. The technical name is not patchable: renaming is the :rename custom method. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) | A new operator-facing label |
 | `--location` | string | (none) | Relocates the system to this location name. An empty string clears its placement. |
-| `--name` | string | (none) | A new globally unique technical name (rename) |
 | `--parent` | string | (none) | Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system. |
 | `--standard-id` | string | (none) | A new standard, by handle or uuid; "" clears it (a one-off system) |
 

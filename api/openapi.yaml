@@ -3673,6 +3673,82 @@ components:
         - component
         - properties
       type: object
+    RenameComponentInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RenameComponentInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        name:
+          description: The new globally unique technical name (lowercase letters, digits, hyphens)
+          maxLength: 100
+          minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
+      required:
+        - name
+      type: object
+    RenameGroupInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RenameGroupInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        name:
+          description: The new unique group name (lowercase letters, digits, hyphens)
+          maxLength: 100
+          minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
+      required:
+        - name
+      type: object
+    RenameLocationInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RenameLocationInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        name:
+          description: The new globally unique technical name (lowercase letters, digits, hyphens)
+          maxLength: 100
+          minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
+      required:
+        - name
+      type: object
+    RenameSystemInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RenameSystemInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        name:
+          description: The new globally unique technical name (lowercase letters, digits, hyphens)
+          maxLength: 100
+          minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
+      required:
+        - name
+      type: object
     ResetPasswordInputBody:
       additionalProperties: false
       properties:
@@ -4774,12 +4850,6 @@ components:
         location:
           description: Relocates the component to this location name. An empty string clears its placement.
           type: string
-        name:
-          description: A new globally unique technical name (rename)
-          maxLength: 100
-          minLength: 1
-          pattern: ^[a-z0-9][a-z0-9-]*$
-          type: string
         parent:
           description: Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component.
           type: string
@@ -4841,12 +4911,6 @@ components:
           description: Display name; empty clears it
           maxLength: 200
           type: string
-        name:
-          description: Group name (lowercase letters, digits, and hyphens); renaming is safe
-          maxLength: 100
-          minLength: 1
-          pattern: ^[a-z0-9][a-z0-9-]*$
-          type: string
       type: object
     UpdateInterfaceInputBody:
       additionalProperties: false
@@ -4879,12 +4943,6 @@ components:
           type: string
         location_type:
           description: "Re-types the location: a location_type, by name or uuid"
-          type: string
-        name:
-          description: A new globally unique technical name (rename)
-          maxLength: 100
-          minLength: 1
-          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         parent:
           description: Re-parents the location (a tree move) to this location name, cycle-guarded and placement-validated. Moving to root is not supported via update this slice.
@@ -5080,12 +5138,6 @@ components:
           type: string
         location:
           description: Relocates the system to this location name. An empty string clears its placement.
-          type: string
-        name:
-          description: A new globally unique technical name (rename)
-          maxLength: 100
-          minLength: 1
-          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         parent:
           description: Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system.
@@ -5947,7 +5999,7 @@ paths:
       summary: Get a component
       x-omniglass-permission: component:read
     patch:
-      description: "Patches a component's technical name, display_name, product, location, or parent. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split."
+      description: "Patches a component's display_name, product, location, or parent. The technical name is not patchable: renaming is the :rename custom method. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split."
       operationId: update-component
       parameters:
         - in: path
@@ -6572,6 +6624,39 @@ paths:
           description: Error
       summary: Remove a tag value from a component
       x-omniglass-permission: component:update
+  /components/{name}:rename:
+    post:
+      description: Moves the component's technical name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by component:rename; read and rename scopes drive the 404 versus 403 split.
+      operationId: rename-component
+      parameters:
+        - description: The component's current name, or its uuid
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's current name, or its uuid
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameComponentInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Rename a component
+      x-omniglass-permission: component:rename
   /components/{name}:setTag:
     post:
       description: Binds a value for a key on a component. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by component:update.
@@ -7420,7 +7505,7 @@ paths:
       summary: Get a location
       x-omniglass-permission: location:read
     patch:
-      description: Patches a location's display_name, location_type, or parent (a move). Gated by location:update; the read and update scopes drive the 404 versus 403 split.
+      description: "Patches a location's display_name, location_type, or parent (a move). The technical name is not patchable: renaming is the :rename custom method. Gated by location:update; the read and update scopes drive the 404 versus 403 split."
       operationId: update-location
       parameters:
         - in: path
@@ -7628,6 +7713,39 @@ paths:
           description: Error
       summary: Remove a tag value from a location
       x-omniglass-permission: location:update
+  /locations/{name}:rename:
+    post:
+      description: Moves the location's technical name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by location:rename; the read and rename scopes drive the 404 versus 403 split.
+      operationId: rename-location
+      parameters:
+        - description: The location's current name, or its uuid
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The location's current name, or its uuid
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameLocationInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Rename a location
+      x-omniglass-permission: location:rename
   /locations/{name}:setTag:
     post:
       description: Binds a value for a key on a location. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by location:update.
@@ -8080,7 +8198,7 @@ paths:
       summary: Get a principal group
       x-omniglass-permission: principal_group:read:admin
     patch:
-      description: Updates a group's name and presentational fields. Gated by principal_group:update (all-scope). A duplicate name is 409.
+      description: "Updates a group's presentational fields. The name is not patchable: renaming is the :rename custom method. Gated by principal_group:update (all-scope)."
       operationId: update-group
       parameters:
         - description: The group's id (uuid)
@@ -8285,6 +8403,39 @@ paths:
           description: Error
       summary: Remove a member from a group
       x-omniglass-permission: principal_group:update
+  /principal-groups/{id}:rename:
+    post:
+      description: Moves the group's name. A separate act from an update, and a separately grantable one, because it breaks the references stored outside this system; inside it nothing breaks, since membership and grants both key on the group's uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by principal_group:rename (all-scope).
+      operationId: rename-group
+      parameters:
+        - description: The group's id (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The group's id (uuid)
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameGroupInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Rename a principal group
+      x-omniglass-permission: principal_group:rename
   /principals:
     get:
       description: Lists all principals (humans and service accounts) with their grants. Gated by principal:read:admin.
@@ -9940,7 +10091,7 @@ paths:
       summary: Get a system
       x-omniglass-permission: system:read
     patch:
-      description: "Patches a system's display_name, standard, location, or parent. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split."
+      description: "Patches a system's display_name, standard, location, or parent. The technical name is not patchable: renaming is the :rename custom method. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split."
       operationId: update-system
       parameters:
         - in: path
@@ -10433,6 +10584,39 @@ paths:
           description: Error
       summary: Remove a tag value from a system
       x-omniglass-permission: system:update
+  /systems/{name}:rename:
+    post:
+      description: Moves the system's technical name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by system:rename; read and rename scopes drive the 404 versus 403 split.
+      operationId: rename-system
+      parameters:
+        - description: The system's current name, or its uuid
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's current name, or its uuid
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameSystemInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Rename a system
+      x-omniglass-permission: system:rename
   /systems/{name}:setTag:
     post:
       description: Binds a value for a key on a system. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by system:update.

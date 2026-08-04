@@ -23,22 +23,36 @@ func TestRenameSystem(t *testing.T) {
 	}
 
 	// A system with a child, so we can prove the UUID FK survives the rename.
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av-root"}, all); err != nil {
+	root, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av-root"}, all)
+	if err != nil {
 		t.Fatal(err)
 	}
-	child, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av-child", ParentName: strptr("av-root")}, all)
-	if err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av-child", ParentName: strptr("av-root")}, all); err != nil {
 		t.Fatal(err)
 	}
 
 	// Rename the parent.
 	newName := "av-root-renamed"
-	up, err := gw.UpdateSystem(ctx, "", "av-root", storage.SystemPatch{Name: &newName}, all, all)
+	up, err := gw.RenameSystem(ctx, "", "av-root", newName, all, all)
 	if err != nil {
 		t.Fatalf("rename: %v", err)
 	}
 	if up.Name != newName {
 		t.Fatalf("name = %q, want %q", up.Name, newName)
+	}
+	if up.ID != root.ID {
+		t.Fatalf("rename changed id: got %q, want %q (a rename moves the name, never the identity)", up.ID, root.ID)
+	}
+
+	// Reachable afterwards by the NEW name and by its uuid, not by the old one.
+	if got, err := gw.GetSystem(ctx, newName, all); err != nil || got.ID != root.ID {
+		t.Fatalf("get by new name = %v, %v; want the same row", got, err)
+	}
+	if got, err := gw.GetSystem(ctx, root.ID, all); err != nil || got.Name != newName {
+		t.Fatalf("get by uuid = %v, %v; want the row under its new name", got, err)
+	}
+	if _, err := gw.GetSystem(ctx, "av-root", all); !errors.Is(err, storage.ErrSystemNotFound) {
+		t.Fatalf("get by old name = %v, want ErrSystemNotFound", err)
 	}
 
 	// The child's parent_id (a UUID FK) is untouched: the child still resolves and
@@ -50,22 +64,31 @@ func TestRenameSystem(t *testing.T) {
 	if got.ParentID == nil || *got.ParentID != up.ID {
 		t.Fatalf("child parent_id = %v, want %q (rename must not touch UUID FKs)", got.ParentID, up.ID)
 	}
-	_ = child
 
 	// The old name is free; a create can reuse it.
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av-root"}, all); err != nil {
 		t.Fatalf("old name should be free after rename: %v", err)
 	}
 
-	// Renaming onto a taken name -> ErrSystemExists.
-	if _, err := gw.UpdateSystem(ctx, "", "av-child", storage.SystemPatch{Name: &newName}, all, all); !errors.Is(err, storage.ErrSystemExists) {
+	// Renaming onto a taken name -> ErrSystemExists (the API's 409).
+	if _, err := gw.RenameSystem(ctx, "", "av-child", newName, all, all); !errors.Is(err, storage.ErrSystemExists) {
 		t.Fatalf("dup rename err = %v, want ErrSystemExists", err)
 	}
 
 	// Bad slug -> ErrInvalidEntityName (before touching the DB).
-	bad := "Bad Name"
-	if _, err := gw.UpdateSystem(ctx, "", "av-child", storage.SystemPatch{Name: &bad}, all, all); !errors.Is(err, storage.ErrInvalidEntityName) {
+	if _, err := gw.RenameSystem(ctx, "", "av-child", "Bad Name", all, all); !errors.Is(err, storage.ErrInvalidEntityName) {
 		t.Fatalf("bad-format rename err = %v, want ErrInvalidEntityName", err)
+	}
+
+	// A uuid-shaped name is its own refusal: it satisfies the slug rule completely,
+	// and admitting it would make a name indistinguishable from an id.
+	if _, err := gw.RenameSystem(ctx, "", "av-child", "019f8754-461f-7b82-b5f2-fc4bbe1c3765", all, all); !errors.Is(err, storage.ErrEntityNameIsUUID) {
+		t.Fatalf("uuid-shaped rename err = %v, want ErrEntityNameIsUUID", err)
+	}
+
+	// A missing entity is the ordinary not-found, so the API answers 404.
+	if _, err := gw.RenameSystem(ctx, "", "no-such-system", "whatever", all, all); !errors.Is(err, storage.ErrSystemNotFound) {
+		t.Fatalf("rename of a missing system = %v, want ErrSystemNotFound", err)
 	}
 
 	// Create-tightening: the shared validator gates create too, not just rename.
@@ -80,4 +103,6 @@ func TestRenameSystem(t *testing.T) {
 	if taken, err := gw.SystemNameTaken(ctx, "nope-not-here"); err != nil || taken {
 		t.Fatalf("SystemNameTaken(free) = %v,%v want false,nil", taken, err)
 	}
+
+	assertOneRenameAudit(t, ctx, gw, "system", root.ID)
 }

@@ -105,6 +105,10 @@ type Gateway interface {
 	ListGroups(ctx context.Context, read scope.Set) ([]Group, error)
 	GetGroup(ctx context.Context, id string, read scope.Set) (*Group, error)
 	UpdateGroup(ctx context.Context, actorID, id string, patch GroupPatch, action scope.Set) (*Group, error)
+	// RenameGroup moves the group's name. Its own function, not a patch field,
+	// because a rename breaks the references an operator stored outside this
+	// system; the API gates it on principal_group:rename.
+	RenameGroup(ctx context.Context, actorID, id, newName string, action scope.Set) (*Group, error)
 	DeleteGroup(ctx context.Context, actorID, id string, action scope.Set) error
 	AddGroupMember(ctx context.Context, actorID, groupID, principalID string, action scope.Set) error
 	RemoveGroupMember(ctx context.Context, actorID, groupID, principalID string, action scope.Set) error
@@ -209,6 +213,10 @@ type Gateway interface {
 	GetLocation(ctx context.Context, name string, read scope.Set) (*Location, error)
 	CreateLocation(ctx context.Context, actorID string, spec LocationSpec, create scope.Set) (*Location, error)
 	UpdateLocation(ctx context.Context, actorID, name string, patch LocationPatch, read, action scope.Set) (*Location, error)
+	// RenameLocation moves the location's name, scoped exactly as the update is.
+	// Its own function, not a patch field, because a rename breaks the references
+	// an operator stored outside this system; the API gates it on location:rename.
+	RenameLocation(ctx context.Context, actorID, name, newName string, read, action scope.Set) (*Location, error)
 	LocationNameTaken(ctx context.Context, name string) (bool, error)
 	DeleteLocation(ctx context.Context, actorID, name string, read, action scope.Set) error
 
@@ -225,6 +233,10 @@ type Gateway interface {
 	GetSystem(ctx context.Context, name string, read scope.Set) (*System, error)
 	CreateSystem(ctx context.Context, actorID string, spec SystemSpec, create scope.Set) (*System, error)
 	UpdateSystem(ctx context.Context, actorID, name string, patch SystemPatch, read, action scope.Set) (*System, error)
+	// RenameSystem moves the system's name, scoped exactly as the update is. Its
+	// own function, not a patch field, because a rename breaks the references an
+	// operator stored outside this system; the API gates it on system:rename.
+	RenameSystem(ctx context.Context, actorID, name, newName string, read, action scope.Set) (*System, error)
 	SystemNameTaken(ctx context.Context, name string) (bool, error)
 	DeleteSystem(ctx context.Context, actorID, name string, read, action scope.Set) error
 
@@ -237,6 +249,10 @@ type Gateway interface {
 	ListComponentInterfaces(ctx context.Context, componentName string) ([]ComponentInterface, error)
 	CreateComponent(ctx context.Context, actorID string, spec ComponentSpec, create scope.Set) (*Component, error)
 	UpdateComponent(ctx context.Context, actorID, name string, patch ComponentPatch, read, action scope.Set) (*Component, error)
+	// RenameComponent moves the component's name, scoped exactly as the update is.
+	// Its own function, not a patch field, because a rename breaks the references
+	// an operator stored outside this system; the API gates it on component:rename.
+	RenameComponent(ctx context.Context, actorID, name, newName string, read, action scope.Set) (*Component, error)
 	ComponentNameTaken(ctx context.Context, name string) (bool, error)
 	DeleteComponent(ctx context.Context, actorID, name string, read, action scope.Set) error
 

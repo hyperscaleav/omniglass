@@ -439,7 +439,7 @@ export interface paths {
         head?: never;
         /**
          * Update a component
-         * @description Patches a component's technical name, display_name, product, location, or parent. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+         * @description Patches a component's display_name, product, location, or parent. The technical name is not patchable: renaming is the :rename custom method. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-component"];
         trace?: never;
@@ -790,6 +790,26 @@ export interface paths {
          * @description Removes a key's value from a component. Gated by component:update.
          */
         post: operations["remove-component-tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}:rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename a component
+         * @description Moves the component's technical name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by component:rename; read and rename scopes drive the 404 versus 403 split.
+         */
+        post: operations["rename-component"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1219,7 +1239,7 @@ export interface paths {
         head?: never;
         /**
          * Update a location
-         * @description Patches a location's display_name, location_type, or parent (a move). Gated by location:update; the read and update scopes drive the 404 versus 403 split.
+         * @description Patches a location's display_name, location_type, or parent (a move). The technical name is not patchable: renaming is the :rename custom method. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-location"];
         trace?: never;
@@ -1322,6 +1342,26 @@ export interface paths {
          * @description Removes a key's value from a location. Gated by location:update.
          */
         post: operations["remove-location-tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/locations/{name}:rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename a location
+         * @description Moves the location's technical name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by location:rename; the read and rename scopes drive the 404 versus 403 split.
+         */
+        post: operations["rename-location"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1587,7 +1627,7 @@ export interface paths {
         head?: never;
         /**
          * Update a principal group
-         * @description Updates a group's name and presentational fields. Gated by principal_group:update (all-scope). A duplicate name is 409.
+         * @description Updates a group's presentational fields. The name is not patchable: renaming is the :rename custom method. Gated by principal_group:update (all-scope).
          */
         patch: operations["update-group"];
         trace?: never;
@@ -1675,6 +1715,26 @@ export interface paths {
          * @description Removes a principal from a group; it stops inheriting the group's grants. Gated by principal_group:update (all-scope).
          */
         delete: operations["remove-group-member"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/principal-groups/{id}:rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename a principal group
+         * @description Moves the group's name. A separate act from an update, and a separately grantable one, because it breaks the references stored outside this system; inside it nothing breaks, since membership and grants both key on the group's uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by principal_group:rename (all-scope).
+         */
+        post: operations["rename-group"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2575,7 +2635,7 @@ export interface paths {
         head?: never;
         /**
          * Update a system
-         * @description Patches a system's display_name, standard, location, or parent. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+         * @description Patches a system's display_name, standard, location, or parent. The technical name is not patchable: renaming is the :rename custom method. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-system"];
         trace?: never;
@@ -2810,6 +2870,26 @@ export interface paths {
          * @description Removes a key's value from a system. Gated by system:update.
          */
         post: operations["remove-system-tag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems/{name}:rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename a system
+         * @description Moves the system's technical name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by system:rename; read and rename scopes drive the 404 versus 403 split.
+         */
+        post: operations["rename-system"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5101,6 +5181,46 @@ export interface components {
             component: string;
             properties: components["schemas"]["ReconPropertyBody"][] | null;
         };
+        RenameComponentInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RenameComponentInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The new globally unique technical name (lowercase letters, digits, hyphens) */
+            name: string;
+        };
+        RenameGroupInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RenameGroupInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The new unique group name (lowercase letters, digits, hyphens) */
+            name: string;
+        };
+        RenameLocationInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RenameLocationInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The new globally unique technical name (lowercase letters, digits, hyphens) */
+            name: string;
+        };
+        RenameSystemInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RenameSystemInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The new globally unique technical name (lowercase letters, digits, hyphens) */
+            name: string;
+        };
         ResetPasswordInputBody: {
             /**
              * Format: uri
@@ -5726,8 +5846,6 @@ export interface components {
             display_name?: string;
             /** @description Relocates the component to this location name. An empty string clears its placement. */
             location?: string;
-            /** @description A new globally unique technical name (rename) */
-            name?: string;
             /** @description Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component. */
             parent?: string;
             /** @description Re-classifies the component to this product (catalog SKU). An empty string clears it. Explicitly-set property values persist; the new product's contract defaults follow. */
@@ -5770,8 +5888,6 @@ export interface components {
             description?: string;
             /** @description Display name; empty clears it */
             display_name?: string;
-            /** @description Group name (lowercase letters, digits, and hyphens); renaming is safe */
-            name?: string;
         };
         UpdateInterfaceInputBody: {
             /**
@@ -5796,8 +5912,6 @@ export interface components {
             display_name?: string;
             /** @description Re-types the location: a location_type, by name or uuid */
             location_type?: string;
-            /** @description A new globally unique technical name (rename) */
-            name?: string;
             /** @description Re-parents the location (a tree move) to this location name, cycle-guarded and placement-validated. Moving to root is not supported via update this slice. */
             parent?: string;
         };
@@ -5927,8 +6041,6 @@ export interface components {
             display_name?: string;
             /** @description Relocates the system to this location name. An empty string clears its placement. */
             location?: string;
-            /** @description A new globally unique technical name (rename) */
-            name?: string;
             /** @description Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system. */
             parent?: string;
             /** @description A new standard, by handle or uuid; "" clears it (a one-off system) */
@@ -7683,6 +7795,42 @@ export interface operations {
             };
         };
     };
+    "rename-component": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's current name, or its uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameComponentInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "set-component-tag": {
         parameters: {
             query?: never;
@@ -9003,6 +9151,42 @@ export interface operations {
             };
         };
     };
+    "rename-location": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location's current name, or its uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameLocationInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "set-location-tag": {
         parameters: {
             query?: never;
@@ -9794,6 +9978,42 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "rename-group": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The group's id (uuid) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameGroupInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupBody"];
+                };
             };
             /** @description Error */
             default: {
@@ -12365,6 +12585,42 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "rename-system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's current name, or its uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameSystemInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemBody"];
+                };
             };
             /** @description Error */
             default: {

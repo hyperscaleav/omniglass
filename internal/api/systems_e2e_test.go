@@ -107,11 +107,11 @@ func TestSystemAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodGet, "/systems/av-sub", nil, http.StatusNotFound)
 }
 
-// TestSystemRenameAndCheckName drives the rename input and the collection-level
-// :checkName advisory over HTTP: checkName reports valid + available (scope-blind),
-// a PATCH renames by the new technical name, a rename onto a taken name is a 409,
-// and a bad slug is rejected at the edge by the Huma pattern (422). Skipped under
-// -short.
+// TestSystemRenameAndCheckName drives the :rename custom method and the
+// collection-level :checkName advisory over HTTP: checkName reports valid +
+// available (scope-blind), :rename moves the name, a rename onto a taken name is a
+// 409, and a bad slug is rejected at the edge by the Huma pattern (422). Skipped
+// under -short.
 func TestSystemRenameAndCheckName(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -166,9 +166,11 @@ func TestSystemRenameAndCheckName(t *testing.T) {
 		t.Fatalf("checkName(Bad Name) = %+v, want valid=false", nc)
 	}
 
-	// Rename via PATCH.
-	out := c.do(ownerTok, http.MethodPatch, "/systems/av-one", map[string]any{"name": "av-renamed"}, http.StatusOK)
+	// Rename via the custom method. It is not a PATCH: a rename breaks stored
+	// external references, so it is an explicit act with its own permission.
+	out := c.do(ownerTok, http.MethodPost, "/systems/av-one:rename", map[string]any{"name": "av-renamed"}, http.StatusOK)
 	var renamed struct {
+		ID   string `json:"id"`
 		Name string `json:"name"`
 	}
 	if err := json.Unmarshal(out, &renamed); err != nil {
@@ -178,12 +180,26 @@ func TestSystemRenameAndCheckName(t *testing.T) {
 		t.Fatalf("name = %q, want av-renamed", renamed.Name)
 	}
 
+	// Afterwards the system answers to the new name and to its uuid, and the old
+	// name is gone.
+	c.do(ownerTok, http.MethodGet, "/systems/av-renamed", nil, http.StatusOK)
+	c.do(ownerTok, http.MethodGet, "/systems/"+renamed.ID, nil, http.StatusOK)
+	c.do(ownerTok, http.MethodGet, "/systems/av-one", nil, http.StatusNotFound)
+
+	// The name is no longer patchable: two ways to rename is what this method removed.
+	c.do(ownerTok, http.MethodPatch, "/systems/av-renamed", map[string]any{"name": "av-sneaky"}, http.StatusUnprocessableEntity)
+
 	// Dup rename -> 409.
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "av-two"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPatch, "/systems/av-two", map[string]any{"name": "av-renamed"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodPost, "/systems/av-two:rename", map[string]any{"name": "av-renamed"}, http.StatusConflict)
 
-	// Bad format via PATCH -> 422 (Huma pattern rejects at the edge).
-	c.do(ownerTok, http.MethodPatch, "/systems/av-two", map[string]any{"name": "Bad Name"}, http.StatusUnprocessableEntity)
+	// Bad format -> 422 (Huma pattern rejects at the edge).
+	c.do(ownerTok, http.MethodPost, "/systems/av-two:rename", map[string]any{"name": "Bad Name"}, http.StatusUnprocessableEntity)
+
+	// A uuid-shaped name passes the slug pattern and is refused by the gateway, so
+	// the name and the id can never be the same shape.
+	c.do(ownerTok, http.MethodPost, "/systems/av-two:rename",
+		map[string]any{"name": "019f8754-461f-7b82-b5f2-fc4bbe1c3765"}, http.StatusUnprocessableEntity)
 
 	// Create-tightening: a bad name is rejected at create too, not just rename.
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "Bad Name"}, http.StatusUnprocessableEntity)

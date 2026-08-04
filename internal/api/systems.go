@@ -106,10 +106,11 @@ type createSystemInput struct {
 	}
 }
 
+// updateSystemInput is the PATCH body. It deliberately carries no name: a rename
+// is the :rename custom method, gated by system:rename.
 type updateSystemInput struct {
 	Name string `path:"name"`
 	Body struct {
-		Name        *string `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"A new globally unique technical name (rename)"`
 		DisplayName *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
 		StandardID  *string `json:"standard_id,omitempty" doc:"A new standard, by handle or uuid; \"\" clears it (a one-off system)"`
 		// Placement fields, house three-state (omitted unchanged, "" clears, name
@@ -117,6 +118,15 @@ type updateSystemInput struct {
 		// reparent within the system tree.
 		Location *string `json:"location,omitempty" doc:"Relocates the system to this location name. An empty string clears its placement."`
 		Parent   *string `json:"parent,omitempty" doc:"Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system."`
+	}
+}
+
+// renameSystemInput is the :rename body. The name rule lives here, in the
+// contract, not only in the prose below it.
+type renameSystemInput struct {
+	Name string `path:"name" doc:"The system's current name, or its uuid"`
+	Body struct {
+		Name string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The new globally unique technical name (lowercase letters, digits, hyphens)"`
 	}
 }
 
@@ -217,10 +227,9 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodPatch,
 		Path:        "/systems/{name}",
 		Summary:     "Update a system",
-		Description: "Patches a system's display_name, standard, location, or parent. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+		Description: "Patches a system's display_name, standard, location, or parent. The technical name is not patchable: renaming is the :rename custom method. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 	}, "system", "update"), func(ctx context.Context, in *updateSystemInput) (*systemOutput, error) {
 		s, err := gw.UpdateSystem(ctx, actorID(ctx), in.Name, storage.SystemPatch{
-			Name:        in.Body.Name,
 			DisplayName: in.Body.DisplayName,
 			// Deliberately NOT emptyPtrToNil: that collapses an explicit "" into
 			// "omitted", which would make clearing (declassify, unplace, lift-to-root)
@@ -229,6 +238,21 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			LocationName: in.Body.Location,
 			ParentName:   in.Body.Parent,
 		}, a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update"))
+		if err != nil {
+			return nil, mapSystemErr(err)
+		}
+		return &systemOutput{Body: toSystemBody(s)}, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "rename-system",
+		Method:      http.MethodPost,
+		Path:        "/systems/{name}:rename",
+		Summary:     "Rename a system",
+		Description: "Moves the system's technical name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by system:rename; read and rename scopes drive the 404 versus 403 split.",
+	}, "system", "rename"), func(ctx context.Context, in *renameSystemInput) (*systemOutput, error) {
+		s, err := gw.RenameSystem(ctx, actorID(ctx), in.Name, in.Body.Name,
+			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "rename"))
 		if err != nil {
 			return nil, mapSystemErr(err)
 		}

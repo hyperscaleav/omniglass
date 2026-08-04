@@ -1213,6 +1213,30 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fName string
+				cmd := &cobra.Command{
+					Use:     "rename <name>",
+					Short:   "Rename a component",
+					Long:    "Moves the component's technical name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by component:rename; read and rename scopes drive the 404 versus 403 split.",
+					Example: "  omniglass component rename <name> --name name",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/components/%s:rename", url.PathEscape(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fName, "name", "", "The new globally unique technical name (lowercase letters, digits, hyphens)")
+				_ = cmd.MarkFlagRequired("name")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
 				var fKey string
 				var fValue string
 				cmd := &cobra.Command{
@@ -1245,13 +1269,12 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var fDisplayName string
 				var fLocation string
-				var fName string
 				var fParent string
 				var fProduct string
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a component",
-					Long:    "Patches a component's technical name, display_name, product, location, or parent. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
+					Long:    "Patches a component's display_name, product, location, or parent. The technical name is not patchable: renaming is the :rename custom method. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
 					Example: "  omniglass component update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1262,9 +1285,6 @@ func generatedCommands() []*cobra.Command {
 						}
 						if cmd.Flags().Changed("location") {
 							body["location"] = fLocation
-						}
-						if cmd.Flags().Changed("name") {
-							body["name"] = fName
 						}
 						if cmd.Flags().Changed("parent") {
 							body["parent"] = fParent
@@ -1277,7 +1297,6 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
 				cmd.Flags().StringVar(&fLocation, "location", "", "Relocates the component to this location name. An empty string clears its placement.")
-				cmd.Flags().StringVar(&fName, "name", "", "A new globally unique technical name (rename)")
 				cmd.Flags().StringVar(&fParent, "parent", "", "Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component.")
 				cmd.Flags().StringVar(&fProduct, "product", "", "Re-classifies the component to this product (catalog SKU). An empty string clears it. Explicitly-set property values persist; the new product's contract defaults follow.")
 				return cmd
@@ -2047,6 +2066,30 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fName string
+				cmd := &cobra.Command{
+					Use:     "rename <name>",
+					Short:   "Rename a location",
+					Long:    "Moves the location's technical name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by location:rename; the read and rename scopes drive the 404 versus 403 split.",
+					Example: "  omniglass location rename <name> --name name",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/locations/%s:rename", url.PathEscape(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fName, "name", "", "The new globally unique technical name (lowercase letters, digits, hyphens)")
+				_ = cmd.MarkFlagRequired("name")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
 				var fKey string
 				var fValue string
 				cmd := &cobra.Command{
@@ -2079,12 +2122,11 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var fDisplayName string
 				var fLocationType string
-				var fName string
 				var fParent string
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a location",
-					Long:    "Patches a location's display_name, location_type, or parent (a move). Gated by location:update; the read and update scopes drive the 404 versus 403 split.",
+					Long:    "Patches a location's display_name, location_type, or parent (a move). The technical name is not patchable: renaming is the :rename custom method. Gated by location:update; the read and update scopes drive the 404 versus 403 split.",
 					Example: "  omniglass location update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2096,9 +2138,6 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("location-type") {
 							body["location_type"] = fLocationType
 						}
-						if cmd.Flags().Changed("name") {
-							body["name"] = fName
-						}
 						if cmd.Flags().Changed("parent") {
 							body["parent"] = fParent
 						}
@@ -2107,7 +2146,6 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
 				cmd.Flags().StringVar(&fLocationType, "location-type", "", "Re-types the location: a location_type, by name or uuid")
-				cmd.Flags().StringVar(&fName, "name", "", "A new globally unique technical name (rename)")
 				cmd.Flags().StringVar(&fParent, "parent", "", "Re-parents the location (a tree move) to this location name, cycle-guarded and placement-validated. Moving to root is not supported via update this slice.")
 				return cmd
 			}()
@@ -3267,13 +3305,36 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fName string
+				cmd := &cobra.Command{
+					Use:     "rename <id>",
+					Short:   "Rename a principal group",
+					Long:    "Moves the group's name. A separate act from an update, and a separately grantable one, because it breaks the references stored outside this system; inside it nothing breaks, since membership and grants both key on the group's uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by principal_group:rename (all-scope).",
+					Example: "  omniglass principal-group rename <id> --name name",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/principal-groups/%s:rename", url.PathEscape(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fName, "name", "", "The new unique group name (lowercase letters, digits, hyphens)")
+				_ = cmd.MarkFlagRequired("name")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
 				var fDescription string
 				var fDisplayName string
-				var fName string
 				cmd := &cobra.Command{
 					Use:     "update <id>",
 					Short:   "Update a principal group",
-					Long:    "Updates a group's name and presentational fields. Gated by principal_group:update (all-scope). A duplicate name is 409.",
+					Long:    "Updates a group's presentational fields. The name is not patchable: renaming is the :rename custom method. Gated by principal_group:update (all-scope).",
 					Example: "  omniglass principal-group update <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3285,15 +3346,11 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("display-name") {
 							body["display_name"] = fDisplayName
 						}
-						if cmd.Flags().Changed("name") {
-							body["name"] = fName
-						}
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
 				cmd.Flags().StringVar(&fDescription, "description", "", "Description; empty clears it")
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "Display name; empty clears it")
-				cmd.Flags().StringVar(&fName, "name", "", "Group name (lowercase letters, digits, and hyphens); renaming is safe")
 				return cmd
 			}()
 			return cmd
@@ -4643,6 +4700,30 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fName string
+				cmd := &cobra.Command{
+					Use:     "rename <name>",
+					Short:   "Rename a system",
+					Long:    "Moves the system's technical name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by system:rename; read and rename scopes drive the 404 versus 403 split.",
+					Example: "  omniglass system rename <name> --name name",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/systems/%s:rename", url.PathEscape(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fName, "name", "", "The new globally unique technical name (lowercase letters, digits, hyphens)")
+				_ = cmd.MarkFlagRequired("name")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			parent := &cobra.Command{
 				Use:   "role",
 				Short: "Commands for the role resource",
@@ -4796,13 +4877,12 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var fDisplayName string
 				var fLocation string
-				var fName string
 				var fParent string
 				var fStandardId string
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a system",
-					Long:    "Patches a system's display_name, standard, location, or parent. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+					Long:    "Patches a system's display_name, standard, location, or parent. The technical name is not patchable: renaming is the :rename custom method. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 					Example: "  omniglass system update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4813,9 +4893,6 @@ func generatedCommands() []*cobra.Command {
 						}
 						if cmd.Flags().Changed("location") {
 							body["location"] = fLocation
-						}
-						if cmd.Flags().Changed("name") {
-							body["name"] = fName
 						}
 						if cmd.Flags().Changed("parent") {
 							body["parent"] = fParent
@@ -4828,7 +4905,6 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
 				cmd.Flags().StringVar(&fLocation, "location", "", "Relocates the system to this location name. An empty string clears its placement.")
-				cmd.Flags().StringVar(&fName, "name", "", "A new globally unique technical name (rename)")
 				cmd.Flags().StringVar(&fParent, "parent", "", "Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system.")
 				cmd.Flags().StringVar(&fStandardId, "standard-id", "", "A new standard, by handle or uuid; \"\" clears it (a one-off system)")
 				return cmd

@@ -599,7 +599,7 @@ func TestHealthSurvivesARename(t *testing.T) {
 	}
 
 	renamed := "plain-renamed"
-	if _, err := f.gw.UpdateSystem(ctx, "", "plain", storage.SystemPatch{Name: &renamed}, f.all, f.all); err != nil {
+	if _, err := f.gw.RenameSystem(ctx, "", "plain", renamed, f.all, f.all); err != nil {
 		t.Fatalf("rename: %v", err)
 	}
 	if n, v := f.recorded(t, ctx, "system", renamed); n != before || v != "healthy" {

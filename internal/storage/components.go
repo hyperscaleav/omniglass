@@ -70,8 +70,11 @@ type ComponentSpec struct {
 // name resolves to its id. ParentName is cycle-guarded and scope-injected like a
 // location reparent: the new parent must be inside the caller's update scope and
 // must not be the component itself or one of its own descendants.
+//
+// There is deliberately no Name here. A rename is RenameComponent, its own act
+// under its own permission, because it breaks the references an operator stored
+// outside this system.
 type ComponentPatch struct {
-	Name         *string
 	DisplayName  *string
 	ProductName  *string
 	LocationName *string
@@ -269,11 +272,6 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 	if err != nil {
 		return nil, err
 	}
-	if patch.Name != nil {
-		if err := ValidateName("component", *patch.Name); err != nil {
-			return nil, err
-		}
-	}
 	// A product reference arrives as a handle or a uuid; the column stores the
 	// uuid. An unknown one resolves to nothing and is reported by name.
 	var patchProductID *string
@@ -328,33 +326,32 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 	}
 	after, err := scanComponent(tx.QueryRow(ctx, `
 		update component set
-			name         = coalesce($2, name),
-			display_name = coalesce($3, display_name),
+			display_name = coalesce($2, display_name),
 			-- product_id takes the house three states: a nil field is unchanged, an
 			-- explicit empty string clears it, anything else names a product by
 			-- handle or uuid and is resolved to its id (an unknown one lands as NULL
 			-- and is caught below).
 			product_id   = case
-				when $4::text is null then product_id
-				when $4 = '' then null
-				else $5::uuid
+				when $3::text is null then product_id
+				when $3 = '' then null
+				else $4::uuid
 			end,
 			-- location_id and parent_id take the same three states, already resolved
 			-- to ids. Each set branch casts because a CASE cannot mix uuid and text.
 			location_id  = case
-				when $6::text is null then location_id
-				when $6 = '' then null
-				else $6::uuid
+				when $5::text is null then location_id
+				when $5 = '' then null
+				else $5::uuid
 			end,
 			parent_id    = case
-				when $7::text is null then parent_id
-				when $7 = '' then null
-				else $7::uuid
+				when $6::text is null then parent_id
+				when $6 = '' then null
+				else $6::uuid
 			end,
 			updated_at   = now()
 		where id = $1
 		returning `+componentCols,
-		before.ID, patch.Name, patch.DisplayName, patch.ProductName, patchProductID, locationPatch, parentPatch))
+		before.ID, patch.DisplayName, patch.ProductName, patchProductID, locationPatch, parentPatch))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
 	}
@@ -373,6 +370,49 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit update component: %w", err)
+	}
+	return after, nil
+}
+
+// RenameComponent moves a component's name, scoped exactly as UpdateComponent is
+// (the same read-then-action split, so an unreadable target is a non-disclosing
+// not-found and a readable-but-unactionable one is forbidden).
+//
+// It is a separate gateway function, not a branch of the patch, because a rename is
+// a separate act: every reference an operator stored outside this system (a
+// bookmark, a runbook step, an integration's config) addresses the component by
+// name, and moving it breaks them. Inside the system nothing breaks, because every
+// arc stores the uuid, which is also why the audit row keys on that uuid: a trail
+// keyed on the thing that just changed is a trail the change orphans.
+//
+// Health is not recomputed. The chain runs component -> systems-it-staffs ->
+// locations-over-those-systems and every link of it is an id, so a name move
+// changes no verdict.
+func (p *PG) RenameComponent(ctx context.Context, actorID, name, newName string, read, action scope.Set) (*Component, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin rename component: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	before, err := resolveScoped(ctx, tx, componentConfig, name, read, action)
+	if err != nil {
+		return nil, err
+	}
+	if err := ValidateName("component", newName); err != nil {
+		return nil, err
+	}
+	after, err := scanComponent(tx.QueryRow(ctx,
+		`update component set name = $2, updated_at = now() where id = $1 returning `+componentCols,
+		before.ID, newName))
+	if err != nil {
+		return nil, mapComponentWriteErr(err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "rename", "component", after.ID, before, after); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit rename component: %w", err)
 	}
 	return after, nil
 }

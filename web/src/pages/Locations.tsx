@@ -16,7 +16,7 @@ import {
   listLocations,
   listLocationTypes,
   createLocation,
-  updateLocation,
+  updateLocation, renameLocation,
   checkLocationName,
   deleteLocation,
 } from "../lib/locations";
@@ -288,11 +288,15 @@ export default function Locations() {
         try {
           const movedParent = parentName() !== initialParentName() ? parentName() : undefined;
           await updateLocation(n().raw.name, {
-            name: renamed ? name().trim() : undefined,
             display_name: display() || undefined,
             location_type: type() || undefined,
             ...(movedParent ? { parent: movedParent } : {}),
           });
+          // The rename is a second call and it goes LAST, because it is the one
+          // that can be refused on its own (it needs <resource>:rename, which a
+          // caller may not hold). Doing it last means a refusal leaves the other
+          // edits saved and the name simply unchanged, rather than the reverse.
+          if (renamed) await renameLocation(n().raw.name, name().trim());
           await qc.invalidateQueries({ queryKey: LOCATIONS_KEY });
           if (renamed) navigate(`/locations/${encodeURIComponent(name().trim())}`);
         } catch (e) {

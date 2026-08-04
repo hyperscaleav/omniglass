@@ -79,8 +79,7 @@ func TestOwnerArcsSurviveARename(t *testing.T) {
 	}
 
 	// The rename. Nothing references the name, so this is a single-row update.
-	newName := "new-room"
-	if _, err := gw.UpdateLocation(ctx, "", "old-room", storage.LocationPatch{Name: &newName}, all, all); err != nil {
+	if _, err := gw.RenameLocation(ctx, "", "old-room", "new-room", all, all); err != nil {
 		t.Fatalf("rename location: %v", err)
 	}
 

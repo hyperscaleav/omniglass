@@ -34,6 +34,12 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
 
 - **Plural resource collections**, standard methods by primary key (AIP-style): `POST` creates (409 on
   PK collision), `GET` reads, `PATCH` partial-updates (AIP-134), `DELETE` removes. No upsert shortcuts.
+- **A rename is a custom method, never a `PATCH` field.** `POST /components/{name}:rename` (also
+  `/systems`, `/locations`, `/principal-groups/{id}`) moves the `name`, gated by `<entity>:rename`
+  rather than `<entity>:update`, and the `PATCH` body of those four carries no `name` at all. Renaming
+  breaks every reference an operator stored outside the system (a bookmark, a runbook step, an
+  integration's config), so it is an act a grant can withhold on its own instead of a side effect of
+  editing a label.
 - **Custom methods carry a colon**, `:verb` not `/verb`, for anything that is not CRUD:
   `/components/{name}/commands:issue`, `/auth/me/sessions/{id}:revoke`, `/nodes:claim`. The verb
   is also the **permission**: `:issue` is gated by `command:issue`, so the route and the
@@ -46,7 +52,8 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
 - **Collection-level custom methods** carry the colon on the collection, not a member:
   `POST /systems:checkName` (also `/components:checkName`, `/locations:checkName`) is an advisory
   precheck for a technical-name rename, returning `{ valid, available, reason }`, gated by
-  `<entity>:update` like a rename. Its availability answer is **scope-blind**: the `name` uniqueness
+  `<entity>:update` (the advisory reads a name's availability; performing the rename needs
+  `<entity>:rename`). Its availability answer is **scope-blind**: the `name` uniqueness
   constraint is global, so a scope-filtered answer would report a name held outside the caller's
   scope as free and then 409 at save. A bounded exception to the ABAC-scope-on-every-query rule (it
   discloses only that a technical name is taken somewhere), not a license to skip scope elsewhere.

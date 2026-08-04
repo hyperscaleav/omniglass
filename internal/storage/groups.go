@@ -49,10 +49,10 @@ type GroupSpec struct {
 	Description string
 }
 
-// GroupPatch updates a group's presentational fields (never its id or name key
-// semantics beyond a rename).
+// GroupPatch updates a group's presentational fields. There is deliberately no
+// Name: a rename is RenameGroup, its own act under its own permission, because it
+// breaks the references an operator stored outside this system.
 type GroupPatch struct {
-	Name        *string
 	DisplayName *string
 	Description *string
 }
@@ -153,16 +153,11 @@ func (p *PG) GetGroup(ctx context.Context, id string, read scope.Set) (*Group, e
 	return g, nil
 }
 
-// UpdateGroup patches a group's name and presentational fields, audited. A
-// duplicate name is ErrGroupExists; an unknown id is ErrGroupNotFound.
+// UpdateGroup patches a group's presentational fields, audited. An unknown id is
+// ErrGroupNotFound.
 func (p *PG) UpdateGroup(ctx context.Context, actorID, groupID string, patch GroupPatch, action scope.Set) (*Group, error) {
 	if !action.All {
 		return nil, ErrPrincipalForbidden
-	}
-	if patch.Name != nil {
-		if err := ValidateName("principal_group", *patch.Name); err != nil {
-			return nil, err
-		}
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -174,10 +169,7 @@ func (p *PG) UpdateGroup(ctx context.Context, actorID, groupID string, patch Gro
 	if err != nil {
 		return nil, notFoundOr(err, ErrGroupNotFound)
 	}
-	name, display, desc := before.Name, before.DisplayName, before.Description
-	if patch.Name != nil {
-		name = *patch.Name
-	}
+	display, desc := before.DisplayName, before.Description
 	if patch.DisplayName != nil {
 		display = *patch.DisplayName
 	}
@@ -185,8 +177,8 @@ func (p *PG) UpdateGroup(ctx context.Context, actorID, groupID string, patch Gro
 		desc = *patch.Description
 	}
 	after, err := scanGroup(tx.QueryRow(ctx,
-		`update principal_group set name = $2, display_name = $3, description = $4, updated_at = now() where id = $1 returning `+groupCols,
-		groupID, name, nullize(display), nullize(desc)))
+		`update principal_group set display_name = $2, description = $3, updated_at = now() where id = $1 returning `+groupCols,
+		groupID, nullize(display), nullize(desc)))
 	if err != nil {
 		return nil, mapGroupWriteErr(err)
 	}
@@ -195,6 +187,45 @@ func (p *PG) UpdateGroup(ctx context.Context, actorID, groupID string, patch Gro
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit update group: %w", err)
+	}
+	return after, nil
+}
+
+// RenameGroup moves a group's name, requiring the same all-scope grant UpdateGroup
+// does (group management is all-scope admin work, like the principal directory).
+//
+// Separate from the patch because a rename is a separate act: it breaks the
+// references an operator stored outside this system. Nothing inside breaks, since
+// membership and grants both key on the group's uuid, which is also why the audit
+// row keys on that uuid rather than on the name it just moved.
+func (p *PG) RenameGroup(ctx context.Context, actorID, groupID, newName string, action scope.Set) (*Group, error) {
+	if !action.All {
+		return nil, ErrPrincipalForbidden
+	}
+	if err := ValidateName("principal_group", newName); err != nil {
+		return nil, err
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin rename group: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	before, err := scanGroup(tx.QueryRow(ctx, `select `+groupCols+` from principal_group where id = $1 for update`, groupID))
+	if err != nil {
+		return nil, notFoundOr(err, ErrGroupNotFound)
+	}
+	after, err := scanGroup(tx.QueryRow(ctx,
+		`update principal_group set name = $2, updated_at = now() where id = $1 returning `+groupCols,
+		before.ID, newName))
+	if err != nil {
+		return nil, mapGroupWriteErr(err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "rename", "principal_group", after.ID, before, after); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit rename group: %w", err)
 	}
 	return after, nil
 }

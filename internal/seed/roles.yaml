@@ -21,7 +21,7 @@ roles:
       platform credentials). Inherits Viewer.
     inherits: ["viewer"]
     permissions:
-      - "component:create,update"
+      - "component:create,update,rename"
       - "interface:create,update"
       - "secret:read,reveal,create,update"
       - "variable:create,update"
@@ -46,9 +46,9 @@ roles:
       Viewer for the read floor over its subtree.
     inherits: ["viewer"]
     permissions:
-      - "location:create,update"
-      - "system:create,update"
-      - "component:create,update"
+      - "location:create,update,rename"
+      - "system:create,update,rename"
+      - "component:create,update,rename"
       - "secret:read,reveal,create,update"
       - "file:create"
   - id: admin
@@ -64,8 +64,8 @@ roles:
       - "component:delete"
       - "interface:*"
       - "task:*"
-      - "system:create,update,delete"
-      - "location:create,update,delete"
+      - "system:create,update,delete,rename"
+      - "location:create,update,delete,rename"
       - "principal:*"
       # read (the Users directory) and purge (the irreversible hard delete) are
       # admin-sensitive: three-token permissions that principal:* (two tokens)

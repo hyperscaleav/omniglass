@@ -54,12 +54,23 @@ type createGroupInput struct {
 		Description string `json:"description,omitempty" maxLength:"1000" doc:"Free-form notes on what the group is for"`
 	}
 }
+
+// updateGroupInput is the PATCH body. It deliberately carries no name: a rename is
+// the :rename custom method, gated by principal_group:rename.
 type updateGroupInput struct {
 	ID   string `path:"id" doc:"The group's id (uuid)"`
 	Body struct {
-		Name        *string `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Group name (lowercase letters, digits, and hyphens); renaming is safe"`
 		DisplayName *string `json:"display_name,omitempty" maxLength:"200" doc:"Display name; empty clears it"`
 		Description *string `json:"description,omitempty" maxLength:"1000" doc:"Description; empty clears it"`
+	}
+}
+
+// renameGroupInput is the :rename body. The name rule lives here, in the contract,
+// not only in the prose below it.
+type renameGroupInput struct {
+	ID   string `path:"id" doc:"The group's id (uuid)"`
+	Body struct {
+		Name string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The new unique group name (lowercase letters, digits, hyphens)"`
 	}
 }
 type addMemberInput struct {
@@ -154,11 +165,25 @@ func registerPrincipalGroupRoutes(api huma.API, a *authenticator, gw storage.Gat
 		Method:      http.MethodPatch,
 		Path:        "/principal-groups/{id}",
 		Summary:     "Update a principal group",
-		Description: "Updates a group's name and presentational fields. Gated by principal_group:update (all-scope). A duplicate name is 409.",
+		Description: "Updates a group's presentational fields. The name is not patchable: renaming is the :rename custom method. Gated by principal_group:update (all-scope).",
 	}, "principal_group", "update"), func(ctx context.Context, in *updateGroupInput) (*groupOutput, error) {
 		g, err := gw.UpdateGroup(ctx, actorID(ctx), in.ID, storage.GroupPatch{
-			Name: in.Body.Name, DisplayName: in.Body.DisplayName, Description: in.Body.Description,
+			DisplayName: in.Body.DisplayName, Description: in.Body.Description,
 		}, a.scopeFor(ctx, "principal_group", "update"))
+		if err != nil {
+			return nil, mapPrincipalErr(err)
+		}
+		return &groupOutput{Body: toGroupBody(g)}, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "rename-group",
+		Method:      http.MethodPost,
+		Path:        "/principal-groups/{id}:rename",
+		Summary:     "Rename a principal group",
+		Description: "Moves the group's name. A separate act from an update, and a separately grantable one, because it breaks the references stored outside this system; inside it nothing breaks, since membership and grants both key on the group's uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by principal_group:rename (all-scope).",
+	}, "principal_group", "rename"), func(ctx context.Context, in *renameGroupInput) (*groupOutput, error) {
+		g, err := gw.RenameGroup(ctx, actorID(ctx), in.ID, in.Body.Name, a.scopeFor(ctx, "principal_group", "rename"))
 		if err != nil {
 			return nil, mapPrincipalErr(err)
 		}

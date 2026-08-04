@@ -13,7 +13,7 @@ import {
   SYSTEMS_KEY,
   listSystems,
   createSystem,
-  updateSystem,
+  updateSystem, renameSystem,
   checkSystemName,
   deleteSystem,
 } from "../lib/systems";
@@ -168,13 +168,17 @@ export default function Systems() {
         const renamed = name().trim() !== n().raw.name;
         try {
           await updateSystem(n().raw.name, {
-            name: renamed ? name().trim() : undefined,
             display_name: display() || undefined,
             // Send the empty string rather than dropping the key: the API reads ""
             // as "clear", which is how the operator converts this system back to a
             // one-off. Omitting it would silently leave the old standard in place.
             standard_id: standard(),
           });
+          // The rename is a second call and it goes LAST, because it is the one
+          // that can be refused on its own (it needs <resource>:rename, which a
+          // caller may not hold). Doing it last means a refusal leaves the other
+          // edits saved and the name simply unchanged, rather than the reverse.
+          if (renamed) await renameSystem(n().raw.name, name().trim());
           await qc.invalidateQueries({ queryKey: SYSTEMS_KEY });
           if (renamed) navigate(`/systems/${encodeURIComponent(name().trim())}`);
         } catch (e) {

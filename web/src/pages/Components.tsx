@@ -10,7 +10,7 @@ import {
   COMPONENTS_KEY,
   listComponents,
   createComponent,
-  updateComponent,
+  updateComponent, renameComponent,
   checkComponentName,
   deleteComponent,
 } from "../lib/components";
@@ -182,9 +182,13 @@ export default function Components() {
         const renamed = name().trim() !== n().raw.name;
         try {
           await updateComponent(n().raw.name, {
-            name: renamed ? name().trim() : undefined,
             display_name: display() || undefined,
           });
+          // The rename is a second call and it goes LAST, because it is the one
+          // that can be refused on its own (it needs <resource>:rename, which a
+          // caller may not hold). Doing it last means a refusal leaves the other
+          // edits saved and the name simply unchanged, rather than the reverse.
+          if (renamed) await renameComponent(n().raw.name, name().trim());
           await qc.invalidateQueries({ queryKey: COMPONENTS_KEY });
           if (renamed) navigate(`/components/${encodeURIComponent(name().trim())}`);
         } catch (e) {

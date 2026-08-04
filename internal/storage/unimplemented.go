@@ -72,6 +72,9 @@ func (UnimplementedGateway) GetGroup(context.Context, string, scope.Set) (*Group
 func (UnimplementedGateway) UpdateGroup(context.Context, string, string, GroupPatch, scope.Set) (*Group, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) RenameGroup(context.Context, string, string, string, scope.Set) (*Group, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) DeleteGroup(context.Context, string, string, scope.Set) error { return nil }
 func (UnimplementedGateway) AddGroupMember(context.Context, string, string, string, scope.Set) error {
 	return nil
@@ -173,6 +176,9 @@ func (UnimplementedGateway) CreateLocation(context.Context, string, LocationSpec
 func (UnimplementedGateway) UpdateLocation(context.Context, string, string, LocationPatch, scope.Set, scope.Set) (*Location, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) RenameLocation(context.Context, string, string, string, scope.Set, scope.Set) (*Location, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) LocationNameTaken(context.Context, string) (bool, error) {
 	return false, nil
 }
@@ -206,6 +212,9 @@ func (UnimplementedGateway) CreateSystem(context.Context, string, SystemSpec, sc
 func (UnimplementedGateway) UpdateSystem(context.Context, string, string, SystemPatch, scope.Set, scope.Set) (*System, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) RenameSystem(context.Context, string, string, string, scope.Set, scope.Set) (*System, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) SystemNameTaken(context.Context, string) (bool, error) {
 	return false, nil
 }
@@ -225,6 +234,9 @@ func (UnimplementedGateway) CreateComponent(context.Context, string, ComponentSp
 	return nil, nil
 }
 func (UnimplementedGateway) UpdateComponent(context.Context, string, string, ComponentPatch, scope.Set, scope.Set) (*Component, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) RenameComponent(context.Context, string, string, string, scope.Set, scope.Set) (*Component, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) ComponentNameTaken(context.Context, string) (bool, error) {

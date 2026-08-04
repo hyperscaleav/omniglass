@@ -58,10 +58,11 @@ type createComponentInput struct {
 	}
 }
 
+// updateComponentInput is the PATCH body. It deliberately carries no name: a
+// rename is the :rename custom method, gated by component:rename.
 type updateComponentInput struct {
 	Name string `path:"name"`
 	Body struct {
-		Name        *string `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"A new globally unique technical name (rename)"`
 		DisplayName *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
 		// The placement and classification fields take the house three-state
 		// convention: an omitted field is unchanged, an explicit empty string
@@ -70,6 +71,16 @@ type updateComponentInput struct {
 		Parent   *string `json:"parent,omitempty" doc:"Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component."`
 		Location *string `json:"location,omitempty" doc:"Relocates the component to this location name. An empty string clears its placement."`
 		Product  *string `json:"product,omitempty" doc:"Re-classifies the component to this product (catalog SKU). An empty string clears it. Explicitly-set property values persist; the new product's contract defaults follow."`
+	}
+}
+
+// renameComponentInput is the :rename body. The name rule lives here, in the
+// contract, not only in the prose below it: the pattern and the ceiling are what
+// the generated client, CLI, and JSONSchema enforce.
+type renameComponentInput struct {
+	Name string `path:"name" doc:"The component's current name, or its uuid"`
+	Body struct {
+		Name string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The new globally unique technical name (lowercase letters, digits, hyphens)"`
 	}
 }
 
@@ -151,10 +162,9 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Method:      http.MethodPatch,
 		Path:        "/components/{name}",
 		Summary:     "Update a component",
-		Description: "Patches a component's technical name, display_name, product, location, or parent. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
+		Description: "Patches a component's display_name, product, location, or parent. The technical name is not patchable: renaming is the :rename custom method. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
 	}, "component", "update"), func(ctx context.Context, in *updateComponentInput) (*componentOutput, error) {
 		c, err := gw.UpdateComponent(ctx, actorID(ctx), in.Name, storage.ComponentPatch{
-			Name:        in.Body.Name,
 			DisplayName: in.Body.DisplayName,
 			// Passed straight through, never emptyPtrToNil: the storage layer reads
 			// "" as clear, and collapsing it here would make a relocate-to-none,
@@ -163,6 +173,21 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 			LocationName: in.Body.Location,
 			ProductName:  in.Body.Product,
 		}, a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "update"))
+		if err != nil {
+			return nil, mapComponentErr(err)
+		}
+		return &componentOutput{Body: toComponentBody(c)}, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "rename-component",
+		Method:      http.MethodPost,
+		Path:        "/components/{name}:rename",
+		Summary:     "Rename a component",
+		Description: "Moves the component's technical name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by component:rename; read and rename scopes drive the 404 versus 403 split.",
+	}, "component", "rename"), func(ctx context.Context, in *renameComponentInput) (*componentOutput, error) {
+		c, err := gw.RenameComponent(ctx, actorID(ctx), in.Name, in.Body.Name,
+			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "rename"))
 		if err != nil {
 			return nil, mapComponentErr(err)
 		}
