@@ -338,6 +338,10 @@ func mapSecretErr(err error) error {
 		return huma.Error422UnprocessableEntity("unknown secret_type")
 	case errors.Is(err, storage.ErrSecretOwnerNotFound):
 		return huma.Error422UnprocessableEntity("secret owner not found")
+	case errors.Is(err, storage.ErrEntityKeyIsUUID):
+		return huma.Error422UnprocessableEntity("secret name may not be a uuid")
+	case errors.Is(err, storage.ErrInvalidEntityKey):
+		return huma.Error422UnprocessableEntity("secret name must be lowercase letters, digits, and hyphens, starting with a letter or digit")
 	case errors.Is(err, storage.ErrSecretFieldInvalid):
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, storage.ErrNoSecretProvider):

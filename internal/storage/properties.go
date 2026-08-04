@@ -84,7 +84,7 @@ func guardPropertyMutable(ctx context.Context, q querier, name string) error {
 // duplicate name is ErrPropertyTypeExists.
 func (p *PG) CreatePropertyType(ctx context.Context, actorID string, spec PropertyTypeSpec) (*PropertyType, error) {
 	if err := ValidateName("property_type", spec.Name); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrPropertyTypeInvalid, err)
+		return nil, fmt.Errorf("%w: %w", ErrPropertyTypeInvalid, err)
 	}
 	if len(spec.Validation) > 0 && !json.Valid(spec.Validation) {
 		return nil, fmt.Errorf("%w: validation is not valid JSON", ErrPropertyTypeInvalid)

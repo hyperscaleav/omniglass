@@ -148,8 +148,7 @@
     },
     {
       "table": "secret",
-      "shape": "keyspace",
-      "reason": "og-session, a cascade key referenced from expressions"
+      "shape": "key-bearing"
     },
     {
       "table": "secret_type",
@@ -198,8 +197,7 @@
     },
     {
       "table": "tag",
-      "shape": "keyspace",
-      "reason": "asset-id, a tag key; the console has always called it a key"
+      "shape": "key-bearing"
     },
     {
       "table": "tag_binding",
@@ -212,8 +210,7 @@
     },
     {
       "table": "variable",
-      "shape": "keyspace",
-      "reason": "poll-interval, a cascade key referenced from expressions"
+      "shape": "key-bearing"
     },
     {
       "table": "vendor",

@@ -237,6 +237,10 @@ func mapVariableErr(err error) error {
 		return huma.Error422UnprocessableEntity("unknown value_type")
 	case errors.Is(err, storage.ErrVariableOwnerNotFound):
 		return huma.Error422UnprocessableEntity("variable owner not found")
+	case errors.Is(err, storage.ErrEntityKeyIsUUID):
+		return huma.Error422UnprocessableEntity("variable name may not be a uuid")
+	case errors.Is(err, storage.ErrInvalidEntityKey):
+		return huma.Error422UnprocessableEntity("variable name must be lowercase letters, digits, and hyphens, starting with a letter or digit")
 	case errors.Is(err, storage.ErrVariableValueInvalid):
 		return huma.Error422UnprocessableEntity(err.Error())
 	default:

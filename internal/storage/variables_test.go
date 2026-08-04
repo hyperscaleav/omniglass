@@ -69,12 +69,12 @@ func TestVariableValueValidation(t *testing.T) {
 	ctx := context.Background()
 
 	if _, err := gw.CreateVariable(ctx, "", storage.VariableSpec{
-		Name: "bad_type", ValueType: "date", OwnerKind: "platform", Value: json.RawMessage(`"x"`),
+		Name: "bad-type", ValueType: "date", OwnerKind: "platform", Value: json.RawMessage(`"x"`),
 	}, all); !errors.Is(err, storage.ErrUnknownValueType) {
 		t.Errorf("unknown value_type = %v, want ErrUnknownValueType", err)
 	}
 	if _, err := gw.CreateVariable(ctx, "", storage.VariableSpec{
-		Name: "bad_val", ValueType: "int", OwnerKind: "platform", Value: json.RawMessage(`"not-an-int"`),
+		Name: "bad-val", ValueType: "int", OwnerKind: "platform", Value: json.RawMessage(`"not-an-int"`),
 	}, all); !errors.Is(err, storage.ErrVariableValueInvalid) {
 		t.Errorf("mismatched value = %v, want ErrVariableValueInvalid", err)
 	}
@@ -212,7 +212,7 @@ func TestVariableAtPlatformTier(t *testing.T) {
 	ctx := context.Background()
 
 	v, err := gw.CreateVariable(ctx, "", storage.VariableSpec{
-		Name: "snmp_community", ValueType: "string", OwnerKind: "platform", Value: json.RawMessage(`"public"`),
+		Name: "snmp-community", ValueType: "string", OwnerKind: "platform", Value: json.RawMessage(`"public"`),
 	}, all)
 	if err != nil {
 		t.Fatalf("create at platform tier: %v", err)

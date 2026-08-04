@@ -132,7 +132,7 @@ func schemaArg(b []byte) any {
 // JSON. A duplicate name is ErrEventTypeExists.
 func (p *PG) CreateEventType(ctx context.Context, actorID string, spec EventTypeSpec) (*EventType, error) {
 	if err := ValidateName("event_type", spec.Name); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrEventTypeInvalid, err)
+		return nil, fmt.Errorf("%w: %w", ErrEventTypeInvalid, err)
 	}
 	if len(spec.PayloadSchema) > 0 && !json.Valid(spec.PayloadSchema) {
 		return nil, fmt.Errorf("%w: payload_schema is not valid JSON", ErrEventTypeInvalid)

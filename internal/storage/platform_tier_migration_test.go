@@ -22,7 +22,7 @@ func TestPlatformTierRename(t *testing.T) {
 	// The renamed value is accepted on every table that carries the tier.
 	mustExec(t, conn, `
 		insert into variable (name, value_type, owner_kind, value)
-		values ('snmp_community', 'string', 'platform', '"public"'::jsonb)`)
+		values ('snmp-community', 'string', 'platform', '"public"'::jsonb)`)
 	mustExec(t, conn, `
 		insert into secret (name, secret_type, owner_kind)
 		values ('snmp_auth', (select id from secret_type where name = 'password'), 'platform')`)
@@ -43,7 +43,7 @@ func TestPlatformTierRename(t *testing.T) {
 
 	// The partial unique indexes moved with it: one platform row per name/key.
 	for _, stmt := range []string{
-		`insert into variable (name, value_type, owner_kind, value) values ('snmp_community', 'string', 'platform', '"other"'::jsonb)`,
+		`insert into variable (name, value_type, owner_kind, value) values ('snmp-community', 'string', 'platform', '"other"'::jsonb)`,
 		`insert into secret (name, secret_type, owner_kind) values ('snmp_auth', 'password', 'platform')`,
 		`insert into tag_binding (tag_id, owner_kind, value) select id, 'platform', 'dev' from tag where name = 'environment'`,
 	} {

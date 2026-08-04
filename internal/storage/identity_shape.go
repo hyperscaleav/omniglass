@@ -23,9 +23,11 @@ const (
 	// (^[a-z0-9][a-z0-9-]*$), enforced by ValidateEntityKey.
 	ShapeKeyBearing IdentityShape = "key-bearing"
 
-	// ShapeKeyspace: an operator types its key, but on the other key rule, the one
-	// internal/key owns (lowercase snake_case, optionally dot-hierarchied). The two
-	// are not merged because each legitimately carries a character the other forbids.
+	// ShapeKeyspace: an operator types its name, on the dotted rule. The two rules
+	// share a character set and a segment shape; the only difference left is that a
+	// keyspace name is a dot-joined PATH of segments (icmp.rtt-avg) and an entity
+	// name is a path of one. An earlier comment here justified the split by claiming
+	// different character sets, which stopped being true when they were unified.
 	ShapeKeyspace IdentityShape = "keyspace"
 
 	// ShapeHumanNotAKey: it carries a human-readable identifier that is NOT a key and
@@ -53,17 +55,16 @@ var IdentityShapes = map[string]TableIdentity{
 	"interface_type": {Shape: ShapeKeyBearing}, "location": {Shape: ShapeKeyBearing},
 	"location_type": {Shape: ShapeKeyBearing}, "node": {Shape: ShapeKeyBearing},
 	"principal_group": {Shape: ShapeKeyBearing}, "product": {Shape: ShapeKeyBearing},
-	"role": {Shape: ShapeKeyBearing}, "secret_type": {Shape: ShapeKeyBearing},
-	"standard": {Shape: ShapeKeyBearing}, "system": {Shape: ShapeKeyBearing},
-	"system_role": {Shape: ShapeKeyBearing}, "vendor": {Shape: ShapeKeyBearing},
+	"role": {Shape: ShapeKeyBearing}, "secret": {Shape: ShapeKeyBearing},
+	"secret_type": {Shape: ShapeKeyBearing}, "standard": {Shape: ShapeKeyBearing},
+	"system": {Shape: ShapeKeyBearing}, "system_role": {Shape: ShapeKeyBearing},
+	"tag": {Shape: ShapeKeyBearing}, "variable": {Shape: ShapeKeyBearing},
+	"vendor": {Shape: ShapeKeyBearing},
 
 	// Keyspace: a key, on the other rule.
 	"property_type": {ShapeKeyspace, "icmp.rtt-avg, a signal key referenced from drivers and templates"},
 	"event_type":    {ShapeKeyspace, "call.started, an occurrence key"},
 	"command_type":  {ShapeKeyspace, "set-input, a command key"},
-	"tag":           {ShapeKeyspace, "asset-id, a tag key; the console has always called it a key"},
-	"variable":      {ShapeKeyspace, "poll-interval, a cascade key referenced from expressions"},
-	"secret":        {ShapeKeyspace, "og-session, a cascade key referenced from expressions"},
 
 	// A human identifier that is not a key. These are the exceptions worth stating.
 	"human": {ShapeHumanNotAKey, "a username: its own rule, its own uniqueness, and not an " +

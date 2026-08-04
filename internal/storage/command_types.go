@@ -162,7 +162,7 @@ func resolveTarget(ctx context.Context, q querier, name string) (*string, error)
 // set) a registered property. A duplicate name is ErrCommandTypeExists.
 func (p *PG) CreateCommandType(ctx context.Context, actorID string, spec CommandTypeSpec) (*CommandType, error) {
 	if err := ValidateName("command_type", spec.Name); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrCommandTypeInvalid, err)
+		return nil, fmt.Errorf("%w: %w", ErrCommandTypeInvalid, err)
 	}
 	if len(spec.ParamsSchema) > 0 && !json.Valid(spec.ParamsSchema) {
 		return nil, fmt.Errorf("%w: params_schema is not valid JSON", ErrCommandTypeInvalid)

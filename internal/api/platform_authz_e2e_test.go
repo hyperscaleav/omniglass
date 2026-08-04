@@ -66,32 +66,32 @@ func TestPlatformTierNeedsItsOwnPermission(t *testing.T) {
 	// A tier variable and a tier secret the update and delete legs act on, placed
 	// by the owner (whose > tail carries the platform permission).
 	tierVarID := createdID(t, c.do(ownerTok, http.MethodPost, "/variables",
-		varReq("tier_poll", "int", "platform", "", 10), http.StatusCreated))
+		varReq("tier-poll", "int", "platform", "", 10), http.StatusCreated))
 	tierSecretID := createdID(t, c.do(ownerTok, http.MethodPost, "/secrets",
-		secretReq("tier_auth", "platform", "", "public"), http.StatusCreated))
+		secretReq("tier-auth", "platform", "", "public"), http.StatusCreated))
 
 	// Refused at the tier: create, update, and delete of a variable.
-	c.do(estateTok, http.MethodPost, "/variables", varReq("denied_at_tier", "string", "platform", "", "x"), http.StatusForbidden)
+	c.do(estateTok, http.MethodPost, "/variables", varReq("denied-at-tier", "string", "platform", "", "x"), http.StatusForbidden)
 	c.do(estateTok, http.MethodPatch, "/variables/"+tierVarID, map[string]any{"value": 99}, http.StatusForbidden)
 	c.do(estateTok, http.MethodDelete, "/variables/"+tierVarID, nil, http.StatusForbidden)
 
 	// Allowed below the tier: the same principal owns the estate outright.
 	belowID := createdID(t, c.do(estateTok, http.MethodPost, "/variables",
-		varReq("allowed_below", "string", "location", "ceres", "x"), http.StatusCreated))
+		varReq("allowed-below", "string", "location", "ceres", "x"), http.StatusCreated))
 	c.do(estateTok, http.MethodPatch, "/variables/"+belowID, map[string]any{"value": "y"}, http.StatusOK)
 	c.do(estateTok, http.MethodDelete, "/variables/"+belowID, nil, http.StatusNoContent)
 
 	// The same split on secrets, across all three verbs: the tier gate on update and
 	// delete lives in the Gateway (only the stored row knows its tier), so it needs
 	// its own coverage rather than riding on the create leg.
-	c.do(estateTok, http.MethodPost, "/secrets", secretReq("tier_snmp", "platform", "", "public"), http.StatusForbidden)
+	c.do(estateTok, http.MethodPost, "/secrets", secretReq("tier-snmp", "platform", "", "public"), http.StatusForbidden)
 	c.do(estateTok, http.MethodPatch, "/secrets/"+tierSecretID, secretFieldsReq("rotated"), http.StatusForbidden)
 	c.do(estateTok, http.MethodDelete, "/secrets/"+tierSecretID, nil, http.StatusForbidden)
 
 	// Allowed below the tier, on the same three verbs: the gate is about the tier,
 	// not about the principal.
 	belowSecretID := createdID(t, c.do(estateTok, http.MethodPost, "/secrets",
-		secretReq("below_snmp", "location", "ceres", "public"), http.StatusCreated))
+		secretReq("below-snmp", "location", "ceres", "public"), http.StatusCreated))
 	c.do(estateTok, http.MethodPatch, "/secrets/"+belowSecretID, secretFieldsReq("rotated"), http.StatusOK)
 	c.do(estateTok, http.MethodDelete, "/secrets/"+belowSecretID, nil, http.StatusNoContent)
 
@@ -103,10 +103,10 @@ func TestPlatformTierNeedsItsOwnPermission(t *testing.T) {
 	c.do(estateTok, http.MethodPost, "/settings:restoreDefaults", nil, http.StatusForbidden)
 
 	// platform:* opens every one of them, with no other change to the grant.
-	c.do(installTok, http.MethodPost, "/variables", varReq("allowed_at_tier", "string", "platform", "", "x"), http.StatusCreated)
+	c.do(installTok, http.MethodPost, "/variables", varReq("allowed-at-tier", "string", "platform", "", "x"), http.StatusCreated)
 	c.do(installTok, http.MethodPatch, "/variables/"+tierVarID, map[string]any{"value": 99}, http.StatusOK)
 	c.do(installTok, http.MethodDelete, "/variables/"+tierVarID, nil, http.StatusNoContent)
-	c.do(installTok, http.MethodPost, "/secrets", secretReq("tier_snmp", "platform", "", "public"), http.StatusCreated)
+	c.do(installTok, http.MethodPost, "/secrets", secretReq("tier-snmp", "platform", "", "public"), http.StatusCreated)
 	c.do(installTok, http.MethodPatch, "/secrets/"+tierSecretID, secretFieldsReq("rotated"), http.StatusOK)
 	c.do(installTok, http.MethodDelete, "/secrets/"+tierSecretID, nil, http.StatusNoContent)
 	c.do(installTok, http.MethodPost, "/tags/environment:setPlatform", map[string]any{"value": "prod"}, http.StatusOK)
@@ -137,8 +137,8 @@ func TestSeededRolesCarryThePlatformPermission(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	// The all-scoped operator carries variable:create but not the tier.
-	c.do(opTok, http.MethodPost, "/variables", varReq("op_tier", "int", "platform", "", 1), http.StatusForbidden)
-	c.do(adminTok, http.MethodPost, "/variables", varReq("admin_tier", "int", "platform", "", 1), http.StatusCreated)
+	c.do(opTok, http.MethodPost, "/variables", varReq("op-tier", "int", "platform", "", 1), http.StatusForbidden)
+	c.do(adminTok, http.MethodPost, "/variables", varReq("admin-tier", "int", "platform", "", 1), http.StatusCreated)
 }
 
 // insertRole adds a custom (non-official) role with the given raw permission

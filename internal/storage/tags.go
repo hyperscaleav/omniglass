@@ -99,8 +99,8 @@ func (p *PG) CreateTag(ctx context.Context, actorID string, spec TagSpec, create
 	if !create.All {
 		return nil, ErrTagForbidden
 	}
-	if err := tag.ValidateKey(spec.Name); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrTagKeyInvalid, err)
+	if err := ValidateName("tag", spec.Name); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrTagKeyInvalid, err)
 	}
 	if err := tag.ValidateAppliesTo(spec.AppliesTo); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrTagAppliesToInvalid, err)

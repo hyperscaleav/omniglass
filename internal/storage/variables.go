@@ -77,6 +77,9 @@ const variableCols = `id, name, value_type, owner_kind, component_id, system_id,
 // within the create scope), and the row plus its audit are written in one
 // transaction.
 func (p *PG) CreateVariable(ctx context.Context, actorID string, spec VariableSpec, create scope.Set) (*Variable, error) {
+	if err := ValidateName("variable", spec.Name); err != nil {
+		return nil, err
+	}
 	vt, err := variable.ParseValueType(spec.ValueType)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrUnknownValueType, err)

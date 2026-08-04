@@ -151,7 +151,7 @@ func TestCreateVariableAtPlatformTierE2E(t *testing.T) {
 		OwnerID   string `json:"owner_id"`
 	}
 	raw := c.do(ownerTok, http.MethodPost, "/variables",
-		varReq("snmp_community", "string", "platform", "", "public"), http.StatusCreated)
+		varReq("snmp-community", "string", "platform", "", "public"), http.StatusCreated)
 	json.Unmarshal(raw, &created)
 	if created.OwnerKind != "platform" {
 		t.Errorf("owner_kind = %q, want %q", created.OwnerKind, "platform")
