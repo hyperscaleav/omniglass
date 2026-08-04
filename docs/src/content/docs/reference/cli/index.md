@@ -2913,7 +2913,7 @@ Seals a secret at an owner scope. Fields are validated and encrypted against the
 |---|---|---|---|
 | `--admin-sensitive` | string | (none) | Admin-only visibility; omit to use the type default. Setting true requires the admin tier |
 | `--fields` | string | (none) | The operator field map, validated against the type shape |
-| `--name` | string | (none) | The cascade key; unique per owner |
+| `--name` | string | (none) | The cascade name (lowercase letters, digits, and hyphens); unique per owner |
 | `--owner` | string | (none) | The owning entity's name; omit for a platform secret |
 | `--owner-kind` | string | (none) | Which tier owns this secret (the system band is retired, ADR-0052) |
 | `--secret-type` | string | (none) | A secret_type id |
@@ -3849,7 +3849,7 @@ Adds a key to the governed vocabulary. The name is normalized (a lowercase ident
 |---|---|---|---|
 | `--allowed-values` | string | (none) | The value enum a bound value must belong to; omit for free text |
 | `--applies-to` | string | (none) | Entity kinds this key may bind to (component, system, location); omit for universal |
-| `--name` | string | (none) | The normalized key: a lowercase identifier, unique tenant-wide |
+| `--name` | string | (none) | The normalized name (lowercase letters, digits, and hyphens), unique tenant-wide |
 | `--propagates` | string | (none) | Whether bindings cascade to descendants; defaults true |
 
 Example:
@@ -4043,7 +4043,7 @@ Sets a variable at an owner scope. The value is validated against value_type. Ga
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | string | (none) | The cascade key; unique per owner |
+| `--name` | string | (none) | The cascade name (lowercase letters, digits, and hyphens); unique per owner |
 | `--owner` | string | (none) | The owning entity's name; omit for a platform variable |
 | `--owner-kind` | string | (none) | Which tier owns this variable |
 | `--value` | string | (none) | The value, validated against value_type |

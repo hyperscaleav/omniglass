@@ -83,7 +83,7 @@ type secretOutput struct {
 
 type createSecretInput struct {
 	Body struct {
-		Name           string            `json:"name" minLength:"1" doc:"The cascade key; unique per owner"`
+		Name           string            `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The cascade name (lowercase letters, digits, and hyphens); unique per owner"`
 		SecretType     string            `json:"secret_type" minLength:"1" doc:"A secret_type id"`
 		OwnerKind      string            `json:"owner_kind" enum:"platform,location,component" doc:"Which tier owns this secret (the system band is retired, ADR-0052)"`
 		Owner          *string           `json:"owner,omitempty" doc:"The owning entity's name; omit for a platform secret"`

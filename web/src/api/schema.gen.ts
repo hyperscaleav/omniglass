@@ -3745,7 +3745,7 @@ export interface components {
             fields: {
                 [key: string]: string;
             };
-            /** @description The cascade key; unique per owner */
+            /** @description The cascade name (lowercase letters, digits, and hyphens); unique per owner */
             name: string;
             /** @description The owning entity's name; omit for a platform secret */
             owner?: string;
@@ -3800,7 +3800,7 @@ export interface components {
             allowed_values?: string[] | null;
             /** @description Entity kinds this key may bind to (component, system, location); omit for universal */
             applies_to?: string[] | null;
-            /** @description The normalized key: a lowercase identifier, unique tenant-wide */
+            /** @description The normalized name (lowercase letters, digits, and hyphens), unique tenant-wide */
             name: string;
             /** @description Whether bindings cascade to descendants; defaults true */
             propagates?: boolean;
@@ -3812,7 +3812,7 @@ export interface components {
              * @example /api/v1/schemas/CreateVariableInputBody.json
              */
             readonly $schema?: string;
-            /** @description The cascade key; unique per owner */
+            /** @description The cascade name (lowercase letters, digits, and hyphens); unique per owner */
             name: string;
             /** @description The owning entity's name; omit for a platform variable */
             owner?: string;

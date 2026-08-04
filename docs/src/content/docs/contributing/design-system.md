@@ -151,16 +151,17 @@ identifier a URL, a CLI argument, and a topic carry is the **Key**. "Display nam
 and "Segment" are all retired as field labels, and `identity-vocabulary-guard.test.ts` fails the build
 on any of them appearing in label text.
 
-**A key is a value; a segment is a position.** `internal/key` already fixes this: a segment is one
-dot-separated component of a key. So `boi.17c.rm215a` is three segments, and the room's key is the
+**A key is a value; a segment is a position.** A segment is one dot-separated component of a key. So `boi.17c.rm215a` is three segments, and the room's key is the
 value in the third. That makes "segment" right in prose about topic structure and wrong on a form,
 where the operator is typing a value and not choosing a position.
 
-**There are two key rules on one character set, deliberately.** An entity key is kebab (`crestron`,
-`rm215a`), validated by `storage.ValidateEntityKey`. A keyspace key is that same kebab segment with an
-optional dot hierarchy (`icmp.rtt-avg`), validated by `internal/key`. They stay two validators because
-only a keyspace key may carry the dot: a key is a dot-joined path of segments and an entity key is a
-path of one. The console says "Key" for both, because an operator types one identifier either way and
+**There are two key rules on one character set, and one validator.** An entity key is kebab
+(`crestron`, `rm215a`). A keyspace key is that same kebab segment with an optional dot hierarchy
+(`icmp.rtt-avg`). Only a keyspace key may carry the dot: a key is a dot-joined path of segments and an
+entity key is a path of one. Both go through `storage.ValidateName`, which picks the rule from the
+table's declared identity shape rather than from whoever wrote the call site. There used to be four
+separate validators and a caller chose between them by hand, which is how three tables reached
+production with no name validation at all. The console says "Key" for both, because an operator types one identifier either way and
 that one difference surfaces as a validation message, not as a second word. The one boundary is the CLI reference, which is generated from the Huma `doc:`
 tags: its flag is still `--display-name` because the wire field is still `display_name`, and a help
 string calling it the name while the flag says otherwise would be worse than the inconsistency. Both
@@ -169,8 +170,10 @@ move together when the field renames.
 A page whose identifier is a keyspace key says **Key**, not Segment, on both the column and the form.
 
 A page whose identifier is a **keyspace key** rather than a segment (`property_type`, `event_type`,
-`command_type`, `tag`) passes `identityColumn({ label: "Key" })` and does not derive its key from the
-label: `icmp.rtt-avg` is a legal key and an illegal segment. The write side has the same split.
+`command_type`) passes `identityColumn({ label: "Key" })` and does not derive its key from the label:
+`icmp.rtt-avg` is a legal key and an illegal segment. Those three are the whole list. `tag`,
+`variable`, and `secret` read as keyspace because their prose calls them keys, but none of them
+carries a dot, so all three are on the entity rule and derive from the label like any other page. The write side has the same split.
 `createIdentity` derives a segment from the label as an operator types and stops the moment they edit
 the segment by hand, and an edit form seeds it with the existing segment so relabelling can never
 rewrite a live address. Keyspace pages do not wire it at all.

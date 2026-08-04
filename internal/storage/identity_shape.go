@@ -20,7 +20,7 @@ type IdentityShape string
 
 const (
 	// ShapeKeyBearing: an operator types its key, on the entity-key rule
-	// (^[a-z0-9][a-z0-9-]*$), enforced by ValidateEntityKey.
+	// (^[a-z0-9][a-z0-9-]*$), enforced by ValidateName.
 	ShapeKeyBearing IdentityShape = "key-bearing"
 
 	// ShapeKeyspace: an operator types its name, on the dotted rule. The two rules

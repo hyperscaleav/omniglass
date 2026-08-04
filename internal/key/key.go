@@ -1,45 +1,23 @@
-// Package key is the canonical keyspace primitive: the shared name-format rule and
-// the typed value validator that every registered key obeys. Pure, no I/O.
+// Package key is the typed value validator that every registered key obeys. Pure,
+// no I/O.
+//
+// The name-format rule used to live here too, and it is gone: it was one of four
+// copies of the same character set, and a caller picked between them by hand. The
+// rule now lives in storage.ValidateName, selected by the table's declared identity
+// shape rather than by whoever wrote the call site. This package keeps only the
+// value half, which is a different subject.
 package key
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/hyperscaleav/omniglass/internal/variable"
 	"gopkg.in/yaml.v3"
 )
-
-// MaxKeyLen bounds a canonical key name.
-const MaxKeyLen = 128
-
-// segment is one dot-separated component of a key. It is the SAME shape as an
-// entity key (storage.ValidateEntityKey): lowercase letters, digits, and hyphens.
-// One character set across the platform, so a key is a dot-joined path of segments
-// and an entity key is a path of one.
-var segment = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
-
-// ValidateKey accepts a kebab key, optionally dot-hierarchied (serial-number,
-// interface.reachable, icmp.rtt-avg). Each dot segment is lowercase letters, digits,
-// and hyphens.
-func ValidateKey(name string) error {
-	if name == "" {
-		return fmt.Errorf("key: name is empty")
-	}
-	if len(name) > MaxKeyLen {
-		return fmt.Errorf("key: name exceeds %d characters", MaxKeyLen)
-	}
-	for _, seg := range strings.Split(name, ".") {
-		if !segment.MatchString(seg) {
-			return fmt.Errorf("key: %q must be lowercase dot-separated segments (letters, digits, and hyphens)", name)
-		}
-	}
-	return nil
-}
 
 // Canonicalize trims and lowercases a key name. No alias resolution this slice.
 func Canonicalize(name string) string { return strings.ToLower(strings.TrimSpace(name)) }

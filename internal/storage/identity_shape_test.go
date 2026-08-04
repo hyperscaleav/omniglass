@@ -3,7 +3,10 @@ package storage_test
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
+	"regexp"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -133,7 +136,11 @@ func TestEveryTableHasADeclaredIdentityShape(t *testing.T) {
 func TestEveryKeyBearingTableIsProved(t *testing.T) {
 	proved := provedByCreateTables()
 	for table, id := range storage.IdentityShapes {
-		if id.Shape != storage.ShapeKeyBearing {
+		// Both name-bearing shapes, not just one. Checking only key-bearing left the
+		// identical hole on the other rule: a new ShapeKeyspace table was skipped
+		// here and never reached by the keyspace sweep either, so it shipped with no
+		// name validation and a green suite.
+		if id.Shape != storage.ShapeKeyBearing && id.Shape != storage.ShapeKeyspace {
 			continue
 		}
 		_, excused := storage.KeyProvedElsewhere[table]
@@ -141,14 +148,68 @@ func TestEveryKeyBearingTableIsProved(t *testing.T) {
 		case proved[table] && excused:
 			t.Errorf("%q is both proved by the create sweep and excused from it; pick one", table)
 		case !proved[table] && !excused:
-			t.Errorf("%q is declared key-bearing but nothing proves it rejects an illegal key.\n"+
-				"Either add it to provedByCreate in entity_key_validation_test.go so the behaviour is "+
-				"proved, or name it in KeyProvedElsewhere with the reason it cannot be.", table)
+			t.Errorf("%q is declared %q but nothing proves it rejects an illegal name.\n"+
+				"Either add it to provedByCreate (entity rule) or provedByCreateKeyspace "+
+				"(dotted rule) in entity_key_validation_test.go so the behaviour is proved, "+
+				"or name it in KeyProvedElsewhere with the reason it cannot be.", table, id.Shape)
 		}
 	}
 	for table := range storage.KeyProvedElsewhere {
-		if storage.IdentityShapes[table].Shape != storage.ShapeKeyBearing {
-			t.Errorf("KeyProvedElsewhere names %q, which is not declared key-bearing", table)
+		shape := storage.IdentityShapes[table].Shape
+		if shape != storage.ShapeKeyBearing && shape != storage.ShapeKeyspace {
+			t.Errorf("KeyProvedElsewhere names %q, which bears no operator-typed name", table)
 		}
 	}
+}
+
+// TestEveryValidateNameCallSiteNamesADeclaredTable closes the one gap the runtime
+// cannot: ValidateName takes the table as a string, so a typo compiles, passes vet,
+// and fails closed at runtime with ErrTableNotNameBearing. No mapper knows that
+// sentinel, so it surfaces as a 500 on a legal request.
+//
+// Most call sites are covered by the create sweep, which would fail on the wrong
+// sentinel. The ones not driven by it (a rename leg, a path a test does not reach)
+// would ship the 500 with a green suite. This reads the literals out of the source
+// instead, so coverage does not depend on which paths happen to have tests.
+func TestEveryValidateNameCallSiteNamesADeclaredTable(t *testing.T) {
+	call := regexp.MustCompile(`ValidateName\("([^"]*)"`)
+
+	var checked int
+	for _, root := range []string{"..", "../../cmd"} {
+		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+			// Production call sites only. A test may pass an undeclared table on
+			// purpose, which is exactly what identity_name_rule_test.go does to pin
+			// that an unclassified table cannot validate by default.
+			if err != nil || info.IsDir() || !strings.HasSuffix(path, ".go") ||
+				strings.HasSuffix(path, "_test.go") {
+				return err
+			}
+			src, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			for _, m := range call.FindAllStringSubmatch(string(src), -1) {
+				table := m[1]
+				checked++
+				id, declared := storage.IdentityShapes[table]
+				switch {
+				case !declared:
+					t.Errorf("%s calls ValidateName(%q, ...), which is not a table in the identity "+
+						"declaration. This compiles and fails closed at runtime as a 500.", path, table)
+				case id.Shape != storage.ShapeKeyBearing && id.Shape != storage.ShapeKeyspace:
+					t.Errorf("%s calls ValidateName(%q, ...), but that table is declared %q and bears "+
+						"no operator-typed name, so the call can only ever fail.", path, table, id.Shape)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walk %s: %v", root, err)
+		}
+	}
+	// If the scan finds nothing it is passing vacuously, which is worse than failing.
+	if checked == 0 {
+		t.Fatal("found no ValidateName call sites, so this guard is not reading the tree it thinks it is")
+	}
+	t.Logf("checked %d ValidateName call sites", checked)
 }

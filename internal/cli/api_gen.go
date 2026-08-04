@@ -3768,7 +3768,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fAdminSensitive, "admin-sensitive", "", "Admin-only visibility; omit to use the type default. Setting true requires the admin tier")
 				cmd.Flags().StringVar(&fFields, "fields", "", "The operator field map, validated against the type shape")
 				_ = cmd.MarkFlagRequired("fields")
-				cmd.Flags().StringVar(&fName, "name", "", "The cascade key; unique per owner")
+				cmd.Flags().StringVar(&fName, "name", "", "The cascade name (lowercase letters, digits, and hyphens); unique per owner")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fOwner, "owner", "", "The owning entity's name; omit for a platform secret")
 				cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "Which tier owns this secret (the system band is retired, ADR-0052)")
@@ -4891,7 +4891,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fAllowedValues, "allowed-values", "", "The value enum a bound value must belong to; omit for free text")
 				cmd.Flags().StringVar(&fAppliesTo, "applies-to", "", "Entity kinds this key may bind to (component, system, location); omit for universal")
-				cmd.Flags().StringVar(&fName, "name", "", "The normalized key: a lowercase identifier, unique tenant-wide")
+				cmd.Flags().StringVar(&fName, "name", "", "The normalized name (lowercase letters, digits, and hyphens), unique tenant-wide")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fPropagates, "propagates", "", "Whether bindings cascade to descendants; defaults true")
 				return cmd
@@ -5139,7 +5139,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fName, "name", "", "The cascade key; unique per owner")
+				cmd.Flags().StringVar(&fName, "name", "", "The cascade name (lowercase letters, digits, and hyphens); unique per owner")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fOwner, "owner", "", "The owning entity's name; omit for a platform variable")
 				cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "Which tier owns this variable")

@@ -53,7 +53,7 @@ enforces it again for callers that never touch a route.
 
 **Every exception is named, in code.** `internal/storage/identity_shape.go` declares one of four
 identity shapes for every table: key-bearing (an operator types its key, on the entity-key rule),
-keyspace (an operator types its key, on `internal/key`'s rule), a human identifier that is not a key,
+keyspace (an operator types its key, on the dotted rule), a human identifier that is not a key,
 and id-only. The last two carry a written reason, and the guard refuses an exception without one.
 
 Which table is which is **not written down here**, because a hand-copied list is the drift class the
@@ -63,7 +63,7 @@ it into [core entities](/architecture/core-entities/). An earlier version of tha
 tables carrying a `name` column, which made it blind to 28 of the 51: absence of a `name` is not
 evidence of absence of an identifier, and a username and a content hash both escaped.
 
-A table on the **keyspace** rule (`internal/key`, a kebab segment with an optional dot hierarchy) is
+A table on the **keyspace** rule (a kebab segment with an optional dot hierarchy) is
 deliberately outside this one, because
 `icmp.rtt-avg` is a legitimate keyspace key and an illegal entity key. Which table is which is not written down
 here, because a hand-copied list is drift waiting to happen: `TestEveryNamedTableIsClassified` reads

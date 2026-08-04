@@ -488,10 +488,11 @@ Every exception is declared in `internal/storage/identity_shape.go` and rendered
 cannot drift from the code. Most tables are key-bearing and the shape explains itself. The two that
 need a reason are the ones where an identifier exists but is not a key.
 
-A **keyspace** table carries a key on the other key rule, the one `internal/key` owns (that same
-kebab segment, optionally dot-hierarchied). The two rules stay two validators, because only a
-keyspace key may carry the dot; the console still says Key for both, and that one difference
-surfaces as a validation message rather than as a second word.
+A **keyspace** table carries a key on the other key rule (that same kebab segment, optionally
+dot-hierarchied). The two rules stay two rules because only a keyspace key may carry the dot, but
+they are one validator: `storage.ValidateName` picks between them from the table's declared shape,
+so a call site cannot pick wrongly or forget to pick at all. The console still says Key for both,
+and that one difference surfaces as a validation message rather than as a second word.
 
 <IdentityShapes shape="keyspace" />
 

@@ -1078,8 +1078,10 @@ components:
           description: The operator field map, validated against the type shape
           type: object
         name:
-          description: The cascade key; unique per owner
+          description: The cascade name (lowercase letters, digits, and hyphens); unique per owner
+          maxLength: 100
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         owner:
           description: The owning entity's name; omit for a platform secret
@@ -1184,8 +1186,10 @@ components:
             - array
             - "null"
         name:
-          description: "The normalized key: a lowercase identifier, unique tenant-wide"
+          description: The normalized name (lowercase letters, digits, and hyphens), unique tenant-wide
+          maxLength: 100
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         propagates:
           description: Whether bindings cascade to descendants; defaults true
@@ -1204,8 +1208,10 @@ components:
           readOnly: true
           type: string
         name:
-          description: The cascade key; unique per owner
+          description: The cascade name (lowercase letters, digits, and hyphens); unique per owner
+          maxLength: 100
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         owner:
           description: The owning entity's name; omit for a platform variable

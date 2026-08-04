@@ -10,16 +10,18 @@ import (
 // identity and survives a rename, and it is not the name, which is the free-text
 // label a human reads.
 //
-// This is the ENTITY key rule, and it is not the only key rule. `internal/key` owns
-// the canonical keyspace that `property_type`, `event_type`, and `command_type`
-// share (`icmp.rtt-avg`, `interface.reachable`): lowercase snake_case, optionally
-// dot-hierarchied. The two must not be merged by accident, because a keyspace key
-// legitimately carries a dot and an underscore while an entity key legitimately
-// carries a hyphen.
+// This is the ENTITY name rule: one segment, no dot. The other rule, the keyspace
+// one, is the same character set joined by dots (`icmp.rtt-avg`). They are two rules
+// and ONE validator: storage.ValidateName picks between them from the table's
+// declared identity shape (identity_shape.go), so a call site cannot pick the wrong
+// rule or forget to pick at all.
 //
-// `internal/key` also fixes the word **segment**: one dot-separated component of a
-// key. That is its only meaning here too. A segment is a position in a path; a key
-// is the value at one.
+// An earlier version of this comment said the two rules carried different character
+// sets and that a keyspace key legitimately carried an underscore. Neither was true:
+// the character sets were unified, and no rule here has ever admitted an underscore.
+//
+// The word **segment** means one dot-separated component of a name. A segment is a
+// position in a path; a name is the value at one.
 
 // ErrInvalidEntityKey is returned when a proposed key does not match the entity-key
 // rule. The API maps it to 422.
@@ -54,21 +56,3 @@ var uuidRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4
 // the dual-accept disambiguation: a key cannot take this shape, so a match here
 // means the caller gave an id.
 func isUUID(ref string) bool { return uuidRe.MatchString(ref) }
-
-// ValidateEntityKey enforces the entity-key rule and a 100-char ceiling. It is the
-// server-side source of truth for every key-bearing entity table.
-//
-// A key may not BE a uuid. A reference in a path or a join field accepts either form
-// and resolves the uuid first, so a key that is also a uuid would make
-// `/components/019f8754-...` mean two different things depending on which entity
-// happened to exist. Forbidding the shape is what keeps that resolution a property of
-// the request rather than of the data.
-func ValidateEntityKey(key string) error {
-	if len(key) > 100 || !entityKeyRe.MatchString(key) {
-		return ErrInvalidEntityKey
-	}
-	if uuidRe.MatchString(key) {
-		return ErrEntityKeyIsUUID
-	}
-	return nil
-}

@@ -89,7 +89,7 @@ func scopedList[T any](ctx context.Context, p *PG, cfg scopedConfig[T], read sco
 // id, a human at a CLI has the name.
 //
 // The uuid is tried first, and that ordering is only unambiguous because a name
-// can never be uuid-shaped (ValidateEntityKey refuses the form). Without that
+// can never be uuid-shaped (ValidateName refuses the form). Without that
 // rule the same reference would resolve differently depending on which entity
 // happened to exist, making the answer a property of the data rather than of the
 // request.
