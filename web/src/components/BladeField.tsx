@@ -89,7 +89,7 @@ export default function BladeField(props: BladeFieldProps): JSX.Element {
   // The control binds to the draft; the fact renders the persisted value.
   const editText = () => (props.draft ?? props.value)?.() ?? "";
   const wrapClass = () =>
-    props.multiline ? "block max-h-56 overflow-y-auto whitespace-pre-wrap break-words" : "";
+    props.multiline ? "block max-h-56 overflow-y-auto whitespace-pre-wrap wrap-break-word" : "";
 
   return (
     <Show

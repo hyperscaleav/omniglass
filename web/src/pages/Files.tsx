@@ -2,6 +2,7 @@ import { Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams } from "@solidjs/router";
 import TreeList, { type FormState, type ListConfig, type ListCtx, type ListNode, type PageDescriptor } from "../components/TreeList";
+import FieldRow from "../components/FieldRow";
 import Button from "../components/Button";
 import { useFormActions } from "../lib/formactions";
 import { Download, Plus, Trash } from "../components/icons";
@@ -284,15 +285,15 @@ function FileForm(props: { form: FormState<FileNode>; close: () => void; ctx: Li
         <Show when={formErr()}>
           <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
         </Show>
-        <Field label="File" hint="The bytes to store. Identical bytes are deduplicated to one blob.">
+        <FieldRow label="File" hint="The bytes to store. Identical bytes are deduplicated to one blob.">
           <input type="file" class="file-input file-input-bordered w-full" onChange={(e) => onPick(e.currentTarget)} />
-        </Field>
-        <Field label="Name" hint="A label for the file; defaults to the uploaded filename.">
+        </FieldRow>
+        <FieldRow bind="name" hint="A label for the file; defaults to the uploaded filename.">
           <input class="input input-bordered w-full font-data" value={name()} placeholder="firmware-2.1.bin" onInput={(e) => setName(e.currentTarget.value)} />
-        </Field>
-        <Field label="Content type" hint="The MIME type used to serve the file.">
+        </FieldRow>
+        <FieldRow label="Content type" hint="The MIME type used to serve the file.">
           <input class="input input-bordered w-full font-data" value={contentType()} placeholder="application/octet-stream" onInput={(e) => setContentType(e.currentTarget.value)} />
-        </Field>
+        </FieldRow>
         <Show when={canSetSensitive()}>
           <label class="flex items-center gap-2 text-sm">
             <input type="checkbox" class="checkbox checkbox-sm" checked={sensitive()} onChange={(e) => setSensitive(e.currentTarget.checked)} />
@@ -306,16 +307,6 @@ function FileForm(props: { form: FormState<FileNode>; close: () => void; ctx: Li
 
 // A labelled field for the create Drawer. The label wraps its control (a native
 // input, no interactive trigger inside), so the association is standard HTML.
-function Field(p: { label: string; hint?: string; children: JSX.Element }): JSX.Element {
-  return (
-    <label class="flex flex-col gap-1">
-      <span class="text-[12px] font-medium text-base-content/70">{p.label}</span>
-      {p.children}
-      <Show when={p.hint}><span class="text-[11px] text-base-content/40">{p.hint}</span></Show>
-    </label>
-  );
-}
-
 // triggerBrowserDownload turns a base64 blob into a file the browser saves: decode
 // to bytes, wrap in a Blob under the returned MIME type, and click a transient
 // anchor, revoking the object URL after.

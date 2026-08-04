@@ -1,6 +1,8 @@
 import { Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import FieldRow from "../components/FieldRow";
+import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
@@ -159,24 +161,20 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
             <KVStacked label="Origin" value={officialBadge(r().official)} />
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Display name</span>
-            <Show
-              when={edit.editing()}
-              fallback={<div class="input input-bordered flex items-center text-sm">{r().display_name}</div>}
-            >
-              <input class="input input-bordered w-full" value={displayName()} onInput={(e) => setDisplayName(e.currentTarget.value)} />
-            </Show>
-          </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Version</span>
-            <Show
-              when={edit.editing()}
-              fallback={<div class="input input-bordered flex items-center text-sm font-data">{r().version || "—"}</div>}
-            >
-              <input class="input input-bordered w-full font-data" placeholder="1.0.0" value={version()} onInput={(e) => setVersion(e.currentTarget.value)} />
-            </Show>
-          </div>
+          <BladeField
+            bind="display_name"
+            value={() => r().display_name ?? ""}
+            draft={displayName}
+            onInput={setDisplayName}
+          />
+          <BladeField
+            label="Version"
+            mono
+            placeholder="1.0.0"
+            value={() => r().version ?? ""}
+            draft={version}
+            onInput={setVersion}
+          />
           <Show when={r().official}>
             <div role="alert" class="alert alert-soft text-sm"><span>Seed-owned, read-only.</span></div>
           </Show>
@@ -227,25 +225,15 @@ export function CreateDriverForm(p: { onCreated: (d: Driver) => void }): JSX.Ele
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Display name">
+      <FieldRow bind="display_name">
         <input class="input input-bordered w-full" value={display()} placeholder="Generic SNMP" onInput={(e) => setDisplay(e.currentTarget.value)} />
-      </Field>
-      <Field label="Name" hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "A kebab name, e.g. snmp-generic."}>
+      </FieldRow>
+      <FieldRow bind="name" hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "A kebab name, e.g. snmp-generic."}>
         <input class="input input-bordered w-full font-data" value={name()} placeholder="snmp-generic" onInput={(e) => setName(e.currentTarget.value)} />
-      </Field>
-      <Field label="Version" hint="A version string, e.g. 1.0.0. Optional.">
+      </FieldRow>
+      <FieldRow label="Version" hint="A version string, e.g. 1.0.0. Optional.">
         <input class="input input-bordered w-full font-data" value={version()} placeholder="1.0.0" onInput={(e) => setVersion(e.currentTarget.value)} />
-      </Field>
+      </FieldRow>
     </form>
-  );
-}
-
-function Field(p: { label: string; hint?: string; children: JSX.Element }): JSX.Element {
-  return (
-    <label class="flex flex-col gap-1">
-      <span class="text-[12px] font-medium text-base-content/70">{p.label}</span>
-      {p.children}
-      <Show when={p.hint}><span class="text-[11px] text-base-content/40">{p.hint}</span></Show>
-    </label>
   );
 }

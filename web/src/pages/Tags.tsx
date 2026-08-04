@@ -1,6 +1,8 @@
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import FieldRow from "../components/FieldRow";
+import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import Button from "../components/Button";
 import { useFormActions } from "../lib/formactions";
@@ -159,33 +161,21 @@ function TagBladeBody(p: { name: string }): JSX.Element {
           <Show when={err()}>
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Applies to</span>
-            <Show
-              when={edit.editing()}
-              fallback={<div class="input input-bordered flex items-center text-sm">{appliesToLabel(t().applies_to)}</div>}
-            >
-              <AppliesToPicker value={appliesTo()} onChange={setAppliesTo} />
-            </Show>
-          </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Binding</span>
-            <Show
-              when={edit.editing()}
-              fallback={<div class="input input-bordered flex items-center text-sm">{t().propagates ? "cascades to descendants" : "flat (own entity only)"}</div>}
-            >
-              <PropagatesToggle value={propagates()} onChange={setPropagates} />
-            </Show>
-          </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Value domain</span>
-            <Show
-              when={edit.editing()}
-              fallback={<div class="input input-bordered flex items-center text-sm">{t().allowed_values.length ? `one of: ${t().allowed_values.join(", ")}` : "free text"}</div>}
-            >
-              <ValueDomainEditor isEnum={isEnum()} values={allowedValues()} onIsEnum={setIsEnum} onValues={setAllowedValues} />
-            </Show>
-          </div>
+          <BladeField label="Applies to" value={() => appliesToLabel(t().applies_to)}>
+            <AppliesToPicker value={appliesTo()} onChange={setAppliesTo} />
+          </BladeField>
+          <BladeField
+            label="Binding"
+            value={() => (t().propagates ? "cascades to descendants" : "flat (own entity only)")}
+          >
+            <PropagatesToggle value={propagates()} onChange={setPropagates} />
+          </BladeField>
+          <BladeField
+            label="Value domain"
+            value={() => (t().allowed_values.length ? `one of: ${t().allowed_values.join(", ")}` : "free text")}
+          >
+            <ValueDomainEditor isEnum={isEnum()} values={allowedValues()} onIsEnum={setIsEnum} onValues={setAllowedValues} />
+          </BladeField>
         </div>
       )}
     </Show>
@@ -265,18 +255,18 @@ export function CreateTagForm(p: { onCreated: (t: Tag) => void; initialName?: st
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Name" hint="A lowercase identifier, unique tenant-wide (e.g. environment, cost_center).">
+      <FieldRow bind="name" hint="A lowercase identifier, unique tenant-wide (e.g. environment, cost_center).">
         <input class="input input-bordered w-full font-data" value={name()} placeholder="environment" onInput={(e) => setName(e.currentTarget.value)} />
-      </Field>
-      <Field label="Applies to">
+      </FieldRow>
+      <FieldRow label="Applies to">
         <AppliesToPicker value={appliesTo()} onChange={setAppliesTo} />
-      </Field>
-      <Field label="Binding">
+      </FieldRow>
+      <FieldRow label="Binding">
         <PropagatesToggle value={propagates()} onChange={setPropagates} />
-      </Field>
-      <Field label="Value domain" hint="Leave free for any text, or constrain the values to a fixed set (an enum), like environment being one of prod, staging, dev.">
+      </FieldRow>
+      <FieldRow label="Value domain" hint="Leave free for any text, or constrain the values to a fixed set (an enum), like environment being one of prod, staging, dev.">
         <ValueDomainEditor isEnum={isEnum()} values={allowedValues()} onIsEnum={setIsEnum} onValues={setAllowedValues} />
-      </Field>
+      </FieldRow>
     </form>
   );
 }
@@ -324,15 +314,5 @@ function ValueDomainEditor(p: { isEnum: boolean; values: string[]; onIsEnum: (b:
         </div>
       </Show>
     </div>
-  );
-}
-
-function Field(p: { label: string; hint?: string; children: JSX.Element }): JSX.Element {
-  return (
-    <label class="flex flex-col gap-1">
-      <span class="text-[12px] font-medium text-base-content/70">{p.label}</span>
-      {p.children}
-      <Show when={p.hint}><span class="text-[11px] text-base-content/40">{p.hint}</span></Show>
-    </label>
   );
 }

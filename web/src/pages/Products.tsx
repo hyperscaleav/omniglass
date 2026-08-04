@@ -1,6 +1,8 @@
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import FieldRow from "../components/FieldRow";
+import BladeField, { EMPTY_VALUE } from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { createIdentity } from "../lib/entities";
@@ -192,59 +194,35 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
             <KVStacked label="Origin" value={officialBadge(r().official)} />
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Display name</span>
-            <Show
-              when={edit.editing()}
-              fallback={<div class="input input-bordered flex items-center text-sm">{r().display_name}</div>}
-            >
-              <input class="input input-bordered w-full" value={displayName()} onInput={(e) => setDisplayName(e.currentTarget.value)} />
-            </Show>
-          </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Kind</span>
-            <Show
-              when={edit.editing()}
-              fallback={<div class="input input-bordered flex items-center text-sm">{kindBadge(r().kind)}</div>}
-            >
-              <select class="select select-bordered w-full" value={kind()} onChange={(e) => setKind(e.currentTarget.value as ProductKind)}>
-                <For each={PRODUCT_KINDS}>{(k) => <option value={k}>{k}</option>}</For>
-              </select>
-            </Show>
-          </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Vendor</span>
-            <Show
-              when={edit.editing()}
-              fallback={<div class="input input-bordered flex items-center text-sm font-data">{r().vendor || "—"}</div>}
-            >
-              <VendorSelect value={vendorId()} onChange={setVendorId} />
-            </Show>
-          </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Driver</span>
-            <Show
-              when={edit.editing()}
-              fallback={<div class="input input-bordered flex items-center text-sm font-data">{r().driver || "—"}</div>}
-            >
-              <DriverSelect value={driverId()} onChange={setDriverId} />
-            </Show>
-          </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Capabilities</span>
-            <Show
-              when={edit.editing()}
-              fallback={
-                <Show when={r().capabilities.length} fallback={<div class="input input-bordered flex items-center text-sm">—</div>}>
-                  <div class="flex flex-wrap gap-1.5">
-                    <For each={r().capabilities}>{(c) => <span class="badge badge-ghost badge-sm font-data">{c}</span>}</For>
-                  </div>
-                </Show>
-              }
-            >
-              <CapabilitiesPicker value={capabilities()} onChange={setCapabilities} />
-            </Show>
-          </div>
+          <BladeField
+            bind="display_name"
+            value={() => r().display_name ?? ""}
+            draft={displayName}
+            onInput={setDisplayName}
+          />
+          <BladeField label="Kind" read={kindBadge(r().kind)}>
+            <select class="select select-bordered w-full" value={kind()} onChange={(e) => setKind(e.currentTarget.value as ProductKind)}>
+              <For each={PRODUCT_KINDS}>{(k) => <option value={k}>{k}</option>}</For>
+            </select>
+          </BladeField>
+          <BladeField label="Vendor" mono value={() => r().vendor ?? ""}>
+            <VendorSelect value={vendorId()} onChange={setVendorId} />
+          </BladeField>
+          <BladeField label="Driver" mono value={() => r().driver ?? ""}>
+            <DriverSelect value={driverId()} onChange={setDriverId} />
+          </BladeField>
+          <BladeField
+            label="Capabilities"
+            read={
+              <Show when={r().capabilities.length} fallback={<span class="text-base-content/40">{EMPTY_VALUE}</span>}>
+                <div class="flex flex-wrap gap-1.5">
+                  <For each={r().capabilities}>{(c) => <span class="badge badge-ghost badge-sm font-data">{c}</span>}</For>
+                </div>
+              </Show>
+            }
+          >
+            <CapabilitiesPicker value={capabilities()} onChange={setCapabilities} />
+          </BladeField>
           <ProductContractEditor productId={r().name} official={r().official} />
           <Show when={r().official}>
             <div role="alert" class="alert alert-soft text-sm"><span>Seed-owned, read-only.</span></div>
@@ -303,23 +281,23 @@ export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.E
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Display name">
+      <FieldRow bind="display_name">
         <input class="input input-bordered w-full" value={display()} placeholder="Crestron TSW-1070" onInput={(e) => setDisplay(e.currentTarget.value)} />
-      </Field>
-      <Field label="Name" hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."}>
+      </FieldRow>
+      <FieldRow bind="name" hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."}>
         <input class="input input-bordered w-full font-data" value={name()} placeholder="crestron-tsw-1070" onInput={(e) => setName(e.currentTarget.value)} />
-      </Field>
-      <Field label="Kind" hint="What class of thing the product is.">
+      </FieldRow>
+      <FieldRow label="Kind" hint="What class of thing the product is.">
         <select class="select select-bordered w-full" value={kind()} onChange={(e) => setKind(e.currentTarget.value as ProductKind)}>
           <For each={PRODUCT_KINDS}>{(k) => <option value={k}>{k}</option>}</For>
         </select>
-      </Field>
-      <Field label="Vendor" hint="Who makes it. Optional.">
+      </FieldRow>
+      <FieldRow label="Vendor" hint="Who makes it. Optional.">
         <VendorSelect value={vendorId()} onChange={setVendorId} />
-      </Field>
-      <Field label="Driver" hint="How its signals are collected. Optional.">
+      </FieldRow>
+      <FieldRow label="Driver" hint="How its signals are collected. Optional.">
         <DriverSelect value={driverId()} onChange={setDriverId} />
-      </Field>
+      </FieldRow>
       {/* Not wrapped in Field: Field's root is a <label>, and a picker of one
           <label> per checkbox nested inside it is invalid HTML that forwards a
           click on the heading straight to the first checkbox. */}
@@ -390,15 +368,5 @@ function CapabilitiesPicker(p: { value: string[]; onChange: (v: string[]) => voi
         </For>
       </Show>
     </div>
-  );
-}
-
-function Field(p: { label: string; hint?: string; children: JSX.Element }): JSX.Element {
-  return (
-    <label class="flex flex-col gap-1">
-      <span class="text-[12px] font-medium text-base-content/70">{p.label}</span>
-      {p.children}
-      <Show when={p.hint}><span class="text-[11px] text-base-content/40">{p.hint}</span></Show>
-    </label>
   );
 }

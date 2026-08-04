@@ -3,6 +3,7 @@ import { Show, For, createEffect, createMemo, createSignal, on, type JSX } from 
 import { Dialog } from "@kobalte/core/dialog";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import Button from "../components/Button";
 import { useFormActions } from "../lib/formactions";
@@ -268,38 +269,41 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
             <KVStacked label="Enrolled" value={node().enrolled ? (node().enrolled_at ? rel(node().enrolled_at!) : "yes") : <span class="text-base-content/40">not yet</span>} />
           </div>
 
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Display name</span>
-            <Show
-              when={edit.editing()}
-              fallback={<div class="input input-bordered flex items-center text-sm">{node().display_name || <span class="text-base-content/40">{node().name}</span>}</div>}
-            >
-              <input class="input input-bordered w-full" value={displayName()} placeholder={node().name} onInput={(e) => setDisplayName(e.currentTarget.value)} />
-            </Show>
-          </div>
+          <BladeField
+            bind="display_name"
+            placeholder={node().name}
+            value={() => node().display_name ?? ""}
+            draft={displayName}
+            onInput={setDisplayName}
+            read={
+              <Show when={node().display_name} fallback={<span class="text-base-content/40">{node().name}</span>}>
+                {node().display_name}
+              </Show>
+            }
+          />
 
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Location</span>
-            <Show
-              when={edit.editing()}
-              fallback={<div class="input input-bordered flex items-center text-sm">{node().location || <span class="text-base-content/40">unplaced</span>}</div>}
-            >
-              <select class="select select-bordered w-full" value={location()} onChange={(e) => setLocation(e.currentTarget.value)}>
-                <option value="">(unplaced)</option>
-                <For each={locations.data ?? []}>{(l) => <option value={l.name}>{entityLabel(l)}</option>}</For>
-              </select>
-            </Show>
-          </div>
+          <BladeField
+            label="Location"
+            read={
+              <Show when={node().location} fallback={<span class="text-base-content/40">unplaced</span>}>
+                {node().location}
+              </Show>
+            }
+          >
+            <select class="select select-bordered w-full" value={location()} onChange={(e) => setLocation(e.currentTarget.value)}>
+              <option value="">(unplaced)</option>
+              <For each={locations.data ?? []}>{(l) => <option value={l.name}>{entityLabel(l)}</option>}</For>
+            </select>
+          </BladeField>
 
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Description</span>
-            <Show
-              when={edit.editing()}
-              fallback={<div class="input input-bordered flex items-center text-sm">{node().description || <span class="text-base-content/40">—</span>}</div>}
-            >
-              <input class="input input-bordered w-full" value={description()} placeholder="HQ network closet" onInput={(e) => setDescription(e.currentTarget.value)} />
-            </Show>
-          </div>
+          <BladeField
+            label="Description"
+            multiline
+            placeholder="HQ network closet"
+            value={() => node().description ?? ""}
+            draft={description}
+            onInput={setDescription}
+          />
 
           <TagAdder
             kind="node"

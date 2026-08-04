@@ -1,6 +1,8 @@
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import FieldRow from "../components/FieldRow";
+import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
@@ -170,25 +172,20 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
             <KVStacked label="Origin" value={officialBadge(r().official)} />
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Display name</span>
-            <Show
-              when={edit.editing()}
-              fallback={<div class="input input-bordered flex items-center text-sm">{r().display_name}</div>}
-            >
-              <input class="input input-bordered w-full" value={displayName()} onInput={(e) => setDisplayName(e.currentTarget.value)} />
-            </Show>
-          </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Variant of</span>
-            <Show
-              when={edit.editing()}
-              fallback={<div class="input input-bordered flex items-center text-sm font-data">{r().parent_standard || "—"}</div>}
-            >
-              <ParentStandardSelect value={parentId()} exclude={r().name} onChange={setParentId} />
-            </Show>
-            <span class="text-[11px] text-base-content/40">A standard this one specializes. Leave empty for a standalone standard.</span>
-          </div>
+          <BladeField
+            bind="display_name"
+            value={() => r().display_name ?? ""}
+            draft={displayName}
+            onInput={setDisplayName}
+          />
+          <BladeField
+            label="Variant of"
+            mono
+            value={() => r().parent_standard ?? ""}
+            hint="A standard this one specializes. Leave empty for a standalone standard."
+          >
+            <ParentStandardSelect value={parentId()} exclude={r().name} onChange={setParentId} />
+          </BladeField>
           <ContractEditor classifier="standard" id={r().name} official={r().official} />
           <RoleEditor id={r().id} official={r().official} />
           <Show when={r().official}>
@@ -243,15 +240,15 @@ export function CreateStandardForm(p: { onCreated: (s: Standard) => void }): JSX
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Display name" hint="What an operator reads.">
+      <FieldRow bind="display_name" hint="What an operator reads.">
         <input class="input input-bordered w-full" value={display()} placeholder="Meeting room" onInput={(e) => setDisplay(e.currentTarget.value)} />
-      </Field>
-      <Field label="Name" hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "A kebab name, e.g. meeting-room."}>
+      </FieldRow>
+      <FieldRow bind="name" hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "A kebab name, e.g. meeting-room."}>
         <input class="input input-bordered w-full font-data" value={name()} placeholder="meeting-room" onInput={(e) => setName(e.currentTarget.value)} />
-      </Field>
-      <Field label="Variant of" hint="A standard this one specializes. Optional.">
+      </FieldRow>
+      <FieldRow label="Variant of" hint="A standard this one specializes. Optional.">
         <ParentStandardSelect value={parentId()} onChange={setParentId} />
-      </Field>
+      </FieldRow>
     </form>
   );
 }
@@ -271,15 +268,5 @@ function ParentStandardSelect(p: { value: string; exclude?: string; onChange: (v
       <option value="">None</option>
       <For each={options()}>{(s) => <option value={s.name}>{s.display_name}</option>}</For>
     </select>
-  );
-}
-
-function Field(p: { label: string; hint?: string; children: JSX.Element }): JSX.Element {
-  return (
-    <label class="flex flex-col gap-1">
-      <span class="text-[12px] font-medium text-base-content/70">{p.label}</span>
-      {p.children}
-      <Show when={p.hint}><span class="text-[11px] text-base-content/40">{p.hint}</span></Show>
-    </label>
   );
 }

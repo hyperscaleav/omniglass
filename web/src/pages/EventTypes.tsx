@@ -2,6 +2,8 @@ import { Show, createEffect, createSignal, on, type JSX } from "solid-js";
 import { entityLabel } from "../lib/entities";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import FieldRow from "../components/FieldRow";
+import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
@@ -156,18 +158,19 @@ function EventTypeBladeBody(p: { name: string }): JSX.Element {
             <KVStacked label="Name" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Origin" value={originBadge(r().official)} />
           </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Display name</span>
-            <Show when={edit.editing()} fallback={<div class="input input-bordered flex items-center text-sm">{r().display_name}</div>}>
-              <input class="input input-bordered w-full" value={displayName()} onInput={(e) => setDisplayName(e.currentTarget.value)} />
-            </Show>
-          </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Description</span>
-            <Show when={edit.editing()} fallback={<div class="input input-bordered flex items-center text-sm">{r().description}</div>}>
-              <input class="input input-bordered w-full" value={description()} onInput={(e) => setDescription(e.currentTarget.value)} />
-            </Show>
-          </div>
+          <BladeField
+            bind="display_name"
+            value={() => r().display_name ?? ""}
+            draft={displayName}
+            onInput={setDisplayName}
+          />
+          <BladeField
+            label="Description"
+            multiline
+            value={() => r().description ?? ""}
+            draft={description}
+            onInput={setDescription}
+          />
           <Show when={r().payload_schema != null}>
             <div class="flex flex-col gap-1.5">
               <span class="eyebrow">Payload schema (JSON Schema)</span>
@@ -224,25 +227,15 @@ export function CreateEventTypeForm(p: { onCreated: (r: EventTypeRow) => void })
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Name" hint="A lowercase, dot-hierarchied name, e.g. call.started or cable.unplugged.">
+      <FieldRow bind="name" hint="A lowercase, dot-hierarchied name, e.g. call.started or cable.unplugged.">
         <input class="input input-bordered w-full font-data" value={name()} placeholder="call.started" onInput={(e) => setName(e.currentTarget.value)} />
-      </Field>
-      <Field label="Display name">
+      </FieldRow>
+      <FieldRow bind="display_name">
         <input class="input input-bordered w-full" value={displayName()} placeholder="Call started" onInput={(e) => setDisplayName(e.currentTarget.value)} />
-      </Field>
-      <Field label="Description">
+      </FieldRow>
+      <FieldRow label="Description">
         <input class="input input-bordered w-full" value={description()} onInput={(e) => setDescription(e.currentTarget.value)} />
-      </Field>
+      </FieldRow>
     </form>
-  );
-}
-
-function Field(p: { label: string; hint?: string; children: JSX.Element }): JSX.Element {
-  return (
-    <label class="flex flex-col gap-1">
-      <span class="text-[12px] font-medium text-base-content/70">{p.label}</span>
-      {p.children}
-      <Show when={p.hint}><span class="text-[11px] text-base-content/40">{p.hint}</span></Show>
-    </label>
   );
 }

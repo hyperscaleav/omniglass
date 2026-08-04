@@ -1,6 +1,8 @@
 import { For, Show, createEffect, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import FieldRow from "../components/FieldRow";
+import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
@@ -224,52 +226,45 @@ function TypeBladeBody(p: { id: string }): JSX.Element {
             <KVStacked label="Origin" value={officialBadge(r().official)} />
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Display name</span>
-            <Show
-              when={edit.editing()}
-              fallback={<div class="input input-bordered flex items-center text-sm">{r().display_name}</div>}
-            >
-              <input class="input input-bordered w-full" value={displayName()} onInput={(e) => setDisplayName(e.currentTarget.value)} />
-            </Show>
-          </div>
+          <BladeField
+            bind="display_name"
+            value={() => r().display_name ?? ""}
+            draft={displayName}
+            onInput={setDisplayName}
+          />
           <Show when={r().kind === "location"}>
-            <div class="flex flex-col gap-1.5">
-              <span class="eyebrow">Icon</span>
-              <Show
-                when={edit.editing()}
-                fallback={<div class="input input-bordered flex items-center text-sm font-data">{r().icon ?? "map-pin"}</div>}
-              >
-                <input class="input input-bordered w-full font-data" placeholder="map-pin" value={icon()} onInput={(e) => setIcon(e.currentTarget.value)} />
-              </Show>
-            </div>
+            <BladeField
+              label="Icon"
+              mono
+              placeholder="map-pin"
+              value={() => r().icon ?? "map-pin"}
+              draft={icon}
+              onInput={setIcon}
+            />
           </Show>
           <Show when={r().kind === "location"}>
-            <div class="flex flex-col gap-1.5">
-              <span class="eyebrow">Allowed parents</span>
-              <Show
-                when={edit.editing()}
-                fallback={
-                  <Show
-                    when={(r().allowed_parent_types?.length ?? 0) > 0}
-                    fallback={<span class="text-sm text-base-content/50">Unconstrained (any parent, or root).</span>}
-                  >
-                    <div class="flex flex-wrap gap-1.5">
-                      <For each={r().allowed_parent_types}>
-                        {(pid) => (
-                          <span class="badge badge-outline badge-sm">
-                            {pid === ROOT_PLACEMENT ? "Root" : locationTypeOptions().find((t) => t.name === pid)?.display_name ?? pid}
-                          </span>
-                        )}
-                      </For>
-                    </div>
-                  </Show>
-                }
-              >
-                <AllowedParentsPicker options={locationTypeOptions()} value={allowedParents()} onChange={setAllowedParents} />
-              </Show>
-              <span class="text-[11px] text-base-content/40">Empty allows any parent (or root). A non-empty set is enforced on create and move.</span>
-            </div>
+            <BladeField
+              label="Allowed parents"
+              hint="Empty allows any parent (or root). A non-empty set is enforced on create and move."
+              read={
+                <Show
+                  when={(r().allowed_parent_types?.length ?? 0) > 0}
+                  fallback={<span class="text-base-content/50">Unconstrained (any parent, or root).</span>}
+                >
+                  <div class="flex flex-wrap gap-1.5">
+                    <For each={r().allowed_parent_types}>
+                      {(pid) => (
+                        <span class="badge badge-outline badge-sm">
+                          {pid === ROOT_PLACEMENT ? "Root" : locationTypeOptions().find((t) => t.name === pid)?.display_name ?? pid}
+                        </span>
+                      )}
+                    </For>
+                  </div>
+                </Show>
+              }
+            >
+              <AllowedParentsPicker options={locationTypeOptions()} value={allowedParents()} onChange={setAllowedParents} />
+            </BladeField>
           </Show>
           {/* The location type's declared-property contract: what every location
               of this type exposes. Writes are immediate (a PUT per line), so the
@@ -357,16 +352,16 @@ export function CreateTypeForm(p: { kind: TypeKind; onCreated: (t: TypeRow) => v
         <span class="eyebrow">Kind</span>
         {kindBadge(p.kind)}
       </div>
-      <Field label="Display name" hint="What an operator reads.">
+      <FieldRow bind="display_name" hint="What an operator reads.">
         <input class="input input-bordered w-full" value={display()} placeholder="Wing" onInput={(e) => setDisplay(e.currentTarget.value)} />
-      </Field>
-      <Field label="Name" hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "A kebab name, e.g. wing. Addressed by the API and CLI."}>
+      </FieldRow>
+      <FieldRow bind="name" hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "A kebab name, e.g. wing. Addressed by the API and CLI."}>
         <input class="input input-bordered w-full font-data" value={name()} placeholder="wing" onInput={(e) => setName(e.currentTarget.value)} />
-      </Field>
+      </FieldRow>
       <Show when={p.kind === "location"}>
-        <Field label="Icon" hint="A glyph key, e.g. map-pin (the default).">
+        <FieldRow label="Icon" hint="A glyph key, e.g. map-pin (the default).">
           <input class="input input-bordered w-full font-data" value={icon()} placeholder="map-pin" onInput={(e) => setIcon(e.currentTarget.value)} />
-        </Field>
+        </FieldRow>
       </Show>
       <Show when={p.kind === "location"}>
         {/* Not wrapped in Field: Field's root is a <label>, and a picker of one
@@ -374,11 +369,12 @@ export function CreateTypeForm(p: { kind: TypeKind; onCreated: (t: TypeRow) => v
             for-less outer label forward a click on the heading or hint straight
             to the first checkbox. The heading and hint render as plain text
             instead. */}
-        <div class="flex flex-col gap-1.5">
-          <span class="eyebrow">Allowed parents</span>
+        <FieldRow
+          label="Allowed parents"
+          hint="Where a location of this type may be placed. Leave every box unchecked to allow any parent (unconstrained)."
+        >
           <AllowedParentsPicker options={locationTypeOptions()} value={allowedParents()} onChange={setAllowedParents} />
-          <span class="text-[11px] text-base-content/40">Where a location of this type may be placed. Leave every box unchecked to allow any parent (unconstrained).</span>
-        </div>
+        </FieldRow>
       </Show>
     </form>
   );
@@ -410,15 +406,5 @@ function AllowedParentsPicker(p: { options: TypeRow[]; value: string[]; onChange
         )}
       </For>
     </div>
-  );
-}
-
-function Field(p: { label: string; hint?: string; children: JSX.Element }): JSX.Element {
-  return (
-    <label class="flex flex-col gap-1">
-      <span class="text-[12px] font-medium text-base-content/70">{p.label}</span>
-      {p.children}
-      <Show when={p.hint}><span class="text-[11px] text-base-content/40">{p.hint}</span></Show>
-    </label>
   );
 }

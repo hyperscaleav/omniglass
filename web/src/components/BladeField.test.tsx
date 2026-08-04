@@ -108,7 +108,7 @@ describe("BladeField", () => {
       ));
       const box = container.querySelector(".whitespace-pre-wrap")!;
       expect(box).toBeTruthy();
-      expect(box.className).toContain("break-words");
+      expect(box.className).toContain("wrap-break-word");
     });
 
     it("preserves newlines in its read value", () => {
