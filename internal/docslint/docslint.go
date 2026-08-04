@@ -38,6 +38,22 @@ type BannedTerm struct {
 // Banned is the denylist. Order is presentation only.
 var Banned = []BannedTerm{
 	{
+		// The identity triad settled on id / name / display_name (ADR-0076). These
+		// two validators were the platform's other name rules and are DELETED, not
+		// renamed: ValidateName picks the rule from the table's declared identity
+		// shape, so a page naming either one is telling a contributor to call
+		// something that no longer exists.
+		Pattern:     regexp.MustCompile(`\bValidateEntityKey\b|\bkey\.ValidateKey\b`),
+		Replacement: "storage.ValidateName, which picks the rule from the table's declared identity shape",
+		Origin:      "ADR-0076",
+	},
+	{
+		// The sentinels moved with the vocabulary.
+		Pattern:     regexp.MustCompile(`\bErrInvalidEntityKey\b|\bErrEntityKeyIsUUID\b`),
+		Replacement: "ErrInvalidEntityName / ErrEntityNameIsUUID",
+		Origin:      "ADR-0076",
+	},
+	{
 		// Split out of the generic datapoint entry below and placed BEFORE it,
 		// because first-match-wins and the generic replacement is wrong here: a
 		// log_datapoint did not become a property or a sample, it was retired
