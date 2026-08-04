@@ -10,13 +10,11 @@ import {
 import ListShell from "./ListShell";
 import Drawer from "./Drawer";
 import ColumnMenu from "./ColumnMenu";
-import FieldRow from "./FieldRow";
 import {
   ChevronDown, ChevronLeft, ChevronsDownUp, ChevronsUpDown, Columns, Check, ListTree, Rows, Maximize, Plus, Pencil, Trash,
 } from "./icons";
 import BladeStack from "./BladeStack";
 import Button from "./Button";
-import KVStacked from "./KVStacked";
 import { type BladeDef, type BladeEdit, type BladeRef, BladesContext, createBladeController, createEditSlot, useBladeEdit } from "../lib/blades";
 
 // TreeList: the one config-driven tree-list body (composing ListShell), the inventory shell. Every entity page (Components,
@@ -75,8 +73,6 @@ export type ListCtx<N extends ListNode> = {
   // through ctx, never via useBladeEdit, since renderDetail is shared by the blade
   // (inside a provider) and the full page (outside one).
   edit?: BladeEdit;
-  fact: (label: string, value: JSX.Element) => JSX.Element;
-  field: (label: string, control: JSX.Element, hint?: string) => JSX.Element;
   facetActive: (key: string, val: string) => boolean;
   toggleFacet: (key: string, val: string) => void;
   openEdit: (n: N) => void;
@@ -293,12 +289,6 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   const back = () => (cfg.onBack ? cfg.onBack() : showFull(null));
 
   const baseCtx = {
-    fact: (label: string, value: JSX.Element) => <KVStacked label={label} value={value} />,
-    // The blade forms render their fields through the shared FieldRow wrapper.
-    // TreeList's `hint` is the (i) tooltip text (not a below-field hint), so it
-    // maps to FieldRow's `info`.
-    field: (label: string, control: JSX.Element, hint?: string) =>
-      <FieldRow label={label} info={hint}>{control}</FieldRow>,
     facetActive: (key: string, val: string) => facetActiveFn(chips(), key, val),
     toggleFacet: (key: string, val: string) => setChips(toggleFacetFn(chips(), key, val)),
     // Close any open blade before the form Drawer opens (the Drawer would

@@ -4,6 +4,9 @@ import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams } from "@solidjs/router";
 import TreeList, { type ListConfig, type ListCtx, type ListNode, type PageDescriptor } from "../components/TreeList";
 import TreeSelect from "../components/TreeSelect";
+import KVStacked from "../components/KVStacked";
+import FieldRow from "../components/FieldRow";
+import { EMPTY_VALUE } from "../components/BladeField";
 import TagPills from "../components/TagPills";
 import TagAdder from "../components/TagAdder";
 import { tagFilterKeys } from "../lib/predicate";
@@ -223,28 +226,35 @@ export default function Systems() {
             when={editing()}
             fallback={
               <div class="grid grid-cols-2 gap-5">
-                {ctx.fact(
-                  "Standard",
-                  n().standard
-                    ? <span class="badge badge-ghost badge-sm">{n().standard}</span>
-                    : <span class="text-sm text-base-content/50">None (a one-off system)</span>,
-                )}
-                {ctx.fact("Name", <span class="font-data text-sm">{n().raw.name}</span>)}
+                <KVStacked
+                  label="Standard"
+                  value={
+                    n().standard
+                      ? <span class="badge badge-ghost badge-sm">{n().standard}</span>
+                      : <span class="text-sm text-base-content/50">None (a one-off system)</span>
+                  }
+                />
+                <KVStacked bind="name" value={<span class="font-data text-sm">{n().raw.name}</span>} />
               </div>
             }
           >
             <div class="flex flex-col gap-3">
-              {ctx.field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Executive Boardroom" onInput={(e) => setDisplay(e.currentTarget.value)} />)}
-              {ctx.field(
-                "Standard",
+              <FieldRow bind="display_name">
+                <input class="input input-bordered w-full" value={display()} placeholder="Executive Boardroom" onInput={(e) => setDisplay(e.currentTarget.value)} />
+              </FieldRow>
+              <FieldRow
+                label="Standard"
+                info="The blueprint this system conforms to; its contract declares the properties below."
+              >
                 <select class="select select-bordered w-full" value={standard()} onChange={(e) => setStandard(e.currentTarget.value)}>
                   <option value="">None (a one-off system)</option>
                   <For each={standardOptions()}>{(s) => <option value={s.name}>{s.display_name}</option>}</For>
-                </select>,
-                "The blueprint this system conforms to; its contract declares the properties below.",
-              )}
-              {ctx.field(
-                "Name",
+                </select>
+              </FieldRow>
+              <FieldRow
+                bind="name"
+                info="Renaming changes the address; existing links to the old name stop resolving."
+              >
                 <>
                   <div class="join w-full">
                     <input
@@ -273,9 +283,8 @@ export default function Systems() {
                       </span>
                     )}
                   </Show>
-                </>,
-                "Renaming changes the address; existing links to the old name stop resolving.",
-              )}
+                </>
+              </FieldRow>
             </div>
           </Show>
         </div>
@@ -283,8 +292,11 @@ export default function Systems() {
         <div class="flex flex-col gap-1.5">
           <span class="eyebrow">Placement</span>
           <div class="grid grid-cols-2 gap-5">
-            {ctx.fact("Location", <span>{n().locationName || "—"}</span>)}
-            {ctx.fact("Parent", parent() ? <button class="link text-sm" onClick={() => ctx.go(parent()!)}>{parent()!.display}</button> : <span class="text-base-content/50">Root</span>)}
+            <KVStacked label="Location" value={<span>{n().locationName || EMPTY_VALUE}</span>} />
+            <KVStacked
+              label="Parent"
+              value={parent() ? <button class="link text-sm" onClick={() => ctx.go(parent()!)}>{parent()!.display}</button> : <span class="text-base-content/50">Root</span>}
+            />
           </div>
         </div>
 

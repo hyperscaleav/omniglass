@@ -3,6 +3,9 @@ import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from 
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import TreeList, { type ListConfig, type ListCtx, type ListNode, type PageDescriptor } from "../components/TreeList";
+import KVStacked from "../components/KVStacked";
+import FieldRow from "../components/FieldRow";
+import { EMPTY_VALUE } from "../components/BladeField";
 import TreeSelect from "../components/TreeSelect";
 import {
   type Component as Comp,
@@ -233,15 +236,19 @@ export default function Components() {
             when={editing()}
             fallback={
               <div class="grid grid-cols-2 gap-5">
-                {ctx.fact("Name", <span class="font-data text-sm">{n().raw.name}</span>)}
-                {ctx.fact("ID", <span class="font-data text-xs text-base-content/50">{n().raw.id}</span>)}
+                <KVStacked bind="name" value={<span class="font-data text-sm">{n().raw.name}</span>} />
+                <KVStacked label="ID" value={<span class="font-data text-xs text-base-content/50">{n().raw.id}</span>} />
               </div>
             }
           >
             <div class="flex flex-col gap-3">
-              {ctx.field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Ceiling Mic 2" onInput={(e) => setDisplay(e.currentTarget.value)} />)}
-              {ctx.field(
-                "Name",
+              <FieldRow bind="display_name">
+                <input class="input input-bordered w-full" value={display()} placeholder="Ceiling Mic 2" onInput={(e) => setDisplay(e.currentTarget.value)} />
+              </FieldRow>
+              <FieldRow
+                bind="name"
+                info="Renaming changes the address; existing links to the old name stop resolving."
+              >
                 <>
                   <div class="join w-full">
                     <input
@@ -270,9 +277,8 @@ export default function Components() {
                       </span>
                     )}
                   </Show>
-                </>,
-                "Renaming changes the address; existing links to the old name stop resolving.",
-              )}
+                </>
+              </FieldRow>
             </div>
           </Show>
         </div>
@@ -280,19 +286,28 @@ export default function Components() {
         <div class="flex flex-col gap-1.5">
           <span class="eyebrow">Placement</span>
           <div class="grid grid-cols-2 gap-5">
-            {ctx.fact("System", sysName() ? (
-              <span class="flex items-baseline gap-1.5">
-                <button class="link text-sm" onClick={() => navigate(`/systems/${encodeURIComponent(sysName()!)}`)}>{n().systemName}</button>
-                {/* Its primary is only part of the answer when it serves more than
-                    one, so the row says so rather than implying exclusivity. */}
-                <Show when={n().systemCount > 1}>
-                  <span class="text-[11px] text-warning">+{n().systemCount - 1} more</span>
-                </Show>
-              </span>
-            ) : <span class="text-base-content/50">—</span>)}
-            {ctx.fact("Location", <span>{n().locationName || "—"}</span>)}
-            {ctx.fact("Parent", parent() ? <button class="link text-sm" onClick={() => ctx.go(parent()!)}>{parent()!.display}</button> : <span class="text-base-content/50">Root</span>)}
-            {ctx.fact("Product", n().raw.product ? <span class="font-data text-sm">{n().raw.product}</span> : <span class="text-base-content/50">—</span>)}
+            <KVStacked
+              label="System"
+              value={sysName() ? (
+                <span class="flex items-baseline gap-1.5">
+                  <button class="link text-sm" onClick={() => navigate(`/systems/${encodeURIComponent(sysName()!)}`)}>{n().systemName}</button>
+                  {/* Its primary is only part of the answer when it serves more than
+                      one, so the row says so rather than implying exclusivity. */}
+                  <Show when={n().systemCount > 1}>
+                    <span class="text-[11px] text-warning">+{n().systemCount - 1} more</span>
+                  </Show>
+                </span>
+              ) : <span class="text-base-content/50">{EMPTY_VALUE}</span>}
+            />
+            <KVStacked label="Location" value={<span>{n().locationName || EMPTY_VALUE}</span>} />
+            <KVStacked
+              label="Parent"
+              value={parent() ? <button class="link text-sm" onClick={() => ctx.go(parent()!)}>{parent()!.display}</button> : <span class="text-base-content/50">Root</span>}
+            />
+            <KVStacked
+              label="Product"
+              value={n().raw.product ? <span class="font-data text-sm">{n().raw.product}</span> : <span class="text-base-content/50">{EMPTY_VALUE}</span>}
+            />
           </div>
         </div>
 
