@@ -32,8 +32,23 @@ first `:verb` routes in the wild. See [implementation status](/architecture/stat
 
 Everything lives under `/api/v1`. The path shape is derivable, not special-cased:
 
-- **Plural resource collections**, standard methods by primary key (AIP-style): `POST` creates (409 on
-  PK collision), `GET` reads, `PATCH` partial-updates (AIP-134), `DELETE` removes. No upsert shortcuts.
+- **Plural resource collections**, standard methods addressed by the entity's `name` where it has one
+  and by its uuid where it does not (AIP-style): `POST` creates (409 when the `name` is already taken;
+  the uuid primary key is the server's to mint and cannot collide), `GET` reads, `PATCH`
+  partial-updates (AIP-134), `DELETE` removes. No upsert shortcuts.
+- **Every name-bearing body carries both handles**: a uuid **`id`** (stable identity, the target every
+  foreign key stores) and a unique, renameable **`name`** (the identifier an operator reads and
+  types). A create takes the `name`; the uuid is the database's to mint, and **every write returns
+  it**, so a client stores the id and detects a rename by diffing the id it holds
+  ([ADR-0076](/architecture/decisions/#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)).
+  A path or a reference resolves whichever form it is given, since a kebab name can never look like a
+  uuid.
+- **A rename is a custom method, never a `PATCH` field.** `POST /components/{name}:rename` (also
+  `/systems`, `/locations`, `/principal-groups/{id}`) moves the `name`, gated by `<entity>:rename`
+  rather than `<entity>:update`, and the `PATCH` body of those four carries no `name` at all. Renaming
+  breaks every reference an operator stored outside the system (a bookmark, a runbook step, an
+  integration's config), so it is an act a grant can withhold on its own instead of a side effect of
+  editing a label.
 - **Custom methods carry a colon**, `:verb` not `/verb`, for anything that is not CRUD:
   `/components/{name}/commands:issue`, `/auth/me/sessions/{id}:revoke`, `/nodes:claim`. The verb
   is also the **permission**: `:issue` is gated by `command:issue`, so the route and the
@@ -46,10 +61,11 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
 - **Collection-level custom methods** carry the colon on the collection, not a member:
   `POST /systems:checkName` (also `/components:checkName`, `/locations:checkName`) is an advisory
   precheck for a technical-name rename, returning `{ valid, available, reason }`, gated by
-  `<entity>:update` like a rename. Its availability answer is **scope-blind**: the `name` uniqueness
+  `<entity>:update` (the advisory reads a name's availability; performing the rename needs
+  `<entity>:rename`). Its availability answer is **scope-blind**: the `name` uniqueness
   constraint is global, so a scope-filtered answer would report a name held outside the caller's
   scope as free and then 409 at save. A bounded exception to the ABAC-scope-on-every-query rule (it
-  discloses only that a technical name is taken somewhere), not a license to skip scope elsewhere.
+  discloses only that a name is taken somewhere), not a license to skip scope elsewhere.
 - **A principal is addressable by uuid or username.** Every `/principals/{id}` route resolves either
   server-side (a value that parses as a uuid is used directly, else a username lookup, an unknown one
   a 404). The uuid stays the stable identity (a username is mutable, nothing keys on it); service
@@ -202,7 +218,8 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
 - `GET /components/{name}/events` is the log-kind mirror: the component's recent **log occurrences**
   (the [`event` log sink](/architecture/core-entities/#the-event-sink-the-first-arc-owned-occurrence)),
   newest first, bounded to the last 24 hours and capped at 200 rows; each row carries `ts`, the
-  `event_type` `key` (e.g. `call.started`), `origin` (caught/caused/derived/scheduled), `instance`,
+  `event_type` name it is typed by (on the wire as `key`, e.g. `call.started`) with its
+  `event_type_id` beside it, `origin` (caught/caused/derived/scheduled), `instance`,
   `message`, optional `attributes`, `provenance` (`observed` for direct collection), and the `source`
   interface type.
 - `GET /components/{name}/reconciliation` pivots want/told/is over the property cache: per declared
@@ -264,14 +281,15 @@ scope is a 403) on `variable:read`; `POST /variables` creates (201, `variable:cr
 (204, `variable:delete`, admin and owner), with the same `platform` tier rule as a secret.
 
 A **tag** ([tags](/architecture/tags/)) is a `key: value` label, and its routes split along the
-governance line: **minting a key** is a tenant-wide governance action, **setting a value** is the
-owning entity's own write. The key vocabulary and an entity's tags read on the viewer floor
+governance line: **minting a tag** is a tenant-wide governance action, **setting a value** is the
+owning entity's own write. The tag vocabulary and an entity's tags read on the viewer floor
 (`tag:read`, `component:read`).
 
-- `GET /tags` lists the governed key vocabulary (`{tags: [tag]}`, `tag:read`); a `tag` body is `{id,
-  name, applies_to, propagates}`, the name normalized to a lowercase identifier (a 422 otherwise),
+- `GET /tags` lists the governed tag vocabulary (`{tags: [tag]}`, `tag:read`); a `tag` body is `{id,
+  name, applies_to, propagates}`, the `name` on the ordinary entity name rule (lowercase letters,
+  digits, and hyphens, at most 100 characters, a uuid-shaped name refused), a 422 otherwise,
   `applies_to` an entity-kind allow-list (empty = universal), `propagates` default true.
-  `POST /tags` mints a key (201), `PATCH /tags/{name}` revises it (the name is fixed), and
+  `POST /tags` mints a tag (201), `PATCH /tags/{name}` revises it (the name is fixed), and
   `DELETE /tags/{name}` removes it, cascading its bindings (204): `tag:create` / `tag:update` /
   `tag:delete`, all-scope.
 - `POST /tags/{name}:setPlatform` sets the **platform-tier** value for a key from `{value}`;
@@ -305,11 +323,11 @@ row (201) and `PATCH` updates and `DELETE` removes (204), gated `<resource>:crea
 `<resource>:update` / `<resource>:delete`, all at the admin tier. An **official** (seed-owned) row is
 read-only (`PATCH` and `DELETE` both 422).
 
-**Every registry body carries both handles** ([ADR-0062](/architecture/decisions/#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle)):
-a uuid **`id`** (stable identity, the target every foreign key stores) and a unique, renameable **`name`**
-(the kebab handle an operator reads and types). A create takes `name`; the uuid is the database's to mint.
-A path or a reference (`vendor`, `driver`, a parent) resolves whichever form it is given, since a kebab
-handle can never look like a uuid.
+A registry body carries **both handles** like every other name-bearing resource
+([above](#shape-resources-and-verb-methods),
+[ADR-0062](/architecture/decisions/#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle)):
+a create takes the `name`, the response carries the minted uuid, and a reference to one (`vendor`,
+`driver`, a parent) resolves whichever form it is given.
 
 What each catalog adds over the shared shape (bodies in the [reference](/reference/api/)):
 

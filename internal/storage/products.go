@@ -50,7 +50,7 @@ func validProductKind(s string) bool {
 // ids. The registry lists alphabetically by display_name; there is no ordering
 // field.
 type Product struct {
-	// ID is the uuid primary key, Name the renameable kebab handle. Its two
+	// ID is the uuid primary key, Name the renameable name. Its two
 	// references carry both forms for the same reason the estate bodies do: the
 	// id is what the row points at, the name is what an operator reads and types.
 	ID                string
@@ -225,7 +225,7 @@ func replaceProductCapabilities(ctx context.Context, tx pgx.Tx, productRef strin
 }
 
 // UpsertProduct installs or updates a product by HANDLE and sets its capability
-// set, the boot-seed phase's write. The seed ships kebab handles, not uuids, so
+// set, the boot-seed phase's write. The seed ships name, not uuids, so
 // the conflict target is the handle: re-seeding `cisco-room-bar` updates that row
 // in place, re-establishes its capabilities, and its id never moves.
 func (p *PG) UpsertProduct(ctx context.Context, m Product) error {
@@ -341,7 +341,7 @@ func (p *PG) GetProduct(ctx context.Context, id string) (*Product, error) {
 // vendor/driver/parent/capability is ErrProductRefNotFound; an out-of-set kind
 // is ErrProductInvalidKind. An empty kind defaults to device.
 func (p *PG) CreateProduct(ctx context.Context, actorID string, m Product) (*Product, error) {
-	if err := ValidateEntityKey(m.Name); err != nil {
+	if err := ValidateName("product", m.Name); err != nil {
 		return nil, err
 	}
 	m.Official = false
@@ -454,7 +454,9 @@ func (p *PG) UpdateProduct(ctx context.Context, actorID, id string, patch Produc
 	if err != nil {
 		return nil, err
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "product", id, before, after); err != nil {
+	// The caller addressed the product by uuid or by name; the audit row keys on
+	// the uuid the before-image already carries, so a later rename cannot orphan it.
+	if err := writeAuditRes(ctx, tx, actorID, "update", "product", auditImageID(before), before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -506,7 +508,7 @@ func (p *PG) DeleteProduct(ctx context.Context, actorID, id string) error {
 		}
 		return fmt.Errorf("storage: delete product %q: %w", id, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "product", id, before, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "product", auditImageID(before), before, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

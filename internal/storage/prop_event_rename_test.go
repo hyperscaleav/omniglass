@@ -58,10 +58,10 @@ func TestPropertiesAndEventsSurviveARename(t *testing.T) {
 	}
 
 	newSys, newComp := "new-sys", "new-comp"
-	if _, err := gw.UpdateSystem(ctx, "", "old-sys", storage.SystemPatch{Name: &newSys}, all, all); err != nil {
+	if _, err := gw.RenameSystem(ctx, "", "old-sys", newSys, all, all); err != nil {
 		t.Fatalf("rename system: %v", err)
 	}
-	if _, err := gw.UpdateComponent(ctx, "", "old-comp", storage.ComponentPatch{Name: &newComp}, all, all); err != nil {
+	if _, err := gw.RenameComponent(ctx, "", "old-comp", newComp, all, all); err != nil {
 		t.Fatalf("rename component: %v", err)
 	}
 

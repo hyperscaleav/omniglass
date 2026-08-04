@@ -262,14 +262,14 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
           </Show>
 
           <div class="grid grid-cols-2 gap-4">
-            <KVStacked label="Key" value={<span class="font-data">{node().name}</span>} />
+            <KVStacked label="Name" value={<span class="font-data">{node().name}</span>} />
             <KVStacked label="Status" value={STATUS[nodeStatus(node())].label} />
             <KVStacked label="Last heartbeat" value={node().last_heartbeat_at ? rel(node().last_heartbeat_at!) : <span class="text-base-content/40">never</span>} />
             <KVStacked label="Enrolled" value={node().enrolled ? (node().enrolled_at ? rel(node().enrolled_at!) : "yes") : <span class="text-base-content/40">not yet</span>} />
           </div>
 
           <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Name</span>
+            <span class="eyebrow">Display name</span>
             <Show
               when={edit.editing()}
               fallback={<div class="input input-bordered flex items-center text-sm">{node().display_name || <span class="text-base-content/40">{node().name}</span>}</div>}
@@ -360,7 +360,7 @@ function CreateNodeForm(props: { close: () => void; onEnrolled: (out: EnrollOutp
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: () => listLocations() }));
   // Display name leads and the address follows it, stopping the moment the
   // operator edits the address by hand (lib/entities).
-  const { display, setDisplay, name, setName, keyDerived } = createIdentity();
+  const { display, setDisplay, name, setName, nameDerived } = createIdentity();
   const [location, setLocation] = createSignal("");
   const [description, setDescription] = createSignal("");
   const [busy, setBusy] = createSignal(false);
@@ -404,13 +404,13 @@ function CreateNodeForm(props: { close: () => void; onEnrolled: (out: EnrollOutp
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
       <div>
-        <label class="eyebrow mb-1.5 block" for="new-node-display">Name</label>
+        <label class="eyebrow mb-1.5 block" for="new-node-display">Display name</label>
         <input id="new-node-display" autocomplete="off" class="input input-bordered w-full" value={display()} placeholder="HQ Closet Node" onInput={(e) => setDisplay(e.currentTarget.value)} disabled={busy()} />
       </div>
       <div>
-        <label class="eyebrow mb-1.5 block" for="new-node-name">Key</label>
+        <label class="eyebrow mb-1.5 block" for="new-node-name">Name</label>
         <input id="new-node-name" autocomplete="off" class="input input-bordered w-full font-data" value={name()} placeholder="edge-hq-1" onInput={(e) => setName(e.currentTarget.value)} disabled={busy()} required />
-        <p class="mt-1 text-xs text-base-content/50">{keyDerived() ? "Derived from the name. Edit to set your own." : "The node's address, used by the API and CLI."}</p>
+        <p class="mt-1 text-xs text-base-content/50">{nameDerived() ? "Derived from the display name. Edit to set your own." : "The node's address, used by the API and CLI."}</p>
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-node-location">Location</label>

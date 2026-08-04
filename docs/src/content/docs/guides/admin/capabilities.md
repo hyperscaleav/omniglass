@@ -7,7 +7,7 @@ description: "The Capabilities catalog: the vocabulary of what a component can d
 `*:read` floor) is the directory of **capabilities**: the flat vocabulary of what a component can
 do, on the same flat-registry pattern as [Types](/guides/admin/types/) and [Tags](/guides/admin/tags/).
 A capability is a plain name of a function (a microphone, a display, a camera), not a device and
-not a measurement. Each row shows the **name** (the operator-facing kebab handle, for example
+not a measurement. Each row shows the **name** (for example
 `microphone`), the **display name**, and its **origin** (**official**, seed-owned, or
 **custom**). A capability also carries an `id`, a uuid minted by the database, the internal
 address the handle resolves to ([ADR-0062](/architecture/decisions/)); the handle is what you
@@ -21,10 +21,10 @@ of them, and a component may fill the role only if it provides every one. Naming
 what makes those two sides line up.
 
 - **New capability** (with `capability:create`, an admin permission) opens a create drawer: give
-  it a **name** (the kebab handle, unique tenant-wide, e.g. `microphone`) and a **display
+  it a **name** (unique tenant-wide, e.g. `microphone`) and a **display
   name**.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `capability:update`)
-  edits the display name; the uuid `id` is database-minted and never edited. **Delete** (with
+  edits the display name; the **name** is fixed, since a catalog row carries no rename. **Delete** (with
   `capability:delete`) removes the row, behind a confirm.
 - An **official** (seed-owned) row is always read-only: no Edit, no Delete, and the blade marks it
   "Seed-owned, read-only." Omniglass ships a starter set of official capabilities (Microphone,

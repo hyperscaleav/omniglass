@@ -127,12 +127,15 @@ type LocationSpec struct {
 	ParentName   *string
 }
 
-// LocationPatch is the update input: nil fields are left unchanged. Name, when
-// set, renames the location. ParentName, when set, re-parents the location (a
-// tree move) to the named parent, cycle-guarded and placement-validated exactly
-// like create; a move to root (no parent) is not supported via patch this slice.
+// LocationPatch is the update input: nil fields are left unchanged. ParentName,
+// when set, re-parents the location (a tree move) to the named parent,
+// cycle-guarded and placement-validated exactly like create; a move to root (no
+// parent) is not supported via patch this slice.
+//
+// There is deliberately no Name here. A rename is RenameLocation, its own act under
+// its own permission, because it breaks the references an operator stored outside
+// this system.
 type LocationPatch struct {
-	Name         *string
 	DisplayName  *string
 	LocationType *string
 	ParentName   *string
@@ -241,7 +244,7 @@ func (p *PG) CreateLocationType(ctx context.Context, actorID string, lt Location
 	if lt.Name == RootPlacement {
 		return nil, ErrReservedTypeID
 	}
-	if err := ValidateEntityKey(lt.Name); err != nil {
+	if err := ValidateName("location_type", lt.Name); err != nil {
 		return nil, err
 	}
 	lt.Official = false
@@ -314,7 +317,7 @@ func (p *PG) UpdateLocationType(ctx context.Context, actorID, id string, patch L
 	if err != nil {
 		return nil, fmt.Errorf("storage: audit image location_type %q: %w", id, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "location_type", id, before, after); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "location_type", lt.ID, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -376,7 +379,7 @@ func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSp
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := ValidateEntityKey(spec.Name); err != nil {
+	if err := ValidateName("location", spec.Name); err != nil {
 		return nil, err
 	}
 
@@ -443,11 +446,6 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 	if err != nil {
 		return nil, err
 	}
-	if patch.Name != nil {
-		if err := ValidateEntityKey(*patch.Name); err != nil {
-			return nil, err
-		}
-	}
 
 	parentID := before.ParentID
 	if patch.ParentName != nil {
@@ -495,14 +493,13 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 	}
 	after, err := scanLocation(tx.QueryRow(ctx, `
 		update location set
-			name          = coalesce($2, name),
-			display_name  = coalesce($3, display_name),
-			location_type = coalesce((select id from location_type where `+typeRefCol+` = $4), location_type),
-			parent_id     = $5,
+			display_name  = coalesce($2, display_name),
+			location_type = coalesce((select id from location_type where `+typeRefCol+` = $3), location_type),
+			parent_id     = $4,
 			updated_at    = now()
 		where id = $1
 		returning `+locationCols,
-		before.ID, patch.Name, patch.DisplayName, patch.LocationType, parentID))
+		before.ID, patch.DisplayName, patch.LocationType, parentID))
 	if err != nil {
 		return nil, mapLocationWriteErr(err)
 	}
@@ -511,6 +508,47 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit update location: %w", err)
+	}
+	return after, nil
+}
+
+// RenameLocation moves a location's name, scoped exactly as UpdateLocation is (the
+// same read-then-action split, so an unreadable target is a non-disclosing
+// not-found and a readable-but-unactionable one is forbidden).
+//
+// Separate from the patch because a rename is a separate act: it breaks the
+// references an operator stored outside this system. Nothing inside breaks, because
+// every arc that points at a location (a placement, a tag binding, a variable, a
+// secret) stores the uuid, which is also why the audit row keys on that uuid rather
+// than on the name it just moved.
+//
+// Placement is not revalidated: a name is not part of the placement rule, which
+// reads location_type against the parent's.
+func (p *PG) RenameLocation(ctx context.Context, actorID, name, newName string, read, action scope.Set) (*Location, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin rename location: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	before, err := p.resolveForAction(ctx, tx, name, read, action)
+	if err != nil {
+		return nil, err
+	}
+	if err := ValidateName("location", newName); err != nil {
+		return nil, err
+	}
+	after, err := scanLocation(tx.QueryRow(ctx,
+		`update location set name = $2, updated_at = now() where id = $1 returning `+locationCols,
+		before.ID, newName))
+	if err != nil {
+		return nil, mapLocationWriteErr(err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "rename", "location", after.ID, before, after); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit rename location: %w", err)
 	}
 	return after, nil
 }

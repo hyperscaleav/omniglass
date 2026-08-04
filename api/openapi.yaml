@@ -175,7 +175,7 @@ components:
           description: The capability's uuid, the stable handle that survives a rename
           type: string
         name:
-          description: The kebab handle an operator reads and types; renameable
+          description: The name an operator reads and types; renameable
           type: string
         official:
           type: boolean
@@ -218,7 +218,7 @@ components:
           readOnly: true
           type: string
         name:
-          description: The proposed technical name to check
+          description: The proposed name to check
           type: string
       required:
         - name
@@ -508,7 +508,7 @@ components:
           minLength: 1
           type: string
         name:
-          description: The globally unique kebab handle; renameable
+          description: The globally unique name; renameable
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
@@ -560,7 +560,7 @@ components:
           readOnly: true
           type: string
         display_name:
-          description: What an operator reads; the technical name is the address
+          description: What an operator reads; the name is the address
           type: string
         location:
           description: Location name this component is placed at
@@ -598,7 +598,7 @@ components:
           minLength: 1
           type: string
         name:
-          description: The globally unique kebab handle; renameable
+          description: The globally unique name; renameable
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
@@ -755,10 +755,10 @@ components:
           maxLength: 200
           type: string
         name:
-          description: Unique group name (lowercase letters, digits, and . _ -)
-          maxLength: 200
+          description: Unique group name (lowercase letters, digits, and hyphens)
+          maxLength: 100
           minLength: 1
-          pattern: ^[a-z0-9][a-z0-9._-]*$
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
       required:
         - name
@@ -799,7 +799,7 @@ components:
           readOnly: true
           type: string
         display_name:
-          description: What an operator reads; the technical name is the address
+          description: What an operator reads; the name is the address
           type: string
         location_type:
           description: The location_type, by name or uuid (campus, building, ...)
@@ -843,7 +843,7 @@ components:
           description: A glyph key; the console falls back to map-pin when empty
           type: string
         name:
-          description: The globally unique kebab handle (e.g. wing); "root" is reserved
+          description: The globally unique name (e.g. wing); "root" is reserved
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
@@ -924,7 +924,7 @@ components:
           description: Optional location the node sits in, by name or id (descriptive placement, not scope)
           type: string
         name:
-          description: Globally unique node name (also its NATS subject token, so no dots or whitespace)
+          description: Globally unique node name (lowercase letters, digits, and hyphens); it is also the node's NATS subject token, which is why the rule forbids a dot
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
@@ -999,7 +999,7 @@ components:
             - vm
           type: string
         name:
-          description: The globally unique kebab handle; renameable
+          description: The globally unique name; renameable
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
@@ -1078,8 +1078,10 @@ components:
           description: The operator field map, validated against the type shape
           type: object
         name:
-          description: The cascade key; unique per owner
+          description: The cascade name (lowercase letters, digits, and hyphens); unique per owner
+          maxLength: 100
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         owner:
           description: The owning entity's name; omit for a platform secret
@@ -1116,7 +1118,7 @@ components:
           minLength: 1
           type: string
         name:
-          description: The globally unique kebab handle; renameable
+          description: The globally unique name; renameable
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
@@ -1139,7 +1141,7 @@ components:
           readOnly: true
           type: string
         display_name:
-          description: What an operator reads; the technical name is the address
+          description: What an operator reads; the name is the address
           type: string
         location:
           description: Location name this system is placed at
@@ -1184,8 +1186,10 @@ components:
             - array
             - "null"
         name:
-          description: "The normalized key: a lowercase identifier, unique tenant-wide"
+          description: The normalized name (lowercase letters, digits, and hyphens), unique tenant-wide
+          maxLength: 100
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         propagates:
           description: Whether bindings cascade to descendants; defaults true
@@ -1204,8 +1208,10 @@ components:
           readOnly: true
           type: string
         name:
-          description: The cascade key; unique per owner
+          description: The cascade name (lowercase letters, digits, and hyphens); unique per owner
+          maxLength: 100
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         owner:
           description: The owning entity's name; omit for a platform variable
@@ -1261,7 +1267,7 @@ components:
             - developer
           type: string
         name:
-          description: The globally unique kebab handle; renameable
+          description: The globally unique name; renameable
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
@@ -1314,7 +1320,7 @@ components:
           description: The driver's uuid, the stable handle that survives a rename
           type: string
         name:
-          description: The kebab handle an operator reads and types; renameable
+          description: The name an operator reads and types; renameable
           type: string
         official:
           type: boolean
@@ -2921,7 +2927,7 @@ components:
           description: The location type's uuid, the stable handle that survives a rename
           type: string
         name:
-          description: The kebab handle an operator reads and types; renameable
+          description: The name an operator reads and types; renameable
           type: string
         official:
           type: boolean
@@ -3276,7 +3282,7 @@ components:
             - vm
           type: string
         name:
-          description: The kebab handle an operator reads and types; renameable
+          description: The name an operator reads and types; renameable
           type: string
         official:
           type: boolean
@@ -3666,6 +3672,82 @@ components:
       required:
         - component
         - properties
+      type: object
+    RenameComponentInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RenameComponentInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        name:
+          description: The new globally unique name (lowercase letters, digits, hyphens)
+          maxLength: 100
+          minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
+      required:
+        - name
+      type: object
+    RenameGroupInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RenameGroupInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        name:
+          description: The new unique group name (lowercase letters, digits, hyphens)
+          maxLength: 100
+          minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
+      required:
+        - name
+      type: object
+    RenameLocationInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RenameLocationInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        name:
+          description: The new globally unique name (lowercase letters, digits, hyphens)
+          maxLength: 100
+          minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
+      required:
+        - name
+      type: object
+    RenameSystemInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RenameSystemInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        name:
+          description: The new globally unique name (lowercase letters, digits, hyphens)
+          maxLength: 100
+          minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
+      required:
+        - name
       type: object
     ResetPasswordInputBody:
       additionalProperties: false
@@ -4078,7 +4160,7 @@ components:
           description: The secret type's uuid, the stable handle that survives a rename
           type: string
         name:
-          description: The kebab handle an operator reads and types; renameable
+          description: The name an operator reads and types; renameable
           type: string
         official:
           type: boolean
@@ -4360,7 +4442,7 @@ components:
           description: The standard's uuid, the stable handle that survives a rename
           type: string
         name:
-          description: The kebab handle an operator reads and types; renameable
+          description: The name an operator reads and types; renameable
           type: string
         official:
           type: boolean
@@ -4469,13 +4551,13 @@ components:
       additionalProperties: false
       properties:
         component:
-          description: Technical name of the component
+          description: Name of the component
           type: string
         primary:
           description: Whether this membership is the component's default when no system is given
           type: boolean
         system:
-          description: Technical name of the system
+          description: Name of the system
           type: string
         system_count:
           description: How many systems this component belongs to in total; more than one means it is shared
@@ -4768,12 +4850,6 @@ components:
         location:
           description: Relocates the component to this location name. An empty string clears its placement.
           type: string
-        name:
-          description: A new globally unique technical name (rename)
-          maxLength: 100
-          minLength: 1
-          pattern: ^[a-z0-9][a-z0-9-]*$
-          type: string
         parent:
           description: Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component.
           type: string
@@ -4835,12 +4911,6 @@ components:
           description: Display name; empty clears it
           maxLength: 200
           type: string
-        name:
-          description: Group name (lowercase letters, digits, and . _ -); renaming is safe
-          maxLength: 200
-          minLength: 1
-          pattern: ^[a-z0-9][a-z0-9._-]*$
-          type: string
       type: object
     UpdateInterfaceInputBody:
       additionalProperties: false
@@ -4873,12 +4943,6 @@ components:
           type: string
         location_type:
           description: "Re-types the location: a location_type, by name or uuid"
-          type: string
-        name:
-          description: A new globally unique technical name (rename)
-          maxLength: 100
-          minLength: 1
-          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         parent:
           description: Re-parents the location (a tree move) to this location name, cycle-guarded and placement-validated. Moving to root is not supported via update this slice.
@@ -5075,12 +5139,6 @@ components:
         location:
           description: Relocates the system to this location name. An empty string clears its placement.
           type: string
-        name:
-          description: A new globally unique technical name (rename)
-          maxLength: 100
-          minLength: 1
-          pattern: ^[a-z0-9][a-z0-9-]*$
-          type: string
         parent:
           description: Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system.
           type: string
@@ -5217,7 +5275,7 @@ components:
             - developer
           type: string
         name:
-          description: The kebab handle an operator reads and types; renameable
+          description: The name an operator reads and types; renameable
           type: string
         official:
           type: boolean
@@ -5744,7 +5802,7 @@ paths:
       summary: List command types
       x-omniglass-permission: command_type:read
     post:
-      description: Registers a custom command type (official=false). The name must be a valid key; a target property, when set, must be registered. Gated by command_type:create.
+      description: Registers a custom command type (official=false). The name must be a valid keyspace name (dot-joined kebab segments); a target property, when set, must be registered. Gated by command_type:create.
       operationId: create-command-type
       requestBody:
         content:
@@ -5941,7 +5999,7 @@ paths:
       summary: Get a component
       x-omniglass-permission: component:read
     patch:
-      description: "Patches a component's technical name, display_name, product, location, or parent. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split."
+      description: "Patches a component's display_name, product, location, or parent. The name is not patchable: renaming is the :rename custom method. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split."
       operationId: update-component
       parameters:
         - in: path
@@ -6338,12 +6396,12 @@ paths:
       description: "The systems this component is bound into, ordered by name. A component may belong to several: a rack DSP serving three rooms is a member of all three, and each of them depends on it. Exactly one membership may be marked primary, the default for a question asked without a system in hand. Gated by component:read; an out-of-scope component is a non-disclosing 404."
       operationId: list-component-memberships
       parameters:
-        - description: Technical name of the component
+        - description: Name of the component
           in: path
           name: name
           required: true
           schema:
-            description: Technical name of the component
+            description: Name of the component
             type: string
       responses:
         "200":
@@ -6566,6 +6624,39 @@ paths:
           description: Error
       summary: Remove a tag value from a component
       x-omniglass-permission: component:update
+  /components/{name}:rename:
+    post:
+      description: Moves the component's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by component:rename; read and rename scopes drive the 404 versus 403 split.
+      operationId: rename-component
+      parameters:
+        - description: The component's current name, or its uuid
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's current name, or its uuid
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameComponentInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Rename a component
+      x-omniglass-permission: component:rename
   /components/{name}:setTag:
     post:
       description: Binds a value for a key on a component. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by component:update.
@@ -6601,7 +6692,7 @@ paths:
       x-omniglass-permission: component:update
   /components:checkName:
     post:
-      description: Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.
+      description: Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.
       operationId: check-component-name
       requestBody:
         content:
@@ -6622,7 +6713,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Check a component technical name
+      summary: Check a component name
       x-omniglass-permission: component:update
   /drivers:
     get:
@@ -6766,7 +6857,7 @@ paths:
       summary: List event types
       x-omniglass-permission: event_type:read
     post:
-      description: Registers a custom event type (official=false). The name must be a valid event key. Gated by event_type:create.
+      description: Registers a custom event type (official=false). The name must be a valid keyspace name (dot-joined kebab segments). Gated by event_type:create.
       operationId: create-event-type
       requestBody:
         content:
@@ -7414,7 +7505,7 @@ paths:
       summary: Get a location
       x-omniglass-permission: location:read
     patch:
-      description: Patches a location's display_name, location_type, or parent (a move). Gated by location:update; the read and update scopes drive the 404 versus 403 split.
+      description: "Patches a location's display_name, location_type, or parent (a move). The name is not patchable: renaming is the :rename custom method. Gated by location:update; the read and update scopes drive the 404 versus 403 split."
       operationId: update-location
       parameters:
         - in: path
@@ -7622,6 +7713,39 @@ paths:
           description: Error
       summary: Remove a tag value from a location
       x-omniglass-permission: location:update
+  /locations/{name}:rename:
+    post:
+      description: Moves the location's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by location:rename; the read and rename scopes drive the 404 versus 403 split.
+      operationId: rename-location
+      parameters:
+        - description: The location's current name, or its uuid
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The location's current name, or its uuid
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameLocationInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Rename a location
+      x-omniglass-permission: location:rename
   /locations/{name}:setTag:
     post:
       description: Binds a value for a key on a location. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by location:update.
@@ -7657,7 +7781,7 @@ paths:
       x-omniglass-permission: location:update
   /locations:checkName:
     post:
-      description: Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.
+      description: Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.
       operationId: check-location-name
       requestBody:
         content:
@@ -7678,7 +7802,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Check a location technical name
+      summary: Check a location name
       x-omniglass-permission: location:update
   /nodes:
     get:
@@ -8074,7 +8198,7 @@ paths:
       summary: Get a principal group
       x-omniglass-permission: principal_group:read:admin
     patch:
-      description: Updates a group's name and presentational fields. Gated by principal_group:update (all-scope). A duplicate name is 409.
+      description: "Updates a group's presentational fields. The name is not patchable: renaming is the :rename custom method. Gated by principal_group:update (all-scope)."
       operationId: update-group
       parameters:
         - description: The group's id (uuid)
@@ -8279,6 +8403,39 @@ paths:
           description: Error
       summary: Remove a member from a group
       x-omniglass-permission: principal_group:update
+  /principal-groups/{id}:rename:
+    post:
+      description: Moves the group's name. A separate act from an update, and a separately grantable one, because it breaks the references stored outside this system; inside it nothing breaks, since membership and grants both key on the group's uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by principal_group:rename (all-scope).
+      operationId: rename-group
+      parameters:
+        - description: The group's id (uuid)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The group's id (uuid)
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameGroupInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Rename a principal group
+      x-omniglass-permission: principal_group:rename
   /principals:
     get:
       description: Lists all principals (humans and service accounts) with their grants. Gated by principal:read:admin.
@@ -8368,7 +8525,7 @@ paths:
       summary: Get a principal
       x-omniglass-permission: principal:read:admin
     patch:
-      description: "Updates a human principal's display name, email, and username. Gated by principal:update (all-scope). Renaming is safe: nothing keys on the username."
+      description: "Updates a human principal's display name, email, and username. Gated by principal:update (all-scope). A username is not an entity name and is patchable here rather than through a :rename method: it is the sign-in identifier, on its own rule, and nothing keys on it."
       operationId: update-principal
       parameters:
         - description: The principal, addressed by its uuid or a human username
@@ -8947,7 +9104,7 @@ paths:
       summary: Delete a product
       x-omniglass-permission: product:delete
     get:
-      description: Fetches a product by id, with its capabilities. Gated by product:read.
+      description: Fetches a product by its name or its uuid, with its capabilities. Either form resolves, so `omniglass product get acme-soundbar` and the uuid are interchangeable. Gated by product:read.
       operationId: get-product
       parameters:
         - description: The product id
@@ -9934,7 +10091,7 @@ paths:
       summary: Get a system
       x-omniglass-permission: system:read
     patch:
-      description: "Patches a system's display_name, standard, location, or parent. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split."
+      description: "Patches a system's display_name, standard, location, or parent. The name is not patchable: renaming is the :rename custom method. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split."
       operationId: update-system
       parameters:
         - in: path
@@ -9995,12 +10152,12 @@ paths:
       description: "The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Gated by system:read; an out-of-scope system is a non-disclosing 404."
       operationId: list-system-members
       parameters:
-        - description: Technical name of the system
+        - description: Name of the system
           in: path
           name: name
           required: true
           schema:
-            description: Technical name of the system
+            description: Name of the system
             type: string
       responses:
         "200":
@@ -10022,19 +10179,19 @@ paths:
       description: "Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404."
       operationId: remove-system-member
       parameters:
-        - description: Technical name of the system
+        - description: Name of the system
           in: path
           name: name
           required: true
           schema:
-            description: Technical name of the system
+            description: Name of the system
             type: string
-        - description: Technical name of the component
+        - description: Name of the component
           in: path
           name: component
           required: true
           schema:
-            description: Technical name of the component
+            description: Name of the component
             type: string
       responses:
         "204":
@@ -10051,19 +10208,19 @@ paths:
       description: Binds this component into the system. Idempotent. A component's first membership becomes its primary with nobody asking, so a component in exactly one system never has to think about the concept; a later membership does not take that default away. Gated by system:update; an out-of-scope system is a non-disclosing 404.
       operationId: add-system-member
       parameters:
-        - description: Technical name of the system
+        - description: Name of the system
           in: path
           name: name
           required: true
           schema:
-            description: Technical name of the system
+            description: Name of the system
             type: string
-        - description: Technical name of the component
+        - description: Name of the component
           in: path
           name: component
           required: true
           schema:
-            description: Technical name of the component
+            description: Name of the component
             type: string
       responses:
         "204":
@@ -10081,19 +10238,19 @@ paths:
       description: Moves the component's default to this membership. The default answers questions asked without a system in hand; it does not decide anything that names a system explicitly. A component that was not a member here is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
       operationId: set-primary-member
       parameters:
-        - description: Technical name of the system
+        - description: Name of the system
           in: path
           name: name
           required: true
           schema:
-            description: Technical name of the system
+            description: Name of the system
             type: string
-        - description: Technical name of the component
+        - description: Name of the component
           in: path
           name: component
           required: true
           schema:
-            description: Technical name of the component
+            description: Name of the component
             type: string
       responses:
         "204":
@@ -10427,6 +10584,39 @@ paths:
           description: Error
       summary: Remove a tag value from a system
       x-omniglass-permission: system:update
+  /systems/{name}:rename:
+    post:
+      description: Moves the system's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by system:rename; read and rename scopes drive the 404 versus 403 split.
+      operationId: rename-system
+      parameters:
+        - description: The system's current name, or its uuid
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's current name, or its uuid
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameSystemInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Rename a system
+      x-omniglass-permission: system:rename
   /systems/{name}:setTag:
     post:
       description: Binds a value for a key on a system. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by system:update.
@@ -10462,7 +10652,7 @@ paths:
       x-omniglass-permission: system:update
   /systems:checkName:
     post:
-      description: Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.
+      description: Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.
       operationId: check-system-name
       requestBody:
         content:
@@ -10483,7 +10673,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Check a system technical name
+      summary: Check a system name
       x-omniglass-permission: system:update
   /tags:
     get:

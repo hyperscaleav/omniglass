@@ -44,13 +44,13 @@ function kindBadge(kind: string): JSX.Element {
   return <span class="badge badge-ghost badge-sm">{kind}</span>;
 }
 
-// refCell prints a reference's kebab handle (never the uuid; ADR-0062).
+// refCell prints a reference's name (never the uuid; ADR-0062).
 function refCell(handle?: string): JSX.Element {
   return <span class="font-data text-xs text-base-content/60">{handle || "—"}</span>;
 }
 
 const columns: FlatColumn<Product>[] = [
-  // One identity column, the shared cell: the label leads and the kebab handle
+  // One identity column, the shared cell: the label leads and the name
   // sits beneath it. A product whose label IS its handle renders it once.
   identityColumn<Product>(),
   { key: "vendor", label: "Vendor", width: "150px", sortVal: (p) => p.vendor ?? "", cell: (p) => refCell(p.vendor) },
@@ -188,12 +188,12 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <KVStacked label="Key" value={<span class="font-data">{r().name}</span>} />
+            <KVStacked label="Name" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Origin" value={officialBadge(r().official)} />
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
           <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Name</span>
+            <span class="eyebrow">Display name</span>
             <Show
               when={edit.editing()}
               fallback={<div class="input input-bordered flex items-center text-sm">{r().display_name}</div>}
@@ -261,7 +261,7 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
 // vendor, driver, and capabilities are optional.
 export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.Element {
   const qc = useQueryClient();
-  const { display, setDisplay, name, setName, keyDerived } = createIdentity();
+  const { display, setDisplay, name, setName, nameDerived } = createIdentity();
   const [kind, setKind] = createSignal<ProductKind>("device");
   const [vendorId, setVendorId] = createSignal("");
   const [driverId, setDriverId] = createSignal("");
@@ -303,10 +303,10 @@ export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.E
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Name">
+      <Field label="Display name">
         <input class="input input-bordered w-full" value={display()} placeholder="Crestron TSW-1070" onInput={(e) => setDisplay(e.currentTarget.value)} />
       </Field>
-      <Field label="Key" hint={keyDerived() ? "Derived from the name. Edit to set your own." : "Globally unique address, used by the API and CLI."}>
+      <Field label="Name" hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."}>
         <input class="input input-bordered w-full font-data" value={name()} placeholder="crestron-tsw-1070" onInput={(e) => setName(e.currentTarget.value)} />
       </Field>
       <Field label="Kind" hint="What class of thing the product is.">
@@ -333,7 +333,7 @@ export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.E
 }
 
 // VendorSelect: a vendor picker over the vendor registry, with a "None" option
-// (a product need not name a vendor). Stores the vendor's kebab handle (the
+// (a product need not name a vendor). Stores the vendor's name (the
 // write path resolves either form).
 function VendorSelect(p: { value: string; onChange: (v: string) => void }): JSX.Element {
   const vendors = useQuery(() => ({ queryKey: VENDORS_KEY, queryFn: listVendors }));
@@ -349,7 +349,7 @@ function VendorSelect(p: { value: string; onChange: (v: string) => void }): JSX.
 }
 
 // DriverSelect: a driver picker over the driver registry, with a "None" option.
-// Stores the driver's kebab handle (the write path resolves either form).
+// Stores the driver's name (the write path resolves either form).
 function DriverSelect(p: { value: string; onChange: (v: string) => void }): JSX.Element {
   const drivers = useQuery(() => ({ queryKey: DRIVERS_KEY, queryFn: listDrivers }));
   const options = createMemo(() =>

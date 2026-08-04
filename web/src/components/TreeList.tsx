@@ -463,9 +463,9 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
                   is not discoverable, and cannot be selected to copy, and
                   copying it into a CLI invocation is the point.
 
-                  When the entity has no display name the label IS the key, so
+                  When the entity has no display name the label IS the name, so
                   it is rendered once, in the data face, which marks it as an
-                  identifier rather than a name somebody chose. */}
+                  identifier rather than a friendly string somebody chose. */}
               <span
                 class="truncate"
                 classList={{ "font-data text-[13px]": n.display === n.id }}

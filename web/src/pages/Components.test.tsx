@@ -46,7 +46,7 @@ describe("Components create-as-route", () => {
     expect(screen.getByText("Draft")).toBeTruthy();
     expect(screen.getByText("Create component")).toBeTruthy();
     // Identity + Placement fields present; the binding sections are locked.
-    expect(screen.getByText("Key")).toBeTruthy();
+    expect(screen.getByText("Name")).toBeTruthy();
     expect(screen.getByText("System")).toBeTruthy();
     expect(screen.getByText(/Available once the component is created/)).toBeTruthy();
   });
@@ -54,27 +54,27 @@ describe("Components create-as-route", () => {
   it("shows an existing component read-only in view: no tag add control, an Edit affordance", async () => {
     mount("/components/mic-2");
     // The detail resolves and renders the read-only facts.
-    await waitFor(() => expect(screen.getByText("Key")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     // No in-body mutation control in view: the TagAdder add row is absent.
     expect(screen.queryByPlaceholderText(/Add a tag/)).toBeNull();
     // The view footer offers Edit (which would flip the accordion to edit mode).
     expect(screen.getByText("Edit")).toBeTruthy();
   });
 
-  it("edit mode exposes an editable technical name with a check button", async () => {
+  it("edit mode exposes an editable name with a check button", async () => {
     mount("/components/mic-2");
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
-    // The technical name becomes an editable input seeded from the row.
+    // The name becomes an editable input seeded from the row.
     const nameInput = (await screen.findByDisplayValue("mic-2")) as HTMLInputElement;
     expect(nameInput.disabled).toBe(false);
     // An inline check button sits beside it.
     expect(screen.getByLabelText("Check name")).toBeTruthy();
   });
 
-  it("a fresh detail view keeps the technical name read-only", async () => {
+  it("a fresh detail view keeps the name read-only", async () => {
     mount("/components/mic-2");
-    await waitFor(() => expect(screen.getByText("Key")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     // No check button until edit begins: the name is a read-only fact.
     expect(screen.queryByLabelText("Check name")).toBeNull();
   });

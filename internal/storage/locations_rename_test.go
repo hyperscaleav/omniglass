@@ -34,7 +34,7 @@ func TestRenameLocation(t *testing.T) {
 
 	// Rename the location.
 	newName := "hq-root-renamed"
-	up, err := gw.UpdateLocation(ctx, "", "hq-root", storage.LocationPatch{Name: &newName}, all, all)
+	up, err := gw.RenameLocation(ctx, "", "hq-root", newName, all, all)
 	if err != nil {
 		t.Fatalf("rename: %v", err)
 	}
@@ -43,6 +43,17 @@ func TestRenameLocation(t *testing.T) {
 	}
 	if up.ID != root.ID {
 		t.Fatalf("rename changed id: got %q, want %q (a rename is a one-column update, not a new row)", up.ID, root.ID)
+	}
+
+	// Reachable afterwards by the NEW name and by its uuid, not by the old one.
+	if got, err := gw.GetLocation(ctx, newName, all); err != nil || got.ID != root.ID {
+		t.Fatalf("get by new name = %v, %v; want the same row", got, err)
+	}
+	if got, err := gw.GetLocation(ctx, root.ID, all); err != nil || got.Name != newName {
+		t.Fatalf("get by uuid = %v, %v; want the row under its new name", got, err)
+	}
+	if _, err := gw.GetLocation(ctx, "hq-root", all); !errors.Is(err, storage.ErrLocationNotFound) {
+		t.Fatalf("get by old name = %v, want ErrLocationNotFound", err)
 	}
 
 	// The placed system's location_id (a UUID FK) is untouched: it still resolves to
@@ -60,20 +71,30 @@ func TestRenameLocation(t *testing.T) {
 		t.Fatalf("old name should be free after rename: %v", err)
 	}
 
-	// Renaming onto a taken name -> ErrLocationExists.
-	if _, err := gw.UpdateLocation(ctx, "", "hq-root-renamed", storage.LocationPatch{Name: strptr("hq-root")}, all, all); !errors.Is(err, storage.ErrLocationExists) {
+	// Renaming onto a taken name -> ErrLocationExists (the API's 409).
+	if _, err := gw.RenameLocation(ctx, "", "hq-root-renamed", "hq-root", all, all); !errors.Is(err, storage.ErrLocationExists) {
 		t.Fatalf("dup rename err = %v, want ErrLocationExists", err)
 	}
 
-	// Bad slug -> ErrInvalidEntityKey (before touching the DB).
-	bad := "Bad Name"
-	if _, err := gw.UpdateLocation(ctx, "", "hq-root-renamed", storage.LocationPatch{Name: &bad}, all, all); !errors.Is(err, storage.ErrInvalidEntityKey) {
-		t.Fatalf("bad-format rename err = %v, want ErrInvalidEntityKey", err)
+	// Bad slug -> ErrInvalidEntityName (before touching the DB).
+	if _, err := gw.RenameLocation(ctx, "", "hq-root-renamed", "Bad Name", all, all); !errors.Is(err, storage.ErrInvalidEntityName) {
+		t.Fatalf("bad-format rename err = %v, want ErrInvalidEntityName", err)
+	}
+
+	// A uuid-shaped name is its own refusal: it satisfies the slug rule completely,
+	// and admitting it would make a name indistinguishable from an id.
+	if _, err := gw.RenameLocation(ctx, "", "hq-root-renamed", "019f8754-461f-7b82-b5f2-fc4bbe1c3765", all, all); !errors.Is(err, storage.ErrEntityNameIsUUID) {
+		t.Fatalf("uuid-shaped rename err = %v, want ErrEntityNameIsUUID", err)
+	}
+
+	// A missing entity is the ordinary not-found, so the API answers 404.
+	if _, err := gw.RenameLocation(ctx, "", "no-such-location", "whatever", all, all); !errors.Is(err, storage.ErrLocationNotFound) {
+		t.Fatalf("rename of a missing location = %v, want ErrLocationNotFound", err)
 	}
 
 	// Create-tightening: the shared validator gates create too, not just rename.
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "Bad Name", LocationType: "campus"}, all); !errors.Is(err, storage.ErrInvalidEntityKey) {
-		t.Fatalf("bad-format create err = %v, want ErrInvalidEntityKey", err)
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "Bad Name", LocationType: "campus"}, all); !errors.Is(err, storage.ErrInvalidEntityName) {
+		t.Fatalf("bad-format create err = %v, want ErrInvalidEntityName", err)
 	}
 
 	// LocationNameTaken is scope-blind existence.
@@ -83,4 +104,6 @@ func TestRenameLocation(t *testing.T) {
 	if taken, err := gw.LocationNameTaken(ctx, "nope-not-here"); err != nil || taken {
 		t.Fatalf("LocationNameTaken(free) = %v,%v want false,nil", taken, err)
 	}
+
+	assertOneRenameAudit(t, ctx, gw, "location", root.ID)
 }

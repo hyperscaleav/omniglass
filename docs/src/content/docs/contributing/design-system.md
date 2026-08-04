@@ -132,48 +132,59 @@ bending `ListShell`.
 
 ### How an entity's identity reads
 
-Every entity carries two identities an operator cares about: a **segment** (the kebab token the API
-and CLI address it by) and an optional **label**. `IdentityCell` states the rule once, and
-`identityColumn` is the `FlatList` column every page uses:
+Every entity carries the same identity triad: an **id** (a uuid, immutable), a **name** (the
+renameable identifier an operator types and the API and CLI address the row by), and an optional
+**display name** (a friendly string a human reads). Two of the three are operator-facing.
+`IdentityCell` states the rule once, and `identityColumn` is the `FlatList` column every page uses:
 
-- the label is the primary line;
-- the segment sits beneath it, in the data face;
-- the segment is suppressed when it equals the label, so the same string never renders twice;
+- the display name is the primary line;
+- the name sits beneath it, in the data face;
+- the name is suppressed when it equals the display name, so the same string never renders twice;
 - an id is never a list column.
 
 This is the same two-line treatment `TreeList` renders, so a tree and a flat list of the same entity
 look like the same product. It replaced sixteen hand-written name columns written in four
-incompatible idioms, which is why the header word for one fact used to be "Name" on one page, "Key"
-on another, and "Display name" beside it.
+incompatible idioms, which is why the header word for one fact used to be "Name" on one page and
+"Key" on another.
 
-**Two words, no synonyms.** The friendly label an operator types is the **Name**. The machine
-identifier a URL, a CLI argument, and a topic carry is the **Key**. "Display name", "Technical name",
-and "Segment" are all retired as field labels, and `identity-vocabulary-guard.test.ts` fails the build
-on any of them appearing in label text.
+**Three fields, no synonyms.** The identifier is the **Name**, on every column header and every
+form. The friendly string is the **Display name**. The id is never labelled because it is never
+shown outside a drill-in. "Technical name" and "Segment" are retired as field labels, and
+`identity-vocabulary-guard.test.ts` fails the build on either appearing in label text. The console's
+words are the column names, so an operator reading the UI, the CLI reference, and the schema reads
+one vocabulary.
 
-**A key is a value; a segment is a position.** `internal/key` already fixes this: a segment is one
-dot-separated component of a key. So `boi.17c.rm215a` is three segments, and the room's key is the
-value in the third. That makes "segment" right in prose about topic structure and wrong on a form,
-where the operator is typing a value and not choosing a position.
+**A name is a value; a segment is a position.** A segment is one dot-separated component of an
+address, so `boi.17c.rm215a` is three segments and the room's name is the value in the third,
+`rm215a`. An entity name is one segment and may not carry a dot; only a keyspace name is a path. That makes "segment"
+right in prose about topic structure and wrong on a form, where the operator is typing a value and
+not choosing a position.
 
-**There are two key rules on one character set, deliberately.** An entity key is kebab (`crestron`,
-`rm215a`), validated by `storage.ValidateEntityKey`. A keyspace key is that same kebab segment with an
-optional dot hierarchy (`icmp.rtt-avg`), validated by `internal/key`. They stay two validators because
-only a keyspace key may carry the dot: a key is a dot-joined path of segments and an entity key is a
-path of one. The console says "Key" for both, because an operator types one identifier either way and
-that one difference surfaces as a validation message, not as a second word. The one boundary is the CLI reference, which is generated from the Huma `doc:`
-tags: its flag is still `--display-name` because the wire field is still `display_name`, and a help
-string calling it the name while the flag says otherwise would be worse than the inconsistency. Both
-move together when the field renames.
+**There are two name rules on one character set, and one validator.** An entity name is kebab
+(`crestron`, `rm215a`). A keyspace name is that same kebab token with an optional dot hierarchy
+(`icmp.rtt-avg`). Only a keyspace name may carry the dot. Both go through `storage.ValidateName`,
+which picks the rule from the table's declared identity shape rather than from whoever wrote the
+call site. There used to be four separate validators and a caller chose between them by hand, which
+is how three tables reached production with no name validation at all.
 
-A page whose identifier is a keyspace key says **Key**, not Segment, on both the column and the form.
+That split is a **validation difference, not a second concept**, so it never surfaces as a second
+word. `property_type`, `event_type`, and `command_type` hold dotted names and head their column
+"Name" like every other page; the difference reaches the operator as a validation message.
+`identityColumn` therefore takes no `label` option at all, and the vocabulary guard scans the source
+for anyone passing one, which is the failure mode a per-page test cannot catch.
 
-A page whose identifier is a **keyspace key** rather than a segment (`property_type`, `event_type`,
-`command_type`, `tag`) passes `identityColumn({ label: "Key" })` and does not derive its key from the
-label: `icmp.rtt-avg` is a legal key and an illegal segment. The write side has the same split.
-`createIdentity` derives a segment from the label as an operator types and stops the moment they edit
-the segment by hand, and an edit form seeds it with the existing segment so relabelling can never
-rewrite a live address. Keyspace pages do not wire it at all.
+The write side does split. `createIdentity` derives the name from the display name as an operator
+types and stops the moment they edit the name by hand, and an edit form seeds it with the existing
+name so relabelling can never rewrite a live address. The keyspace pages (`property_type`,
+`event_type`, `command_type`) do not wire it, because a dotted name has no sensible derivation from
+prose. `tag`, `variable`, and `secret` read as keyspace because their prose calls them keys, but
+none of them carries a dot, so all three are on the entity rule.
+
+**A Save that changed the name is two calls, not one.** The update goes first and the `:rename`
+custom method goes last, because the rename is separately gated by `<resource>:rename` and is the
+one call that can be refused on its own. Last means a refusal leaves the rest of the edit saved and
+the name unchanged, rather than the reverse. On success the page navigates to the entity's new
+address, since the old one no longer resolves ([ADR-0076](/architecture/decisions/)).
 
 ## Build and embed
 

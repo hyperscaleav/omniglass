@@ -9,7 +9,7 @@ import { uuidFor } from "../lib/testids";
 
 // Capabilities is the capability registry on the flat FlatList surface (the
 // capability picker on the product form). Data is seeded into the query cache
-// so no server is needed. Registry rows carry a uuid id and the kebab handle
+// so no server is needed. Registry rows carry a uuid id and the name
 // in name (ADR-0062); the console addresses rows by the handle.
 const seed: Capability[] = [
   { id: uuidFor("cap-touch-screen"), name: "touch-screen", display_name: "Touchscreen control", official: true },
@@ -29,7 +29,7 @@ function mount(me: Me = admin) {
   ));
 }
 
-// The catalog addresses rows by the kebab handle (ADR-0062): the first column
+// The catalog addresses rows by the name (ADR-0062): the first column
 // shows it, and the substring filter matches it. With uuid-shaped fixture ids
 // these fail when the page feeds the uuid anywhere an operator reads or types.
 describe("Capabilities addressing honesty (#469)", () => {

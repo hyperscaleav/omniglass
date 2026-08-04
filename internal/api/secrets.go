@@ -28,7 +28,7 @@ type secretTypeFieldBody struct {
 
 type secretTypeBody struct {
 	ID                    string                `json:"id" doc:"The secret type's uuid, the stable handle that survives a rename"`
-	Name                  string                `json:"name" doc:"The kebab handle an operator reads and types; renameable"`
+	Name                  string                `json:"name" doc:"The name an operator reads and types; renameable"`
 	DisplayName           string                `json:"display_name"`
 	Official              bool                  `json:"official"`
 	DefaultAdminSensitive bool                  `json:"default_admin_sensitive" doc:"The admin_sensitive value the create form seeds for this type"`
@@ -83,7 +83,7 @@ type secretOutput struct {
 
 type createSecretInput struct {
 	Body struct {
-		Name           string            `json:"name" minLength:"1" doc:"The cascade key; unique per owner"`
+		Name           string            `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The cascade name (lowercase letters, digits, and hyphens); unique per owner"`
 		SecretType     string            `json:"secret_type" minLength:"1" doc:"A secret_type id"`
 		OwnerKind      string            `json:"owner_kind" enum:"platform,location,component" doc:"Which tier owns this secret (the system band is retired, ADR-0052)"`
 		Owner          *string           `json:"owner,omitempty" doc:"The owning entity's name; omit for a platform secret"`
@@ -338,6 +338,10 @@ func mapSecretErr(err error) error {
 		return huma.Error422UnprocessableEntity("unknown secret_type")
 	case errors.Is(err, storage.ErrSecretOwnerNotFound):
 		return huma.Error422UnprocessableEntity("secret owner not found")
+	case errors.Is(err, storage.ErrEntityNameIsUUID):
+		return huma.Error422UnprocessableEntity("secret name may not be a uuid")
+	case errors.Is(err, storage.ErrInvalidEntityName):
+		return huma.Error422UnprocessableEntity("secret name must be lowercase letters, digits, and hyphens, starting with a letter or digit")
 	case errors.Is(err, storage.ErrSecretFieldInvalid):
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, storage.ErrNoSecretProvider):

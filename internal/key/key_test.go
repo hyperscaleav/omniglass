@@ -5,38 +5,6 @@ import (
 	"testing"
 )
 
-func TestValidateKey(t *testing.T) {
-	cases := []struct {
-		name, key string
-		ok        bool
-	}{
-		{"flat", "serial-number", true},
-		{"dotted", "interface.reachable", true},
-		{"multi_dot", "icmp.rtt-avg", true},
-		{"digits", "tcp-open2", true},
-		{"empty", "", false},
-		{"leading_dot", ".a", false},
-		{"trailing_dot", "a.", false},
-		{"double_dot", "a..b", false},
-		{"upper", "Serial-Number", false},
-		{"space", "serial number", false},
-		{"underscore", "serial_number", false},
-		{"leading_digit_segment", "9lives", true},
-		{"leading_hyphen_segment", "-lives", false},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			err := ValidateKey(c.key)
-			if c.ok && err != nil {
-				t.Fatalf("want ok, got %v", err)
-			}
-			if !c.ok && err == nil {
-				t.Fatalf("want error for %q", c.key)
-			}
-		})
-	}
-}
-
 func TestValidateValue(t *testing.T) {
 	j := func(s string) json.RawMessage { return json.RawMessage(s) }
 	cases := []struct {

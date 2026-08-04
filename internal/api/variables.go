@@ -52,7 +52,7 @@ type variableOutput struct {
 
 type createVariableInput struct {
 	Body struct {
-		Name      string  `json:"name" minLength:"1" doc:"The cascade key; unique per owner"`
+		Name      string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The cascade name (lowercase letters, digits, and hyphens); unique per owner"`
 		ValueType string  `json:"value_type" enum:"string,int,float,bool,json" doc:"The declared value type"`
 		OwnerKind string  `json:"owner_kind" enum:"platform,location,system,component" doc:"Which tier owns this variable"`
 		Owner     *string `json:"owner,omitempty" doc:"The owning entity's name; omit for a platform variable"`
@@ -237,6 +237,10 @@ func mapVariableErr(err error) error {
 		return huma.Error422UnprocessableEntity("unknown value_type")
 	case errors.Is(err, storage.ErrVariableOwnerNotFound):
 		return huma.Error422UnprocessableEntity("variable owner not found")
+	case errors.Is(err, storage.ErrEntityNameIsUUID):
+		return huma.Error422UnprocessableEntity("variable name may not be a uuid")
+	case errors.Is(err, storage.ErrInvalidEntityName):
+		return huma.Error422UnprocessableEntity("variable name must be lowercase letters, digits, and hyphens, starting with a letter or digit")
 	case errors.Is(err, storage.ErrVariableValueInvalid):
 		return huma.Error422UnprocessableEntity(err.Error())
 	default:

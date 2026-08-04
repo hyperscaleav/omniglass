@@ -38,6 +38,32 @@ type BannedTerm struct {
 // Banned is the denylist. Order is presentation only.
 var Banned = []BannedTerm{
 	{
+		// Two synonyms the corpus invented for the identifier. Neither is a symbol,
+		// so nothing else catches them, and both survived the first vocabulary sweep
+		// on ten pages: "technical name" appeared 21 times in the generated CLI
+		// reference alone, from a Huma doc: tag. A third word for the identifier is
+		// exactly what the triad exists to stop (ADR-0076).
+		Pattern:     regexp.MustCompile(`(?i)\btechnical names?\b|\bkebab handles?\b`),
+		Replacement: "name (the identifier), or display name (the friendly string)",
+		Origin:      "ADR-0076",
+	},
+	{
+		// The identity triad settled on id / name / display_name (ADR-0076). These
+		// two validators were the platform's other name rules and are DELETED, not
+		// renamed: ValidateName picks the rule from the table's declared identity
+		// shape, so a page naming either one is telling a contributor to call
+		// something that no longer exists.
+		Pattern:     regexp.MustCompile(`\bValidateEntityKey\b|\bkey\.ValidateKey\b`),
+		Replacement: "storage.ValidateName, which picks the rule from the table's declared identity shape",
+		Origin:      "ADR-0076",
+	},
+	{
+		// The sentinels moved with the vocabulary.
+		Pattern:     regexp.MustCompile(`\bErrInvalidEntityKey\b|\bErrEntityKeyIsUUID\b`),
+		Replacement: "ErrInvalidEntityName / ErrEntityNameIsUUID",
+		Origin:      "ADR-0076",
+	},
+	{
 		// Split out of the generic datapoint entry below and placed BEFORE it,
 		// because first-match-wins and the generic replacement is wrong here: a
 		// log_datapoint did not become a property or a sample, it was retired

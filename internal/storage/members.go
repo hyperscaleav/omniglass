@@ -63,13 +63,14 @@ func (p *PG) AddMember(ctx context.Context, actorID, systemName, componentName s
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := p.resolveMembershipEnds(ctx, tx, systemName, componentName, write); err != nil {
+	systemID, err := p.resolveMembershipEnds(ctx, tx, systemName, componentName, write)
+	if err != nil {
 		return err
 	}
 	if err := addMemberTx(ctx, tx, systemName, componentName); err != nil {
 		return err
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "system_member", systemName, nil,
+	if err := writeAuditRes(ctx, tx, actorID, "update", "system_member", systemID, nil,
 		map[string]string{"system": systemName, "component": componentName}); err != nil {
 		return err
 	}
@@ -118,7 +119,8 @@ func (p *PG) RemoveMember(ctx context.Context, actorID, systemName, componentNam
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := p.resolveMembershipEnds(ctx, tx, systemName, componentName, write); err != nil {
+	systemID, err := p.resolveMembershipEnds(ctx, tx, systemName, componentName, write)
+	if err != nil {
 		return err
 	}
 	if err := lockMemberComponent(ctx, tx, componentName); err != nil {
@@ -152,7 +154,7 @@ func (p *PG) RemoveMember(ctx context.Context, actorID, systemName, componentNam
 	if err := promoteSolePrimary(ctx, tx, componentName); err != nil {
 		return err
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "system_member", systemName,
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "system_member", systemID,
 		map[string]string{"system": systemName, "component": componentName}, nil); err != nil {
 		return err
 	}
@@ -195,7 +197,8 @@ func (p *PG) SetPrimaryMember(ctx context.Context, actorID, systemName, componen
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := p.resolveMembershipEnds(ctx, tx, systemName, componentName, write); err != nil {
+	systemID, err := p.resolveMembershipEnds(ctx, tx, systemName, componentName, write)
+	if err != nil {
 		return err
 	}
 	if err := lockMemberComponent(ctx, tx, componentName); err != nil {
@@ -221,7 +224,7 @@ func (p *PG) SetPrimaryMember(ctx context.Context, actorID, systemName, componen
 	if tag.RowsAffected() == 0 {
 		return ErrMemberNotFound
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "system_member", systemName, nil,
+	if err := writeAuditRes(ctx, tx, actorID, "update", "system_member", systemID, nil,
 		map[string]string{"system": systemName, "component": componentName, "primary": "true"}); err != nil {
 		return err
 	}
@@ -268,17 +271,23 @@ func (p *PG) membersWhere(ctx context.Context, where string, arg string) ([]Memb
 
 // resolveMembershipEnds checks both ends of the binding before it is written: the
 // system must be in the caller's write scope (a non-disclosing not-found when it
-// is not) and the component must exist.
-func (p *PG) resolveMembershipEnds(ctx context.Context, q txQuerier, systemName, componentName string, write scope.Set) error {
-	inScope, err := p.ownerInScope(ctx, q, "system", systemName, write)
+// is not) and the component must exist. It returns the system's id, because a
+// membership is audited against the system it binds into and a name is renameable;
+// the scope check already loads the row, so the id costs nothing extra here.
+func (p *PG) resolveMembershipEnds(ctx context.Context, q txQuerier, systemName, componentName string, write scope.Set) (string, error) {
+	sys, err := scopedByName(ctx, q, systemConfig, systemName)
 	if err != nil {
-		return err
+		return "", err // ErrSystemNotFound when absent
+	}
+	inScope, err := inScopeTree(ctx, q, systemTable, sys.ID, write)
+	if err != nil {
+		return "", err
 	}
 	if !inScope {
-		return ErrSystemNotFound
+		return "", ErrSystemNotFound
 	}
 	if _, err := scopedByName(ctx, q, componentConfig, componentName); err != nil {
-		return err // ErrComponentNotFound when absent
+		return "", err // ErrComponentNotFound when absent
 	}
-	return nil
+	return sys.ID, nil
 }

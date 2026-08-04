@@ -152,7 +152,7 @@ function InterfaceBladeBody(props: { id: string }): JSX.Element {
             when={edit.editing()}
             fallback={
               <div class="grid grid-cols-2 gap-4">
-                <KVStacked label="Key" value={<span class="font-data">{iface().name}</span>} />
+                <KVStacked label="Name" value={<span class="font-data">{iface().name}</span>} />
                 <KVStacked label="Type" value={<span class="badge badge-ghost badge-sm">{iface().interface_type}</span>} />
                 <KVStacked label="Component" value={iface().component ? <span class="font-data">{iface().component}</span> : <span class="text-base-content/40">server-hosted</span>} />
                 <KVStacked label="Node" value={iface().node ? <span class="font-data">{iface().node}</span> : <span class="text-base-content/40">unassigned</span>} />

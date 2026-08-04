@@ -6,7 +6,7 @@ import ColumnMenu from "./ColumnMenu";
 // in-flow inside the grid card, which has overflow-hidden, so a short grid clipped
 // the panel. The panel must float over the grid, which means it must mount OUTSIDE
 // any overflow-clipping ancestor (it portals to the document body).
-const columns = { type: { label: "Type" }, parent: { label: "Parent" }, tech: { label: "Segment" } };
+const columns = { type: { label: "Type" }, parent: { label: "Parent" }, tech: { label: "Name" } };
 
 describe("ColumnMenu", () => {
   it("floats the column panel outside an overflow-clipping ancestor", async () => {
@@ -39,7 +39,7 @@ describe("ColumnMenu", () => {
       />
     ));
     fireEvent.click(getByLabelText("Columns"));
-    fireEvent.click(await screen.findByText("Segment"));
+    fireEvent.click(await screen.findByText("Name"));
     expect(toggled).toEqual(["tech"]);
   });
 });

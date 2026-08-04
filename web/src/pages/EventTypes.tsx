@@ -1,4 +1,5 @@
 import { Show, createEffect, createSignal, on, type JSX } from "solid-js";
+import { entityLabel } from "../lib/entities";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import { identityColumn } from "../components/IdentityCell";
@@ -29,11 +30,11 @@ function originBadge(official: boolean): JSX.Element {
 }
 
 const columns: FlatColumn<EventTypeRow>[] = [
-  // The header word stays "Key" rather than the primitive's default "Name": an event
-  // type's `name` is a keyspace key (call.started), which is a legal key and an
-  // illegal segment, so calling it a name here would teach the wrong thing. The cell
-  // renders the label above the key, which is why there is no longer a Label column.
-  identityColumn<EventTypeRow>({ label: "Key" }),
+  // The shared identity cell under the one header word, "Name". An event type's
+  // `name` is dot-segmented (call.started) where most of the estate is kebab, but
+  // that is a validation difference, not a different concept. The cell renders the
+  // display name above the name, which is why there is no longer a Label column.
+  identityColumn<EventTypeRow>(),
   { key: "official", label: "Origin", width: "100px", sortVal: (r) => String(r.official), cell: (r) => originBadge(r.official) },
 ];
 
@@ -55,7 +56,7 @@ export default function EventTypes(): JSX.Element {
             { key: "name", type: "string", hint: "substring", get: (r) => `${r.name} ${r.display_name ?? ""}`, values: () => [] },
             { key: "official", type: "string", hint: "exact", get: (r) => (r.official ? "official" : "custom"), values: () => ["official", "custom"] },
           ],
-          filterPlaceholder: "filter event types by name, label…",
+          filterPlaceholder: "filter event types by name, display name…",
           columns,
           empty: "No event types.",
           rowId: (r) => r.name,
@@ -72,9 +73,18 @@ export default function EventTypes(): JSX.Element {
 // eventTypeBlade renders one event type on the shared blade stack. The title is the
 // mono key; official event types are read-only (no pencil, no delete).
 export const eventTypeBlade: BladeDef = {
-  Title: (p) => <span class="font-data">{p.id}</span>,
+  Title: (p) => <EventTypeBladeTitle name={p.id} />,
   Body: (p) => <EventTypeBladeBody name={p.id} />,
 };
+
+// The blade heading is the display name, falling back to the name, so opening a row
+// lands on the same words the row showed. It rendered the bare name before, so
+// clicking "ICMP RTT (avg)" opened a panel headed icmp.rtt-avg.
+function EventTypeBladeTitle(p: { name: string }): JSX.Element {
+  const row = useEventTypeRow(p.name);
+  const r = row();
+  return <span classList={{ "font-data": !r?.display_name }}>{r ? entityLabel(r) : p.name}</span>;
+}
 
 function useEventTypeRow(name: string): () => EventTypeRow | undefined {
   const eventTypes = useQuery(() => ({ queryKey: EVENT_TYPES_KEY, queryFn: listEventTypes }));
@@ -143,10 +153,11 @@ function EventTypeBladeBody(p: { name: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
+            <KVStacked label="Name" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Origin" value={originBadge(r().official)} />
           </div>
           <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Name</span>
+            <span class="eyebrow">Display name</span>
             <Show when={edit.editing()} fallback={<div class="input input-bordered flex items-center text-sm">{r().display_name}</div>}>
               <input class="input input-bordered w-full" value={displayName()} onInput={(e) => setDisplayName(e.currentTarget.value)} />
             </Show>
@@ -213,10 +224,10 @@ export function CreateEventTypeForm(p: { onCreated: (r: EventTypeRow) => void })
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Key" hint="A lowercase, dot-hierarchied name, e.g. call.started or cable.unplugged.">
+      <Field label="Name" hint="A lowercase, dot-hierarchied name, e.g. call.started or cable.unplugged.">
         <input class="input input-bordered w-full font-data" value={name()} placeholder="call.started" onInput={(e) => setName(e.currentTarget.value)} />
       </Field>
-      <Field label="Name">
+      <Field label="Display name">
         <input class="input input-bordered w-full" value={displayName()} placeholder="Call started" onInput={(e) => setDisplayName(e.currentTarget.value)} />
       </Field>
       <Field label="Description">

@@ -40,6 +40,11 @@ sections ([getting around](/guides/operator/#getting-around)).
   list, with each row's place in the tree shown above its name.
 - The default list order is the **tree compressed to a flat list** (nesting preserved); click
   a column header to sort by it instead.
+- The **Name** column carries both halves of an entity's identity: the **display name** it goes by on
+  the first line, and beneath it, in the data face, the **name** the API, the CLI, and the URL address
+  it by. An entity with no display name shows its name alone, in the data face, so an absence reads as
+  an absence rather than a typo. That second line is what you copy into an `omniglass` command. The
+  column is headed **Name** on every page and sorts on the line you are reading down.
 - The **columns** menu shows or hides columns and lets you **drag to reorder** them. The
   layout is remembered per browser.
 - On Locations, each row wears its **type's icon** as a leading glyph (a campus, building,

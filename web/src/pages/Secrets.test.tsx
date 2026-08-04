@@ -73,7 +73,7 @@ describe("Secrets page platform-tier authority", () => {
     fireEvent.click(screen.getByRole("button", { name: /new secret/i }));
     const typeSelect = screen.getByLabelText("Type") as HTMLSelectElement;
     fireEvent.change(typeSelect, { target: { value: typeSelect.options[1]?.value ?? typeSelect.options[0].value } });
-    fireEvent.input(screen.getByLabelText("Key"), { target: { value: "poll" } });
+    fireEvent.input(screen.getByLabelText("Name"), { target: { value: "poll" } });
     fireEvent.input(screen.getByLabelText(/community/i), { target: { value: "s3cr3t" } });
     const submitBtn = screen.getByRole("button", { name: /create secret/i });
     expect(submitBtn).not.toBeDisabled();
@@ -150,7 +150,7 @@ describe("Secrets create lands on the new row (#471)", () => {
     fireEvent.click(screen.getByRole("button", { name: /new secret/i }));
     const typeSelect = screen.getByLabelText("Type") as HTMLSelectElement;
     fireEvent.change(typeSelect, { target: { value: "snmp-community" } });
-    fireEvent.input(screen.getByLabelText("Key"), { target: { value: "door_code" } });
+    fireEvent.input(screen.getByLabelText("Name"), { target: { value: "door_code" } });
     fireEvent.input(screen.getByLabelText(/community/i), { target: { value: "s3cr3t" } });
     fireEvent.click(screen.getByRole("button", { name: /create secret/i }));
     const blade = await waitFor(() => {

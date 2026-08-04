@@ -110,6 +110,8 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0073](#adr-0073-a-driver-consumes-transports-a-transport-is-code-not-a-row) | 2026-07-31 | Accepted | a driver consumes transports; a transport is code, not a row |
 | [ADR-0074](#adr-0074-an-approved-definition-rolls-up-to-one-pr-slices-cascade-on-an-integration-branch) | 2026-08-01 | Accepted | loop-executed work rolls up to one PR per approved definition; slices cascade through per-slice gates on an integration branch |
 | [ADR-0075](#adr-0075-an-alarms-condition-identity-is-a-raiser-supplied-dedup-key) | 2026-08-01 | Accepted | alarm gains dedup_key and the one-open-per-condition partial unique index; RaiseAlarm becomes a guarded conditional insert |
+| [ADR-0076](#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid) | 2026-08-04 | Accepted | the name stays renameable and addressable; rename is a custom method, every write returns the uuid, and one validator applies one of two rules |
+| [ADR-0077](#adr-0077-a-group-name-obeys-the-entity-name-rule-tightening-a-pattern-the-code-had-excused) | 2026-08-04 | Accepted | principal_group.name moves to the entity name rule, retiring the looser API-layer pattern |
 
 ## Entries
 
@@ -2148,7 +2150,7 @@ below from the project's history. From here it grows one slice at a time.
 - **`node` stays the exception.** Its primary key is `principal_id`, because a node is the detail row of a
   principal and its key IS that foreign key. It is deliberate and it is not changing.
 - **The API carries both and accepts either**, as the estate entities do: `id` (uuid) and `name` (handle)
-  on every body, and a path or reference resolves whichever form it is given. A kebab handle can never
+  on every body, and a path or reference resolves whichever form it is given. A name can never
   look like a uuid, so the two cannot collide.
 - **The rename test is written first, each slice.** It renames a handle and asserts every reference still
   resolves and now reads the new one. That is the capability the epic buys, so it is what the slice proves.
@@ -2578,3 +2580,52 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   as a singleton. The table had no column naming WHICH condition was open, so the documented `(event_rule, owner)`
   key was unrepresentable before the rule table exists; the raiser-supplied key works today and does not block on
   the engine. Shipped by [#465](https://github.com/hyperscaleav/omniglass/issues/465) in the #431 loop.
+
+### ADR-0076: A renameable, human-typed identifier stays in the URL, and the write returns the uuid
+
+- **Date:** 2026-08-04 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/), [api](/architecture/api/), [storage](/architecture/storage/), [tags](/architecture/tags/), [config, secrets, and variables](/architecture/variables/)
+- **Decision:** An entity is addressed by its **`name`**, a renameable identifier an operator types, as well as
+  by its immutable **`id`**. A rename is an explicit custom method (`POST /<collection>/{ref}:rename`, gated by
+  `<resource>:rename`) rather than a field write, and a write returns the `id` so a client can store the
+  stable handle and stop depending on the name it used. References inside the platform store the `id` only
+  (ADR-0056), and `audit_log.resource_id` keys on it, so a rename moves exactly one column. Two
+  response bodies do not yet carry the id, `NodeBody` and `SystemRoleBody`, so a client of those two
+  has the name and nothing else to diff; closing that is a follow-up, not a change of direction.
+- **Decision (what the name rule became):** there is **one validator**, `storage.ValidateName(table, name)`,
+  which picks the rule from the table's declared identity shape instead of from the call site; the platform's
+  two other name rules are deleted, not renamed. Two rules survive rather than four, and they share one
+  character set, differing only in the dot and the ceiling: an **entity name** is one segment of lowercase
+  letters, digits, and hyphens, at most 100 characters (`hq-boardroom-dsp`); a **keyspace name** is a dot-joined
+  path of those same segments, at most 128 (`icmp.rtt-avg`). Neither may be uuid-shaped. Only `property_type`,
+  `event_type`, and `command_type` are keyspace. `tag`, `variable`, and `secret` had been declared keyspace on a
+  claim nothing exercised, and move to the entity rule, since none of them ever carries a dot: a behaviour
+  change on three shipped surfaces, so `cost_center` and `$var:crestron.ssh` stop being creatable and the docs
+  that taught them say `cost-center` and `$var:crestron-ssh`.
+- **Context:** this is a deliberate departure from prevailing practice, recorded so it is not mistaken for an
+  oversight. Prior art runs the other way almost without exception: AIP-180 states that a resource must not
+  change its name, Kubernetes `metadata.name` is documented "Cannot be updated", GCP `projectId` and Tag
+  `shortName` are Immutable, and Azure's own guidance is that most resource names cannot change after creation
+  and that details belong in tags instead. More pointedly, systems in this domain **retreated** from it after
+  shipping: Grafana deprecated its title-derived dashboard slug in v5.0 and added `uid` because name-based
+  references broke dashboards, and PagerDuty froze `CustomField.name` at creation and routes all renaming
+  pressure to `display_name`. None migrated the other way. The case for keeping it is operator ergonomics in an
+  estate whose entities are named after rooms and racks that genuinely get renamed, and the mitigation is
+  Linear's: the typed identifier is renameable, the uuid is returned on every write, and a client that kept
+  using the name can detect the move by diffing the id it holds. The cost is real and accepted: an external
+  reference held as a name breaks on rename, and nothing on the server can repair it. Alias and redirect
+  machinery is deliberately not built yet; it is the first thing to reach for if that cost shows up.
+
+### ADR-0077: A group name obeys the entity name rule, tightening a pattern the code had excused
+
+- **Date:** 2026-08-04 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/)
+- **Decision:** `principal_group.name` obeys the ordinary entity name rule (`^[a-z0-9][a-z0-9-]*$`, 100
+  characters, a uuid refused), enforced by the Storage Gateway on create and rename and carried in the OpenAPI
+  contract as a `pattern`. The previous rule (`^[a-z0-9][a-z0-9._-]*$`, 200 characters, checked only by the
+  request schema) is retired.
+- **Context:** this reverses a position that was written down in code. `KeyProvedElsewhere` excused
+  `principal_group` from the behavioural validation sweep with the reason that tightening it "is a behaviour
+  change for existing groups, tracked with the rename work". This is that work, so the excuse is spent. The
+  looser pattern admitted `.` and `_`, the two characters the address grammar reads as separators, and the
+  gateway itself validated nothing at all, so a group could be created with a uuid-shaped name through any
+  caller that was not the HTTP route. There are no releases and no operator data, so the tightening costs
+  nothing now and would cost a migration later. Shipped by [#567](https://github.com/hyperscaleav/omniglass/issues/567) in the [#545](https://github.com/hyperscaleav/omniglass/issues/545) loop.

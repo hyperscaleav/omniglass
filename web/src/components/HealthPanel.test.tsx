@@ -105,8 +105,8 @@ function mountSystem(data: EstateHealth, onOpenComponent?: (name: string) => voi
   ));
 }
 
-// The impaired-role block is the flex column the role's technical name sits in
-// (the display name also appears inside the chain, so the address is the anchor).
+// The impaired-role block is the flex column the role's name sits in (the display
+// name also appears inside the chain, so the name is the anchor).
 const roleBlock = (getByText: (t: string) => HTMLElement, name: string) =>
   getByText(name).closest("div.flex-col") as HTMLElement;
 

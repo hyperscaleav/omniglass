@@ -17,8 +17,12 @@ they pin are [templates](/architecture/templates/); the data they own is
 
 :::note[Partial]
 Built today: `component`, `system`, and `location` as name-addressable, variable-depth (`parent_id`)
-trees with full scoped CRUD; a delete is refused while a structural child remains. **Placement and
-classification are mutable, not fixed at create** ([ADR-0064](/architecture/decisions/#adr-0064-placement-and-classification-are-mutable-after-create)):
+trees with full scoped CRUD; a delete is refused while a structural child remains. **A rename is its
+own custom method** (`POST /components/{name}:rename` and its siblings) gated `<resource>:rename`,
+with no `name` in the `PATCH` body and a scope-blind `:checkName` precheck beside it
+([ADR-0076](/architecture/decisions/#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)).
+**Placement and classification are mutable, not fixed at create**
+([ADR-0064](/architecture/decisions/#adr-0064-placement-and-classification-are-mutable-after-create)):
 re-parent (cycle-guarded), relocate, re-classify, or clear each field; a product swap keeps hand-set
 property values while the new contract's defaults take over. Each entity carries an **optional
 classifier** (`product` / `standard` / `location_type`; the `component_type` registry retired,
@@ -79,7 +83,7 @@ least-specific tier, **`platform`**
 | `component` | a deployed instance (`dsp-boardroom-3`); points at its `product`, the source of its shape |
 | `system` | a composition of components / subsystems (the service tree); conforms to its `standard` |
 | `location` | a place tree; no template (the `location_type` is the only shape-definer) |
-| `node` | the edge process; its name is the identity, bound to a credential ([identity and access](/architecture/identity-access/)) |
+| `node` | the edge process; addressed by its `name`, identified by the `principal_id` it is bound to ([identity and access](/architecture/identity-access/)) |
 
 The column mechanics render from the generated schema facts:
 
@@ -112,7 +116,7 @@ The column mechanics render from the generated schema facts:
 <SchemaTable
   table="node"
   notes={{
-    name: 'The identity the node enrolls and heartbeats under',
+    name: 'The address the node enrolls and heartbeats under; fixed at create, unlike a component name',
     last_heartbeat_at: 'Liveness, stamped by the heartbeat lane',
   }}
 />
@@ -361,7 +365,7 @@ The singleton `global` owner rides the same arc as an all-null arm: none of the 
 This makes **system-, location-, and node-level samples first-class** (`health` is a `state` owned by
 a system; a node's self-health is owned by the node); estate-wide samples owned by `global` are the
 designed extension. The **owner** gives a recorded [health](/architecture/health/) verdict its level:
-component, system, and location each own a transition series under the same `health` key. The same
+component, system, and location each own a transition series under the same `health` property name. The same
 arc owns the `event` rows a sample produces, and is the design for `alarm` (component-local today),
 so a system-owned sample will yield a system-owned alarm. The full pattern and DDL are on
 [storage](/architecture/storage/).
@@ -374,8 +378,9 @@ The arc's first built sink beyond the sample tables is **`event`**, the **occurr
 
 An `event` row carries the **identical owner exclusive-arc** as a sample (same one-set CHECK) and
 the **same provenance** vocabulary (`observed` / `calculated` / `intended` / `declared`, default
-`observed`), so the same owner-confinement and reject-not-project gates apply at ingest. The occurrence key
-(`event_type_id`), the lineage columns, and the separate raw `log_line` lane
+`observed`), so the same owner-confinement and reject-not-project gates apply at ingest. The occurrence type
+(`event_type_id`, resolved from the `event_type` name), the lineage columns, and the separate raw
+`log_line` lane
 ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)) are the
 [events](/architecture/events/) page's model. Closing the loop, the reserved **`event_id`** columns
 on `metric` and `state` are now **real foreign keys** to `event(id)` (`on delete set null`): an
@@ -478,27 +483,38 @@ Three things, and no fourth:
 
 - **id**, a uuid. Immutable, the primary key, and what every foreign key stores, so a rename has
   nothing to rewrite.
-- **key**, the machine identifier an operator types and a URL, a CLI argument, and a topic carry.
-  Mutable, which is the point: `cisco-room-bar` is a typo or a rebrand away from being wrong forever
-  if it cannot change.
-- **name**, an optional free-text label. Absent is normal: `crestron` needs no label, and a tag never
-  has one.
+- **name**, the renameable machine identifier an operator types and a URL, a CLI argument, and an
+  address carry (the `rm215a` in `boi.17c.rm215a`). Renameable is the point: `cisco-room-bar` is a
+  typo or a rebrand away from being wrong forever if it cannot change.
+- **display_name**, an optional friendly string a human reads ("HQ Boardroom DSP"). Absent is normal:
+  `crestron` needs no label, and a tag never has one.
+
+Because the id is what everything stores, `audit_log.resource_id` included, a rename moves exactly
+one column and the history of the row survives it intact. Changing a name is therefore its own act
+rather than a field write: a `:rename` custom method on the collection, gated `<resource>:rename`,
+with no `name` in the `PATCH` body at all
+([ADR-0076](/architecture/decisions/#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)).
 
 Every exception is declared in `internal/storage/identity_shape.go` and rendered below, so this page
-cannot drift from the code. Most tables are key-bearing and the shape explains itself. The two that
-need a reason are the ones where an identifier exists but is not a key.
+cannot drift from the code. Most tables bear a name on the ordinary entity rule and the shape
+explains itself. Two groups need a reason: the keyspace tables, whose name is a dot-joined path
+rather than one segment, and the tables carrying a human-readable identifier that is not a name at
+all.
 
-A **keyspace** table carries a key on the other key rule, the one `internal/key` owns (that same
-kebab segment, optionally dot-hierarchied). The two rules stay two validators, because only a
-keyspace key may carry the dot; the console still says Key for both, and that one difference
-surfaces as a validation message rather than as a second word.
+A **keyspace** table carries a `name` on the other name rule: the same characters and the same
+segment shape, joined into a dot-separated path (`icmp.rtt-avg`) instead of standing alone, and
+bounded at 128 characters rather than 100. The two rules stay two rules because only a keyspace name
+may carry the dot, but they are one validator: `storage.ValidateName` picks between them from the
+table's declared shape, so a call site cannot pick wrongly or forget to pick at all. The console
+labels the identifier **Name** under both rules and the friendly string **Display name**, so the one
+difference surfaces as a validation message rather than as a second word.
 
 <IdentityShapes shape="keyspace" />
 
-A **human identifier that is not a key** is the set worth stating out loud, because each looks
-key-shaped from a distance and must never acquire the key rule.
+A **human identifier that is not a name** is the set worth stating out loud, because each looks
+name-shaped from a distance and must never acquire the name rule.
 
-<IdentityShapes shape="human identifier, not a key" />
+<IdentityShapes shape="human identifier, not a name" />
 
 Everything else is **id-only**: a join row and a telemetry row are addressed by uuid because nobody
 names them. An operator names the component, not the metric.

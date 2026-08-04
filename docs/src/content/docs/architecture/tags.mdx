@@ -26,7 +26,7 @@ the [decision log](/architecture/decisions/).
 :::
 
 A **tag** is an operator **`key: value`** label for dimensions Omniglass does not model natively
-(`category: audio-dsp`, `environment: prod`, `cost_center: 4021`): not a signal, no lifecycle, riding the
+(`category: audio-dsp`, `environment: prod`, `cost-center: 4021`): not a signal, no lifecycle, riding the
 same [cascade](/architecture/cascade/) as
 [config, secrets, and variables](/architecture/variables/) but with a **union-on-key, override-on-value**
 combinator rather than a single most-specific value.
@@ -40,8 +40,10 @@ combinator rather than a single most-specific value.
   or a secret is owned at.
 
 Splitting them keeps the vocabulary **normalized**: `environment` is minted once and reused, no one
-inventing `env` beside `environment` beside `Environment`; the key name is validated as a lowercase
-identifier in a pure `internal/tag` package, enforcing the canonical spelling on the way in.
+inventing `env` beside `environment` beside `Environment`. What an operator binds by is the tag's
+**`name`**, and it is an ordinary entity name: `storage.ValidateName` reads the shape the `tag` table
+declares and applies the one-segment rule (lowercase letters, digits, and hyphens, 100 characters, a uuid
+refused), so `cost-center` is the canonical spelling and `cost_center` never enters the vocabulary.
 
 ## The governance split is the point
 
@@ -64,7 +66,7 @@ Two fields on the key shape its bindings:
 
 - **`applies_to`** narrows a key to a subset of entity kinds (`component`, `system`, `location`, `node`):
   empty is **universal**, a non-empty set rejects a binding on any other kind at write time (a
-  `rack_position` key that `applies_to: [location]` cannot be bound onto a component).
+  `rack-position` key that `applies_to: [location]` cannot be bound onto a component).
 - **`propagates`** says whether a bound value cascades. A **propagating** key (the default) resolves down the
   [cascade](/architecture/cascade/); a **non-propagating** key binds as a **flat per-entity set**, resolving
   only from a binding on the entity itself.

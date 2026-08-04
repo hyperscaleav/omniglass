@@ -205,8 +205,8 @@ describe("Nodes page", () => {
   it("derives the node name from the display name until the name is hand-edited", async () => {
     mount(owner);
     fireEvent.click(screen.getByText("New node"));
-    const display = (await screen.findByLabelText("Name")) as HTMLInputElement;
-    const name = screen.getByLabelText("Key") as HTMLInputElement;
+    const display = (await screen.findByLabelText("Display name")) as HTMLInputElement;
+    const name = screen.getByLabelText("Name") as HTMLInputElement;
 
     fireEvent.input(display, { target: { value: "HQ Closet Node" } });
     expect(name.value).toBe("hq-closet-node");

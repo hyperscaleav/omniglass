@@ -44,7 +44,7 @@ function ownerLabel(v: Variable): string {
 }
 
 const columns: FlatColumn<Variable>[] = [
-  identityColumn<Variable>({ label: "Key" }),
+  identityColumn<Variable>(),
   { key: "type", label: "Type", width: "120px", sortVal: (v) => v.value_type, cell: (v) => <span class="badge badge-ghost badge-sm">{v.value_type}</span> },
   { key: "owner", label: "Scope", width: "220px", sortVal: (v) => v.owner_kind, cell: (v) => <span class="text-base-content/70">{ownerLabel(v)}</span> },
   { key: "value", label: "Value", cell: (v) => <span class="font-data text-xs text-base-content/60">{displayValue(v.value)}</span> },
@@ -318,7 +318,7 @@ function CreateVariableForm(p: { onCreated: (v: Variable) => void }): JSX.Elemen
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow label="Key" hint="The cascade key; unique per owner.">
+      <FieldRow label="Name" hint="What the cascade resolves by; unique per owner.">
         <input class="input input-bordered w-full font-data" value={name()} placeholder="poll-interval" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>
       <div class="grid grid-cols-2 gap-3">

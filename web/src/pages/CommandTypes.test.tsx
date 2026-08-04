@@ -40,13 +40,13 @@ describe("Command Types page", () => {
     expect(screen.getByText("fire-and-forget")).toBeTruthy();
   });
 
-  // One identity column carries both identities, so the separate label column is
-  // gone. The header stays "Key" because this catalog stores a keyspace key
-  // (set-input, icmp.rtt-avg), which is not the kebab segment other entities use.
-  it("carries the label and the key in a single Key column", () => {
+  // One identity column carries both operator-facing identities, so the separate
+  // label column is gone. The header is the one word every list uses, even though
+  // this catalog's names may be dotted (set-input, icmp.rtt-avg) rather than kebab.
+  it("carries the display name and the name in a single Name column", () => {
     mount();
     const headers = screen.getAllByRole("columnheader").map((h) => h.textContent?.trim());
-    expect(headers).toContain("Key");
+    expect(headers).toContain("Name");
     expect(headers).not.toContain("Label");
     expect(screen.getByText("Set input")).toBeTruthy();
     expect(screen.getByText("set-input")).toBeTruthy();

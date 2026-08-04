@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/hyperscaleav/omniglass/internal/key"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -84,8 +83,8 @@ func guardPropertyMutable(ctx context.Context, q querier, name string) error {
 // must be a valid canonical key and the validation must be well-formed JSON. A
 // duplicate name is ErrPropertyTypeExists.
 func (p *PG) CreatePropertyType(ctx context.Context, actorID string, spec PropertyTypeSpec) (*PropertyType, error) {
-	if err := key.ValidateKey(spec.Name); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrPropertyTypeInvalid, err)
+	if err := ValidateName("property_type", spec.Name); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrPropertyTypeInvalid, err)
 	}
 	if len(spec.Validation) > 0 && !json.Valid(spec.Validation) {
 		return nil, fmt.Errorf("%w: validation is not valid JSON", ErrPropertyTypeInvalid)
@@ -108,16 +107,20 @@ func (p *PG) CreatePropertyType(ctx context.Context, actorID string, spec Proper
 		return nil, ErrPropertyTypeExists
 	}
 
-	if _, err := tx.Exec(ctx,
+	// The insert returns the generated id so the audit row can key on the primary
+	// key, which survives a later rename, rather than on the name.
+	var ptID string
+	if err := tx.QueryRow(ctx,
 		`insert into property_type (name, display_name, kind, data_type, unit, precision, validation, description, official)
-		 values ($1, $2, $3, $4, $5, $6, $7, $8, false)`,
-		spec.Name, spec.DisplayName, spec.Kind, spec.DataType, spec.Unit, spec.Precision, spec.Validation, spec.Description); err != nil {
+		 values ($1, $2, $3, $4, $5, $6, $7, $8, false)
+		 returning id`,
+		spec.Name, spec.DisplayName, spec.Kind, spec.DataType, spec.Unit, spec.Precision, spec.Validation, spec.Description).Scan(&ptID); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrPropertyTypeExists
 		}
 		return nil, fmt.Errorf("storage: insert property %q: %w", spec.Name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "create", "property_type", spec.Name, nil, spec); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "create", "property_type", ptID, nil, spec); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -169,7 +172,9 @@ func (p *PG) UpdatePropertyType(ctx context.Context, actorID, name string, patch
 	if err != nil {
 		return nil, fmt.Errorf("storage: audit image property_type %q: %w", name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "property_type", name, before, after); err != nil {
+	// A property type is addressed by name, but the audit row keys on the uuid the
+	// before-image already carries: a rename must not orphan the trail.
+	if err := writeAuditRes(ctx, tx, actorID, "update", "property_type", auditImageID(before), before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -200,7 +205,7 @@ func (p *PG) DeletePropertyType(ctx context.Context, actorID, name string) error
 	if _, err := tx.Exec(ctx, `delete from property_type where name = $1`, name); err != nil {
 		return fmt.Errorf("storage: delete property %q: %w", name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "property_type", name, before, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "property_type", auditImageID(before), before, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

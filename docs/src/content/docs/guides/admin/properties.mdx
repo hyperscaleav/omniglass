@@ -7,8 +7,9 @@ import SeededSet from '../../../../components/SeededSet.astro';
 
 **Catalog > Properties** (with `property_type:read`, covered by every viewer's `*:read` floor) is the
 estate's **signal catalog**: one directory of the typed names that identify what is tracked. A
-**property** is a name plus a data type (and an optional label, unit, and validation), identified by
-its **key** (its canonical name), and the same property is the same concept wherever it appears,
+**property** is a **name** plus a data type, with an optional display name, unit, and validation. The
+name is its canonical identifier, a dot-hierarchied path of lowercase kebab segments, and the same
+property is the same concept wherever it appears,
 whether a device **reports** it (an observed value) or an operator **types** it (a declared value).
 Registering `serial-number` once means it cannot drift into `serialNumber` in one place and
 `serial_number` in another.
@@ -22,23 +23,24 @@ for its components, a [standard](/guides/admin/standards/) for its systems, and 
 The catalog is estate-wide reference data, not a scoped resource, so every property is visible to
 every reader; the write gates decide who may change it.
 
-- The directory lists every property sorted by name, each showing its **key** (the canonical name),
-  **type** (`string`, `int`, `float`, `bool`, or `json`), **label**, **kind**, and **origin**
-  (**official**, seed-owned, or **custom**). **name** filters by the key or its label; **type**
-  and **official** narrow the list.
+- The directory lists every property sorted by name, each showing its **name** (the canonical
+  identifier, with its display name on the line above it), **type** (`string`, `int`, `float`, `bool`,
+  or `json`), **kind**, and **origin** (**official**, seed-owned, or **custom**). **name** filters by
+  the name or its display name; **type** and **official** narrow the list.
 - **Kind** marks a property that is **observed** as telemetry: `metric` (a continuous measure),
   `state` (a discrete condition), or `log` (an event). A property with no kind is a **declared**
   attribute, something an operator sets, like `serial-number`, that is never collected off a
   device.
-- **New property** (with `property_type:create`, granted to operators) opens a create **drawer**: name
-  the **key** (lowercase kebab, dot-hierarchied, for example `serial-number` or
+- **New property** (with `property_type:create`, granted to operators) opens a create **drawer**: give
+  it a **name** (lowercase kebab segments joined by dots, for example `serial-number` or
   `interface.reachable`), choose its **data type**, and optionally add a **display name**,
   **description**, **unit**, and **kind**. Leave the kind as **declared** for an operator-set
-  attribute. An invalid key (an uppercase letter, an underscore, a leading hyphen, a stray dot) is
+  attribute. An invalid name (an uppercase letter, an underscore, a leading hyphen, a stray dot) is
   refused with a message.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `property_type:update`) edits
-  the label, description, and unit; the data type and kind are fixed at creation, since changing
-  a property's type under the values that already use it is unsafe. **Delete** (with
+  the display name, description, and unit; the name, data type, and kind are fixed at creation, since
+  changing a property's type under the values that already use it is unsafe and a name is what every
+  driver and contract maps onto. **Delete** (with
   `property_type:delete`) removes a custom property, behind a confirm.
 - A property can carry a **validation** JSON Schema (for example a `pattern` on a MAC address, an
   `enum` on a state, or `minimum` / `maximum` on a number), shown read-only on the blade. Editing
@@ -76,7 +78,7 @@ and optionally marks it **required**.
 
 Declaring `serial-number`, `firmware-version`, and `model-number` on a Samsung QM55 is what makes
 every QM55 in the estate carry those three, with the same names and the same types, without touching
-a component. Declaring `room_capacity` on Huddle Room does the same for every huddle room. Type and
+a component. Declaring `room-capacity` on Huddle Room does the same for every huddle room. Type and
 validation are **not** repeated in the contract, they stay on the catalog entry, so a property means
 one thing everywhere.
 

@@ -11,7 +11,7 @@ import (
 
 // TestTypeReferencesAcceptEitherForm pins the ADR-0062 write contract #468
 // finishes: a location_type or secret_type reference in a write body resolves
-// whether the caller sends the uuid or the kebab handle, like every other
+// whether the caller sends the uuid or the name, like every other
 // registry reference (the registryRefCol pattern). Before the fix the uuid
 // form silently resolved to NULL and the insert failed.
 func TestTypeReferencesAcceptEitherForm(t *testing.T) {

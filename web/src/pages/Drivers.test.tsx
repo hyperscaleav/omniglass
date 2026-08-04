@@ -9,7 +9,7 @@ import { uuidFor } from "../lib/testids";
 
 // Drivers is the driver registry on the flat FlatList surface (the driver
 // picker on the product form). Data is seeded into the query cache so no
-// server is needed. Registry rows carry a uuid id and the kebab handle in
+// server is needed. Registry rows carry a uuid id and the name in
 // name (ADR-0062); the console addresses rows by the handle.
 const seed: Driver[] = [
   { id: uuidFor("drv-snmp-generic"), name: "snmp-generic", display_name: "Generic SNMP", official: true, version: "1.0.0" },
@@ -29,7 +29,7 @@ function mount(me: Me = admin) {
   ));
 }
 
-// The catalog addresses rows by the kebab handle (ADR-0062): the first column
+// The catalog addresses rows by the name (ADR-0062): the first column
 // shows it, and the substring filter matches it. With uuid-shaped fixture ids
 // these fail when the page feeds the uuid anywhere an operator reads or types.
 describe("Drivers addressing honesty (#469)", () => {
@@ -75,13 +75,13 @@ describe("Drivers create derives the handle", () => {
 
     fireEvent.input(display, { target: { value: "Acme PTZ Camera" } });
     expect(handle.value).toBe("acme-ptz-camera");
-    expect(screen.getByText(/derived from the name/i)).toBeInTheDocument();
+    expect(screen.getByText(/derived from the display name/i)).toBeInTheDocument();
 
     fireEvent.input(handle, { target: { value: "acme-ptz" } });
     fireEvent.input(display, { target: { value: "Acme PTZ Camera v2" } });
     expect(handle.value).toBe("acme-ptz");
     // The field stops advertising a coupling it no longer has.
-    expect(screen.queryByText(/derived from the name/i)).toBeNull();
+    expect(screen.queryByText(/derived from the display name/i)).toBeNull();
   });
 });
 

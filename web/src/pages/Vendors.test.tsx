@@ -101,7 +101,7 @@ describe("Vendors page", () => {
   });
 });
 
-// The catalog addresses rows by the kebab handle (ADR-0062): the first column
+// The catalog addresses rows by the name (ADR-0062): the first column
 // shows it, and the substring filter matches it. With uuid-shaped fixture ids
 // these fail when the page feeds the uuid anywhere an operator reads or types.
 describe("Vendors addressing honesty (#469)", () => {
@@ -145,18 +145,18 @@ describe("Vendors create form identity", () => {
   it("derives the handle from the display name until the operator edits the handle", () => {
     mount();
     fireEvent.click(screen.getByRole("button", { name: /new vendor/i }));
-    const display = screen.getByLabelText(/^Name/) as HTMLInputElement;
-    const handle = screen.getByLabelText(/^Key/) as HTMLInputElement;
+    const display = screen.getByLabelText(/^Display name/) as HTMLInputElement;
+    const handle = screen.getByLabelText(/^Name/) as HTMLInputElement;
 
     fireEvent.input(display, { target: { value: "Acme AV" } });
     expect(handle.value).toBe("acme-av");
-    expect(screen.getByText(/Derived from the name/)).toBeInTheDocument();
+    expect(screen.getByText(/Derived from the display name/)).toBeInTheDocument();
 
     fireEvent.input(handle, { target: { value: "acme" } });
     fireEvent.input(display, { target: { value: "Acme AV Holdings" } });
     expect(handle.value).toBe("acme");
     // And the field says so, so the operator is not left guessing whether it
     // still follows.
-    expect(screen.queryByText(/Derived from the name/)).toBeNull();
+    expect(screen.queryByText(/Derived from the display name/)).toBeNull();
   });
 });

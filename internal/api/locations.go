@@ -44,7 +44,7 @@ type listLocationsOutput struct {
 // binary. The registry lists alphabetically by display_name.
 type locationTypeBody struct {
 	ID                 string   `json:"id" doc:"The location type's uuid, the stable handle that survives a rename"`
-	Name               string   `json:"name" doc:"The kebab handle an operator reads and types; renameable"`
+	Name               string   `json:"name" doc:"The name an operator reads and types; renameable"`
 	DisplayName        string   `json:"display_name"`
 	Icon               string   `json:"icon"`
 	AllowedParentTypes []string `json:"allowed_parent_types"`
@@ -63,7 +63,7 @@ type locationTypePathInput struct {
 
 type createLocationTypeInput struct {
 	Body struct {
-		Name               string   `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique kebab handle (e.g. wing); \"root\" is reserved"`
+		Name               string   `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique name (e.g. wing); \"root\" is reserved"`
 		DisplayName        string   `json:"display_name" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		Icon               string   `json:"icon,omitempty" doc:"A glyph key; the console falls back to map-pin when empty"`
 		AllowedParentTypes []string `json:"allowed_parent_types,omitempty" doc:"location_type names and/or the reserved root sentinel this type may be placed under; empty means unconstrained"`
@@ -94,19 +94,29 @@ type locationPathInput struct {
 type createLocationInput struct {
 	Body struct {
 		Name         string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Globally unique name (the address; lowercase letters, digits, hyphens)"`
-		DisplayName  string  `json:"display_name,omitempty" doc:"What an operator reads; the technical name is the address"`
+		DisplayName  string  `json:"display_name,omitempty" doc:"What an operator reads; the name is the address"`
 		LocationType string  `json:"location_type" minLength:"1" doc:"The location_type, by name or uuid (campus, building, ...)"`
 		Parent       *string `json:"parent,omitempty" doc:"Parent location name; omit for a root location"`
 	}
 }
 
+// updateLocationInput is the PATCH body. It deliberately carries no name: a rename
+// is the :rename custom method, gated by location:rename.
 type updateLocationInput struct {
 	Name string `path:"name"`
 	Body struct {
-		Name         *string `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"A new globally unique technical name (rename)"`
 		DisplayName  *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
 		LocationType *string `json:"location_type,omitempty" doc:"Re-types the location: a location_type, by name or uuid"`
 		Parent       *string `json:"parent,omitempty" doc:"Re-parents the location (a tree move) to this location name, cycle-guarded and placement-validated. Moving to root is not supported via update this slice."`
+	}
+}
+
+// renameLocationInput is the :rename body. The name rule lives here, in the
+// contract, not only in the prose below it.
+type renameLocationInput struct {
+	Name string `path:"name" doc:"The location's current name, or its uuid"`
+	Body struct {
+		Name string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The new globally unique name (lowercase letters, digits, hyphens)"`
 	}
 }
 
@@ -265,10 +275,9 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPatch,
 		Path:        "/locations/{name}",
 		Summary:     "Update a location",
-		Description: "Patches a location's display_name, location_type, or parent (a move). Gated by location:update; the read and update scopes drive the 404 versus 403 split.",
+		Description: "Patches a location's display_name, location_type, or parent (a move). The name is not patchable: renaming is the :rename custom method. Gated by location:update; the read and update scopes drive the 404 versus 403 split.",
 	}, "location", "update"), func(ctx context.Context, in *updateLocationInput) (*locationOutput, error) {
 		l, err := gw.UpdateLocation(ctx, actorID(ctx), in.Name, storage.LocationPatch{
-			Name:         in.Body.Name,
 			DisplayName:  in.Body.DisplayName,
 			LocationType: in.Body.LocationType,
 			ParentName:   in.Body.Parent,
@@ -280,18 +289,33 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	})
 
 	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "rename-location",
+		Method:      http.MethodPost,
+		Path:        "/locations/{name}:rename",
+		Summary:     "Rename a location",
+		Description: "Moves the location's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by location:rename; the read and rename scopes drive the 404 versus 403 split.",
+	}, "location", "rename"), func(ctx context.Context, in *renameLocationInput) (*locationOutput, error) {
+		l, err := gw.RenameLocation(ctx, actorID(ctx), in.Name, in.Body.Name,
+			a.scopeFor(ctx, "location", "read"), a.scopeFor(ctx, "location", "rename"))
+		if err != nil {
+			return nil, mapLocationErr(err)
+		}
+		return &locationOutput{Body: toLocationBody(l)}, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "check-location-name",
 		Method:      http.MethodPost,
 		Path:        "/locations:checkName",
-		Summary:     "Check a location technical name",
-		Description: "Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.",
+		Summary:     "Check a location name",
+		Description: "Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.",
 	}, "location", "update"), func(ctx context.Context, in *checkNameInput) (*checkNameOutput, error) {
 		out := &checkNameOutput{}
-		if err := storage.ValidateEntityKey(in.Body.Name); err != nil {
+		if err := storage.ValidateName("location", in.Body.Name); err != nil {
 			out.Body.Valid = false
 			// A uuid passes the slug rule, so the generic reason would describe
 			// exactly what the operator typed and explain nothing.
-			if errors.Is(err, storage.ErrEntityKeyIsUUID) {
+			if errors.Is(err, storage.ErrEntityNameIsUUID) {
 				out.Body.Reason = "A name cannot be a uuid: that form is reserved for an entity's id."
 			} else {
 				out.Body.Reason = "Use lowercase letters, digits, and hyphens."
@@ -355,9 +379,9 @@ func mapLocationErr(err error) error {
 		return huma.Error409Conflict("location has child locations")
 	case errors.Is(err, storage.ErrLocationExists):
 		return huma.Error409Conflict("location name already exists")
-	case errors.Is(err, storage.ErrEntityKeyIsUUID):
+	case errors.Is(err, storage.ErrEntityNameIsUUID):
 		return huma.Error422UnprocessableEntity("location name may not be a uuid: that form is reserved for an entity's id")
-	case errors.Is(err, storage.ErrInvalidEntityKey):
+	case errors.Is(err, storage.ErrInvalidEntityName):
 		return huma.Error422UnprocessableEntity("invalid name")
 	case errors.Is(err, storage.ErrParentNotFound):
 		return huma.Error422UnprocessableEntity("parent location not found")

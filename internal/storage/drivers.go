@@ -95,7 +95,7 @@ func (p *PG) GetDriver(ctx context.Context, id string) (*Driver, error) {
 // CreateDriver inserts a custom (official=false) driver and audits it. A
 // duplicate id is ErrTypeExists.
 func (p *PG) CreateDriver(ctx context.Context, actorID string, d Driver) (*Driver, error) {
-	if err := ValidateEntityKey(d.Name); err != nil {
+	if err := ValidateName("driver", d.Name); err != nil {
 		return nil, err
 	}
 	d.Official = false
@@ -163,7 +163,7 @@ func (p *PG) UpdateDriver(ctx context.Context, actorID, id string, patch DriverP
 	if err != nil {
 		return nil, fmt.Errorf("storage: audit image driver %q: %w", id, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "driver", id, before, after); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "driver", d.ID, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -195,7 +195,7 @@ func (p *PG) DeleteDriver(ctx context.Context, actorID, id string) error {
 	if _, err := tx.Exec(ctx, `delete from driver where `+registryRefCol(id)+` = $1`, id); err != nil {
 		return fmt.Errorf("storage: delete driver %q: %w", id, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "driver", id, before, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "driver", auditImageID(before), before, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

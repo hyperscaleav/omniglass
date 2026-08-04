@@ -148,18 +148,18 @@ func (p *PG) ClearProperty(ctx context.Context, actorID, ownerKind, ownerID, pro
 	sql := fmt.Sprintf(`delete from property
 		where owner_kind = $1 and %s = $2 and property_type_id = (select id from property_type where name = $3) and instance = $4 and provenance = '`+declaredProvenance+`'
 		returning id`, col)
-	var id string
+	var propertyID string
 	arc, err := p.ownerArcValue(ctx, tx, ownerKind, ownerID)
 	if err != nil {
 		return err
 	}
-	if err := tx.QueryRow(ctx, sql, ownerKind, arc, propertyName, instance).Scan(&id); err != nil {
+	if err := tx.QueryRow(ctx, sql, ownerKind, arc, propertyName, instance).Scan(&propertyID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrPropertyNotFound
 		}
 		return fmt.Errorf("storage: clear property value %s/%s: %w", ownerID, propertyName, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "property", id, nil, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "property", propertyID, nil, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

@@ -15,7 +15,7 @@
     },
     {
       "table": "blob",
-      "shape": "human identifier, not a key",
+      "shape": "human identifier, not a name",
       "reason": "content-addressed by sha256, for the same reason"
     },
     {
@@ -29,7 +29,7 @@
     {
       "table": "command_type",
       "shape": "keyspace",
-      "reason": "set-input, a command key"
+      "reason": "set-input, a command name"
     },
     {
       "table": "component",
@@ -54,16 +54,16 @@
     {
       "table": "event_type",
       "shape": "keyspace",
-      "reason": "call.started, an occurrence key"
+      "reason": "call.started, an occurrence name"
     },
     {
       "table": "file",
-      "shape": "human identifier, not a key",
+      "shape": "human identifier, not a name",
       "reason": "a filename with an extension (codec-firmware-2.1.4.txt): not unique, already the label, and addressed by uuid"
     },
     {
       "table": "human",
-      "shape": "human identifier, not a key",
+      "shape": "human identifier, not a name",
       "reason": "a username: its own rule, its own uniqueness, and not an address, since a principal is addressed by uuid"
     },
     {
@@ -73,7 +73,7 @@
     {
       "table": "interface",
       "shape": "key-bearing",
-      "proved_elsewhere": "the key is server-derived, not operator-typed: InterfaceSpec carries no Name and the column is set from spec.Type, an already-validated interface_type key"
+      "proved_elsewhere": "the name is server-derived, not operator-typed: InterfaceSpec carries no Name and the column is set from spec.Type, an already-validated interface_type name"
     },
     {
       "table": "interface_type",
@@ -114,8 +114,7 @@
     },
     {
       "table": "principal_group",
-      "shape": "key-bearing",
-      "proved_elsewhere": "validated at the API layer with a looser pattern (^[a-z0-9][a-z0-9._-]*$), which admits the . and _ the address grammar reads as separators; tightening it is a behaviour change for existing groups, tracked with the rename work"
+      "shape": "key-bearing"
     },
     {
       "table": "principal_group_member",
@@ -140,7 +139,7 @@
     {
       "table": "property_type",
       "shape": "keyspace",
-      "reason": "icmp.rtt-avg, a signal key referenced from drivers and templates"
+      "reason": "icmp.rtt-avg, a signal name referenced from drivers and templates"
     },
     {
       "table": "role",
@@ -149,8 +148,7 @@
     },
     {
       "table": "secret",
-      "shape": "keyspace",
-      "reason": "og-session, a cascade key referenced from expressions"
+      "shape": "key-bearing"
     },
     {
       "table": "secret_type",
@@ -199,8 +197,7 @@
     },
     {
       "table": "tag",
-      "shape": "keyspace",
-      "reason": "asset-id, a tag key; the console has always called it a key"
+      "shape": "key-bearing"
     },
     {
       "table": "tag_binding",
@@ -208,13 +205,12 @@
     },
     {
       "table": "task",
-      "shape": "human identifier, not a key",
-      "reason": "content-addressed, the id IS hash(interface, kind, schedule, params), so a key would be a second identity for the same row"
+      "shape": "human identifier, not a name",
+      "reason": "content-addressed, the id IS hash(interface, kind, schedule, params), so a name would be a second identity for the same row"
     },
     {
       "table": "variable",
-      "shape": "keyspace",
-      "reason": "poll-interval, a cascade key referenced from expressions"
+      "shape": "key-bearing"
     },
     {
       "table": "vendor",

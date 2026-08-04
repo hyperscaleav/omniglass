@@ -19,9 +19,12 @@ store, behind the same Storage Gateway as everything else.
 
 ## Two layers: the file handle and the blob
 
-- **`file`** is **indexable metadata**: name, content-type, size, `sha256` (no `tags` column yet,
-  deferred to [#191](https://github.com/hyperscaleav/omniglass/issues/191)), the searchable handle
-  an operator references; it owns no bytes, pointing at a blob by hash.
+- **`file`** is **indexable metadata**: a filename, content-type, size, `sha256` (no `tags` column
+  yet, deferred to [#191](https://github.com/hyperscaleav/omniglass/issues/191)), the searchable
+  handle an operator references; it owns no bytes, pointing at a blob by hash. The filename is a
+  human label with an extension (`codec-firmware-2.1.4.txt`), deliberately **not** a triad name: it
+  takes no name rule, carries no uniqueness, and the handle is addressed by its uuid, which is why
+  `file` is declared "human identifier, not a name" in the identity shapes.
 - **the blob store** holds the **bytes**, **content-addressed by `sha256`**: the hash is the key,
   so identical bytes are one blob.
 

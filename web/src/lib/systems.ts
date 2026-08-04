@@ -13,7 +13,7 @@ export type System = {
   name: string;
   display_name?: string;
   // The standard it conforms to, in both forms (api/systems.go): standard is
-  // the kebab handle an operator reads, standard_id the uuid it resolves to.
+  // the name an operator reads, standard_id the uuid it resolves to.
   standard?: string;
   standard_id?: string;
   location?: string;
@@ -56,13 +56,21 @@ export async function createSystem(body: CreateSystem): Promise<System> {
 }
 
 export type UpdateSystem = {
-  name?: string;
   display_name?: string;
   standard_id?: string;
 };
 
 export async function updateSystem(name: string, body: UpdateSystem): Promise<System> {
   const { data, error } = await api.PATCH("/systems/{name}", { params: { path: { name } }, body });
+  if (error) throw error;
+  return data as System;
+}
+
+// A rename is its own call, not a field on the patch body. The API gates it with
+// `<resource>:rename` rather than `<resource>:update`, because moving a name breaks
+// stored references and is worth being able to withhold on its own.
+export async function renameSystem(name: string, to: string): Promise<System> {
+  const { data, error } = await api.POST("/systems/{name}:rename", { params: { path: { name } }, body: { name: to } });
   if (error) throw error;
   return data as System;
 }

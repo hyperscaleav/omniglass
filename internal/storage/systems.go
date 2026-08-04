@@ -31,7 +31,7 @@ var (
 // product.parent_product_id does. The registry lists alphabetically by
 // display_name; there is no ordering field.
 type Standard struct {
-	// ID is the uuid primary key and Name the renameable kebab handle (ADR-0062).
+	// ID is the uuid primary key and Name the renameable name (ADR-0062).
 	ID                 string
 	Name               string
 	Official           bool
@@ -83,8 +83,11 @@ type SystemSpec struct {
 // system a root). ParentName is cycle-guarded and scope-injected: the new parent
 // must be inside the caller's update scope and must not be the system itself or
 // one of its own descendants.
+//
+// There is deliberately no Name here. A rename is RenameSystem, its own act under
+// its own permission, because it breaks the references an operator stored outside
+// this system.
 type SystemPatch struct {
-	Name         *string
 	DisplayName  *string
 	StandardID   *string
 	LocationName *string
@@ -199,7 +202,7 @@ type StandardPatch struct {
 // CreateStandard inserts a custom (official=false) standard and audits it. A
 // duplicate id is ErrTypeExists; an unknown parent is ErrParentStandardNotFound.
 func (p *PG) CreateStandard(ctx context.Context, actorID string, st Standard) (*Standard, error) {
-	if err := ValidateEntityKey(st.Name); err != nil {
+	if err := ValidateName("standard", st.Name); err != nil {
 		return nil, err
 	}
 	st.Official = false
@@ -270,7 +273,7 @@ func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch Stand
 	if err != nil {
 		return nil, fmt.Errorf("storage: audit image standard %q: %w", id, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "standard", id, before, after); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "standard", st.ID, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -349,7 +352,7 @@ func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, 
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := ValidateEntityKey(spec.Name); err != nil {
+	if err := ValidateName("system", spec.Name); err != nil {
 		return nil, err
 	}
 
@@ -460,11 +463,6 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	if err != nil {
 		return nil, err
 	}
-	if patch.Name != nil {
-		if err := ValidateEntityKey(*patch.Name); err != nil {
-			return nil, err
-		}
-	}
 	// The location arrives as a name and the column holds an id, so the three-state
 	// value is resolved before the statement: nil stays nil (unchanged), "" stays ""
 	// (clear), and a named location becomes its id.
@@ -514,35 +512,34 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	}
 	after, err := scanSystem(tx.QueryRow(ctx, `
 		update system set
-			name         = coalesce($2, name),
-			display_name = coalesce($3, display_name),
+			display_name = coalesce($2, display_name),
 			-- standard_id follows the house patch convention: a nil field is left
 			-- unchanged, and a provided empty string CLEARS the column, which is how a
 			-- classified system is converted back to a one-off. coalesce alone cannot
 			-- express the difference between "omitted" and "clear".
 			standard_id  = case
-				when $4::text is null then standard_id
-				when $4 = '' then null
-				else $6::uuid
+				when $3::text is null then standard_id
+				when $3 = '' then null
+				else $5::uuid
 			end,
 			-- location_id takes the same three states, already resolved to an id. The
 			-- column is a uuid, so the branch that sets it casts: a CASE cannot mix
 			-- uuid and text.
 			location_id  = case
-				when $5::text is null then location_id
-				when $5 = '' then null
-				else $5::uuid
+				when $4::text is null then location_id
+				when $4 = '' then null
+				else $4::uuid
 			end,
 			-- parent_id takes the same three states, resolved to an id above.
 			parent_id    = case
-				when $7::text is null then parent_id
-				when $7 = '' then null
-				else $7::uuid
+				when $6::text is null then parent_id
+				when $6 = '' then null
+				else $6::uuid
 			end,
 			updated_at   = now()
 		where id = $1
 		returning `+systemCols,
-		before.ID, patch.Name, patch.DisplayName, patch.StandardID, locationPatch, standardPatchID, parentPatch))
+		before.ID, patch.DisplayName, patch.StandardID, locationPatch, standardPatchID, parentPatch))
 	if err != nil {
 		return nil, mapSystemWriteErr(err)
 	}
@@ -573,6 +570,46 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit update system: %w", err)
+	}
+	return after, nil
+}
+
+// RenameSystem moves a system's name, scoped exactly as UpdateSystem is (the same
+// read-then-action split, so an unreadable target is a non-disclosing not-found and
+// a readable-but-unactionable one is forbidden).
+//
+// Separate from the patch because a rename is a separate act: it breaks the
+// references an operator stored outside this system. Nothing inside breaks (every
+// arc holds the uuid), which is also why the audit row keys on that uuid rather
+// than on the name it just moved.
+//
+// Health is not recomputed: its records address their owner by id, so the history
+// follows the row without being touched, and no verdict depends on a name.
+func (p *PG) RenameSystem(ctx context.Context, actorID, name, newName string, read, action scope.Set) (*System, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin rename system: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	before, err := p.resolveSystemForAction(ctx, tx, name, read, action)
+	if err != nil {
+		return nil, err
+	}
+	if err := ValidateName("system", newName); err != nil {
+		return nil, err
+	}
+	after, err := scanSystem(tx.QueryRow(ctx,
+		`update system set name = $2, updated_at = now() where id = $1 returning `+systemCols,
+		before.ID, newName))
+	if err != nil {
+		return nil, mapSystemWriteErr(err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "rename", "system", after.ID, before, after); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit rename system: %w", err)
 	}
 	return after, nil
 }

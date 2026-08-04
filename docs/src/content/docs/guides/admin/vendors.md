@@ -7,7 +7,7 @@ description: "The Vendors catalog: the organizations behind products (name, disp
 floor) is the directory of **vendors**: the organizations behind the products in the estate, on
 the same flat-registry pattern as [Types](/guides/admin/types/) and [Tags](/guides/admin/tags/).
 A vendor is not a device; it is the company a device comes from. Each row shows the **name**
-(the operator-facing kebab handle, for example `crestron`), the **display name**, its **kind**
+(for example `crestron`), the **display name**, its **kind**
 (**manufacturer**, **integrator**, or **developer**), an optional **icon** glyph key, and its
 **origin** (**official**, seed-owned, or **custom**). A vendor also carries an `id`, a uuid
 minted by the database, the internal address the handle resolves to
@@ -25,12 +25,12 @@ the two leaf catalogs beside it.
   assembles and installs systems, a **developer** ships software. It defaults to **manufacturer**
   and is a closed set; a value outside it is refused (422).
 - **New vendor** (with `vendor:create`, an admin permission) opens a create drawer: give it a
-  **name** (the kebab handle, unique tenant-wide, e.g. `crestron`) and a **display name**;
+  **name** (unique tenant-wide, e.g. `crestron`) and a **display name**;
   choose its **kind** (defaults to manufacturer); **icon** (a glyph key), **support phone**, and
   **website** are optional.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `vendor:update`) edits
-  the display name, kind, icon, support phone, and website; the uuid `id` is database-minted and
-  never edited. **Delete** (with `vendor:delete`) removes the row, behind a confirm.
+  the display name, kind, icon, support phone, and website; the **name** is fixed, since a catalog
+  row carries no rename. **Delete** (with `vendor:delete`) removes the row, behind a confirm.
 - An **official** (seed-owned) row is always read-only: no Edit, no Delete, and the blade marks it
   "Seed-owned, read-only." Omniglass ships eight official vendors (Crestron, Biamp, QSC, Shure,
   Cisco, Extron, Sony, Samsung), all manufacturers, as a starter baseline, upserted idempotently

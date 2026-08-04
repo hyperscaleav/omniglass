@@ -161,7 +161,7 @@ describe("Standards page", () => {
   });
 });
 
-// The catalog addresses rows by the kebab handle (ADR-0062): the first column
+// The catalog addresses rows by the name (ADR-0062): the first column
 // shows it, and the substring filter matches it. With uuid-shaped fixture ids
 // these fail when the page feeds the uuid anywhere an operator reads or types.
 describe("Standards addressing honesty (#469)", () => {

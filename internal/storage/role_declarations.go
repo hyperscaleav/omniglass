@@ -116,7 +116,7 @@ func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]
 // An owner or capability that does not exist is ErrRoleRefNotFound (a request
 // fault), never a server error.
 func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID string, spec SystemRoleSpec) (*SystemRole, error) {
-	if err := ValidateEntityKey(spec.Name); err != nil {
+	if err := ValidateName("system_role", spec.Name); err != nil {
 		return nil, err
 	}
 	col, err := roleOwnerColumn(ownerKind)
@@ -269,7 +269,7 @@ func (p *PG) SetComponentCapability(ctx context.Context, actorID, componentName,
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	var id string
+	var factID string
 	if err := tx.QueryRow(ctx, `
 		insert into component_capability (component_id, capability_id, present)
 		values ((select id from component where name = $1),
@@ -277,10 +277,10 @@ func (p *PG) SetComponentCapability(ctx context.Context, actorID, componentName,
 		on conflict (component_id, capability_id) do update
 			set present    = excluded.present,
 			    updated_at = now()
-		returning id`, componentName, capabilityID, present).Scan(&id); err != nil {
+		returning id`, componentName, capabilityID, present).Scan(&factID); err != nil {
 		return mapRoleWriteErr(err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "component_capability", id, nil,
+	if err := writeAuditRes(ctx, tx, actorID, "update", "component_capability", factID, nil,
 		map[string]any{"component": componentName, "capability": capabilityID, "present": present}); err != nil {
 		return err
 	}
@@ -305,18 +305,18 @@ func (p *PG) ClearComponentCapability(ctx context.Context, actorID, componentNam
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	var id string
+	var factID string
 	if err := tx.QueryRow(ctx, `
 		delete from component_capability
 		where component_id = (select id from component where name = $1)
 		  and capability_id = (select id from capability where name = $2 or id::text = $2)
-		returning id`, componentName, capabilityID).Scan(&id); err != nil {
+		returning id`, componentName, capabilityID).Scan(&factID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrComponentCapabilityNotFound
 		}
 		return fmt.Errorf("storage: clear component capability %s/%s: %w", componentName, capabilityID, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "component_capability", id, nil, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "component_capability", factID, nil, nil); err != nil {
 		return err
 	}
 	// Falling back to the product's set can drop a capability a role required.

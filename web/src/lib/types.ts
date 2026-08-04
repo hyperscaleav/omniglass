@@ -74,7 +74,7 @@ export async function listTypes(): Promise<TypeRow[]> {
 }
 
 export type CreateType = {
-  // The kebab handle. The uuid is the database's to mint.
+  // The name. The uuid is the database's to mint.
   name: string;
   display_name: string;
   icon?: string;

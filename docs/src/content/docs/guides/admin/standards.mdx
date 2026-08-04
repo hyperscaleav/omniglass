@@ -9,7 +9,7 @@ import SeededSet from '../../../../components/SeededSet.astro';
 is the directory of **standards**: the blueprints your systems are built against. A **Huddle Room**, a
 **Classroom**, an **Auditorium** are standards; the meeting room on the third floor is a
 [system](/guides/operator/inventory/) that **conforms** to one. Each row shows the **name** (the
-operator-facing kebab handle, for example `huddle-room`), the **display name**, its **parent
+operator-facing name, for example `huddle-room`), the **display name**, its **parent
 standard** if it is a variant, and its **origin**. A standard also carries an `id`, a uuid minted
 by the database, the internal address the handle resolves to
 ([ADR-0062](/architecture/decisions/)); the handle is what you type and read.
@@ -27,10 +27,10 @@ sitting under the shared type registry.
   **parent standard** (a Large Classroom under Classroom). A standard with no parent is a base
   standard.
 - **New standard** (with `standard:create`, an admin permission) opens a create drawer: give it a
-  **name** (the kebab handle, unique tenant-wide, e.g. `lecture-hall`) and a **display name**, and
+  **name** (unique tenant-wide, e.g. `lecture-hall`) and a **display name**, and
   optionally pick a **parent standard**. An unknown parent is refused (422).
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `standard:update`) edits the
-  display name and parent; the uuid `id` is database-minted and never edited. **Delete** (with
+  display name and parent; the **name** is fixed, since a catalog row carries no rename. **Delete** (with
   `standard:delete`) removes the row, behind
   a confirm.
 - **Delete is refused (409) while a system still conforms to it.** Repoint or remove those systems
@@ -72,7 +72,7 @@ defaults to. It is the same editor as a product's contract, on the system side.
   [Catalog > Properties](/guides/admin/properties/) first. Declaring is **idempotent**, so declaring a
   property already on the contract revises that line in place.
 - **The default is typed by the catalog, not here.** Type and validation live on the property, so a
-  standard cannot redefine what `room_capacity` means, only what a system conforming to it starts with.
+  standard cannot redefine what `room-capacity` means, only what a system conforming to it starts with.
 - **Conformance is live, not a copy.** A system does **not** fork its standard. Change a contract
   default and every conforming system that has not overridden that property picks up the new value
   immediately. Only a system's own override survives the change.

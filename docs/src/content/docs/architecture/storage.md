@@ -38,12 +38,21 @@ Column schemas live with each owning feature: [samples](/architecture/properties
 
 ## Conventions
 
-- **No `tenant_id`.** Isolation is per-database; no tenant column anywhere. The registries and catalogs (`property_type`, `event_type`, `interface_type`, `location_type`, `secret_type`, `vendor`, `driver`, `capability`, `product`, `standard`) carry an **`official` boolean** (the per-registry template / org / official `scope` ladder is future design, [key scope](/architecture/properties/#key-scope-template-org-official)): `official: true` rows are the ship-with canonical set, `official: false` operator- or org-authored. The boolean is **authority, not provenance**: a `standard` and a `location_type` ship `official: false`, installed **only if absent** (example content an estate owns); the canonical catalogs ship `official: true` through an authoritative `ON CONFLICT DO UPDATE`, so a release can correct the shared vocabulary ([the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs)).
+- **Identity is three columns.** **`id`** is a uuid: immutable, the primary key, and what every
+  foreign key stores. **`name`** is the renameable identifier an operator types and an address
+  carries (the `rm215a` in `boi.17c.rm215a`). **`display_name`** is an optional friendly string a
+  human reads ("HQ Boardroom DSP"), and a surface that has none falls back to the name rather than
+  re-casing it. A rename moves `name` and nothing else, which is why references store the id and why
+  `audit_log.resource_id` does too. `storage.ValidateName` is the one validator, picking between the
+  entity rule (one segment) and the keyspace rule (dot-joined segments) from the table's declared
+  identity shape, so a call site cannot choose the wrong rule or forget to choose
+  ([ADR-0076](/architecture/decisions/), [core entities](/architecture/core-entities/)).
+- **No `tenant_id`.** Isolation is per-database; no tenant column anywhere. The registries and catalogs (`property_type`, `event_type`, `interface_type`, `location_type`, `secret_type`, `vendor`, `driver`, `capability`, `product`, `standard`) carry an **`official` boolean** (the per-registry template / org / official `scope` ladder is future design, [property scope](/architecture/properties/#key-scope-template-org-official)): `official: true` rows are the ship-with canonical set, `official: false` operator- or org-authored. The boolean is **authority, not provenance**: a `standard` and a `location_type` ship `official: false`, installed **only if absent** (example content an estate owns); the canonical catalogs ship `official: true` through an authoritative `ON CONFLICT DO UPDATE`, so a release can correct the shared vocabulary ([the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs)).
 - **Three storage shapes.** **Ground-truth records**: append-only, immutable, named for what they are ([below](#ground-truth-records)). There is **no `telemetry` table**: samples are published to the JetStream data lane (raw appears only on a `collection.failed` event or a dev raw-mode tap, [samples](/architecture/properties/)), and a schedule fire is an `event` with `origin=scheduled`. **Samples** (`metric` / `state`) are the typed firehose, `log_line` the untyped raw arrival beside them ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events): no property name, no registry gate). **Stateful entities and projections** (`alarm`, `action`, current-value) hold state directly or are rebuildable read models, **views by default**. The model is **not event-sourced**.
 - **Provenance and lineage on every sample**: `provenance` (observed / calculated / intended / declared), `source` (which sensor or path, for observed), and a lineage pointer enforced per provenance by a CHECK ([the lineage CHECK](#the-lineage-check-the-pattern)). `declared` exists as a sample provenance in the schema ([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)), though the model going forward keeps declared config in [config](/architecture/variables/).
 - **Ownership is the exclusive-arc**, though not one uniform arc: the sample tables and `event` carry `owner_kind` (`component` / `system` / `location` / `node`) plus the matching typed FK and a CHECK (no platform or global arm on a sample); `variable`'s arc is `platform` / `component` / `system` / `location` (no node arm; `platform` sets all three FKs null); `alarm` carries **no arc**, a single NOT NULL `component_id`, component-local by design today. Full pattern: [core entities](/architecture/core-entities/#ownership-the-exclusive-arc).
 - **A write struct takes the `Write` suffix; the bare noun is the row**: `MetricSampleWrite` in, `MetricSample` back, likewise `StateSampleWrite`, `EventWrite`, `LogLineWrite`. A carrier is named for what it carries: hence the wire message is a `TelemetryBatch` ([ADR-0072](/architecture/decisions/#adr-0072-an-envelope-is-not-named-after-its-passengers-and-an-insert-struct-takes-the-write-suffix)).
-- **Keys**: samples and events use a surrogate id plus `ts`; `property_type` is name-unique with the **`official` boolean** deciding authority; structural entities are name-keyed; a `task` is **content-addressed** (`sha256` over `(interface_id, mode, spec)`); a `node` by its `principal_id`. Every foreign key stores the target's primary key, so a rename is free ([ADR-0056](/architecture/decisions/#adr-0056-every-foreign-key-stores-a-primary-key)).
+- **Keys**: samples and events use a surrogate id plus `ts`; `property_type` is name-unique with the **`official` boolean** deciding authority; structural entities carry a unique, renameable `name` over a uuid primary key; a `task` is **content-addressed** (`sha256` over `(interface_id, mode, spec)`); a `node` by its `principal_id`. Every foreign key stores the target's primary key, so a rename is free ([ADR-0056](/architecture/decisions/#adr-0056-every-foreign-key-stores-a-primary-key)).
 
 ## How the records relate
 
@@ -97,7 +106,7 @@ CHECK (
 )
 ```
 
-Observed and calculated are distinguished by the **`provenance` column**, not a pointer-presence trick. Three layers: the CHECK enforces *which pointers are populated*, foreign keys enforce *the ids are real*, the app enforces *the value type matches the key's kind*.
+Observed and calculated are distinguished by the **`provenance` column**, not a pointer-presence trick. Three layers: the CHECK enforces *which pointers are populated*, foreign keys enforce *the ids are real*, the app enforces *the value type matches the `property_type`'s kind*.
 
 The **trace columns live beside the lineage pointers, but not on the sample tables**: `event` carries `correlation_id` and `source_event_id` (plus `source_log_line_id` and `derived_by_rule_id`), `log_line` carries `correlation_id`; `metric` and `state` carry none today. Orthogonal to the lineage CHECK.
 
@@ -115,23 +124,23 @@ observed-sample round trip and lands on the sample row, so the cycle guard walks
 
 | Read model | Of | Shape | Notes |
 |---|---|---|---|
-| `current_value` | latest sample per (owner, key, **instance**, **provenance**), fused across sources per the key's `fusion_policy` | **view** | the dashboard read; per-provenance so observed and intended are both visible (the divergence model needs both), per-instance so siblings of one key stay distinct, fusion applied on read. The one table candidate if a profile earns it, metric kind only |
+| `current_value` | latest sample per series (owner, `property_type`, **instance**, **provenance**), fused across sources per the property's `fusion_policy` | **view** | the dashboard read; per-provenance so observed and intended are both visible (the divergence model needs both), per-instance so siblings of one property stay distinct, fusion applied on read. The one table candidate if a profile earns it, metric kind only |
 | `session` | `session_log` | **view** | low-volume; node, interface, status, opened_at, last_activity_at, command/error counts |
 
-**When the view stops scaling.** A latest-per-key view's cost scales with the number of **distinct
-keys** (a loose index scan), not total rows: point and scoped reads are a covering-index probe, fast
-at any size, while a full-fleet "every current value" is O(distinct keys), comfortable to hundreds of
+**When the view stops scaling.** A latest-per-series view's cost scales with the number of **distinct
+series** (a loose index scan), not total rows: point and scoped reads are a covering-index probe, fast
+at any size, while a full-fleet "every current value" is O(distinct series), comfortable to hundreds of
 thousands, painful past a few million (a naive `DISTINCT ON` scans the whole log; never that plan).
 So only `current_value` for the **metric** firehose is even a table candidate, and only when
-frequent full-fleet reads meet low-millions-plus distinct keys; the sparse kinds stay views
+frequent full-fleet reads meet low-millions-plus distinct series; the sparse kinds stay views
 indefinitely. A worker-maintained table costs one upsert per sample write (write amplification,
-hot-key contention) and reintroduces a staleness window: a cost earned by a read profile. **Never a
+hot-row contention) and reintroduces a staleness window: a cost earned by a read profile. **Never a
 materialized view**: a PG MV is stale between refreshes with no incremental refresh. The choice is
 plain view (default) versus inline table (profiled).
 
 :::caution[Open question]
 If `current_value` is ever materialized, is it one wide table or a table per kind, keyed per (owner,
-key, instance, provenance)?
+`property_type`, instance, provenance)?
 :::
 
 ::::

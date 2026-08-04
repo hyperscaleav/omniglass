@@ -1,5 +1,5 @@
 // Test-fixture id minting (#474). Every registry row's `id` is a uuid
-// post-ADR-0062 and its kebab handle lives in `name`; a fixture that puts the
+// post-ADR-0062 and its name lives in `name`; a fixture that puts the
 // handle in the id slot re-creates the pre-uuid world and lets a real
 // picker/join break ship green (that is exactly how the #432 regressions
 // shipped). Mint fixture ids with uuidFor so they are uuid-shaped and stable

@@ -24,7 +24,7 @@ export async function listDrivers(): Promise<Driver[]> {
 }
 
 export type CreateDriver = {
-  // The kebab handle. The uuid is the database's to mint.
+  // The name. The uuid is the database's to mint.
   name: string;
   display_name: string;
   version?: string;

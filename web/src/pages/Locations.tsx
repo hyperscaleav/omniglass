@@ -16,7 +16,7 @@ import {
   listLocations,
   listLocationTypes,
   createLocation,
-  updateLocation,
+  updateLocation, renameLocation,
   checkLocationName,
   deleteLocation,
 } from "../lib/locations";
@@ -57,7 +57,7 @@ export const locationsDescriptor: PageDescriptor = {
   columns: {
     type: { label: "Type", width: 120 },
     parent: { label: "Parent", width: 190 },
-    tech: { label: "Key", width: 200 },
+    tech: { label: "Name", width: 200 },
     tags: { label: "Tags", width: 340 },
   },
   columnKeys: ["type", "parent", "tech", "tags"],
@@ -288,16 +288,27 @@ export default function Locations() {
         try {
           const movedParent = parentName() !== initialParentName() ? parentName() : undefined;
           await updateLocation(n().raw.name, {
-            name: renamed ? name().trim() : undefined,
             display_name: display() || undefined,
             location_type: type() || undefined,
             ...(movedParent ? { parent: movedParent } : {}),
           });
-          await qc.invalidateQueries({ queryKey: LOCATIONS_KEY });
+          // The rename is a second call and it goes LAST, because it is the one that
+          // can be refused on its own: it needs <resource>:rename, and a duplicate
+          // name is a 409 the advisory :checkName precheck cannot rule out. Doing it
+          // last means a refusal leaves the other edits saved and the name unchanged.
+          //
+          // The invalidation is in a finally for the same reason. It used to sit
+          // after the rename, so a 409 skipped it and the list went on rendering the
+          // display name the server had already accepted: the operator saw a total
+          // failure for a half-committed save, and Cancel re-seeded the inputs from
+          // that stale cache.
+          if (renamed) await renameLocation(n().raw.name, name().trim());
           if (renamed) navigate(`/locations/${encodeURIComponent(name().trim())}`);
         } catch (e) {
           setSaveErr(describeError(e));
           throw e; // keep the slot in edit mode so the operator can retry
+        } finally {
+          await qc.invalidateQueries({ queryKey: LOCATIONS_KEY });
         }
       },
       destructive: () =>
@@ -329,12 +340,12 @@ export default function Locations() {
             fallback={
               <div class="grid grid-cols-2 gap-5">
                 {ctx.fact("Type", <span class={typeBadge(n().type)}>{n().type}</span>)}
-                {ctx.fact("Key", <span class="font-data text-sm">{n().raw.name}</span>)}
+                {ctx.fact("Name", <span class="font-data text-sm">{n().raw.name}</span>)}
               </div>
             }
           >
             <div class="flex flex-col gap-3">
-              {ctx.field("Name", <input class="input input-bordered w-full" value={display()} placeholder="Conf Room 301" onInput={(e) => setDisplay(e.currentTarget.value)} />)}
+              {ctx.field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Conf Room 301" onInput={(e) => setDisplay(e.currentTarget.value)} />)}
               {ctx.field(
                 "Location type",
                 <select class="select select-bordered w-full" value={type()} onChange={(e) => setType(e.currentTarget.value)}>
@@ -344,7 +355,7 @@ export default function Locations() {
                 "A location_type name.",
               )}
               {ctx.field(
-                "Key",
+                "Name",
                 <>
                   <div class="join w-full">
                     <input
@@ -479,7 +490,7 @@ export default function Locations() {
   function LocationCreate(): JSX.Element {
     // Display name leads and the key follows it, stopping the moment the
     // operator edits the key by hand (lib/entities).
-    const { display, setDisplay, name, setName, keyDerived } = createIdentity();
+    const { display, setDisplay, name, setName, nameDerived } = createIdentity();
     const [type, setType] = createSignal("");
     const [parent, setParent] = createSignal("");
     const [busy, setBusy] = createSignal(false);
@@ -514,8 +525,8 @@ export default function Locations() {
         <div class="flex flex-col gap-1.5">
           <span class="eyebrow">Identity</span>
           <div class="flex flex-col gap-3">
-            {field("Name", <input class="input input-bordered w-full" value={display()} placeholder="Conf Room 301" onInput={(e) => setDisplay(e.currentTarget.value)} />, "What an operator reads. Optional.")}
-            {field("Key", <input class="input input-bordered w-full font-data" value={name()} placeholder="hq-a-301" onInput={(e) => setName(e.currentTarget.value)} />, () => (keyDerived() ? "Derived from the name. Edit to set your own." : "Globally unique address, used by the API and CLI."))}
+            {field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Conf Room 301" onInput={(e) => setDisplay(e.currentTarget.value)} />, "What an operator reads. Optional.")}
+            {field("Name", <input class="input input-bordered w-full font-data" value={name()} placeholder="hq-a-301" onInput={(e) => setName(e.currentTarget.value)} />, () => (nameDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."))}
             {field(
               "Location type",
               <select class="select select-bordered w-full" value={type()} onChange={(e) => setType(e.currentTarget.value)}>

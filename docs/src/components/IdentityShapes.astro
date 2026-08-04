@@ -8,7 +8,7 @@
 import identity from '../generated/identity.json';
 
 interface Props {
-  shape: 'keyspace' | 'human identifier, not a key';
+  shape: 'keyspace' | 'human identifier, not a name';
 }
 const { shape } = Astro.props;
 
@@ -24,7 +24,7 @@ if (rows.length === 0) {
 ---
 
 <table>
-    <thead><tr><th>table</th><th>why it is not on the entity-key rule</th></tr></thead>
+    <thead><tr><th>table</th><th>why it is not on the entity name rule</th></tr></thead>
     <tbody>
       {rows.map((r) => (
         <tr>

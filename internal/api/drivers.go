@@ -12,7 +12,7 @@ import (
 // alphabetically by display_name, like vendor.
 type driverBody struct {
 	ID          string `json:"id" doc:"The driver's uuid, the stable handle that survives a rename"`
-	Name        string `json:"name" doc:"The kebab handle an operator reads and types; renameable"`
+	Name        string `json:"name" doc:"The name an operator reads and types; renameable"`
 	DisplayName string `json:"display_name"`
 	Version     string `json:"version,omitempty"`
 	Official    bool   `json:"official"`
@@ -36,7 +36,7 @@ type driverPathInput struct {
 
 type createDriverInput struct {
 	Body struct {
-		Name        string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique kebab handle; renameable"`
+		Name        string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique name; renameable"`
 		DisplayName string `json:"display_name" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		Version     string `json:"version,omitempty" doc:"A free-form version string, e.g. 1.0.0"`
 	}

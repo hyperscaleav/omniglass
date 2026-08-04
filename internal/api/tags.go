@@ -70,7 +70,7 @@ type tagValuesOutput struct {
 
 type createTagInput struct {
 	Body struct {
-		Name          string   `json:"name" minLength:"1" doc:"The normalized key: a lowercase identifier, unique tenant-wide"`
+		Name          string   `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The normalized name (lowercase letters, digits, and hyphens), unique tenant-wide"`
 		AppliesTo     []string `json:"applies_to,omitempty" doc:"Entity kinds this key may bind to (component, system, location); omit for universal"`
 		Propagates    *bool    `json:"propagates,omitempty" doc:"Whether bindings cascade to descendants; defaults true"`
 		AllowedValues []string `json:"allowed_values,omitempty" doc:"The value enum a bound value must belong to; omit for free text"`

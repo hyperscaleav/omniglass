@@ -89,7 +89,7 @@ func scopedList[T any](ctx context.Context, p *PG, cfg scopedConfig[T], read sco
 // id, a human at a CLI has the name.
 //
 // The uuid is tried first, and that ordering is only unambiguous because a name
-// can never be uuid-shaped (ValidateEntityKey refuses the form). Without that
+// can never be uuid-shaped (ValidateName refuses the form). Without that
 // rule the same reference would resolve differently depending on which entity
 // happened to exist, making the answer a property of the data rather than of the
 // request.
@@ -167,14 +167,17 @@ func scopedDelete[T any](ctx context.Context, p *PG, cfg scopedConfig[T], actorI
 	if err != nil {
 		return err
 	}
+	// The caller addressed the entity by uuid or by name; everything below keys on
+	// the row's own primary key, the audit row included.
+	beforeID := cfg.idOf(before)
 	var childCount int
-	if err := tx.QueryRow(ctx, `select count(*) from `+string(cfg.table)+` where parent_id = $1`, cfg.idOf(before)).Scan(&childCount); err != nil {
+	if err := tx.QueryRow(ctx, `select count(*) from `+string(cfg.table)+` where parent_id = $1`, beforeID).Scan(&childCount); err != nil {
 		return fmt.Errorf("storage: count %s children: %w", cfg.table, err)
 	}
 	if childCount > 0 {
 		return cfg.occupied
 	}
-	if _, err := tx.Exec(ctx, `delete from `+string(cfg.table)+` where id = $1`, cfg.idOf(before)); err != nil {
+	if _, err := tx.Exec(ctx, `delete from `+string(cfg.table)+` where id = $1`, beforeID); err != nil {
 		// A row that something else still references is refused, like a row with
 		// children, and must reach the caller as a conflict rather than an opaque
 		// server error. It is a distinct sentinel from occupied: the child count
@@ -186,7 +189,7 @@ func scopedDelete[T any](ctx context.Context, p *PG, cfg scopedConfig[T], actorI
 		}
 		return fmt.Errorf("storage: delete %s: %w", cfg.table, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", cfg.resource, cfg.idOf(before), before, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", cfg.resource, beforeID, before, nil); err != nil {
 		return err
 	}
 	if cfg.afterDelete != nil {

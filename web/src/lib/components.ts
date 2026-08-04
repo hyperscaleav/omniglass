@@ -55,12 +55,20 @@ export async function createComponent(body: CreateComponent): Promise<Component>
 }
 
 export type UpdateComponent = {
-  name?: string;
   display_name?: string;
 };
 
 export async function updateComponent(name: string, body: UpdateComponent): Promise<Component> {
   const { data, error } = await api.PATCH("/components/{name}", { params: { path: { name } }, body });
+  if (error) throw error;
+  return data as Component;
+}
+
+// A rename is its own call, not a field on the patch body. The API gates it with
+// `<resource>:rename` rather than `<resource>:update`, because moving a name breaks
+// stored references and is worth being able to withhold on its own.
+export async function renameComponent(name: string, to: string): Promise<Component> {
+  const { data, error } = await api.POST("/components/{name}:rename", { params: { path: { name } }, body: { name: to } });
   if (error) throw error;
   return data as Component;
 }

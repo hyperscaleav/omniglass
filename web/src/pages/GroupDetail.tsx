@@ -150,7 +150,7 @@ export function GroupDetail(props: { id: string }) {
       </Show>
 
       <div class="grid grid-cols-2 gap-3">
-        <KVStacked label="Key" value={<span class="font-data">{group.data?.name}</span>} />
+        <KVStacked label="Name" value={<span class="font-data">{group.data?.name}</span>} />
         <KVStacked label="Members" value={<span class="tnum text-sm">{memberItems().length}</span>} />
       </div>
 
@@ -164,7 +164,7 @@ export function GroupDetail(props: { id: string }) {
       >
         <div class="flex flex-col gap-3">
           <label class="flex flex-col gap-1">
-            <span class="eyebrow">Name</span>
+            <span class="eyebrow">Display name</span>
             <input class="input input-bordered w-full" value={displayName()} placeholder="Field Crew" onInput={(e) => setDisplayName(e.currentTarget.value)} />
           </label>
           <label class="flex flex-col gap-1">

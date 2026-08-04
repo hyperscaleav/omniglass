@@ -107,7 +107,7 @@ describe("Products page", () => {
   });
 });
 
-// The catalog addresses rows by the kebab handle (ADR-0062): the first column
+// The catalog addresses rows by the name (ADR-0062): the first column
 // shows it, and the substring filter matches it. With uuid-shaped fixture ids
 // these fail when the page feeds the uuid anywhere an operator reads or types.
 describe("Products addressing honesty (#469)", () => {
@@ -127,7 +127,7 @@ describe("Products addressing honesty (#469)", () => {
 });
 
 // The reference cells and the capability picker join on what the wire carries:
-// vendor/driver cells show the kebab handle (not the uuid), and the picker
+// vendor/driver cells show the name (not the uuid), and the picker
 // compares capability NAMES (product.capabilities is a list of names).
 describe("Products reference honesty (#470)", () => {
   afterEach(() => vi.restoreAllMocks());

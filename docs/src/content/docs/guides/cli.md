@@ -43,10 +43,18 @@ export OMNIGLASS_TOKEN=ogp_...
 omniglass location list
 omniglass location create --name hq --location-type campus
 omniglass location get hq
+omniglass location rename hq --name hq-west          # needs location:rename, not location:update
 ```
 
 Output is JSON. A non-2xx response prints the server's error body and exits non-zero, so
 the CLI is safe in scripts.
+
+A name is renameable, and a rename is its own command rather than a flag on `update`: `component`,
+`system`, `location`, and `principal-group` each carry one, gated by `<resource>:rename`, which is
+granted separately because moving a name breaks the references stored outside Omniglass (bookmarks,
+runbooks, integration config). Inside it nothing breaks, since every reference holds the entity's
+`id`, which every write returns ([ADR-0076](/architecture/decisions/)). A taken name is a 409, an
+illegal or uuid-shaped one a 422.
 
 ## Authentication
 
@@ -253,7 +261,7 @@ one component.
 ```sh
 omniglass tag list                                  # the governed key vocabulary
 omniglass tag create --name environment             # mint a key (tag:create, admin)
-omniglass tag create --name rack_position --applies-to '["location"]' --propagates=false
+omniglass tag create --name rack-position --applies-to '["location"]' --propagates=false
 omniglass tag update environment --applies-to '["component","system"]'
 omniglass tag setPlatform environment --value prod  # an install-wide default (tag:update + platform:update)
 omniglass tag clearPlatform environment
@@ -269,9 +277,11 @@ omniglass component effective-tag list codec-1                # the cascade reso
 ```
 
 Binding is a custom method on the entity (`component setTag`), like the principal lifecycle verbs, so it
-stays clear of the top-level `tag` commands. A key name is a normalized lowercase identifier (minting a
-bad name is a 422). `--applies-to` is an entity-kind allow-list passed as a JSON array
-(`'["component","system"]'`; empty means universal), checked when a value is bound. `--propagates`
+stays clear of the top-level `tag` commands. A tag's `--name` is an ordinary entity name (lowercase
+letters, digits, and hyphens, no dots and no underscores, never a uuid), and minting one that breaks
+the rule is a 422; that name is then the key a binding carries (`--key`). `--applies-to` is an
+entity-kind allow-list passed as a JSON array (`'["component","system"]'`; empty means universal),
+checked when a value is bound. `--propagates`
 defaults true (the value cascades to descendants); `--propagates=false` binds a flat per-entity value
 that resolves only on its own entity. Resolving onto a component **unions** keys and **overrides** values
 most-specific-wins down the cascade.
@@ -394,14 +404,14 @@ are the same three verbs, and the contract commands hang off the classifier that
 omniglass product property list cisco-room-bar                         # a product's contract
 omniglass standard property list huddle-room                           # a standard's contract
 omniglass location-type property list room                             # a location type's contract
-omniglass standard property update huddle-room room_capacity --default-value 6 --required true
-omniglass standard property delete huddle-room room_capacity        # systems keep any value they set
+omniglass standard property update huddle-room room-capacity --default-value 6 --required true
+omniglass standard property delete huddle-room room-capacity        # systems keep any value they set
 
 omniglass component property list dsp-boardroom-3                      # the effective read
 omniglass system property list boardroom                               # same shape, system side
 omniglass location property list east-campus                           # same shape, location side
-omniglass system property update boardroom room_capacity --value 12    # idempotent
-omniglass system property delete boardroom room_capacity             # falls back to the contract default
+omniglass system property update boardroom room-capacity --value 12    # idempotent
+omniglass system property delete boardroom room-capacity             # falls back to the contract default
 ```
 
 The read resolves the classifier's contract against the instance's own values, so a **one-off system**

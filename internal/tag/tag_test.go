@@ -5,41 +5,6 @@ import (
 	"testing"
 )
 
-func TestValidateKey(t *testing.T) {
-	cases := []struct {
-		name string
-		key  string
-		ok   bool
-	}{
-		{"simple", "category", true},
-		{"hyphen", "cost-center", true},
-		{"digits", "tier2", true},
-		{"single letter", "x", true},
-		{"leading digit", "2tier", true},
-		{"empty", "", false},
-		{"uppercase", "Environment", false},
-		{"mixed case", "costCenter", false},
-		{"leading hyphen", "-hidden", false},
-		{"leading underscore", "_hidden", false},
-		{"space", "cost center", false},
-		{"underscore", "cost_center", false},
-		{"dot", "a.b", false},
-		{"too long", strings.Repeat("a", MaxKeyLen+1), false},
-		{"at limit", strings.Repeat("a", MaxKeyLen), true},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			err := ValidateKey(c.key)
-			if c.ok && err != nil {
-				t.Fatalf("ValidateKey(%q) = %v, want ok", c.key, err)
-			}
-			if !c.ok && err == nil {
-				t.Fatalf("ValidateKey(%q) = nil, want error", c.key)
-			}
-		})
-	}
-}
-
 func TestValidateValue(t *testing.T) {
 	cases := []struct {
 		name string

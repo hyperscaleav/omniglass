@@ -457,7 +457,7 @@ func (p *PG) SetPassword(ctx context.Context, username, encoded string) (bool, e
 // revokes every one of the target's bearer credentials (all sessions and tokens) in
 // the same transaction, so the reset takes effect immediately: any live session is
 // signed out and must re-authenticate with the new password.
-func (p *PG) SetPrincipalPassword(ctx context.Context, actorID, id, encoded string, action scope.Set) error {
+func (p *PG) SetPrincipalPassword(ctx context.Context, actorID, principalID, encoded string, action scope.Set) error {
 	if !action.All {
 		return ErrPrincipalForbidden
 	}
@@ -469,7 +469,7 @@ func (p *PG) SetPrincipalPassword(ctx context.Context, actorID, id, encoded stri
 
 	// Only a human holds a password credential; an unknown id (or a service) is not found.
 	var pgErr *pgconn.PgError
-	if err := tx.QueryRow(ctx, `select 1 from human where principal_id = $1`, id).Scan(new(int)); err != nil {
+	if err := tx.QueryRow(ctx, `select 1 from human where principal_id = $1`, principalID).Scan(new(int)); err != nil {
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
 			return ErrPrincipalNotFound
@@ -484,13 +484,13 @@ func (p *PG) SetPrincipalPassword(ctx context.Context, actorID, id, encoded stri
 		values ($1, 'password', $2, '')
 		on conflict (principal_id) where kind = 'password'
 			do update set secret_hash = excluded.secret_hash`,
-		id, []byte(encoded)); err != nil {
+		principalID, []byte(encoded)); err != nil {
 		return fmt.Errorf("storage: reset password: %w", err)
 	}
 	// Force logout: drop every SESSION for the target so a reset immediately signs it
 	// out everywhere. API tokens are left intact: a token is its own bearer secret, not
 	// tied to the password, and has its own revoke surface (issue #194).
-	if _, err := tx.Exec(ctx, `delete from credential where principal_id = $1 and kind = 'bearer' and purpose = 'session'`, id); err != nil {
+	if _, err := tx.Exec(ctx, `delete from credential where principal_id = $1 and kind = 'bearer' and purpose = 'session'`, principalID); err != nil {
 		return fmt.Errorf("storage: revoke sessions on reset: %w", err)
 	}
 	// Force a change on next login: the admin knows the value they just set, so the
@@ -501,10 +501,10 @@ func (p *PG) SetPrincipalPassword(ctx context.Context, actorID, id, encoded stri
 	// of the window even with the new secret.
 	if _, err := tx.Exec(ctx,
 		`update human set must_change_password = true, failed_login_count = 0, locked_until = null where principal_id = $1`,
-		id); err != nil {
+		principalID); err != nil {
 		return fmt.Errorf("storage: flag must-change on reset: %w", err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "reset_password", "credential", id, nil, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "reset_password", "credential", principalID, nil, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -516,7 +516,7 @@ func (p *PG) SetPrincipalPassword(ctx context.Context, actorID, id, encoded stri
 // setAvatarTx writes (or clears, when b64 == "") a human's avatar within tx and
 // audits the change against actorID. It does not commit. avatar_updated_at is
 // server-clocked to now() on write and null on clear.
-func setAvatarTx(ctx context.Context, tx pgx.Tx, actorID, id, b64 string) error {
+func setAvatarTx(ctx context.Context, tx pgx.Tx, actorID, principalID, b64 string) error {
 	verb := "clear_avatar"
 	var val any
 	if b64 != "" {
@@ -525,10 +525,10 @@ func setAvatarTx(ctx context.Context, tx pgx.Tx, actorID, id, b64 string) error 
 	if _, err := tx.Exec(ctx,
 		`update human set avatar = $2, avatar_updated_at = case when $3 then now() else null end
 		 where principal_id = $1`,
-		id, val, b64 != ""); err != nil {
+		principalID, val, b64 != ""); err != nil {
 		return fmt.Errorf("storage: write avatar: %w", err)
 	}
-	return writeAuditRes(ctx, tx, actorID, verb, "principal", id, nil, nil)
+	return writeAuditRes(ctx, tx, actorID, verb, "principal", principalID, nil, nil)
 }
 
 // SetOwnAvatar sets the caller's own profile picture (a normalized base64 JPEG),
@@ -956,7 +956,7 @@ type AdminHumanPatch struct {
 // ErrPrincipalNotHuman, an unknown id ErrPrincipalNotFound, a username clash
 // ErrUsernameTaken. Renaming is safe: nothing keys on the username (credentials
 // and grants reference the principal id), so a rename follows the identity.
-func (p *PG) UpdatePrincipalHuman(ctx context.Context, actorID, id string, patch AdminHumanPatch, action scope.Set) (*Principal, error) {
+func (p *PG) UpdatePrincipalHuman(ctx context.Context, actorID, principalID string, patch AdminHumanPatch, action scope.Set) (*Principal, error) {
 	if !action.All {
 		return nil, ErrPrincipalForbidden
 	}
@@ -967,7 +967,7 @@ func (p *PG) UpdatePrincipalHuman(ctx context.Context, actorID, id string, patch
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	var kind string
-	err = tx.QueryRow(ctx, `select kind from principal where id = $1`, id).Scan(&kind)
+	err = tx.QueryRow(ctx, `select kind from principal where id = $1`, principalID).Scan(&kind)
 	var pgErr *pgconn.PgError
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
@@ -985,7 +985,7 @@ func (p *PG) UpdatePrincipalHuman(ctx context.Context, actorID, id string, patch
 	var before HumanProfile
 	if err := tx.QueryRow(ctx,
 		`select username, coalesce(email, ''), coalesce(display_name, '') from human where principal_id = $1`,
-		id).Scan(&before.Username, &before.Email, &before.DisplayName); err != nil {
+		principalID).Scan(&before.Username, &before.Email, &before.DisplayName); err != nil {
 		return nil, fmt.Errorf("storage: update principal before: %w", err)
 	}
 
@@ -1008,7 +1008,7 @@ func (p *PG) UpdatePrincipalHuman(ctx context.Context, actorID, id string, patch
 			email        = case when $4 then $5 else email end,
 			username     = case when $6 then $7 else username end
 		where principal_id = $1`,
-		id, setDisplay, display, setEmail, email, setUsername, username); err != nil {
+		principalID, setDisplay, display, setEmail, email, setUsername, username); err != nil {
 		return nil, mapPrincipalWriteErr(err)
 	}
 
@@ -1022,14 +1022,14 @@ func (p *PG) UpdatePrincipalHuman(ctx context.Context, actorID, id string, patch
 	if patch.Username != nil {
 		after.Username = *patch.Username
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "principal", id, before, after); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "principal", principalID, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit update principal: %w", err)
 	}
 
-	pr := Principal{ID: id, Kind: "human"}
+	pr := Principal{ID: principalID, Kind: "human"}
 	if err := p.loadPrincipal(ctx, &pr); err != nil {
 		return nil, err
 	}
@@ -1168,7 +1168,7 @@ func (p *PG) RevokeGrant(ctx context.Context, actorID, principalID, grantID stri
 // SetPrincipalActive enables or disables a principal (soft), audited. Requires an
 // all-scope grant. Disabling the last active owner is refused (ErrLastOwner); a
 // disabled principal cannot authenticate, and enabling restores access.
-func (p *PG) SetPrincipalActive(ctx context.Context, actorID, id string, active bool, action scope.Set) error {
+func (p *PG) SetPrincipalActive(ctx context.Context, actorID, principalID string, active bool, action scope.Set) error {
 	if !action.All {
 		return ErrPrincipalForbidden
 	}
@@ -1180,7 +1180,7 @@ func (p *PG) SetPrincipalActive(ctx context.Context, actorID, id string, active 
 
 	var kind string
 	var wasActive bool
-	err = tx.QueryRow(ctx, `select kind, active from principal where id = $1`, id).Scan(&kind, &wasActive)
+	err = tx.QueryRow(ctx, `select kind, active from principal where id = $1`, principalID).Scan(&kind, &wasActive)
 	var pgErr *pgconn.PgError
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
@@ -1190,7 +1190,7 @@ func (p *PG) SetPrincipalActive(ctx context.Context, actorID, id string, active 
 	case err != nil:
 		return fmt.Errorf("storage: set active lookup: %w", err)
 	}
-	if _, err := tx.Exec(ctx, `update principal set active = $2 where id = $1`, id, active); err != nil {
+	if _, err := tx.Exec(ctx, `update principal set active = $2 where id = $1`, principalID, active); err != nil {
 		return fmt.Errorf("storage: set active: %w", err)
 	}
 	if !active {
@@ -1208,7 +1208,7 @@ func (p *PG) SetPrincipalActive(ctx context.Context, actorID, id string, active 
 	if !active {
 		verb = "disable"
 	}
-	if err := writeAuditRes(ctx, tx, actorID, verb, "principal", id,
+	if err := writeAuditRes(ctx, tx, actorID, verb, "principal", principalID,
 		map[string]any{"active": wasActive}, map[string]any{"active": active}); err != nil {
 		return err
 	}
@@ -1249,7 +1249,7 @@ func (p *PG) RestorePrincipal(ctx context.Context, actorID, id string, action sc
 	return p.setArchived(ctx, actorID, id, false, action)
 }
 
-func (p *PG) setArchived(ctx context.Context, actorID, id string, archive bool, action scope.Set) error {
+func (p *PG) setArchived(ctx context.Context, actorID, principalID string, archive bool, action scope.Set) error {
 	if !action.All {
 		return ErrPrincipalForbidden
 	}
@@ -1260,7 +1260,7 @@ func (p *PG) setArchived(ctx context.Context, actorID, id string, archive bool, 
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	var pgErr *pgconn.PgError
-	if err := tx.QueryRow(ctx, `select 1 from principal where id = $1`, id).Scan(new(int)); err != nil {
+	if err := tx.QueryRow(ctx, `select 1 from principal where id = $1`, principalID).Scan(new(int)); err != nil {
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
 			return ErrPrincipalNotFound
@@ -1272,7 +1272,7 @@ func (p *PG) setArchived(ctx context.Context, actorID, id string, archive bool, 
 	}
 
 	if archive {
-		if _, err := tx.Exec(ctx, `update principal set archived_at = now(), active = false where id = $1`, id); err != nil {
+		if _, err := tx.Exec(ctx, `update principal set archived_at = now(), active = false where id = $1`, principalID); err != nil {
 			return fmt.Errorf("storage: archive: %w", err)
 		}
 		remains, err := activeOwnerRemains(ctx, tx)
@@ -1282,7 +1282,7 @@ func (p *PG) setArchived(ctx context.Context, actorID, id string, archive bool, 
 		if !remains {
 			return ErrLastOwner // rolls back the archive
 		}
-	} else if _, err := tx.Exec(ctx, `update principal set archived_at = null, active = true where id = $1`, id); err != nil {
+	} else if _, err := tx.Exec(ctx, `update principal set archived_at = null, active = true where id = $1`, principalID); err != nil {
 		return fmt.Errorf("storage: restore: %w", err)
 	}
 
@@ -1290,7 +1290,7 @@ func (p *PG) setArchived(ctx context.Context, actorID, id string, archive bool, 
 	if archive {
 		verb = "archive"
 	}
-	if err := writeAuditRes(ctx, tx, actorID, verb, "principal", id, nil, map[string]any{"archived": archive}); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, verb, "principal", principalID, nil, map[string]any{"archived": archive}); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -1306,7 +1306,7 @@ func (p *PG) setArchived(ctx context.Context, actorID, id string, archive bool, 
 // audit foreign keys are ON DELETE SET NULL and every row keeps a denormalized
 // actor label. Requires an all-scope grant; refused (ErrLastOwner) if it would
 // remove the last owner grant.
-func (p *PG) PurgePrincipal(ctx context.Context, actorID, id string, action scope.Set) error {
+func (p *PG) PurgePrincipal(ctx context.Context, actorID, principalID string, action scope.Set) error {
 	if !action.All {
 		return ErrPrincipalForbidden
 	}
@@ -1318,7 +1318,7 @@ func (p *PG) PurgePrincipal(ctx context.Context, actorID, id string, action scop
 
 	var archivedAt *time.Time
 	var pgErr *pgconn.PgError
-	if err := tx.QueryRow(ctx, `select archived_at from principal where id = $1`, id).Scan(&archivedAt); err != nil {
+	if err := tx.QueryRow(ctx, `select archived_at from principal where id = $1`, principalID).Scan(&archivedAt); err != nil {
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
 			return ErrPrincipalNotFound
@@ -1333,10 +1333,10 @@ func (p *PG) PurgePrincipal(ctx context.Context, actorID, id string, action scop
 	}
 	// Audit the purge before the row is gone; the actor is the purger (unaffected by
 	// the delete), and the resource id is a plain text value, not a foreign key.
-	if err := writeAuditRes(ctx, tx, actorID, "purge", "principal", id, nil, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "purge", "principal", principalID, nil, nil); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `delete from principal where id = $1`, id); err != nil {
+	if _, err := tx.Exec(ctx, `delete from principal where id = $1`, principalID); err != nil {
 		return fmt.Errorf("storage: purge principal: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {

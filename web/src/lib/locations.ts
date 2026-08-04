@@ -70,7 +70,6 @@ export async function createLocation(body: CreateLocation): Promise<Location> {
 }
 
 export type UpdateLocation = {
-  name?: string;
   display_name?: string;
   location_type?: string;
   // Re-parents the location (a tree move) to this location name. Omit to leave
@@ -81,6 +80,15 @@ export type UpdateLocation = {
 
 export async function updateLocation(name: string, body: UpdateLocation): Promise<Location> {
   const { data, error } = await api.PATCH("/locations/{name}", { params: { path: { name } }, body });
+  if (error) throw error;
+  return data as Location;
+}
+
+// A rename is its own call, not a field on the patch body. The API gates it with
+// `<resource>:rename` rather than `<resource>:update`, because moving a name breaks
+// stored references and is worth being able to withhold on its own.
+export async function renameLocation(name: string, to: string): Promise<Location> {
+  const { data, error } = await api.POST("/locations/{name}:rename", { params: { path: { name } }, body: { name: to } });
   if (error) throw error;
   return data as Location;
 }

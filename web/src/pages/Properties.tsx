@@ -1,4 +1,5 @@
 import { For, Show, createEffect, createSignal, on, type JSX } from "solid-js";
+import { entityLabel } from "../lib/entities";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import { identityColumn } from "../components/IdentityCell";
@@ -41,12 +42,13 @@ function originBadge(official: boolean): JSX.Element {
     : <span class="badge badge-outline badge-sm">custom</span>;
 }
 
-// The identity column keeps the header word "Key" here: this catalog is a keyspace, so
-// `name` holds a dotted key (icmp.rtt-avg) rather than the kebab segment the rest of the
-// estate addresses rows by. The cell is the shared two-line treatment either way, which
-// is what retires the separate "Label" column.
+// This catalog is a keyspace, so `name` holds a dotted value (icmp.rtt-avg) rather
+// than the kebab the rest of the estate addresses rows by. That is a validation
+// difference, not a different concept, so the header is the one word every list
+// uses. The cell is the shared two-line treatment either way, which is what retires
+// the separate "Label" column.
 const columns: FlatColumn<PropertyRow>[] = [
-  identityColumn<PropertyRow>({ label: "Key" }),
+  identityColumn<PropertyRow>(),
   { key: "data_type", label: "Type", width: "90px", sortVal: (r) => r.data_type, cell: (r) => typeBadge(r.data_type) },
   { key: "kind", label: "Kind", width: "90px", cell: (r) => kindBadge(r.kind) },
   { key: "official", label: "Origin", width: "100px", sortVal: (r) => String(r.official), cell: (r) => originBadge(r.official) },
@@ -71,7 +73,7 @@ export default function Properties(): JSX.Element {
             { key: "type", type: "string", hint: "exact", get: (r) => r.data_type, values: () => PROPERTY_DATA_TYPES },
             { key: "official", type: "string", hint: "exact", get: (r) => (r.official ? "official" : "custom"), values: () => ["official", "custom"] },
           ],
-          filterPlaceholder: "filter properties by name, label…",
+          filterPlaceholder: "filter properties by name, display name…",
           columns,
           empty: "No properties.",
           rowId: (r) => r.name,
@@ -85,12 +87,22 @@ export default function Properties(): JSX.Element {
   );
 }
 
-// propertyBlade renders one property on the shared blade stack. The title is the mono
-// property key; official properties are read-only (no pencil, no delete).
+// propertyBlade renders one property on the shared blade stack. The title is what the
+// list shows, the display name, falling back to the name; official properties are
+// read-only (no pencil, no delete).
 export const propertyBlade: BladeDef = {
-  Title: (p) => <span class="font-data">{p.id}</span>,
+  Title: (p) => <PropertyBladeTitle name={p.id} />,
   Body: (p) => <PropertyBladeBody name={p.id} />,
 };
+
+// The blade heading is the display name, falling back to the name, so opening a row
+// lands on the same words the row showed. It rendered the bare name before, so
+// clicking "ICMP RTT (avg)" opened a panel headed icmp.rtt-avg.
+function PropertyBladeTitle(p: { name: string }): JSX.Element {
+  const row = usePropertyRow(p.name);
+  const r = row();
+  return <span classList={{ "font-data": !r?.display_name }}>{r ? entityLabel(r) : p.name}</span>;
+}
 
 function usePropertyRow(name: string): () => PropertyRow | undefined {
   const properties = useQuery(() => ({ queryKey: PROPERTIES_KEY, queryFn: listProperties }));
@@ -161,13 +173,14 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
+            <KVStacked label="Name" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Type" value={typeBadge(r().data_type)} />
             <KVStacked label="Kind" value={kindBadge(r().kind)} />
             <KVStacked label="Origin" value={originBadge(r().official)} />
             <KVStacked label="Unit" value={<span class="font-data">{r().unit ?? "—"}</span>} />
           </div>
           <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Name</span>
+            <span class="eyebrow">Display name</span>
             <Show when={edit.editing()} fallback={<div class="input input-bordered flex items-center text-sm">{r().display_name}</div>}>
               <input class="input input-bordered w-full" value={displayName()} onInput={(e) => setDisplayName(e.currentTarget.value)} />
             </Show>
@@ -247,7 +260,7 @@ export function CreatePropertyForm(p: { onCreated: (r: PropertyRow) => void }): 
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Key" hint="A lowercase, dot-hierarchied name, e.g. serial-number or interface.reachable.">
+      <Field label="Name" hint="A lowercase, dot-hierarchied name, e.g. serial-number or interface.reachable.">
         <input class="input input-bordered w-full font-data" value={name()} placeholder="serial-number" onInput={(e) => setName(e.currentTarget.value)} />
       </Field>
       <Field label="Data type">
@@ -255,7 +268,7 @@ export function CreatePropertyForm(p: { onCreated: (r: PropertyRow) => void }): 
           <For each={PROPERTY_DATA_TYPES}>{(t) => <option value={t}>{t}</option>}</For>
         </select>
       </Field>
-      <Field label="Name">
+      <Field label="Display name">
         <input class="input input-bordered w-full" value={displayName()} placeholder="Serial number" onInput={(e) => setDisplayName(e.currentTarget.value)} />
       </Field>
       <Field label="Description">

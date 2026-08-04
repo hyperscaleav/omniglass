@@ -355,7 +355,7 @@ export interface paths {
         put?: never;
         /**
          * Create a command type
-         * @description Registers a custom command type (official=false). The name must be a valid key; a target property, when set, must be registered. Gated by command_type:create.
+         * @description Registers a custom command type (official=false). The name must be a valid keyspace name (dot-joined kebab segments); a target property, when set, must be registered. Gated by command_type:create.
          */
         post: operations["create-command-type"];
         delete?: never;
@@ -439,7 +439,7 @@ export interface paths {
         head?: never;
         /**
          * Update a component
-         * @description Patches a component's technical name, display_name, product, location, or parent. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+         * @description Patches a component's display_name, product, location, or parent. The name is not patchable: renaming is the :rename custom method. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-component"];
         trace?: never;
@@ -796,6 +796,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components/{name}:rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename a component
+         * @description Moves the component's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by component:rename; read and rename scopes drive the 404 versus 403 split.
+         */
+        post: operations["rename-component"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/components/{name}:setTag": {
         parameters: {
             query?: never;
@@ -826,8 +846,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Check a component technical name
-         * @description Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.
+         * Check a component name
+         * @description Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.
          */
         post: operations["check-component-name"];
         delete?: never;
@@ -903,7 +923,7 @@ export interface paths {
         put?: never;
         /**
          * Create an event type
-         * @description Registers a custom event type (official=false). The name must be a valid event key. Gated by event_type:create.
+         * @description Registers a custom event type (official=false). The name must be a valid keyspace name (dot-joined kebab segments). Gated by event_type:create.
          */
         post: operations["create-event-type"];
         delete?: never;
@@ -1219,7 +1239,7 @@ export interface paths {
         head?: never;
         /**
          * Update a location
-         * @description Patches a location's display_name, location_type, or parent (a move). Gated by location:update; the read and update scopes drive the 404 versus 403 split.
+         * @description Patches a location's display_name, location_type, or parent (a move). The name is not patchable: renaming is the :rename custom method. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-location"];
         trace?: never;
@@ -1328,6 +1348,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/locations/{name}:rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename a location
+         * @description Moves the location's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by location:rename; the read and rename scopes drive the 404 versus 403 split.
+         */
+        post: operations["rename-location"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/locations/{name}:setTag": {
         parameters: {
             query?: never;
@@ -1358,8 +1398,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Check a location technical name
-         * @description Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.
+         * Check a location name
+         * @description Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.
          */
         post: operations["check-location-name"];
         delete?: never;
@@ -1587,7 +1627,7 @@ export interface paths {
         head?: never;
         /**
          * Update a principal group
-         * @description Updates a group's name and presentational fields. Gated by principal_group:update (all-scope). A duplicate name is 409.
+         * @description Updates a group's presentational fields. The name is not patchable: renaming is the :rename custom method. Gated by principal_group:update (all-scope).
          */
         patch: operations["update-group"];
         trace?: never;
@@ -1680,6 +1720,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/principal-groups/{id}:rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename a principal group
+         * @description Moves the group's name. A separate act from an update, and a separately grantable one, because it breaks the references stored outside this system; inside it nothing breaks, since membership and grants both key on the group's uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by principal_group:rename (all-scope).
+         */
+        post: operations["rename-group"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/principals": {
         parameters: {
             query?: never;
@@ -1723,7 +1783,7 @@ export interface paths {
         head?: never;
         /**
          * Update a principal
-         * @description Updates a human principal's display name, email, and username. Gated by principal:update (all-scope). Renaming is safe: nothing keys on the username.
+         * @description Updates a human principal's display name, email, and username. Gated by principal:update (all-scope). A username is not an entity name and is patchable here rather than through a :rename method: it is the sign-in identifier, on its own rule, and nothing keys on it.
          */
         patch: operations["update-principal"];
         trace?: never;
@@ -2061,7 +2121,7 @@ export interface paths {
         };
         /**
          * Get a product
-         * @description Fetches a product by id, with its capabilities. Gated by product:read.
+         * @description Fetches a product by its name or its uuid, with its capabilities. Either form resolves, so `omniglass product get acme-soundbar` and the uuid are interchangeable. Gated by product:read.
          */
         get: operations["get-product"];
         put?: never;
@@ -2575,7 +2635,7 @@ export interface paths {
         head?: never;
         /**
          * Update a system
-         * @description Patches a system's display_name, standard, location, or parent. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+         * @description Patches a system's display_name, standard, location, or parent. The name is not patchable: renaming is the :rename custom method. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-system"];
         trace?: never;
@@ -2816,6 +2876,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/systems/{name}:rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename a system
+         * @description Moves the system's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by system:rename; read and rename scopes drive the 404 versus 403 split.
+         */
+        post: operations["rename-system"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/systems/{name}:setTag": {
         parameters: {
             query?: never;
@@ -2846,8 +2926,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Check a system technical name
-         * @description Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.
+         * Check a system name
+         * @description Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.
          */
         post: operations["check-system-name"];
         delete?: never;
@@ -3222,7 +3302,7 @@ export interface components {
             display_name: string;
             /** @description The capability's uuid, the stable handle that survives a rename */
             id: string;
-            /** @description The kebab handle an operator reads and types; renameable */
+            /** @description The name an operator reads and types; renameable */
             name: string;
             official: boolean;
         };
@@ -3245,7 +3325,7 @@ export interface components {
              * @example /api/v1/schemas/CheckNameInputBody.json
              */
             readonly $schema?: string;
-            /** @description The proposed technical name to check */
+            /** @description The proposed name to check */
             name: string;
         };
         CheckNameOutputBody: {
@@ -3414,7 +3494,7 @@ export interface components {
             readonly $schema?: string;
             /** @description What an operator reads in pickers and lists */
             display_name: string;
-            /** @description The globally unique kebab handle; renameable */
+            /** @description The globally unique name; renameable */
             name: string;
         };
         CreateCommandTypeInputBody: {
@@ -3447,7 +3527,7 @@ export interface components {
              * @example /api/v1/schemas/CreateComponentInputBody.json
              */
             readonly $schema?: string;
-            /** @description What an operator reads; the technical name is the address */
+            /** @description What an operator reads; the name is the address */
             display_name?: string;
             /** @description Location name this component is placed at */
             location?: string;
@@ -3469,7 +3549,7 @@ export interface components {
             readonly $schema?: string;
             /** @description What an operator reads in pickers and lists */
             display_name: string;
-            /** @description The globally unique kebab handle; renameable */
+            /** @description The globally unique name; renameable */
             name: string;
             /** @description A free-form version string, e.g. 1.0.0 */
             version?: string;
@@ -3561,7 +3641,7 @@ export interface components {
             description?: string;
             /** @description What an operator reads in lists */
             display_name?: string;
-            /** @description Unique group name (lowercase letters, digits, and . _ -) */
+            /** @description Unique group name (lowercase letters, digits, and hyphens) */
             name: string;
         };
         CreateInterfaceInputBody: {
@@ -3587,7 +3667,7 @@ export interface components {
              * @example /api/v1/schemas/CreateLocationInputBody.json
              */
             readonly $schema?: string;
-            /** @description What an operator reads; the technical name is the address */
+            /** @description What an operator reads; the name is the address */
             display_name?: string;
             /** @description The location_type, by name or uuid (campus, building, ...) */
             location_type: string;
@@ -3609,7 +3689,7 @@ export interface components {
             display_name: string;
             /** @description A glyph key; the console falls back to map-pin when empty */
             icon?: string;
-            /** @description The globally unique kebab handle (e.g. wing); "root" is reserved */
+            /** @description The globally unique name (e.g. wing); "root" is reserved */
             name: string;
         };
         CreateMeTokenInputBody: {
@@ -3656,7 +3736,7 @@ export interface components {
             display_name?: string;
             /** @description Optional location the node sits in, by name or id (descriptive placement, not scope) */
             location?: string;
-            /** @description Globally unique node name (also its NATS subject token, so no dots or whitespace) */
+            /** @description Globally unique node name (lowercase letters, digits, and hyphens); it is also the node's NATS subject token, which is why the rule forbids a dot */
             name: string;
         };
         CreatePrincipalInputBody: {
@@ -3697,7 +3777,7 @@ export interface components {
              * @enum {string}
              */
             kind: "device" | "app" | "service" | "vm";
-            /** @description The globally unique kebab handle; renameable */
+            /** @description The globally unique name; renameable */
             name: string;
             /** @description The parent product, by handle or uuid */
             parent_product_id?: string;
@@ -3745,7 +3825,7 @@ export interface components {
             fields: {
                 [key: string]: string;
             };
-            /** @description The cascade key; unique per owner */
+            /** @description The cascade name (lowercase letters, digits, and hyphens); unique per owner */
             name: string;
             /** @description The owning entity's name; omit for a platform secret */
             owner?: string;
@@ -3766,7 +3846,7 @@ export interface components {
             readonly $schema?: string;
             /** @description What an operator reads in pickers and lists */
             display_name: string;
-            /** @description The globally unique kebab handle; renameable */
+            /** @description The globally unique name; renameable */
             name: string;
             /** @description A standard this one is a variant of, by handle or uuid */
             parent_standard_id?: string;
@@ -3778,7 +3858,7 @@ export interface components {
              * @example /api/v1/schemas/CreateSystemInputBody.json
              */
             readonly $schema?: string;
-            /** @description What an operator reads; the technical name is the address */
+            /** @description What an operator reads; the name is the address */
             display_name?: string;
             /** @description Location name this system is placed at */
             location?: string;
@@ -3800,7 +3880,7 @@ export interface components {
             allowed_values?: string[] | null;
             /** @description Entity kinds this key may bind to (component, system, location); omit for universal */
             applies_to?: string[] | null;
-            /** @description The normalized key: a lowercase identifier, unique tenant-wide */
+            /** @description The normalized name (lowercase letters, digits, and hyphens), unique tenant-wide */
             name: string;
             /** @description Whether bindings cascade to descendants; defaults true */
             propagates?: boolean;
@@ -3812,7 +3892,7 @@ export interface components {
              * @example /api/v1/schemas/CreateVariableInputBody.json
              */
             readonly $schema?: string;
-            /** @description The cascade key; unique per owner */
+            /** @description The cascade name (lowercase letters, digits, and hyphens); unique per owner */
             name: string;
             /** @description The owning entity's name; omit for a platform variable */
             owner?: string;
@@ -3846,7 +3926,7 @@ export interface components {
              * @enum {string}
              */
             kind: "manufacturer" | "integrator" | "developer";
-            /** @description The globally unique kebab handle; renameable */
+            /** @description The globally unique name; renameable */
             name: string;
             /** @description The vendor's support line */
             support_phone?: string;
@@ -3875,7 +3955,7 @@ export interface components {
             display_name: string;
             /** @description The driver's uuid, the stable handle that survives a rename */
             id: string;
-            /** @description The kebab handle an operator reads and types; renameable */
+            /** @description The name an operator reads and types; renameable */
             name: string;
             official: boolean;
             version?: string;
@@ -4707,7 +4787,7 @@ export interface components {
             icon: string;
             /** @description The location type's uuid, the stable handle that survives a rename */
             id: string;
-            /** @description The kebab handle an operator reads and types; renameable */
+            /** @description The name an operator reads and types; renameable */
             name: string;
             official: boolean;
         };
@@ -4889,7 +4969,7 @@ export interface components {
             id: string;
             /** @enum {string} */
             kind: "device" | "app" | "service" | "vm";
-            /** @description The kebab handle an operator reads and types; renameable */
+            /** @description The name an operator reads and types; renameable */
             name: string;
             official: boolean;
             /** @description The parent product's handle */
@@ -5100,6 +5180,46 @@ export interface components {
             readonly $schema?: string;
             component: string;
             properties: components["schemas"]["ReconPropertyBody"][] | null;
+        };
+        RenameComponentInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RenameComponentInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The new globally unique name (lowercase letters, digits, hyphens) */
+            name: string;
+        };
+        RenameGroupInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RenameGroupInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The new unique group name (lowercase letters, digits, hyphens) */
+            name: string;
+        };
+        RenameLocationInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RenameLocationInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The new globally unique name (lowercase letters, digits, hyphens) */
+            name: string;
+        };
+        RenameSystemInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RenameSystemInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The new globally unique name (lowercase letters, digits, hyphens) */
+            name: string;
         };
         ResetPasswordInputBody: {
             /**
@@ -5320,7 +5440,7 @@ export interface components {
             fields: components["schemas"]["SecretTypeFieldBody"][] | null;
             /** @description The secret type's uuid, the stable handle that survives a rename */
             id: string;
-            /** @description The kebab handle an operator reads and types; renameable */
+            /** @description The name an operator reads and types; renameable */
             name: string;
             official: boolean;
         };
@@ -5491,7 +5611,7 @@ export interface components {
             display_name: string;
             /** @description The standard's uuid, the stable handle that survives a rename */
             id: string;
-            /** @description The kebab handle an operator reads and types; renameable */
+            /** @description The name an operator reads and types; renameable */
             name: string;
             official: boolean;
             /** @description The parent standard's handle */
@@ -5553,11 +5673,11 @@ export interface components {
             standard_id?: string;
         };
         SystemMemberBody: {
-            /** @description Technical name of the component */
+            /** @description Name of the component */
             component: string;
             /** @description Whether this membership is the component's default when no system is given */
             primary: boolean;
-            /** @description Technical name of the system */
+            /** @description Name of the system */
             system: string;
             /**
              * Format: int64
@@ -5726,8 +5846,6 @@ export interface components {
             display_name?: string;
             /** @description Relocates the component to this location name. An empty string clears its placement. */
             location?: string;
-            /** @description A new globally unique technical name (rename) */
-            name?: string;
             /** @description Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component. */
             parent?: string;
             /** @description Re-classifies the component to this product (catalog SKU). An empty string clears it. Explicitly-set property values persist; the new product's contract defaults follow. */
@@ -5770,8 +5888,6 @@ export interface components {
             description?: string;
             /** @description Display name; empty clears it */
             display_name?: string;
-            /** @description Group name (lowercase letters, digits, and . _ -); renaming is safe */
-            name?: string;
         };
         UpdateInterfaceInputBody: {
             /**
@@ -5796,8 +5912,6 @@ export interface components {
             display_name?: string;
             /** @description Re-types the location: a location_type, by name or uuid */
             location_type?: string;
-            /** @description A new globally unique technical name (rename) */
-            name?: string;
             /** @description Re-parents the location (a tree move) to this location name, cycle-guarded and placement-validated. Moving to root is not supported via update this slice. */
             parent?: string;
         };
@@ -5927,8 +6041,6 @@ export interface components {
             display_name?: string;
             /** @description Relocates the system to this location name. An empty string clears its placement. */
             location?: string;
-            /** @description A new globally unique technical name (rename) */
-            name?: string;
             /** @description Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system. */
             parent?: string;
             /** @description A new standard, by handle or uuid; "" clears it (a one-off system) */
@@ -6009,7 +6121,7 @@ export interface components {
             id: string;
             /** @enum {string} */
             kind: "manufacturer" | "integrator" | "developer";
-            /** @description The kebab handle an operator reads and types; renameable */
+            /** @description The name an operator reads and types; renameable */
             name: string;
             official: boolean;
             support_phone?: string;
@@ -7424,7 +7536,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Technical name of the component */
+                /** @description Name of the component */
                 name: string;
             };
             cookie?: never;
@@ -7671,6 +7783,42 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "rename-component": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's current name, or its uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameComponentInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentBody"];
+                };
             };
             /** @description Error */
             default: {
@@ -9003,6 +9151,42 @@ export interface operations {
             };
         };
     };
+    "rename-location": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location's current name, or its uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameLocationInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "set-location-tag": {
         parameters: {
             query?: never;
@@ -9794,6 +9978,42 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "rename-group": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The group's id (uuid) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameGroupInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupBody"];
+                };
             };
             /** @description Error */
             default: {
@@ -11916,7 +12136,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Technical name of the system */
+                /** @description Name of the system */
                 name: string;
             };
             cookie?: never;
@@ -11948,9 +12168,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Technical name of the system */
+                /** @description Name of the system */
                 name: string;
-                /** @description Technical name of the component */
+                /** @description Name of the component */
                 component: string;
             };
             cookie?: never;
@@ -11980,9 +12200,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Technical name of the system */
+                /** @description Name of the system */
                 name: string;
-                /** @description Technical name of the component */
+                /** @description Name of the component */
                 component: string;
             };
             cookie?: never;
@@ -12012,9 +12232,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Technical name of the system */
+                /** @description Name of the system */
                 name: string;
-                /** @description Technical name of the component */
+                /** @description Name of the component */
                 component: string;
             };
             cookie?: never;
@@ -12365,6 +12585,42 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "rename-system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's current name, or its uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameSystemInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemBody"];
+                };
             };
             /** @description Error */
             default: {

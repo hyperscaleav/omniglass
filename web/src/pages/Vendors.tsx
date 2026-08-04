@@ -189,12 +189,12 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <KVStacked label="Key" value={<span class="font-data">{r().name}</span>} />
+            <KVStacked label="Name" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Origin" value={officialBadge(r().official)} />
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
           <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Name</span>
+            <span class="eyebrow">Display name</span>
             <Show
               when={edit.editing()}
               fallback={<div class="input input-bordered flex items-center text-sm">{r().display_name}</div>}
@@ -269,7 +269,7 @@ export function CreateVendorForm(p: { onCreated: (v: Vendor) => void }): JSX.Ele
   const qc = useQueryClient();
   // Display name leads and the name follows it, stopping the moment the operator
   // edits the name by hand (lib/entities).
-  const { display, setDisplay, name, setName, keyDerived } = createIdentity();
+  const { display, setDisplay, name, setName, nameDerived } = createIdentity();
   const [kind, setKind] = createSignal<VendorKind>("manufacturer");
   const [icon, setIcon] = createSignal("");
   const [supportPhone, setSupportPhone] = createSignal("");
@@ -311,12 +311,12 @@ export function CreateVendorForm(p: { onCreated: (v: Vendor) => void }): JSX.Ele
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Name" hint="What an operator reads, e.g. Crestron.">
+      <Field label="Display name" hint="What an operator reads, e.g. Crestron.">
         <input class="input input-bordered w-full" value={display()} placeholder="Crestron" onInput={(e) => setDisplay(e.currentTarget.value)} />
       </Field>
       <Field
-        label="Key"
-        hint={keyDerived() ? "Derived from the name. Edit to set your own." : "A kebab name, the address the API and CLI accept."}
+        label="Name"
+        hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "A kebab name, the address the API and CLI accept."}
       >
         <input class="input input-bordered w-full font-data" value={name()} placeholder="crestron" onInput={(e) => setName(e.currentTarget.value)} />
       </Field>

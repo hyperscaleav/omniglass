@@ -29,10 +29,11 @@ const filterKeys: FilterKey<Principal>[] = [
   { key: "username", type: "string", hint: "substring", get: (p) => p.human?.username ?? "" },
 ];
 
-// A principal wears the two identities the console labels everything by, under its
-// own field names: the username is the segment (what the API, the CLI, and the sign-in
-// prompt address a human by) and the display name is the label. A service account has
-// only its label, so that stands as the segment and nothing sits beneath it.
+// A principal wears the two operator-facing identities the console labels everything
+// by, under its own field names: the username stands in for the name (what the API,
+// the CLI, and the sign-in prompt address a human by) and the display name is the
+// display name. A service account has only its label, so that stands in for the name
+// and nothing sits beneath it.
 const principalIdentity = (p: Principal): Labelled => ({
   name: p.human?.username ?? p.service?.label ?? p.kind,
   display_name: p.human?.display_name,
@@ -133,7 +134,7 @@ export default function Users() {
 // handle character class, and the moment they edit the username it is theirs.
 function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) => void }) {
   const qc = useQueryClient();
-  const { display, name: username, keyDerived, setDisplay, setName: setUsername } = createIdentity();
+  const { display, name: username, nameDerived, setDisplay, setName: setUsername } = createIdentity();
   const [email, setEmail] = createSignal("");
   const [password, setPassword] = createSignal("");
   const [busy, setBusy] = createSignal(false);
@@ -184,13 +185,13 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
       <div>
-        <label class="eyebrow mb-1.5 block" for="new-display">Name</label>
+        <label class="eyebrow mb-1.5 block" for="new-display">Display name</label>
         <input id="new-display" autocomplete="off" class="input input-bordered w-full" value={display()} placeholder="Jordan Rivera" onInput={(e) => setDisplay(e.currentTarget.value)} disabled={busy()} />
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-username">Username</label>
         <input id="new-username" autocomplete="off" class="input input-bordered w-full font-data" classList={{ "input-error": !!handleError(username()) }} value={username()} placeholder="jordan" onInput={(e) => setUsername(e.currentTarget.value)} disabled={busy()} required />
-        <Show when={handleError(username())} fallback={<p class="mt-1 text-[11px] text-base-content/40">{keyDerived() ? "Derived from the name. Edit to set your own." : "What they sign in with."}</p>}>
+        <Show when={handleError(username())} fallback={<p class="mt-1 text-[11px] text-base-content/40">{nameDerived() ? "Derived from the display name. Edit to set your own." : "What they sign in with."}</p>}>
           {(msg) => <p class="mt-1 text-[11px] text-error">{msg()}</p>}
         </Show>
       </div>

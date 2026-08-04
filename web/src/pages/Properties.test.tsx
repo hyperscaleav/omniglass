@@ -39,13 +39,14 @@ describe("Properties page", () => {
     expect(screen.getByText("rack-unit")).toBeTruthy();
   });
 
-  it("renders the label and the key in one identity cell, not two columns", () => {
+  it("renders the display name and the name in one identity cell, not two columns", () => {
     mount();
-    // The key is a keyspace key rather than a kebab segment, so the header word stays
-    // "Key"; what changes is that the label now sits above it in the same cell.
+    // A dotted keyspace name is validated differently from a kebab one, not a
+    // different concept, so the header is the one word every list uses; what changes
+    // is that the display name now sits above the name in the same cell.
     const cell = screen.getByText("serial-number").closest("td");
     expect(cell?.textContent).toContain("Serial number");
-    expect(screen.getByRole("columnheader", { name: "Key" })).toBeTruthy();
+    expect(screen.getByRole("columnheader", { name: "Name" })).toBeTruthy();
     expect(screen.queryByRole("columnheader", { name: "Label" })).toBeNull();
   });
 

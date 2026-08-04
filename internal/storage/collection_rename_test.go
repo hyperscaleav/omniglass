@@ -71,12 +71,10 @@ func TestCollectionReferencesSurviveARename(t *testing.T) {
 
 	// The renames an operator can actually perform. A node's name is immutable (it
 	// is the enrollment identity), so the node arc is exercised below instead.
-	if _, err := gw.UpdateComponent(ctx, "", "old-codec",
-		storage.ComponentPatch{Name: strptr("new-codec")}, all, all); err != nil {
+	if _, err := gw.RenameComponent(ctx, "", "old-codec", "new-codec", all, all); err != nil {
 		t.Fatalf("rename component: %v", err)
 	}
-	if _, err := gw.UpdateLocation(ctx, "", "old-room",
-		storage.LocationPatch{Name: strptr("new-room")}, all, all); err != nil {
+	if _, err := gw.RenameLocation(ctx, "", "old-room", "new-room", all, all); err != nil {
 		t.Fatalf("rename location: %v", err)
 	}
 

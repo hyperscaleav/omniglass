@@ -180,6 +180,11 @@ const secretCols = `id, name, (select st.name from secret_type st where st.id = 
 // transaction. Secret fields are AES-256-GCM sealed with their (owner, name,
 // field) bound as AAD, so a ciphertext cannot be lifted into another row.
 func (p *PG) CreateSecret(ctx context.Context, actorID string, spec SecretSpec, create scope.Set, canAdmin bool) (*Secret, error) {
+	// The name is checked before the provider, so an illegal name is a 422 about the
+	// name rather than a 500 about crypto configuration.
+	if err := ValidateName("secret", spec.Name); err != nil {
+		return nil, err
+	}
 	if p.secret == nil {
 		return nil, ErrNoSecretProvider
 	}
@@ -441,7 +446,10 @@ func (p *PG) decryptSecret(ctx context.Context, actorID, id, verb string, read, 
 		}
 		out[f.Name] = string(pt)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, verb, "secret", row.id, nil, nil); err != nil {
+	// The decrypt is audited against the secret's primary key, taken from the row
+	// that was fetched, never against the reference the caller reached it by.
+	secretID := row.id
+	if err := writeAuditRes(ctx, tx, actorID, verb, "secret", secretID, nil, nil); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {

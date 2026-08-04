@@ -2,25 +2,27 @@ import { createSignal } from "solid-js";
 
 // How an estate entity is labelled, in one place.
 //
-// Every entity carries two identities: a **key** (`name`, the kebab identifier
-// the API and CLI address it by) and an optional **display name**. The label is
-// the display name when there is one and the key when there is not.
+// The identity triad is `id` (a uuid, immutable), `name` (the renameable kebab
+// identifier an operator types and the API and CLI address the row by), and
+// `display_name` (an optional friendly string a human reads). Only the last two
+// are operator-facing, and the label is the display name when there is one and
+// the name when there is not.
 //
-// Nothing is derived from the key. Sentence-casing `hq-boardroom-dsp` gives
+// Nothing is derived from the name. Sentence-casing `hq-boardroom-dsp` gives
 // "Hq boardroom dsp", and this domain is acronyms (DSP, HDMI, NVX, PTZ, UC,
 // AVoIP), so any mechanical casing mangles them and makes an ABSENT display name
-// look like a typo rather than an absence. The key shown as-is is honest, and it
+// look like a typo rather than an absence. The name shown as-is is honest, and it
 // keeps the gap visible.
 //
 // This rule used to be written out six times: `nodeLabel` in lib/nodes.ts, the
 // `display:` mapper on each of the Components, Systems, and Locations pages, and
 // three inline copies in the Variables owner picker. Six copies of one rule is
-// how the Components list ended up showing a key where its neighbours showed a
-// label.
+// how the Components list ended up showing a name where its neighbours showed a
+// display name.
 
-// Labelled is the shape of anything the console labels: the key, plus the
-// optional operator-facing name. It is deliberately structural rather than a
-// union of entity types, so a generated body satisfies it without a cast.
+// Labelled is the shape of anything the console labels: the name, plus the
+// optional display name. It is deliberately structural rather than a union of
+// entity types, so a generated body satisfies it without a cast.
 export interface Labelled {
   name: string;
   display_name?: string | null;
@@ -33,14 +35,14 @@ export function entityLabel(e: Labelled): string {
   return e.display_name?.trim() || e.name;
 }
 
-// hasDisplayName reports whether the label and the key are different things,
-// which is what decides whether a surface shows the key on its own line. When
+// hasDisplayName reports whether the label and the name are different things,
+// which is what decides whether a surface shows the name on its own line. When
 // they are the same, showing it twice is noise.
 export function hasDisplayName(e: Labelled): boolean {
   return entityLabel(e) !== e.name;
 }
 
-// deriveKey turns what an operator typed into the key the API will accept.
+// deriveName turns what an operator typed into the name the API will accept.
 //
 // The API enforces `^[a-z0-9][a-z0-9-]*$` with a 100 character ceiling, so this
 // produces exactly that or the empty string. It never produces something the
@@ -53,9 +55,9 @@ export function hasDisplayName(e: Labelled): boolean {
 // character be alphanumeric.
 //
 // It is deliberately NOT reversible and not a general slugifier. Two display
-// names can derive the same key; the server's uniqueness check is what settles
-// that, and the key stays editable so an operator can resolve it themselves.
-export function deriveKey(display: string): string {
+// names can derive the same name; the server's uniqueness check is what settles
+// that, and the name stays editable so an operator can resolve it themselves.
+export function deriveName(display: string): string {
   return display
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "") // fold diacritics onto their base letter
@@ -66,35 +68,36 @@ export function deriveKey(display: string): string {
     .replace(/-+$/g, ""); // the slice can leave a trailing separator behind
 }
 
-// createIdentity owns the coupling between the two identity fields on a create
-// form: the operator types a display name, the key derives from it live, and the
-// moment they edit the key by hand it becomes theirs and stops following.
+// createIdentity owns the coupling between the two operator-facing identity
+// fields on a create form: the operator types a display name, the name derives
+// from it live, and the moment they edit the name by hand it becomes theirs and
+// stops following.
 //
 // That last rule is the whole reason this is a primitive rather than three
-// copies of a signal pair. A form that keeps overwriting a hand-edited key is
+// copies of a signal pair. A form that keeps overwriting a hand-edited name is
 // worse than one that never derived it, and it is the part that is easy to get
 // wrong in each page separately.
 //
-// Passing an existing name marks the key as already the operator's, so an edit
-// form can never rewrite a live key from its display name. Renaming is a
-// deliberate act (the API takes it explicitly), never a side effect of relabelling.
+// Passing an existing name marks it as already the operator's, so an edit form
+// can never rewrite a live name from its display name. Renaming is a deliberate
+// act (the API takes it explicitly), never a side effect of relabelling.
 export function createIdentity(initial?: { display?: string; name?: string }) {
   const [display, setDisplayRaw] = createSignal(initial?.display ?? "");
   const [name, setNameRaw] = createSignal(initial?.name ?? "");
-  const [keyOwned, setKeyOwned] = createSignal(Boolean(initial?.name));
+  const [nameOwned, setNameOwned] = createSignal(Boolean(initial?.name));
 
   return {
     display,
     name,
-    // True while the key is still following the display name, which is what the
+    // True while the name is still following the display name, which is what the
     // form uses to decide whether to say so beneath the field.
-    keyDerived: () => !keyOwned(),
+    nameDerived: () => !nameOwned(),
     setDisplay: (v: string) => {
       setDisplayRaw(v);
-      if (!keyOwned()) setNameRaw(deriveKey(v));
+      if (!nameOwned()) setNameRaw(deriveName(v));
     },
     setName: (v: string) => {
-      setKeyOwned(true);
+      setNameOwned(true);
       setNameRaw(v);
     },
   };
