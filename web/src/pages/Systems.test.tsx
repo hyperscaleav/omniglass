@@ -68,11 +68,10 @@ describe("Systems create-as-route", () => {
 
   it("offers the standard registry on the create form, with a one-off option", async () => {
     mount("/systems/create");
-    const picker = (await waitFor(() => {
-      const el = screen.getByText("Standard").closest("label")?.querySelector("select");
-      if (!el) throw new Error("no standard picker");
-      return el;
-    })) as HTMLSelectElement;
+    // The label is associated with its control by id (FieldRow), not by wrapping
+    // it, so the lookup goes through the accessible name. That also proves the
+    // association, which the old markup did not.
+    const picker = (await waitFor(() => screen.getByLabelText("Standard"))) as HTMLSelectElement;
     // Conforming to no standard is first class, so it heads the list.
     expect(Array.from(picker.options).map((o) => o.value)).toEqual(["", "huddle-space", "meeting-room"]);
   });

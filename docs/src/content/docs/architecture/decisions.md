@@ -112,6 +112,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0075](#adr-0075-an-alarms-condition-identity-is-a-raiser-supplied-dedup-key) | 2026-08-01 | Accepted | alarm gains dedup_key and the one-open-per-condition partial unique index; RaiseAlarm becomes a guarded conditional insert |
 | [ADR-0076](#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid) | 2026-08-04 | Accepted | the name stays renameable and addressable; rename is a custom method, every write returns the uuid, and one validator applies one of two rules |
 | [ADR-0077](#adr-0077-a-group-name-obeys-the-entity-name-rule-tightening-a-pattern-the-code-had-excused) | 2026-08-04 | Accepted | principal_group.name moves to the entity name rule, retiring the looser API-layer pattern |
+| [ADR-0078](#adr-0078-a-read-only-field-renders-as-a-fact-not-as-a-box-that-refuses-typing) | 2026-08-04 | Accepted | a blade the operator cannot edit contains nothing shaped like a control; BladeField owns the read-or-edit switch |
 
 ## Entries
 
@@ -2629,3 +2630,25 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   gateway itself validated nothing at all, so a group could be created with a uuid-shaped name through any
   caller that was not the HTTP route. There are no releases and no operator data, so the tightening costs
   nothing now and would cost a migration later. Shipped by [#567](https://github.com/hyperscaleav/omniglass/issues/567) in the [#545](https://github.com/hyperscaleav/omniglass/issues/545) loop.
+
+### ADR-0078: A read-only field renders as a fact, not as a box that refuses typing
+
+- **Date:** 2026-08-04 | **Status:** Accepted | **Pages:** [UI and the design system](/contributing/design-system/)
+- **Decision:** a field that is not being edited renders as a **fact** (`KVStacked`: an eyebrow label
+  above a value), never as a bordered control. `BladeField` owns the read-or-edit switch, the
+  read-only treatment, the free-text shape, and the identity label pairing, so each is decided once
+  instead of at every field. A blade the operator cannot edit therefore contains no element shaped
+  like a control.
+- **Context:** the blade shell was a primitive and the blade contents were not. Eleven pages defined
+  a byte-identical local `Field`, four more went through positional `ctx.field(...)` / `ctx.fact(...)`
+  helpers, and the read-only rendering (`input input-bordered flex items-center`) was hand-rolled 24
+  times, so every blade defect was an N-place defect: `display_name` was labelled "Name" on 11 blades
+  at once, and a description that would not wrap was one bug in 24 fields
+  ([#573](https://github.com/hyperscaleav/omniglass/issues/573)). The seed-owned vendor blade made
+  the treatment question concrete: five fields rendered as bordered boxes on a panel with no pencil,
+  two of them holding a placeholder glyph, directly below three plain facts. The same read-only state
+  had two appearances on one panel, and the boxed one signalled an editability that did not exist.
+  A box that rejects typing reads as broken; a fact reads as a fact. The rule also fixes the read half
+  of #573 by construction, because text in a fact wraps. Shipped by
+  [#575](https://github.com/hyperscaleav/omniglass/issues/575) in the
+  [#574](https://github.com/hyperscaleav/omniglass/issues/574) loop.

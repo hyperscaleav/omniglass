@@ -1,10 +1,12 @@
 import { createIdentity, entityLabel } from "../lib/entities";
-import { For, Show, createEffect, createMemo, createSignal, createUniqueId, on, type JSX } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams } from "@solidjs/router";
 import TreeList, { type ListConfig, type ListCtx, type ListNode, type PageDescriptor, type Widget } from "../components/TreeList";
 import Donut from "../components/Donut";
 import TreeSelect from "../components/TreeSelect";
+import KVStacked from "../components/KVStacked";
+import FieldRow from "../components/FieldRow";
 import TagPills from "../components/TagPills";
 import { tagFilterKeys } from "../lib/predicate";
 import TagAdder from "../components/TagAdder";
@@ -25,7 +27,6 @@ import { describeError } from "../lib/format";
 import { openInEdit, consumePendingEdit } from "../lib/pendingedit";
 import { ChevronRight, Pencil, Plus, Save, Search, X, resolveIcon } from "../components/icons";
 import Button from "../components/Button";
-import InfoTip from "../components/InfoTip";
 import PropertiesPanel, { propertyResolutionBlade, ownerPropertyBladeId } from "../components/PropertiesPanel";
 import { LocationHealthPanel } from "../components/HealthPanel";
 import { ROOT_PLACEMENT } from "../lib/types";
@@ -256,7 +257,6 @@ export default function Locations() {
     // operator actually changed this" from "unchanged, omit from the patch."
     const [parentName, setParentName] = createSignal("");
     const [initialParentName, setInitialParentName] = createSignal("");
-    const parentFieldId = createUniqueId();
     async function runCheck() {
       setChecking(true);
       try { setNameCheck(await checkLocationName(name().trim())); }
@@ -339,23 +339,25 @@ export default function Locations() {
             when={editing()}
             fallback={
               <div class="grid grid-cols-2 gap-5">
-                {ctx.fact("Type", <span class={typeBadge(n().type)}>{n().type}</span>)}
-                {ctx.fact("Name", <span class="font-data text-sm">{n().raw.name}</span>)}
+                <KVStacked label="Type" value={<span class={typeBadge(n().type)}>{n().type}</span>} />
+                <KVStacked bind="name" value={<span class="font-data text-sm">{n().raw.name}</span>} />
               </div>
             }
           >
             <div class="flex flex-col gap-3">
-              {ctx.field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Conf Room 301" onInput={(e) => setDisplay(e.currentTarget.value)} />)}
-              {ctx.field(
-                "Location type",
+              <FieldRow bind="display_name">
+                <input class="input input-bordered w-full" value={display()} placeholder="Conf Room 301" onInput={(e) => setDisplay(e.currentTarget.value)} />
+              </FieldRow>
+              <FieldRow label="Location type" info="A location_type name.">
                 <select class="select select-bordered w-full" value={type()} onChange={(e) => setType(e.currentTarget.value)}>
                   <option value="" disabled>Select a type…</option>
                   <For each={locationTypes.data}>{(t) => <option value={t.name}>{t.display_name}</option>}</For>
-                </select>,
-                "A location_type name.",
-              )}
-              {ctx.field(
-                "Name",
+                </select>
+              </FieldRow>
+              <FieldRow
+                bind="name"
+                info="Renaming changes the address; existing links to the old name stop resolving."
+              >
                 <>
                   <div class="join w-full">
                     <input
@@ -384,9 +386,8 @@ export default function Locations() {
                       </span>
                     )}
                   </Show>
-                </>,
-                "Renaming changes the address; existing links to the old name stop resolving.",
-              )}
+                </>
+              </FieldRow>
             </div>
           </Show>
         </div>
@@ -396,24 +397,24 @@ export default function Locations() {
           <div class="grid grid-cols-2 gap-5">
             <Show
               when={editing()}
-              fallback={ctx.fact("Parent", parent() ? <button class="link text-sm" onClick={() => ctx.go(parent()!)}>{parent()!.display}</button> : <span class="text-base-content/50">Root</span>)}
+              fallback={
+                <KVStacked
+                  label="Parent"
+                  value={parent() ? <button class="link text-sm" onClick={() => ctx.go(parent()!)}>{parent()!.display}</button> : <span class="text-base-content/50">Root</span>}
+                />
+              }
             >
-              <div class="flex flex-col gap-1.5">
-                <span class="flex items-center gap-1.5">
-                  <label class="eyebrow" for={parentFieldId}>Parent</label>
-                  <InfoTip text={parentHint()} label="Parent" />
-                </span>
+              <FieldRow label="Parent" eyebrow info={parentHint()}>
                 <TreeSelect
-                  id={parentFieldId}
                   items={parentCandidates()}
                   value={parentName()}
                   onChange={setParentName}
                   excludeSubtreeOf={n().raw.name}
                   rootLabel={parent() ? undefined : "Root (current)"}
                 />
-              </div>
+              </FieldRow>
             </Show>
-            {ctx.fact("Contains", <span class="tnum text-sm">{kids().length}</span>)}
+            <KVStacked label="Contains" value={<span class="tnum text-sm">{kids().length}</span>} />
           </div>
         </div>
 
@@ -525,31 +526,41 @@ export default function Locations() {
         <div class="flex flex-col gap-1.5">
           <span class="eyebrow">Identity</span>
           <div class="flex flex-col gap-3">
-            {field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Conf Room 301" onInput={(e) => setDisplay(e.currentTarget.value)} />, "What an operator reads. Optional.")}
-            {field("Name", <input class="input input-bordered w-full font-data" value={name()} placeholder="hq-a-301" onInput={(e) => setName(e.currentTarget.value)} />, () => (nameDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."))}
-            {field(
-              "Location type",
+            <FieldRow
+              bind="display_name"
+              hint="What an operator reads. Optional."
+            >
+              <input class="input input-bordered w-full" value={display()} placeholder="Conf Room 301" onInput={(e) => setDisplay(e.currentTarget.value)} />
+            </FieldRow>
+            <FieldRow
+              bind="name"
+              hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."}
+            >
+              <input class="input input-bordered w-full font-data" value={name()} placeholder="hq-a-301" onInput={(e) => setName(e.currentTarget.value)} />
+            </FieldRow>
+            <FieldRow
+              label="Location type"
+              hint="A location_type name."
+            >
               <select class="select select-bordered w-full" value={type()} onChange={(e) => setType(e.currentTarget.value)}>
                 <option value="" disabled>Select a type…</option>
                 <For each={locationTypes.data}>{(t) => <option value={t.name}>{t.display_name}</option>}</For>
-              </select>,
-              "A location_type name.",
-            )}
+              </select>
+            </FieldRow>
           </div>
         </div>
 
         <div class="flex flex-col gap-1.5">
           <span class="eyebrow">Placement</span>
           <div class="grid grid-cols-2 gap-3">
-            {field(
-              "Parent",
+            <FieldRow label="Parent">
               <TreeSelect
                 items={(locations.data ?? []).map((l) => ({ id: l.name, value: l.name, label: entityLabel(l), parentId: l.parent, rank: TYPE_RANK[l.location_type] ?? 9 }))}
                 value={parent()}
                 onChange={setParent}
                 rootLabel="Root (no parent)"
-              />,
-            )}
+              />
+            </FieldRow>
           </div>
         </div>
 
@@ -564,17 +575,6 @@ export default function Locations() {
           <span class="text-sm text-base-content/40">Available once the location is created.</span>
         </div>
       </form>
-    );
-  }
-
-  // A labelled field for the create surface (the detail accordion uses ctx.field).
-  function field(labelText: string, control: JSX.Element, hint?: string | (() => string)): JSX.Element {
-    return (
-      <label class="flex flex-col gap-1">
-        <span class="text-[12px] font-medium text-base-content/70">{labelText}</span>
-        {control}
-        <Show when={hint}><span class="text-[11px] text-base-content/40">{typeof hint === "function" ? hint() : hint}</span></Show>
-      </label>
     );
   }
 

@@ -2,6 +2,8 @@ import { Show, createEffect, createSignal, on, type JSX } from "solid-js";
 import { entityLabel } from "../lib/entities";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import FieldRow from "../components/FieldRow";
+import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
@@ -163,28 +165,28 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <KVStacked label="Name" value={<span class="font-data">{r().name}</span>} />
+            <KVStacked bind="name" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Target property" value={targetCell(r().target_property_type)} />
             <KVStacked label="Settle window" value={<span class="tabular-nums">{r().settle_window_seconds}s</span>} />
             <KVStacked label="Origin" value={originBadge(r().official)} />
           </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Display name</span>
-            <Show when={edit.editing()} fallback={<div class="input input-bordered flex items-center text-sm">{r().display_name}</div>}>
-              <input class="input input-bordered w-full" value={displayName()} onInput={(e) => setDisplayName(e.currentTarget.value)} />
-            </Show>
-          </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Description</span>
-            <Show when={edit.editing()} fallback={<div class="input input-bordered flex items-center text-sm">{r().description}</div>}>
-              <input class="input input-bordered w-full" value={description()} onInput={(e) => setDescription(e.currentTarget.value)} />
-            </Show>
-          </div>
+          <BladeField
+            bind="display_name"
+            value={() => r().display_name ?? ""}
+            draft={displayName}
+            onInput={setDisplayName}
+          />
+          <BladeField
+            label="Description"
+            multiline
+            value={() => r().description ?? ""}
+            draft={description}
+            onInput={setDescription}
+          />
           <Show when={edit.editing()}>
-            <div class="flex flex-col gap-1.5">
-              <span class="eyebrow">Settle window (seconds)</span>
+            <FieldRow label="Settle window (seconds)" eyebrow>
               <input class="input input-bordered w-full font-data" type="number" min="0" value={settle()} onInput={(e) => setSettle(e.currentTarget.value)} />
-            </div>
+            </FieldRow>
           </Show>
           <Show when={r().official}>
             <div role="alert" class="alert alert-soft text-sm"><span>Seed-owned, read-only.</span></div>
@@ -240,31 +242,21 @@ export function CreateCommandTypeForm(p: { onCreated: (r: CommandTypeRow) => voi
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Name" hint="A lowercase, dot-hierarchied name, e.g. set-input or reboot.">
+      <FieldRow bind="name" hint="A lowercase, dot-hierarchied name, e.g. set-input or reboot.">
         <input class="input input-bordered w-full font-data" value={name()} placeholder="set-input" onInput={(e) => setName(e.currentTarget.value)} />
-      </Field>
-      <Field label="Display name">
+      </FieldRow>
+      <FieldRow bind="display_name">
         <input class="input input-bordered w-full" value={displayName()} placeholder="Set input" onInput={(e) => setDisplayName(e.currentTarget.value)} />
-      </Field>
-      <Field label="Description">
+      </FieldRow>
+      <FieldRow label="Description">
         <input class="input input-bordered w-full" value={description()} onInput={(e) => setDescription(e.currentTarget.value)} />
-      </Field>
-      <Field label="Target property" hint="The property this command sets, for settlement. Leave blank for a fire-and-forget command.">
+      </FieldRow>
+      <FieldRow label="Target property" hint="The property this command sets, for settlement. Leave blank for a fire-and-forget command.">
         <input class="input input-bordered w-full font-data" value={target()} placeholder="video.input" onInput={(e) => setTarget(e.currentTarget.value)} />
-      </Field>
-      <Field label="Settle window (seconds)" hint="How long the device is given to actuate before a mismatch is a failed command.">
+      </FieldRow>
+      <FieldRow label="Settle window (seconds)" hint="How long the device is given to actuate before a mismatch is a failed command.">
         <input class="input input-bordered w-full font-data" type="number" min="0" value={settle()} onInput={(e) => setSettle(e.currentTarget.value)} />
-      </Field>
+      </FieldRow>
     </form>
-  );
-}
-
-function Field(p: { label: string; hint?: string; children: JSX.Element }): JSX.Element {
-  return (
-    <label class="flex flex-col gap-1">
-      <span class="text-[12px] font-medium text-base-content/70">{p.label}</span>
-      {p.children}
-      <Show when={p.hint}><span class="text-[11px] text-base-content/40">{p.hint}</span></Show>
-    </label>
   );
 }

@@ -30,6 +30,27 @@ describe("FieldRow", () => {
     expect(getByText("Leave blank to keep the current value.")).toBeTruthy();
   });
 
+  it("labels a bound field from the identity map rather than from a prop", () => {
+    // A create form sits Display name next to Name, which is exactly where the
+    // two got swapped twice. A bound field takes its label from lib/entities, so
+    // there is no prop to get wrong.
+    const { getByText } = render(() => (
+      <>
+        <FieldRow bind="display_name"><input type="text" /></FieldRow>
+        <FieldRow bind="name"><input type="text" /></FieldRow>
+      </>
+    ));
+    expect(getByText("Display name")).toBeTruthy();
+    expect(getByText("Name")).toBeTruthy();
+  });
+
+  it("labels with the eyebrow when asked, so a blade field keeps one label style", () => {
+    const { getByText } = render(() => (
+      <FieldRow label="Website" eyebrow><input type="text" /></FieldRow>
+    ));
+    expect(getByText("Website").className).toContain("eyebrow");
+  });
+
   it("renders an (i) info affordance beside the label when info is given", () => {
     const { getByText } = render(() => (
       <FieldRow label="Scope" info="Where this value lives."><input type="text" /></FieldRow>

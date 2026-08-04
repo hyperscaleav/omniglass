@@ -1,6 +1,8 @@
 import { Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import FieldRow from "../components/FieldRow";
+import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { createIdentity } from "../lib/entities";
@@ -151,19 +153,16 @@ function CapabilityBladeBody(p: { id: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <KVStacked label="Name" value={<span class="font-data">{r().name}</span>} />
+            <KVStacked bind="name" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Origin" value={officialBadge(r().official)} />
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Display name</span>
-            <Show
-              when={edit.editing()}
-              fallback={<div class="input input-bordered flex items-center text-sm">{r().display_name}</div>}
-            >
-              <input class="input input-bordered w-full" value={displayName()} onInput={(e) => setDisplayName(e.currentTarget.value)} />
-            </Show>
-          </div>
+          <BladeField
+            bind="display_name"
+            value={() => r().display_name ?? ""}
+            draft={displayName}
+            onInput={setDisplayName}
+          />
           <Show when={r().official}>
             <div role="alert" class="alert alert-soft text-sm"><span>Seed-owned, read-only.</span></div>
           </Show>
@@ -214,22 +213,12 @@ export function CreateCapabilityForm(p: { onCreated: (c: Capability) => void }):
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Display name">
+      <FieldRow bind="display_name">
         <input class="input input-bordered w-full" value={display()} placeholder="Microphone" onInput={(e) => setDisplay(e.currentTarget.value)} />
-      </Field>
-      <Field label="Name" hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "A kebab name, e.g. microphone."}>
+      </FieldRow>
+      <FieldRow bind="name" hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "A kebab name, e.g. microphone."}>
         <input class="input input-bordered w-full font-data" value={name()} placeholder="microphone" onInput={(e) => setName(e.currentTarget.value)} />
-      </Field>
+      </FieldRow>
     </form>
-  );
-}
-
-function Field(p: { label: string; hint?: string; children: JSX.Element }): JSX.Element {
-  return (
-    <label class="flex flex-col gap-1">
-      <span class="text-[12px] font-medium text-base-content/70">{p.label}</span>
-      {p.children}
-      <Show when={p.hint}><span class="text-[11px] text-base-content/40">{p.hint}</span></Show>
-    </label>
   );
 }

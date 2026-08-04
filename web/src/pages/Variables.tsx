@@ -2,6 +2,7 @@ import { entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import TreeSelect from "../components/TreeSelect";
 import KVStacked from "../components/KVStacked";
@@ -182,15 +183,9 @@ function VariableBladeBody(p: { id: string }): JSX.Element {
             <KVStacked label="Type" value={<span class="badge badge-ghost badge-sm">{v().value_type}</span>} />
             <KVStacked label="Scope" value={<span>{ownerLabel(v())}</span>} />
           </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Value</span>
-            <Show
-              when={edit.editing()}
-              fallback={<ValueDisplay valueType={v().value_type} value={v().value} />}
-            >
-              <ValueInput valueType={v().value_type as ValueType} value={input()} onInput={setInput} />
-            </Show>
-          </div>
+          <BladeField label="Value" read={<ValueDisplay valueType={v().value_type} value={v().value} />}>
+            <ValueInput valueType={v().value_type as ValueType} value={input()} onInput={setInput} />
+          </BladeField>
         </div>
       )}
     </Show>
@@ -198,12 +193,15 @@ function VariableBladeBody(p: { id: string }): JSX.Element {
 }
 
 // ValueDisplay renders a resolved value read-only: a code block for a json value,
-// an inline monospace value otherwise.
+// an inline monospace value otherwise. The plain case is a bare value and not a
+// bordered box, because it is rendered as a fact (ADR-0078): a box that refuses
+// typing reads as broken rather than as read-only. Json keeps its code block,
+// which is a code block and not a control.
 export function ValueDisplay(p: { valueType: string; value: unknown }): JSX.Element {
   return (
     <Show
       when={p.valueType === "json"}
-      fallback={<div class="input input-bordered flex items-center font-data text-sm">{displayValue(p.value)}</div>}
+      fallback={<span class="font-data wrap-break-word">{displayValue(p.value)}</span>}
     >
       <pre class="overflow-x-auto rounded-box border border-base-300 bg-base-200 p-3 font-data text-xs">{JSON.stringify(p.value, null, 2)}</pre>
     </Show>
@@ -318,7 +316,7 @@ function CreateVariableForm(p: { onCreated: (v: Variable) => void }): JSX.Elemen
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow label="Name" hint="What the cascade resolves by; unique per owner.">
+      <FieldRow bind="name" hint="What the cascade resolves by; unique per owner.">
         <input class="input input-bordered w-full font-data" value={name()} placeholder="poll-interval" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>
       <div class="grid grid-cols-2 gap-3">
