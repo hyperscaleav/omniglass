@@ -29,8 +29,10 @@ drawer. See [implementation status](/architecture/status/).
   every row keyed on a name the moment somebody renamed it. The name at the time of the action is
   not lost: it is in the `old` and `new` images, which is a point-in-time snapshot rather than a
   lookup key, exactly as `actor_username` is snapshotted beside `actor_principal_id`. A guard reads
-  every `writeAuditRes` call site and fails on an argument that is not the primary key, so this
-  holds by construction rather than by review.
+  every `writeAuditRes` call site and fails on an argument that is not primary-key **shaped**, which
+  catches the two ways this went wrong (a name, and a dual-accept route's reference) without being
+  able to prove that a given uuid is the right table's. The remaining gap is narrow and known: a
+  `credential` row is keyed on its principal's uuid rather than its own.
 - **The actor** is resolved by IAM ([identity and access](/architecture/identity-access/)): the
   human, service, or node. The read side resolves a **human** actor to a username; a service or
   node actor surfaces as its principal id.

@@ -106,7 +106,7 @@ describe("identity vocabulary", () => {
       offenders,
       `\nThese carry a retired word in operator-visible text:\n  ${offenders.join("\n  ")}\n\n` +
         `The identifier is "Name". The friendly string is "Display name".\n` +
-        `"Name" and "Segment" are retired as labels.\n`,
+        `"Technical name" and "Segment" are retired as labels.\n`,
     ).toEqual([]);
   });
 
@@ -148,10 +148,16 @@ describe("identity vocabulary", () => {
 // So the check is on the pairing, not on the vocabulary list. A label is only wrong
 // relative to what it labels.
 describe("a label matches the field it labels", () => {
-  // A label is an eyebrow span, or a Field's label prop. The prop is often on its
-  // own line, because Fields wrap, so match it standalone too or the window below
-  // runs past the end of this field and reads the next one's binding.
-  const LABEL = /class="eyebrow">([^<]+)<\/span>|\blabel="([^"]+)"/g;
+  // A label reaches the screen four ways in this console, and the guard has to know
+  // all four or it is vacuous exactly where it matters. An eyebrow span; a Field's
+  // `label` prop (often on its own line, because Fields wrap, so match it standalone
+  // or the window below runs past the end of this field into the next one's
+  // binding); and the `field(...)` / `fact(...)` helpers, which take the label as
+  // their first positional argument and are what Components, Systems, Locations, and
+  // Files use. An earlier version of this guard matched only the first two, which
+  // left 13 label sites unguarded, including every create form where `name` and
+  // `display_name` sit adjacent. That is the precise shape of the bug it exists for.
+  const LABEL = /class="eyebrow">([^<]+)<\/span>|\blabel="([^"]+)"|\b(?:ctx\.)?(?:field|fact)\(\s*"([^"]+)"/g;
 
   it("never labels display_name as Name, or name as Display name", () => {
     for (const file of walk(SRC, { tests: false })) {
@@ -160,14 +166,22 @@ describe("a label matches the field it labels", () => {
         LABEL.lastIndex = 0;
         const m = LABEL.exec(line);
         if (!m) return;
-        const label = (m[1] ?? m[2]).trim();
+        const label = (m[1] ?? m[2] ?? m[3]).trim();
         // The binding shows up within a few lines: the input, or the read-only
         // span. Stop at the NEXT label, or the window bleeds into the adjacent
         // field and reads its binding as this one's.
         const rest = lines.slice(i + 1, i + 8);
-        const next = rest.findIndex((l) => LABEL.test((LABEL.lastIndex = 0, l)));
+        // A wrapped `field(` puts its label on the NEXT line, so a bare quoted
+        // string also ends this field's window; without it the window swallows the
+        // following field and reads its binding as this one's.
+        const next = rest.findIndex(
+          (l) => LABEL.test((LABEL.lastIndex = 0, l)) || /^\s*"[^"]+",\s*$/.test(l),
+        );
         const window = [lines[i], ...rest.slice(0, next === -1 ? rest.length : next)].join("\n");
-        const bindsDisplay = /display_name|displayName/.test(window);
+        // `display()` and `setDisplay(` are the console's shorthand for the
+        // display_name signal, so a check that only knows the column name reads a
+        // correct field as unbound and then blames the neighbour.
+        const bindsDisplay = /display_name|displayName|\bdisplay\(\)|setDisplay\(/.test(window);
         const bindsName = /\bname\(\)|\.name\b|setName\(/.test(window);
 
         if (label === "Name" && bindsDisplay && !bindsName) {

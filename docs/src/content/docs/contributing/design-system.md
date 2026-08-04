@@ -154,8 +154,9 @@ shown outside a drill-in. "Technical name" and "Segment" are retired as field la
 words are the column names, so an operator reading the UI, the CLI reference, and the schema reads
 one vocabulary.
 
-**A name is a value; a segment is a position.** A segment is one dot-separated component of a name,
-so `boi.17c.rm215a` is three segments and the room's name is the whole path. That makes "segment"
+**A name is a value; a segment is a position.** A segment is one dot-separated component of an
+address, so `boi.17c.rm215a` is three segments and the room's name is the value in the third,
+`rm215a`. An entity name is one segment and may not carry a dot; only a keyspace name is a path. That makes "segment"
 right in prose about topic structure and wrong on a form, where the operator is typing a value and
 not choosing a position.
 

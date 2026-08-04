@@ -209,7 +209,12 @@ func (p *PG) DeleteNode(ctx context.Context, actorID, name string, read, action 
 	} else if err != nil {
 		return fmt.Errorf("storage: delete node lookup %q: %w", name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "node", pid, nil, nil); err != nil {
+	// The before image carries the name. Keying on the principal id is right (a rename
+	// must not orphan the row), but without the image the row is unresolvable: the
+	// principal is deleted in this same transaction and no API surface returns a
+	// node's principal_id, so "which node was deleted" would have no answer at all.
+	before := map[string]any{"name": name, "principal_id": pid}
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "node", pid, before, nil); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `delete from principal where id = $1`, pid); err != nil {

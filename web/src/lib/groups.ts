@@ -57,7 +57,9 @@ export async function createGroup(body: { name: string; display_name?: string; d
   return data as Group;
 }
 
-export async function updateGroup(id: string, body: { name?: string; display_name?: string; description?: string }): Promise<Group> {
+// No `name` here: a rename is POST /principal-groups/{id}:rename, and this body
+// declares `additionalProperties: false`, so sending one is a 422.
+export async function updateGroup(id: string, body: { display_name?: string; description?: string }): Promise<Group> {
   const { data, error } = await api.PATCH("/principal-groups/{id}", { params: { path: { id } }, body });
   if (error) throw error;
   return data as Group;

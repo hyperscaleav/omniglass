@@ -292,16 +292,23 @@ export default function Locations() {
             location_type: type() || undefined,
             ...(movedParent ? { parent: movedParent } : {}),
           });
-          // The rename is a second call and it goes LAST, because it is the one
-          // that can be refused on its own (it needs <resource>:rename, which a
-          // caller may not hold). Doing it last means a refusal leaves the other
-          // edits saved and the name simply unchanged, rather than the reverse.
+          // The rename is a second call and it goes LAST, because it is the one that
+          // can be refused on its own: it needs <resource>:rename, and a duplicate
+          // name is a 409 the advisory :checkName precheck cannot rule out. Doing it
+          // last means a refusal leaves the other edits saved and the name unchanged.
+          //
+          // The invalidation is in a finally for the same reason. It used to sit
+          // after the rename, so a 409 skipped it and the list went on rendering the
+          // display name the server had already accepted: the operator saw a total
+          // failure for a half-committed save, and Cancel re-seeded the inputs from
+          // that stale cache.
           if (renamed) await renameLocation(n().raw.name, name().trim());
-          await qc.invalidateQueries({ queryKey: LOCATIONS_KEY });
           if (renamed) navigate(`/locations/${encodeURIComponent(name().trim())}`);
         } catch (e) {
           setSaveErr(describeError(e));
           throw e; // keep the slot in edit mode so the operator can retry
+        } finally {
+          await qc.invalidateQueries({ queryKey: LOCATIONS_KEY });
         }
       },
       destructive: () =>

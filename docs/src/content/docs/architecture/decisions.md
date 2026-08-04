@@ -2586,9 +2586,11 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
 - **Date:** 2026-08-04 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/), [api](/architecture/api/), [storage](/architecture/storage/), [tags](/architecture/tags/), [config, secrets, and variables](/architecture/variables/)
 - **Decision:** An entity is addressed by its **`name`**, a renameable identifier an operator types, as well as
   by its immutable **`id`**. A rename is an explicit custom method (`POST /<collection>/{ref}:rename`, gated by
-  `<resource>:rename`) rather than a field write, and every write returns the `id` so a client can store the
+  `<resource>:rename`) rather than a field write, and a write returns the `id` so a client can store the
   stable handle and stop depending on the name it used. References inside the platform store the `id` only
-  (ADR-0056), and `audit_log.resource_id` keys on it, so a rename moves exactly one column.
+  (ADR-0056), and `audit_log.resource_id` keys on it, so a rename moves exactly one column. Two
+  response bodies do not yet carry the id, `NodeBody` and `SystemRoleBody`, so a client of those two
+  has the name and nothing else to diff; closing that is a follow-up, not a change of direction.
 - **Decision (what the name rule became):** there is **one validator**, `storage.ValidateName(table, name)`,
   which picks the rule from the table's declared identity shape instead of from the call site; the platform's
   two other name rules are deleted, not renamed. Two rules survive rather than four, and they share one
