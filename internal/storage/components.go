@@ -146,7 +146,7 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := ValidateEntityName(spec.Name); err != nil {
+	if err := ValidateEntityKey(spec.Name); err != nil {
 		return nil, err
 	}
 
@@ -270,7 +270,7 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 		return nil, err
 	}
 	if patch.Name != nil {
-		if err := ValidateEntityName(*patch.Name); err != nil {
+		if err := ValidateEntityKey(*patch.Name); err != nil {
 			return nil, err
 		}
 	}

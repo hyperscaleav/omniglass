@@ -81,7 +81,7 @@ func TestTelemetryPushAPI(t *testing.T) {
 		"source": "webex-cloud",
 		"samples": []map[string]any{
 			{"name": "video.input", "text": "hdmi2"},
-			{"name": "icmp.rtt_avg", "number": 12.4},
+			{"name": "icmp.rtt-avg", "number": 12.4},
 			{"name": "call.started", "text": "call started, 4 participants"},
 			{"name": "audio.level", "number": -42.5},
 		},
@@ -105,7 +105,7 @@ func TestTelemetryPushAPI(t *testing.T) {
 
 	// The registry, not the caller, decided which table each name landed in.
 	waitFor(t, "the metric row", func() bool {
-		m, err := gw.LatestMetric(ctx, "bar-1", "icmp.rtt_avg")
+		m, err := gw.LatestMetric(ctx, "bar-1", "icmp.rtt-avg")
 		return err == nil && m != nil && m.Value == 12.4 && m.Source == "webex-cloud"
 	})
 	waitFor(t, "the state row", func() bool {
@@ -153,9 +153,9 @@ func TestTelemetryPushAPI(t *testing.T) {
 		"owner": map[string]any{"kind": "component", "ref": "bar-1"},
 		"samples": []map[string]any{
 			{"name": "video.input", "number": 3},     // state property, sent a number
-			{"name": "icmp.rtt_avg", "text": "fast"}, // metric property, sent text
+			{"name": "icmp.rtt-avg", "text": "fast"}, // metric property, sent text
 			{"name": "call.started", "number": 1},    // event type, sent a number
-			{"name": "icmp.rtt_avg", "number": 9.5},  // correct, must still land
+			{"name": "icmp.rtt-avg", "number": 9.5},  // correct, must still land
 		},
 	}, http.StatusAccepted)
 	var mismatch pushResp
@@ -176,7 +176,7 @@ func TestTelemetryPushAPI(t *testing.T) {
 			if !strings.Contains(r.Reason, "text") {
 				t.Errorf("%s rejection %q does not tell the caller to send text", r.Name, r.Reason)
 			}
-		case "icmp.rtt_avg":
+		case "icmp.rtt-avg":
 			if !strings.Contains(r.Reason, "number") {
 				t.Errorf("%s rejection %q does not tell the caller to send a number", r.Name, r.Reason)
 			}

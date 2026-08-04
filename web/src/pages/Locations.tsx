@@ -57,7 +57,7 @@ export const locationsDescriptor: PageDescriptor = {
   columns: {
     type: { label: "Type", width: 120 },
     parent: { label: "Parent", width: 190 },
-    tech: { label: "Technical name", width: 200 },
+    tech: { label: "Key", width: 200 },
     tags: { label: "Tags", width: 340 },
   },
   columnKeys: ["type", "parent", "tech", "tags"],
@@ -329,12 +329,12 @@ export default function Locations() {
             fallback={
               <div class="grid grid-cols-2 gap-5">
                 {ctx.fact("Type", <span class={typeBadge(n().type)}>{n().type}</span>)}
-                {ctx.fact("Technical name", <span class="font-data text-sm">{n().raw.name}</span>)}
+                {ctx.fact("Key", <span class="font-data text-sm">{n().raw.name}</span>)}
               </div>
             }
           >
             <div class="flex flex-col gap-3">
-              {ctx.field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Conf Room 301" onInput={(e) => setDisplay(e.currentTarget.value)} />)}
+              {ctx.field("Name", <input class="input input-bordered w-full" value={display()} placeholder="Conf Room 301" onInput={(e) => setDisplay(e.currentTarget.value)} />)}
               {ctx.field(
                 "Location type",
                 <select class="select select-bordered w-full" value={type()} onChange={(e) => setType(e.currentTarget.value)}>
@@ -344,7 +344,7 @@ export default function Locations() {
                 "A location_type name.",
               )}
               {ctx.field(
-                "Technical name",
+                "Key",
                 <>
                   <div class="join w-full">
                     <input
@@ -514,8 +514,8 @@ export default function Locations() {
         <div class="flex flex-col gap-1.5">
           <span class="eyebrow">Identity</span>
           <div class="flex flex-col gap-3">
-            {field("Display name", <input class="input input-bordered w-full" value={display()} placeholder="Conf Room 301" onInput={(e) => setDisplay(e.currentTarget.value)} />, "What an operator reads. Optional.")}
-            {field("Name", <input class="input input-bordered w-full font-data" value={name()} placeholder="hq-a-301" onInput={(e) => setName(e.currentTarget.value)} />, () => (keyDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."))}
+            {field("Name", <input class="input input-bordered w-full" value={display()} placeholder="Conf Room 301" onInput={(e) => setDisplay(e.currentTarget.value)} />, "What an operator reads. Optional.")}
+            {field("Key", <input class="input input-bordered w-full font-data" value={name()} placeholder="hq-a-301" onInput={(e) => setName(e.currentTarget.value)} />, () => (keyDerived() ? "Derived from the name. Edit to set your own." : "Globally unique address, used by the API and CLI."))}
             {field(
               "Location type",
               <select class="select select-bordered w-full" value={type()} onChange={(e) => setType(e.currentTarget.value)}>

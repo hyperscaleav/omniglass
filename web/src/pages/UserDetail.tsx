@@ -408,7 +408,7 @@ export function UserDetail(props: { id: string }) {
                 <Show when={handleError(username())}>{(msg) => <p class="mt-1 text-[11px] text-error">{msg()}</p>}</Show>
               </div>
               <div>
-                <label class="eyebrow mb-1.5 block" for="edit-display">Display name</label>
+                <label class="eyebrow mb-1.5 block" for="edit-display">Name</label>
                 <input id="edit-display" autocomplete="off" class="input input-bordered w-full" value={displayName()} placeholder="Jordan Rivera" onInput={(e) => setDisplayName(e.currentTarget.value)} />
               </div>
               <div>

@@ -16,8 +16,8 @@ func TestCommandPillarMigration(t *testing.T) {
 	conn := connectMigrated(t)
 
 	// The command_type registry exists and is keyed uniquely by name.
-	mustExec(t, conn, `insert into command_type (name, display_name, settle_window_seconds) values ('set_input', 'Set input', 30)`)
-	if _, err := conn.Exec(ctx, `insert into command_type (name) values ('set_input')`); err == nil {
+	mustExec(t, conn, `insert into command_type (name, display_name, settle_window_seconds) values ('set-input', 'Set input', 30)`)
+	if _, err := conn.Exec(ctx, `insert into command_type (name) values ('set-input')`); err == nil {
 		t.Error("expected command_type.name unique to reject a duplicate")
 	}
 
@@ -44,7 +44,7 @@ func TestCommandPillarMigration(t *testing.T) {
 	}
 
 	var ctID string
-	if err := conn.QueryRow(ctx, `select id from command_type where name = 'set_input'`).Scan(&ctID); err != nil {
+	if err := conn.QueryRow(ctx, `select id from command_type where name = 'set-input'`).Scan(&ctID); err != nil {
 		t.Fatalf("command_type id: %v", err)
 	}
 

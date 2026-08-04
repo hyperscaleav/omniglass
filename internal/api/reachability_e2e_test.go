@@ -98,7 +98,7 @@ func TestReachabilityAPI(t *testing.T) {
 	}
 	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp.open", Instance: "disp-1-tcp", Value: 1, Source: "tcp", TS: t2},
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp.connect_time", Instance: "disp-1-tcp", Value: 3.1, Source: "tcp", TS: t2},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp.connect-time", Instance: "disp-1-tcp", Value: 3.1, Source: "tcp", TS: t2},
 	}); err != nil {
 		t.Fatalf("insert tcp metrics: %v", err)
 	}

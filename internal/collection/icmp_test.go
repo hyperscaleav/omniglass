@@ -20,7 +20,7 @@ func (f fakeICMP) Ping(context.Context, string, int, time.Duration) (collection.
 }
 
 // TestCollectICMPReachable: an echoing target yields icmp.reachable=1 plus a
-// present icmp.rtt_avg, and the reachable sample carries a responded reason.
+// present icmp.rtt-avg, and the reachable sample carries a responded reason.
 func TestCollectICMPReachable(t *testing.T) {
 	r := &collection.Runner{Ping: fakeICMP{res: collection.PingResult{
 		Received: 1, AvgRTT: 3 * time.Millisecond, Reason: collection.Responded,
@@ -39,12 +39,12 @@ func TestCollectICMPReachable(t *testing.T) {
 	}
 	rtt, ok := got[collection.SignalICMPRTTAvg]
 	if !ok || rtt.Value != 3 {
-		t.Fatalf("icmp.rtt_avg: want present val=3, got %+v (present=%v)", rtt, ok)
+		t.Fatalf("icmp.rtt-avg: want present val=3, got %+v (present=%v)", rtt, ok)
 	}
 }
 
 // TestCollectICMPUnreachable: a target that did not echo yields icmp.reachable=0
-// with a down reason, and icmp.rtt_avg is ABSENT. A non-answer is DATA, not error.
+// with a down reason, and icmp.rtt-avg is ABSENT. A non-answer is DATA, not error.
 func TestCollectICMPUnreachable(t *testing.T) {
 	r := &collection.Runner{Ping: fakeICMP{res: collection.PingResult{Received: 0, Reason: collection.Timedout}}}
 	dps, err := r.CollectICMP(context.Background(), collection.ICMPTask{Target: "10.0.0.9"})
@@ -60,7 +60,7 @@ func TestCollectICMPUnreachable(t *testing.T) {
 		t.Fatalf("icmp.reachable reason: want timeout, got %q", reach.Labels[collection.ReasonLabel])
 	}
 	if _, ok := got[collection.SignalICMPRTTAvg]; ok {
-		t.Fatal("icmp.rtt_avg must be absent when the target is unreachable")
+		t.Fatal("icmp.rtt-avg must be absent when the target is unreachable")
 	}
 }
 

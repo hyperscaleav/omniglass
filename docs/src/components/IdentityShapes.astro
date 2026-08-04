@@ -1,0 +1,36 @@
+---
+// Renders the identity-shape declaration (docs/src/generated/identity.json, written
+// by make gen via cmd/identitygen) from internal/storage. The prose around it stays
+// narrative; the membership is a fact the code owns, so it is never hand-written
+// here. Same contract as SchemaTable and ConfigVars.
+//
+// Props: shape (required) picks which group to render.
+import identity from '../generated/identity.json';
+
+interface Props {
+  shape: 'keyspace' | 'human identifier, not a key';
+}
+const { shape } = Astro.props;
+
+const rows = (identity.tables as Array<{ table: string; shape: string; reason?: string; proved_elsewhere?: string }>)
+  .filter((r) => r.shape === shape);
+
+if (rows.length === 0) {
+  throw new Error(
+    `IdentityShapes: no table declared "${shape}" in docs/src/generated/identity.json ` +
+      `(run make gen, or the shape was renamed in internal/storage/identity_shape.go)`,
+  );
+}
+---
+
+<table>
+    <thead><tr><th>table</th><th>why it is not on the entity-key rule</th></tr></thead>
+    <tbody>
+      {rows.map((r) => (
+        <tr>
+          <td><code>{r.table}</code></td>
+          <td>{r.reason}</td>
+        </tr>
+      ))}
+    </tbody>
+</table>

@@ -40,7 +40,7 @@ message TelemetryBatch {
   map<string, string> labels = 4;
 
   // samples is the observations in this batch (a tcp probe carries tcp.open and,
-  // when open, tcp.connect_time).
+  // when open, tcp.connect-time).
   repeated Sample samples = 5;
 
   // raw is the original wire payload, preserved verbatim for replay. Empty for

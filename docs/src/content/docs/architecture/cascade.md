@@ -214,7 +214,7 @@ not the comparison itself.
 ```text
 RM204 - cascade precedence            most-specific (highest) wins
 ==============================================================================
- spec  source                            poll_interval  credential   retry_limit
+ spec  source                            poll-interval  credential   retry_limit
  ----  --------------------------------  -------------  ----------   -----------
  500   component RM204  (explicit)        -              -            -      <- ceiling
  450   group: Old-firmware Room Kits      5min  *        -            -
@@ -228,14 +228,14 @@ RM204 - cascade precedence            most-specific (highest) wins
  100   product: Room Kit Pro              30s            -            -
    0   platform  (admin, install-wide)    60s            -            -
 ==============================================================================
- effective:  poll_interval = 5min    (group 450; shadowed template 30s, platform 60s)
+ effective:  poll-interval = 5min    (group 450; shadowed template 30s, platform 60s)
              credential    = vault-B (location Floor 3 @330; shadowed PCI-scope @250, HQ Campus @310)
              retry_limit   = 3       (no binding at any rung: the declaration stands)
 ```
 
 The three columns are the point:
 
-- **`poll_interval`**: the **Old-firmware group (450)** sits *above* deployment, so its `5min`
+- **`poll-interval`**: the **Old-firmware group (450)** sits *above* deployment, so its `5min`
   workaround beats the template's `30s` and the admin's install-wide `60s`, what a fleet-wide bug
   fix needs.
 - **`credential`**: the **PCI-scope group (250)** sits *below* deployment, so the specific

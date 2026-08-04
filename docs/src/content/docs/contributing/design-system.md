@@ -125,10 +125,55 @@ themes at the same weight as the soft hues. The same reason keeps `type` values 
 ## Primitives (the reuse target)
 
 `ListShell` (with its `FlatList` / `TreeList` bodies), `FilterBar`, `Drawer`, `PanelFooter`,
-`Donut`, `Badge`, `Fact`, `Page`, `DataTable`,
+`Donut`, `Badge`, `Fact`, `Page`, `DataTable`, `IdentityCell`,
 `CommandPalette`, plus the `Sidebar` / `TopBar` shell. New inventory pages consume these; new
 surface *classes* (dashboards, alarms, explore, learn) add their own primitive rather than
 bending `ListShell`.
+
+### How an entity's identity reads
+
+Every entity carries two identities an operator cares about: a **segment** (the kebab token the API
+and CLI address it by) and an optional **label**. `IdentityCell` states the rule once, and
+`identityColumn` is the `FlatList` column every page uses:
+
+- the label is the primary line;
+- the segment sits beneath it, in the data face;
+- the segment is suppressed when it equals the label, so the same string never renders twice;
+- an id is never a list column.
+
+This is the same two-line treatment `TreeList` renders, so a tree and a flat list of the same entity
+look like the same product. It replaced sixteen hand-written name columns written in four
+incompatible idioms, which is why the header word for one fact used to be "Name" on one page, "Key"
+on another, and "Display name" beside it.
+
+**Two words, no synonyms.** The friendly label an operator types is the **Name**. The machine
+identifier a URL, a CLI argument, and a topic carry is the **Key**. "Display name", "Technical name",
+and "Segment" are all retired as field labels, and `identity-vocabulary-guard.test.ts` fails the build
+on any of them appearing in label text.
+
+**A key is a value; a segment is a position.** `internal/key` already fixes this: a segment is one
+dot-separated component of a key. So `boi.17c.rm215a` is three segments, and the room's key is the
+value in the third. That makes "segment" right in prose about topic structure and wrong on a form,
+where the operator is typing a value and not choosing a position.
+
+**There are two key rules on one character set, deliberately.** An entity key is kebab (`crestron`,
+`rm215a`), validated by `storage.ValidateEntityKey`. A keyspace key is that same kebab segment with an
+optional dot hierarchy (`icmp.rtt-avg`), validated by `internal/key`. They stay two validators because
+only a keyspace key may carry the dot: a key is a dot-joined path of segments and an entity key is a
+path of one. The console says "Key" for both, because an operator types one identifier either way and
+that one difference surfaces as a validation message, not as a second word. The one boundary is the CLI reference, which is generated from the Huma `doc:`
+tags: its flag is still `--display-name` because the wire field is still `display_name`, and a help
+string calling it the name while the flag says otherwise would be worse than the inconsistency. Both
+move together when the field renames.
+
+A page whose identifier is a keyspace key says **Key**, not Segment, on both the column and the form.
+
+A page whose identifier is a **keyspace key** rather than a segment (`property_type`, `event_type`,
+`command_type`, `tag`) passes `identityColumn({ label: "Key" })` and does not derive its key from the
+label: `icmp.rtt-avg` is a legal key and an illegal segment. The write side has the same split.
+`createIdentity` derives a segment from the label as an operator types and stops the moment they edit
+the segment by hand, and an edit form seeds it with the existing segment so relabelling can never
+rewrite a live address. Keyspace pages do not wire it at all.
 
 ## Build and embed
 

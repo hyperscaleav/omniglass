@@ -59,7 +59,7 @@ func TestSelfProfileAndChangePassword(t *testing.T) {
 		defer resp.Body.Close()
 		var cookie *http.Cookie
 		for _, c := range resp.Cookies() {
-			if c.Name == "og_session" {
+			if c.Name == "og-session" {
 				cookie = c
 			}
 		}

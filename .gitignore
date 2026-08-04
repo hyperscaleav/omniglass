@@ -61,3 +61,7 @@ coverage.txt
 .server.log
 **/node_modules.broken.bak/
 node_modules/
+
+# docs/ builds with pnpm. An npm lockfile there is unused and actively misleading:
+# it tells a contributor npm is supported, then resolves a tree Astro cannot build.
+docs/package-lock.json

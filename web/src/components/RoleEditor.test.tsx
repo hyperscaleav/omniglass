@@ -73,7 +73,7 @@ describe("RoleEditor on a standard", () => {
     // The rest of the form appears only once the role is named: the name is the
     // address, and it is invented here, not picked from a catalog.
     fireEvent.input(getByLabelText("Role name"), { target: { value: "camera" } });
-    fireEvent.input(getByLabelText("Display name for the new role"), { target: { value: "Room camera" } });
+    fireEvent.input(getByLabelText("Name for the new role"), { target: { value: "Room camera" } });
     fireEvent.input(getByLabelText("Quorum for the new role"), { target: { value: "3" } });
     fireEvent.change(getByLabelText("Capability to require"), { target: { value: "speaker" } });
     fireEvent.click(getByLabelText("Declare role"));

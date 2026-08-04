@@ -132,29 +132,29 @@ func TestReconciliation(t *testing.T) {
 
 	// want: an ad-hoc declared value on the component (a productless component's
 	// declared values are all ad-hoc).
-	if _, err := gw.SetProperty(ctx, "", "component", "disp-r", "firmware_version", "", json.RawMessage(`"1.0.0"`), all); err != nil {
-		t.Fatalf("set declared firmware_version: %v", err)
+	if _, err := gw.SetProperty(ctx, "", "component", "disp-r", "firmware-version", "", json.RawMessage(`"1.0.0"`), all); err != nil {
+		t.Fatalf("set declared firmware-version: %v", err)
 	}
 	// is: an observed value that differs from the declared one.
 	if err := gw.UpsertProperties(ctx, []storage.PropertyUpsert{{
-		OwnerKind: "component", OwnerID: "disp-r", Key: "firmware_version",
+		OwnerKind: "component", OwnerID: "disp-r", Key: "firmware-version",
 		Instance: "", Provenance: "observed", Value: json.RawMessage(`"2.0.0"`), TS: time.Now().UTC(),
 	}}); err != nil {
-		t.Fatalf("upsert observed firmware_version: %v", err)
+		t.Fatalf("upsert observed firmware-version: %v", err)
 	}
 
 	recs, err := gw.Reconciliation(ctx, "component", "disp-r", all)
 	if err != nil {
 		t.Fatalf("reconciliation: %v", err)
 	}
-	fw := byName(recs)["firmware_version"]
+	fw := byName(recs)["firmware-version"]
 	if string(fw.Want) != `"1.0.0"` || string(fw.Is) != `"2.0.0"` || fw.Told != nil || !fw.Drift {
 		t.Fatalf("drift pivot: want want=1.0.0 is=2.0.0 told=nil drift=true, got %+v", fw)
 	}
 
 	// Reality matching intent: no drift.
 	if err := gw.UpsertProperties(ctx, []storage.PropertyUpsert{{
-		OwnerKind: "component", OwnerID: "disp-r", Key: "firmware_version",
+		OwnerKind: "component", OwnerID: "disp-r", Key: "firmware-version",
 		Instance: "", Provenance: "observed", Value: json.RawMessage(`"1.0.0"`), TS: time.Now().UTC().Add(time.Second),
 	}}); err != nil {
 		t.Fatalf("upsert observed match: %v", err)
@@ -163,7 +163,7 @@ func TestReconciliation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reconciliation after match: %v", err)
 	}
-	if fw := byName(recs)["firmware_version"]; fw.Drift || string(fw.Is) != `"1.0.0"` {
+	if fw := byName(recs)["firmware-version"]; fw.Drift || string(fw.Is) != `"1.0.0"` {
 		t.Fatalf("no-drift pivot: want is=1.0.0 drift=false, got %+v", fw)
 	}
 

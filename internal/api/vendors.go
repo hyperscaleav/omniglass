@@ -41,7 +41,7 @@ type vendorPathInput struct {
 
 type createVendorInput struct {
 	Body struct {
-		Name         string `json:"name" minLength:"1" doc:"The globally unique kebab handle; renameable"`
+		Name         string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique kebab handle; renameable"`
 		DisplayName  string `json:"display_name" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		Kind         string `json:"kind,omitempty" enum:"manufacturer,integrator,developer" default:"manufacturer" doc:"The role the organization plays"`
 		Icon         string `json:"icon,omitempty" doc:"A glyph key, e.g. crestron-logo"`

@@ -45,7 +45,7 @@ func TestCommandTypeAPI(t *testing.T) {
 
 	// Register a custom, settleable command type targeting a seeded property.
 	created := c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{
-		"name": "set_volume", "display_name": "Set volume",
+		"name": "set-volume", "display_name": "Set volume",
 		"settle_window_seconds": 5, "target_property_type": "video.input",
 	}, http.StatusCreated)
 	var ct struct {
@@ -55,12 +55,12 @@ func TestCommandTypeAPI(t *testing.T) {
 		Official            bool   `json:"official"`
 	}
 	json.Unmarshal(created, &ct)
-	if ct.Name != "set_volume" || ct.SettleWindowSeconds != 5 || ct.TargetPropertyType != "video.input" || ct.Official {
+	if ct.Name != "set-volume" || ct.SettleWindowSeconds != 5 || ct.TargetPropertyType != "video.input" || ct.Official {
 		t.Fatalf("created = %+v", ct)
 	}
 
 	// Get it back; list includes the custom + the seeded official ones.
-	c.do(ownerTok, http.MethodGet, "/command-types/set_volume", nil, http.StatusOK)
+	c.do(ownerTok, http.MethodGet, "/command-types/set-volume", nil, http.StatusOK)
 	var listed struct {
 		CommandTypes []struct {
 			Name string `json:"name"`
@@ -71,29 +71,29 @@ func TestCommandTypeAPI(t *testing.T) {
 	for _, e := range listed.CommandTypes {
 		names[e.Name] = true
 	}
-	if !names["set_volume"] || !names["set_input"] || !names["reboot"] {
+	if !names["set-volume"] || !names["set-input"] || !names["reboot"] {
 		t.Fatalf("list missing command types: %v", names)
 	}
 
 	// Update the settle window.
-	c.do(ownerTok, http.MethodPatch, "/command-types/set_volume", map[string]any{"settle_window_seconds": 10}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, "/command-types/set-volume", map[string]any{"settle_window_seconds": 10}, http.StatusOK)
 
 	// A malformed name is a 422; an unknown target property is a 422.
 	c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{"name": "Bad-Name"}, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{"name": "set_thing", "target_property_type": "no.such.property"}, http.StatusUnprocessableEntity)
 
 	// A duplicate name is a 409.
-	c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{"name": "set_volume"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{"name": "set-volume"}, http.StatusConflict)
 
 	// An official (seeded) command type is read-only.
-	c.do(ownerTok, http.MethodPatch, "/command-types/set_input", map[string]any{"display_name": "x"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodPatch, "/command-types/set-input", map[string]any{"display_name": "x"}, http.StatusConflict)
 	c.do(ownerTok, http.MethodDelete, "/command-types/reboot", nil, http.StatusConflict)
 
 	// An unknown command type is a 404.
 	c.do(ownerTok, http.MethodGet, "/command-types/nope", nil, http.StatusNotFound)
 
 	// Delete the custom command type.
-	c.do(ownerTok, http.MethodDelete, "/command-types/set_volume", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/command-types/set-volume", nil, http.StatusNoContent)
 
 	// An ungranted principal is forbidden to create.
 	noneTok := principalWithGrants(t, ctx, dsn, "nocmds", nil)

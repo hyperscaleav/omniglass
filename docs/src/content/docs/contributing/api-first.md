@@ -44,6 +44,37 @@ server.
 resolves to.** `{"parent": "rack", "parent_id": "0198f..."}`. The name is what a human types
 and what a body round-trips; the id is the stable handle that survives a rename.
 
+**The entity-key rule is enforced on every key-bearing table.** An entity's key is the identifier an
+operator types and an address carries (the `rm215a` in `boi.17c.rm215a`), and the rule is
+`^[a-z0-9][a-z0-9-]*$` with a 100 character ceiling and the uuid shape refused. It lives in the
+contract, not just below it: the create body carries `pattern` and `maxLength`, so the generated
+OpenAPI, the typed client, the CLI, and the YAML JSONSchema all enforce it, and the Storage Gateway
+enforces it again for callers that never touch a route.
+
+**Every exception is named, in code.** `internal/storage/identity_shape.go` declares one of four
+identity shapes for every table: key-bearing (an operator types its key, on the entity-key rule),
+keyspace (an operator types its key, on `internal/key`'s rule), a human identifier that is not a key,
+and id-only. The last two carry a written reason, and the guard refuses an exception without one.
+
+Which table is which is **not written down here**, because a hand-copied list is the drift class the
+generate-first rule exists for. `identity_shape_test.go` checks the declaration against the generated
+schema, so a new table is a failing test until somebody classifies it, and `cmd/identitygen` renders
+it into [core entities](/architecture/core-entities/). An earlier version of that guard only inspected
+tables carrying a `name` column, which made it blind to 28 of the 51: absence of a `name` is not
+evidence of absence of an identifier, and a username and a content hash both escaped.
+
+A table on the **keyspace** rule (`internal/key`, a kebab segment with an optional dot hierarchy) is
+deliberately outside this one, because
+`icmp.rtt-avg` is a legitimate keyspace key and an illegal entity key. Which table is which is not written down
+here, because a hand-copied list is drift waiting to happen: `TestEveryNamedTableIsClassified` reads
+the generated schema, finds every table carrying a `name`, and fails until each one is classified onto
+one rule or the other with its reason. A new table joins the guard by existing.
+
+The exclusions are load-bearing rather than tidy. Barring `.` keeps one key from splitting into two
+segments. Barring `*` and `>` keeps a key from reading as a NATS subject pattern. Barring
+`$` is what lets an address use sigil accessors without reserving any word, so a location may still
+legitimately take the key `sys`.
+
 The test is a **round trip**: a response body can be fed back to the write that produced it
 (create a component with `{"parent": "rack"}`, read it back as `{"parent": "rack"}`). When that
 fails, every client has to fetch a second collection and join by uuid to render one label, each

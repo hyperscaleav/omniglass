@@ -1,6 +1,7 @@
 import { Show, createEffect, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
 import { Plus } from "../components/icons";
@@ -18,7 +19,7 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Command Types: the "do" catalog (Catalog > Command Types), the twin of the
 // Properties and Event Types catalogs. A command type names what a component can be
-// told (set_input, reboot); a settleable one targets a property and carries a settle
+// told (set-input, reboot); a settleable one targets a property and carries a settle
 // window, a fire-and-forget one neither. Official (seed-owned) types are read-only.
 
 function originBadge(official: boolean): JSX.Element {
@@ -33,9 +34,11 @@ function targetCell(target: string | undefined): JSX.Element {
     : <span class="text-base-content/30">fire-and-forget</span>;
 }
 
+// The header stays "Key" rather than the primitive's default "Name": a command
+// type's `name` is a keyspace key (set-input, video.input), not the kebab segment
+// the rest of the estate is addressed by, and calling it a name would be a lie.
 const columns: FlatColumn<CommandTypeRow>[] = [
-  { key: "name", label: "Key", sortVal: (r) => r.name, cell: (r) => <span class="font-data font-semibold">{r.name}</span> },
-  { key: "display_name", label: "Label", sortVal: (r) => r.display_name ?? "", cell: (r) => <span>{r.display_name}</span> },
+  identityColumn<CommandTypeRow>({ label: "Key" }),
   { key: "target", label: "Target", cell: (r) => targetCell(r.target_property_type) },
   { key: "settle", label: "Settle (s)", width: "90px", sortVal: (r) => r.settle_window_seconds, cell: (r) => <span class="tabular-nums text-[12px]">{r.settle_window_seconds}</span> },
   { key: "official", label: "Origin", width: "100px", sortVal: (r) => String(r.official), cell: (r) => originBadge(r.official) },
@@ -155,7 +158,7 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
             <KVStacked label="Origin" value={originBadge(r().official)} />
           </div>
           <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Display name</span>
+            <span class="eyebrow">Name</span>
             <Show when={edit.editing()} fallback={<div class="input input-bordered flex items-center text-sm">{r().display_name}</div>}>
               <input class="input input-bordered w-full" value={displayName()} onInput={(e) => setDisplayName(e.currentTarget.value)} />
             </Show>
@@ -226,10 +229,10 @@ export function CreateCommandTypeForm(p: { onCreated: (r: CommandTypeRow) => voi
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Key" hint="A lowercase, dot-hierarchied name, e.g. set_input or reboot.">
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="set_input" onInput={(e) => setName(e.currentTarget.value)} />
+      <Field label="Key" hint="A lowercase, dot-hierarchied name, e.g. set-input or reboot.">
+        <input class="input input-bordered w-full font-data" value={name()} placeholder="set-input" onInput={(e) => setName(e.currentTarget.value)} />
       </Field>
-      <Field label="Display name">
+      <Field label="Name">
         <input class="input input-bordered w-full" value={displayName()} placeholder="Set input" onInput={(e) => setDisplayName(e.currentTarget.value)} />
       </Field>
       <Field label="Description">

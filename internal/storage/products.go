@@ -341,6 +341,9 @@ func (p *PG) GetProduct(ctx context.Context, id string) (*Product, error) {
 // vendor/driver/parent/capability is ErrProductRefNotFound; an out-of-set kind
 // is ErrProductInvalidKind. An empty kind defaults to device.
 func (p *PG) CreateProduct(ctx context.Context, actorID string, m Product) (*Product, error) {
+	if err := ValidateEntityKey(m.Name); err != nil {
+		return nil, err
+	}
 	m.Official = false
 	if m.Kind == "" {
 		m.Kind = string(ProductDevice)

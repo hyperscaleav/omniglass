@@ -65,8 +65,8 @@ func TestTagAPI(t *testing.T) {
 	// Mint keys. A non-normalized key is a 422.
 	c.do(ownerTok, http.MethodPost, "/tags", map[string]any{"name": "Environment"}, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodPost, "/tags", map[string]any{"name": "environment"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPost, "/tags", map[string]any{"name": "asset_id", "propagates": false}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPost, "/tags", map[string]any{"name": "rack_key", "applies_to": []string{"location"}}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/tags", map[string]any{"name": "asset-id", "propagates": false}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/tags", map[string]any{"name": "rack-key", "applies_to": []string{"location"}}, http.StatusCreated)
 	// Duplicate key is a conflict.
 	c.do(ownerTok, http.MethodPost, "/tags", map[string]any{"name": "environment"}, http.StatusConflict)
 
@@ -74,11 +74,11 @@ func TestTagAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/tags/environment:setPlatform", map[string]any{"value": "prod"}, http.StatusOK)
 	setTag(c, ownerTok, "locations", "room", "environment", "staging", http.StatusOK)
 	setTag(c, ownerTok, "components", "codec-1", "environment", "dev", http.StatusOK)
-	// asset_id is non-propagating: bind it above the component (room) and on it.
-	setTag(c, ownerTok, "locations", "room", "asset_id", "R-1", http.StatusOK)
-	setTag(c, ownerTok, "components", "codec-1", "asset_id", "A-42", http.StatusOK)
-	// A key that does not apply to the entity kind is a 422 (rack_key on a component).
-	setTag(c, ownerTok, "components", "codec-1", "rack_key", "x", http.StatusUnprocessableEntity)
+	// asset-id is non-propagating: bind it above the component (room) and on it.
+	setTag(c, ownerTok, "locations", "room", "asset-id", "R-1", http.StatusOK)
+	setTag(c, ownerTok, "components", "codec-1", "asset-id", "A-42", http.StatusOK)
+	// A key that does not apply to the entity kind is a 422 (rack-key on a component).
+	setTag(c, ownerTok, "components", "codec-1", "rack-key", "x", http.StatusUnprocessableEntity)
 	// Binding an unknown key is a 404.
 	setTag(c, ownerTok, "components", "codec-1", "ghost", "x", http.StatusNotFound)
 
@@ -93,16 +93,16 @@ func TestTagAPI(t *testing.T) {
 	if w := winners["environment"]; w.Value != "dev" || w.OwnerKind != "component" {
 		t.Errorf("environment winner = %+v, want dev on component", w)
 	}
-	if w := winners["asset_id"]; w.Value != "A-42" || w.OwnerKind != "component" {
-		t.Errorf("asset_id winner = %+v, want A-42 on component", w)
+	if w := winners["asset-id"]; w.Value != "A-42" || w.OwnerKind != "component" {
+		t.Errorf("asset-id winner = %+v, want A-42 on component", w)
 	}
 	for _, r := range resolved {
-		if r.Key == "asset_id" && r.OwnerKind == "location" {
+		if r.Key == "asset-id" && r.OwnerKind == "location" {
 			t.Errorf("non-propagating location binding leaked into cascade: %+v", r)
 		}
 	}
 
-	// Direct tags on the component: environment=dev and asset_id=A-42.
+	// Direct tags on the component: environment=dev and asset-id=A-42.
 	var direct struct {
 		Tags []struct {
 			Key   string `json:"key"`

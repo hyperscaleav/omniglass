@@ -66,9 +66,10 @@ describe("Products page", () => {
     expect(within(blade).queryByRole("button", { name: /delete/i })).not.toBeInTheDocument();
     expect(within(blade).queryByLabelText("Edit")).not.toBeInTheDocument();
 
-    // create is available to an admin
+    // create is available to an admin. The label match is anchored because the
+    // Name field's hint mentions the display name too.
     fireEvent.click(screen.getByRole("button", { name: /new product/i }));
-    expect(screen.getByLabelText(/display name/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Name/)).toBeInTheDocument();
   });
 
   it("a custom (non-official) row carries edit and delete", async () => {
@@ -115,8 +116,8 @@ describe("Products addressing honesty (#469)", () => {
   it("shows the handle in the Name column and finds the row by it in the filter", async () => {
     mount();
     expect(await screen.findByText("Acme Panel")).toBeInTheDocument();
-    const row = screen.getByText("Acme Panel").closest("tr")!;
-    expect(within(row).getByText("acme-panel")).toBeInTheDocument();
+    const cell = screen.getByText("Acme Panel").closest("td")!;
+    expect(within(cell).getByText("acme-panel")).toBeInTheDocument();
     const input = screen.getByRole("combobox") as HTMLInputElement;
     fireEvent.input(input, { target: { value: "acme-panel" } });
     fireEvent.keyDown(input, { key: "Enter" });
@@ -170,5 +171,60 @@ describe("Products reference honesty (#470)", () => {
     fireEvent.click(within(blade).getByText("Save"));
     await waitFor(() => expect(sent).toBeTruthy());
     expect((sent as { capabilities: string[] }).capabilities).toEqual([]);
+  });
+});
+
+// The catalog wears the shared identity cell (components/IdentityCell): one
+// "Name" header whose cell carries the label over the handle, so a product reads
+// the same here as it does on every other list. The separate "Name"
+// column went with it: the cell already renders both.
+describe("Products identity column", () => {
+  it("carries both identities under one Name header", async () => {
+    mount();
+    expect(await screen.findByText("Acme Panel")).toBeInTheDocument();
+    const heads = screen.getAllByRole("columnheader").map((h) => h.textContent);
+    expect(heads).toContain("Name");
+    expect(heads.filter((h) => h === "Name")).toHaveLength(1);
+    // Every other column survives, in order.
+    expect(heads).toEqual(["Name", "Vendor", "Driver", "Kind", "Origin", ""]);
+
+    const cell = screen.getByText("Acme Panel").closest("td")!;
+    expect(within(cell).getByText("acme-panel")).toBeInTheDocument();
+  });
+});
+
+// The create form leads with the display name and derives the handle from it, so
+// an operator types "Acme Panel Pro" and never has to invent `acme-panel-pro` or
+// think about the character class the API enforces. This proves the page is
+// WIRED to the primitive; lib/entities.test.ts proves the suppression rule
+// itself, which cannot be witnessed here (once a test types into an input its
+// value property no longer tracks the signal).
+describe("Products create identity", () => {
+  const fields = async () => {
+    mount();
+    expect(await screen.findByText("Acme Panel")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /new product/i }));
+    const display = screen.getByPlaceholderText("Crestron TSW-1070") as HTMLInputElement;
+    const key = screen.getByPlaceholderText("crestron-tsw-1070") as HTMLInputElement;
+    return { display, key };
+  };
+
+  it("derives the handle as the display name is typed", async () => {
+    const { display, key } = await fields();
+    fireEvent.input(display, { target: { value: "Acme Panel Pro" } });
+    await waitFor(() => expect(key.value).toBe("acme-panel-pro"));
+  });
+
+  it("stops advertising the handle as derived once it is edited by hand", async () => {
+    const { display, key } = await fields();
+    fireEvent.input(display, { target: { value: "Acme Panel Pro" } });
+    await waitFor(() => expect(key.value).toBe("acme-panel-pro"));
+
+    fireEvent.input(key, { target: { value: "acme-panel-2" } });
+    fireEvent.input(display, { target: { value: "Acme Panel Pro Mk2" } });
+
+    await waitFor(() => expect(display.value).toBe("Acme Panel Pro Mk2"));
+    expect(screen.getByText(/Globally unique address/)).toBeTruthy();
+    expect(screen.queryByText(/Derived from the display name/)).toBeNull();
   });
 });

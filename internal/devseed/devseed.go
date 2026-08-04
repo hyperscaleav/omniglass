@@ -648,8 +648,8 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string) e
 		if _, err := gw.SetTagBinding(ctx, actorID, "environment", "node", &nodeName, "prod", all, all); err != nil {
 			return fmt.Errorf("devseed: tag reachability node environment: %w", err)
 		}
-		if _, err := gw.SetTagBinding(ctx, actorID, "asset_id", "node", &nodeName, "NODE-EDGE-HQ", all, all); err != nil {
-			return fmt.Errorf("devseed: tag reachability node asset_id: %w", err)
+		if _, err := gw.SetTagBinding(ctx, actorID, "asset-id", "node", &nodeName, "NODE-EDGE-HQ", all, all); err != nil {
+			return fmt.Errorf("devseed: tag reachability node asset-id: %w", err)
 		}
 	} else if err != nil {
 		return fmt.Errorf("devseed: check reachability node: %w", err)
@@ -699,9 +699,9 @@ func seedReachSamples(ctx context.Context, gw storage.Gateway, iface string, fla
 	}
 	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
 		{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp.reachable", Instance: iface, Value: 1, Source: "icmp", TS: recovered},
-		{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp.rtt_avg", Instance: iface, Value: rttMs, Source: "icmp", TS: recovered},
+		{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp.rtt-avg", Instance: iface, Value: rttMs, Source: "icmp", TS: recovered},
 		{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp.open", Instance: iface, Value: 1, Source: "tcp", TS: recovered},
-		{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp.connect_time", Instance: iface, Value: connMs, Source: "tcp", TS: recovered},
+		{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp.connect-time", Instance: iface, Value: connMs, Source: "tcp", TS: recovered},
 	}); err != nil {
 		return fmt.Errorf("devseed: insert %s metric samples: %w", iface, err)
 	}

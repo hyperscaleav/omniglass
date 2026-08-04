@@ -509,7 +509,9 @@ components:
           type: string
         name:
           description: The globally unique kebab handle; renameable
+          maxLength: 100
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
       required:
         - name
@@ -597,7 +599,9 @@ components:
           type: string
         name:
           description: The globally unique kebab handle; renameable
+          maxLength: 100
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         version:
           description: A free-form version string, e.g. 1.0.0
@@ -840,7 +844,9 @@ components:
           type: string
         name:
           description: The globally unique kebab handle (e.g. wing); "root" is reserved
+          maxLength: 100
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
       required:
         - name
@@ -919,7 +925,9 @@ components:
           type: string
         name:
           description: Globally unique node name (also its NATS subject token, so no dots or whitespace)
+          maxLength: 100
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
       required:
         - name
@@ -992,7 +1000,9 @@ components:
           type: string
         name:
           description: The globally unique kebab handle; renameable
+          maxLength: 100
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         parent_product_id:
           description: The parent product, by handle or uuid
@@ -1107,7 +1117,9 @@ components:
           type: string
         name:
           description: The globally unique kebab handle; renameable
+          maxLength: 100
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         parent_standard_id:
           description: A standard this one is a variant of, by handle or uuid
@@ -1250,7 +1262,9 @@ components:
           type: string
         name:
           description: The globally unique kebab handle; renameable
+          maxLength: 100
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         support_phone:
           description: The vendor's support line

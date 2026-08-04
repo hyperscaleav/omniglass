@@ -62,15 +62,15 @@ func TestRenameSystem(t *testing.T) {
 		t.Fatalf("dup rename err = %v, want ErrSystemExists", err)
 	}
 
-	// Bad slug -> ErrInvalidName (before touching the DB).
+	// Bad slug -> ErrInvalidEntityKey (before touching the DB).
 	bad := "Bad Name"
-	if _, err := gw.UpdateSystem(ctx, "", "av-child", storage.SystemPatch{Name: &bad}, all, all); !errors.Is(err, storage.ErrInvalidName) {
-		t.Fatalf("bad-format rename err = %v, want ErrInvalidName", err)
+	if _, err := gw.UpdateSystem(ctx, "", "av-child", storage.SystemPatch{Name: &bad}, all, all); !errors.Is(err, storage.ErrInvalidEntityKey) {
+		t.Fatalf("bad-format rename err = %v, want ErrInvalidEntityKey", err)
 	}
 
 	// Create-tightening: the shared validator gates create too, not just rename.
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "Bad Name"}, all); !errors.Is(err, storage.ErrInvalidName) {
-		t.Fatalf("bad-format create err = %v, want ErrInvalidName", err)
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "Bad Name"}, all); !errors.Is(err, storage.ErrInvalidEntityKey) {
+		t.Fatalf("bad-format create err = %v, want ErrInvalidEntityKey", err)
 	}
 
 	// SystemNameTaken is scope-blind existence.

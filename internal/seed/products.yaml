@@ -16,9 +16,9 @@ products:
     # their defaults. An operator overrides one on a component; an unset property
     # resolves to the default here.
     properties:
-      - name: serial_number
-      - name: firmware_version
-      - name: model_number
+      - name: serial-number
+      - name: firmware-version
+      - name: model-number
         default: '"Room Bar"'
   - id: samsung-qm55
     display_name: Samsung QM55
@@ -26,9 +26,9 @@ products:
     kind: device
     capabilities: [flat-panel-display]
     properties:
-      - name: serial_number
-      - name: firmware_version
-      - name: model_number
+      - name: serial-number
+      - name: firmware-version
+      - name: model-number
         default: '"QM55"'
   - id: shure-mxa920
     display_name: Shure MXA920

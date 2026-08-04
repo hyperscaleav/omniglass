@@ -57,9 +57,10 @@ describe("Nodes page", () => {
     expect(getByText("HQ Edge Node")).toBeTruthy(); // display_name label
     expect(getByText(/edge-hq/)).toBeTruthy(); // key + location in the subtitle
     expect(getByText("East Edge")).toBeTruthy();
-    // A node with no display_name falls back to its key: it reads as both the label
-    // and the subtitle, so the key appears twice.
-    expect(getAllByText("edge-new").length).toBe(2);
+    // A node with no display_name falls back to its key, and the shared identity
+    // cell suppresses the subtitle when the two are the same string, so the key
+    // reads once rather than twice.
+    expect(getAllByText("edge-new").length).toBe(1);
     // Status is derived from last_heartbeat_at against the down window.
     expect(getByText("up")).toBeTruthy();
     expect(getByText("down")).toBeTruthy();
@@ -190,11 +191,28 @@ describe("Nodes page", () => {
     const nameInput = (await screen.findByLabelText("Name")) as HTMLInputElement;
     fireEvent.input(nameInput, { target: { value: "edge-2" } });
     // The create form also carries display_name + location (parity with components).
-    expect(screen.getByLabelText("Display name")).toBeTruthy();
+    expect(screen.getByLabelText("Name")).toBeTruthy();
     expect(screen.getByLabelText("Location")).toBeTruthy();
     fireEvent.click(screen.getByText("Create node"));
 
     expect(await screen.findByDisplayValue("og_new_TOKEN")).toBeTruthy();
     await waitFor(() => expect(screen.queryByText("Create node")).toBeNull());
+  });
+
+  // The create form's two identity fields are coupled by lib/entities: the operator
+  // types the label, the address follows it, and hand-editing the address claims it
+  // so a later relabel cannot rewrite what they typed.
+  it("derives the node name from the display name until the name is hand-edited", async () => {
+    mount(owner);
+    fireEvent.click(screen.getByText("New node"));
+    const display = (await screen.findByLabelText("Name")) as HTMLInputElement;
+    const name = screen.getByLabelText("Key") as HTMLInputElement;
+
+    fireEvent.input(display, { target: { value: "HQ Closet Node" } });
+    expect(name.value).toBe("hq-closet-node");
+
+    fireEvent.input(name, { target: { value: "edge-hq-1" } });
+    fireEvent.input(display, { target: { value: "HQ Closet Node 2" } });
+    expect(name.value).toBe("edge-hq-1");
   });
 });

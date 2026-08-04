@@ -376,7 +376,7 @@ const sessionCookieLifetime = 12 * time.Hour
 
 // sessionCookieName is the httpOnly cookie carrying a human's session bearer
 // token; the SPA never reads it (it sends with credentials: 'include').
-const sessionCookieName = "og_session"
+const sessionCookieName = "og-session"
 
 // sessionCookieToken extracts the session token from a raw Cookie header.
 func sessionCookieToken(cookieHeader string) (string, bool) {

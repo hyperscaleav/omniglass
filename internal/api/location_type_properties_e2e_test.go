@@ -58,14 +58,14 @@ func TestLocationTypePropertiesAPI(t *testing.T) {
 	}, http.StatusCreated)
 
 	// PUT declares the line. The property must already exist in the catalog
-	// (model_number is seeded); the contract only names it.
+	// (model-number is seeded); the contract only names it.
 	var set locationTypePropertyWire
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/location-types/annex/properties/model_number",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/location-types/annex/properties/model-number",
 		map[string]any{"default_value": "MN-UNSET", "required": true}, http.StatusOK), &set); err != nil {
 		t.Fatalf("decode set: %v", err)
 	}
-	if set.PropertyTypeName != "model_number" || !set.Required || string(set.DefaultValue) != `"MN-UNSET"` {
-		t.Fatalf("set = %+v, want model_number required with default \"MN-UNSET\"", set)
+	if set.PropertyTypeName != "model-number" || !set.Required || string(set.DefaultValue) != `"MN-UNSET"` {
+		t.Fatalf("set = %+v, want model-number required with default \"MN-UNSET\"", set)
 	}
 
 	// GET lists the contract.
@@ -73,12 +73,12 @@ func TestLocationTypePropertiesAPI(t *testing.T) {
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/location-types/annex/properties", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode list: %v", err)
 	}
-	if len(listed.Properties) != 1 || listed.Properties[0].PropertyTypeName != "model_number" {
-		t.Fatalf("contract = %+v, want one model_number line", listed.Properties)
+	if len(listed.Properties) != 1 || listed.Properties[0].PropertyTypeName != "model-number" {
+		t.Fatalf("contract = %+v, want one model-number line", listed.Properties)
 	}
 
 	// A second PUT revises the same line rather than adding another.
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/location-types/annex/properties/model_number",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/location-types/annex/properties/model-number",
 		map[string]any{"default_value": "MN-REVISED"}, http.StatusOK), &set); err != nil {
 		t.Fatalf("decode revise: %v", err)
 	}
@@ -93,19 +93,19 @@ func TestLocationTypePropertiesAPI(t *testing.T) {
 	}
 
 	// DELETE withdraws the line; withdrawing it twice is an explicit miss.
-	c.do(ownerTok, http.MethodDelete, "/location-types/annex/properties/model_number", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/location-types/annex/properties/model-number", nil, http.StatusNoContent)
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/location-types/annex/properties", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode list after delete: %v", err)
 	}
 	if len(listed.Properties) != 0 {
 		t.Fatalf("contract after delete = %+v, want empty", listed.Properties)
 	}
-	c.do(ownerTok, http.MethodDelete, "/location-types/annex/properties/model_number", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodDelete, "/location-types/annex/properties/model-number", nil, http.StatusNotFound)
 
 	// A property the catalog does not know, and a type that does not exist, are
 	// request faults rather than 500s.
 	c.do(ownerTok, http.MethodPut, "/location-types/annex/properties/not_a_property",
 		map[string]any{"required": true}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodPut, "/location-types/no-such-type/properties/model_number",
+	c.do(ownerTok, http.MethodPut, "/location-types/no-such-type/properties/model-number",
 		map[string]any{"required": true}, http.StatusNotFound)
 }

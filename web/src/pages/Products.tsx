@@ -1,7 +1,10 @@
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
+import { createIdentity } from "../lib/entities";
+import { entityLabel } from "../lib/entities";
 import { useFormActions } from "../lib/formactions";
 import ProductContractEditor from "../components/ProductContractEditor";
 import { Plus } from "../components/icons";
@@ -47,8 +50,9 @@ function refCell(handle?: string): JSX.Element {
 }
 
 const columns: FlatColumn<Product>[] = [
-  { key: "name", label: "Name", sortVal: (p) => p.name, cell: (p) => <span class="font-data font-semibold">{p.name}</span> },
-  { key: "display_name", label: "Display name", sortVal: (p) => p.display_name, cell: (p) => <span>{p.display_name}</span> },
+  // One identity column, the shared cell: the label leads and the kebab handle
+  // sits beneath it. A product whose label IS its handle renders it once.
+  identityColumn<Product>(),
   { key: "vendor", label: "Vendor", width: "150px", sortVal: (p) => p.vendor ?? "", cell: (p) => refCell(p.vendor) },
   { key: "driver", label: "Driver", width: "150px", sortVal: (p) => p.driver ?? "", cell: (p) => refCell(p.driver) },
   { key: "kind", label: "Kind", width: "110px", sortVal: (p) => p.kind, cell: (p) => kindBadge(p.kind) },
@@ -106,7 +110,8 @@ function useProductRow(id: string): () => Product | undefined {
 
 function ProductBladeTitle(p: { id: string }): JSX.Element {
   const row = useProductRow(p.id);
-  return <span class="font-data">{row()?.name ?? p.id}</span>;
+  const r = row();
+  return <span>{r ? entityLabel(r) : p.id}</span>;
 }
 
 function ProductBladeBody(p: { id: string }): JSX.Element {
@@ -183,12 +188,12 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <KVStacked label="Name" value={<span class="font-data">{r().name}</span>} />
+            <KVStacked label="Key" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Origin" value={officialBadge(r().official)} />
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
           <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Display name</span>
+            <span class="eyebrow">Name</span>
             <Show
               when={edit.editing()}
               fallback={<div class="input input-bordered flex items-center text-sm">{r().display_name}</div>}
@@ -250,13 +255,13 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
   );
 }
 
-// CreateProductForm: pick the kebab name (the operator-facing address; the
-// uuid is the database's to mint), set the display name and kind; vendor,
-// driver, and capabilities are optional.
+// CreateProductForm: the display name leads and the kebab name (the
+// operator-facing address; the uuid is the database's to mint) derives from it
+// until the operator edits it by hand (lib/entities). Kind defaults to device;
+// vendor, driver, and capabilities are optional.
 export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.Element {
   const qc = useQueryClient();
-  const [id, setId] = createSignal("");
-  const [displayName, setDisplayName] = createSignal("");
+  const { display, setDisplay, name, setName, keyDerived } = createIdentity();
   const [kind, setKind] = createSignal<ProductKind>("device");
   const [vendorId, setVendorId] = createSignal("");
   const [driverId, setDriverId] = createSignal("");
@@ -269,7 +274,7 @@ export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.E
     submitIcon: Plus,
     submit: () => void submit(),
     busy,
-    disabled: () => !id().trim() || !displayName().trim(),
+    disabled: () => !name().trim() || !display().trim(),
   });
 
   async function submit() {
@@ -277,8 +282,8 @@ export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.E
     setFormErr(null);
     try {
       const created = await createProduct({
-        name: id().trim(),
-        display_name: displayName().trim(),
+        name: name().trim(),
+        display_name: display().trim(),
         kind: kind(),
         vendor_id: vendorId() || undefined,
         driver_id: driverId() || undefined,
@@ -298,11 +303,11 @@ export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.E
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Name" hint="A kebab name, e.g. crestron-tsw-1070.">
-        <input class="input input-bordered w-full font-data" value={id()} placeholder="crestron-tsw-1070" onInput={(e) => setId(e.currentTarget.value)} />
+      <Field label="Name">
+        <input class="input input-bordered w-full" value={display()} placeholder="Crestron TSW-1070" onInput={(e) => setDisplay(e.currentTarget.value)} />
       </Field>
-      <Field label="Display name">
-        <input class="input input-bordered w-full" value={displayName()} placeholder="Crestron TSW-1070" onInput={(e) => setDisplayName(e.currentTarget.value)} />
+      <Field label="Key" hint={keyDerived() ? "Derived from the name. Edit to set your own." : "Globally unique address, used by the API and CLI."}>
+        <input class="input input-bordered w-full font-data" value={name()} placeholder="crestron-tsw-1070" onInput={(e) => setName(e.currentTarget.value)} />
       </Field>
       <Field label="Kind" hint="What class of thing the product is.">
         <select class="select select-bordered w-full" value={kind()} onChange={(e) => setKind(e.currentTarget.value as ProductKind)}>

@@ -3,7 +3,7 @@
 # targets a property (it opens an intended value and settles when observed matches);
 # a fire-and-forget command has no target and just records the invocation.
 command_types:
-  - name: set_input
+  - name: set-input
     display_name: Set Input
     description: >-
       Tell a display or switcher which video input to select. A settleable command:

@@ -63,7 +63,7 @@ type locationTypePathInput struct {
 
 type createLocationTypeInput struct {
 	Body struct {
-		Name               string   `json:"name" minLength:"1" doc:"The globally unique kebab handle (e.g. wing); \"root\" is reserved"`
+		Name               string   `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique kebab handle (e.g. wing); \"root\" is reserved"`
 		DisplayName        string   `json:"display_name" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		Icon               string   `json:"icon,omitempty" doc:"A glyph key; the console falls back to map-pin when empty"`
 		AllowedParentTypes []string `json:"allowed_parent_types,omitempty" doc:"location_type names and/or the reserved root sentinel this type may be placed under; empty means unconstrained"`
@@ -287,11 +287,11 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Description: "Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.",
 	}, "location", "update"), func(ctx context.Context, in *checkNameInput) (*checkNameOutput, error) {
 		out := &checkNameOutput{}
-		if err := storage.ValidateEntityName(in.Body.Name); err != nil {
+		if err := storage.ValidateEntityKey(in.Body.Name); err != nil {
 			out.Body.Valid = false
 			// A uuid passes the slug rule, so the generic reason would describe
 			// exactly what the operator typed and explain nothing.
-			if errors.Is(err, storage.ErrNameIsUUID) {
+			if errors.Is(err, storage.ErrEntityKeyIsUUID) {
 				out.Body.Reason = "A name cannot be a uuid: that form is reserved for an entity's id."
 			} else {
 				out.Body.Reason = "Use lowercase letters, digits, and hyphens."
@@ -355,7 +355,9 @@ func mapLocationErr(err error) error {
 		return huma.Error409Conflict("location has child locations")
 	case errors.Is(err, storage.ErrLocationExists):
 		return huma.Error409Conflict("location name already exists")
-	case errors.Is(err, storage.ErrInvalidName):
+	case errors.Is(err, storage.ErrEntityKeyIsUUID):
+		return huma.Error422UnprocessableEntity("location name may not be a uuid: that form is reserved for an entity's id")
+	case errors.Is(err, storage.ErrInvalidEntityKey):
 		return huma.Error422UnprocessableEntity("invalid name")
 	case errors.Is(err, storage.ErrParentNotFound):
 		return huma.Error422UnprocessableEntity("parent location not found")

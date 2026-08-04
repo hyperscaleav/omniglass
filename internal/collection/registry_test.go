@@ -43,7 +43,7 @@ func TestRegistryReportsCollisions(t *testing.T) {
 		[]storage.PropertyType{
 			{Name: "call.started", Kind: &metric}, // collides with the event type below
 			{Name: "video.input", Kind: &state},
-			{Name: "serial_number"}, // declared-only, not collectable
+			{Name: "serial-number"}, // declared-only, not collectable
 		},
 		[]storage.EventType{{Name: "call.started"}, {Name: "command.issued"}},
 	)
@@ -66,7 +66,7 @@ func TestRegistryReportsCollisions(t *testing.T) {
 		t.Fatalf("command.issued = (%q,%v), want (event,true)", kind, ok)
 	}
 	// A declared-only property stays uncollectable.
-	if _, ok := reg.Allows("serial_number"); ok {
+	if _, ok := reg.Allows("serial-number"); ok {
 		t.Fatal("a declared-only property must not be collectable")
 	}
 }
@@ -77,7 +77,7 @@ func TestRegistryReportsCollisions(t *testing.T) {
 func TestRegistryNoCollisionsIsEmpty(t *testing.T) {
 	metric := "metric"
 	reg := collection.NewRegistry(
-		[]storage.PropertyType{{Name: "icmp.rtt_avg", Kind: &metric}},
+		[]storage.PropertyType{{Name: "icmp.rtt-avg", Kind: &metric}},
 		[]storage.EventType{{Name: "call.started"}},
 	)
 	if got := reg.Collisions(); len(got) != 0 {

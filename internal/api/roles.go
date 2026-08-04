@@ -423,6 +423,10 @@ func mapRoleErr(err error) error {
 			short.Component, short.Role, strings.Join(missing, ", ")))
 	}
 	switch {
+	case errors.Is(err, storage.ErrEntityKeyIsUUID):
+		return huma.Error422UnprocessableEntity("role key may not be a uuid")
+	case errors.Is(err, storage.ErrInvalidEntityKey):
+		return huma.Error422UnprocessableEntity("role key must be lowercase letters, digits, and hyphens, starting with a letter or digit")
 	case errors.Is(err, storage.ErrRoleNotFound):
 		return huma.Error404NotFound("role not found")
 	case errors.Is(err, storage.ErrAssignmentMissing):

@@ -11,9 +11,9 @@ import (
 // consumer's reject-not-project drops any name absent from that registry.
 const (
 	SignalTCPOpen        = "tcp.open"
-	SignalTCPConnectTime = "tcp.connect_time"
+	SignalTCPConnectTime = "tcp.connect-time"
 	SignalICMPReachable  = "icmp.reachable"
-	SignalICMPRTTAvg     = "icmp.rtt_avg"
+	SignalICMPRTTAvg     = "icmp.rtt-avg"
 )
 
 // defaultTCPTimeout bounds a connect attempt when the task sets none.
@@ -70,7 +70,7 @@ type Runner struct {
 
 // CollectTCP runs one tcp task and returns its samples. A tcp probe always
 // emits tcp.open (1.0 open, 0.0 closed) carrying the verdict reason as a label,
-// and emits tcp.connect_time (ms) ONLY when open (absent when closed). A failed
+// and emits tcp.connect-time (ms) ONLY when open (absent when closed). A failed
 // connect is data, not an error; err is returned only when the target could not
 // be attempted (an unresolved host), so the caller skips the task rather than
 // recording a false down.
@@ -130,7 +130,7 @@ type Pinger interface {
 
 // CollectICMP runs one icmp (ping) task and returns its samples. A ping probe
 // always emits icmp.reachable (1.0 if any echo returned, 0.0 otherwise) carrying
-// the verdict reason as a label, and emits icmp.rtt_avg (ms) ONLY when reachable
+// the verdict reason as a label, and emits icmp.rtt-avg (ms) ONLY when reachable
 // (absent when unreachable). A target that does not answer is data, not an error;
 // err is returned only when the node cannot attempt the probe at all (no ICMP
 // capability, or an unresolvable host), so the caller skips the task rather than

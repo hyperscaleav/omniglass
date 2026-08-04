@@ -245,8 +245,8 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
                     <div class="flex items-center gap-2">
                       <input
                         class="input input-bordered input-sm min-w-0 flex-1"
-                        placeholder="display name"
-                        aria-label={`Display name for ${r.name}`}
+                        placeholder="name"
+                        aria-label={`Name for ${r.name}`}
                         value={draft().display}
                         onInput={(e) => setDraft({ ...draft(), display: e.currentTarget.value })}
                       />
@@ -287,8 +287,8 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
             <div class="flex items-center gap-2">
               <input
                 class="input input-bordered input-sm min-w-0 flex-1"
-                placeholder="display name, e.g. Table microphone"
-                aria-label="Display name for the new role"
+                placeholder="name, e.g. Table microphone"
+                aria-label="Name for the new role"
                 value={addDraft().display}
                 onInput={(e) => setAddDraft({ ...addDraft(), display: e.currentTarget.value })}
               />

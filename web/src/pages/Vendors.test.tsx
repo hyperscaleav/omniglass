@@ -50,9 +50,10 @@ describe("Vendors page", () => {
     expect(within(blade).queryByRole("button", { name: /delete/i })).not.toBeInTheDocument();
     expect(within(blade).queryByLabelText("Edit")).not.toBeInTheDocument();
 
-    // create is available to an admin
+    // create is available to an admin. Anchored, because the Name field's hint
+    // mentions the display name it derives from.
     fireEvent.click(screen.getByRole("button", { name: /new vendor/i }));
-    expect(screen.getByLabelText(/display name/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Name/)).toBeInTheDocument();
   });
 
   it("a custom (non-official) row carries edit and delete", async () => {
@@ -116,5 +117,46 @@ describe("Vendors addressing honesty (#469)", () => {
     fireEvent.keyDown(input, { key: "Enter" });
     expect(screen.getByText("Acme AV")).toBeInTheDocument();
     expect(screen.queryByText("Crestron")).toBeNull();
+  });
+});
+
+// Both identities live in one column (components/IdentityCell), so the catalog
+// reads the way every other list does instead of spending a second column on the
+// half of the identity that is only sometimes different.
+describe("Vendors identity column", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("carries both identities under one Name header, and no retired second column", async () => {
+    mount();
+    expect(await screen.findByText("Acme AV")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /^Name$/ })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: /display name/i })).toBeNull();
+    const row = screen.getByText("Acme AV").closest("tr")!;
+    expect(within(row).getByText("acme-av")).toBeInTheDocument();
+  });
+});
+
+// The create form's two identity fields are coupled by lib/entities: the label
+// leads, the handle follows it, and a hand-edited handle is the operator's from
+// then on. Vendors used to make the operator type the kebab first, unaided.
+describe("Vendors create form identity", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("derives the handle from the display name until the operator edits the handle", () => {
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: /new vendor/i }));
+    const display = screen.getByLabelText(/^Name/) as HTMLInputElement;
+    const handle = screen.getByLabelText(/^Key/) as HTMLInputElement;
+
+    fireEvent.input(display, { target: { value: "Acme AV" } });
+    expect(handle.value).toBe("acme-av");
+    expect(screen.getByText(/Derived from the name/)).toBeInTheDocument();
+
+    fireEvent.input(handle, { target: { value: "acme" } });
+    fireEvent.input(display, { target: { value: "Acme AV Holdings" } });
+    expect(handle.value).toBe("acme");
+    // And the field says so, so the operator is not left guessing whether it
+    // still follows.
+    expect(screen.queryByText(/Derived from the name/)).toBeNull();
   });
 });

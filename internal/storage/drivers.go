@@ -95,6 +95,9 @@ func (p *PG) GetDriver(ctx context.Context, id string) (*Driver, error) {
 // CreateDriver inserts a custom (official=false) driver and audits it. A
 // duplicate id is ErrTypeExists.
 func (p *PG) CreateDriver(ctx context.Context, actorID string, d Driver) (*Driver, error) {
+	if err := ValidateEntityKey(d.Name); err != nil {
+		return nil, err
+	}
 	d.Official = false
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {

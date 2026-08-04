@@ -70,7 +70,7 @@ func TestAdminSessionsAPI(t *testing.T) {
 		}
 		defer resp.Body.Close()
 		for _, ck := range resp.Cookies() {
-			if ck.Name == "og_session" {
+			if ck.Name == "og-session" {
 				return ck.Value
 			}
 		}
@@ -80,7 +80,7 @@ func TestAdminSessionsAPI(t *testing.T) {
 	meStatus := func(cookie string) int {
 		t.Helper()
 		req, _ := http.NewRequest(http.MethodGet, base+"/api/v1/auth/me", nil)
-		req.AddCookie(&http.Cookie{Name: "og_session", Value: cookie})
+		req.AddCookie(&http.Cookie{Name: "og-session", Value: cookie})
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatalf("me: %v", err)
@@ -245,7 +245,7 @@ func TestAdminRevokeAllAPI(t *testing.T) {
 		}
 		defer resp.Body.Close()
 		for _, ck := range resp.Cookies() {
-			if ck.Name == "og_session" {
+			if ck.Name == "og-session" {
 				return ck.Value
 			}
 		}
@@ -264,7 +264,7 @@ func TestAdminRevokeAllAPI(t *testing.T) {
 	meStatus := func(cookie string) int {
 		t.Helper()
 		req, _ := http.NewRequest(http.MethodGet, base+"/api/v1/auth/me", nil)
-		req.AddCookie(&http.Cookie{Name: "og_session", Value: cookie})
+		req.AddCookie(&http.Cookie{Name: "og-session", Value: cookie})
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatalf("me: %v", err)

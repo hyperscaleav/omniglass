@@ -1,6 +1,7 @@
 import { For, Show, createEffect, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
 import { Plus } from "../components/icons";
@@ -40,10 +41,13 @@ function originBadge(official: boolean): JSX.Element {
     : <span class="badge badge-outline badge-sm">custom</span>;
 }
 
+// The identity column keeps the header word "Key" here: this catalog is a keyspace, so
+// `name` holds a dotted key (icmp.rtt-avg) rather than the kebab segment the rest of the
+// estate addresses rows by. The cell is the shared two-line treatment either way, which
+// is what retires the separate "Label" column.
 const columns: FlatColumn<PropertyRow>[] = [
-  { key: "name", label: "Key", sortVal: (r) => r.name, cell: (r) => <span class="font-data font-semibold">{r.name}</span> },
+  identityColumn<PropertyRow>({ label: "Key" }),
   { key: "data_type", label: "Type", width: "90px", sortVal: (r) => r.data_type, cell: (r) => typeBadge(r.data_type) },
-  { key: "display_name", label: "Label", sortVal: (r) => r.display_name ?? "", cell: (r) => <span>{r.display_name}</span> },
   { key: "kind", label: "Kind", width: "90px", cell: (r) => kindBadge(r.kind) },
   { key: "official", label: "Origin", width: "100px", sortVal: (r) => String(r.official), cell: (r) => originBadge(r.official) },
 ];
@@ -163,7 +167,7 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
             <KVStacked label="Unit" value={<span class="font-data">{r().unit ?? "—"}</span>} />
           </div>
           <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Display name</span>
+            <span class="eyebrow">Name</span>
             <Show when={edit.editing()} fallback={<div class="input input-bordered flex items-center text-sm">{r().display_name}</div>}>
               <input class="input input-bordered w-full" value={displayName()} onInput={(e) => setDisplayName(e.currentTarget.value)} />
             </Show>
@@ -243,15 +247,15 @@ export function CreatePropertyForm(p: { onCreated: (r: PropertyRow) => void }): 
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Key" hint="A lowercase, dot-hierarchied name, e.g. serial_number or interface.reachable.">
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="serial_number" onInput={(e) => setName(e.currentTarget.value)} />
+      <Field label="Key" hint="A lowercase, dot-hierarchied name, e.g. serial-number or interface.reachable.">
+        <input class="input input-bordered w-full font-data" value={name()} placeholder="serial-number" onInput={(e) => setName(e.currentTarget.value)} />
       </Field>
       <Field label="Data type">
         <select class="select select-bordered w-full" value={dataType()} onChange={(e) => setDataType(e.currentTarget.value as PropertyDataType)}>
           <For each={PROPERTY_DATA_TYPES}>{(t) => <option value={t}>{t}</option>}</For>
         </select>
       </Field>
-      <Field label="Display name">
+      <Field label="Name">
         <input class="input input-bordered w-full" value={displayName()} placeholder="Serial number" onInput={(e) => setDisplayName(e.currentTarget.value)} />
       </Field>
       <Field label="Description">

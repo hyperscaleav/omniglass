@@ -1,7 +1,10 @@
 import { Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
+import { createIdentity } from "../lib/entities";
+import { entityLabel } from "../lib/entities";
 import { useFormActions } from "../lib/formactions";
 import { Plus } from "../components/icons";
 import {
@@ -29,8 +32,7 @@ function officialBadge(official: boolean): JSX.Element {
 }
 
 const columns: FlatColumn<Capability>[] = [
-  { key: "name", label: "Name", sortVal: (c) => c.name, cell: (c) => <span class="font-data font-semibold">{c.name}</span> },
-  { key: "display_name", label: "Display name", sortVal: (c) => c.display_name, cell: (c) => <span>{c.display_name}</span> },
+  identityColumn<Capability>(),
   { key: "official", label: "Origin", width: "100px", sortVal: (c) => String(c.official), cell: (c) => officialBadge(c.official) },
 ];
 
@@ -83,7 +85,8 @@ function useCapabilityRow(id: string): () => Capability | undefined {
 
 function CapabilityBladeTitle(p: { id: string }): JSX.Element {
   const row = useCapabilityRow(p.id);
-  return <span class="font-data">{row()?.name ?? p.id}</span>;
+  const r = row();
+  return <span>{r ? entityLabel(r) : p.id}</span>;
 }
 
 function CapabilityBladeBody(p: { id: string }): JSX.Element {
@@ -148,12 +151,12 @@ function CapabilityBladeBody(p: { id: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <KVStacked label="Name" value={<span class="font-data">{r().name}</span>} />
+            <KVStacked label="Key" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Origin" value={officialBadge(r().official)} />
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
           <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Display name</span>
+            <span class="eyebrow">Name</span>
             <Show
               when={edit.editing()}
               fallback={<div class="input input-bordered flex items-center text-sm">{r().display_name}</div>}
@@ -170,12 +173,12 @@ function CapabilityBladeBody(p: { id: string }): JSX.Element {
   );
 }
 
-// CreateCapabilityForm: pick the kebab name (the operator-facing address; the
-// uuid is the database's to mint) and set the display name.
+// CreateCapabilityForm: name the capability and let the kebab address (the
+// operator-facing handle; the uuid is the database's to mint) follow, stopping
+// the moment the operator edits it by hand (lib/entities).
 export function CreateCapabilityForm(p: { onCreated: (c: Capability) => void }): JSX.Element {
   const qc = useQueryClient();
-  const [id, setId] = createSignal("");
-  const [displayName, setDisplayName] = createSignal("");
+  const { display, setDisplay, name, setName, keyDerived } = createIdentity();
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
 
@@ -184,7 +187,9 @@ export function CreateCapabilityForm(p: { onCreated: (c: Capability) => void }):
     submitIcon: Plus,
     submit: () => void submit(),
     busy,
-    disabled: () => !id().trim() || !displayName().trim(),
+    // The API takes both: a capability with no label reads as a bare handle
+    // everywhere it is picked (the product form).
+    disabled: () => !name().trim() || !display().trim(),
   });
 
   async function submit() {
@@ -192,8 +197,8 @@ export function CreateCapabilityForm(p: { onCreated: (c: Capability) => void }):
     setFormErr(null);
     try {
       const created = await createCapability({
-        name: id().trim(),
-        display_name: displayName().trim(),
+        name: name().trim(),
+        display_name: display().trim(),
       });
       await qc.invalidateQueries({ queryKey: CAPABILITIES_KEY });
       p.onCreated(created);
@@ -209,11 +214,11 @@ export function CreateCapabilityForm(p: { onCreated: (c: Capability) => void }):
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Name" hint="A kebab name, e.g. microphone.">
-        <input class="input input-bordered w-full font-data" value={id()} placeholder="microphone" onInput={(e) => setId(e.currentTarget.value)} />
+      <Field label="Name">
+        <input class="input input-bordered w-full" value={display()} placeholder="Microphone" onInput={(e) => setDisplay(e.currentTarget.value)} />
       </Field>
-      <Field label="Display name">
-        <input class="input input-bordered w-full" value={displayName()} placeholder="Microphone" onInput={(e) => setDisplayName(e.currentTarget.value)} />
+      <Field label="Key" hint={keyDerived() ? "Derived from the name. Edit to set your own." : "A kebab name, e.g. microphone."}>
+        <input class="input input-bordered w-full font-data" value={name()} placeholder="microphone" onInput={(e) => setName(e.currentTarget.value)} />
       </Field>
     </form>
   );

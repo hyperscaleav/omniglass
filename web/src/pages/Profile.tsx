@@ -351,7 +351,7 @@ export default function Profile() {
               <p class="mt-1 text-[11px] text-base-content/40">Your sign-in name. An administrator can change it.</p>
             </div>
             <div>
-              <label class="eyebrow mb-1.5 block" for="profile-display-name">Display name</label>
+              <label class="eyebrow mb-1.5 block" for="profile-display-name">Name</label>
               <input
                 id="profile-display-name"
                 type="text"

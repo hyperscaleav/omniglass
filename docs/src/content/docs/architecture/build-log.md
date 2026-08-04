@@ -2270,3 +2270,83 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   unreachable without deleting claims; the acceptance was amended to the measured floor,
   with the no-claim-lost rule outranking the number. The #429 lint suite guarded every
   identifier through both passes.
+
+- **The segment rule reaches every segment-bearing table** (#552). `ValidateEntityName` guarded
+  `component`, `system`, and `location` and nothing else, so seven registries accepted whatever they
+  were handed. The rule now runs on `location_type`, `standard`, `vendor`, `driver`, `capability`,
+  `product`, and `node`, and its vocabulary moved to the settled word: `ValidateSegment`,
+  `ErrInvalidSegment`, `ErrSegmentIsUUID`, in `segment.go`. It also moved into the contract, where
+  API-first wants it: the create bodies carry `pattern` and `maxLength`, so the generated spec,
+  client, CLI, and JSONSchema enforce it too. The rule itself did not change and every seeded row
+  already satisfied it.
+
+  An adversarial review pass caught what the first attempt shipped. Five registries route their
+  errors through one shared `mapTypeErr`, which never learned the new sentinels, so an operator typo
+  returned **500** on `/vendors`, `/drivers`, `/capabilities`, `/standards`, and `/location-types`;
+  only the node path had been taught. `product` had been missed outright, and a uuid-named product is
+  unreachable by its own handle from the moment it is written, because `registryRefCol` routes a
+  uuid-shaped reference to `where id = $1`. Two guards were added rather than two fixes: an API-tier
+  test drives every affected route with nine illegal segments and asserts the operator receives a
+  422, and `TestEveryNamedTableIsClassified` reads the generated schema so a new named table fails
+  the build until somebody classifies it as a segment or a keyspace key. The API-tier test then found
+  a **pre-existing** 500 the review had not: `ErrSegmentIsUUID` was mapped only in the advisory
+  `:check-name` verb, never in the create mappers, so a pasted uuid 500'd on `/components`,
+  `/systems`, and `/locations` before this slice existed.
+
+  Two gaps are recorded rather than closed. No registry patch carries a name field, so the renameable
+  handles ADR-0062 describes are unreachable through any update path ([#555](https://github.com/hyperscaleav/omniglass/issues/555)).
+  And `principal_group` is guarded by a looser pattern (`^[a-z0-9][a-z0-9._-]*$`) that admits `.` and
+  `_`, which the address grammar would read as token separators.
+
+- **One identity cell replaces four column idioms** (#553, #554). A list rendered an entity's identity
+  four different ways depending on the page: separate `Name` and `Display name` columns, `Key` and
+  `Label` columns, one `Name` column with an inline muted segment, or the segment alone. Sixteen
+  hand-written column definitions, and the header word for the same fact differed between them.
+  `IdentityCell` and `identityColumn` state the rule once (label on top, segment beneath, suppressed
+  when equal, no uuid in a list), matching what `TreeList` already rendered. The keyspace pages keep
+  `Key` as their header word and deliberately do not derive, since `icmp.rtt_avg` is a legal key and
+  an illegal segment. On the write side, `createIdentity` had three consumers out of twenty surfaces
+  despite being built for exactly this; every segment-bearing create form now consumes it. The
+  recon that preceded the work corrected the plan: the rule was going to move into `ListShell` and
+  `DetailShell`, but `ListShell` is chrome only, `DetailShell` contains no shell (it exports
+  `RelatedList` and the filename is a leftover), and `Page` has one consumer in the SPA, so the rule
+  had no home to move into and needed a primitive built instead.
+
+- **The detail surfaces caught up with the list** (#553). Unifying the list column exposed that the
+  word "Name" then meant two things two clicks apart: a list column header rendering the label, and a
+  blade fact rendering the kebab address. Seven blades called the address "Name" while the three
+  estate blades already called it "Technical name"; they now all say "Technical name". Five registry
+  blade titles rendered the address in the data face, so an operator clicked a row reading "Crestron"
+  and got a panel titled "crestron"; the title now reads the same rule the row does. A source guard
+  (`identity-vocabulary-guard.test.ts`) pins it, because the failure mode is a new page reaching for
+  the wrong word and the page nobody wrote a test for is the page that drifts. Create forms still
+  label the address "Name", which is the pre-existing convention on every page and is settled by the
+  `display_name` to `name` rename, which moves both words at once.
+
+- **One word for the machine identifier: Key** (#553). The console had settled on `Segment`, which
+  named a part where the whole is not visible: on a vendor form there is no path on screen, so the
+  word was precise for us and meaningless at the point of use. It also hardened a migration artifact
+  into vocabulary, since `Key` and `Segment` were never two concepts but one concept in two states, an
+  entity key already kebab and a keyspace key still snake pending the address grammar.
+
+  `internal/key` had fixed the right doctrine long before this slice and nobody had noticed: a segment
+  is one dot-separated component of a key. So a key is a value and a segment is a position, which
+  makes "segment" correct in prose about topic structure and wrong on a form. The console now says
+  `Key` everywhere, `identity-vocabulary-guard.test.ts` retires `Segment` alongside `Display name` and
+  `Technical name` as label text (matching quoted strings and JSX text only, so a donut chart may keep
+  its segments), and `ValidateSegment` became `ValidateEntityKey` in `entity_key.go`, which no longer
+  collides with the `segment` regex `internal/key` already owned.
+
+  Two key rules remain, deliberately: an entity key is kebab and a keyspace key is snake with an
+  optional dot hierarchy. They are not merged, because each legitimately carries a character the other
+  forbids. The console says `Key` for both, and the differing character set surfaces as a validation
+  message rather than as a second word.
+
+- **Every identity exception is named explicitly** (#552). The key classification guard only inspected
+  tables carrying a `name` column, so it saw 23 of 51 and was blind to every table identified by
+  something else: `human` by a username, `blob` by a sha256, `task` by a content hash. Absence of a
+  `name` is not evidence of absence of an identifier. It now declares one of four identity shapes for
+  every table (key-bearing, keyspace, a human identifier that is not a key, id-only) and fails on a
+  table with none or with more than one, so a new table is a failing test until somebody classifies
+  it. Proved non-vacuous in both directions: removing a table fails, and declaring one twice fails.
+

@@ -1,6 +1,7 @@
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import { identityColumn } from "../components/IdentityCell";
 import Button from "../components/Button";
 import { useFormActions } from "../lib/formactions";
 import { Plus, X } from "../components/icons";
@@ -34,7 +35,12 @@ function propagatesBadge(t: Tag): JSX.Element {
 }
 
 const columns: FlatColumn<Tag>[] = [
-  { key: "name", label: "Key", sortVal: (t) => t.name, cell: (t) => <span class="font-data font-semibold">{t.name}</span> },
+  // The shared identity cell, under the honest header word: a tag's name is a
+  // keyspace key (icmp.rtt-avg is a legal key and an illegal segment), not the
+  // kebab segment every other list heads "Name". A tag carries no display name,
+  // so the cell collapses to the key alone in the data face, which is the same
+  // rule the labelled pages follow rather than an exception to it.
+  identityColumn<Tag>({ label: "Key" }),
   { key: "applies_to", label: "Applies to", width: "220px", sortVal: (t) => appliesToLabel(t.applies_to), cell: (t) => <span class="text-base-content/70">{appliesToLabel(t.applies_to)}</span> },
   { key: "propagates", label: "Binding", width: "120px", sortVal: (t) => String(t.propagates), cell: (t) => propagatesBadge(t) },
 ];

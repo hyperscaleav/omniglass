@@ -62,11 +62,11 @@ func TestReconciliationAPI(t *testing.T) {
 	}
 	// A declared value (want) and an observed value (is) that differ, so the read
 	// reports drift.
-	if _, err := gw.SetProperty(ctx, "", "component", "disp-1", "firmware_version", "", json.RawMessage(`"1.0.0"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "component", "disp-1", "firmware-version", "", json.RawMessage(`"1.0.0"`), all); err != nil {
 		t.Fatalf("set declared: %v", err)
 	}
 	if err := gw.UpsertProperties(ctx, []storage.PropertyUpsert{{
-		OwnerKind: "component", OwnerID: "disp-1", Key: "firmware_version",
+		OwnerKind: "component", OwnerID: "disp-1", Key: "firmware-version",
 		Instance: "", Provenance: "observed", Value: json.RawMessage(`"2.0.0"`), TS: time.Now().UTC(),
 	}}); err != nil {
 		t.Fatalf("upsert observed: %v", err)
@@ -86,16 +86,16 @@ func TestReconciliationAPI(t *testing.T) {
 	}
 	var found bool
 	for _, p := range r.Properties {
-		if p.Property != "firmware_version" {
+		if p.Property != "firmware-version" {
 			continue
 		}
 		found = true
 		if string(p.Want) != `"1.0.0"` || string(p.Is) != `"2.0.0"` || !p.Drift {
-			t.Fatalf("firmware_version pivot: want want=1.0.0 is=2.0.0 drift=true, got %+v", p)
+			t.Fatalf("firmware-version pivot: want want=1.0.0 is=2.0.0 drift=true, got %+v", p)
 		}
 	}
 	if !found {
-		t.Fatalf("firmware_version not in reconciliation: %+v", r.Properties)
+		t.Fatalf("firmware-version not in reconciliation: %+v", r.Properties)
 	}
 
 	// A viewer scoped to a different component gets a non-disclosing 404 on disp-1,

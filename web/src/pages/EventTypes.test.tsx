@@ -37,6 +37,24 @@ describe("Event Types page", () => {
     expect(screen.getByText("cable.unplugged")).toBeTruthy();
   });
 
+  // The identity cell puts the label on the primary line and the key beneath it, in
+  // one cell, which is what makes this catalog read the same as every other list.
+  it("renders the label above the key in a single identity cell", () => {
+    mount();
+    const cell = screen.getByText("call.started").closest("td");
+    expect(cell?.textContent).toContain("Call Started");
+    expect(screen.getAllByText("Call Started")).toHaveLength(1);
+  });
+
+  // The header word stays "Key" because this table's name is a keyspace key
+  // (call.started), not a kebab segment. The separate Label column goes: the cell
+  // already renders the label, so the column only repeated it.
+  it("keeps the Key header and drops the redundant Label column", () => {
+    mount();
+    expect(screen.getByRole("columnheader", { name: "Key" })).toBeTruthy();
+    expect(screen.queryByRole("columnheader", { name: "Label" })).toBeNull();
+  });
+
   it("shows New event type for a caller holding event_type:create", () => {
     mount(admin);
     expect(screen.getByText("New event type")).toBeTruthy();

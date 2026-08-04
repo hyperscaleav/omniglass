@@ -27,7 +27,7 @@ func TestPropertyCRUD(t *testing.T) {
 
 	// Create a custom property.
 	prop, err := gw.CreatePropertyType(ctx, "", storage.PropertyTypeSpec{
-		Name: "rack_unit", DataType: "int", DisplayName: "Rack unit",
+		Name: "rack-unit", DataType: "int", DisplayName: "Rack unit",
 		Validation: json.RawMessage(`{"minimum":1,"maximum":48}`), Description: "U position.",
 	})
 	if err != nil {
@@ -38,7 +38,7 @@ func TestPropertyCRUD(t *testing.T) {
 	}
 
 	// Get it back.
-	got, err := gw.GetPropertyType(ctx, "rack_unit")
+	got, err := gw.GetPropertyType(ctx, "rack-unit")
 	if err != nil || got.DataType != "int" || got.DisplayName != "Rack unit" {
 		t.Fatalf("get: %v (%+v)", err, got)
 	}
@@ -52,21 +52,21 @@ func TestPropertyCRUD(t *testing.T) {
 	for _, pp := range props {
 		names[pp.Name] = true
 	}
-	if !names["rack_unit"] || !names["serial_number"] || !names["icmp.reachable"] {
+	if !names["rack-unit"] || !names["serial-number"] || !names["icmp.reachable"] {
 		t.Fatalf("list missing properties: %v", names)
 	}
 
 	// Update a mutable field.
 	label := "Rack Unit (U)"
-	if _, err := gw.UpdatePropertyType(ctx, "", "rack_unit", storage.PropertyTypePatch{DisplayName: &label}); err != nil {
+	if _, err := gw.UpdatePropertyType(ctx, "", "rack-unit", storage.PropertyTypePatch{DisplayName: &label}); err != nil {
 		t.Fatalf("update: %v", err)
 	}
-	if got, _ := gw.GetPropertyType(ctx, "rack_unit"); got.DisplayName != label {
+	if got, _ := gw.GetPropertyType(ctx, "rack-unit"); got.DisplayName != label {
 		t.Fatalf("update not applied: %q", got.DisplayName)
 	}
 
 	// A duplicate name is ErrPropertyExists.
-	if _, err := gw.CreatePropertyType(ctx, "", storage.PropertyTypeSpec{Name: "rack_unit", DataType: "int"}); !errors.Is(err, storage.ErrPropertyTypeExists) {
+	if _, err := gw.CreatePropertyType(ctx, "", storage.PropertyTypeSpec{Name: "rack-unit", DataType: "int"}); !errors.Is(err, storage.ErrPropertyTypeExists) {
 		t.Fatalf("dup err = %v, want ErrPropertyExists", err)
 	}
 
@@ -76,10 +76,10 @@ func TestPropertyCRUD(t *testing.T) {
 	}
 
 	// Official (seeded) properties are read-only.
-	if _, err := gw.UpdatePropertyType(ctx, "", "serial_number", storage.PropertyTypePatch{DisplayName: &label}); !errors.Is(err, storage.ErrPropertyTypeOfficial) {
+	if _, err := gw.UpdatePropertyType(ctx, "", "serial-number", storage.PropertyTypePatch{DisplayName: &label}); !errors.Is(err, storage.ErrPropertyTypeOfficial) {
 		t.Fatalf("update official err = %v, want ErrPropertyOfficial", err)
 	}
-	if err := gw.DeletePropertyType(ctx, "", "serial_number"); !errors.Is(err, storage.ErrPropertyTypeOfficial) {
+	if err := gw.DeletePropertyType(ctx, "", "serial-number"); !errors.Is(err, storage.ErrPropertyTypeOfficial) {
 		t.Fatalf("delete official err = %v, want ErrPropertyOfficial", err)
 	}
 
@@ -92,10 +92,10 @@ func TestPropertyCRUD(t *testing.T) {
 	}
 
 	// Delete the custom property; a re-delete is ErrPropertyNotFound.
-	if err := gw.DeletePropertyType(ctx, "", "rack_unit"); err != nil {
+	if err := gw.DeletePropertyType(ctx, "", "rack-unit"); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	if err := gw.DeletePropertyType(ctx, "", "rack_unit"); !errors.Is(err, storage.ErrPropertyTypeNotFound) {
+	if err := gw.DeletePropertyType(ctx, "", "rack-unit"); !errors.Is(err, storage.ErrPropertyTypeNotFound) {
 		t.Fatalf("re-delete err = %v, want ErrPropertyNotFound", err)
 	}
 }

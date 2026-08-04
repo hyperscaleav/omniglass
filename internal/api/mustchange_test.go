@@ -64,7 +64,7 @@ func TestForceChangePasswordGate(t *testing.T) {
 	}
 	var session *http.Cookie
 	for _, c := range resp.Cookies() {
-		if c.Name == "og_session" {
+		if c.Name == "og-session" {
 			session = c
 		}
 	}

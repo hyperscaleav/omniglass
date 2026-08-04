@@ -63,6 +63,14 @@ describe("Users page", () => {
     expect(getByText("inactive")).toBeTruthy(); // bob is disabled
   });
 
+  it("shows the username once for a user who has no display name", () => {
+    // bob's username is his whole identity, so printing it as both the label line
+    // and the segment beneath it said the same thing twice. The shared identity
+    // cell suppresses the segment when it equals the label.
+    mount();
+    expect(screen.getAllByText("bob")).toHaveLength(1);
+  });
+
   it("renders an image thumbnail in the name cell for a principal that has an avatar", async () => {
     // A principal with human.has_avatar renders the image (lazily fetched as a data
     // URL) rather than the initials placeholder.
@@ -494,5 +502,42 @@ describe("Users page", () => {
     fireEvent.keyDown(input, { key: "Enter" });
     expect(screen.getByText("ingest-bot")).toBeTruthy();
     expect(queryByText("Alice Ng")).toBeNull();
+  });
+});
+
+// The create form's two identity fields are coupled: an operator types the person's
+// name and the username follows, so the handle constraint stays out of their way.
+// Hand-editing the username ends the coupling, because the handle they sign in with
+// is not something a later relabel should quietly rewrite.
+describe("Users create identity", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const fields = async () => {
+    mount();
+    fireEvent.click(screen.getByText("New user"));
+    const display = (await screen.findByLabelText("Name")) as HTMLInputElement;
+    const username = screen.getByLabelText("Username") as HTMLInputElement;
+    return { display, username };
+  };
+
+  it("derives the username from the display name as it is typed", async () => {
+    const { display, username } = await fields();
+    fireEvent.input(display, { target: { value: "Jordan Rivera" } });
+    await waitFor(() => expect(username.value).toBe("jordan-rivera"));
+  });
+
+  it("stops deriving once the username is edited by hand", async () => {
+    const { display, username } = await fields();
+    fireEvent.input(display, { target: { value: "Jordan Rivera" } });
+    await waitFor(() => expect(username.value).toBe("jordan-rivera"));
+
+    fireEvent.input(username, { target: { value: "jordan" } });
+    fireEvent.input(display, { target: { value: "Jordan Rivera Jr" } });
+
+    await waitFor(() => expect(display.value).toBe("Jordan Rivera Jr"));
+    expect(username.value).toBe("jordan");
+    // And the field stops advertising itself as derived, which is what the
+    // operator actually sees.
+    expect(screen.queryByText(/Derived from the display name/)).toBeNull();
   });
 });

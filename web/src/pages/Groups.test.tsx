@@ -46,8 +46,23 @@ describe("Groups page", () => {
   it("renders a directory row per group with its member and grant counts", () => {
     mount();
     expect(screen.getByText("Help Desk")).toBeTruthy();
-    expect(screen.getByText("help-desk")).toBeTruthy(); // the technical name beside the display name
+    expect(screen.getByText("help-desk")).toBeTruthy(); // the technical name beneath the label
     expect(screen.getByText("Support crew")).toBeTruthy();
+  });
+
+  it("shows a group's name once when it carries no display name", () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...GROUPS_KEY], [{ id: uuidFor("g-bare"), name: "night-ops" } as Group]);
+    qc.setQueryData([...ME_KEY], me);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="*" component={() => <Groups />} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    // The label IS the name, so rendering it twice would be noise.
+    expect(screen.getAllByText("night-ops")).toHaveLength(1);
   });
 
   it("opens read-only with a footer bar; Delete is always there, Edit reveals the member controls", async () => {
@@ -123,7 +138,7 @@ describe("Groups page", () => {
   it("disables Create and shows an inline error for an invalid group name", async () => {
     mount();
     fireEvent.click(screen.getByText("New group"));
-    const name = (await screen.findByLabelText("Name")) as HTMLInputElement;
+    const name = (await screen.findByPlaceholderText("field-crew")) as HTMLInputElement;
     const createBtn = () => screen.getByText("Create group").closest("button") as HTMLButtonElement;
     fireEvent.input(name, { target: { value: "Field Crew" } }); // caps + space
     expect(screen.getByText(/space|capital/i)).toBeTruthy();
@@ -146,7 +161,7 @@ describe("Groups page", () => {
     });
     mount();
     fireEvent.click(screen.getByText("New group"));
-    const name = (await screen.findByLabelText("Name")) as HTMLInputElement;
+    const name = (await screen.findByPlaceholderText("field-crew")) as HTMLInputElement;
     fireEvent.input(name, { target: { value: "field-crew" } });
     fireEvent.click(screen.getByText("Create group"));
     // The new group's blade opens already in edit mode: Save / Cancel and the
@@ -185,5 +200,35 @@ describe("Groups page", () => {
     const userBlade = asides()[1] as HTMLElement;
     fireEvent.click(within(userBlade).getByText("Help Desk"));
     expect(asides().length).toBe(2);
+  });
+});
+
+// The create form leads with the display name and derives the name from it, so an
+// admin types "Field Crew" and never has to invent `field-crew`. These two prove
+// the page is WIRED to lib/entities; the suppression rule itself (a hand-edited
+// name stops following) is asserted in lib/entities.test.ts, because once a test
+// types into an input its DOM value stops tracking the signal.
+describe("Groups create identity", () => {
+  const openCreate = async () => {
+    mount();
+    fireEvent.click(screen.getByText("New group"));
+    const display = (await screen.findByPlaceholderText("Field Crew")) as HTMLInputElement;
+    return { display, name: screen.getByPlaceholderText("field-crew") as HTMLInputElement };
+  };
+
+  it("derives the name as the display name is typed", async () => {
+    const { display, name } = await openCreate();
+    fireEvent.input(display, { target: { value: "Field Crew" } });
+    await waitFor(() => expect(name.value).toBe("field-crew"));
+  });
+
+  it("stops advertising the name as derived once it is edited by hand", async () => {
+    const { display, name } = await openCreate();
+    fireEvent.input(display, { target: { value: "Field Crew" } });
+    await waitFor(() => expect(name.value).toBe("field-crew"));
+
+    fireEvent.input(name, { target: { value: "crew-west" } });
+    expect(screen.getByText(/Globally unique address/)).toBeTruthy();
+    expect(screen.queryByText(/Derived from the display name/)).toBeNull();
   });
 });

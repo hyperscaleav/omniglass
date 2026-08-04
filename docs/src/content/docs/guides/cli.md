@@ -215,7 +215,7 @@ no reveal: the value is shown in the clear.
 
 ```sh
 omniglass variable list                             # the all-scope admin directory
-omniglass variable create --name poll_interval --value-type int \
+omniglass variable create --name poll-interval --value-type int \
   --owner-kind system --owner east-auditorium-av --value 30
 omniglass variable create --name retry --value-type json --owner-kind platform \
   --value '{"retries":3,"backoff":"1s"}'
@@ -380,9 +380,9 @@ settlement verdict.
 
 ```sh
 omniglass command-type list                                         # the command type catalog
-omniglass command-type create --name set_input --target-property-type video.input --settle-window-seconds 15
+omniglass command-type create --name set-input --target-property-type video.input --settle-window-seconds 15
 omniglass command-type get reboot
-omniglass component command issue disp-1 --command-type set_input --value '"hdmi2"'   # needs command:issue
+omniglass component command issue disp-1 --command-type set-input --value '"hdmi2"'   # needs command:issue
 ```
 
 ## Property contracts and values

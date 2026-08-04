@@ -191,11 +191,11 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	}
 	var barModelDefault string
 	if err := conn.QueryRow(ctx, `select default_value #>> '{}' from product_property
-		where product_id = (select id from product where name = 'cisco-room-bar') and property_type_id = (select id from property_type where name = 'model_number')`).Scan(&barModelDefault); err != nil {
-		t.Fatalf("read cisco-room-bar model_number default: %v", err)
+		where product_id = (select id from product where name = 'cisco-room-bar') and property_type_id = (select id from property_type where name = 'model-number')`).Scan(&barModelDefault); err != nil {
+		t.Fatalf("read cisco-room-bar model-number default: %v", err)
 	}
 	if barModelDefault != "Room Bar" {
-		t.Errorf("cisco-room-bar model_number default = %q, want %q", barModelDefault, "Room Bar")
+		t.Errorf("cisco-room-bar model-number default = %q, want %q", barModelDefault, "Room Bar")
 	}
 
 	// Re-running Run keeps the metadata fields, not just the initial insert.

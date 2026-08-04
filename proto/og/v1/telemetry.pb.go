@@ -53,7 +53,7 @@ type TelemetryBatch struct {
 	// persisted in checkpoint 3 (only the typed sample row lands).
 	Labels map[string]string `protobuf:"bytes,4,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// samples is the observations in this batch (a tcp probe carries tcp.open and,
-	// when open, tcp.connect_time).
+	// when open, tcp.connect-time).
 	Samples []*Sample `protobuf:"bytes,5,rep,name=samples,proto3" json:"samples,omitempty"`
 	// raw is the original wire payload, preserved verbatim for replay. Empty for
 	// the inline tcp probe (no protocol payload). Raw-batch persistence is deferred

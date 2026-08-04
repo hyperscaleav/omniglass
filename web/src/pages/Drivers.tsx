@@ -1,8 +1,10 @@
 import { Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
+import { entityLabel } from "../lib/entities";
 import { Plus } from "../components/icons";
 import {
   type Driver,
@@ -13,6 +15,7 @@ import {
   deleteDriver,
 } from "../lib/drivers";
 import { useMe, can } from "../lib/auth";
+import { createIdentity } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
@@ -29,8 +32,7 @@ function officialBadge(official: boolean): JSX.Element {
 }
 
 const columns: FlatColumn<Driver>[] = [
-  { key: "name", label: "Name", sortVal: (d) => d.name, cell: (d) => <span class="font-data font-semibold">{d.name}</span> },
-  { key: "display_name", label: "Display name", sortVal: (d) => d.display_name, cell: (d) => <span>{d.display_name}</span> },
+  identityColumn<Driver>(),
   { key: "version", label: "Version", width: "110px", sortVal: (d) => d.version ?? "", cell: (d) => <span class="font-data text-xs text-base-content/60">{d.version || "—"}</span> },
   { key: "official", label: "Origin", width: "100px", sortVal: (d) => String(d.official), cell: (d) => officialBadge(d.official) },
 ];
@@ -84,7 +86,8 @@ function useDriverRow(id: string): () => Driver | undefined {
 
 function DriverBladeTitle(p: { id: string }): JSX.Element {
   const row = useDriverRow(p.id);
-  return <span class="font-data">{row()?.name ?? p.id}</span>;
+  const r = row();
+  return <span>{r ? entityLabel(r) : p.id}</span>;
 }
 
 function DriverBladeBody(p: { id: string }): JSX.Element {
@@ -152,12 +155,12 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <KVStacked label="Name" value={<span class="font-data">{r().name}</span>} />
+            <KVStacked label="Key" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Origin" value={officialBadge(r().official)} />
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
           <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Display name</span>
+            <span class="eyebrow">Name</span>
             <Show
               when={edit.editing()}
               fallback={<div class="input input-bordered flex items-center text-sm">{r().display_name}</div>}
@@ -183,12 +186,12 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
   );
 }
 
-// CreateDriverForm: pick the kebab name (the operator-facing address; the uuid
-// is the database's to mint) and set the display name; version is optional.
+// CreateDriverForm: type the display name and the kebab name (the operator-facing
+// address; the uuid is the database's to mint) follows it, until the operator
+// takes the name over by hand. Version is optional.
 export function CreateDriverForm(p: { onCreated: (d: Driver) => void }): JSX.Element {
   const qc = useQueryClient();
-  const [id, setId] = createSignal("");
-  const [displayName, setDisplayName] = createSignal("");
+  const { display, setDisplay, name, setName, keyDerived } = createIdentity();
   const [version, setVersion] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
@@ -198,7 +201,7 @@ export function CreateDriverForm(p: { onCreated: (d: Driver) => void }): JSX.Ele
     submitIcon: Plus,
     submit: () => void submit(),
     busy,
-    disabled: () => !id().trim() || !displayName().trim(),
+    disabled: () => !name().trim() || !display().trim(),
   });
 
   async function submit() {
@@ -206,8 +209,8 @@ export function CreateDriverForm(p: { onCreated: (d: Driver) => void }): JSX.Ele
     setFormErr(null);
     try {
       const created = await createDriver({
-        name: id().trim(),
-        display_name: displayName().trim(),
+        name: name().trim(),
+        display_name: display().trim(),
         version: version().trim() || undefined,
       });
       await qc.invalidateQueries({ queryKey: DRIVERS_KEY });
@@ -224,11 +227,11 @@ export function CreateDriverForm(p: { onCreated: (d: Driver) => void }): JSX.Ele
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <Field label="Name" hint="A kebab name, e.g. snmp-generic.">
-        <input class="input input-bordered w-full font-data" value={id()} placeholder="snmp-generic" onInput={(e) => setId(e.currentTarget.value)} />
+      <Field label="Name">
+        <input class="input input-bordered w-full" value={display()} placeholder="Generic SNMP" onInput={(e) => setDisplay(e.currentTarget.value)} />
       </Field>
-      <Field label="Display name">
-        <input class="input input-bordered w-full" value={displayName()} placeholder="Generic SNMP" onInput={(e) => setDisplayName(e.currentTarget.value)} />
+      <Field label="Key" hint={keyDerived() ? "Derived from the name. Edit to set your own." : "A kebab name, e.g. snmp-generic."}>
+        <input class="input input-bordered w-full font-data" value={name()} placeholder="snmp-generic" onInput={(e) => setName(e.currentTarget.value)} />
       </Field>
       <Field label="Version" hint="A version string, e.g. 1.0.0. Optional.">
         <input class="input input-bordered w-full font-data" value={version()} placeholder="1.0.0" onInput={(e) => setVersion(e.currentTarget.value)} />

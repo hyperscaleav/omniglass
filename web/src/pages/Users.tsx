@@ -5,6 +5,8 @@ import FlatList, { type FlatColumn } from "../components/FlatList";
 import { useFormActions } from "../lib/formactions";
 import PasswordField from "../components/PasswordField";
 import { type Principal, PRINCIPALS_KEY, listPrincipals, createPrincipal, openPrincipalInEdit, principalName, kindBadge } from "../lib/principals";
+import { identityColumn } from "../components/IdentityCell";
+import { createIdentity, type Labelled } from "../lib/entities";
 import UserAvatar from "../components/UserAvatar";
 import { identityRegistry } from "../lib/identityBlades";
 import { useMe, can } from "../lib/auth";
@@ -27,19 +29,30 @@ const filterKeys: FilterKey<Principal>[] = [
   { key: "username", type: "string", hint: "substring", get: (p) => p.human?.username ?? "" },
 ];
 
-// The directory columns. Name carries the avatar initials + display name + username;
+// A principal wears the two identities the console labels everything by, under its
+// own field names: the username is the segment (what the API, the CLI, and the sign-in
+// prompt address a human by) and the display name is the label. A service account has
+// only its label, so that stands as the segment and nothing sits beneath it.
+const principalIdentity = (p: Principal): Labelled => ({
+  name: p.human?.username ?? p.service?.label ?? p.kind,
+  display_name: p.human?.display_name,
+});
+
+const identity = identityColumn<Labelled>();
+
+// The directory columns. Name carries the avatar plus the shared identity cell;
 // Kind the human/service badge (with an inactive marker); Grants the grant count;
 // Groups the badges of the groups the principal belongs to.
 const columns: FlatColumn<Principal>[] = [
   {
-    key: "name", label: "Name", sortVal: (p) => principalName(p).toLowerCase(),
-    cell: (p) => (
+    ...identity,
+    // The avatar is a principal's own identity cue and stays; the two lines beside
+    // it are the shared cell, read through the adapter above.
+    sortVal: (p: Principal) => identity.sortVal(principalIdentity(p)),
+    cell: (p: Principal) => (
       <div class="flex items-center gap-2.5">
         <UserAvatar principal={p} size="w-7" textClass="text-[10px]" />
-        <div class="min-w-0 leading-tight">
-          <div class="truncate text-sm font-medium">{principalName(p)}</div>
-          <Show when={p.human}><div class="truncate font-data text-[11px] text-base-content/40">{p.human!.username}</div></Show>
-        </div>
+        {identity.cell(principalIdentity(p))}
       </div>
     ),
   },
@@ -110,14 +123,17 @@ export default function Users() {
   );
 }
 
-// CreateUserForm is the new-human form the create Drawer hosts: username (required),
-// display name, email, and an optional initial password (min 8) the user changes
-// after signing in. On success it invalidates the directory and hands the created
-// principal to onCreated, which opens its detail blade (closing this Drawer).
+// CreateUserForm is the new-human form the create Drawer hosts: display name and
+// username (required), email, and an optional initial password (min 8) the user
+// changes after signing in. On success it invalidates the directory and hands the
+// created principal to onCreated, which opens its detail blade (closing this Drawer).
+//
+// The two identity fields are the shared coupling: the display name leads and the
+// username derives from it, so an operator types "Jordan Rivera" without meeting the
+// handle character class, and the moment they edit the username it is theirs.
 function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) => void }) {
   const qc = useQueryClient();
-  const [username, setUsername] = createSignal("");
-  const [displayName, setDisplayName] = createSignal("");
+  const { display, name: username, keyDerived, setDisplay, setName: setUsername } = createIdentity();
   const [email, setEmail] = createSignal("");
   const [password, setPassword] = createSignal("");
   const [busy, setBusy] = createSignal(false);
@@ -142,7 +158,7 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
     try {
       const created = await createPrincipal({
         username: username().trim(),
-        display_name: displayName().trim() || undefined,
+        display_name: display().trim() || undefined,
         email: email().trim() || undefined,
         password: password() || undefined,
       });
@@ -168,13 +184,15 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
       <div>
-        <label class="eyebrow mb-1.5 block" for="new-username">Username</label>
-        <input id="new-username" autocomplete="off" class="input input-bordered w-full font-data" classList={{ "input-error": !!handleError(username()) }} value={username()} placeholder="jordan" onInput={(e) => setUsername(e.currentTarget.value)} disabled={busy()} required />
-        <Show when={handleError(username())}>{(msg) => <p class="mt-1 text-[11px] text-error">{msg()}</p>}</Show>
+        <label class="eyebrow mb-1.5 block" for="new-display">Name</label>
+        <input id="new-display" autocomplete="off" class="input input-bordered w-full" value={display()} placeholder="Jordan Rivera" onInput={(e) => setDisplay(e.currentTarget.value)} disabled={busy()} />
       </div>
       <div>
-        <label class="eyebrow mb-1.5 block" for="new-display">Display name</label>
-        <input id="new-display" autocomplete="off" class="input input-bordered w-full" value={displayName()} placeholder="Jordan Rivera" onInput={(e) => setDisplayName(e.currentTarget.value)} disabled={busy()} />
+        <label class="eyebrow mb-1.5 block" for="new-username">Username</label>
+        <input id="new-username" autocomplete="off" class="input input-bordered w-full font-data" classList={{ "input-error": !!handleError(username()) }} value={username()} placeholder="jordan" onInput={(e) => setUsername(e.currentTarget.value)} disabled={busy()} required />
+        <Show when={handleError(username())} fallback={<p class="mt-1 text-[11px] text-base-content/40">{keyDerived() ? "Derived from the name. Edit to set your own." : "What they sign in with."}</p>}>
+          {(msg) => <p class="mt-1 text-[11px] text-error">{msg()}</p>}
+        </Show>
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-email">Email</label>

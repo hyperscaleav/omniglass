@@ -130,6 +130,35 @@ describe("Standards page", () => {
     expect(await screen.findByText("Create standard")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("meeting-room")).toBeInTheDocument();
   });
+
+  // One Name column carries both identities (components/IdentityCell), so the
+  // catalog reads the same way as every other list rather than spending a second
+  // column on the fact.
+  it("carries both identities in one Name column, and no retired second column", async () => {
+    mount();
+    await screen.findByText("Huddle space");
+    const heads = Array.from(document.querySelectorAll("thead th")).map((th) => th.textContent?.trim());
+    expect(heads).toEqual(["Name", "Variant of", "Origin", ""]);
+    const cell = screen.getByText("Huddle space").closest("td")!;
+    expect(within(cell).getByText("huddle-space")).toBeInTheDocument();
+  });
+
+  // The handle follows the display name until the operator claims it, so a
+  // standard gets a valid kebab address without anyone thinking about the
+  // character class (lib/entities).
+  it("derives the handle from the display name until the operator edits it", async () => {
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: /new standard/i }));
+    const display = (await screen.findByPlaceholderText("Meeting room")) as HTMLInputElement;
+    const handle = screen.getByPlaceholderText("meeting-room") as HTMLInputElement;
+
+    fireEvent.input(display, { target: { value: "Huddle Space" } });
+    expect(handle.value).toBe("huddle-space");
+
+    fireEvent.input(handle, { target: { value: "huddle" } });
+    fireEvent.input(display, { target: { value: "Huddle Space Two" } });
+    expect(handle.value).toBe("huddle");
+  });
 });
 
 // The catalog addresses rows by the kebab handle (ADR-0062): the first column

@@ -39,7 +39,7 @@ differ in what they are keyed to and what lifecycle they carry:
 | keyed by | a canonical signal (`property_type`) | its own `secret_type` shape name | an org config key (cascade namespace) |
 | has an observed side? | yes, a sample via a get function | its **validity**, not the secret value | no |
 | lifecycle | drift → reconcile (a set function) | refresh + rotation + expiry (deferred) | none; resolved and interpolated |
-| example | `video.input = HDMI1` | an `snmp-community`, a `basic-auth` | `poll_interval = 30s`, a base URL, a label |
+| example | `video.input = HDMI1` | an `snmp-community`, a `basic-auth` | `poll-interval = 30s`, a base URL, a label |
 
 The common thread is the cascade and an exclusive-arc scope (exactly one of
 `platform | template | location | system | component`): the same exclusive-arc ownership as samples,

@@ -9,9 +9,9 @@ import { ME_KEY, type Me } from "../lib/auth";
 // Official types are read-only; a custom type is writable only when the caller holds
 // command_type:create / command_type:update. Data is seeded into the query cache.
 const seed: CommandTypeRow[] = [
-  { name: "set_input", display_name: "Set input", target_property_type: "video.input", settle_window_seconds: 15, official: true },
+  { name: "set-input", display_name: "Set input", target_property_type: "video.input", settle_window_seconds: 15, official: true },
   { name: "reboot", display_name: "Reboot", settle_window_seconds: 0, official: true },
-  { name: "set_volume", display_name: "Set volume", target_property_type: "audio.level", settle_window_seconds: 5, official: false },
+  { name: "set-volume", display_name: "Set volume", target_property_type: "audio.level", settle_window_seconds: 5, official: false },
 ];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
@@ -33,11 +33,23 @@ describe("Command Types page", () => {
 
   it("lists the seeded command types with their target and settle window", () => {
     mount();
-    expect(screen.getByText("set_input")).toBeTruthy();
+    expect(screen.getByText("set-input")).toBeTruthy();
     expect(screen.getByText("reboot")).toBeTruthy();
     expect(screen.getByText("video.input")).toBeTruthy();
     // reboot is fire-and-forget (no target).
     expect(screen.getByText("fire-and-forget")).toBeTruthy();
+  });
+
+  // One identity column carries both identities, so the separate label column is
+  // gone. The header stays "Key" because this catalog stores a keyspace key
+  // (set-input, icmp.rtt-avg), which is not the kebab segment other entities use.
+  it("carries the label and the key in a single Key column", () => {
+    mount();
+    const headers = screen.getAllByRole("columnheader").map((h) => h.textContent?.trim());
+    expect(headers).toContain("Key");
+    expect(headers).not.toContain("Label");
+    expect(screen.getByText("Set input")).toBeTruthy();
+    expect(screen.getByText("set-input")).toBeTruthy();
   });
 
   it("shows New command type for a caller holding command_type:create", () => {

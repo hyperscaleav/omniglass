@@ -54,7 +54,7 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 		t.Fatalf("sub-product: %v", err)
 	}
 	if _, err := gw.SetProductProperty(ctx, "", "acme-bar", storage.ProductPropertySpec{
-		PropertyTypeName: "serial_number", Required: true}); err != nil {
+		PropertyTypeName: "serial-number", Required: true}); err != nil {
 		t.Fatalf("property: %v", err)
 	}
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
@@ -97,8 +97,8 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list properties: %v", err)
 	}
-	if len(props) != 1 || props[0].PropertyTypeName != "serial_number" {
-		t.Errorf("contract = %v, want serial_number still declared", props)
+	if len(props) != 1 || props[0].PropertyTypeName != "serial-number" {
+		t.Errorf("contract = %v, want serial-number still declared", props)
 	}
 	comp, err := gw.GetComponent(ctx, "bar-1", all)
 	if err != nil {
@@ -144,17 +144,17 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 	// Slice 3: a property rename follows its contract line, a declared value, AND
 	// a telemetry series, since the telemetry key is now a real foreign key.
 	if _, err := gw.SetProductProperty(ctx, "", "acme-soundbar", storage.ProductPropertySpec{
-		PropertyTypeName: "serial_number", Required: true}); err != nil {
+		PropertyTypeName: "serial-number", Required: true}); err != nil {
 		t.Fatalf("contract: %v", err)
 	}
-	if _, err := gw.SetProperty(ctx, "", "component", "bar-1", "serial_number", "", []byte(`"SN-1"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "component", "bar-1", "serial-number", "", []byte(`"SN-1"`), all); err != nil {
 		t.Fatalf("value: %v", err)
 	}
 	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{{
 		OwnerKind: "component", OwnerID: "bar-1", Key: "tcp.open", Value: 1, Source: "test"}}); err != nil {
 		t.Fatalf("sample: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `update property_type set name = 'serial_no' where name = 'serial_number'`); err != nil {
+	if _, err := conn.Exec(ctx, `update property_type set name = 'serial_no' where name = 'serial-number'`); err != nil {
 		t.Fatalf("rename property: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `update property_type set name = 'tcp.reachable' where name = 'tcp.open'`); err != nil {
