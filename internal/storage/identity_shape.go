@@ -37,7 +37,7 @@ const (
 	// ShapeHumanNotAKey: it carries a human-readable identifier that is NOT a name in
 	// the triad sense and must never acquire the name rule. Each looks name-shaped
 	// from a distance: a username, a filename, a content hash.
-	ShapeHumanNotAKey IdentityShape = "human identifier, not a key"
+	ShapeHumanNotAKey IdentityShape = "human identifier, not a name"
 
 	// ShapeIDOnly: nobody names it, so it is addressed by uuid. A join row and a
 	// telemetry row: an operator names the component, not the metric.

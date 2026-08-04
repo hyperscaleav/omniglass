@@ -15,7 +15,7 @@
     },
     {
       "table": "blob",
-      "shape": "human identifier, not a key",
+      "shape": "human identifier, not a name",
       "reason": "content-addressed by sha256, for the same reason"
     },
     {
@@ -58,12 +58,12 @@
     },
     {
       "table": "file",
-      "shape": "human identifier, not a key",
+      "shape": "human identifier, not a name",
       "reason": "a filename with an extension (codec-firmware-2.1.4.txt): not unique, already the label, and addressed by uuid"
     },
     {
       "table": "human",
-      "shape": "human identifier, not a key",
+      "shape": "human identifier, not a name",
       "reason": "a username: its own rule, its own uniqueness, and not an address, since a principal is addressed by uuid"
     },
     {
@@ -205,7 +205,7 @@
     },
     {
       "table": "task",
-      "shape": "human identifier, not a key",
+      "shape": "human identifier, not a name",
       "reason": "content-addressed, the id IS hash(interface, kind, schedule, params), so a key would be a second identity for the same row"
     },
     {
