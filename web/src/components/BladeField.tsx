@@ -99,13 +99,19 @@ export default function BladeField(props: BladeFieldProps): JSX.Element {
           label={label()}
           mono={props.mono}
           value={
-            <Show when={props.read !== undefined} fallback={
-              <Show when={text() !== ""} fallback={<span class="text-base-content/40">{EMPTY_VALUE}</span>}>
-                <span class={wrapClass()}>{text()}</span>
+            // The wrap treatment sits on the OUTER node, so it reaches a custom
+            // `read` render too. Putting it only on the plain-text branch would
+            // leave a free-text field with a custom render able to run off the
+            // panel again, which is the defect this component exists to end.
+            <span class={wrapClass()}>
+              <Show when={props.read !== undefined} fallback={
+                <Show when={text() !== ""} fallback={<span class="text-base-content/40">{EMPTY_VALUE}</span>}>
+                  {text()}
+                </Show>
+              }>
+                {props.read}
               </Show>
-            }>
-              {props.read}
-            </Show>
+            </span>
           }
         />
       }
