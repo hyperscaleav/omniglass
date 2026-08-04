@@ -199,7 +199,7 @@ type StandardPatch struct {
 // CreateStandard inserts a custom (official=false) standard and audits it. A
 // duplicate id is ErrTypeExists; an unknown parent is ErrParentStandardNotFound.
 func (p *PG) CreateStandard(ctx context.Context, actorID string, st Standard) (*Standard, error) {
-	if err := ValidateSegment(st.Name); err != nil {
+	if err := ValidateEntityKey(st.Name); err != nil {
 		return nil, err
 	}
 	st.Official = false
@@ -349,7 +349,7 @@ func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, 
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := ValidateSegment(spec.Name); err != nil {
+	if err := ValidateEntityKey(spec.Name); err != nil {
 		return nil, err
 	}
 
@@ -461,7 +461,7 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 		return nil, err
 	}
 	if patch.Name != nil {
-		if err := ValidateSegment(*patch.Name); err != nil {
+		if err := ValidateEntityKey(*patch.Name); err != nil {
 			return nil, err
 		}
 	}

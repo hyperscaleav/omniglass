@@ -65,15 +65,15 @@ func TestRenameLocation(t *testing.T) {
 		t.Fatalf("dup rename err = %v, want ErrLocationExists", err)
 	}
 
-	// Bad slug -> ErrInvalidSegment (before touching the DB).
+	// Bad slug -> ErrInvalidEntityKey (before touching the DB).
 	bad := "Bad Name"
-	if _, err := gw.UpdateLocation(ctx, "", "hq-root-renamed", storage.LocationPatch{Name: &bad}, all, all); !errors.Is(err, storage.ErrInvalidSegment) {
-		t.Fatalf("bad-format rename err = %v, want ErrInvalidSegment", err)
+	if _, err := gw.UpdateLocation(ctx, "", "hq-root-renamed", storage.LocationPatch{Name: &bad}, all, all); !errors.Is(err, storage.ErrInvalidEntityKey) {
+		t.Fatalf("bad-format rename err = %v, want ErrInvalidEntityKey", err)
 	}
 
 	// Create-tightening: the shared validator gates create too, not just rename.
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "Bad Name", LocationType: "campus"}, all); !errors.Is(err, storage.ErrInvalidSegment) {
-		t.Fatalf("bad-format create err = %v, want ErrInvalidSegment", err)
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "Bad Name", LocationType: "campus"}, all); !errors.Is(err, storage.ErrInvalidEntityKey) {
+		t.Fatalf("bad-format create err = %v, want ErrInvalidEntityKey", err)
 	}
 
 	// LocationNameTaken is scope-blind existence.

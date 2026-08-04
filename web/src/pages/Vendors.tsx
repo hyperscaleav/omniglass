@@ -189,7 +189,7 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <KVStacked label="Segment" value={<span class="font-data">{r().name}</span>} />
+            <KVStacked label="Key" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Origin" value={officialBadge(r().official)} />
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
@@ -315,7 +315,7 @@ export function CreateVendorForm(p: { onCreated: (v: Vendor) => void }): JSX.Ele
         <input class="input input-bordered w-full" value={display()} placeholder="Crestron" onInput={(e) => setDisplay(e.currentTarget.value)} />
       </Field>
       <Field
-        label="Segment"
+        label="Key"
         hint={keyDerived() ? "Derived from the name. Edit to set your own." : "A kebab name, the address the API and CLI accept."}
       >
         <input class="input input-bordered w-full font-data" value={name()} placeholder="crestron" onInput={(e) => setName(e.currentTarget.value)} />

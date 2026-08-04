@@ -287,11 +287,11 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Description: "Reports whether a proposed technical name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.",
 	}, "location", "update"), func(ctx context.Context, in *checkNameInput) (*checkNameOutput, error) {
 		out := &checkNameOutput{}
-		if err := storage.ValidateSegment(in.Body.Name); err != nil {
+		if err := storage.ValidateEntityKey(in.Body.Name); err != nil {
 			out.Body.Valid = false
 			// A uuid passes the slug rule, so the generic reason would describe
 			// exactly what the operator typed and explain nothing.
-			if errors.Is(err, storage.ErrSegmentIsUUID) {
+			if errors.Is(err, storage.ErrEntityKeyIsUUID) {
 				out.Body.Reason = "A name cannot be a uuid: that form is reserved for an entity's id."
 			} else {
 				out.Body.Reason = "Use lowercase letters, digits, and hyphens."
@@ -355,9 +355,9 @@ func mapLocationErr(err error) error {
 		return huma.Error409Conflict("location has child locations")
 	case errors.Is(err, storage.ErrLocationExists):
 		return huma.Error409Conflict("location name already exists")
-	case errors.Is(err, storage.ErrSegmentIsUUID):
+	case errors.Is(err, storage.ErrEntityKeyIsUUID):
 		return huma.Error422UnprocessableEntity("location name may not be a uuid: that form is reserved for an entity's id")
-	case errors.Is(err, storage.ErrInvalidSegment):
+	case errors.Is(err, storage.ErrInvalidEntityKey):
 		return huma.Error422UnprocessableEntity("invalid name")
 	case errors.Is(err, storage.ErrParentNotFound):
 		return huma.Error422UnprocessableEntity("parent location not found")

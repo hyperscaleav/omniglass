@@ -146,7 +146,7 @@ describe("Vendors create form identity", () => {
     mount();
     fireEvent.click(screen.getByRole("button", { name: /new vendor/i }));
     const display = screen.getByLabelText(/^Name/) as HTMLInputElement;
-    const handle = screen.getByLabelText(/^Segment/) as HTMLInputElement;
+    const handle = screen.getByLabelText(/^Key/) as HTMLInputElement;
 
     fireEvent.input(display, { target: { value: "Acme AV" } });
     expect(handle.value).toBe("acme-av");

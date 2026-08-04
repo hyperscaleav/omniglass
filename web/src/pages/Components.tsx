@@ -222,7 +222,7 @@ export default function Components() {
             when={editing()}
             fallback={
               <div class="grid grid-cols-2 gap-5">
-                {ctx.fact("Segment", <span class="font-data text-sm">{n().raw.name}</span>)}
+                {ctx.fact("Key", <span class="font-data text-sm">{n().raw.name}</span>)}
                 {ctx.fact("ID", <span class="font-data text-xs text-base-content/50">{n().raw.id}</span>)}
               </div>
             }
@@ -230,7 +230,7 @@ export default function Components() {
             <div class="flex flex-col gap-3">
               {ctx.field("Name", <input class="input input-bordered w-full" value={display()} placeholder="Ceiling Mic 2" onInput={(e) => setDisplay(e.currentTarget.value)} />)}
               {ctx.field(
-                "Segment",
+                "Key",
                 <>
                   <div class="join w-full">
                     <input
@@ -415,7 +415,7 @@ export default function Components() {
           <span class="eyebrow">Identity</span>
           <div class="flex flex-col gap-3">
             {field("Name", <input class="input input-bordered w-full" value={display()} placeholder="Ceiling Mic 2" onInput={(e) => setDisplay(e.currentTarget.value)} />, "What an operator reads. Optional.")}
-            {field("Segment", <input class="input input-bordered w-full font-data" value={name()} placeholder="mic-2" onInput={(e) => setName(e.currentTarget.value)} />, () => (keyDerived() ? "Derived from the name. Edit to set your own." : "Globally unique address, used by the API and CLI."))}
+            {field("Key", <input class="input input-bordered w-full font-data" value={name()} placeholder="mic-2" onInput={(e) => setName(e.currentTarget.value)} />, () => (keyDerived() ? "Derived from the name. Edit to set your own." : "Globally unique address, used by the API and CLI."))}
           </div>
         </div>
 

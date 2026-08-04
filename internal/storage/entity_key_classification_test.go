@@ -8,7 +8,7 @@ import (
 )
 
 // Six tables went unvalidated for as long as they did because the only thing
-// listing which tables carry a segment was a set of hand-written call sites. A
+// listing which tables carry a key was a set of hand-written call sites. A
 // table added later joined no list and tripped no test, so it simply never
 // acquired the rule.
 //
@@ -19,16 +19,16 @@ import (
 // says which bucket it is in. The decision stops being implicit.
 //
 // The two buckets are not stylistic. A segment is one token of an address, so it
-// takes the segment rule and gets `$`, `.`, `*`, and `>` refused. A keyspace key
+// takes the key rule and gets `$`, `.`, `*`, and `>` refused. A keyspace key
 // is a namespaced identifier referenced from drivers, templates, and expressions,
 // so it keeps its own character set: `icmp.rtt_avg` is a legitimate key and an
-// illegal segment, and running the segment rule over the key tables would reject
+// illegal key, and running the key rule over the key tables would reject
 // data the seed corpus ships today.
 var (
-	// segmentBearing: `name` is the token this entity contributes to an address.
-	// Every one of these must reject an illegal segment on its create path; the
-	// behaviour is proved by TestEverySegmentBearingTableValidates.
-	segmentBearing = map[string]bool{
+	// keyBearing: `name` is the token this entity contributes to an address.
+	// Every one of these must reject an illegal key on its create path; the
+	// behaviour is proved by TestEveryKeyBearingTableValidates.
+	keyBearing = map[string]bool{
 		"capability":      true,
 		"component":       true,
 		"driver":          true,
@@ -89,7 +89,7 @@ func TestEveryNamedTableIsClassified(t *testing.T) {
 				continue
 			}
 			named = append(named, table)
-			_, isSeg := segmentBearing[table]
+			_, isSeg := keyBearing[table]
 			_, isKey := keyspaceOrOther[table]
 			switch {
 			case isSeg && isKey:
@@ -106,12 +106,12 @@ func TestEveryNamedTableIsClassified(t *testing.T) {
 		t.Fatal("found no table with a name column, which means this guard is not reading the schema it thinks it is")
 	}
 	for _, table := range both {
-		t.Errorf("%q is in BOTH segmentBearing and keyspaceOrOther; it is one or the other", table)
+		t.Errorf("%q is in BOTH keyBearing and keyspaceOrOther; it is one or the other", table)
 	}
 	for _, table := range unclassified {
-		t.Errorf("%q carries a `name` column and is in neither segmentBearing nor keyspaceOrOther.\n"+
-			"Decide which it is. If the name is one token of an address, add it to segmentBearing "+
-			"AND give its create path a ValidateSegment call (and a case in this package's create "+
+		t.Errorf("%q carries a `name` column and is in neither keyBearing nor keyspaceOrOther.\n"+
+			"Decide which it is. If the name is one token of an address, add it to keyBearing "+
+			"AND give its create path a ValidateEntityKey call (and a case in this package's create "+
 			"map, so the behaviour is proved). If it is a namespaced key referenced from drivers, "+
 			"templates, or expressions, add it to keyspaceOrOther with the reason.", table)
 	}
@@ -122,9 +122,9 @@ func TestEveryNamedTableIsClassified(t *testing.T) {
 	for _, table := range named {
 		live[table] = true
 	}
-	for table := range segmentBearing {
+	for table := range keyBearing {
 		if !live[table] {
-			t.Errorf("segmentBearing lists %q, which has no `name` column in the generated schema", table)
+			t.Errorf("keyBearing lists %q, which has no `name` column in the generated schema", table)
 		}
 	}
 	for table := range keyspaceOrOther {

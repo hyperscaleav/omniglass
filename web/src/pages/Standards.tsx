@@ -166,7 +166,7 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <KVStacked label="Segment" value={<span class="font-data">{r().name}</span>} />
+            <KVStacked label="Key" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Origin" value={officialBadge(r().official)} />
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
@@ -246,7 +246,7 @@ export function CreateStandardForm(p: { onCreated: (s: Standard) => void }): JSX
       <Field label="Name" hint="What an operator reads.">
         <input class="input input-bordered w-full" value={display()} placeholder="Meeting room" onInput={(e) => setDisplay(e.currentTarget.value)} />
       </Field>
-      <Field label="Segment" hint={keyDerived() ? "Derived from the name. Edit to set your own." : "A kebab name, e.g. meeting-room."}>
+      <Field label="Key" hint={keyDerived() ? "Derived from the name. Edit to set your own." : "A kebab name, e.g. meeting-room."}>
         <input class="input input-bordered w-full font-data" value={name()} placeholder="meeting-room" onInput={(e) => setName(e.currentTarget.value)} />
       </Field>
       <Field label="Variant of" hint="A standard this one specializes. Optional.">

@@ -151,7 +151,7 @@ function CapabilityBladeBody(p: { id: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <KVStacked label="Segment" value={<span class="font-data">{r().name}</span>} />
+            <KVStacked label="Key" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Origin" value={officialBadge(r().official)} />
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
@@ -217,7 +217,7 @@ export function CreateCapabilityForm(p: { onCreated: (c: Capability) => void }):
       <Field label="Name">
         <input class="input input-bordered w-full" value={display()} placeholder="Microphone" onInput={(e) => setDisplay(e.currentTarget.value)} />
       </Field>
-      <Field label="Segment" hint={keyDerived() ? "Derived from the name. Edit to set your own." : "A kebab name, e.g. microphone."}>
+      <Field label="Key" hint={keyDerived() ? "Derived from the name. Edit to set your own." : "A kebab name, e.g. microphone."}>
         <input class="input input-bordered w-full font-data" value={name()} placeholder="microphone" onInput={(e) => setName(e.currentTarget.value)} />
       </Field>
     </form>

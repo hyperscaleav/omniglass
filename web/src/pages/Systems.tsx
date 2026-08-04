@@ -218,7 +218,7 @@ export default function Systems() {
                     ? <span class="badge badge-ghost badge-sm">{n().standard}</span>
                     : <span class="text-sm text-base-content/50">None (a one-off system)</span>,
                 )}
-                {ctx.fact("Segment", <span class="font-data text-sm">{n().raw.name}</span>)}
+                {ctx.fact("Key", <span class="font-data text-sm">{n().raw.name}</span>)}
               </div>
             }
           >
@@ -233,7 +233,7 @@ export default function Systems() {
                 "The blueprint this system conforms to; its contract declares the properties below.",
               )}
               {ctx.field(
-                "Segment",
+                "Key",
                 <>
                   <div class="join w-full">
                     <input
@@ -401,7 +401,7 @@ export default function Systems() {
           <span class="eyebrow">Identity</span>
           <div class="flex flex-col gap-3">
             {field("Name", <input class="input input-bordered w-full" value={display()} placeholder="Executive Boardroom" onInput={(e) => setDisplay(e.currentTarget.value)} />, "What an operator reads. Optional.")}
-            {field("Segment", <input class="input input-bordered w-full font-data" value={name()} placeholder="exec-boardroom" onInput={(e) => setName(e.currentTarget.value)} />, () => (keyDerived() ? "Derived from the name. Edit to set your own." : "Globally unique address, used by the API and CLI."))}
+            {field("Key", <input class="input input-bordered w-full font-data" value={name()} placeholder="exec-boardroom" onInput={(e) => setName(e.currentTarget.value)} />, () => (keyDerived() ? "Derived from the name. Edit to set your own." : "Globally unique address, used by the API and CLI."))}
             {field(
               "Standard",
               <select class="select select-bordered w-full" value={standard()} onChange={(e) => setStandard(e.currentTarget.value)}>

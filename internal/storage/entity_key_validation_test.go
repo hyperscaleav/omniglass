@@ -13,7 +13,7 @@ import (
 // A segment is the one token an entity contributes to every address that passes
 // through it, and the rule for it (`^[a-z0-9][a-z0-9-]*$`, uuid refused) has only
 // ever been enforced on component, system, and location. Every other
-// segment-bearing table took whatever it was handed.
+// key-bearing table took whatever it was handed.
 //
 // That gap is load-bearing, not cosmetic. The address grammar (#549) uses `$` as
 // its accessor sigil precisely BECAUSE `$` cannot appear in a segment, so
@@ -23,7 +23,7 @@ import (
 //
 // This test is the enforcement. Each case creates through the real gateway with a
 // segment the rule forbids and requires a refusal.
-func TestEverySegmentBearingTableValidates(t *testing.T) {
+func TestEveryKeyBearingTableValidates(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
@@ -36,7 +36,7 @@ func TestEverySegmentBearingTableValidates(t *testing.T) {
 	}
 
 	// Each entry creates one entity with the given segment and returns the error.
-	// A nil error means the table accepted an illegal segment.
+	// A nil error means the table accepted an illegal key.
 	creates := map[string]func(seg string) error{
 		"component": func(s string) error {
 			_, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: s}, all)
@@ -80,12 +80,12 @@ func TestEverySegmentBearingTableValidates(t *testing.T) {
 		},
 	}
 
-	// Every one of these violates the segment rule, and each fails for a reason a
+	// Every one of these violates the key rule, and each fails for a reason a
 	// caller might otherwise talk themselves into allowing.
 	bad := map[string]string{
 		"the accessor sigil": "bad$seg",
-		"a dot, which would split one segment into two path tokens": "bad.seg",
-		"an underscore, legal in a keyspace key but not a segment":  "bad_seg",
+		"a dot, which would split one key into two path tokens":    "bad.seg",
+		"an underscore, legal in a keyspace key but not a segment": "bad_seg",
 		"uppercase":                  "BadSeg",
 		"a leading hyphen":           "-badseg",
 		"whitespace":                 "bad seg",
@@ -99,11 +99,11 @@ func TestEverySegmentBearingTableValidates(t *testing.T) {
 			t.Run(table+"/"+why, func(t *testing.T) {
 				err := create(seg)
 				if err == nil {
-					t.Fatalf("%s accepted the segment %q (%s); every segment-bearing table "+
+					t.Fatalf("%s accepted the key %q (%s); every key-bearing table "+
 						"must refuse it, or the address grammar's `$` sigil is not safe", table, seg, why)
 				}
-				if !errors.Is(err, storage.ErrInvalidSegment) && !errors.Is(err, storage.ErrSegmentIsUUID) {
-					t.Fatalf("%s refused %q with %v, want ErrInvalidSegment or ErrSegmentIsUUID so the "+
+				if !errors.Is(err, storage.ErrInvalidEntityKey) && !errors.Is(err, storage.ErrEntityKeyIsUUID) {
+					t.Fatalf("%s refused %q with %v, want ErrInvalidEntityKey or ErrEntityKeyIsUUID so the "+
 						"API maps it to 422 rather than a 500", table, seg, err)
 				}
 			})

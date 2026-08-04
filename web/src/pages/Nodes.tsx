@@ -262,7 +262,7 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
           </Show>
 
           <div class="grid grid-cols-2 gap-4">
-            <KVStacked label="Segment" value={<span class="font-data">{node().name}</span>} />
+            <KVStacked label="Key" value={<span class="font-data">{node().name}</span>} />
             <KVStacked label="Status" value={STATUS[nodeStatus(node())].label} />
             <KVStacked label="Last heartbeat" value={node().last_heartbeat_at ? rel(node().last_heartbeat_at!) : <span class="text-base-content/40">never</span>} />
             <KVStacked label="Enrolled" value={node().enrolled ? (node().enrolled_at ? rel(node().enrolled_at!) : "yes") : <span class="text-base-content/40">not yet</span>} />
@@ -408,7 +408,7 @@ function CreateNodeForm(props: { close: () => void; onEnrolled: (out: EnrollOutp
         <input id="new-node-display" autocomplete="off" class="input input-bordered w-full" value={display()} placeholder="HQ Closet Node" onInput={(e) => setDisplay(e.currentTarget.value)} disabled={busy()} />
       </div>
       <div>
-        <label class="eyebrow mb-1.5 block" for="new-node-name">Segment</label>
+        <label class="eyebrow mb-1.5 block" for="new-node-name">Key</label>
         <input id="new-node-name" autocomplete="off" class="input input-bordered w-full font-data" value={name()} placeholder="edge-hq-1" onInput={(e) => setName(e.currentTarget.value)} disabled={busy()} required />
         <p class="mt-1 text-xs text-base-content/50">{keyDerived() ? "Derived from the name. Edit to set your own." : "The node's address, used by the API and CLI."}</p>
       </div>

@@ -61,7 +61,7 @@ describe("Systems create-as-route", () => {
     expect(screen.getByText("Draft")).toBeTruthy();
     expect(screen.getByText("Create system")).toBeTruthy();
     // Identity + Placement fields present; the binding sections are locked.
-    expect(screen.getByText("Segment")).toBeTruthy();
+    expect(screen.getByText("Key")).toBeTruthy();
     expect(screen.getByText("Standard")).toBeTruthy();
     expect(screen.getByText(/Available once the system is created/)).toBeTruthy();
   });
@@ -80,7 +80,7 @@ describe("Systems create-as-route", () => {
   it("shows an existing system read-only in view: no tag add control, an Edit affordance", async () => {
     mount("/systems/boardroom");
     // The detail resolves and renders the read-only facts.
-    await waitFor(() => expect(screen.getByText("Segment")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Key")).toBeTruthy());
     // No in-body mutation control in view: the TagAdder add row is absent.
     expect(screen.queryByPlaceholderText(/Add a tag/)).toBeNull();
     // The view footer offers Edit (which would flip the accordion to edit mode).
@@ -100,14 +100,14 @@ describe("Systems create-as-route", () => {
 
   it("a fresh detail view keeps the technical name read-only", async () => {
     mount("/systems/boardroom");
-    await waitFor(() => expect(screen.getByText("Segment")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Key")).toBeTruthy());
     // No check button until edit begins: the name is a read-only fact.
     expect(screen.queryByLabelText("Check name")).toBeNull();
   });
 
   it("shows the system's standard by display name, not its id", async () => {
     mount("/systems/boardroom");
-    await waitFor(() => expect(screen.getByText("Segment")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Key")).toBeTruthy());
     expect(screen.getAllByText("Meeting room").length).toBeGreaterThan(0);
   });
 });

@@ -129,7 +129,7 @@ func (p *PG) GetVendor(ctx context.Context, id string) (*Vendor, error) {
 // CreateVendor inserts a custom (official=false) vendor and audits it. A
 // duplicate id is ErrTypeExists.
 func (p *PG) CreateVendor(ctx context.Context, actorID string, m Vendor) (*Vendor, error) {
-	if err := ValidateSegment(m.Name); err != nil {
+	if err := ValidateEntityKey(m.Name); err != nil {
 		return nil, err
 	}
 	m.Official = false

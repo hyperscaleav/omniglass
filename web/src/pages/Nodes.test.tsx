@@ -206,7 +206,7 @@ describe("Nodes page", () => {
     mount(owner);
     fireEvent.click(screen.getByText("New node"));
     const display = (await screen.findByLabelText("Name")) as HTMLInputElement;
-    const name = screen.getByLabelText("Segment") as HTMLInputElement;
+    const name = screen.getByLabelText("Key") as HTMLInputElement;
 
     fireEvent.input(display, { target: { value: "HQ Closet Node" } });
     expect(name.value).toBe("hq-closet-node");

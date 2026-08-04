@@ -146,10 +146,22 @@ look like the same product. It replaced sixteen hand-written name columns writte
 incompatible idioms, which is why the header word for one fact used to be "Name" on one page, "Key"
 on another, and "Display name" beside it.
 
-**Two words, no synonyms.** The friendly label an operator types is the **Name**. The kebab token an
-address is built from is the **Segment** (in prose, a topic segment). "Display name" and "Technical
-name" are both retired, and `identity-vocabulary-guard.test.ts` fails the build on either appearing in
-operator-visible text. The one boundary is the CLI reference, which is generated from the Huma `doc:`
+**Two words, no synonyms.** The friendly label an operator types is the **Name**. The machine
+identifier a URL, a CLI argument, and a topic carry is the **Key**. "Display name", "Technical name",
+and "Segment" are all retired as field labels, and `identity-vocabulary-guard.test.ts` fails the build
+on any of them appearing in label text.
+
+**A key is a value; a segment is a position.** `internal/key` already fixes this: a segment is one
+dot-separated component of a key. So `boi.17c.rm215a` is three segments, and the room's key is the
+value in the third. That makes "segment" right in prose about topic structure and wrong on a form,
+where the operator is typing a value and not choosing a position.
+
+**There are two key rules, deliberately.** An entity key is kebab (`crestron`, `rm215a`), validated by
+`storage.ValidateEntityKey`. A keyspace key is snake_case with an optional dot hierarchy
+(`icmp.rtt_avg`), validated by `internal/key`. They are not merged, because a keyspace key
+legitimately carries a dot and an underscore while an entity key legitimately carries a hyphen. The
+console says "Key" for both, because an operator types one identifier either way and the differing
+character set surfaces as a validation message, not as a second word. The one boundary is the CLI reference, which is generated from the Huma `doc:`
 tags: its flag is still `--display-name` because the wire field is still `display_name`, and a help
 string calling it the name while the flag says otherwise would be worse than the inconsistency. Both
 move together when the field renames.

@@ -4,8 +4,8 @@ import { describe, expect, it } from "vitest";
 
 // Two words, two meanings, and no synonyms.
 //
-//   Name     the friendly label an operator types and reads.
-//   Segment  the kebab token an address is built from, what the API and CLI take.
+//   Name  the friendly label an operator types and reads.
+//   Key   the machine identifier, what a URL, a CLI argument, and a topic carry.
 //
 // The console used to say four things. A list column header said "Name" for the
 // address on some pages and for the label on others. A blade said "Technical name"
@@ -13,7 +13,10 @@ import { describe, expect, it } from "vitest";
 // same fact answered to three words and the same word meant two facts, which is
 // the confusion the identity work exists to end.
 //
-// "Display name" and "Technical name" are retired. They are allowed in a comment
+// "Display name", "Technical name", and "Segment" are all retired as field labels.
+// A segment is one dot-separated component of a key (internal/key fixes that
+// meaning), so it names a position in a path and never the value at one. That makes
+// it a fine word in prose about topics and a wrong one on a form. They are allowed in a comment
 // (IdentityCell's header names both, because that comment IS the history) but not
 // in anything an operator reads.
 //
@@ -21,7 +24,7 @@ import { describe, expect, it } from "vitest";
 // is a NEW page reaching for a retired word, and no per-page test catches that,
 // because the page nobody wrote a test for is the page that drifts.
 const SRC = join(__dirname);
-const RETIRED = ["Display name", "Technical name"];
+const RETIRED = ["Display name", "Technical name", "Segment"];
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
@@ -48,7 +51,13 @@ describe("identity vocabulary", () => {
         .forEach((line, i) => {
           if (isComment(line)) return;
           for (const word of RETIRED) {
-            if (line.includes(word)) {
+            // Only label TEXT counts: a quoted string an operator reads, or JSX
+            // text between tags. A type or an accessor may legitimately be named
+            // Segment (a donut chart has segments; IdentityCell has showSegment),
+            // and renaming those would be a rename for its own sake.
+            const asString = new RegExp(`["'\`]${word}["'\`]`);
+            const asJsxText = new RegExp(`>\\s*${word}\\s*<`);
+            if (asString.test(line) || asJsxText.test(line)) {
               offenders.push(`${file.replace(SRC + "/", "")}:${i + 1}  ${word}`);
             }
           }
@@ -57,8 +66,8 @@ describe("identity vocabulary", () => {
     expect(
       offenders,
       `\nThese carry a retired word in operator-visible text:\n  ${offenders.join("\n  ")}\n\n` +
-        `The label an operator types is "Name". The kebab address is "Segment".\n` +
-        `"Display name" and "Technical name" are both retired.\n`,
+        `The label an operator types is "Name". The machine identifier is "Key".\n` +
+        `"Display name", "Technical name", and "Segment" are retired as labels.\n`,
     ).toEqual([]);
   });
 });

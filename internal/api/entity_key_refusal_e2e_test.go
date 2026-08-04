@@ -12,12 +12,12 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// An illegal segment is an operator typo, so it owes an operator a 422 that says
+// An illegal key is an operator typo, so it owes an operator a 422 that says
 // what is wrong. It must never be a 5xx.
 //
 // This is the tier that matters and the tier that was missing. Asserting the
 // storage sentinel proves the gateway refuses; it says nothing about what the
-// route does with that refusal. When the segment rule was first widened, five
+// route does with that refusal. When the key rule was first widened, five
 // registry routes threw a brand new sentinel into mapTypeErr, which had no case
 // for it, so every one of them fell to the default branch and returned
 // 500 "type operation failed" for a name with a capital letter in it. The whole
@@ -25,7 +25,7 @@ import (
 //
 // So this drives them. One request per route per illegal input, over real HTTP
 // against real Postgres, asserting the status an operator actually receives.
-func TestIllegalSegmentIsAlways422(t *testing.T) {
+func TestIllegalKeyIsAlways422(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)

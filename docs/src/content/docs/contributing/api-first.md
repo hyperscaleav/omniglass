@@ -44,23 +44,24 @@ server.
 resolves to.** `{"parent": "rack", "parent_id": "0198f..."}`. The name is what a human types
 and what a body round-trips; the id is the stable handle that survives a rename.
 
-**The segment rule is enforced on every segment-bearing table.** A segment is the one token an
-entity contributes to an address (the `rm215a` in `boi.17c.rm215a`), and the rule is
+**The entity-key rule is enforced on every key-bearing table.** An entity's key is the identifier an
+operator types and an address carries (the `rm215a` in `boi.17c.rm215a`), and the rule is
 `^[a-z0-9][a-z0-9-]*$` with a 100 character ceiling and the uuid shape refused. It lives in the
 contract, not just below it: the create body carries `pattern` and `maxLength`, so the generated
 OpenAPI, the typed client, the CLI, and the YAML JSONSchema all enforce it, and the Storage Gateway
 enforces it again for callers that never touch a route.
 
-A table that stores a **keyspace key** rather than a segment is deliberately outside the rule, because
-`icmp.rtt_avg` is a legitimate key and an illegal segment. Which table is which is not written down
+A table on the **keyspace** rule (`internal/key`, snake_case with an optional dot hierarchy) is
+deliberately outside this one, because
+`icmp.rtt_avg` is a legitimate keyspace key and an illegal entity key. Which table is which is not written down
 here, because a hand-copied list is drift waiting to happen: `TestEveryNamedTableIsClassified` reads
-the generated schema, finds every table carrying a `name`, and fails until each one is classified as a
-segment or a key with its reason. A new table joins the guard by existing.
+the generated schema, finds every table carrying a `name`, and fails until each one is classified onto
+one rule or the other with its reason. A new table joins the guard by existing.
 
-The exclusions are load-bearing rather than tidy. Barring `.` keeps one segment from splitting into
-two path tokens. Barring `*` and `>` keeps a segment from reading as a NATS subject pattern. Barring
+The exclusions are load-bearing rather than tidy. Barring `.` keeps one key from splitting into two
+segments. Barring `*` and `>` keeps a key from reading as a NATS subject pattern. Barring
 `$` is what lets an address use sigil accessors without reserving any word, so a location may still
-legitimately take the segment `sys`.
+legitimately take the key `sys`.
 
 The test is a **round trip**: a response body can be fed back to the write that produced it
 (create a component with `{"parent": "rack"}`, read it back as `{"parent": "rack"}`). When that

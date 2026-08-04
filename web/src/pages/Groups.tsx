@@ -112,7 +112,7 @@ function CreateGroupForm(props: { onCreated: (g: Group) => void; onClose: () => 
         <input class="input input-bordered w-full" value={display()} placeholder="Field Crew" onInput={(e) => setDisplay(e.currentTarget.value)} disabled={busy()} />
       </label>
       <label class="flex flex-col gap-1">
-        <span class="eyebrow">Segment</span>
+        <span class="eyebrow">Key</span>
         <input class="input input-bordered w-full font-data" classList={{ "input-error": !!handleError(name()) }} value={name()} placeholder="field-crew" onInput={(e) => setName(e.currentTarget.value)} disabled={busy()} required />
         <Show
           when={handleError(name())}

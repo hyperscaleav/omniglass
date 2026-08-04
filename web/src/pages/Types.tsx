@@ -360,7 +360,7 @@ export function CreateTypeForm(p: { kind: TypeKind; onCreated: (t: TypeRow) => v
       <Field label="Name" hint="What an operator reads.">
         <input class="input input-bordered w-full" value={display()} placeholder="Wing" onInput={(e) => setDisplay(e.currentTarget.value)} />
       </Field>
-      <Field label="Segment" hint={keyDerived() ? "Derived from the name. Edit to set your own." : "A kebab name, e.g. wing. Addressed by the API and CLI."}>
+      <Field label="Key" hint={keyDerived() ? "Derived from the name. Edit to set your own." : "A kebab name, e.g. wing. Addressed by the API and CLI."}>
         <input class="input input-bordered w-full font-data" value={name()} placeholder="wing" onInput={(e) => setName(e.currentTarget.value)} />
       </Field>
       <Show when={p.kind === "location"}>
