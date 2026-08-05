@@ -10,11 +10,12 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// TestSampleProvenanceDomainsNarrowed pins #460: `declared` is impossible on
-// the sample sinks (a declared value lives only in the property cache), so the
-// metric and state provenance CHECKs refuse it at the schema, not just by
-// writer convention.
-func TestSampleProvenanceDomainsNarrowed(t *testing.T) {
+// TestSampleProvenanceDomains pins each lane's provenance domain after #591
+// re-admitted declared rows on the state series (a declared value IS a series
+// row now, reversing the #460 narrowing for that lane): state accepts a
+// declared row with no lineage, while metric still refuses declared until a
+// slice folds declared numeric values into it.
+func TestSampleProvenanceDomains(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, dsn)
@@ -40,18 +41,21 @@ func TestSampleProvenanceDomainsNarrowed(t *testing.T) {
 		t.Fatalf("property_type: %v", err)
 	}
 
-	for tbl, ins := range map[string]struct{ typeCol, typeID, val string }{
-		"metric": {"metric_type_id", mtID, "1"},
-		"state":  {"property_type_id", ptID, "'on'"},
-	} {
-		_, err := conn.Exec(ctx, `
-			insert into `+tbl+` (ts, owner_kind, component_id, `+ins.typeCol+`, value, provenance, source)
-			values (now(), 'component', $1, $2, `+ins.val+`, 'declared', 'test')`, compID, ins.typeID)
-		// Either narrowed constraint may report first; the claim is that the
-		// schema refuses the row.
-		if err == nil || (!strings.Contains(err.Error(), tbl+"_provenance_check") && !strings.Contains(err.Error(), tbl+"_lineage_check")) {
-			t.Errorf("%s declared insert error = %v, want a provenance or lineage CHECK violation", tbl, err)
-		}
+	// The metric lane has no declared writer, so its schema still refuses the
+	// row (either narrowed constraint may report first).
+	_, err = conn.Exec(ctx, `
+		insert into metric (ts, owner_kind, component_id, metric_type_id, value, provenance, source)
+		values (now(), 'component', $1, $2, 1, 'declared', 'test')`, compID, mtID)
+	if err == nil || (!strings.Contains(err.Error(), "metric_provenance_check") && !strings.Contains(err.Error(), "metric_lineage_check")) {
+		t.Errorf("metric declared insert error = %v, want a provenance or lineage CHECK violation", err)
+	}
+
+	// The state lane holds declared values as series rows (#591), with the
+	// no-lineage arm: no rule, no causing event.
+	if _, err := conn.Exec(ctx, `
+		insert into state (ts, owner_kind, component_id, property_type_id, value, provenance, source)
+		values (now(), 'component', $1, $2, 'on', 'declared', 'test')`, compID, ptID); err != nil {
+		t.Errorf("state declared insert error = %v, want accepted (a declared value is a series row)", err)
 	}
 }
 

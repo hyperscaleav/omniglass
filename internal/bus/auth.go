@@ -40,10 +40,6 @@ type Store interface {
 	// The raw log-line sink (ADR-0066): untyped arrival off the ingest lane,
 	// owner-bound to the publishing node (self-logs), no registry gate.
 	InsertLogLines(ctx context.Context, lines []storage.LogLineWrite) error
-	// The observed latest-value cache derive (ADR-0063 #394): after the samples
-	// land, upsert the newest value per series. Non-gating and idempotent, so it
-	// never fails the ack and a redelivery does not double-write.
-	UpsertProperties(ctx context.Context, ups []storage.PropertyUpsert) error
 }
 
 // nodeAuth implements server.Authentication (the in-process

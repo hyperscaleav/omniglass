@@ -50,9 +50,6 @@ func (f fakeStore) InsertEvents(context.Context, []storage.EventWrite) error {
 func (f fakeStore) InsertLogLines(context.Context, []storage.LogLineWrite) error {
 	return nil
 }
-func (f fakeStore) UpsertProperties(context.Context, []storage.PropertyUpsert) error {
-	return nil
-}
 func (f fakeStore) ListEventTypes(context.Context) ([]storage.EventType, error) {
 	return nil, nil
 }

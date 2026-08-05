@@ -8,7 +8,7 @@ import (
 // SettlementVerdict is the computed state of a command's effect: never stored,
 // always derived from the intended value it opened, the observed value the device
 // reports, and the command_type's settle window (the driver's fact about how long
-// the device takes to actuate). This is what turns the property cache's want/told/is
+// the device takes to actuate). This is what turns the series' want/told/is
 // pivot into a command-settlement judgment.
 type SettlementVerdict string
 
@@ -33,7 +33,7 @@ const (
 // now. Within the window the verdict is pending regardless of the observed value;
 // past it, a match is settled and anything else is failed. A nil intended value is
 // none (nothing was told).
-func Settle(intended, observed *CachedValue, windowSeconds int, now time.Time) SettlementVerdict {
+func Settle(intended, observed *CurrentValue, windowSeconds int, now time.Time) SettlementVerdict {
 	if intended == nil {
 		return SettlementNone
 	}

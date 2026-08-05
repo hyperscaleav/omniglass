@@ -2,7 +2,6 @@ package bus
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"time"
 
@@ -185,9 +184,9 @@ type ingestBinding struct {
 }
 
 // land writes one batch to its sinks: the raw log lines, then the samples routed by
-// registry kind, then the derived latest-value cache. It is the ONE write path, and
-// both ingest lanes call it, so a new lane cannot drift from the node lane's
-// semantics (reject-not-project, the transition-only state guard, the cache derive).
+// registry kind. It is the ONE write path, and both ingest lanes call it, so a new
+// lane cannot drift from the node lane's semantics (reject-not-project, the
+// transition-only state guard).
 //
 // It deliberately knows nothing about JetStream: no message, no ack, no nak. The
 // caller owns delivery semantics and decides what a returned error means, which is
@@ -252,7 +251,8 @@ func (s *Server) land(ctx context.Context, ev *ogv1.TelemetryBatch, bind ingestB
 	// The transition guard: a state series is transition-only, so skip a write whose
 	// value equals the latest stored value for that series. A producer's own change
 	// detection is the primary defense; this is the robustness net for a restart that
-	// re-emits an unchanged verdict.
+	// re-emits an unchanged verdict. Nothing derives after the write: a sample's
+	// current value IS its latest series row, both lanes (#591 retired the cache).
 	fresh, err := s.dedupeStates(ctx, states)
 	if err != nil {
 		return err
@@ -262,43 +262,7 @@ func (s *Server) land(ctx context.Context, ev *ogv1.TelemetryBatch, bind ingestB
 			return err
 		}
 	}
-	// Derive the observed latest-value cache from the state samples that just landed
-	// (ADR-0063 #394). This is non-gating: the append tables are the source of truth
-	// and the cache is rebuildable from them, so a failed upsert is logged, not
-	// retried, and never fails the caller. Its series-key upsert is idempotent, so a
-	// redelivery that re-runs it does not double-write (unlike the append sinks).
-	if ups := latestUpserts(fresh); len(ups) > 0 {
-		if err := s.store.UpsertProperties(ctx, ups); err != nil {
-			slog.Warn("latest-value derive failed (rebuildable from samples)",
-				"component", bind.SampleOwner.Component, "error", err)
-		}
-	}
 	return nil
-}
-
-// latestUpserts turns the post-dedupe state samples that just landed into
-// producer-cache upserts: one newest value per series, provenance observed, the
-// state's string encoded as the jsonb value the cache stores. Pure: no I/O.
-// Events are occurrences, not values, so they never enter the value cache.
-//
-// Metric samples are deliberately NOT derived: the metric lane's current value
-// is its latest series row (the reachability BFF already reads it there), the
-// value store retires entirely in the slice that folds declared values into the
-// series (#591), and deriving into a cache whose catalog no longer holds metric
-// names (#587) would need a two-armed FK on a table that is about to die.
-func latestUpserts(states []storage.StateSampleWrite) []storage.PropertyUpsert {
-	ups := make([]storage.PropertyUpsert, 0, len(states))
-	for _, st := range states {
-		v, err := json.Marshal(st.Value)
-		if err != nil {
-			continue
-		}
-		ups = append(ups, storage.PropertyUpsert{
-			OwnerKind: st.OwnerKind, OwnerID: st.OwnerID, Key: st.Key, Instance: st.Instance,
-			Provenance: "observed", Value: v, TS: st.TS,
-		})
-	}
-	return ups
 }
 
 // nakOrTerm redelivers a telemetry message that failed for a transient reason

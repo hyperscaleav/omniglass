@@ -50,10 +50,11 @@ func TestCommandIssueAPI(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("create command type: %v", err)
 	}
-	// The device already reports hdmi2 (an observed value the command settles against).
-	if err := gw.UpsertProperties(ctx, []storage.PropertyUpsert{{
-		OwnerKind: "component", OwnerID: "disp-1", Key: "video-input", Instance: "", Provenance: "observed",
-		Value: json.RawMessage(`"hdmi2"`), TS: time.Now().UTC(),
+	// The device already reports hdmi2 (an observed series row the command
+	// settles against; the current value is the latest row, #591).
+	if err := gw.InsertStateSamples(ctx, []storage.StateSampleWrite{{
+		OwnerKind: "component", OwnerID: "disp-1", Key: "video-input", Instance: "",
+		Value: "hdmi2", TS: time.Now().UTC(),
 	}}); err != nil {
 		t.Fatalf("seed observed: %v", err)
 	}

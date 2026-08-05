@@ -452,17 +452,19 @@ type Gateway interface {
 	ClearProperty(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, write scope.Set) error
 	EffectiveProperties(ctx context.Context, ownerKind, ownerID string, read scope.Set) ([]EffectiveProperty, error)
 
-	// The property latest-value cache (ADR-0063 #394): the producer provenances
-	// (observed/calculated/intended) upserted latest per series, over the same owner
-	// arc. UpsertProperties is the non-gating ingest derive; LatestValue is the
-	// single-lookup current value. Declared is NOT cached here; it resolves live via
-	// EffectiveProperties.
-	UpsertProperties(ctx context.Context, ups []PropertyUpsert) error
-	LatestValue(ctx context.Context, ownerKind, ownerID, key, instance, provenance string, read scope.Set) (*CachedValue, error)
+	// The current value of a series is its latest row per (type, owner arc,
+	// instance, provenance); there is no maintained cache (#591). LatestValue is
+	// that read, scope-guarded per owner kind.
+	LatestValue(ctx context.Context, ownerKind, ownerID, key, instance, provenance string, read scope.Set) (*CurrentValue, error)
 	// Reconciliation pivots want (declared, resolved live) / told (intended) / is
 	// (observed) per declared property of an owner, with config-drift computed on
 	// read. It backs the reconciliation read surface.
 	Reconciliation(ctx context.Context, ownerKind, ownerID string, read scope.Set) ([]PropertyReconciliation, error)
+	// PruneSamples is the provenance-aware retention primitive over both series
+	// tables: delete samples older than before, never a declared row and never
+	// the latest row of a series. The retention feature that will call it is a
+	// later slice; the rule ships first (#591).
+	PruneSamples(ctx context.Context, before time.Time) (int64, error)
 
 	// Membership: the binding a role attaches to. Many-valued on purpose, since a
 	// shared device belongs to every system it serves, which a single pointer on

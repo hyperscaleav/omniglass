@@ -13,17 +13,17 @@ var Subsystems = []Cluster{
 		"capability",
 	}},
 	{Name: "estate", Tables: []string{
-		"location", "location_type", "location_type_property",
+		"location", "location_type", "location_type_property", "location_type_metric",
 		"system", "system_member",
 		"component", "component_capability",
 		"interface", "interface_type",
 	}},
 	{Name: "catalog", Tables: []string{
-		"vendor", "product", "product_capability", "product_property",
-		"driver", "standard", "standard_property",
+		"vendor", "product", "product_capability", "product_property", "product_metric",
+		"driver", "standard", "standard_property", "standard_metric",
 	}},
 	{Name: "telemetry", Tables: []string{
-		"property_type", "property", "metric", "state",
+		"property_type", "metric_type", "metric", "state",
 		"event_type", "event", "log_line", "alarm", "alarm_capability",
 		"command_type", "command",
 	}},

@@ -216,13 +216,14 @@ func TestRunIdempotent(t *testing.T) {
 		t.Errorf("property-seed components = %d, want 1 (lobby-display)", comps)
 	}
 	if err := conn.QueryRow(ctx, `
-		select count(*) from property
+		select count(*) from state
 		where owner_kind = 'component'
-		  and component_id = (select id from component where name = 'lobby-display')`).Scan(&propVals); err != nil {
-		t.Fatalf("count property values: %v", err)
+		  and component_id = (select id from component where name = 'lobby-display')
+		  and provenance = 'declared'`).Scan(&propVals); err != nil {
+		t.Fatalf("count declared values: %v", err)
 	}
 	if propVals != 2 {
-		t.Errorf("property values = %d, want 2 (serial-number, firmware-version)", propVals)
+		t.Errorf("declared value rows = %d, want 2 (serial-number, firmware-version; a re-run re-declares the same values, which appends nothing)", propVals)
 	}
 
 	// The tree links resolve: the west building hangs under the hq campus.

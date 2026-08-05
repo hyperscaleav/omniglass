@@ -92,7 +92,7 @@ var IdentityShapes = map[string]TableIdentity{
 	"principal": {Shape: ShapeIDOnly}, "principal_grant": {Shape: ShapeIDOnly},
 	"principal_group_member": {Shape: ShapeIDOnly}, "product_capability": {Shape: ShapeIDOnly},
 	"product_metric": {Shape: ShapeIDOnly}, "product_property": {Shape: ShapeIDOnly},
-	"property": {Shape: ShapeIDOnly}, "service": {Shape: ShapeIDOnly},
+	"service":          {Shape: ShapeIDOnly},
 	"setting_override": {Shape: ShapeIDOnly}, "standard_metric": {Shape: ShapeIDOnly},
 	"standard_property": {Shape: ShapeIDOnly},
 	"state":             {Shape: ShapeIDOnly}, "system_member": {Shape: ShapeIDOnly},

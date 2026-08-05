@@ -524,11 +524,11 @@ func (UnimplementedGateway) ClearProperty(context.Context, string, string, strin
 func (UnimplementedGateway) EffectiveProperties(context.Context, string, string, scope.Set) ([]EffectiveProperty, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpsertProperties(context.Context, []PropertyUpsert) error {
-	return nil
-}
-func (UnimplementedGateway) LatestValue(context.Context, string, string, string, string, string, scope.Set) (*CachedValue, error) {
+func (UnimplementedGateway) LatestValue(context.Context, string, string, string, string, string, scope.Set) (*CurrentValue, error) {
 	return nil, nil
+}
+func (UnimplementedGateway) PruneSamples(context.Context, time.Time) (int64, error) {
+	return 0, nil
 }
 func (UnimplementedGateway) Reconciliation(context.Context, string, string, scope.Set) ([]PropertyReconciliation, error) {
 	return nil, nil

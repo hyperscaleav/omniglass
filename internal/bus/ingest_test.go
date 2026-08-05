@@ -223,15 +223,14 @@ func TestTelemetryRoundTrip(t *testing.T) {
 		t.Fatalf("transition-only breached: want [up down], got %+v", trans)
 	}
 
-	// The observed latest-value cache was derived on ingest for the STATE lane
-	// (ADR-0063 #394): the current value of a series is one lookup, mirroring the
-	// newest sample; the newest value here is the "down" flip. Poll, since the
-	// derive is a non-gating write that runs just after the sample lands. The
-	// metric lane does not derive into the cache (#587: its catalog no longer
-	// holds metric names, and the value store retires with #591): a metric's
-	// current value is its latest series row, read by type, owner, and instance.
-	waitValue(t, ctx, gw, "disp-1", "interface-reachable", "disp-1-tcp", "observed",
-		func(cv *storage.CachedValue) bool { return cv != nil && string(cv.Value) == `"down"` })
+	// The current value of a series IS its latest row, both lanes (#591 retired
+	// the derived cache): the state series resolves to the "down" flip and the
+	// metric series to the probe value, each read by type, owner, and instance.
+	if got, err := gw.LatestState(ctx, "disp-1", "interface-reachable", "disp-1-tcp"); err != nil {
+		t.Fatalf("latest interface-reachable series row: %v", err)
+	} else if got == nil || got.Value != "down" {
+		t.Fatalf("latest interface-reachable series row = %+v, want value down", got)
+	}
 	if dp, err := gw.LatestMetricInstance(ctx, "disp-1", "tcp-open", "disp-1-tcp"); err != nil {
 		t.Fatalf("latest tcp-open series row: %v", err)
 	} else if dp == nil || dp.Value != 1 {
@@ -411,27 +410,6 @@ func waitMetric(t *testing.T, ctx context.Context, gw storage.Gateway, comp, key
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("metric %s/%s never satisfied the predicate (last=%+v)", comp, key, dp)
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-}
-
-// waitValue polls the component-owned latest-value cache until pred is satisfied
-// or a deadline passes, so the derive (a non-gating write just after the sample
-// lands) does not race the assertion.
-func waitValue(t *testing.T, ctx context.Context, gw storage.Gateway, comp, key, instance, provenance string, pred func(*storage.CachedValue) bool) *storage.CachedValue {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		cv, err := gw.LatestValue(ctx, "component", comp, key, instance, provenance, scope.Set{All: true})
-		if err != nil {
-			t.Fatalf("latest value %s/%s[%s]: %v", comp, key, instance, err)
-		}
-		if pred(cv) {
-			return cv
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("value %s/%s[%s] never satisfied the predicate (last=%+v)", comp, key, instance, cv)
 		}
 		time.Sleep(50 * time.Millisecond)
 	}

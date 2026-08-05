@@ -146,10 +146,6 @@
       "shape": "id only"
     },
     {
-      "table": "property",
-      "shape": "id only"
-    },
-    {
       "table": "property_type",
       "shape": "keyspace",
       "reason": "serial-number, a signal name referenced from drivers and templates"
