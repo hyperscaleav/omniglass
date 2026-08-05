@@ -3438,6 +3438,8 @@ export interface components {
             instance?: string;
             /** @description The computed settlement verdict (none/pending/settled/failed) */
             settlement: string;
+            /** @description The recorded command status (issued/settled/failed/timed-out); issued until a settle-check records the terminal outcome */
+            status: string;
         };
         CommandTypeBody: {
             /**

@@ -246,6 +246,7 @@ telemetry: {
   command_type: {
     shape: sql_table
     id: uuid {constraint: primary_key}
+    target_metric_type_id: uuid {constraint: foreign_key}
     target_property_type_id: uuid {constraint: foreign_key}
   }
   event: {
@@ -271,6 +272,7 @@ telemetry: {
   metric: {
     shape: sql_table
     id: bigint {constraint: primary_key}
+    command_id: bigint {constraint: foreign_key}
     component_id: uuid {constraint: foreign_key}
     event_id: bigint {constraint: foreign_key}
     location_id: uuid {constraint: foreign_key}
@@ -285,6 +287,7 @@ telemetry: {
   property: {
     shape: sql_table
     id: bigint {constraint: primary_key}
+    command_id: bigint {constraint: foreign_key}
     component_id: uuid {constraint: foreign_key}
     event_id: bigint {constraint: foreign_key}
     location_id: uuid {constraint: foreign_key}
@@ -459,6 +462,7 @@ telemetry.command.component_id -> estate.component.id
 telemetry.command.location_id -> estate.location.id
 telemetry.command.node_id -> collection.node.principal_id
 telemetry.command.system_id -> estate.system.id
+telemetry.command_type.target_metric_type_id -> telemetry.metric_type.id
 telemetry.command_type.target_property_type_id -> telemetry.property_type.id
 telemetry.event.component_id -> estate.component.id
 telemetry.event.event_type_id -> telemetry.event_type.id
@@ -468,12 +472,14 @@ telemetry.event.source_event_id -> telemetry.event.id
 telemetry.event.source_log_line_id -> telemetry.log_line.id
 telemetry.event.system_id -> estate.system.id
 telemetry.log_line.component_id -> estate.component.id
+telemetry.metric.command_id -> telemetry.command.id
 telemetry.metric.component_id -> estate.component.id
 telemetry.metric.event_id -> telemetry.event.id
 telemetry.metric.location_id -> estate.location.id
 telemetry.metric.metric_type_id -> telemetry.metric_type.id
 telemetry.metric.node_id -> collection.node.principal_id
 telemetry.metric.system_id -> estate.system.id
+telemetry.property.command_id -> telemetry.command.id
 telemetry.property.component_id -> estate.component.id
 telemetry.property.event_id -> telemetry.event.id
 telemetry.property.location_id -> estate.location.id

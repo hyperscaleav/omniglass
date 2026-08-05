@@ -64,16 +64,21 @@ func TestCommandIssueAPI(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	// Issue set-input-now to hdmi2: the observed value already matches, so past the
-	// zero window it settles. The response carries the caused event id.
+	// zero window it settles. The response carries the caused event id and the
+	// recorded status (#590), which round-trips the terminal outcome.
 	var settled struct {
 		CausedEventID int64  `json:"caused_event_id"`
 		Settlement    string `json:"settlement"`
+		Status        string `json:"status"`
 	}
 	json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components/disp-1/commands:issue", map[string]any{
 		"command_type": "set-input-now", "value": "hdmi2",
 	}, http.StatusOK), &settled)
 	if settled.Settlement != "settled" || settled.CausedEventID == 0 {
 		t.Fatalf("issue to matching value: want settled with a caused event, got %+v", settled)
+	}
+	if settled.Status != "settled" {
+		t.Fatalf("issue to matching value: want recorded status settled, got %q", settled.Status)
 	}
 
 	// The caused event was recorded: a command-issued occurrence with origin caused.
@@ -95,15 +100,32 @@ func TestCommandIssueAPI(t *testing.T) {
 	}
 
 	// Issue to hdmi3: the observed value (hdmi2) no longer matches the intended one,
-	// so past the zero window it is a failed command.
+	// so past the zero window it is a failed command, and the failure is recorded.
 	var failed struct {
 		Settlement string `json:"settlement"`
+		Status     string `json:"status"`
 	}
 	json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components/disp-1/commands:issue", map[string]any{
 		"command_type": "set-input-now", "value": "hdmi3",
 	}, http.StatusOK), &failed)
 	if failed.Settlement != "failed" {
 		t.Fatalf("issue to mismatched value: want failed, got %q", failed.Settlement)
+	}
+	if failed.Status != "failed" {
+		t.Fatalf("issue to mismatched value: want recorded status failed, got %q", failed.Status)
+	}
+
+	// A fire-and-forget command has nothing to settle: it goes straight to
+	// settled (the computed verdict stays none, nothing was told).
+	var ff struct {
+		Settlement string `json:"settlement"`
+		Status     string `json:"status"`
+	}
+	json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components/disp-1/commands:issue", map[string]any{
+		"command_type": "reboot",
+	}, http.StatusOK), &ff)
+	if ff.Settlement != "none" || ff.Status != "settled" {
+		t.Fatalf("fire-and-forget: want verdict none with status settled, got %+v", ff)
 	}
 
 	// An unknown command_type is a 422.
@@ -117,6 +139,20 @@ func TestCommandIssueAPI(t *testing.T) {
 	other, err := gw.GetComponent(ctx, "other-1", all)
 	if err != nil {
 		t.Fatalf("get other: %v", err)
+	}
+
+	// other-1 reports nothing, so past the zero window there is no observation to
+	// match: the verdict keeps its shipped meaning (failed) while the recorded
+	// status distinguishes the unanswered command as timed-out.
+	var unanswered struct {
+		Settlement string `json:"settlement"`
+		Status     string `json:"status"`
+	}
+	json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components/other-1/commands:issue", map[string]any{
+		"command_type": "set-input-now", "value": "hdmi2",
+	}, http.StatusOK), &unanswered)
+	if unanswered.Settlement != "failed" || unanswered.Status != "timed-out" {
+		t.Fatalf("unanswered command: want verdict failed with status timed-out, got %+v", unanswered)
 	}
 	opTok := setupScopedViewer(t, ctx, dsn, "op-other", "operator", "component", other.ID)
 	c.do(opTok, http.MethodPost, "/components/disp-1/commands:issue", map[string]any{"command_type": "reboot"}, http.StatusNotFound)

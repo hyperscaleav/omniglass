@@ -33,6 +33,7 @@ type commandOutput struct {
 		Instance      string `json:"instance,omitempty"`
 		CausedEventID int64  `json:"caused_event_id" doc:"The caused event this command recorded"`
 		Settlement    string `json:"settlement" doc:"The computed settlement verdict (none/pending/settled/failed)"`
+		Status        string `json:"status" doc:"The recorded command status (issued/settled/failed/timed-out); issued until a settle-check records the terminal outcome"`
 	}
 }
 
@@ -65,19 +66,23 @@ func registerCommandRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		out.Body.Instance = cmd.Instance
 		out.Body.CausedEventID = cmd.CausedEventID
 		out.Body.Settlement = string(verdict)
+		out.Body.Status = cmd.Status
 		return out, nil
 	})
 }
 
 // mapCommandErr maps the command sentinels: a request that names a command_type that
-// does not exist (or an invalid one) is a 422; an out-of-scope component falls through
-// to the component mapping (a non-disclosing 404).
+// does not exist (or an invalid one) is a 422, as is a non-numeric intended value for
+// a metric target; an out-of-scope component falls through to the component mapping
+// (a non-disclosing 404).
 func mapCommandErr(err error) error {
 	switch {
 	case err == nil:
 		return nil
 	case errors.Is(err, storage.ErrCommandTypeNotFound), errors.Is(err, storage.ErrCommandTypeInvalid):
 		return huma.Error422UnprocessableEntity("unknown or invalid command_type")
+	case errors.Is(err, storage.ErrCommandValueNotNumeric):
+		return huma.Error422UnprocessableEntity("intended value for a metric target must be numeric")
 	default:
 		return mapComponentErr(err)
 	}

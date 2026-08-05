@@ -316,11 +316,15 @@ components:
         settlement:
           description: The computed settlement verdict (none/pending/settled/failed)
           type: string
+        status:
+          description: The recorded command status (issued/settled/failed/timed-out); issued until a settle-check records the terminal outcome
+          type: string
       required:
         - id
         - command_type
         - caused_event_id
         - settlement
+        - status
       type: object
     CommandTypeBody:
       additionalProperties: false
