@@ -37,8 +37,9 @@ func TestAPIBindingRequiresAnAddressableOwner(t *testing.T) {
 		{"no owner at all", &ogv1.TelemetryBatch{}},
 		{"owner with no kind", &ogv1.TelemetryBatch{Owner: &ogv1.Owner{Ref: "disp-1"}}},
 		{"owner with no ref", &ogv1.TelemetryBatch{Owner: &ogv1.Owner{Kind: "component"}}},
-		// Guarded until #422 widens deriveSamples past owner_kind=component. Accepting
-		// these would write a sample to the wrong arc, which is worse than refusing.
+		// Guarded until #422 widens the lane derivations past owner_kind=component.
+		// Accepting these would write a sample to the wrong arc, which is worse than
+		// refusing.
 		{"system owner, not yet supported", &ogv1.TelemetryBatch{Owner: &ogv1.Owner{Kind: "system", Ref: "boardroom-a"}}},
 		{"location owner, not yet supported", &ogv1.TelemetryBatch{Owner: &ogv1.Owner{Kind: "location", Ref: "hq-west"}}},
 		{"node owner, not yet supported", &ogv1.TelemetryBatch{Owner: &ogv1.Owner{Kind: "node", Ref: "edge-hq"}}},
@@ -76,13 +77,13 @@ func TestAPIBindingOwnsBothLanesOfTheBatch(t *testing.T) {
 
 // The wire value wins where supplied, else the interface-derived value. This is what
 // keeps the node lane byte-for-byte unchanged while letting a push express both.
-func TestDeriveSamplesInstanceAndSourcePrecedence(t *testing.T) {
+func TestDeriveMetricsInstanceAndSourcePrecedence(t *testing.T) {
 	reg := testRegistry(t)
 
 	t.Run("push supplies instance and source", func(t *testing.T) {
-		metrics, _, _ := deriveSamples(&ogv1.TelemetryBatch{
+		metrics := deriveMetrics(&ogv1.TelemetryBatch{
 			Source:  "webex-cloud",
-			Samples: []*ogv1.Sample{{Name: "icmp-rtt-avg", Instance: "mic-1", Value: &ogv1.Sample_DoubleValue{DoubleValue: 12.4}}},
+			Metrics: []*ogv1.MetricSample{{Name: "icmp-rtt-avg", Instance: "mic-1", Value: 12.4}},
 		}, pushOwner(), reg)
 		if len(metrics) != 1 {
 			t.Fatalf("got %d metrics, want 1", len(metrics))
@@ -93,8 +94,8 @@ func TestDeriveSamplesInstanceAndSourcePrecedence(t *testing.T) {
 	})
 
 	t.Run("node lane falls back to the interface", func(t *testing.T) {
-		metrics, _, _ := deriveSamples(&ogv1.TelemetryBatch{
-			Samples: []*ogv1.Sample{{Name: "icmp-rtt-avg", Value: &ogv1.Sample_DoubleValue{DoubleValue: 12.4}}},
+		metrics := deriveMetrics(&ogv1.TelemetryBatch{
+			Metrics: []*ogv1.MetricSample{{Name: "icmp-rtt-avg", Value: 12.4}},
 		}, nodeOwner(), reg)
 		if len(metrics) != 1 {
 			t.Fatalf("got %d metrics, want 1", len(metrics))

@@ -4169,13 +4169,15 @@ Push telemetry for an owner
 omniglass telemetry push [flags]
 ```
 
-Accepts samples and raw log lines for one owner and publishes them onto the ingest lane. The registry decides where each sample lands (metric, state, or a caught event); an unregistered name is rejected and reported in the response rather than silently dropped. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.
+Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--events` | string | (none) | Natively caught occurrences, validated against event_type |
 | `--logs` | string | (none) | Raw untyped log lines. No registry gate |
+| `--metrics` | string | (none) | Numeric observations, validated against metric_type |
 | `--owner` | string | (none) | The entity every row in the batch lands under |
-| `--samples` | string | (none) | Registry-resolved observations. The registry decides which table each lands in |
+| `--properties` | string | (none) | Categorical observations, validated against property_type and each type's validation schema |
 | `--source` | string | (none) | Who observed this batch (recorded as the provenance source on every row) |
 | `--ts` | string | (none) | Batch timestamp; a per-item timestamp overrides it |
 

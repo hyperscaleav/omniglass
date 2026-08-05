@@ -3147,7 +3147,7 @@ export interface paths {
         put?: never;
         /**
          * Push telemetry for an owner
-         * @description Accepts samples and raw log lines for one owner and publishes them onto the ingest lane. The registry decides where each sample lands (metric, state, or a caught event); an unregistered name is rejected and reported in the response rather than silently dropped. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.
+         * @description Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.
          */
         post: operations["push-telemetry"];
         delete?: never;
@@ -3262,9 +3262,13 @@ export interface components {
     schemas: {
         AcceptedStruct: {
             /** Format: int64 */
+            events: number;
+            /** Format: int64 */
             logs: number;
             /** Format: int64 */
-            samples: number;
+            metrics: number;
+            /** Format: int64 */
+            properties: number;
         };
         AddMemberInputBody: {
             /**
@@ -5118,6 +5122,21 @@ export interface components {
             /** @description A JSON Schema fragment constraining the value */
             validation?: unknown;
         };
+        PushEvent: {
+            /** @description Discriminates many occurrences of one name on one owner */
+            instance?: string;
+            /** @description The occurrence's human-readable line */
+            message?: string;
+            /** @description A registered event_type name */
+            name: string;
+            /** @description The occurrence's structured payload, validated against the event_type's payload schema */
+            payload?: unknown;
+            /**
+             * Format: date-time
+             * @description When this occurred; defaults to the batch timestamp, then to ingest time
+             */
+            ts?: string;
+        };
         PushInputBody: {
             /**
              * Format: uri
@@ -5125,12 +5144,16 @@ export interface components {
              * @example /api/v1/schemas/PushInputBody.json
              */
             readonly $schema?: string;
+            /** @description Natively caught occurrences, validated against event_type */
+            events?: components["schemas"]["PushEvent"][] | null;
             /** @description Raw untyped log lines. No registry gate */
             logs?: components["schemas"]["PushLog"][] | null;
+            /** @description Numeric observations, validated against metric_type */
+            metrics?: components["schemas"]["PushMetric"][] | null;
             /** @description The entity every row in the batch lands under */
             owner: components["schemas"]["OwnerStruct"];
-            /** @description Registry-resolved observations. The registry decides which table each lands in */
-            samples?: components["schemas"]["PushSample"][] | null;
+            /** @description Categorical observations, validated against property_type and each type's validation schema */
+            properties?: components["schemas"]["PushProperty"][] | null;
             /** @description Who observed this batch (recorded as the provenance source on every row) */
             source?: string;
             /**
@@ -5156,6 +5179,22 @@ export interface components {
              */
             ts?: string;
         };
+        PushMetric: {
+            /** @description Discriminates many values of one name on one owner (three fan speeds, per-port counters) */
+            instance?: string;
+            /** @description A registered metric_type name */
+            name: string;
+            /**
+             * Format: date-time
+             * @description When this was observed; defaults to the batch timestamp, then to ingest time
+             */
+            ts?: string;
+            /**
+             * Format: double
+             * @description The numeric observation
+             */
+            value: number;
+        };
         PushOutputBody: {
             /**
              * Format: uri
@@ -5167,22 +5206,22 @@ export interface components {
             /** @description Names dropped by reject-not-project. Reported synchronously so a caller learns about a typo */
             rejected?: components["schemas"]["PushRejection"][] | null;
         };
+        PushProperty: {
+            /** @description Discriminates many values of one name on one owner */
+            instance?: string;
+            /** @description A registered property_type name */
+            name: string;
+            /**
+             * Format: date-time
+             * @description When this was observed; defaults to the batch timestamp, then to ingest time
+             */
+            ts?: string;
+            /** @description The observed value, shaped by the type's data_type and validated against its validation schema */
+            value: unknown;
+        };
         PushRejection: {
             name: string;
             reason: string;
-        };
-        PushSample: {
-            /** @description Discriminates many values of one name on one owner (three fan speeds, per-port counters) */
-            instance?: string;
-            /** @description The canonical metric or property name, or a registered event_type name */
-            name: string;
-            /**
-             * Format: double
-             * @description The value for a metric type
-             */
-            number?: number;
-            /** @description The value for a property (a state), or the message for an event_type */
-            text?: string;
         };
         RaiseAlarmInputBody: {
             /**

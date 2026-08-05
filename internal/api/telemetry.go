@@ -2,11 +2,13 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/key"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -42,11 +44,26 @@ type TelemetryPublisher interface {
 	PublishTelemetry(ctx context.Context, b *ogv1.TelemetryBatch) error
 }
 
-type pushSample struct {
-	Name     string   `json:"name" minLength:"1" doc:"The canonical metric or property name, or a registered event_type name"`
-	Instance string   `json:"instance,omitempty" doc:"Discriminates many values of one name on one owner (three fan speeds, per-port counters)"`
-	Number   *float64 `json:"number,omitempty" doc:"The value for a metric type"`
-	Text     *string  `json:"text,omitempty" doc:"The value for a property (a state), or the message for an event_type"`
+type pushMetric struct {
+	Name     string    `json:"name" minLength:"1" doc:"A registered metric_type name"`
+	Instance string    `json:"instance,omitempty" doc:"Discriminates many values of one name on one owner (three fan speeds, per-port counters)"`
+	Value    float64   `json:"value" doc:"The numeric observation"`
+	TS       time.Time `json:"ts,omitempty" doc:"When this was observed; defaults to the batch timestamp, then to ingest time"`
+}
+
+type pushProperty struct {
+	Name     string    `json:"name" minLength:"1" doc:"A registered property_type name"`
+	Instance string    `json:"instance,omitempty" doc:"Discriminates many values of one name on one owner"`
+	Value    any       `json:"value" doc:"The observed value, shaped by the type's data_type and validated against its validation schema"`
+	TS       time.Time `json:"ts,omitempty" doc:"When this was observed; defaults to the batch timestamp, then to ingest time"`
+}
+
+type pushEvent struct {
+	Name     string    `json:"name" minLength:"1" doc:"A registered event_type name"`
+	Instance string    `json:"instance,omitempty" doc:"Discriminates many occurrences of one name on one owner"`
+	Message  string    `json:"message,omitempty" doc:"The occurrence's human-readable line"`
+	Payload  any       `json:"payload,omitempty" doc:"The occurrence's structured payload, validated against the event_type's payload schema"`
+	TS       time.Time `json:"ts,omitempty" doc:"When this occurred; defaults to the batch timestamp, then to ingest time"`
 }
 
 type pushLog struct {
@@ -64,10 +81,12 @@ type pushInput struct {
 			Kind string `json:"kind" enum:"component" doc:"The owner arc. Only component today; system and location arrive with #422"`
 			Ref  string `json:"ref" minLength:"1" doc:"The owning entity, by name or id"`
 		} `json:"owner" doc:"The entity every row in the batch lands under"`
-		Source  string       `json:"source,omitempty" doc:"Who observed this batch (recorded as the provenance source on every row)"`
-		TS      time.Time    `json:"ts,omitempty" doc:"Batch timestamp; a per-item timestamp overrides it"`
-		Samples []pushSample `json:"samples,omitempty" doc:"Registry-resolved observations. The registry decides which table each lands in"`
-		Logs    []pushLog    `json:"logs,omitempty" doc:"Raw untyped log lines. No registry gate"`
+		Source     string         `json:"source,omitempty" doc:"Who observed this batch (recorded as the provenance source on every row)"`
+		TS         time.Time      `json:"ts,omitempty" doc:"Batch timestamp; a per-item timestamp overrides it"`
+		Metrics    []pushMetric   `json:"metrics,omitempty" doc:"Numeric observations, validated against metric_type"`
+		Properties []pushProperty `json:"properties,omitempty" doc:"Categorical observations, validated against property_type and each type's validation schema"`
+		Events     []pushEvent    `json:"events,omitempty" doc:"Natively caught occurrences, validated against event_type"`
+		Logs       []pushLog      `json:"logs,omitempty" doc:"Raw untyped log lines. No registry gate"`
 	}
 }
 
@@ -80,34 +99,13 @@ type pushOutput struct {
 	Status int
 	Body   struct {
 		Accepted struct {
-			Samples int `json:"samples"`
-			Logs    int `json:"logs"`
+			Metrics    int `json:"metrics"`
+			Properties int `json:"properties"`
+			Events     int `json:"events"`
+			Logs       int `json:"logs"`
 		} `json:"accepted"`
 		Rejected []pushRejection `json:"rejected,omitempty" doc:"Names dropped by reject-not-project. Reported synchronously so a caller learns about a typo"`
 	}
-}
-
-// kindMismatch reports whether a pushed sample's value shape disagrees with the
-// kind its name resolved to, and what to send instead. It mirrors the consumer's
-// extractors exactly (numericValue takes int or double; stringValue and logValue
-// take a string), so the route rejects precisely what the sink would have dropped
-// and nothing more. Pure: no I/O.
-func kindMismatch(kind string, s pushSample) (reason string, bad bool) {
-	switch kind {
-	case "metric":
-		if s.Number == nil {
-			return "\"" + s.Name + "\" is a metric type: send number, not text", true
-		}
-	case "state":
-		if s.Text == nil {
-			return "\"" + s.Name + "\" is a state property: send text, not number", true
-		}
-	case "event":
-		if s.Text == nil {
-			return "\"" + s.Name + "\" is an event type: send text (the message), not number", true
-		}
-	}
-	return "", false
 }
 
 // registerTelemetryRoutes wires the push-ingest write surface.
@@ -118,9 +116,10 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		Path:          "/telemetry:push",
 		DefaultStatus: http.StatusAccepted,
 		Summary:       "Push telemetry for an owner",
-		Description: "Accepts samples and raw log lines for one owner and publishes them onto the ingest lane. " +
-			"The registry decides where each sample lands (metric, state, or a caught event); an unregistered name is " +
-			"rejected and reported in the response rather than silently dropped. Gated by telemetry:push, and the " +
+		Description: "Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and " +
+			"publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is " +
+			"rejected and reported in the response rather than silently dropped, and a property or event payload " +
+			"violating its type's schema refuses the batch with a 422. Gated by telemetry:push, and the " +
 			"caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.",
 	}, "telemetry", "push"), func(ctx context.Context, in *pushInput) (*pushOutput, error) {
 		if pub == nil {
@@ -129,10 +128,11 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		if in.Body.Owner.Kind != "component" {
 			return nil, huma.Error422UnprocessableEntity("owner.kind must be component")
 		}
-		if len(in.Body.Samples) == 0 && len(in.Body.Logs) == 0 {
-			return nil, huma.Error422UnprocessableEntity("a batch must carry at least one sample or log line")
+		items := len(in.Body.Metrics) + len(in.Body.Properties) + len(in.Body.Events) + len(in.Body.Logs)
+		if items == 0 {
+			return nil, huma.Error422UnprocessableEntity("a batch must carry at least one observation or log line")
 		}
-		if len(in.Body.Samples)+len(in.Body.Logs) > pushBatchLimit {
+		if items > pushBatchLimit {
 			return nil, huma.Error422UnprocessableEntity("batch exceeds the per-request item limit")
 		}
 
@@ -180,38 +180,80 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 			batch.Ts = timestamppb.New(in.Body.TS.UTC())
 		}
 
-		for _, s := range in.Body.Samples {
-			kind, ok := reg.Allows(s.Name)
+		// Reject-not-project is per lane: a name unknown to the lane's OWN catalog
+		// is reported in the rejected list, even when another catalog knows it. A
+		// value that fails its type's schema refuses the whole request with a 422
+		// instead (the #594 contract): the caller declared the right name, so the
+		// mistake is in the data, and half-landing a batch around it would leave
+		// the caller guessing which rows exist.
+		for _, m := range in.Body.Metrics {
+			if _, ok := reg.Metric(m.Name); !ok {
+				out.Body.Rejected = append(out.Body.Rejected, pushRejection{
+					Name: m.Name, Reason: "unregistered metric type name",
+				})
+				continue
+			}
+			batch.Metrics = append(batch.Metrics, &ogv1.MetricSample{
+				Name: m.Name, Instance: m.Instance, Value: m.Value, Ts: itemTS(m.TS),
+			})
+		}
+
+		for _, p := range in.Body.Properties {
+			pt, ok := reg.Property(p.Name)
 			if !ok {
 				out.Body.Rejected = append(out.Body.Rejected, pushRejection{
-					Name: s.Name, Reason: "unregistered property or event type name",
+					Name: p.Name, Reason: "unregistered property type name",
 				})
 				continue
 			}
-			if s.Number == nil && s.Text == nil {
+			if p.Value == nil {
 				out.Body.Rejected = append(out.Body.Rejected, pushRejection{
-					Name: s.Name, Reason: "no value: set number or text",
+					Name: p.Name, Reason: "no value",
 				})
 				continue
 			}
-			// The registry says which value shape the sink will accept, so check it
-			// HERE rather than letting the consumer discover it. Without this the
-			// name resolves, the batch is accepted with an empty rejected list, and
-			// the sample then dies silently in the consumer's value extraction: the
-			// exact mistake a human makes by hand, and the one case the synchronous
-			// rejection report used to miss. The reason names the shape to send,
-			// because "invalid value" is not actionable.
-			if reason, bad := kindMismatch(kind, s); bad {
-				out.Body.Rejected = append(out.Body.Rejected, pushRejection{Name: s.Name, Reason: reason})
+			raw, err := json.Marshal(p.Value)
+			if err != nil {
+				return nil, huma.Error422UnprocessableEntity("property \"" + p.Name + "\": value is not encodable")
+			}
+			// The same validator the property catalog itself obeys (ADR-0043):
+			// data_type shapes the value, the validation schema constrains it.
+			if err := key.ValidateValue(pt.DataType, raw, pt.Validation); err != nil {
+				return nil, huma.Error422UnprocessableEntity("property \"" + p.Name + "\": " + err.Error())
+			}
+			batch.Properties = append(batch.Properties, &ogv1.PropertySample{
+				Name: p.Name, Instance: p.Instance, ValueJson: string(raw), Ts: itemTS(p.TS),
+			})
+		}
+
+		for _, e := range in.Body.Events {
+			et, ok := reg.Event(e.Name)
+			if !ok {
+				out.Body.Rejected = append(out.Body.Rejected, pushRejection{
+					Name: e.Name, Reason: "unregistered event type name",
+				})
 				continue
 			}
-			sample := &ogv1.Sample{Name: s.Name, Instance: s.Instance}
-			if s.Number != nil {
-				sample.Value = &ogv1.Sample_DoubleValue{DoubleValue: *s.Number}
-			} else {
-				sample.Value = &ogv1.Sample_StringValue{StringValue: *s.Text}
+			if e.Message == "" && e.Payload == nil {
+				out.Body.Rejected = append(out.Body.Rejected, pushRejection{
+					Name: e.Name, Reason: "no content: set message or payload",
+				})
+				continue
 			}
-			batch.Samples = append(batch.Samples, sample)
+			var payload []byte
+			if e.Payload != nil {
+				raw, err := json.Marshal(e.Payload)
+				if err != nil {
+					return nil, huma.Error422UnprocessableEntity("event \"" + e.Name + "\": payload is not encodable")
+				}
+				if err := key.ValidateValue("json", raw, et.PayloadSchema); err != nil {
+					return nil, huma.Error422UnprocessableEntity("event \"" + e.Name + "\": " + err.Error())
+				}
+				payload = raw
+			}
+			batch.Events = append(batch.Events, &ogv1.EventSample{
+				Name: e.Name, Instance: e.Instance, Message: e.Message, Payload: payload, Ts: itemTS(e.TS),
+			})
 		}
 
 		for _, l := range in.Body.Logs {
@@ -227,14 +269,27 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 
 		// Everything rejected means nothing to publish: report it and stop rather than
 		// putting an empty batch on the lane.
-		if len(batch.Samples) == 0 && len(batch.Logs) == 0 {
+		accepted := len(batch.Metrics) + len(batch.Properties) + len(batch.Events) + len(batch.Logs)
+		if accepted == 0 {
 			return out, nil
 		}
 		if err := pub.PublishTelemetry(ctx, batch); err != nil {
 			return nil, huma.Error503ServiceUnavailable("publish telemetry")
 		}
-		out.Body.Accepted.Samples = len(batch.Samples)
+		out.Body.Accepted.Metrics = len(batch.Metrics)
+		out.Body.Accepted.Properties = len(batch.Properties)
+		out.Body.Accepted.Events = len(batch.Events)
 		out.Body.Accepted.Logs = len(batch.Logs)
 		return out, nil
 	})
+}
+
+// itemTS maps an optional per-item timestamp to the wire: absent stays absent
+// (nil), so the batch ts, then ingest time, can fill it downstream. A supplied
+// ts survives verbatim (normalized to UTC, the storage timezone).
+func itemTS(t time.Time) *timestamppb.Timestamp {
+	if t.IsZero() {
+		return nil
+	}
+	return timestamppb.New(t.UTC())
 }

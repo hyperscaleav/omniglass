@@ -19,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/nats-io/nats.go"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // TestTelemetryRoundTrip is the checkpoint-3 closing gate: a node runs a REAL tcp
@@ -140,7 +141,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId:  "t-b",
 		NodeId:  "node-a",
-		Samples: []*ogv1.Sample{{Name: "tcp-open", Value: &ogv1.Sample_DoubleValue{DoubleValue: 1}}},
+		Metrics: []*ogv1.MetricSample{{Name: "tcp-open", Value: 1}},
 	})
 
 	// NEGATIVE (a) REJECT-NOT-PROJECT: node-a publishes for its own t-a but with an
@@ -148,7 +149,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId:  "t-a",
 		NodeId:  "node-a",
-		Samples: []*ogv1.Sample{{Name: "bogus.metric", Value: &ogv1.Sample_DoubleValue{DoubleValue: 9}}},
+		Metrics: []*ogv1.MetricSample{{Name: "bogus.metric", Value: 9}},
 	})
 
 	// WATERMARK: a valid sample published AFTER the negatives. JetStream is
@@ -158,9 +159,23 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId:  "t-a",
 		NodeId:  "node-a",
-		Samples: []*ogv1.Sample{{Name: "tcp-connect-time", Value: &ogv1.Sample_DoubleValue{DoubleValue: 42}}},
+		Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 42}},
 	})
 	waitMetric(t, ctx, gw, "disp-1", "tcp-connect-time", func(d *storage.MetricSample) bool { return d != nil && d.Value == 42 })
+
+	// SUPPLIED TS SURVIVES VERBATIM (#594): a per-sample ts is never overwritten
+	// by ingest time, so a late-shipped observation keeps its observation time.
+	// A name with no other rows in this test (icmp-rtt-avg, seeded), so the
+	// latest-row read IS this row and its stored ts is directly assertable.
+	suppliedTS := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
+		TaskId:  "t-a",
+		NodeId:  "node-a",
+		Metrics: []*ogv1.MetricSample{{Name: "icmp-rtt-avg", Value: 7.5, Ts: timestamppb.New(suppliedTS)}},
+	})
+	waitMetric(t, ctx, gw, "disp-1", "icmp-rtt-avg", func(d *storage.MetricSample) bool {
+		return d != nil && d.Value == 7.5 && d.TS.Equal(suppliedTS)
+	})
 
 	// Confinement held: disp-2 (node-b's component) has NO sample from node-a.
 	if got, err := gw.LatestMetric(ctx, "disp-2", "tcp-open"); err != nil {
@@ -175,41 +190,51 @@ func TestTelemetryRoundTrip(t *testing.T) {
 		t.Fatalf("reject-not-project breached: unregistered name was written: %+v", got)
 	}
 
-	// --- STATE PATH (cp5a): interface-reachable is a STATE sample, routed by
-	// the property_type kind to state, under the SAME confinement and
+	// --- PROPERTY LANE (cp5a, per-lane since #594): interface-reachable rides the
+	// properties array as canonical JSON text, under the SAME confinement and
 	// reject-not-project as a metric, plus the ingest-side transition-only guard.
 
-	// node-a publishes interface-reachable=up for its own t-a. The registry kind is
-	// state, so it lands in state (not metric), owned disp-1 and
-	// instanced by the interface (disp-1-tcp).
+	// node-a publishes interface-reachable=up for its own t-a. The property lane
+	// lands in property (not metric), owned disp-1 and instanced by the interface
+	// (disp-1-tcp).
 	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
-		TaskId:  "t-a",
-		NodeId:  "node-a",
-		Samples: []*ogv1.Sample{{Name: "interface-reachable", Value: &ogv1.Sample_StringValue{StringValue: "up"}}},
+		TaskId:     "t-a",
+		NodeId:     "node-a",
+		Properties: []*ogv1.PropertySample{{Name: "interface-reachable", ValueJson: `"up"`}},
 	})
 	waitProperty(t, ctx, gw, "disp-1", "interface-reachable", "disp-1-tcp", func(d *storage.PropertySample) bool { return d != nil && d.Value == "up" })
 
-	// CONFINEMENT (state path): node-a publishes interface-reachable=up for t-b,
+	// CONFINEMENT (property lane): node-a publishes interface-reachable=up for t-b,
 	// which belongs to node-b (owner disp-2). The same fence that drops a foreign
-	// metric drops a foreign state: disp-2 gets no verdict.
+	// metric drops a foreign verdict: disp-2 gets none.
 	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
-		TaskId:  "t-b",
-		NodeId:  "node-a",
-		Samples: []*ogv1.Sample{{Name: "interface-reachable", Value: &ogv1.Sample_StringValue{StringValue: "up"}}},
+		TaskId:     "t-b",
+		NodeId:     "node-a",
+		Properties: []*ogv1.PropertySample{{Name: "interface-reachable", ValueJson: `"up"`}},
+	})
+
+	// PER-LANE VALIDATION (#594): a property value violating the type's validation
+	// schema (interface-reachable is enum [up, down]) must never land. Refusal is
+	// proven by the watermark pattern: the down flip below lands, so the consumer
+	// drained past this batch, and the series never contains "sideways".
+	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
+		TaskId:     "t-a",
+		NodeId:     "node-a",
+		Properties: []*ogv1.PropertySample{{Name: "interface-reachable", ValueJson: `"sideways"`}},
 	})
 
 	// TRANSITION-ONLY (ingest guard): a repeated identical up must NOT add a second
 	// row (the latest-value guard skips it); only a flip to down writes. The first
 	// up is already committed (waitProperty above), so the guard sees it deterministically.
 	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
-		TaskId:  "t-a",
-		NodeId:  "node-a",
-		Samples: []*ogv1.Sample{{Name: "interface-reachable", Value: &ogv1.Sample_StringValue{StringValue: "up"}}},
+		TaskId:     "t-a",
+		NodeId:     "node-a",
+		Properties: []*ogv1.PropertySample{{Name: "interface-reachable", ValueJson: `"up"`}},
 	})
 	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
-		TaskId:  "t-a",
-		NodeId:  "node-a",
-		Samples: []*ogv1.Sample{{Name: "interface-reachable", Value: &ogv1.Sample_StringValue{StringValue: "down"}}},
+		TaskId:     "t-a",
+		NodeId:     "node-a",
+		Properties: []*ogv1.PropertySample{{Name: "interface-reachable", ValueJson: `"down"`}},
 	})
 	waitProperty(t, ctx, gw, "disp-1", "interface-reachable", "disp-1-tcp", func(d *storage.PropertySample) bool { return d != nil && d.Value == "down" })
 
@@ -244,17 +269,22 @@ func TestTelemetryRoundTrip(t *testing.T) {
 		t.Fatalf("state confinement breached: node-a landed a verdict on disp-2: %+v", got)
 	}
 
-	// NATIVE CAUGHT EVENT (ADR-0066): a component publishes an event natively (a
-	// call-started, a seeded event_type) and it lands as a caught event on its
-	// component, routed by the event registry under the same owner confinement and
-	// reject-not-project as a metric or state. Raw logs are a separate lane, not this.
+	// MIXED LANES + NATIVE CAUGHT EVENT (ADR-0066, #594): one batch carries a
+	// metric, a property, and an event, and each lands in its lane's table. The
+	// event is a natively published occurrence (call-started, a seeded event_type)
+	// landing caught on the component, under the same owner confinement and
+	// reject-not-project as the other lanes. Raw logs are a separate lane, not this.
 	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId: "t-a", NodeId: "node-a",
-		Samples: []*ogv1.Sample{{Name: "call-started", Value: &ogv1.Sample_StringValue{StringValue: "call started"}}},
+		Metrics:    []*ogv1.MetricSample{{Name: "tcp-open", Value: 0}},
+		Properties: []*ogv1.PropertySample{{Name: "interface-reachable", ValueJson: `"up"`}},
+		Events:     []*ogv1.EventSample{{Name: "call-started", Message: "call started"}},
 	})
 	waitEvent(t, ctx, gw, "disp-1", func(e storage.Event) bool {
 		return e.Message == "call started" && e.Origin == "caught" && e.Key == "call-started"
 	})
+	waitMetric(t, ctx, gw, "disp-1", "tcp-open", func(d *storage.MetricSample) bool { return d != nil && d.Value == 0 })
+	waitProperty(t, ctx, gw, "disp-1", "interface-reachable", "disp-1-tcp", func(d *storage.PropertySample) bool { return d != nil && d.Value == "up" })
 
 	// RAW LOG LANE (ADR-0066): node-a ships its own self-log as a LogLine on the
 	// telemetry Event (no task, no registry name, no sample). It lands on
@@ -294,13 +324,13 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId: "t-a", NodeId: "node-a",
 		Owner:   &ogv1.Owner{Kind: "component", Ref: "disp-2"},
-		Samples: []*ogv1.Sample{{Name: "tcp-open", Value: &ogv1.Sample_DoubleValue{DoubleValue: 1}}},
+		Metrics: []*ogv1.MetricSample{{Name: "tcp-open", Value: 1}},
 	})
 	// Watermark: a later valid publish proves the forged one was processed and
 	// dropped rather than merely still in flight.
 	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId:  "t-a",
-		Samples: []*ogv1.Sample{{Name: "tcp-connect-time", Value: &ogv1.Sample_DoubleValue{DoubleValue: 42}}},
+		Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 42}},
 	})
 	waitMetric(t, ctx, gw, "disp-1", "tcp-connect-time", func(d *storage.MetricSample) bool {
 		return d != nil && d.Value == 42

@@ -5263,28 +5263,36 @@ func generatedCommands() []*cobra.Command {
 		}
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fEvents string
 				var fLogs string
+				var fMetrics string
 				var fOwner string
-				var fSamples string
+				var fProperties string
 				var fSource string
 				var fTs string
 				cmd := &cobra.Command{
 					Use:     "push",
 					Short:   "Push telemetry for an owner",
-					Long:    "Accepts samples and raw log lines for one owner and publishes them onto the ingest lane. The registry decides where each sample lands (metric, state, or a caught event); an unregistered name is rejected and reported in the response rather than silently dropped. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.",
+					Long:    "Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.",
 					Example: "  omniglass telemetry push --owner owner",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/telemetry:push")
 						body := map[string]any{}
+						if cmd.Flags().Changed("events") {
+							body["events"] = jsonOrString(fEvents)
+						}
 						if cmd.Flags().Changed("logs") {
 							body["logs"] = jsonOrString(fLogs)
+						}
+						if cmd.Flags().Changed("metrics") {
+							body["metrics"] = jsonOrString(fMetrics)
 						}
 						if cmd.Flags().Changed("owner") {
 							body["owner"] = jsonOrString(fOwner)
 						}
-						if cmd.Flags().Changed("samples") {
-							body["samples"] = jsonOrString(fSamples)
+						if cmd.Flags().Changed("properties") {
+							body["properties"] = jsonOrString(fProperties)
 						}
 						if cmd.Flags().Changed("source") {
 							body["source"] = fSource
@@ -5295,10 +5303,12 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
+				cmd.Flags().StringVar(&fEvents, "events", "", "Natively caught occurrences, validated against event_type")
 				cmd.Flags().StringVar(&fLogs, "logs", "", "Raw untyped log lines. No registry gate")
+				cmd.Flags().StringVar(&fMetrics, "metrics", "", "Numeric observations, validated against metric_type")
 				cmd.Flags().StringVar(&fOwner, "owner", "", "The entity every row in the batch lands under")
 				_ = cmd.MarkFlagRequired("owner")
-				cmd.Flags().StringVar(&fSamples, "samples", "", "Registry-resolved observations. The registry decides which table each lands in")
+				cmd.Flags().StringVar(&fProperties, "properties", "", "Categorical observations, validated against property_type and each type's validation schema")
 				cmd.Flags().StringVar(&fSource, "source", "", "Who observed this batch (recorded as the provenance source on every row)")
 				cmd.Flags().StringVar(&fTs, "ts", "", "Batch timestamp; a per-item timestamp overrides it")
 				return cmd

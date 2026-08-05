@@ -3,14 +3,22 @@ components:
     AcceptedStruct:
       additionalProperties: false
       properties:
+        events:
+          format: int64
+          type: integer
         logs:
           format: int64
           type: integer
-        samples:
+        metrics:
+          format: int64
+          type: integer
+        properties:
           format: int64
           type: integer
       required:
-        - samples
+        - metrics
+        - properties
+        - events
         - logs
       type: object
     AddMemberInputBody:
@@ -3447,6 +3455,28 @@ components:
         - data_type
         - official
       type: object
+    PushEvent:
+      additionalProperties: false
+      properties:
+        instance:
+          description: Discriminates many occurrences of one name on one owner
+          type: string
+        message:
+          description: The occurrence's human-readable line
+          type: string
+        name:
+          description: A registered event_type name
+          minLength: 1
+          type: string
+        payload:
+          description: The occurrence's structured payload, validated against the event_type's payload schema
+        ts:
+          description: When this occurred; defaults to the batch timestamp, then to ingest time
+          format: date-time
+          type: string
+      required:
+        - name
+      type: object
     PushInputBody:
       additionalProperties: false
       properties:
@@ -3457,6 +3487,13 @@ components:
           format: uri
           readOnly: true
           type: string
+        events:
+          description: Natively caught occurrences, validated against event_type
+          items:
+            $ref: "#/components/schemas/PushEvent"
+          type:
+            - array
+            - "null"
         logs:
           description: Raw untyped log lines. No registry gate
           items:
@@ -3464,13 +3501,20 @@ components:
           type:
             - array
             - "null"
+        metrics:
+          description: Numeric observations, validated against metric_type
+          items:
+            $ref: "#/components/schemas/PushMetric"
+          type:
+            - array
+            - "null"
         owner:
           $ref: "#/components/schemas/OwnerStruct"
           description: The entity every row in the batch lands under
-        samples:
-          description: Registry-resolved observations. The registry decides which table each lands in
+        properties:
+          description: Categorical observations, validated against property_type and each type's validation schema
           items:
-            $ref: "#/components/schemas/PushSample"
+            $ref: "#/components/schemas/PushProperty"
           type:
             - array
             - "null"
@@ -3510,6 +3554,28 @@ components:
       required:
         - message
       type: object
+    PushMetric:
+      additionalProperties: false
+      properties:
+        instance:
+          description: Discriminates many values of one name on one owner (three fan speeds, per-port counters)
+          type: string
+        name:
+          description: A registered metric_type name
+          minLength: 1
+          type: string
+        ts:
+          description: When this was observed; defaults to the batch timestamp, then to ingest time
+          format: date-time
+          type: string
+        value:
+          description: The numeric observation
+          format: double
+          type: number
+      required:
+        - name
+        - value
+      type: object
     PushOutputBody:
       additionalProperties: false
       properties:
@@ -3532,6 +3598,26 @@ components:
       required:
         - accepted
       type: object
+    PushProperty:
+      additionalProperties: false
+      properties:
+        instance:
+          description: Discriminates many values of one name on one owner
+          type: string
+        name:
+          description: A registered property_type name
+          minLength: 1
+          type: string
+        ts:
+          description: When this was observed; defaults to the batch timestamp, then to ingest time
+          format: date-time
+          type: string
+        value:
+          description: The observed value, shaped by the type's data_type and validated against its validation schema
+      required:
+        - name
+        - value
+      type: object
     PushRejection:
       additionalProperties: false
       properties:
@@ -3542,26 +3628,6 @@ components:
       required:
         - name
         - reason
-      type: object
-    PushSample:
-      additionalProperties: false
-      properties:
-        instance:
-          description: Discriminates many values of one name on one owner (three fan speeds, per-port counters)
-          type: string
-        name:
-          description: The canonical metric or property name, or a registered event_type name
-          minLength: 1
-          type: string
-        number:
-          description: The value for a metric type
-          format: double
-          type: number
-        text:
-          description: The value for a property (a state), or the message for an event_type
-          type: string
-      required:
-        - name
       type: object
     RaiseAlarmInputBody:
       additionalProperties: false
@@ -11131,7 +11197,7 @@ paths:
       x-omniglass-permission: task:read
   /telemetry:push:
     post:
-      description: Accepts samples and raw log lines for one owner and publishes them onto the ingest lane. The registry decides where each sample lands (metric, state, or a caught event); an unregistered name is rejected and reported in the response rather than silently dropped. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.
+      description: "Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404."
       operationId: push-telemetry
       requestBody:
         content:
