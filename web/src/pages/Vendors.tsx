@@ -1,12 +1,12 @@
 import { Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import BladeTitle from "../components/BladeTitle";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import BladeField, { EMPTY_VALUE } from "../components/BladeField";
 import FieldRow from "../components/FieldRow";
 import { createIdentity } from "../lib/entities";
-import { entityLabel } from "../lib/entities";
 import { useFormActions } from "../lib/formactions";
 import { Plus } from "../components/icons";
 import {
@@ -112,9 +112,7 @@ function useVendorRow(id: string): () => Vendor | undefined {
 }
 
 function VendorBladeTitle(p: { id: string }): JSX.Element {
-  const row = useVendorRow(p.id);
-  const r = row();
-  return <span>{r ? entityLabel(r) : p.id}</span>;
+  return <BladeTitle row={useVendorRow(p.id)} fallback={p.id} />;
 }
 
 function VendorBladeBody(p: { id: string }): JSX.Element {

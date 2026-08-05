@@ -1,12 +1,12 @@
 import { Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
-import { entityLabel } from "../lib/entities";
 import { Plus } from "../components/icons";
 import {
   type Driver,
@@ -87,9 +87,7 @@ function useDriverRow(id: string): () => Driver | undefined {
 }
 
 function DriverBladeTitle(p: { id: string }): JSX.Element {
-  const row = useDriverRow(p.id);
-  const r = row();
-  return <span>{r ? entityLabel(r) : p.id}</span>;
+  return <BladeTitle row={useDriverRow(p.id)} fallback={p.id} />;
 }
 
 function DriverBladeBody(p: { id: string }): JSX.Element {

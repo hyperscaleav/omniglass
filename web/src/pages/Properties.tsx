@@ -1,7 +1,7 @@
 import { For, Show, createEffect, createSignal, on, type JSX } from "solid-js";
-import { entityLabel } from "../lib/entities";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
@@ -101,9 +101,7 @@ export const propertyBlade: BladeDef = {
 // lands on the same words the row showed. It rendered the bare name before, so
 // clicking "ICMP RTT (avg)" opened a panel headed icmp.rtt-avg.
 function PropertyBladeTitle(p: { name: string }): JSX.Element {
-  const row = usePropertyRow(p.name);
-  const r = row();
-  return <span classList={{ "font-data": !r?.display_name }}>{r ? entityLabel(r) : p.name}</span>;
+  return <BladeTitle row={usePropertyRow(p.name)} fallback={p.name} />;
 }
 
 function usePropertyRow(name: string): () => PropertyRow | undefined {

@@ -251,3 +251,53 @@ describe("a blade heading resolves the display name", () => {
     }
   });
 });
+
+// A blade heading may not SNAPSHOT its row.
+//
+// The sibling of the check above, and the one that actually shipped. Eight titles
+// looked the row up correctly and still went stale, because they read the accessor
+// once in the component body:
+//
+//   const r = row();                                  // subscribes to nothing
+//   return <span>{r ? entityLabel(r) : p.id}</span>;
+//
+// A Solid component body runs ONCE. The rename reached the row, the list, and the
+// blade body, and never the heading, until the blade was closed and reopened
+// (#579). The check above passed the whole time: the row WAS looked up, just not
+// reactively. So this one is about WHERE the accessor is read, not whether.
+//
+// It is deliberately narrow. Inside a component whose name ends in Title, a const
+// bound to a zero-argument call of a local accessor is the snapshot, every time,
+// because a title has nothing to do with that value except render it. Read it
+// inside the JSX (or hand it to `BladeTitle`, which does) and the rule is met.
+describe("a blade heading tracks its row", () => {
+  it("never snapshots the row accessor in the component body", () => {
+    // A component body between `function <Name>Title(` and the closing brace at
+    // column 0, which is where a snapshot would sit; a read inside the returned
+    // JSX is indented past it and is what we want callers to do instead.
+    const title = /^(?:export\s+)?function\s+(\w*Title)\s*\(/;
+    const snapshot = /^\s{2}const\s+(\w+)\s*=\s*(\w+)\(\)\s*;/;
+    const offenders: string[] = [];
+    for (const file of walk(SRC, { tests: false })) {
+      const lines = readFileSync(file, "utf8").split("\n");
+      let inTitle: string | null = null;
+      lines.forEach((line, i) => {
+        const start = title.exec(line);
+        if (start) inTitle = start[1];
+        else if (inTitle && /^\}/.test(line)) inTitle = null;
+        else if (inTitle) {
+          const m = snapshot.exec(line);
+          if (m) offenders.push(`${file.replace(SRC + "/", "")}:${i + 1}  ${inTitle}: const ${m[1]} = ${m[2]}()`);
+        }
+      });
+    }
+    expect(
+      offenders,
+      `\nThese blade headings snapshot their row instead of tracking it:\n  ${offenders.join("\n  ")}\n\n` +
+        `A Solid component body runs once, so a read there subscribes to nothing and the\n` +
+        `heading will not follow a rename. Read the accessor inside the JSX, or render\n` +
+        `<BladeTitle row={...} fallback={...} />, which is that rule as a component.\n`,
+    ).toEqual([]);
+  });
+});
+

@@ -99,6 +99,39 @@ describe("Vendors page", () => {
     expect(value.tagName).not.toBe("A");
     expect(blade.querySelector('a[href^="javascript:"]')).not.toBeInTheDocument();
   });
+
+  // #579: the heading is what tells an operator which row they are looking at, so
+  // it has to follow a rename. It read its accessor ONCE in the component body,
+  // outside any tracking scope, and a Solid component body runs once: the refetch
+  // after Save updated the row, the list, and the body, and never the heading.
+  // Driving the whole save is the point. A test that only re-rendered the title
+  // would have passed against the broken code.
+  it("updates the blade heading when the display name is saved, without reopening", async () => {
+    const renamed = seed.map((v) => (v.name === "acme-av" ? { ...v, display_name: "Acme Audio Visual" } : v));
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+      const body = url.includes("/vendors/") ? renamed[1] : { vendors: renamed };
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    });
+
+    mount();
+    fireEvent.click(screen.getByText("Acme AV"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    // The heading starts on the row the operator clicked.
+    const heading = blade.querySelector("header .truncate") as HTMLElement;
+    expect(heading.textContent).toBe("Acme AV");
+
+    fireEvent.click(within(blade).getByText("Edit"));
+    const input = await within(blade).findByDisplayValue("Acme AV");
+    fireEvent.input(input, { target: { value: "Acme Audio Visual" } });
+    fireEvent.click(within(blade).getByText("Save"));
+
+    await waitFor(() => expect(heading.textContent).toBe("Acme Audio Visual"));
+  });
 });
 
 // The catalog addresses rows by the name (ADR-0062): the first column

@@ -1,12 +1,12 @@
 import { Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { createIdentity } from "../lib/entities";
-import { entityLabel } from "../lib/entities";
 import { useFormActions } from "../lib/formactions";
 import { Plus } from "../components/icons";
 import {
@@ -86,9 +86,7 @@ function useCapabilityRow(id: string): () => Capability | undefined {
 }
 
 function CapabilityBladeTitle(p: { id: string }): JSX.Element {
-  const row = useCapabilityRow(p.id);
-  const r = row();
-  return <span>{r ? entityLabel(r) : p.id}</span>;
+  return <BladeTitle row={useCapabilityRow(p.id)} fallback={p.id} />;
 }
 
 function CapabilityBladeBody(p: { id: string }): JSX.Element {

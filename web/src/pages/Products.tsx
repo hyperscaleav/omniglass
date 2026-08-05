@@ -1,12 +1,12 @@
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
 import BladeField, { EMPTY_VALUE } from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { createIdentity } from "../lib/entities";
-import { entityLabel } from "../lib/entities";
 import { useFormActions } from "../lib/formactions";
 import ProductContractEditor from "../components/ProductContractEditor";
 import { Plus } from "../components/icons";
@@ -111,9 +111,7 @@ function useProductRow(id: string): () => Product | undefined {
 }
 
 function ProductBladeTitle(p: { id: string }): JSX.Element {
-  const row = useProductRow(p.id);
-  const r = row();
-  return <span>{r ? entityLabel(r) : p.id}</span>;
+  return <BladeTitle row={useProductRow(p.id)} fallback={p.id} />;
 }
 
 function ProductBladeBody(p: { id: string }): JSX.Element {
