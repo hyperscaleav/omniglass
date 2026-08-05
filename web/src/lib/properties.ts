@@ -3,9 +3,9 @@ import { api } from "../api/client";
 // The Properties catalog data layer: thin typed wrappers over the /property-types
 // surface. A property is a canonical, typed, non-numeric signal named by a key
 // that a sample observes and a field declares; numeric signals live on the metric
-// lane (/metric-types, a later console slice). Official properties are seed-owned
-// and read-only; custom properties are operator created. validation is a JSON
-// Schema fragment.
+// lane (/metric-types, lib/metric_types, the Metrics page). Official properties
+// are seed-owned and read-only; custom properties are operator created.
+// validation is a JSON Schema fragment.
 
 export type PropertyDataType = "string" | "bool" | "json";
 

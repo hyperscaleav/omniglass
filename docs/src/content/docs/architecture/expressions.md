@@ -32,7 +32,7 @@ Stored values are always in their `property_type`'s **canonical unit**; **`conve
 "<unit>")`** lets an operator author against a non-canonical one. The **source unit is
 inferred** from the bound property's canonical unit; the **target** must be a registered unit
 in the **same family** (a compile error otherwise). The conversion comes from the
-[unit registry](/architecture/properties/#units-one-canonical-unit-per-key): `to_canonical` /
+[unit registry](/architecture/properties/#units-one-canonical-unit-per-metric): `to_canonical` /
 `from_canonical` transforms, **affine** or an **Expr** for the rare nonlinear one. So
 `convert(value, "fahrenheit") > 100` reads in Fahrenheit while storage stays in canonical
 celsius. A function rather than a per-unit method: data-driven, general, available wherever

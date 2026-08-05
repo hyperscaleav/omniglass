@@ -115,7 +115,7 @@ func registerCommandTypeRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 		Path:          "/command-types",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a command type",
-		Description:   "Registers a custom command type (official=false). The name must be a valid keyspace name (dot-joined kebab segments); a target property, when set, must be registered. Gated by command_type:create.",
+		Description:   "Registers a custom command type (official=false). The name must be a single kebab token; a target, when set, must be a registered property or metric type. Gated by command_type:create.",
 	}, "command_type", "create"), func(ctx context.Context, in *createCommandTypeInput) (*commandTypeOutput, error) {
 		schema, err := marshalValidation(in.Body.ParamsSchema)
 		if err != nil {

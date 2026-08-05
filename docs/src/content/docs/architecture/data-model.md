@@ -498,12 +498,15 @@ telemetry.property.system_id -> estate.system.id
   interfaces a component exposes.
 - **catalog** - the shared reference library: vendors, products, drivers, and
   standards, plus the capabilities and properties they define.
-- **telemetry** - the observability model of [ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables):
-  the typed registries (`property_type`, `event_type`, `command_type`) over the
-  bare-noun data tables (`property`, `metric`, `state`, `event`, `log_line`,
-  `command`) and the alarms raised off them (`alarm`, `alarm_capability`).
-- **collection** - where and how telemetry is gathered: the nodes that run probes
-  and the tasks they execute.
+- **telemetry** - the five-lane observability model
+  ([ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables),
+  [ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)):
+  the typed registries (`metric_type`, `property_type`, `event_type`,
+  `command_type`) over the bare-noun data tables (`metric`, `property`, `event`,
+  `command`, `log_line`) and the alarms raised off them (`alarm`,
+  `alarm_capability`).
+- **collection** - where and how telemetry is gathered: the nodes that run probes,
+  the tasks they execute, and the `node_log` self-log lane.
 - **config** - the settings, variables, secrets, and credentials that parameterize
   everything above.
 - **content** - the cross-cutting attachments: blobs, files, and the tag bindings

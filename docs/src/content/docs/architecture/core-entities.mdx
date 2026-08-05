@@ -29,7 +29,8 @@ classifier** (`product` / `standard` / `location_type`; the `component_type` reg
 [ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value);
 `system_type` was promoted to `standard`,
 [ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)).
-The **exclusive-arc** owner columns are real, carrying the sample sinks, **`event`**, **`property`**,
+The **exclusive-arc** owner columns are real, carrying the sample lanes (**`metric`**,
+**`property`**), **`event`**, and **`command`**,
 and a recorded **[health](/architecture/health/)** series per component, system, and location. A
 system declares **roles** staffed by components whose **resolved capabilities** cover them, each role
 carrying an **impact**. See [implementation status](/architecture/status/).
@@ -163,24 +164,28 @@ first-class and carries no contract. Conformance is **not** a copy: the standard
 resolve **live** for every conforming system until it overrides one. See the
 [Standards guide](/guides/admin/standards/).
 
-### Declared properties: the classifier contracts and the value store
+### Declared properties: the classifier contracts and the declared rows
 
-A classifier also **declares what its instances expose**, in three tables of one shape:
-**`product_property`**, **`standard_property`**, and **`location_type_property`**, one row per
-declared property (`<classifier>_id`, a **`property_type_id`** FK into the
-[`property_type` catalog](/architecture/variables/), an optional `default_value` in jsonb, a
-`required` flag), unique per `(classifier, property)`; the API body carries `property_type_name`,
-resolved to the FK at the edge. Type and validation live on the property, never repeated here.
+A classifier also **declares what its instances expose**, one row per declared name, unique per
+`(classifier, name)`: **`product_property`**, **`standard_property`**, and
+**`location_type_property`** carry a **`property_type_id`** FK into the
+[`property_type` catalog](/architecture/properties/), and their metric siblings
+(**`product_metric`**, **`standard_metric`**, **`location_type_metric`**) carry a
+**`metric_type_id`** into `metric_type`, each with an optional `default_value` in jsonb and a
+`required` flag; the API body carries the type name,
+resolved to the FK at the edge. Type and validation live on the catalog row, never repeated here.
 
-The value lives in **`property`**, on the **same owner exclusive-arc** as the sample sinks and
-`event` ([below](#ownership-the-exclusive-arc)), plus the **`property_type_id`** FK, an `instance`
-discriminator, a **`provenance`**, and the jsonb `value`. Provenance makes the fold work: one table holds values an operator **declared**, a device
-**observed**, a rule **calculated**, and config **intended**; the per-provenance producers are on
-[config, secrets, and variables](/architecture/variables/#property-one-typed-name-a-classifier-contract-a-stored-value).
+The value lives in the **`property` series itself**: an operator-set value is a **declared series
+row** (`provenance='declared'`, jsonb `value`, the same owner exclusive-arc, type FK, and
+`instance` discriminator every sample carries), beside the rows a device **observed**, a rule
+**calculated**, and a command **intended**
+([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).
+An edit appends, an unset appends a tombstone, and the history is the series
+([samples](/architecture/properties/#declared-an-operators-assertion-as-a-series-row)).
 
 The read is **`EffectiveProperties(ownerKind, ownerID)`**, one query with two arms: the **contract
 arm** (every property the classifier declares, resolved to
-`coalesce(the instance's declared value, the contract default)`, marked `from_contract`) and the
+`coalesce(the instance's current declared row, the contract default)`, marked `from_contract`) and the
 **off-contract arm** (values set directly on the instance); an instance with no classifier set (a
 **productless** component, a **one-off** system) resolves to its off-contract arm alone, and a
 **node**, with no classifier, always does.
@@ -258,7 +263,7 @@ Membership **cascades from both ends**, and does not restrict the component the 
 `system_role_assignment` does: that restrict is load-bearing (deleting a filler would silently break
 health); a role-less membership is not worth blocking a delete over.
 
-**A role is declared on a standard or on a system**, the same exclusive arc the value store uses:
+**A role is declared on a standard or on a system**, the same exclusive-arc pattern the sample tables use:
 standard-declared roles are **inherited live** by every conforming system, like a contract default;
 system-declared ones are ad-hoc, how a one-off system gets roles and a conforming system adds beyond
 its standard. A role carries a **`quorum`** (two ceiling mics is one role with quorum 2), at least
@@ -307,7 +312,8 @@ Shipped content is two kinds, never conflated:
   per release without touching a tenant. What lands is an **operator-owned** row (`official: false`),
   installed **only if absent** (`ON CONFLICT DO NOTHING`) so re-seeding never reverts an edit; a
   shipped standard's **roles** ride the same lane.
-- **Canonical vocabulary** (the [`property_type` catalog](/architecture/variables/), the `event_type`
+- **Canonical vocabulary** (the [`metric_type` and `property_type` catalogs](/architecture/properties/),
+  the `event_type`
   and `command_type` registries) is the shared namespace a driver maps onto, identical install to
   install: seeded `official: true` through an **authoritative upsert** (`ON CONFLICT DO UPDATE`),
   read-only in the API. The classification catalogs (`vendor`, `driver`, `capability`, `product`)
@@ -362,7 +368,7 @@ Every built CHECK admits exactly `component | system | location | node`.
 The singleton `global` owner rides the same arc as an all-null arm: none of the four owner columns set.
 :::
 
-This makes **system-, location-, and node-level samples first-class** (`health` is a `state` owned by
+This makes **system-, location-, and node-level samples first-class** (`health` is a `property` owned by
 a system; a node's self-health is owned by the node); estate-wide samples owned by `global` are the
 designed extension. The **owner** gives a recorded [health](/architecture/health/) verdict its level:
 component, system, and location each own a transition series under the same `health` property name. The same
@@ -373,7 +379,7 @@ so a system-owned sample will yield a system-owned alarm. The full pattern and D
 ### The event sink: the first arc-owned occurrence
 
 The arc's first built sink beyond the sample tables is **`event`**, the **occurrence sink**: a
-**past occurrence** with no "what is it now?", against a `metric` or `state`'s sampled present value
+**past occurrence** with no "what is it now?", against a `metric` or `property`'s sampled present value
 (the [has-a-value-now razor](/architecture/properties/#the-has-a-value-now-razor-sample-vs-event)).
 
 An `event` row carries the **identical owner exclusive-arc** as a sample (same one-set CHECK) and
@@ -382,10 +388,10 @@ the **same provenance** vocabulary (`observed` / `calculated` / `intended` / `de
 (`event_type_id`, resolved from the `event_type` name), the lineage columns, and the separate raw
 `log_line` lane
 ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)) are the
-[events](/architecture/events/) page's model. Closing the loop, the reserved **`event_id`** columns
-on `metric` and `state` are now **real foreign keys** to `event(id)` (`on delete set null`): an
-**intended**-provenance sample references the `event` that produced it
-([samples](/architecture/properties/)).
+[events](/architecture/events/) page's model. Closing the loop, an **intended**-provenance sample
+names the **command** that opened it (`command_id`, a real foreign key on both sample tables); the
+command's caused `event` stays stamped on the row but is optional
+([samples](/architecture/properties/), [ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).
 
 ## Structural multi-membership (a component in N systems)
 

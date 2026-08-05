@@ -94,7 +94,7 @@ export default defineConfig({
             { label: 'Core entities', slug: 'architecture/core-entities' },
             // the journey, in the order the data travels
             { label: 'Data collection', slug: 'architecture/collection' },
-            { label: 'Properties', slug: 'architecture/properties' },
+            { label: 'Metrics and properties', slug: 'architecture/properties' },
             { label: 'Events', slug: 'architecture/events' },
             { label: 'Commands', slug: 'architecture/commands' },
             { label: 'Config & credentials', slug: 'architecture/variables' },

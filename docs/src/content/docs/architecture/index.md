@@ -70,27 +70,35 @@ That normalized reading is a **sample**.
 
 ## The sample
 
-A **[sample](/architecture/properties/)** is one value of one **canonical signal** (`power-state`,
-`audio-level`), owned by exactly one entity through the **exclusive arc**: a component or a system
+A **[sample](/architecture/properties/)** is one reading of one **canonical signal** (`power-state`,
+`audio-level`), in one of two lanes: a **metric** is a **quantity** (a number that aggregates: an
+average fan speed means something), a **property** is a **value** (what something *is*, including a
+number used as a name: input 3, zone 4; values do not aggregate, they have **duration**). It is
+owned by exactly one entity through the **exclusive arc**: a component or a system
 or a location, never more than one. It carries a **provenance** (how we know it: **observed**
-from the device, **[calculated](/architecture/calculations/)** by Omniglass, or **intended** by a
-**[command](/architecture/commands/)** we sent) and a **source** (which sensor or path told us).
+from the device, **[calculated](/architecture/calculations/)** by Omniglass, **intended** by a
+**[command](/architecture/commands/)** we sent, or **declared** by an operator) and a **source**
+(which sensor or path told us).
 
-The meaning of each signal (its kind, unit, and validation) lives in a governed **registry**, and
-a template *references* a registered signal rather than inventing one, so two displays from
+The meaning of each signal (its value type, its unit, its validation) lives in a governed
+**catalog** per lane (`metric_type`, `property_type`), and a template *references* a registered
+signal rather than inventing one, so two displays from
 different manufacturers answer the same question the same way: the **measurement** is named, not
 the device.
 
 ## What it should be
 
 Not every value is measured. Some are **declared**, set by an operator rather than read from a
-device: **[config](/architecture/variables/)** when bound to a signal (this input should be HDMI1),
-a plain **variable** when it just rides down the tree (this system polls every 30 seconds), both
+device. A declared signal value (this input should be HDMI1) is an ordinary **sample row** with
+`provenance=declared` in the same series its observed side lands in, so its edit history is the
+series itself; a plain **[variable](/architecture/variables/)** just rides down the tree (this
+system polls every 30 seconds),
 resolved down a **[cascade](/architecture/cascade/)**: set once high, overridden exactly where it
 matters. The same
 cascade resolves **[tags](/architecture/tags/)** (the governed label vocabulary), encrypted secrets,
 and platform **[settings](/architecture/settings/)**, and **[files](/architecture/files/)** attach
-alongside them as searchable handles over a content-addressed blob store. Config has an observed side,
+alongside them as searchable handles over a content-addressed blob store. A declared signal has an
+observed side,
 so the gap between intent and reality is **drift**, a signal you can alarm on or a fix you can push
 back.
 
@@ -151,7 +159,7 @@ event: event { class: node }
 alarm: alarm { class: node }
 health: "health\nrolls up the system" { class: node }
 action: "action\nnotify · remediate · ticket" { class: node }
-config: "config\ndeclared" { class: node }
+declared: "declared\noperator-set" { class: node }
 views: "views → console" { class: node }
 
 gear -> sample: collect (node + edge parse)
@@ -160,7 +168,7 @@ event -> alarm: fire / clear
 alarm -> health: degrades a capability
 alarm -> action: action_rule
 action -> gear: command { style.stroke-dash: 4 }
-config -- sample: drift { style.stroke-dash: 4 }
+declared -- sample: drift { style.stroke-dash: 4 }
 sample -> views
 alarm -> views
 health -> views
@@ -204,7 +212,8 @@ A handful of patterns hold everywhere:
   one-time clone with no back-pointer, so a template can be rewritten in any release without
   migrating an install ([ADR-0071](/architecture/decisions/#adr-0071-a-template-is-a-clonable-example-not-a-versioned-shape-an-instance-pins)).
 - **On-row lineage**: a derived row carries its own evidence; there is no separate execution table.
-- **The `official` boolean**: every registry (`property_type`, `event_type`, `command_type`, and the
+- **The `official` boolean**: every registry (`metric_type`, `property_type`, `event_type`,
+  `command_type`, and the
   catalogs) and rule row carries an `official` boolean: the curated ship-with set, seeded at boot
   and authoritative; the rest is operator-authored and local to a deployment.
 - **Views by default**: current-state reads are plain views, materialized only when a profile proves

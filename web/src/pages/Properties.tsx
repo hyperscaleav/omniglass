@@ -22,10 +22,13 @@ import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
-// Properties: the estate-model signal catalog (Catalog > Properties). A property is
-// a typed, registered signal named by a key that a sample observes and a field
-// declares. Official (seed-owned) properties are read-only; custom properties are
-// operator-created. The catalog is estate-wide reference data, not a scoped resource.
+// Properties: the categorical lane of the signal catalog (Catalog > Properties),
+// the twin of the Metrics page. A property is a typed, registered non-numeric
+// signal named by a key that a sample observes and a field declares; a numeric
+// signal is a metric type. Official (seed-owned) properties are read-only; custom
+// properties are operator-created. The catalog is estate-wide reference data, not
+// a scoped resource, and every affordance gates on property_type, the resource
+// the API stamps.
 
 function typeBadge(dataType: string): JSX.Element {
   return <span class="badge badge-ghost badge-sm font-data">{dataType}</span>;
@@ -52,7 +55,7 @@ export default function Properties(): JSX.Element {
   const me = useMe();
   const properties = useQuery(() => ({ queryKey: PROPERTIES_KEY, queryFn: listProperties }));
   const rows = () => (properties.data ?? []).slice().sort((a, b) => a.name.localeCompare(b.name));
-  const canCreate = () => can(me.data, "property", "create");
+  const canCreate = () => can(me.data, "property_type", "create");
 
   return (
     <div class="flex min-h-full flex-col gap-4">
@@ -147,10 +150,10 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
   }
 
   edit.bind({
-    editable: () => !!row() && !row()!.official && can(me.data, "property", "update"),
+    editable: () => !!row() && !row()!.official && can(me.data, "property_type", "update"),
     save,
     destructive: () =>
-      row() && !row()!.official && can(me.data, "property", "delete")
+      row() && !row()!.official && can(me.data, "property_type", "delete")
         ? { label: "Delete", tone: "danger", onClick: removeProperty }
         : undefined,
   });

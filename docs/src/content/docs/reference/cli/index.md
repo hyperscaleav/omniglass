@@ -373,7 +373,7 @@ Create a command type
 omniglass command-type create [flags]
 ```
 
-Registers a custom command type (official=false). The name must be a valid keyspace name (dot-joined kebab segments); a target property, when set, must be registered. Gated by command_type:create.
+Registers a custom command type (official=false). The name must be a single kebab token; a target, when set, must be a registered property or metric type. Gated by command_type:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|

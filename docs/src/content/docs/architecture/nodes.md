@@ -151,7 +151,7 @@ a held-open connection is a **stateful interface transport**, not a third task t
 assemble the same telemetry payload (below).
 :::
 
-The built interface types, their per-task params, and the fixed samples each emits are the collection **type catalog** ([built interface types and their config](/architecture/collection/#built-interface-types-and-their-config)); this page covers how the node *executes* them: reachability gating, sessions, the task queue, tick scheduling.
+The built interface types, their per-task params, and the fixed samples each emits are the collection **type catalog** ([interface types and their config](/architecture/collection/#interface-types-and-their-config)); this page covers how the node *executes* them: reachability gating, sessions, the task queue, tick scheduling.
 
 ## Sessions
 

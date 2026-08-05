@@ -56,7 +56,8 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   `/auth/me` family is the exception: authn-only, resolving the target from the session, never a path
   id, so it carries no capability and a credential id not the caller's own is a 404; the **admin**
   counterparts on `/principals/{id}` do carry a capability and a scoped path id.
-- **Each typed registry is its own plural collection**: `/location-types`, `/property-types`,
+- **Each typed registry is its own plural collection**: `/location-types`, `/metric-types`,
+  `/property-types`,
   `/event-types` ([ADR-0060](/architecture/decisions/#adr-0060-a-resource-is-one-kebab-case-noun-nesting-means-ownership)).
 - **Collection-level custom methods** carry the colon on the collection, not a member:
   `POST /systems:checkName` (also `/components:checkName`, `/locations:checkName`) is an advisory
@@ -222,21 +223,28 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   `event_type_id` beside it, `origin` (caught/caused/derived/scheduled), `instance`,
   `message`, optional `attributes`, `provenance` (`observed` for direct collection), and the `source`
   interface type.
-- `GET /components/{name}/reconciliation` pivots want/told/is over the property cache: per declared
-  property, the **want** (the declared value, resolved live from the
-  [cascade](/architecture/variables/), never a cache row), the **told** (the `intended` value a command
-  set), and the **is** (the `observed` value from the [latest-value cache](/architecture/properties/)),
+- `GET /components/{name}/reconciliation` pivots want/told/is over the series: per declared
+  property, the **want** (the current declared value, with the contract default coalesced in), the
+  **told** (the `intended` value a command
+  set), and the **is** (the latest `observed` value), all three
+  [latest-series-row reads](/architecture/properties/#current-value-is-the-latest-series-row),
   with **drift** (observed present and disagreeing with declared) computed on read.
 
-**Two registries ride the `/property-types` shape** (estate-wide reference data, no scope injection;
-official seed-owned types read-only, a 409). The **event_type registry is the occurrence keyspace**:
+**Three registries ride the `/property-types` shape** (estate-wide reference data, no scope injection;
+official seed-owned types read-only, a 409). The **metric_type catalog is the numeric keyspace**:
+`GET/POST/PATCH/DELETE /metric-types[/{name}]`, gated `metric_type:read` / `:create` / `:update` /
+`:delete`, each type carrying the numeric facts (`unit`, `precision`); the two sample catalogs and
+`event_type` share one resolution namespace, so a create is refused when a sibling holds the name
+([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).
+The **event_type registry is the occurrence keyspace**:
 `GET/POST/PATCH/DELETE /event-types[/{name}]`, gated `event_type:read` / `:create` / `:update` /
 `:delete`; an ingested occurrence is typed by a registered `event_type` name (the log-to-event
 promotion, ADR-0063), the optional `payload_schema` a JSON Schema fragment for its payload. The
 **command_type registry is the do catalog**:
 `GET/POST/PATCH/DELETE /command-types[/{name}]`, gated `command_type:read` / `:create` / `:update` /
 `:delete`, each type carrying a `settle_window_seconds` and an optional `target_property_type` (the
-property a settleable command sets). `POST /components/{name}/commands:issue` (gated `command:issue`,
+property a settleable command sets; the metric target arm is storage-deep, its authoring surface
+deferred). `POST /components/{name}/commands:issue` (gated `command:issue`,
 scope-injected through the component) is the write: it records the invocation, writes a caused event,
 and (for a settleable command) opens an intended value, returning the computed settlement verdict
 (none/pending/settled/failed).
@@ -375,7 +383,7 @@ update or delete by id) the resolved capability rides into the Gateway alongside
 ## Properties: a classifier declares, an instance sets
 
 A **contract** is the set of properties a classifier's instances expose
-([core entities](/architecture/core-entities/#declared-properties-the-classifier-contracts-and-the-value-store)).
+([core entities](/architecture/core-entities/#declared-properties-the-classifier-contracts-and-the-declared-rows)).
 Each contract is a **sub-collection of its classifier**, addressed by property name, so the line is
 idempotent: `PUT` declares it or revises it in place. Type and validation come from the
 [property catalog](/guides/admin/properties/), not the body. Three classifiers carry a contract, on

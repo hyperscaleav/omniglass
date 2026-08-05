@@ -40,8 +40,9 @@ per-slice detail (136 entries at this update) is on [implementation status](/arc
   embedded NATS/JetStream with per-node subject isolation, the icmp and tcp probes, the
   transition-only reachability verdict and its panel, interface and task authoring, and the raw-log
   lane with node self-logs ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)).
-- **The telemetry ontology.** The `property_type` / `event_type` / `command_type` registries, the
-  sample sinks (`metric`, `state`, `event`, `log_line`), the `property` latest-value cache, and the
+- **The telemetry ontology.** The `metric_type` / `property_type` / `event_type` / `command_type`
+  registries, the sample lanes (`metric`, `property`, `event`, `log_line`), current values derived
+  from the series, and the
   [command](/architecture/commands/) pillar with computed settlement
   ([ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables)).
 - **Delivery and the pipeline.** `make gen` emits the OpenAPI document, the cobra CLI, the typed SPA

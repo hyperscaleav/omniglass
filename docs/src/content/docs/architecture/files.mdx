@@ -119,7 +119,7 @@ Chunking and streaming for very large blobs (firmware images, captures) on the `
 A blob is collectable **only when no live reference points at its hash AND a grace or retention
 floor has passed** (age-based GC alone is wrong: dedup means a blob uploaded long ago can be the one
 a *recent* event references). References come from a **`file`** handle, a large `log_line` body, a
-`collection.failed` raw hash-ref, and an **attach event** (a `state` or `audit_log` recording "this
+`collection.failed` raw hash-ref, and an **attach event** (an `event` or `audit_log` row recording "this
 component was attached to this file at T"). They disappear when a `file` is deleted or a referencing
 **event ages out** (a retention partition drop), so GC is **coupled to retention**: dropping a
 partition releases its references.

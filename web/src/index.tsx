@@ -21,6 +21,7 @@ import Roles from "./pages/Roles";
 import Groups from "./pages/Groups";
 import Secrets from "./pages/Secrets";
 import Variables from "./pages/Variables";
+import Metrics from "./pages/Metrics";
 import Properties from "./pages/Properties";
 import EventTypes from "./pages/EventTypes";
 import CommandTypes from "./pages/CommandTypes";
@@ -97,6 +98,7 @@ render(
           <Route path="/tags" component={Tags} />
           <Route path="/types" component={Types} />
           <Route path="/standards" component={Standards} />
+          <Route path="/metrics" component={Metrics} />
           <Route path="/properties" component={Properties} />
           <Route path="/event-types" component={EventTypes} />
           <Route path="/command-types" component={CommandTypes} />

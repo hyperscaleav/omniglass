@@ -441,7 +441,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a command type",
-					Long:    "Registers a custom command type (official=false). The name must be a valid keyspace name (dot-joined kebab segments); a target property, when set, must be registered. Gated by command_type:create.",
+					Long:    "Registers a custom command type (official=false). The name must be a single kebab token; a target, when set, must be a registered property or metric type. Gated by command_type:create.",
 					Example: "  omniglass command-type create --name name",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {

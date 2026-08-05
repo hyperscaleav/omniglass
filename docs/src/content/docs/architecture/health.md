@@ -102,11 +102,11 @@ one reads as one** (a role no component need fill is not a role).
 
 If the history must be **accurate**, the verdict must be computed at the **write** that changed it;
 if it must be **edges**, the right carrier already exists. Health lands in
-**`state`**, **already transition-only** (the ingest path writes a row only when the value
+the **`property` lane**, **already transition-only** (the ingest path writes a row only when the value
 differs from the last stored), reusing that primitive with its own owner-arc read
 (`healthTransitions`, the ordered flip sequence on the
 **[owner arc](/architecture/core-entities/#ownership-the-exclusive-arc)** rather than the
-component-and-instance one `StateTransitions` reads): a component, system, or location owns its own
+component-and-instance one `PropertyTransitions` reads): a component, system, or location owns its own
 health series, with `provenance='calculated'` and `source_rule='health-rollup'` naming the producer.
 There is **no `health_history` table**: it would be a second, worse copy of one that already
 exists.
@@ -290,8 +290,8 @@ the escape hatch to author your own. **Availability** is health over time, the S
 - **booking-utilization**: booked vs unbooked minutes;
 - **ghost**: occupied vs booked, so booked but nobody showed (the wasted-room signal).
 
-Both inputs are **ordinary components**: an occupancy sensor emitting `occupancy.*`, and the booking
-system as a component whose interface is the calendar API, emitting `booking.*`; the KPIs are calcs
+Both inputs are **ordinary components**: an occupancy sensor emitting the `occupancy-*` family, and the booking
+system as a component whose interface is the calendar API, emitting `booking-*`; the KPIs are calcs
 over those samples, owned at room / system / location / global (a ghost meeting is
 `occupied < booked`).
 
@@ -300,7 +300,7 @@ The full default KPI set and each one's exact reducers and windows.
 :::
 
 :::caution[Open question]
-The `occupancy.*` and `booking.*` canonical signals, and the occupancy-sensor and booking-system
+The `occupancy-*` and `booking-*` canonical signals, and the occupancy-sensor and booking-system
 component templates that feed the utilization KPIs.
 :::
 
@@ -309,11 +309,11 @@ component templates that feed the utilization KPIs.
 ## Why this is the Zabbix service tree, done right
 
 Zabbix bolts services, SLA, and the service tree on as a separate subsystem. Omniglass makes health
-**first-class but not separate**: the **system tree is the service tree**, the verdict a `state`
+**first-class but not separate**: the **system tree is the service tree**, the verdict a `property`
 sample, the history its transitions, the SLI a calc over them, the SLA an alarm.
 
 Related: [core entities](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)
 (the role, the capability, the quorum), [alarms and actions](/architecture/alarms-actions/) (the
-detection tier), [properties](/architecture/properties/) (the `state` sample and the owner arc), and
+detection tier), [samples](/architecture/properties/) (the `property` lane and the owner arc), and
 the [Standards](/guides/admin/standards/) and [Work with an entity](/guides/operator/entities/)
 guides for the operator loop.

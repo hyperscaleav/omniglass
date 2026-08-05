@@ -355,7 +355,7 @@ export interface paths {
         put?: never;
         /**
          * Create a command type
-         * @description Registers a custom command type (official=false). The name must be a valid keyspace name (dot-joined kebab segments); a target property, when set, must be registered. Gated by command_type:create.
+         * @description Registers a custom command type (official=false). The name must be a single kebab token; a target, when set, must be a registered property or metric type. Gated by command_type:create.
          */
         post: operations["create-command-type"];
         delete?: never;

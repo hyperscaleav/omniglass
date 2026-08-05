@@ -46,7 +46,7 @@ down node produces no message), scanning heartbeat freshness and raising / resol
 built; nodes already publish the heartbeat the sweep will read, the sweep itself is not).
 :::
 
-There is no separate projector: current values live in the `property` latest-value cache table (ADR-0065; [storage](/architecture/storage/)), and `alarm` / `action` hold their state directly.
+There is no separate projector: a current value is the latest series row, derived on read ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus); [storage](/architecture/storage/)), and `alarm` / `action` hold their state directly.
 
 :::design[Target design, tracked in #430 (the CDC publisher) and #419 (the clock)]
 
