@@ -106,6 +106,10 @@ function useSecretById(id: string): () => Secret | undefined {
   return () => (secrets.data ?? []).find((s) => s.id === id);
 }
 
+// The heading is the name, in the data face, because a secret carries no display
+// name: the name IS its only operator-facing string, so entityLabel would return
+// it anyway. Deliberate, not an oversight (#581); a secret blade would use BladeTitle
+// the moment the entity gained one.
 function SecretBladeTitle(p: { id: string }): JSX.Element {
   const secret = useSecretById(p.id);
   return <span class="font-data">{secret()?.name ?? "secret"}</span>;

@@ -60,6 +60,10 @@ export const interfaceBlade: BladeDef = {
   Body: (p) => <InterfaceBladeBody id={p.id} />,
 };
 
+// The heading is the name, in the data face, because a interface carries no display
+// name: the name IS its only operator-facing string, so entityLabel would return
+// it anyway. Deliberate, not an oversight (#581); a interface blade would use BladeTitle
+// the moment the entity gained one.
 function InterfaceBladeTitle(props: { id: string }): JSX.Element {
   const iface = useInterfaceById(props.id);
   return <span class="font-data">{iface()?.name ?? "interface"}</span>;

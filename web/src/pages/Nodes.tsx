@@ -3,6 +3,7 @@ import { Show, For, createEffect, createMemo, createSignal, on, type JSX } from 
 import { Dialog } from "@kobalte/core/dialog";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import BladeTitle from "../components/BladeTitle";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import Button from "../components/Button";
@@ -135,9 +136,7 @@ export default function Nodes() {
 function NodeBladeTitle(props: { name: string }): JSX.Element {
   const nodes = useQuery(() => ({ queryKey: NODES_KEY, queryFn: () => listNodes() }));
   const n = () => (nodes.data ?? []).find((x) => x.name === props.name);
-  // The title is the node's label (display_name, falling back to its name/key),
-  // mirroring how the component/system/location blades title by display_name.
-  return <span>{n() ? nodeLabel(n()!) : props.name}</span>;
+  return <BladeTitle row={n} fallback={props.name} />;
 }
 
 // NodeBladeBody is the node's detail on the shared blade stack (same chrome and

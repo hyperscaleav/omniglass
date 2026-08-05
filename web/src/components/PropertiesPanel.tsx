@@ -15,6 +15,7 @@ import { useMe, can } from "../lib/auth";
 import { type BladeDef, type BladeEdit } from "../lib/blades";
 import { describeError } from "../lib/format";
 import FieldControl from "./FieldControl";
+import BladeTitle from "./BladeTitle";
 import { Check } from "./icons";
 
 // PropertiesPanel lists an owner's effective properties. A property comes from the
@@ -328,8 +329,14 @@ function usePropertyOf(id: () => string) {
 
 function PropertyBladeTitle(p: { id: string }): JSX.Element {
   const { key, property } = usePropertyOf(() => p.id);
-  // Fall back to the raw key until the property resolves (or if it is gone).
-  return <span>{property()?.display_name || property()?.property_type_name || key()}</span>;
+  // An effective property names its type in property_type_name rather than in
+  // `name`, so it is mapped onto the triad here rather than hand-rolling the
+  // heading rule. Falls back to the raw key until it resolves (or if it is gone).
+  const row = () => {
+    const r = property();
+    return r ? { name: r.property_type_name, display_name: r.display_name } : undefined;
+  };
+  return <BladeTitle row={row} fallback={key()} />;
 }
 
 function PropertyResolutionBody(p: { id: string }): JSX.Element {

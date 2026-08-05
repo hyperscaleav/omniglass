@@ -95,6 +95,10 @@ function useTagByName(name: string): () => Tag | undefined {
   return () => (tags.data ?? []).find((t) => t.name === name);
 }
 
+// The heading is the name, in the data face, because a tag carries no display
+// name: the name IS its only operator-facing string, so entityLabel would return
+// it anyway. Deliberate, not an oversight (#581); a tag blade would use BladeTitle
+// the moment the entity gained one.
 function TagBladeTitle(p: { name: string }): JSX.Element {
   return <span class="font-data">{p.name}</span>;
 }

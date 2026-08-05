@@ -157,8 +157,12 @@ pencil is clicked.
 the identifier in the data face. It reads its row accessor inside the JSX, which is the whole of the
 rule: eight pages wrote this heading by hand and all eight read the accessor once in the component
 body, where a Solid read subscribes to nothing, so the heading kept the old words after a rename
-until the blade was closed and reopened. `identity-vocabulary-guard.test.ts` now fails on a
-`*Title` component that snapshots its row.
+until the blade was closed and reopened. `identity-vocabulary-guard.test.ts` now carries three checks over headings, one per bug that got
+through: a heading must resolve its row (it rendered the raw id), must not snapshot it (it went
+stale after a rename), and must render through `BladeTitle` or be named in the test's exception
+list with a reason (it resolved and tracked correctly and read the wrong field, the name where
+its list showed the display name). The exceptions are the entities that carry no display name at
+all, where the name is the only operator-facing string: a secret, a variable, a tag, an interface.
 
 **Free text declares itself.** `multiline` reads wrapped with its newlines preserved and edits in a
 `textarea`. It is a prop rather than a second component because a component means every new page

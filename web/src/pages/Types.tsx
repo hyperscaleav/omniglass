@@ -1,6 +1,7 @@
 import { For, Show, createEffect, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
+import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
@@ -149,8 +150,7 @@ function useTypeRow(id: string): () => TypeRow | undefined {
 }
 
 function TypeBladeTitle(p: { id: string }): JSX.Element {
-  const row = useTypeRow(p.id);
-  return <span class="font-data">{row()?.name ?? splitBladeId(p.id).id}</span>;
+  return <BladeTitle row={useTypeRow(p.id)} fallback={splitBladeId(p.id).id} />;
 }
 
 function TypeBladeBody(p: { id: string }): JSX.Element {
