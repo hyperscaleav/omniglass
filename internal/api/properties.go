@@ -10,18 +10,16 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// propertyBody is the wire shape of a property: the typed signal-catalog entry a
-// sample observes and a field declares. Kind (metric/state/log) is present only
-// for an observed property; validation is a JSON Schema fragment; official marks a
-// seed-owned, read-only property.
+// propertyBody is the wire shape of a property: the non-numeric signal-catalog
+// entry a sample observes and a field declares (#587 split the numeric lane into
+// /metric-types, which carries unit and precision). validation is a JSON Schema
+// fragment; official marks a seed-owned, read-only property.
 type propertyBody struct {
 	ID          string          `json:"id" doc:"The property's uuid, the stable form the contract and telemetry keys store"`
 	Name        string          `json:"name"`
 	DataType    string          `json:"data_type"`
 	DisplayName string          `json:"display_name,omitempty"`
 	Description string          `json:"description,omitempty"`
-	Unit        *string         `json:"unit,omitempty"`
-	Kind        *string         `json:"kind,omitempty"`
 	Validation  json.RawMessage `json:"validation,omitempty" doc:"A JSON Schema fragment constraining the value"`
 	Official    bool            `json:"official"`
 }
@@ -29,7 +27,7 @@ type propertyBody struct {
 func toPropertyBody(p *storage.PropertyType) propertyBody {
 	b := propertyBody{
 		ID: p.ID, Name: p.Name, DataType: p.DataType, DisplayName: p.DisplayName,
-		Description: p.Description, Unit: p.Unit, Kind: p.Kind, Official: p.Official,
+		Description: p.Description, Official: p.Official,
 	}
 	if len(p.Validation) > 0 {
 		b.Validation = json.RawMessage(p.Validation)
@@ -49,13 +47,11 @@ type propertyOutput struct {
 
 type createPropertyInput struct {
 	Body struct {
-		Name        string  `json:"name" minLength:"1" doc:"The property name (lowercase, dot-hierarchied)"`
-		DataType    string  `json:"data_type" enum:"string,int,float,bool,json" doc:"The value type"`
-		DisplayName string  `json:"display_name,omitempty" doc:"A human label"`
-		Description string  `json:"description,omitempty" doc:"What the property means"`
-		Unit        *string `json:"unit,omitempty" doc:"A display unit (observed properties)"`
-		Kind        *string `json:"kind,omitempty" enum:"metric,state,log" doc:"The observed kind; omit for a declared-only property"`
-		Validation  any     `json:"validation,omitempty" doc:"A JSON Schema fragment constraining the value"`
+		Name        string `json:"name" minLength:"1" doc:"The property name (lowercase kebab)"`
+		DataType    string `json:"data_type" enum:"string,bool,json" doc:"The value type; a numeric signal is a metric type"`
+		DisplayName string `json:"display_name,omitempty" doc:"A human label"`
+		Description string `json:"description,omitempty" doc:"What the property means"`
+		Validation  any    `json:"validation,omitempty" doc:"A JSON Schema fragment constraining the value"`
 	}
 }
 
@@ -68,7 +64,6 @@ type updatePropertyInput struct {
 	Body struct {
 		DisplayName *string `json:"display_name,omitempty" doc:"A human label"`
 		Description *string `json:"description,omitempty" doc:"What the property means"`
-		Unit        *string `json:"unit,omitempty" doc:"A display unit"`
 		Validation  any     `json:"validation,omitempty" doc:"A JSON Schema fragment (replaces wholesale)"`
 	}
 }
@@ -128,8 +123,6 @@ func registerPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 			DataType:    in.Body.DataType,
 			DisplayName: in.Body.DisplayName,
 			Description: in.Body.Description,
-			Unit:        in.Body.Unit,
-			Kind:        in.Body.Kind,
 			Validation:  validation,
 		})
 		if err != nil {
@@ -143,7 +136,7 @@ func registerPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPatch,
 		Path:        "/property-types/{name}",
 		Summary:     "Update a property",
-		Description: "Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property_type:update.",
+		Description: "Patches a custom property's label, description, or validation (a nil field is unchanged). Data type is fixed at creation. Official properties are read-only. Gated by property_type:update.",
 	}, "property_type", "update"), func(ctx context.Context, in *updatePropertyInput) (*propertyOutput, error) {
 		validation, err := marshalValidation(in.Body.Validation)
 		if err != nil {
@@ -152,7 +145,6 @@ func registerPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		p, err := gw.UpdatePropertyType(ctx, actorID(ctx), in.Name, storage.PropertyTypePatch{
 			DisplayName: in.Body.DisplayName,
 			Description: in.Body.Description,
-			Unit:        in.Body.Unit,
 			Validation:  validation,
 		})
 		if err != nil {

@@ -157,8 +157,10 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 	if _, err := conn.Exec(ctx, `update property_type set name = 'serial_no' where name = 'serial-number'`); err != nil {
 		t.Fatalf("rename property: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `update property_type set name = 'tcp-reachable' where name = 'tcp-open'`); err != nil {
-		t.Fatalf("rename telemetry property: %v", err)
+	// tcp-open lives on the metric lane (#587), so the telemetry rename happens
+	// on metric_type; the sample FK follows the same way.
+	if _, err := conn.Exec(ctx, `update metric_type set name = 'tcp-reachable' where name = 'tcp-open'`); err != nil {
+		t.Fatalf("rename telemetry metric type: %v", err)
 	}
 	// The contract reads the property's new handle.
 	props2, err := gw.ListProductProperties(ctx, "acme-soundbar")

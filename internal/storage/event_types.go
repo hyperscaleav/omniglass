@@ -143,15 +143,17 @@ func (p *PG) CreateEventType(ctx context.Context, actorID string, spec EventType
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Cross-registry uniqueness. property_type and event_type are separate tables
-	// with separate uniqueness, so nothing at the schema level stops a name landing
-	// in both, and a name in both resolves to NOTHING at ingest (the snapshot
-	// refuses it rather than picking a winner). Refusing at create is the only
-	// place the operator can be told, while they still have the name in hand.
+	// Cross-registry uniqueness. The ingest registries (property_type, metric_type,
+	// event_type) are separate tables with separate uniqueness, so nothing at the
+	// schema level stops a name landing in two of them, and such a name resolves to
+	// NOTHING at ingest (the snapshot refuses it rather than picking a winner).
+	// Refusing at create is the only place the operator can be told, while they
+	// still have the name in hand.
 	var clash bool
 	if err := tx.QueryRow(ctx,
-		`select exists (select 1 from property_type where name = $1)`, spec.Name).Scan(&clash); err != nil {
-		return nil, fmt.Errorf("storage: check property_type clash for %q: %w", spec.Name, err)
+		`select exists (select 1 from property_type where name = $1)
+		     or exists (select 1 from metric_type where name = $1)`, spec.Name).Scan(&clash); err != nil {
+		return nil, fmt.Errorf("storage: check registry clash for %q: %w", spec.Name, err)
 	}
 	if clash {
 		return nil, ErrEventTypeExists

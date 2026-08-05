@@ -11,8 +11,8 @@ import { ME_KEY, type Me } from "../lib/auth";
 // so no server is needed.
 const seed: PropertyRow[] = [
   { name: "serial-number", data_type: "string", display_name: "Serial number", official: true },
-  { name: "icmp-reachable", data_type: "int", display_name: "ICMP Reachable", kind: "metric", official: true },
-  { name: "rack-unit", data_type: "int", display_name: "Rack unit", official: false },
+  { name: "interface-reachable", data_type: "string", display_name: "Interface Reachable", official: true },
+  { name: "rack-unit", data_type: "string", display_name: "Rack unit", official: false },
 ];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
@@ -35,7 +35,7 @@ describe("Properties page", () => {
   it("lists the seeded properties", () => {
     mount();
     expect(screen.getByText("serial-number")).toBeTruthy();
-    expect(screen.getByText("icmp-reachable")).toBeTruthy();
+    expect(screen.getByText("interface-reachable")).toBeTruthy();
     expect(screen.getByText("rack-unit")).toBeTruthy();
   });
 

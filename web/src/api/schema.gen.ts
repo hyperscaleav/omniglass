@@ -1408,6 +1408,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/metric-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List metric types
+         * @description Lists every registered metric type (official and custom). The catalog is estate-wide reference data. Gated by metric_type:read.
+         */
+        get: operations["list-metric-type"];
+        put?: never;
+        /**
+         * Create a metric type
+         * @description Registers a custom metric type (official=false). The name must be a valid metric key. Gated by metric_type:create.
+         */
+        post: operations["create-metric-type"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/metric-types/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a metric type
+         * @description Returns one metric type by name. Gated by metric_type:read.
+         */
+        get: operations["get-metric-type"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a metric type
+         * @description Removes a custom metric type by name. Official metric types are read-only. Gated by metric_type:delete.
+         */
+        delete: operations["delete-metric-type"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a metric type
+         * @description Patches a custom metric type's label, description, unit, or precision (a nil field is unchanged). Data type is fixed at creation. Official metric types are read-only. Gated by metric_type:update.
+         */
+        patch: operations["update-metric-type"];
+        trace?: never;
+    };
     "/nodes": {
         parameters: {
             query?: never;
@@ -2231,7 +2283,7 @@ export interface paths {
         head?: never;
         /**
          * Update a property
-         * @description Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property_type:update.
+         * @description Patches a custom property's label, description, or validation (a nil field is unchanged). Data type is fixed at creation. Official properties are read-only. Gated by property_type:update.
          */
         patch: operations["update-property-type"];
         trace?: never;
@@ -3723,6 +3775,32 @@ export interface components {
             /** @description The bearer token, shown once. Store it now: it cannot be retrieved again. */
             token: string;
         };
+        CreateMetricTypeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateMetricTypeInputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * @description The value type; a metric is always a number
+             * @enum {string}
+             */
+            data_type: "int" | "float";
+            /** @description What the series measures */
+            description?: string;
+            /** @description A human label */
+            display_name?: string;
+            /** @description The metric type name (lowercase kebab) */
+            name: string;
+            /**
+             * Format: int64
+             * @description Decimal places a rendered value keeps
+             */
+            precision?: number;
+            /** @description The display unit of the series (ms, dB, percent) */
+            unit?: string;
+        };
         CreateNodeInputBody: {
             /**
              * Format: uri
@@ -3792,23 +3870,16 @@ export interface components {
              */
             readonly $schema?: string;
             /**
-             * @description The value type
+             * @description The value type; a numeric signal is a metric type
              * @enum {string}
              */
-            data_type: "string" | "int" | "float" | "bool" | "json";
+            data_type: "string" | "bool" | "json";
             /** @description What the property means */
             description?: string;
             /** @description A human label */
             display_name?: string;
-            /**
-             * @description The observed kind; omit for a declared-only property
-             * @enum {string}
-             */
-            kind?: "metric" | "state" | "log";
-            /** @description The property name (lowercase, dot-hierarchied) */
+            /** @description The property name (lowercase kebab) */
             name: string;
-            /** @description A display unit (observed properties) */
-            unit?: string;
             /** @description A JSON Schema fragment constraining the value */
             validation?: unknown;
         };
@@ -4560,6 +4631,15 @@ export interface components {
             readonly $schema?: string;
             members: components["schemas"]["MemberBody"][] | null;
         };
+        ListMetricTypesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListMetricTypesOutputBody.json
+             */
+            readonly $schema?: string;
+            metric_types: components["schemas"]["MetricTypeBody"][] | null;
+        };
         ListNodesOutputBody: {
             /**
              * Format: uri
@@ -4871,6 +4951,28 @@ export interface components {
             principal_id: string;
             username?: string;
         };
+        MetricTypeBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/MetricTypeBody.json
+             */
+            readonly $schema?: string;
+            data_type: string;
+            description?: string;
+            display_name?: string;
+            /** @description The metric type's uuid, the stable form the contract and telemetry keys store */
+            id: string;
+            name: string;
+            official: boolean;
+            /**
+             * Format: int64
+             * @description Decimal places a rendered value keeps
+             */
+            precision?: number;
+            /** @description The display unit of the series (ms, dB, percent) */
+            unit?: string;
+        };
         NodeBody: {
             /**
              * Format: uri
@@ -5009,10 +5111,8 @@ export interface components {
             display_name?: string;
             /** @description The property's uuid, the stable form the contract and telemetry keys store */
             id: string;
-            kind?: string;
             name: string;
             official: boolean;
-            unit?: string;
             /** @description A JSON Schema fragment constraining the value */
             validation?: unknown;
         };
@@ -5072,14 +5172,14 @@ export interface components {
         PushSample: {
             /** @description Discriminates many values of one name on one owner (three fan speeds, per-port counters) */
             instance?: string;
-            /** @description The canonical property name, or a registered event_type name */
+            /** @description The canonical metric or property name, or a registered event_type name */
             name: string;
             /**
              * Format: double
-             * @description The value for a metric-kind property
+             * @description The value for a metric type
              */
             number?: number;
-            /** @description The value for a state-kind property, or the message for an event_type */
+            /** @description The value for a property (a state), or the message for an event_type */
             text?: string;
         };
         RaiseAlarmInputBody: {
@@ -5939,6 +6039,25 @@ export interface components {
             /** @description Your display name; empty clears it */
             display_name?: string;
         };
+        UpdateMetricTypeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateMetricTypeInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description What the series measures */
+            description?: string;
+            /** @description A human label */
+            display_name?: string;
+            /**
+             * Format: int64
+             * @description Decimal places a rendered value keeps
+             */
+            precision?: number;
+            /** @description The display unit of the series */
+            unit?: string;
+        };
         UpdateNodeInputBody: {
             /**
              * Format: uri
@@ -6001,8 +6120,6 @@ export interface components {
             description?: string;
             /** @description A human label */
             display_name?: string;
-            /** @description A display unit */
-            unit?: string;
             /** @description A JSON Schema fragment (replaces wholesale) */
             validation?: unknown;
         };
@@ -9243,6 +9360,166 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CheckNameOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-metric-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListMetricTypesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-metric-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMetricTypeInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-metric-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The metric type's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-metric-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The metric type's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-metric-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The metric type's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMetricTypeInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricTypeBody"];
                 };
             };
             /** @description Error */

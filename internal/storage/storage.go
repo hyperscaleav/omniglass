@@ -313,6 +313,15 @@ type Gateway interface {
 	CreatePropertyType(ctx context.Context, actorID string, spec PropertyTypeSpec) (*PropertyType, error)
 	UpdatePropertyType(ctx context.Context, actorID, name string, patch PropertyTypePatch) (*PropertyType, error)
 	DeletePropertyType(ctx context.Context, actorID, name string) error
+	// The metric_type registry (#587): the numeric lane of the catalog, split
+	// from property_type so the numeric facts (unit, precision) live with the
+	// series keys they describe.
+	UpsertMetricType(ctx context.Context, mt MetricType) error
+	ListMetricTypes(ctx context.Context) ([]MetricType, error)
+	GetMetricType(ctx context.Context, name string) (*MetricType, error)
+	CreateMetricType(ctx context.Context, actorID string, spec MetricTypeSpec) (*MetricType, error)
+	UpdateMetricType(ctx context.Context, actorID, name string, patch MetricTypePatch) (*MetricType, error)
+	DeleteMetricType(ctx context.Context, actorID, name string) error
 	UpsertInterfaceType(ctx context.Context, it InterfaceType) error
 	ListInterfaceTypes(ctx context.Context) ([]InterfaceType, error)
 

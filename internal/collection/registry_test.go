@@ -8,17 +8,22 @@ import (
 )
 
 func TestRegistryAllows(t *testing.T) {
-	metric := "metric"
 	reg := collection.NewRegistry(
-		[]storage.PropertyType{
-			{Name: "tcp-open", Kind: &metric},
-			{Name: "icmp-reachable", Kind: &metric},
+		[]storage.MetricType{
+			{Name: "tcp-open"},
+			{Name: "icmp-reachable"},
 		},
+		[]storage.PropertyType{{Name: "video-input"}},
 		[]storage.EventType{{Name: "call-started"}},
 	)
 
+	// The lane IS the routing (#587): a metric_type name routes to the metric
+	// sink, a property_type name to the state sink.
 	if kind, ok := reg.Allows("tcp-open"); !ok || kind != "metric" {
 		t.Errorf("tcp-open: want (metric,true), got (%q,%v)", kind, ok)
+	}
+	if kind, ok := reg.Allows("video-input"); !ok || kind != "state" {
+		t.Errorf("video-input: want (state,true), got (%q,%v)", kind, ok)
 	}
 	// A registered event_type resolves to kind "event" (the occurrence keyspace).
 	if kind, ok := reg.Allows("call-started"); !ok || kind != "event" {
@@ -29,22 +34,20 @@ func TestRegistryAllows(t *testing.T) {
 	}
 }
 
-// TestRegistryReportsCollisions pins the shadowing bug. property_type and
-// event_type are separate tables with separate uniqueness, so nothing stops the
-// same name existing in both. The merge applied event types second, so the event
-// silently won and a metric-kind name became unwritable: it reached the event
+// TestRegistryReportsCollisions pins the shadowing bug. The catalogs are separate
+// tables with separate uniqueness, so nothing stops the same name existing in two
+// of them. The merge applied later catalogs second, so the later one silently won
+// and a colliding name became unwritable on its own lane: it reached the wrong
 // arm, failed the value extraction, and vanished with no row and no error.
 //
 // The snapshot cannot fix the data, so it must not hide it. Collisions() names
-// them, and the ingest path can refuse rather than guess which registry meant it.
+// them, and the ingest path can refuse rather than guess which catalog meant it.
 func TestRegistryReportsCollisions(t *testing.T) {
-	metric, state := "metric", "state"
 	reg := collection.NewRegistry(
-		[]storage.PropertyType{
-			{Name: "call-started", Kind: &metric}, // collides with the event type below
-			{Name: "video-input", Kind: &state},
-			{Name: "serial-number"}, // declared-only, not collectable
+		[]storage.MetricType{
+			{Name: "call-started"}, // collides with the event type below
 		},
+		[]storage.PropertyType{{Name: "video-input"}},
 		[]storage.EventType{{Name: "call-started"}, {Name: "command-issued"}},
 	)
 
@@ -65,9 +68,25 @@ func TestRegistryReportsCollisions(t *testing.T) {
 	if kind, ok := reg.Allows("command-issued"); !ok || kind != "event" {
 		t.Fatalf("command-issued = (%q,%v), want (event,true)", kind, ok)
 	}
-	// A declared-only property stays uncollectable.
-	if _, ok := reg.Allows("serial-number"); ok {
-		t.Fatal("a declared-only property must not be collectable")
+}
+
+// TestRegistryReportsCrossLaneCollisions is the same refusal for the split's new
+// seam: a name in BOTH catalog lanes (metric and property) would route to two
+// sinks, so it must resolve to nothing until one side is renamed.
+func TestRegistryReportsCrossLaneCollisions(t *testing.T) {
+	reg := collection.NewRegistry(
+		[]storage.MetricType{{Name: "fan-speed"}},
+		[]storage.PropertyType{{Name: "fan-speed"}, {Name: "video-input"}},
+		nil,
+	)
+	if got := reg.Collisions(); len(got) != 1 || got[0] != "fan-speed" {
+		t.Fatalf("Collisions() = %v, want exactly [fan-speed]", got)
+	}
+	if kind, ok := reg.Allows("fan-speed"); ok {
+		t.Fatalf("a cross-lane colliding name resolved to %q; it must be rejected", kind)
+	}
+	if kind, ok := reg.Allows("video-input"); !ok || kind != "state" {
+		t.Fatalf("video-input = (%q,%v), want (state,true)", kind, ok)
 	}
 }
 
@@ -75,9 +94,9 @@ func TestRegistryReportsCollisions(t *testing.T) {
 // vocabulary has no overlap, so Collisions() must stay empty rather than
 // reporting noise every boot.
 func TestRegistryNoCollisionsIsEmpty(t *testing.T) {
-	metric := "metric"
 	reg := collection.NewRegistry(
-		[]storage.PropertyType{{Name: "icmp-rtt-avg", Kind: &metric}},
+		[]storage.MetricType{{Name: "icmp-rtt-avg"}},
+		[]storage.PropertyType{{Name: "video-input"}},
 		[]storage.EventType{{Name: "call-started"}},
 	)
 	if got := reg.Collisions(); len(got) != 0 {

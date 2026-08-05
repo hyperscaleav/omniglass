@@ -11,8 +11,7 @@ import (
 // testRegistry is the minimal registry these cases resolve against.
 func testRegistry(t *testing.T) collection.Registry {
 	t.Helper()
-	metric := "metric"
-	return collection.NewRegistry([]storage.PropertyType{{Name: "icmp-rtt-avg", Kind: &metric}}, nil)
+	return collection.NewRegistry([]storage.MetricType{{Name: "icmp-rtt-avg"}}, nil, nil)
 }
 
 // pushOwner is what apiBinding produces: a component, and no interface labels.

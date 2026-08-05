@@ -29,9 +29,16 @@ type factsRole struct {
 
 type factsProperty struct {
 	Name        string `json:"name"`
-	Kind        string `json:"kind,omitempty"`
+	DataType    string `json:"data_type"`
+	DisplayName string `json:"display_name"`
+	Description string `json:"description,omitempty"`
+}
+
+type factsMetricType struct {
+	Name        string `json:"name"`
 	DataType    string `json:"data_type"`
 	Unit        string `json:"unit,omitempty"`
+	Precision   *int   `json:"precision,omitempty"`
 	DisplayName string `json:"display_name"`
 	Description string `json:"description,omitempty"`
 }
@@ -122,6 +129,7 @@ type seedFactsDoc struct {
 	Comment        string               `json:"//"`
 	Roles          []factsRole          `json:"roles"`
 	PropertyTypes  []factsProperty      `json:"property_types"`
+	MetricTypes    []factsMetricType    `json:"metric_types"`
 	EventTypes     []factsNamed         `json:"event_types"`
 	CommandTypes   []factsNamed         `json:"command_types"`
 	SecretTypes    []factsSecretType    `json:"secret_types"`
@@ -174,14 +182,25 @@ func FactsJSON() ([]byte, error) {
 		})
 	}
 
-	var props propertiesDoc
-	if err := yaml.Unmarshal(propertiesYAML, &props); err != nil {
-		return nil, fmt.Errorf("seed facts: properties: %w", err)
+	var props propertyTypesDoc
+	if err := yaml.Unmarshal(propertyTypesYAML, &props); err != nil {
+		return nil, fmt.Errorf("seed facts: property types: %w", err)
 	}
-	for _, p := range props.Properties {
+	for _, p := range props.PropertyTypes {
 		doc.PropertyTypes = append(doc.PropertyTypes, factsProperty{
-			Name: p.Name, Kind: p.Kind, DataType: p.DataType, Unit: p.Unit,
+			Name: p.Name, DataType: p.DataType,
 			DisplayName: p.DisplayName, Description: p.Description,
+		})
+	}
+
+	var mts metricTypesDoc
+	if err := yaml.Unmarshal(metricTypesYAML, &mts); err != nil {
+		return nil, fmt.Errorf("seed facts: metric types: %w", err)
+	}
+	for _, m := range mts.MetricTypes {
+		doc.MetricTypes = append(doc.MetricTypes, factsMetricType{
+			Name: m.Name, DataType: m.DataType, Unit: m.Unit, Precision: m.Precision,
+			DisplayName: m.DisplayName, Description: m.Description,
 		})
 	}
 

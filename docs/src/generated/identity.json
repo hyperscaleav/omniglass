@@ -89,6 +89,10 @@
       "shape": "key-bearing"
     },
     {
+      "table": "location_type_metric",
+      "shape": "id only"
+    },
+    {
       "table": "location_type_property",
       "shape": "id only"
     },
@@ -99,6 +103,11 @@
     {
       "table": "metric",
       "shape": "id only"
+    },
+    {
+      "table": "metric_type",
+      "shape": "keyspace",
+      "reason": "icmp-rtt-avg, a numeric-series name referenced from drivers and templates"
     },
     {
       "table": "node",
@@ -129,6 +138,10 @@
       "shape": "id only"
     },
     {
+      "table": "product_metric",
+      "shape": "id only"
+    },
+    {
       "table": "product_property",
       "shape": "id only"
     },
@@ -139,7 +152,7 @@
     {
       "table": "property_type",
       "shape": "keyspace",
-      "reason": "icmp-rtt-avg, a signal name referenced from drivers and templates"
+      "reason": "serial-number, a signal name referenced from drivers and templates"
     },
     {
       "table": "role",
@@ -166,6 +179,10 @@
     {
       "table": "standard",
       "shape": "key-bearing"
+    },
+    {
+      "table": "standard_metric",
+      "shape": "id only"
     },
     {
       "table": "standard_property",

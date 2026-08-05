@@ -19,8 +19,10 @@ type Store interface {
 	RecordHeartbeat(ctx context.Context, name string) error
 	// The telemetry ingest consumer surface: resolve+confine a task's owner,
 	// snapshot the sample registry (reject-not-project), and write the typed
-	// metric rows through cp1's insert path.
+	// metric rows through cp1's insert path. The catalog is two lanes (#587):
+	// metric_type names route to the metric sink, property_type names to state.
 	ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (storage.TaskOwner, bool, error)
+	ListMetricTypes(ctx context.Context) ([]storage.MetricType, error)
 	ListPropertyTypes(ctx context.Context) ([]storage.PropertyType, error)
 	// The event-type registry snapshot: with the log kind gone from property_type,
 	// a registered event_type name routes a natively-published occurrence (an xAPI

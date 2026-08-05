@@ -210,7 +210,8 @@ var vocabularyAllowed = map[string]bool{
 // internal identifiers is a code change with its own ripple, not a lint.
 var operatorStrings = []string{
 	filepath.Join("..", "..", "internal", "seed", "event_types.yaml"),
-	filepath.Join("..", "..", "internal", "seed", "properties.yaml"),
+	filepath.Join("..", "..", "internal", "seed", "property_types.yaml"),
+	filepath.Join("..", "..", "internal", "seed", "metric_types.yaml"),
 	filepath.Join("..", "..", "internal", "seed", "command_types.yaml"),
 	filepath.Join("..", "..", "internal", "seed", "interface_types.yaml"),
 	filepath.Join("..", "..", "internal", "seed", "roles.yaml"),

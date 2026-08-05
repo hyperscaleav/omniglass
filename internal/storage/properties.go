@@ -21,29 +21,25 @@ var (
 type PropertyTypeSpec struct {
 	Name        string
 	DisplayName string
-	Kind        *string
 	DataType    string
-	Unit        *string
-	Precision   *int
 	Validation  []byte
 	Description string
 }
 
 // PropertyTypePatch carries the mutable fields of a property update; a nil field is
-// unchanged. DataType and Kind are fixed at create (a property's type must not shift
-// under its consumers). Validation replaces wholesale when non-nil.
+// unchanged. DataType is fixed at create (a property's type must not shift under its
+// consumers). Validation replaces wholesale when non-nil.
 type PropertyTypePatch struct {
 	DisplayName *string
 	Description *string
-	Unit        *string
 	Validation  []byte
 }
 
-const propertyCols = `id, name, coalesce(display_name, ''), kind, data_type, unit, precision, validation, fusion_policy, description, official`
+const propertyCols = `id, name, coalesce(display_name, ''), data_type, validation, fusion_policy, description, official`
 
 func scanPropertyType(row pgx.Row) (*PropertyType, error) {
 	var prop PropertyType
-	if err := row.Scan(&prop.ID, &prop.Name, &prop.DisplayName, &prop.Kind, &prop.DataType, &prop.Unit, &prop.Precision, &prop.Validation, &prop.FusionPolicy, &prop.Description, &prop.Official); err != nil {
+	if err := row.Scan(&prop.ID, &prop.Name, &prop.DisplayName, &prop.DataType, &prop.Validation, &prop.FusionPolicy, &prop.Description, &prop.Official); err != nil {
 		return nil, err
 	}
 	return &prop, nil
@@ -95,13 +91,15 @@ func (p *PG) CreatePropertyType(ctx context.Context, actorID string, spec Proper
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Cross-registry uniqueness, the mirror of the check in CreateEventType: a name
-	// in both registries resolves to nothing at ingest, so refuse it here where the
-	// operator can still choose a different one.
+	// Cross-registry uniqueness, the mirror of the check in CreateEventType: the
+	// three ingest registries (property, metric, event) share one resolution
+	// namespace, and a name in two of them resolves to nothing at ingest, so refuse
+	// it here where the operator can still choose a different one.
 	var clash bool
 	if err := tx.QueryRow(ctx,
-		`select exists (select 1 from event_type where name = $1)`, spec.Name).Scan(&clash); err != nil {
-		return nil, fmt.Errorf("storage: check event_type clash for %q: %w", spec.Name, err)
+		`select exists (select 1 from event_type where name = $1)
+		     or exists (select 1 from metric_type where name = $1)`, spec.Name).Scan(&clash); err != nil {
+		return nil, fmt.Errorf("storage: check registry clash for %q: %w", spec.Name, err)
 	}
 	if clash {
 		return nil, ErrPropertyTypeExists
@@ -111,10 +109,10 @@ func (p *PG) CreatePropertyType(ctx context.Context, actorID string, spec Proper
 	// key, which survives a later rename, rather than on the name.
 	var ptID string
 	if err := tx.QueryRow(ctx,
-		`insert into property_type (name, display_name, kind, data_type, unit, precision, validation, description, official)
-		 values ($1, $2, $3, $4, $5, $6, $7, $8, false)
+		`insert into property_type (name, display_name, data_type, validation, description, official)
+		 values ($1, $2, $3, $4, $5, false)
 		 returning id`,
-		spec.Name, spec.DisplayName, spec.Kind, spec.DataType, spec.Unit, spec.Precision, spec.Validation, spec.Description).Scan(&ptID); err != nil {
+		spec.Name, spec.DisplayName, spec.DataType, spec.Validation, spec.Description).Scan(&ptID); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrPropertyTypeExists
 		}
@@ -155,10 +153,9 @@ func (p *PG) UpdatePropertyType(ctx context.Context, actorID, name string, patch
 		update property_type set
 			display_name = coalesce($2, display_name),
 			description  = coalesce($3, description),
-			unit         = coalesce($4, unit),
-			validation   = coalesce($5, validation)
+			validation   = coalesce($4, validation)
 		where name = $1`,
-		name, patch.DisplayName, patch.Description, patch.Unit, patch.Validation); err != nil {
+		name, patch.DisplayName, patch.Description, patch.Validation); err != nil {
 		return nil, fmt.Errorf("storage: update property %q: %w", name, err)
 	}
 	prop, err := scanPropertyType(tx.QueryRow(ctx, `select `+propertyCols+` from property_type where name = $1`, name))

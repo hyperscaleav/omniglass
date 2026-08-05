@@ -2959,11 +2959,11 @@
       "fk_target": "node.principal_id"
      },
      {
-      "name": "property_type_id",
+      "name": "metric_type_id",
       "type": "uuid",
       "nullable": false,
       "fk": true,
-      "fk_target": "property_type.id"
+      "fk_target": "metric_type.id"
      }
     ],
     "checks": [
@@ -3103,24 +3103,9 @@
       "nullable": true
      },
      {
-      "name": "kind",
-      "type": "text",
-      "nullable": true
-     },
-     {
       "name": "data_type",
       "type": "text",
       "nullable": false
-     },
-     {
-      "name": "unit",
-      "type": "text",
-      "nullable": true
-     },
-     {
-      "name": "precision",
-      "type": "integer",
-      "nullable": true
      },
      {
       "name": "fusion_policy",
@@ -3161,11 +3146,7 @@
     "checks": [
      {
       "name": "property_type_data_type_check",
-      "expr": "CHECK ((data_type = ANY (ARRAY['string'::text, 'int'::text, 'float'::text, 'bool'::text, 'json'::text])))"
-     },
-     {
-      "name": "property_type_kind_check",
-      "expr": "CHECK ((kind = ANY (ARRAY['metric'::text, 'state'::text])))"
+      "expr": "CHECK ((data_type = ANY (ARRAY['string'::text, 'bool'::text, 'json'::text])))"
      }
     ],
     "uniques": [
@@ -3291,6 +3272,241 @@
      {
       "name": "state_provenance_check",
       "expr": "CHECK ((provenance = ANY (ARRAY['observed'::text, 'calculated'::text, 'intended'::text])))"
+     }
+    ]
+   }
+  },
+  "unclustered": {
+   "location_type_metric": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "default_value",
+      "type": "jsonb",
+      "nullable": true
+     },
+     {
+      "name": "required",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "location_type_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "location_type.id"
+     },
+     {
+      "name": "metric_type_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "metric_type.id"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "location_type_metric_location_type_id_metric_type_id_key",
+      "definition": "CREATE UNIQUE INDEX location_type_metric_location_type_id_metric_type_id_key ON public.location_type_metric USING btree (location_type_id, metric_type_id)"
+     }
+    ]
+   },
+   "metric_type": {
+    "columns": [
+     {
+      "name": "name",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "display_name",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "data_type",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "unit",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "precision",
+      "type": "integer",
+      "nullable": true
+     },
+     {
+      "name": "fusion_policy",
+      "type": "jsonb",
+      "nullable": true
+     },
+     {
+      "name": "description",
+      "type": "text",
+      "nullable": false,
+      "default": "''::text"
+     },
+     {
+      "name": "registered_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "official",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+     },
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     }
+    ],
+    "checks": [
+     {
+      "name": "metric_type_data_type_check",
+      "expr": "CHECK ((data_type = ANY (ARRAY['int'::text, 'float'::text])))"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "metric_type_handle_key",
+      "definition": "CREATE UNIQUE INDEX metric_type_handle_key ON public.metric_type USING btree (name)"
+     }
+    ]
+   },
+   "product_metric": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "default_value",
+      "type": "jsonb",
+      "nullable": true
+     },
+     {
+      "name": "required",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "product_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "product.id"
+     },
+     {
+      "name": "metric_type_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "metric_type.id"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "product_metric_product_id_metric_type_id_key",
+      "definition": "CREATE UNIQUE INDEX product_metric_product_id_metric_type_id_key ON public.product_metric USING btree (product_id, metric_type_id)"
+     }
+    ]
+   },
+   "standard_metric": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "default_value",
+      "type": "jsonb",
+      "nullable": true
+     },
+     {
+      "name": "required",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "standard_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "standard.id"
+     },
+     {
+      "name": "metric_type_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "metric_type.id"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "standard_metric_standard_id_metric_type_id_key",
+      "definition": "CREATE UNIQUE INDEX standard_metric_standard_id_metric_type_id_key ON public.standard_metric USING btree (standard_id, metric_type_id)"
      }
     ]
    }

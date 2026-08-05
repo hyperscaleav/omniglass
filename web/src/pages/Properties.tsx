@@ -11,7 +11,6 @@ import { Plus } from "../components/icons";
 import {
   type PropertyRow,
   type PropertyDataType,
-  type PropertyKind,
   PROPERTY_DATA_TYPES,
   PROPERTIES_KEY,
   listProperties,
@@ -32,12 +31,6 @@ function typeBadge(dataType: string): JSX.Element {
   return <span class="badge badge-ghost badge-sm font-data">{dataType}</span>;
 }
 
-function kindBadge(kind: string | undefined): JSX.Element {
-  return kind
-    ? <span class="badge badge-outline badge-sm">{kind}</span>
-    : <span class="text-base-content/30">—</span>;
-}
-
 function originBadge(official: boolean): JSX.Element {
   return official
     ? <span class="badge badge-ghost badge-sm">official</span>
@@ -52,7 +45,6 @@ function originBadge(official: boolean): JSX.Element {
 const columns: FlatColumn<PropertyRow>[] = [
   identityColumn<PropertyRow>(),
   { key: "data_type", label: "Type", width: "90px", sortVal: (r) => r.data_type, cell: (r) => typeBadge(r.data_type) },
-  { key: "kind", label: "Kind", width: "90px", cell: (r) => kindBadge(r.kind) },
   { key: "official", label: "Origin", width: "100px", sortVal: (r) => String(r.official), cell: (r) => originBadge(r.official) },
 ];
 
@@ -118,14 +110,12 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
   const [err, setErr] = createSignal<string | null>(null);
   const [displayName, setDisplayName] = createSignal("");
   const [description, setDescription] = createSignal("");
-  const [unit, setUnit] = createSignal("");
 
   createEffect(on(edit.editing, (editing) => {
     if (!editing) return;
     const r = row();
     setDisplayName(r?.display_name ?? "");
     setDescription(r?.description ?? "");
-    setUnit(r?.unit ?? "");
     setErr(null);
   }));
 
@@ -148,7 +138,7 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
     if (!r) return;
     setErr(null);
     try {
-      await updateProperty(r.name, { display_name: displayName(), description: description(), unit: unit() || undefined });
+      await updateProperty(r.name, { display_name: displayName(), description: description() });
       await qc.invalidateQueries({ queryKey: PROPERTIES_KEY });
     } catch (e) {
       setErr(describeError(e));
@@ -175,9 +165,7 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
           <div class="grid grid-cols-2 gap-3 text-sm">
             <KVStacked bind="name" value={<span class="font-data">{r().name}</span>} />
             <KVStacked label="Type" value={typeBadge(r().data_type)} />
-            <KVStacked label="Kind" value={kindBadge(r().kind)} />
             <KVStacked label="Origin" value={originBadge(r().official)} />
-            <KVStacked label="Unit" value={<span class="font-data">{r().unit ?? "—"}</span>} />
           </div>
           <BladeField
             bind="display_name"
@@ -192,11 +180,6 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
             draft={description}
             onInput={setDescription}
           />
-          <Show when={edit.editing()}>
-            <FieldRow label="Unit" eyebrow>
-              <input class="input input-bordered w-full font-data" placeholder="ms" value={unit()} onInput={(e) => setUnit(e.currentTarget.value)} />
-            </FieldRow>
-          </Show>
           <Show when={r().validation != null}>
             <div class="flex flex-col gap-1.5">
               <span class="eyebrow">Validation (JSON Schema)</span>
@@ -213,16 +196,14 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
   );
 }
 
-// CreatePropertyForm: register a custom property. Name and data type are required; kind
-// (observed metric/state/log) is optional, omitted for a declared attribute property.
+// CreatePropertyForm: register a custom property. Name and data type are required;
+// the data types are the non-numeric lane (a numeric signal is a metric type).
 export function CreatePropertyForm(p: { onCreated: (r: PropertyRow) => void }): JSX.Element {
   const qc = useQueryClient();
   const [name, setName] = createSignal("");
   const [dataType, setDataType] = createSignal<PropertyDataType>("string");
   const [displayName, setDisplayName] = createSignal("");
   const [description, setDescription] = createSignal("");
-  const [unit, setUnit] = createSignal("");
-  const [kind, setKind] = createSignal<"" | PropertyKind>("");
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
 
@@ -243,8 +224,6 @@ export function CreatePropertyForm(p: { onCreated: (r: PropertyRow) => void }): 
         data_type: dataType(),
         display_name: displayName().trim() || undefined,
         description: description().trim() || undefined,
-        unit: unit().trim() || undefined,
-        kind: kind() || undefined,
       });
       await qc.invalidateQueries({ queryKey: PROPERTIES_KEY });
       p.onCreated(created);
@@ -260,7 +239,7 @@ export function CreatePropertyForm(p: { onCreated: (r: PropertyRow) => void }): 
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="name" hint="A lowercase, dot-hierarchied name, e.g. serial-number or interface.reachable.">
+      <FieldRow bind="name" hint="A lowercase kebab name, e.g. serial-number or interface-reachable.">
         <input class="input input-bordered w-full font-data" value={name()} placeholder="serial-number" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Data type">
@@ -273,17 +252,6 @@ export function CreatePropertyForm(p: { onCreated: (r: PropertyRow) => void }): 
       </FieldRow>
       <FieldRow label="Description">
         <input class="input input-bordered w-full" value={description()} onInput={(e) => setDescription(e.currentTarget.value)} />
-      </FieldRow>
-      <FieldRow label="Unit" hint="Optional, for an observed measurement (e.g. ms).">
-        <input class="input input-bordered w-full font-data" value={unit()} placeholder="ms" onInput={(e) => setUnit(e.currentTarget.value)} />
-      </FieldRow>
-      <FieldRow label="Kind" hint="Observed kind: metric, state, or log. Leave declared for an operator-set attribute.">
-        <select class="select select-bordered w-full" value={kind()} onChange={(e) => setKind(e.currentTarget.value as "" | PropertyKind)}>
-          <option value="">declared (no observed kind)</option>
-          <option value="metric">metric</option>
-          <option value="state">state</option>
-          <option value="log">log</option>
-        </select>
       </FieldRow>
     </form>
   );

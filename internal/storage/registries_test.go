@@ -9,8 +9,9 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// TestRegistrySeed proves the boot seed lands the reachability property_type
-// canon and the icmp/tcp interface_types, and that a second Run is idempotent.
+// TestRegistrySeed proves the boot seed lands the catalog canon on its two lanes
+// (the reachability metric_types, the non-numeric property_types) and the
+// icmp/tcp interface_types, and that a second Run is idempotent.
 func TestRegistrySeed(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -29,30 +30,45 @@ func TestRegistrySeed(t *testing.T) {
 		t.Fatalf("seed (2nd, idempotent): %v", err)
 	}
 
+	// The reachability canon seeds on the metric lane (#587), official=true.
+	mts, err := gw.ListMetricTypes(ctx)
+	if err != nil {
+		t.Fatalf("list metric types: %v", err)
+	}
+	metricOfficial := map[string]bool{}
+	metricUnit := map[string]string{}
+	for _, mt := range mts {
+		metricOfficial[mt.Name] = mt.Official
+		if mt.Unit != nil {
+			metricUnit[mt.Name] = *mt.Unit
+		}
+	}
+	for _, name := range []string{"icmp-reachable", "icmp-rtt-avg", "tcp-open", "tcp-connect-time"} {
+		if !metricOfficial[name] {
+			t.Errorf("metric type %s: want seeded official=true, got %v", name, metricOfficial)
+		}
+	}
+	// The numeric facts live on the metric lane: the timing series keep their unit.
+	if metricUnit["icmp-rtt-avg"] != "ms" || metricUnit["tcp-connect-time"] != "ms" {
+		t.Errorf("metric units = %v, want ms on the timing series", metricUnit)
+	}
+
 	props, err := gw.ListPropertyTypes(ctx)
 	if err != nil {
 		t.Fatalf("list properties: %v", err)
 	}
-	want := map[string]string{"icmp-reachable": "metric", "icmp-rtt-avg": "metric", "tcp-open": "metric", "tcp-connect-time": "metric"}
-	got := map[string]string{}
 	official := map[string]bool{}
 	for _, prop := range props {
-		if prop.Kind != nil {
-			got[prop.Name] = *prop.Kind
-		}
 		official[prop.Name] = prop.Official
 	}
-	for name, kind := range want {
-		if got[name] != kind {
-			t.Errorf("property %s: want kind %q, got %q", name, kind, got[name])
+	// The property lane holds the non-numeric canon, no numeric row among it.
+	for _, name := range []string{"interface-reachable", "health", "serial-number"} {
+		if !official[name] {
+			t.Errorf("property %s: want seeded official=true, got %v", name, official)
 		}
 	}
-	// The declared attribute properties seed with no kind and official=true.
-	if _, ok := got["serial-number"]; ok {
-		t.Errorf("serial-number: want no kind (declared-only), got %q", got["serial-number"])
-	}
-	if !official["serial-number"] {
-		t.Errorf("serial-number: want official=true")
+	if _, ok := official["icmp-reachable"]; ok {
+		t.Error("icmp-reachable seeded on the property lane; numbers are metrics")
 	}
 
 	its, err := gw.ListInterfaceTypes(ctx)

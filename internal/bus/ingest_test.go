@@ -223,14 +223,20 @@ func TestTelemetryRoundTrip(t *testing.T) {
 		t.Fatalf("transition-only breached: want [up down], got %+v", trans)
 	}
 
-	// The observed latest-value cache was derived on ingest (ADR-0063 #394): the
-	// current value of a series is one lookup, mirroring the newest sample. The
-	// state's newest value is the "down" flip; the metric's is tcp-open=1. Poll,
-	// since the derive is a non-gating write that runs just after the sample lands.
+	// The observed latest-value cache was derived on ingest for the STATE lane
+	// (ADR-0063 #394): the current value of a series is one lookup, mirroring the
+	// newest sample; the newest value here is the "down" flip. Poll, since the
+	// derive is a non-gating write that runs just after the sample lands. The
+	// metric lane does not derive into the cache (#587: its catalog no longer
+	// holds metric names, and the value store retires with #591): a metric's
+	// current value is its latest series row, read by type, owner, and instance.
 	waitValue(t, ctx, gw, "disp-1", "interface-reachable", "disp-1-tcp", "observed",
 		func(cv *storage.CachedValue) bool { return cv != nil && string(cv.Value) == `"down"` })
-	waitValue(t, ctx, gw, "disp-1", "tcp-open", "disp-1-tcp", "observed",
-		func(cv *storage.CachedValue) bool { return cv != nil && string(cv.Value) == "1" })
+	if dp, err := gw.LatestMetricInstance(ctx, "disp-1", "tcp-open", "disp-1-tcp"); err != nil {
+		t.Fatalf("latest tcp-open series row: %v", err)
+	} else if dp == nil || dp.Value != 1 {
+		t.Fatalf("latest tcp-open series row = %+v, want value 1", dp)
+	}
 
 	// Confinement held for the state path: disp-2 (node-b's component) got no verdict.
 	if got, err := gw.LatestState(ctx, "disp-2", "interface-reachable", "disp-2-tcp"); err != nil {

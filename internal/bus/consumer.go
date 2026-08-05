@@ -211,6 +211,10 @@ func (s *Server) land(ctx context.Context, ev *ogv1.TelemetryBatch, bind ingestB
 		return nil
 	}
 
+	metricTypes, err := s.store.ListMetricTypes(ctx)
+	if err != nil {
+		return err
+	}
 	properties, err := s.store.ListPropertyTypes(ctx)
 	if err != nil {
 		return err
@@ -219,7 +223,7 @@ func (s *Server) land(ctx context.Context, ev *ogv1.TelemetryBatch, bind ingestB
 	if err != nil {
 		return err
 	}
-	reg := collection.NewRegistry(properties, eventTypes)
+	reg := collection.NewRegistry(metricTypes, properties, eventTypes)
 	// A name in both registries resolves to nothing, so every sample carrying it is
 	// refused. The fence at the create routes stops new ones, but an install that
 	// already has a collision would otherwise just lose data quietly. Say so.
@@ -258,12 +262,12 @@ func (s *Server) land(ctx context.Context, ev *ogv1.TelemetryBatch, bind ingestB
 			return err
 		}
 	}
-	// Derive the observed latest-value cache from the samples that just landed
+	// Derive the observed latest-value cache from the state samples that just landed
 	// (ADR-0063 #394). This is non-gating: the append tables are the source of truth
 	// and the cache is rebuildable from them, so a failed upsert is logged, not
 	// retried, and never fails the caller. Its series-key upsert is idempotent, so a
 	// redelivery that re-runs it does not double-write (unlike the append sinks).
-	if ups := latestUpserts(metrics, fresh); len(ups) > 0 {
+	if ups := latestUpserts(fresh); len(ups) > 0 {
 		if err := s.store.UpsertProperties(ctx, ups); err != nil {
 			slog.Warn("latest-value derive failed (rebuildable from samples)",
 				"component", bind.SampleOwner.Component, "error", err)
@@ -272,23 +276,18 @@ func (s *Server) land(ctx context.Context, ev *ogv1.TelemetryBatch, bind ingestB
 	return nil
 }
 
-// latestUpserts turns the observed samples that just landed (metrics and the
-// post-dedupe states) into producer-cache upserts: one newest value per series,
-// provenance observed, the metric's number and the state's string encoded as the
-// jsonb value the cache stores. Pure: no I/O. Events are occurrences, not values,
-// so they never enter the value cache.
-func latestUpserts(metrics []storage.MetricSampleWrite, states []storage.StateSampleWrite) []storage.PropertyUpsert {
-	ups := make([]storage.PropertyUpsert, 0, len(metrics)+len(states))
-	for _, m := range metrics {
-		v, err := json.Marshal(m.Value)
-		if err != nil {
-			continue
-		}
-		ups = append(ups, storage.PropertyUpsert{
-			OwnerKind: m.OwnerKind, OwnerID: m.OwnerID, Key: m.Key, Instance: m.Instance,
-			Provenance: "observed", Value: v, TS: m.TS,
-		})
-	}
+// latestUpserts turns the post-dedupe state samples that just landed into
+// producer-cache upserts: one newest value per series, provenance observed, the
+// state's string encoded as the jsonb value the cache stores. Pure: no I/O.
+// Events are occurrences, not values, so they never enter the value cache.
+//
+// Metric samples are deliberately NOT derived: the metric lane's current value
+// is its latest series row (the reachability BFF already reads it there), the
+// value store retires entirely in the slice that folds declared values into the
+// series (#591), and deriving into a cache whose catalog no longer holds metric
+// names (#587) would need a two-armed FK on a table that is about to die.
+func latestUpserts(states []storage.StateSampleWrite) []storage.PropertyUpsert {
+	ups := make([]storage.PropertyUpsert, 0, len(states))
 	for _, st := range states {
 		v, err := json.Marshal(st.Value)
 		if err != nil {

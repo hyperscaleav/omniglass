@@ -21,11 +21,20 @@ func TestEventTypeFamilyMigration(t *testing.T) {
 		t.Error("expected event_type.name unique to reject a duplicate")
 	}
 
-	// The log kind left property_type: metric is accepted, log is rejected.
-	mustExec(t, conn, `insert into property_type (name, kind, data_type) values ('cpu.load', 'metric', 'float')`)
-	if _, err := conn.Exec(ctx, `insert into property_type (name, kind, data_type) values ('device.log', 'log', 'string')`); err == nil {
-		t.Error("expected property_type.kind check to reject 'log'")
+	// The kind discriminator is gone entirely (#587 finished what #395 started):
+	// the log kind left first, then the split retired the column, so a plain
+	// insert works and the column must not exist at all.
+	mustExec(t, conn, `insert into property_type (name, data_type) values ('device-log', 'string')`)
+	var kindPresent bool
+	if err := conn.QueryRow(ctx,
+		`select exists (select 1 from information_schema.columns
+		 where table_name = 'property_type' and column_name = 'kind')`).Scan(&kindPresent); err != nil {
+		t.Fatalf("read property_type kind column: %v", err)
 	}
+	if kindPresent {
+		t.Error("property_type still carries the kind column; the lane split retired it")
+	}
+	mustExec(t, conn, `insert into metric_type (name, data_type) values ('cpu-load', 'float')`)
 
 	// event is repointed onto event_type: event_type_id present and NOT NULL, the
 	// old property_type_id gone, and the origin/causation columns present.

@@ -259,8 +259,8 @@ telemetry: {
     component_id: uuid {constraint: foreign_key}
     event_id: bigint {constraint: foreign_key}
     location_id: uuid {constraint: foreign_key}
+    metric_type_id: uuid {constraint: foreign_key}
     node_id: uuid {constraint: foreign_key}
-    property_type_id: uuid {constraint: foreign_key}
     system_id: uuid {constraint: foreign_key}
   }
   property: {
@@ -366,6 +366,31 @@ audit: {
   }
 }
 
+unclustered: {
+  location_type_metric: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+    location_type_id: uuid {constraint: foreign_key}
+    metric_type_id: uuid {constraint: foreign_key}
+  }
+  metric_type: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+  }
+  product_metric: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+    metric_type_id: uuid {constraint: foreign_key}
+    product_id: uuid {constraint: foreign_key}
+  }
+  standard_metric: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+    metric_type_id: uuid {constraint: foreign_key}
+    standard_id: uuid {constraint: foreign_key}
+  }
+}
+
 audit.audit_log.actor_principal_id -> identity.principal.id
 audit.audit_log.real_actor_principal_id -> identity.principal.id
 catalog.product.driver_id -> catalog.driver.id
@@ -452,8 +477,8 @@ telemetry.log_line.system_id -> estate.system.id
 telemetry.metric.component_id -> estate.component.id
 telemetry.metric.event_id -> telemetry.event.id
 telemetry.metric.location_id -> estate.location.id
+telemetry.metric.metric_type_id -> unclustered.metric_type.id
 telemetry.metric.node_id -> collection.node.principal_id
-telemetry.metric.property_type_id -> telemetry.property_type.id
 telemetry.metric.system_id -> estate.system.id
 telemetry.property.component_id -> estate.component.id
 telemetry.property.location_id -> estate.location.id
@@ -466,6 +491,12 @@ telemetry.state.location_id -> estate.location.id
 telemetry.state.node_id -> collection.node.principal_id
 telemetry.state.property_type_id -> telemetry.property_type.id
 telemetry.state.system_id -> estate.system.id
+unclustered.location_type_metric.location_type_id -> estate.location_type.id
+unclustered.location_type_metric.metric_type_id -> unclustered.metric_type.id
+unclustered.product_metric.metric_type_id -> unclustered.metric_type.id
+unclustered.product_metric.product_id -> catalog.product.id
+unclustered.standard_metric.metric_type_id -> unclustered.metric_type.id
+unclustered.standard_metric.standard_id -> catalog.standard.id
 ```
 
 <!-- erd:end -->

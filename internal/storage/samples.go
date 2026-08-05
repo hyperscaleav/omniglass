@@ -83,8 +83,8 @@ func (p *PG) InsertMetricSamples(ctx context.Context, evs []MetricSampleWrite) e
 		if err != nil {
 			return fmt.Errorf("storage: sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
-		sql := fmt.Sprintf(`insert into metric (ts, owner_kind, %s, property_type_id, instance, value, provenance, source)
-			values ($1, $2, $3, (select id from property_type where name = $4), $5, $6, 'observed', $7)`, col)
+		sql := fmt.Sprintf(`insert into metric (ts, owner_kind, %s, metric_type_id, instance, value, provenance, source)
+			values ($1, $2, $3, (select id from metric_type where name = $4), $5, $6, 'observed', $7)`, col)
 		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arc, ev.Key, ev.Instance, ev.Value, ev.Source); err != nil {
 			return fmt.Errorf("storage: insert sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
@@ -101,10 +101,10 @@ func (p *PG) LatestMetric(ctx context.Context, componentName, key string) (*Metr
 	var dp MetricSample
 	err := p.pool.QueryRow(ctx, `
 		select ts, owner_kind,
-			(select p.name from property_type p where p.id = metric.property_type_id), instance, value, provenance, source
+			(select m.name from metric_type m where m.id = metric.metric_type_id), instance, value, provenance, source
 		from metric
 		where component_id = (select id from component where name = $1)
-		  and property_type_id = (select id from property_type where name = $2)
+		  and metric_type_id = (select id from metric_type where name = $2)
 		order by ts desc
 		limit 1`, componentName, key).Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -124,10 +124,10 @@ func (p *PG) LatestMetricInstance(ctx context.Context, componentName, key, insta
 	var dp MetricSample
 	err := p.pool.QueryRow(ctx, `
 		select ts, owner_kind,
-			(select p.name from property_type p where p.id = metric.property_type_id), instance, value, provenance, source
+			(select m.name from metric_type m where m.id = metric.metric_type_id), instance, value, provenance, source
 		from metric
 		where component_id = (select id from component where name = $1)
-		  and property_type_id = (select id from property_type where name = $2) and instance = $3
+		  and metric_type_id = (select id from metric_type where name = $2) and instance = $3
 		order by ts desc
 		limit 1`, componentName, key, instance).Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source)
 	if errors.Is(err, pgx.ErrNoRows) {

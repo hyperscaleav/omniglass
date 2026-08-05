@@ -43,10 +43,10 @@ type TelemetryPublisher interface {
 }
 
 type pushSample struct {
-	Name     string   `json:"name" minLength:"1" doc:"The canonical property name, or a registered event_type name"`
+	Name     string   `json:"name" minLength:"1" doc:"The canonical metric or property name, or a registered event_type name"`
 	Instance string   `json:"instance,omitempty" doc:"Discriminates many values of one name on one owner (three fan speeds, per-port counters)"`
-	Number   *float64 `json:"number,omitempty" doc:"The value for a metric-kind property"`
-	Text     *string  `json:"text,omitempty" doc:"The value for a state-kind property, or the message for an event_type"`
+	Number   *float64 `json:"number,omitempty" doc:"The value for a metric type"`
+	Text     *string  `json:"text,omitempty" doc:"The value for a property (a state), or the message for an event_type"`
 }
 
 type pushLog struct {
@@ -96,7 +96,7 @@ func kindMismatch(kind string, s pushSample) (reason string, bad bool) {
 	switch kind {
 	case "metric":
 		if s.Number == nil {
-			return "\"" + s.Name + "\" is a metric property: send number, not text", true
+			return "\"" + s.Name + "\" is a metric type: send number, not text", true
 		}
 	case "state":
 		if s.Text == nil {
@@ -157,6 +157,10 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		// asynchronous, so a route that validated nothing would have to answer "202,
 		// and good luck", which is useless to a human who mistyped a property name.
 		// The registry is an in-memory snapshot, so this costs a map lookup per name.
+		metricTypes, err := gw.ListMetricTypes(ctx)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("read registry")
+		}
 		properties, err := gw.ListPropertyTypes(ctx)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("read registry")
@@ -165,7 +169,7 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		if err != nil {
 			return nil, huma.Error500InternalServerError("read registry")
 		}
-		reg := collection.NewRegistry(properties, eventTypes)
+		reg := collection.NewRegistry(metricTypes, properties, eventTypes)
 
 		out := &pushOutput{Status: http.StatusAccepted}
 		batch := &ogv1.TelemetryBatch{

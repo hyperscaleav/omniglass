@@ -2338,6 +2338,152 @@ func generatedCommands() []*cobra.Command {
 	}())
 	roots = append(roots, func() *cobra.Command {
 		parent := &cobra.Command{
+			Use:   "metric-type",
+			Short: "Commands for the metric-type resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fDataType string
+				var fDescription string
+				var fDisplayName string
+				var fName string
+				var fPrecision string
+				var fUnit string
+				cmd := &cobra.Command{
+					Use:     "create",
+					Short:   "Create a metric type",
+					Long:    "Registers a custom metric type (official=false). The name must be a valid metric key. Gated by metric_type:create.",
+					Example: "  omniglass metric-type create --data-type data_type --name name",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/metric-types")
+						body := map[string]any{}
+						if cmd.Flags().Changed("data-type") {
+							body["data_type"] = fDataType
+						}
+						if cmd.Flags().Changed("description") {
+							body["description"] = fDescription
+						}
+						if cmd.Flags().Changed("display-name") {
+							body["display_name"] = fDisplayName
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						if cmd.Flags().Changed("precision") {
+							body["precision"] = jsonOrString(fPrecision)
+						}
+						if cmd.Flags().Changed("unit") {
+							body["unit"] = fUnit
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fDataType, "data-type", "", "The value type; a metric is always a number")
+				_ = cmd.MarkFlagRequired("data-type")
+				cmd.Flags().StringVar(&fDescription, "description", "", "What the series measures")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A human label")
+				cmd.Flags().StringVar(&fName, "name", "", "The metric type name (lowercase kebab)")
+				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fPrecision, "precision", "", "Decimal places a rendered value keeps")
+				cmd.Flags().StringVar(&fUnit, "unit", "", "The display unit of the series (ms, dB, percent)")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "delete <name>",
+					Short:   "Delete a metric type",
+					Long:    "Removes a custom metric type by name. Official metric types are read-only. Gated by metric_type:delete.",
+					Example: "  omniglass metric-type delete <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/metric-types/%s", url.PathEscape(args[0]))
+						return runAPICommand(cmd, "DELETE", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "get <name>",
+					Short:   "Get a metric type",
+					Long:    "Returns one metric type by name. Gated by metric_type:read.",
+					Example: "  omniglass metric-type get <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/metric-types/%s", url.PathEscape(args[0]))
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "List metric types",
+					Long:    "Lists every registered metric type (official and custom). The catalog is estate-wide reference data. Gated by metric_type:read.",
+					Example: "  omniglass metric-type list",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/metric-types")
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fDescription string
+				var fDisplayName string
+				var fPrecision string
+				var fUnit string
+				cmd := &cobra.Command{
+					Use:     "update <name>",
+					Short:   "Update a metric type",
+					Long:    "Patches a custom metric type's label, description, unit, or precision (a nil field is unchanged). Data type is fixed at creation. Official metric types are read-only. Gated by metric_type:update.",
+					Example: "  omniglass metric-type update <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/metric-types/%s", url.PathEscape(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("description") {
+							body["description"] = fDescription
+						}
+						if cmd.Flags().Changed("display-name") {
+							body["display_name"] = fDisplayName
+						}
+						if cmd.Flags().Changed("precision") {
+							body["precision"] = jsonOrString(fPrecision)
+						}
+						if cmd.Flags().Changed("unit") {
+							body["unit"] = fUnit
+						}
+						return runAPICommand(cmd, "PATCH", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fDescription, "description", "", "What the series measures")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A human label")
+				cmd.Flags().StringVar(&fPrecision, "precision", "", "Decimal places a rendered value keeps")
+				cmd.Flags().StringVar(&fUnit, "unit", "", "The display unit of the series")
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
 			Use:   "node",
 			Short: "Commands for the node resource",
 		}
@@ -3597,9 +3743,7 @@ func generatedCommands() []*cobra.Command {
 				var fDataType string
 				var fDescription string
 				var fDisplayName string
-				var fKind string
 				var fName string
-				var fUnit string
 				var fValidation string
 				cmd := &cobra.Command{
 					Use:     "create",
@@ -3619,14 +3763,8 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("display-name") {
 							body["display_name"] = fDisplayName
 						}
-						if cmd.Flags().Changed("kind") {
-							body["kind"] = fKind
-						}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
-						}
-						if cmd.Flags().Changed("unit") {
-							body["unit"] = fUnit
 						}
 						if cmd.Flags().Changed("validation") {
 							body["validation"] = jsonOrString(fValidation)
@@ -3634,14 +3772,12 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fDataType, "data-type", "", "The value type")
+				cmd.Flags().StringVar(&fDataType, "data-type", "", "The value type; a numeric signal is a metric type")
 				_ = cmd.MarkFlagRequired("data-type")
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the property means")
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A human label")
-				cmd.Flags().StringVar(&fKind, "kind", "", "The observed kind; omit for a declared-only property")
-				cmd.Flags().StringVar(&fName, "name", "", "The property name (lowercase, dot-hierarchied)")
+				cmd.Flags().StringVar(&fName, "name", "", "The property name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
-				cmd.Flags().StringVar(&fUnit, "unit", "", "A display unit (observed properties)")
 				cmd.Flags().StringVar(&fValidation, "validation", "", "A JSON Schema fragment constraining the value")
 				return cmd
 			}()
@@ -3702,12 +3838,11 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var fDescription string
 				var fDisplayName string
-				var fUnit string
 				var fValidation string
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a property",
-					Long:    "Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property_type:update.",
+					Long:    "Patches a custom property's label, description, or validation (a nil field is unchanged). Data type is fixed at creation. Official properties are read-only. Gated by property_type:update.",
 					Example: "  omniglass property-type update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3719,9 +3854,6 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("display-name") {
 							body["display_name"] = fDisplayName
 						}
-						if cmd.Flags().Changed("unit") {
-							body["unit"] = fUnit
-						}
 						if cmd.Flags().Changed("validation") {
 							body["validation"] = jsonOrString(fValidation)
 						}
@@ -3730,7 +3862,6 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the property means")
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A human label")
-				cmd.Flags().StringVar(&fUnit, "unit", "", "A display unit")
 				cmd.Flags().StringVar(&fValidation, "validation", "", "A JSON Schema fragment (replaces wholesale)")
 				return cmd
 			}()

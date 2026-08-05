@@ -7,7 +7,7 @@ import (
 )
 
 // The canonical reachability sample names the tcp probe emits. They are
-// seeded property_types (internal/seed/properties.yaml); the ingest
+// seeded metric_types (internal/seed/metric_types.yaml); the ingest
 // consumer's reject-not-project drops any name absent from that registry.
 const (
 	SignalTCPOpen        = "tcp-open"

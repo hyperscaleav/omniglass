@@ -125,6 +125,10 @@ func provedByCreateKeyspace(ctx context.Context, gw *storage.PG) map[string]func
 			_, err := gw.CreatePropertyType(ctx, "", storage.PropertyTypeSpec{Name: s, DisplayName: "X", DataType: "string"})
 			return err
 		},
+		"metric_type": func(s string) error {
+			_, err := gw.CreateMetricType(ctx, "", storage.MetricTypeSpec{Name: s, DisplayName: "X", DataType: "int"})
+			return err
+		},
 		"event_type": func(s string) error {
 			_, err := gw.CreateEventType(ctx, "", storage.EventTypeSpec{Name: s, DisplayName: "X"})
 			return err

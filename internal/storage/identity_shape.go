@@ -68,7 +68,8 @@ var IdentityShapes = map[string]TableIdentity{
 	"vendor": {Shape: ShapeKeyBearing},
 
 	// Keyspace: a name, on the other rule.
-	"property_type": {ShapeKeyspace, "icmp-rtt-avg, a signal name referenced from drivers and templates"},
+	"property_type": {ShapeKeyspace, "serial-number, a signal name referenced from drivers and templates"},
+	"metric_type":   {ShapeKeyspace, "icmp-rtt-avg, a numeric-series name referenced from drivers and templates"},
 	"event_type":    {ShapeKeyspace, "call-started, an occurrence name"},
 	"command_type":  {ShapeKeyspace, "set-input, a command name"},
 
@@ -86,13 +87,15 @@ var IdentityShapes = map[string]TableIdentity{
 	"audit_log": {Shape: ShapeIDOnly}, "command": {Shape: ShapeIDOnly},
 	"component_capability": {Shape: ShapeIDOnly}, "credential": {Shape: ShapeIDOnly},
 	"event": {Shape: ShapeIDOnly}, "impersonation_session": {Shape: ShapeIDOnly},
-	"location_type_property": {Shape: ShapeIDOnly}, "log_line": {Shape: ShapeIDOnly},
-	"metric": {Shape: ShapeIDOnly}, "principal": {Shape: ShapeIDOnly},
-	"principal_grant": {Shape: ShapeIDOnly}, "principal_group_member": {Shape: ShapeIDOnly},
-	"product_capability": {Shape: ShapeIDOnly}, "product_property": {Shape: ShapeIDOnly},
+	"location_type_metric": {Shape: ShapeIDOnly}, "location_type_property": {Shape: ShapeIDOnly},
+	"log_line": {Shape: ShapeIDOnly}, "metric": {Shape: ShapeIDOnly},
+	"principal": {Shape: ShapeIDOnly}, "principal_grant": {Shape: ShapeIDOnly},
+	"principal_group_member": {Shape: ShapeIDOnly}, "product_capability": {Shape: ShapeIDOnly},
+	"product_metric": {Shape: ShapeIDOnly}, "product_property": {Shape: ShapeIDOnly},
 	"property": {Shape: ShapeIDOnly}, "service": {Shape: ShapeIDOnly},
-	"setting_override": {Shape: ShapeIDOnly}, "standard_property": {Shape: ShapeIDOnly},
-	"state": {Shape: ShapeIDOnly}, "system_member": {Shape: ShapeIDOnly},
+	"setting_override": {Shape: ShapeIDOnly}, "standard_metric": {Shape: ShapeIDOnly},
+	"standard_property": {Shape: ShapeIDOnly},
+	"state":             {Shape: ShapeIDOnly}, "system_member": {Shape: ShapeIDOnly},
 	"system_role_assignment": {Shape: ShapeIDOnly}, "system_role_capability": {Shape: ShapeIDOnly},
 	"tag_binding": {Shape: ShapeIDOnly},
 }

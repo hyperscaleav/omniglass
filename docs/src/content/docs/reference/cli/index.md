@@ -1828,6 +1828,106 @@ Example:
 omniglass location-type update <id>
 ```
 
+## `omniglass metric-type`
+
+Commands for the metric-type resource
+
+### `omniglass metric-type create`
+
+Create a metric type
+
+```
+omniglass metric-type create [flags]
+```
+
+Registers a custom metric type (official=false). The name must be a valid metric key. Gated by metric_type:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--data-type` | string | (none) | The value type; a metric is always a number |
+| `--description` | string | (none) | What the series measures |
+| `--display-name` | string | (none) | A human label |
+| `--name` | string | (none) | The metric type name (lowercase kebab) |
+| `--precision` | string | (none) | Decimal places a rendered value keeps |
+| `--unit` | string | (none) | The display unit of the series (ms, dB, percent) |
+
+Example:
+
+```sh
+omniglass metric-type create --data-type data_type --name name
+```
+
+### `omniglass metric-type delete`
+
+Delete a metric type
+
+```
+omniglass metric-type delete <name>
+```
+
+Removes a custom metric type by name. Official metric types are read-only. Gated by metric_type:delete.
+
+Example:
+
+```sh
+omniglass metric-type delete <name>
+```
+
+### `omniglass metric-type get`
+
+Get a metric type
+
+```
+omniglass metric-type get <name>
+```
+
+Returns one metric type by name. Gated by metric_type:read.
+
+Example:
+
+```sh
+omniglass metric-type get <name>
+```
+
+### `omniglass metric-type list`
+
+List metric types
+
+```
+omniglass metric-type list
+```
+
+Lists every registered metric type (official and custom). The catalog is estate-wide reference data. Gated by metric_type:read.
+
+Example:
+
+```sh
+omniglass metric-type list
+```
+
+### `omniglass metric-type update`
+
+Update a metric type
+
+```
+omniglass metric-type update <name> [flags]
+```
+
+Patches a custom metric type's label, description, unit, or precision (a nil field is unchanged). Data type is fixed at creation. Official metric types are read-only. Gated by metric_type:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--description` | string | (none) | What the series measures |
+| `--display-name` | string | (none) | A human label |
+| `--precision` | string | (none) | Decimal places a rendered value keeps |
+| `--unit` | string | (none) | The display unit of the series |
+
+Example:
+
+```sh
+omniglass metric-type update <name>
+```
+
 ## `omniglass migrate`
 
 Apply embedded database migrations (dbmate)
@@ -2831,12 +2931,10 @@ Registers a custom property (official=false). The name must be a valid property 
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--data-type` | string | (none) | The value type |
+| `--data-type` | string | (none) | The value type; a numeric signal is a metric type |
 | `--description` | string | (none) | What the property means |
 | `--display-name` | string | (none) | A human label |
-| `--kind` | string | (none) | The observed kind; omit for a declared-only property |
-| `--name` | string | (none) | The property name (lowercase, dot-hierarchied) |
-| `--unit` | string | (none) | A display unit (observed properties) |
+| `--name` | string | (none) | The property name (lowercase kebab) |
 | `--validation` | string | (none) | A JSON Schema fragment constraining the value |
 
 Example:
@@ -2901,13 +2999,12 @@ Update a property
 omniglass property-type update <name> [flags]
 ```
 
-Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property_type:update.
+Patches a custom property's label, description, or validation (a nil field is unchanged). Data type is fixed at creation. Official properties are read-only. Gated by property_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the property means |
 | `--display-name` | string | (none) | A human label |
-| `--unit` | string | (none) | A display unit |
 | `--validation` | string | (none) | A JSON Schema fragment (replaces wholesale) |
 
 Example:

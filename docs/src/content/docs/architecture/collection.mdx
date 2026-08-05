@@ -165,7 +165,7 @@ Built today: the `icmp` and `tcp` probes (with `ssh` and `http` probing as tcp-c
 
 :::
 
-`icmp`/`tcp` are inline probes (config on `interface.params`); the rest, in the design model, are held connections: the connection lives on the interface, the task names what to read. The ship-with registry seeds the 11 real `property_type` rows (`internal/seed/properties.yaml`), including the probe built-ins above plus `interface-reachable`; the wider per-transport set (`udp-open`, `snmp-reachable`, the http trio, `<proto>.reachable`/`<proto>.response_time` for the text family) is Design, and unregistered names would be reject-not-project dropped at ingest.
+`icmp`/`tcp` are inline probes (config on `interface.params`); the rest, in the design model, are held connections: the connection lives on the interface, the task names what to read. The ship-with registry seeds the 11 real catalog rows, 4 `metric_type` plus 7 `property_type` (`internal/seed/metric_types.yaml`, `internal/seed/property_types.yaml`), including the probe built-ins above plus `interface-reachable`; the wider per-transport set (`udp-open`, `snmp-reachable`, the http trio, `<proto>.reachable`/`<proto>.response_time` for the text family) is Design, and unregistered names would be reject-not-project dropped at ingest.
 
 :::design[The held-connection transports in detail, tracked in #489]
 

@@ -17,11 +17,10 @@ import (
 // name is stamped with the task's interface owner (component / source / instance),
 // and reject-not-project drops an unregistered name (no row produced for it).
 func TestDeriveSamples(t *testing.T) {
-	metric := "metric"
-	reg := collection.NewRegistry([]storage.PropertyType{
-		{Name: "tcp-open", Kind: &metric},
-		{Name: "tcp-connect-time", Kind: &metric},
-	}, nil)
+	reg := collection.NewRegistry([]storage.MetricType{
+		{Name: "tcp-open"},
+		{Name: "tcp-connect-time"},
+	}, nil, nil)
 	owner := storage.TaskOwner{Component: "disp-1", InterfaceName: "disp-1-tcp", InterfaceType: "tcp"}
 	ev := &ogv1.TelemetryBatch{
 		TaskId: "t1",
@@ -52,11 +51,10 @@ func TestDeriveSamples(t *testing.T) {
 // (the log-to-event promotion, origin caught), each stamped with the same
 // task-interface owner; an unregistered name is still dropped (reject-not-project).
 func TestDeriveSamplesRoutesByKind(t *testing.T) {
-	metric, state := "metric", "state"
-	reg := collection.NewRegistry([]storage.PropertyType{
-		{Name: "tcp-open", Kind: &metric},
-		{Name: "interface-reachable", Kind: &state},
-	}, []storage.EventType{{Name: "some.log"}})
+	reg := collection.NewRegistry(
+		[]storage.MetricType{{Name: "tcp-open"}},
+		[]storage.PropertyType{{Name: "interface-reachable"}},
+		[]storage.EventType{{Name: "some.log"}})
 	owner := storage.TaskOwner{Component: "disp-1", InterfaceName: "disp-1-tcp", InterfaceType: "tcp"}
 	ev := &ogv1.TelemetryBatch{Samples: []*ogv1.Sample{
 		{Name: "tcp-open", Value: &ogv1.Sample_DoubleValue{DoubleValue: 1}},
