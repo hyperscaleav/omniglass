@@ -19,16 +19,16 @@ import (
 func TestDeriveSamples(t *testing.T) {
 	metric := "metric"
 	reg := collection.NewRegistry([]storage.PropertyType{
-		{Name: "tcp.open", Kind: &metric},
-		{Name: "tcp.connect-time", Kind: &metric},
+		{Name: "tcp-open", Kind: &metric},
+		{Name: "tcp-connect-time", Kind: &metric},
 	}, nil)
 	owner := storage.TaskOwner{Component: "disp-1", InterfaceName: "disp-1-tcp", InterfaceType: "tcp"}
 	ev := &ogv1.TelemetryBatch{
 		TaskId: "t1",
 		NodeId: "node-a",
 		Samples: []*ogv1.Sample{
-			{Name: "tcp.open", Value: &ogv1.Sample_DoubleValue{DoubleValue: 1}},
-			{Name: "tcp.connect-time", Value: &ogv1.Sample_DoubleValue{DoubleValue: 3.5}},
+			{Name: "tcp-open", Value: &ogv1.Sample_DoubleValue{DoubleValue: 1}},
+			{Name: "tcp-connect-time", Value: &ogv1.Sample_DoubleValue{DoubleValue: 3.5}},
 			{Name: "not.registered", Value: &ogv1.Sample_DoubleValue{DoubleValue: 9}},
 		},
 	}
@@ -54,25 +54,25 @@ func TestDeriveSamples(t *testing.T) {
 func TestDeriveSamplesRoutesByKind(t *testing.T) {
 	metric, state := "metric", "state"
 	reg := collection.NewRegistry([]storage.PropertyType{
-		{Name: "tcp.open", Kind: &metric},
-		{Name: "interface.reachable", Kind: &state},
+		{Name: "tcp-open", Kind: &metric},
+		{Name: "interface-reachable", Kind: &state},
 	}, []storage.EventType{{Name: "some.log"}})
 	owner := storage.TaskOwner{Component: "disp-1", InterfaceName: "disp-1-tcp", InterfaceType: "tcp"}
 	ev := &ogv1.TelemetryBatch{Samples: []*ogv1.Sample{
-		{Name: "tcp.open", Value: &ogv1.Sample_DoubleValue{DoubleValue: 1}},
-		{Name: "interface.reachable", Value: &ogv1.Sample_StringValue{StringValue: "up"}},
+		{Name: "tcp-open", Value: &ogv1.Sample_DoubleValue{DoubleValue: 1}},
+		{Name: "interface-reachable", Value: &ogv1.Sample_StringValue{StringValue: "up"}},
 		{Name: "some.log", Value: &ogv1.Sample_StringValue{StringValue: "line"}},
 		{Name: "not.registered", Value: &ogv1.Sample_StringValue{StringValue: "up"}},
 	}}
 	metrics, states, events := deriveSamples(ev, owner, reg)
-	if len(metrics) != 1 || metrics[0].Key != "tcp.open" {
-		t.Fatalf("metrics = %+v, want one tcp.open", metrics)
+	if len(metrics) != 1 || metrics[0].Key != "tcp-open" {
+		t.Fatalf("metrics = %+v, want one tcp-open", metrics)
 	}
 	if len(states) != 1 {
-		t.Fatalf("states = %+v, want one interface.reachable (unregistered dropped)", states)
+		t.Fatalf("states = %+v, want one interface-reachable (unregistered dropped)", states)
 	}
 	s := states[0]
-	if s.Key != "interface.reachable" || s.Value != "up" || s.OwnerKind != "component" ||
+	if s.Key != "interface-reachable" || s.Value != "up" || s.OwnerKind != "component" ||
 		s.OwnerID != "disp-1" || s.Instance != "disp-1-tcp" || s.Source != "tcp" {
 		t.Fatalf("state routing/owner wrong: %+v", s)
 	}

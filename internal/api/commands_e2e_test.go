@@ -46,13 +46,13 @@ func TestCommandIssueAPI(t *testing.T) {
 	}
 	// A settleable command with a zero window, so settlement is immediate.
 	if _, err := gw.CreateCommandType(ctx, "", storage.CommandTypeSpec{
-		Name: "set-input-now", DisplayName: "Set input (now)", TargetPropertyType: "video.input", SettleWindowSeconds: 0,
+		Name: "set-input-now", DisplayName: "Set input (now)", TargetPropertyType: "video-input", SettleWindowSeconds: 0,
 	}); err != nil {
 		t.Fatalf("create command type: %v", err)
 	}
 	// The device already reports hdmi2 (an observed value the command settles against).
 	if err := gw.UpsertProperties(ctx, []storage.PropertyUpsert{{
-		OwnerKind: "component", OwnerID: "disp-1", Key: "video.input", Instance: "", Provenance: "observed",
+		OwnerKind: "component", OwnerID: "disp-1", Key: "video-input", Instance: "", Provenance: "observed",
 		Value: json.RawMessage(`"hdmi2"`), TS: time.Now().UTC(),
 	}}); err != nil {
 		t.Fatalf("seed observed: %v", err)
@@ -75,7 +75,7 @@ func TestCommandIssueAPI(t *testing.T) {
 		t.Fatalf("issue to matching value: want settled with a caused event, got %+v", settled)
 	}
 
-	// The caused event was recorded: a command.issued occurrence with origin caused.
+	// The caused event was recorded: a command-issued occurrence with origin caused.
 	var events struct {
 		Events []struct {
 			Key    string `json:"key"`
@@ -85,12 +85,12 @@ func TestCommandIssueAPI(t *testing.T) {
 	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/disp-1/events", nil, http.StatusOK), &events)
 	var foundCaused bool
 	for _, e := range events.Events {
-		if e.Key == "command.issued" && e.Origin == "caused" {
+		if e.Key == "command-issued" && e.Origin == "caused" {
 			foundCaused = true
 		}
 	}
 	if !foundCaused {
-		t.Fatalf("no caused command.issued event recorded: %+v", events.Events)
+		t.Fatalf("no caused command-issued event recorded: %+v", events.Events)
 	}
 
 	// Issue to hdmi3: the observed value (hdmi2) no longer matches the intended one,

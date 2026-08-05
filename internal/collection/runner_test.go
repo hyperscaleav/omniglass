@@ -28,7 +28,7 @@ func index(dps []collection.Sample) map[string]collection.Sample {
 	return m
 }
 
-// TestCollectTCPOpen: an open port yields tcp.open=1 plus a present connect_time.
+// TestCollectTCPOpen: an open port yields tcp-open=1 plus a present connect_time.
 func TestCollectTCPOpen(t *testing.T) {
 	r := &collection.Runner{TCP: fakeTCP{ms: 4, reach: collection.Responded}}
 	dps, err := r.CollectTCP(context.Background(), collection.TCPTask{Target: "10.0.0.5:22", Timeout: 2 * time.Second})
@@ -38,19 +38,19 @@ func TestCollectTCPOpen(t *testing.T) {
 	got := index(dps)
 	open, ok := got[collection.SignalTCPOpen]
 	if !ok || open.Value != 1 {
-		t.Fatalf("tcp.open: want present val=1, got %+v", open)
+		t.Fatalf("tcp-open: want present val=1, got %+v", open)
 	}
 	if open.Labels[collection.ReasonLabel] != string(collection.Responded) {
-		t.Fatalf("tcp.open reason label: want responded, got %q", open.Labels[collection.ReasonLabel])
+		t.Fatalf("tcp-open reason label: want responded, got %q", open.Labels[collection.ReasonLabel])
 	}
 	ct, ok := got[collection.SignalTCPConnectTime]
 	if !ok || ct.Value != 4 {
-		t.Fatalf("tcp.connect-time: want present val=4, got %+v (present=%v)", ct, ok)
+		t.Fatalf("tcp-connect-time: want present val=4, got %+v (present=%v)", ct, ok)
 	}
 }
 
-// TestCollectTCPClosed: a refused port yields tcp.open=0 with a reason, and
-// tcp.connect-time is ABSENT.
+// TestCollectTCPClosed: a refused port yields tcp-open=0 with a reason, and
+// tcp-connect-time is ABSENT.
 func TestCollectTCPClosed(t *testing.T) {
 	r := &collection.Runner{TCP: fakeTCP{reach: collection.Refused}}
 	dps, err := r.CollectTCP(context.Background(), collection.TCPTask{Target: "10.0.0.5:22"})
@@ -60,13 +60,13 @@ func TestCollectTCPClosed(t *testing.T) {
 	got := index(dps)
 	open, ok := got[collection.SignalTCPOpen]
 	if !ok || open.Value != 0 {
-		t.Fatalf("tcp.open: want present val=0, got %+v (present=%v)", open, ok)
+		t.Fatalf("tcp-open: want present val=0, got %+v (present=%v)", open, ok)
 	}
 	if open.Labels[collection.ReasonLabel] != string(collection.Refused) {
-		t.Fatalf("tcp.open reason: want refused, got %q", open.Labels[collection.ReasonLabel])
+		t.Fatalf("tcp-open reason: want refused, got %q", open.Labels[collection.ReasonLabel])
 	}
 	if _, ok := got[collection.SignalTCPConnectTime]; ok {
-		t.Fatal("tcp.connect-time must be absent when the port is closed")
+		t.Fatal("tcp-connect-time must be absent when the port is closed")
 	}
 }
 

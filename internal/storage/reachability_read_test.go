@@ -60,30 +60,30 @@ func TestReachabilityReads(t *testing.T) {
 		t.Fatalf("tcp interface: want type tcp with params, got %+v", ifaces[1])
 	}
 
-	// tcp.open on two different interface instances at different times: the newer
+	// tcp-open on two different interface instances at different times: the newer
 	// write is on disp-1-icmp is irrelevant; instance-scoped read must return the
 	// disp-1-tcp value even though it is older.
 	older := time.Now().UTC().Add(-2 * time.Minute)
 	newer := older.Add(time.Minute)
 	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp.open", Instance: "disp-1-tcp", Value: 1, Source: "tcp", TS: older},
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp.open", Instance: "disp-1-icmp", Value: 0, Source: "tcp", TS: newer},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp-open", Instance: "disp-1-tcp", Value: 1, Source: "tcp", TS: older},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp-open", Instance: "disp-1-icmp", Value: 0, Source: "tcp", TS: newer},
 	}); err != nil {
 		t.Fatalf("insert metrics: %v", err)
 	}
 
-	dp, err := gw.LatestMetricInstance(ctx, "disp-1", "tcp.open", "disp-1-tcp")
+	dp, err := gw.LatestMetricInstance(ctx, "disp-1", "tcp-open", "disp-1-tcp")
 	if err != nil {
 		t.Fatalf("latest metric instance: %v", err)
 	}
 	if dp == nil || dp.Value != 1 || dp.Instance != "disp-1-tcp" {
-		t.Fatalf("tcp.open[disp-1-tcp]: want value 1, got %+v", dp)
+		t.Fatalf("tcp-open[disp-1-tcp]: want value 1, got %+v", dp)
 	}
 
 	// A series with no sample returns nil, not an error.
-	if none, err := gw.LatestMetricInstance(ctx, "disp-1", "icmp.reachable", "disp-1-icmp"); err != nil {
+	if none, err := gw.LatestMetricInstance(ctx, "disp-1", "icmp-reachable", "disp-1-icmp"); err != nil {
 		t.Fatalf("latest missing metric: %v", err)
 	} else if none != nil {
-		t.Fatalf("icmp.reachable[disp-1-icmp]: want nil, got %+v", none)
+		t.Fatalf("icmp-reachable[disp-1-icmp]: want nil, got %+v", none)
 	}
 }

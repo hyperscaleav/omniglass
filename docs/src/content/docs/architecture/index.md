@@ -70,8 +70,8 @@ That normalized reading is a **sample**.
 
 ## The sample
 
-A **[sample](/architecture/properties/)** is one value of one **canonical signal** (`power.state`,
-`audio.level`), owned by exactly one entity through the **exclusive arc**: a component or a system
+A **[sample](/architecture/properties/)** is one value of one **canonical signal** (`power-state`,
+`audio-level`), owned by exactly one entity through the **exclusive arc**: a component or a system
 or a location, never more than one. It carries a **provenance** (how we know it: **observed**
 from the device, **[calculated](/architecture/calculations/)** by Omniglass, or **intended** by a
 **[command](/architecture/commands/)** we sent) and a **source** (which sensor or path told us).

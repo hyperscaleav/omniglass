@@ -33,7 +33,7 @@ func TestRegistrySeed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list properties: %v", err)
 	}
-	want := map[string]string{"icmp.reachable": "metric", "icmp.rtt-avg": "metric", "tcp.open": "metric", "tcp.connect-time": "metric"}
+	want := map[string]string{"icmp-reachable": "metric", "icmp-rtt-avg": "metric", "tcp-open": "metric", "tcp-connect-time": "metric"}
 	got := map[string]string{}
 	official := map[string]bool{}
 	for _, prop := range props {

@@ -12,7 +12,7 @@ import (
 )
 
 // The reachability read BFF: a per-component, per-interface composition of the
-// verdict state (interface.reachable), the layer signals (the raw icmp/tcp probe
+// verdict state (interface-reachable), the layer signals (the raw icmp/tcp probe
 // metrics), and the recent transition history the availability strip reads. It is
 // a plain typed Huma GET (no ViewResult framework exists), gated by component:read
 // and scope-injected through GetComponent: an out-of-scope component is a
@@ -23,20 +23,20 @@ import (
 const reachHistoryWindow = 24 * time.Hour
 
 // verdictKey is the state sample that carries the per-interface verdict.
-const verdictKey = "interface.reachable"
+const verdictKey = "interface-reachable"
 
 // reachLayer describes one probe layer the panel gates on: its primary signal
 // (0/1) and the optional companion metric that carries a timing detail.
 type reachLayer struct {
 	Layer     string // the layer word: "ping" (L3) or "port" (L4)
-	SignalKey string // the primary metric key (icmp.reachable / tcp.open)
-	TimingKey string // the companion timing metric (icmp.rtt-avg / tcp.connect-time)
+	SignalKey string // the primary metric key (icmp-reachable / tcp-open)
+	TimingKey string // the companion timing metric (icmp-rtt-avg / tcp-connect-time)
 }
 
 // reachLayers is the fixed probe-layer order, L3 then L4.
 var reachLayers = []reachLayer{
-	{Layer: "ping", SignalKey: "icmp.reachable", TimingKey: "icmp.rtt-avg"},
-	{Layer: "port", SignalKey: "tcp.open", TimingKey: "tcp.connect-time"},
+	{Layer: "ping", SignalKey: "icmp-reachable", TimingKey: "icmp-rtt-avg"},
+	{Layer: "port", SignalKey: "tcp-open", TimingKey: "tcp-connect-time"},
 }
 
 type reachVerdictBody struct {

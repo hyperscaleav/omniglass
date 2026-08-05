@@ -98,7 +98,7 @@ standalone Interfaces page).
 
 Alongside sampled readings, a component carries two occurrence panels, both read-only and gated by
 `component:read`. The **Events** panel shows the most recent typed **events**, newest first, over the
-last 24 hours (capped at 200): discrete things that *happened* (a `call.started`) that a component
+last 24 hours (capped at 200): discrete things that *happened* (a `call-started`) that a component
 published natively or a rule derived, each row showing its **time**, the **event type** it is typed by,
 the **message**, and any structured **attributes**. Below it, the **Logs** panel shows the component's raw **log lines**
 (the ingest lane, [ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)):

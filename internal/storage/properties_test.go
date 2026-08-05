@@ -52,7 +52,7 @@ func TestPropertyCRUD(t *testing.T) {
 	for _, pp := range props {
 		names[pp.Name] = true
 	}
-	if !names["rack-unit"] || !names["serial-number"] || !names["icmp.reachable"] {
+	if !names["rack-unit"] || !names["serial-number"] || !names["icmp-reachable"] {
 		t.Fatalf("list missing properties: %v", names)
 	}
 
@@ -120,25 +120,25 @@ func TestRegistryNamesAreUniqueAcrossBothRegistries(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	// video.input is seeded as a state property, so the event registry must refuse it.
+	// video-input is seeded as a state property, so the event registry must refuse it.
 	if _, err := gw.CreateEventType(ctx, "", storage.EventTypeSpec{
-		Name: "video.input", DisplayName: "Video Input",
+		Name: "video-input", DisplayName: "Video Input",
 	}); !errors.Is(err, storage.ErrEventTypeExists) {
 		t.Fatalf("CreateEventType on an existing property name = %v, want ErrEventTypeExists", err)
 	}
 
-	// The mirror: call.started is a seeded event type, so the property registry
+	// The mirror: call-started is a seeded event type, so the property registry
 	// must refuse it.
 	metric := "metric"
 	if _, err := gw.CreatePropertyType(ctx, "", storage.PropertyTypeSpec{
-		Name: "call.started", DisplayName: "Call Started", Kind: &metric, DataType: "float",
+		Name: "call-started", DisplayName: "Call Started", Kind: &metric, DataType: "float",
 	}); !errors.Is(err, storage.ErrPropertyTypeExists) {
 		t.Fatalf("CreatePropertyType on an existing event type name = %v, want ErrPropertyTypeExists", err)
 	}
 
 	// A free name in either registry is unaffected.
 	if _, err := gw.CreateEventType(ctx, "", storage.EventTypeSpec{
-		Name: "cable.unplugged", DisplayName: "Cable Unplugged",
+		Name: "cable-unplugged", DisplayName: "Cable Unplugged",
 	}); err != nil {
 		t.Fatalf("CreateEventType on a free name: %v", err)
 	}

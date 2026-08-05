@@ -12,7 +12,7 @@ import (
 func testRegistry(t *testing.T) collection.Registry {
 	t.Helper()
 	metric := "metric"
-	return collection.NewRegistry([]storage.PropertyType{{Name: "icmp.rtt-avg", Kind: &metric}}, nil)
+	return collection.NewRegistry([]storage.PropertyType{{Name: "icmp-rtt-avg", Kind: &metric}}, nil)
 }
 
 // pushOwner is what apiBinding produces: a component, and no interface labels.
@@ -83,7 +83,7 @@ func TestDeriveSamplesInstanceAndSourcePrecedence(t *testing.T) {
 	t.Run("push supplies instance and source", func(t *testing.T) {
 		metrics, _, _ := deriveSamples(&ogv1.TelemetryBatch{
 			Source:  "webex-cloud",
-			Samples: []*ogv1.Sample{{Name: "icmp.rtt-avg", Instance: "mic-1", Value: &ogv1.Sample_DoubleValue{DoubleValue: 12.4}}},
+			Samples: []*ogv1.Sample{{Name: "icmp-rtt-avg", Instance: "mic-1", Value: &ogv1.Sample_DoubleValue{DoubleValue: 12.4}}},
 		}, pushOwner(), reg)
 		if len(metrics) != 1 {
 			t.Fatalf("got %d metrics, want 1", len(metrics))
@@ -95,7 +95,7 @@ func TestDeriveSamplesInstanceAndSourcePrecedence(t *testing.T) {
 
 	t.Run("node lane falls back to the interface", func(t *testing.T) {
 		metrics, _, _ := deriveSamples(&ogv1.TelemetryBatch{
-			Samples: []*ogv1.Sample{{Name: "icmp.rtt-avg", Value: &ogv1.Sample_DoubleValue{DoubleValue: 12.4}}},
+			Samples: []*ogv1.Sample{{Name: "icmp-rtt-avg", Value: &ogv1.Sample_DoubleValue{DoubleValue: 12.4}}},
 		}, nodeOwner(), reg)
 		if len(metrics) != 1 {
 			t.Fatalf("got %d metrics, want 1", len(metrics))

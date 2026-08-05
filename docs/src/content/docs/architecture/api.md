@@ -213,12 +213,12 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
 [reads beyond one resource are views](#reads-beyond-one-resource-are-views)):
 
 - `GET /components/{name}/reachability` composes, per interface, the latest verdict state
-  (`interface.reachable`), the probe-layer signals that compose it (the raw `icmp`/`tcp` metrics), and
+  (`interface-reachable`), the probe-layer signals that compose it (the raw `icmp`/`tcp` metrics), and
   the recent verdict transitions the availability strip reads.
 - `GET /components/{name}/events` is the log-kind mirror: the component's recent **log occurrences**
   (the [`event` log sink](/architecture/core-entities/#the-event-sink-the-first-arc-owned-occurrence)),
   newest first, bounded to the last 24 hours and capped at 200 rows; each row carries `ts`, the
-  `event_type` name it is typed by (on the wire as `key`, e.g. `call.started`) with its
+  `event_type` name it is typed by (on the wire as `key`, e.g. `call-started`) with its
   `event_type_id` beside it, `origin` (caught/caused/derived/scheduled), `instance`,
   `message`, optional `attributes`, `provenance` (`observed` for direct collection), and the `source`
   interface type.

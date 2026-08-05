@@ -348,7 +348,7 @@ type Gateway interface {
 	LatestMetricInstance(ctx context.Context, componentName, key, instance string) (*MetricSample, error)
 
 	// The observed-state sink: the mirror of the metric sink for categorical
-	// verdicts (interface.reachable). reject-not-project and the transition-only
+	// verdicts (interface-reachable). reject-not-project and the transition-only
 	// guard are applied by the caller before the write. LatestState backs the
 	// ingest-side transition guard; StateTransitions is the ordered flip series
 	// the availability strip reads.

@@ -54,7 +54,7 @@
     {
       "table": "event_type",
       "shape": "keyspace",
-      "reason": "call.started, an occurrence name"
+      "reason": "call-started, an occurrence name"
     },
     {
       "table": "file",
@@ -139,7 +139,7 @@
     {
       "table": "property_type",
       "shape": "keyspace",
-      "reason": "icmp.rtt-avg, a signal name referenced from drivers and templates"
+      "reason": "icmp-rtt-avg, a signal name referenced from drivers and templates"
     },
     {
       "table": "role",

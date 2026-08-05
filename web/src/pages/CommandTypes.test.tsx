@@ -9,9 +9,9 @@ import { ME_KEY, type Me } from "../lib/auth";
 // Official types are read-only; a custom type is writable only when the caller holds
 // command_type:create / command_type:update. Data is seeded into the query cache.
 const seed: CommandTypeRow[] = [
-  { name: "set-input", display_name: "Set input", target_property_type: "video.input", settle_window_seconds: 15, official: true },
+  { name: "set-input", display_name: "Set input", target_property_type: "video-input", settle_window_seconds: 15, official: true },
   { name: "reboot", display_name: "Reboot", settle_window_seconds: 0, official: true },
-  { name: "set-volume", display_name: "Set volume", target_property_type: "audio.level", settle_window_seconds: 5, official: false },
+  { name: "set-volume", display_name: "Set volume", target_property_type: "audio-level", settle_window_seconds: 5, official: false },
 ];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
@@ -35,14 +35,14 @@ describe("Command Types page", () => {
     mount();
     expect(screen.getByText("set-input")).toBeTruthy();
     expect(screen.getByText("reboot")).toBeTruthy();
-    expect(screen.getByText("video.input")).toBeTruthy();
+    expect(screen.getByText("video-input")).toBeTruthy();
     // reboot is fire-and-forget (no target).
     expect(screen.getByText("fire-and-forget")).toBeTruthy();
   });
 
   // One identity column carries both operator-facing identities, so the separate
   // label column is gone. The header is the one word every list uses, even though
-  // this catalog's names may be dotted (set-input, icmp.rtt-avg) rather than kebab.
+  // this catalog's names may be dotted (set-input, icmp-rtt-avg) rather than kebab.
   it("carries the display name and the name in a single Name column", () => {
     mount();
     const headers = screen.getAllByRole("columnheader").map((h) => h.textContent?.trim());

@@ -421,7 +421,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 	if err := seedReachability(ctx, gw, actorID); err != nil {
 		return err
 	}
-	// A handful of native call.started events on a boardroom video bar, so the
+	// A handful of native call-started events on a boardroom video bar, so the
 	// console's event panel comes up populated instead of empty.
 	if err := seedEvents(ctx, gw); err != nil {
 		return err
@@ -680,7 +680,7 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string) e
 }
 
 // seedReachSamples writes one interface's reachability samples: the
-// interface.reachable state (a fresh "up"; when flapped, an up baseline then a brief
+// interface-reachable state (a fresh "up"; when flapped, an up baseline then a brief
 // outage then the recovery, so the strip reads mostly up with a thin blip) and the
 // probe-layer metrics (ping + port). Owner = the component, instance = the interface
 // name. Only canonical property_type names are used (reject-not-project).
@@ -689,19 +689,19 @@ func seedReachSamples(ctx context.Context, gw storage.Gateway, iface string, fla
 	states := []storage.StateSampleWrite{}
 	if flapped {
 		states = append(states,
-			storage.StateSampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "interface.reachable", Instance: iface, Value: "up", Source: "reachability", TS: now.Add(-2 * time.Hour)},
-			storage.StateSampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "interface.reachable", Instance: iface, Value: "down", Source: "reachability", TS: now.Add(-6 * time.Minute)},
+			storage.StateSampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "interface-reachable", Instance: iface, Value: "up", Source: "reachability", TS: now.Add(-2 * time.Hour)},
+			storage.StateSampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "interface-reachable", Instance: iface, Value: "down", Source: "reachability", TS: now.Add(-6 * time.Minute)},
 		)
 	}
-	states = append(states, storage.StateSampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "interface.reachable", Instance: iface, Value: "up", Source: "reachability", TS: recovered})
+	states = append(states, storage.StateSampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "interface-reachable", Instance: iface, Value: "up", Source: "reachability", TS: recovered})
 	if err := gw.InsertStateSamples(ctx, states); err != nil {
 		return fmt.Errorf("devseed: insert %s state samples: %w", iface, err)
 	}
 	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
-		{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp.reachable", Instance: iface, Value: 1, Source: "icmp", TS: recovered},
-		{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp.rtt-avg", Instance: iface, Value: rttMs, Source: "icmp", TS: recovered},
-		{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp.open", Instance: iface, Value: 1, Source: "tcp", TS: recovered},
-		{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp.connect-time", Instance: iface, Value: connMs, Source: "tcp", TS: recovered},
+		{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp-reachable", Instance: iface, Value: 1, Source: "icmp", TS: recovered},
+		{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp-rtt-avg", Instance: iface, Value: rttMs, Source: "icmp", TS: recovered},
+		{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp-open", Instance: iface, Value: 1, Source: "tcp", TS: recovered},
+		{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp-connect-time", Instance: iface, Value: connMs, Source: "tcp", TS: recovered},
 	}); err != nil {
 		return fmt.Errorf("devseed: insert %s metric samples: %w", iface, err)
 	}
@@ -709,16 +709,16 @@ func seedReachSamples(ctx context.Context, gw storage.Gateway, iface string, fla
 }
 
 // The example events the dev seed installs on a boardroom video bar: a conferencing
-// endpoint publishes call.started natively (an xAPI event) so the console's event
+// endpoint publishes call-started natively (an xAPI event) so the console's event
 // panel comes up populated instead of empty. eventComponent names an existing fixture
 // component (a video bar seeded above), so the event's component_id foreign key
-// resolves. Every row uses the registered event_type key call.started
+// resolves. Every row uses the registered event_type key call-started
 // (reject-not-project) and is stamped origin=caught: the device reported it, the
 // platform did not derive it. Raw device logs are a separate ingest lane (ADR-0066),
 // not seeded here.
 const eventComponent = "boardroom-a-bar"
 
-// exampleEvents are the bar's recent call.started occurrences, each offset back from
+// exampleEvents are the bar's recent call-started occurrences, each offset back from
 // now so the panel reads as a recent window (spread over the last day, newest last).
 // Two rows carry a structured attributes payload (the call's peer and protocol); the
 // rest are plain messages. minsAgo is minutes before the seed's now.
@@ -754,7 +754,7 @@ func seedEvents(ctx context.Context, gw storage.Gateway) error {
 		evs = append(evs, storage.EventWrite{
 			OwnerKind:  "component",
 			OwnerID:    eventComponent,
-			Key:        "call.started",
+			Key:        "call-started",
 			Origin:     "caught",
 			Message:    e.message,
 			Attributes: e.attrs,

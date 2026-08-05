@@ -350,37 +350,37 @@ func TestRunIdempotent(t *testing.T) {
 		{iface: "http", transitions: 1},
 		{iface: "tcp", transitions: 3},
 	} {
-		verdict, err := gw.LatestState(ctx, "hq-boardroom-dsp", "interface.reachable", tc.iface)
+		verdict, err := gw.LatestState(ctx, "hq-boardroom-dsp", "interface-reachable", tc.iface)
 		if err != nil {
 			t.Fatalf("latest verdict %s: %v", tc.iface, err)
 		}
 		if verdict == nil || verdict.Value != "up" {
 			t.Fatalf("seeded %s verdict = %+v, want value up", tc.iface, verdict)
 		}
-		transitions, err := gw.StateTransitions(ctx, "hq-boardroom-dsp", "interface.reachable", tc.iface, time.Time{})
+		transitions, err := gw.StateTransitions(ctx, "hq-boardroom-dsp", "interface-reachable", tc.iface, time.Time{})
 		if err != nil {
 			t.Fatalf("state transitions %s: %v", tc.iface, err)
 		}
 		if len(transitions) != tc.transitions {
 			t.Errorf("%s verdict transitions = %d, want %d (idempotent across two Runs)", tc.iface, len(transitions), tc.transitions)
 		}
-		tcpOpen, err := gw.LatestMetricInstance(ctx, "hq-boardroom-dsp", "tcp.open", tc.iface)
+		tcpOpen, err := gw.LatestMetricInstance(ctx, "hq-boardroom-dsp", "tcp-open", tc.iface)
 		if err != nil {
-			t.Fatalf("latest tcp.open %s: %v", tc.iface, err)
+			t.Fatalf("latest tcp-open %s: %v", tc.iface, err)
 		}
 		if tcpOpen == nil || tcpOpen.Value != 1 {
-			t.Errorf("seeded %s tcp.open = %+v, want 1", tc.iface, tcpOpen)
+			t.Errorf("seeded %s tcp-open = %+v, want 1", tc.iface, tcpOpen)
 		}
-		icmpReach, err := gw.LatestMetricInstance(ctx, "hq-boardroom-dsp", "icmp.reachable", tc.iface)
+		icmpReach, err := gw.LatestMetricInstance(ctx, "hq-boardroom-dsp", "icmp-reachable", tc.iface)
 		if err != nil {
-			t.Fatalf("latest icmp.reachable %s: %v", tc.iface, err)
+			t.Fatalf("latest icmp-reachable %s: %v", tc.iface, err)
 		}
 		if icmpReach == nil || icmpReach.Value != 1 {
-			t.Errorf("seeded %s icmp.reachable = %+v, want 1", tc.iface, icmpReach)
+			t.Errorf("seeded %s icmp-reachable = %+v, want 1", tc.iface, icmpReach)
 		}
 	}
 
-	// The example events: a handful of native call.started occurrences on a boardroom
+	// The example events: a handful of native call-started occurrences on a boardroom
 	// video bar, so the console's event panel comes up populated. The count is over two
 	// Runs, so a duplicate here is the seed failing to be idempotent (the event table
 	// has an auto id and no natural unique key, so only the sentinel guard keeps a re-run

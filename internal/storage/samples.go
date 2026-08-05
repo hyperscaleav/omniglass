@@ -117,7 +117,7 @@ func (p *PG) LatestMetric(ctx context.Context, componentName, key string) (*Metr
 
 // LatestMetricInstance returns the most recent metric row for a component series
 // (key + instance), or nil if none. The reachability panel's probe metrics
-// (tcp.open, icmp.reachable, and their rtt/connect_time companions) are
+// (tcp-open, icmp-reachable, and their rtt/connect_time companions) are
 // per-interface instance, so the layer signals must resolve one interface's
 // latest value, not the newest across every interface as LatestMetric does.
 func (p *PG) LatestMetricInstance(ctx context.Context, componentName, key, instance string) (*MetricSample, error) {

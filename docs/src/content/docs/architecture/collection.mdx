@@ -13,13 +13,13 @@ import SchemaTable from '../../../components/SchemaTable.astro';
 The first collection path is live end to end: an edge node runs **reachability probes** against a
 component's interfaces (each an **API named by the protocol it speaks**, typed by its **transport**:
 `tcp`, `ssh`, and `http` reach by opening the tcp port, `icmp` pings), ships a protobuf
-`TelemetryBatch` over a JetStream durable consumer, and `tcp.open` / `tcp.connect-time` and
-`icmp.reachable` / `icmp.rtt-avg` land in `metric` owned by the target component. The owner is bound
+`TelemetryBatch` over a JetStream durable consumer, and `tcp-open` / `tcp-connect-time` and
+`icmp-reachable` / `icmp-rtt-avg` land in `metric` owned by the target component. The owner is bound
 **server-side** from the task's interface (the node stamps no component identity); the ingest
 consumer confines a node to its own tasks (another node's `task_id` is orphan-dropped) and rejects
-unregistered sample names. A non-answering icmp target is DATA (`icmp.reachable=0` with a reason);
+unregistered sample names. A non-answering icmp target is DATA (`icmp-reachable=0` with a reason);
 an error means the node cannot do ICMP at all (a once-cached loopback self-check tells them apart).
-The node computes the per-interface verdict `interface.reachable` (the AND of its probe results) as
+The node computes the per-interface verdict `interface-reachable` (the AND of its probe results) as
 a built-in **state**; the consumer **routes by the registry kind** (metric / state / log to
 `log_line` per [ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events),
 superseding the [ADR-0046](/architecture/decisions/#adr-0046-the-event-log-kind-sink) log-to-event
@@ -150,22 +150,22 @@ Built today: the `icmp` and `tcp` probes (with `ssh` and `http` probing as tcp-c
 
 | interface type | shape | config (`interface.params`) | samples |
 |---|---|---|---|
-| `icmp` | inline probe | `target` (host or IP), `count`, `timeout` | `icmp.reachable`, `icmp.rtt-avg` (fixed) |
-| `tcp` | inline probe | `target` (`host:port`), `timeout` | `tcp.open`, `tcp.connect-time` (fixed) |
+| `icmp` | inline probe | `target` (host or IP), `count`, `timeout` | `icmp-reachable`, `icmp-rtt-avg` (fixed) |
+| `tcp` | inline probe | `target` (`host:port`), `timeout` | `tcp-open`, `tcp-connect-time` (fixed) |
 
 :::design[The remaining transports and their per-task spec, tracked in #489]
 
 | interface type | shape | host/target | per-task params | samples |
 |---|---|---|---|---|
 | `snmp` | held connection | `interface.endpoint` (`host[:port]`, port defaults 161) | `task.params.oids` (comma-separated `name=oid`); `interface.params.version` (default `2c`), `interface.params.community` | one sample per OID, `name` = the sample key |
-| `http` | held connection | `interface.endpoint` (base URL) | `task.params.path` (joined onto the base URL), `method` (default `GET`), `timeout` (default `5s`), `body`, `extract` (comma-separated `name=json:<dot.path>`); `interface.params.header_*` (request headers, prefix stripped) | `http.reachable`, `http.status_code`, `http.response_time` (fixed) + one per `extract` entry |
-| `raw-tcp` | held connection | `interface.endpoint` (`host:port`) | `task.params.command` (sent verbatim + line ending), `timeout`, `extract` (comma-separated `name=re:<pattern>`); `interface.params.line_ending` (default `\r\n`), `read_delim` (default `\n`), `connect_timeout`, `read_timeout` | `rawtcp.reachable`, `rawtcp.response_time` (fixed) + one per `extract` entry |
-| `telnet` | held connection | `interface.endpoint` (`host:port`) | as `raw-tcp`, plus `interface.params.username`/`password` (drive the default `login:` / `Password:` chain; `login_expect`/`password_expect` override the prompts) | `telnet.reachable`, `telnet.response_time` (fixed) + one per `extract` entry |
-| `ssh` | held connection | `interface.endpoint` (`host:port`) | as `raw-tcp` (the command runs as a one-shot `exec`), plus `interface.params.username` and `password` and/or `private_key` (inline PEM) | `ssh.reachable`, `ssh.response_time` (fixed) + one per `extract` entry |
+| `http` | held connection | `interface.endpoint` (base URL) | `task.params.path` (joined onto the base URL), `method` (default `GET`), `timeout` (default `5s`), `body`, `extract` (comma-separated `name=json:<dot.path>`); `interface.params.header_*` (request headers, prefix stripped) | `http-reachable`, `http-status-code`, `http-response-time` (fixed) + one per `extract` entry |
+| `raw-tcp` | held connection | `interface.endpoint` (`host:port`) | `task.params.command` (sent verbatim + line ending), `timeout`, `extract` (comma-separated `name=re:<pattern>`); `interface.params.line_ending` (default `\r\n`), `read_delim` (default `\n`), `connect_timeout`, `read_timeout` | `rawtcp-reachable`, `rawtcp-response-time` (fixed) + one per `extract` entry |
+| `telnet` | held connection | `interface.endpoint` (`host:port`) | as `raw-tcp`, plus `interface.params.username`/`password` (drive the default `login:` / `Password:` chain; `login_expect`/`password_expect` override the prompts) | `telnet-reachable`, `telnet-response-time` (fixed) + one per `extract` entry |
+| `ssh` | held connection | `interface.endpoint` (`host:port`) | as `raw-tcp` (the command runs as a one-shot `exec`), plus `interface.params.username` and `password` and/or `private_key` (inline PEM) | `ssh-reachable`, `ssh-response-time` (fixed) + one per `extract` entry |
 
 :::
 
-`icmp`/`tcp` are inline probes (config on `interface.params`); the rest, in the design model, are held connections: the connection lives on the interface, the task names what to read. The ship-with registry seeds the 11 real `property_type` rows (`internal/seed/properties.yaml`), including the probe built-ins above plus `interface.reachable`; the wider per-transport set (`udp.open`, `snmp.reachable`, the http trio, `<proto>.reachable`/`<proto>.response_time` for the text family) is Design, and unregistered names would be reject-not-project dropped at ingest.
+`icmp`/`tcp` are inline probes (config on `interface.params`); the rest, in the design model, are held connections: the connection lives on the interface, the task names what to read. The ship-with registry seeds the 11 real `property_type` rows (`internal/seed/properties.yaml`), including the probe built-ins above plus `interface-reachable`; the wider per-transport set (`udp-open`, `snmp-reachable`, the http trio, `<proto>.reachable`/`<proto>.response_time` for the text family) is Design, and unregistered names would be reject-not-project dropped at ingest.
 
 :::design[The held-connection transports in detail, tracked in #489]
 
@@ -186,8 +186,8 @@ Extraction is typed by value: a number/bool leaf or numeric capture -> `metric`,
 non-compiling regex is a configuration error. The http `extract` dot-paths a JSON body, the text
 family (`raw-tcp`/`telnet`/`ssh`, one ephemeral round trip: connect, authenticate, send
 `task.params.command`, read, extract, close) uses **regex named capture**, each named group routing
-to the same-name sample. `http.reachable` (did the round trip complete; `0` on
-DNS/refused/timeout/TLS) and `http.status_code` are separate, so reachability and a `>= 500` status
+to the same-name sample. `http-reachable` (did the round trip complete; `0` on
+DNS/refused/timeout/TLS) and `http-status-code` are separate, so reachability and a `>= 500` status
 are distinct alarm signals; the text family counts rejected credentials as connection health, not
 errors, and `<proto>.response_time` is absent when unreachable. Auth resolves from interface params
 or an `auth_secret` credential everywhere (http via `header_*`, never the URL or body; ssh pins the
@@ -249,8 +249,8 @@ produces samples through a typed extractor.
 steps:
   - id: poll
     interface: snmp
-    kind: snmp.get                  # gated by the interface type; schema-validated
-    when: "$dp.power.state == 'on'" # optional guard = explicit branch
+    kind: snmp-get                  # gated by the interface type; schema-validated
+    when: "$dp.power-state == 'on'" # optional guard = explicit branch
     samples:
       oid:
         - { key: cpu.utilization, oid: 1.3.6.1.4.1.55540.2.1.0, value: "raw / 100.0" }
@@ -263,8 +263,8 @@ steps:
 - **`forEach`**: step-level fan-out (element bound as `$steps.<id>.item`), downstream steps running
   per element; distinct from an extractor's `each`, which fans one response's array into many
   samples in one step.
-- **`kind` is interface-gated and registry-driven** (`snmp.get`, `snmp.walk`, `http.request`,
-  `ssh.send`, `ssh.subscribe`, the interface-agnostic `extract` and `blend`), each kind's param
+- **`kind` is interface-gated and registry-driven** (`snmp-get`, `snmp-walk`, `http-request`,
+  `ssh-send`, `ssh-subscribe`, the interface-agnostic `extract` and `blend`), each kind's param
   schema in the registry.
 
 In-scope namespaces: `$var:<name>` (config and secrets via the [cascade](/architecture/cascade/)),

@@ -67,8 +67,8 @@ func TestEventsAPI(t *testing.T) {
 	t0 := time.Now().UTC().Add(-2 * time.Minute)
 	t1 := t0.Add(time.Minute)
 	if err := gw.InsertEvents(ctx, []storage.EventWrite{
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "call.started", Message: "call started", Source: "xapi", TS: t0},
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "call.started", Message: "call joined by 4 participants", Attributes: []byte(`{"peer":"room-204","protocol":"sip"}`), Source: "xapi", TS: t1},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "call-started", Message: "call started", Source: "xapi", TS: t0},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "call-started", Message: "call joined by 4 participants", Attributes: []byte(`{"peer":"room-204","protocol":"sip"}`), Source: "xapi", TS: t1},
 	}); err != nil {
 		t.Fatalf("insert events: %v", err)
 	}
@@ -86,9 +86,9 @@ func TestEventsAPI(t *testing.T) {
 		t.Fatalf("events: want disp-1 with 2 events, got %+v", r)
 	}
 	// Newest first: "call joined by 4 participants" with its structured attributes, observed provenance.
-	if r.Events[0].Message != "call joined by 4 participants" || r.Events[0].Key != "call.started" ||
+	if r.Events[0].Message != "call joined by 4 participants" || r.Events[0].Key != "call-started" ||
 		r.Events[0].Provenance != "observed" || r.Events[0].Source != "xapi" {
-		t.Fatalf("newest event: want 'call joined by 4 participants' call.started observed, got %+v", r.Events[0])
+		t.Fatalf("newest event: want 'call joined by 4 participants' call-started observed, got %+v", r.Events[0])
 	}
 	// The wire form is JSON-compacted (encoding/json compacts a RawMessage), unlike
 	// the DB's jsonb normalization which inserts a space after the colon.

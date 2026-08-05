@@ -71,7 +71,7 @@ func TestPropertyAPI(t *testing.T) {
 	for _, pp := range listed.Properties {
 		names[pp.Name] = true
 	}
-	if !names["rack-unit"] || !names["serial-number"] || !names["icmp.reachable"] {
+	if !names["rack-unit"] || !names["serial-number"] || !names["icmp-reachable"] {
 		t.Fatalf("list missing properties: %v", names)
 	}
 

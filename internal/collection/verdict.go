@@ -1,13 +1,13 @@
 package collection
 
 // The interface reachability verdict: a built-in STATE sample, distinct from
-// the raw probe metrics (tcp.open, icmp.reachable). interface.reachable is gated
+// the raw probe metrics (tcp-open, icmp-reachable). interface-reachable is gated
 // per interface and its value domain is up/down; availability is time_in_state
 // over it. The node computes it and emits it as a state sample; the ingest
 // consumer routes it to state by the property_type kind.
 const (
 	// SignalInterfaceReachable is the seeded state key the verdict lands under.
-	SignalInterfaceReachable = "interface.reachable"
+	SignalInterfaceReachable = "interface-reachable"
 	// VerdictUp / VerdictDown are the state's value domain.
 	VerdictUp   = "up"
 	VerdictDown = "down"

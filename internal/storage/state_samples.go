@@ -12,7 +12,7 @@ import (
 // StateSampleWrite is one observed state verdict to persist. OwnerKind picks
 // the arc; OwnerID is the estate address (component/system/location/node name);
 // Instance discriminates many verdicts of one key on one owner (the interface
-// name for interface.reachable). Value is the categorical text (up/down), the
+// name for interface-reachable). Value is the categorical text (up/down), the
 // mirror of MetricSampleWrite but with a value domain, not a number.
 type StateSampleWrite struct {
 	OwnerKind string

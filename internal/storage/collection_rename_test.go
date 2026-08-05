@@ -65,7 +65,7 @@ func TestCollectionReferencesSurviveARename(t *testing.T) {
 		t.Fatalf("interface: %v", err)
 	}
 	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{{
-		OwnerKind: "component", OwnerID: "old-codec", Key: "tcp.open", Value: 1, Source: "test"}}); err != nil {
+		OwnerKind: "component", OwnerID: "old-codec", Key: "tcp-open", Value: 1, Source: "test"}}); err != nil {
 		t.Fatalf("sample: %v", err)
 	}
 
@@ -115,7 +115,7 @@ func TestCollectionReferencesSurviveARename(t *testing.T) {
 	}
 
 	// The sample still resolves under the component's new name.
-	dp, err := gw.LatestMetric(ctx, "new-codec", "tcp.open")
+	dp, err := gw.LatestMetric(ctx, "new-codec", "tcp-open")
 	if err != nil {
 		t.Fatalf("latest metric: %v", err)
 	}

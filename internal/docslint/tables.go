@@ -23,8 +23,8 @@ import (
 var tableColumnSpan = regexp.MustCompile(`^([a-z_]+)\.([a-z_]+)`)
 
 // loadSeededDottedNames reads the generated seed facts for registry keys that
-// carry a dot (property, event, and command type names like command.issued or
-// interface.reachable): a dotted NAME is not a column claim, and the seed facts
+// carry a dot (property, event, and command type names like command-issued or
+// interface-reachable): a dotted NAME is not a column claim, and the seed facts
 // are the authoritative list of them.
 func loadSeededDottedNames() (map[string]bool, error) {
 	b, err := os.ReadFile(filepath.Join(repoRoot, "docs", "src", "generated", "seed.json"))

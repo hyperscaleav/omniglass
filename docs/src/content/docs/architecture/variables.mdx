@@ -39,7 +39,7 @@ differ in what they are keyed to and what lifecycle they carry:
 | keyed by | a canonical signal (`property_type`) | its own `secret_type` shape name | its own `name`, an org-local cascade namespace |
 | has an observed side? | yes, a sample via a get function | its **validity**, not the secret value | no |
 | lifecycle | drift → reconcile (a set function) | refresh + rotation + expiry (deferred) | none; resolved and interpolated |
-| example | `video.input = HDMI1` | an `snmp-community`, a `basic-auth` | `poll-interval = 30s`, a base URL, a label |
+| example | `video-input = HDMI1` | an `snmp-community`, a `basic-auth` | `poll-interval = 30s`, a base URL, a label |
 
 The common thread is the cascade and an exclusive-arc scope (exactly one of
 `platform | template | location | system | component`): the same exclusive-arc ownership as samples,
@@ -49,13 +49,13 @@ plus a `template`-scoped binding the sample arc lacks (and unlike samples, confi
 ## config: declared device state, keyed to a signal
 
 ::::design[The `config` member, tracked in #153]
-A **config** item is the **declared side of a canonical signal**: `video.input` is one key with two
+A **config** item is the **declared side of a canonical signal**: `video-input` is one key with two
 sides, the **observed** value the device reports (a `state`, provenance=observed) and the
 **declared** value you set, sharing the **key** but not the **storage** (the declared value is
 **never a sample row**). Their gap is **drift**.
 
 A component template **brings no keys, it references registered ones**: two display templates
-touching `video.input` are two references to one governed key, not a collision. Config reuses the
+touching `video-input` are two references to one governed key, not a collision. Config reuses the
 `property_type`'s value domain for validation.
 
 **The template is the source of truth for configurability**: a signal becomes settable on a device
@@ -104,7 +104,7 @@ template bound (get alone: observe or warn; a set makes it enforceable).
 
 ### Declaring at the system level
 
-Because config rides the cascade, you rarely declare on the device: declare `video.input = HDMI1` for
+Because config rides the cascade, you rarely declare on the device: declare `video-input = HDMI1` for
 the **main-display role** on the system template and the cascade resolves it onto whichever display
 fills that role; drift and reconcile follow.
 
@@ -339,7 +339,7 @@ command -> device
 Modeling declared state as **config** keeps **declared** out of the sample provenances: samples carry
 three ([observed, calculated, intended](/architecture/properties/#provenance-how-we-know-a-value)),
 and declared intent lives in config, keyed to the same signal but stored down the cascade. The
-`state` **kind** is unchanged (an observed `power.state = on` is still a `state`); only the
+`state` **kind** is unchanged (an observed `power-state = on` is still a `state`); only the
 *declared* value moved.
 :::
 

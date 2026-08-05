@@ -57,7 +57,7 @@ func TestBuildEvent(t *testing.T) {
 	}
 	first := ev.GetSamples()[0]
 	if first.GetName() != collection.SignalTCPOpen || first.GetDoubleValue() != 1 {
-		t.Fatalf("first sample = %+v, want tcp.open=1", first)
+		t.Fatalf("first sample = %+v, want tcp-open=1", first)
 	}
 }
 
@@ -71,7 +71,7 @@ func TestBuildEventText(t *testing.T) {
 	ev := buildBatch("t1", "node-a", dps)
 	verdict := ev.GetSamples()[1]
 	if verdict.GetName() != collection.SignalInterfaceReachable || verdict.GetStringValue() != "up" {
-		t.Fatalf("verdict sample = %+v, want interface.reachable=up on string_value", verdict)
+		t.Fatalf("verdict sample = %+v, want interface-reachable=up on string_value", verdict)
 	}
 	if verdict.GetDoubleValue() != 0 {
 		t.Fatalf("a text sample must not set double_value, got %v", verdict.GetDoubleValue())

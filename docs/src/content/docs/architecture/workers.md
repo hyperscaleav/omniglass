@@ -41,7 +41,7 @@ scale horizontally with no leader (JetStream hands each message to exactly one m
 :::design[The node-liveness sweep, tracked in #419]
 Alongside the consumers, a **node-liveness sweep** runs on its own ticker: a *poll*, not a drain (a
 down node produces no message), scanning heartbeat freshness and raising / resolving the node-owned
-`node.down` alarm idempotently over the one-open dedup primitive
+`node-down` alarm idempotently over the one-open dedup primitive
 ([ADR-0075](/architecture/decisions/#adr-0075-an-alarms-condition-identity-is-a-raiser-supplied-dedup-key),
 built; nodes already publish the heartbeat the sweep will read, the sweep itself is not).
 :::

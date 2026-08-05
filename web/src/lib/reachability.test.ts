@@ -62,8 +62,8 @@ describe("reason", () => {
     const iface: ReachInterface = {
       ...base,
       layers: [
-        { layer: "ping", check: "icmp.reachable", value: 1, ts: ago(5_000) },
-        { layer: "port", check: "tcp.open", value: 0, ts: ago(5_000) },
+        { layer: "ping", check: "icmp-reachable", value: 1, ts: ago(5_000) },
+        { layer: "port", check: "tcp-open", value: 0, ts: ago(5_000) },
       ],
     };
     expect(reason(iface, now)).toMatch(/service down, box up/i);
@@ -71,7 +71,7 @@ describe("reason", () => {
   it("explains ping-down as unreachable", () => {
     const iface: ReachInterface = {
       ...base,
-      layers: [{ layer: "ping", check: "icmp.reachable", value: 0, ts: ago(5_000) }],
+      layers: [{ layer: "ping", check: "icmp-reachable", value: 0, ts: ago(5_000) }],
     };
     expect(reason(iface, now)).toMatch(/unreachable/i);
   });
@@ -82,11 +82,11 @@ describe("reason", () => {
 
 describe("layerWord", () => {
   it("renders open/closed for the port layer", () => {
-    expect(layerWord({ layer: "port", check: "tcp.open", value: 1, ts: ago(0) })).toBe("open");
-    expect(layerWord({ layer: "port", check: "tcp.open", value: 0, ts: ago(0) })).toBe("closed");
+    expect(layerWord({ layer: "port", check: "tcp-open", value: 1, ts: ago(0) })).toBe("open");
+    expect(layerWord({ layer: "port", check: "tcp-open", value: 0, ts: ago(0) })).toBe("closed");
   });
   it("renders up/down for the ping layer", () => {
-    expect(layerWord({ layer: "ping", check: "icmp.reachable", value: 1, ts: ago(0) })).toBe("up");
-    expect(layerWord({ layer: "ping", check: "icmp.reachable", value: 0, ts: ago(0) })).toBe("down");
+    expect(layerWord({ layer: "ping", check: "icmp-reachable", value: 1, ts: ago(0) })).toBe("up");
+    expect(layerWord({ layer: "ping", check: "icmp-reachable", value: 0, ts: ago(0) })).toBe("down");
   });
 });

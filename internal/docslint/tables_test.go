@@ -9,7 +9,7 @@ func TestScanTableColumnsIn(t *testing.T) {
 		"event":     {"id": true, "origin": true, "correlation_id": true},
 		"interface": {"params": true},
 	}
-	seeded := map[string]bool{"interface.reachable": true}
+	seeded := map[string]bool{"interface-reachable": true}
 	cases := []struct {
 		line string
 		want int
@@ -19,7 +19,7 @@ func TestScanTableColumnsIn(t *testing.T) {
 		{"a nested `interface.params.path` token", 0},
 		{"the `sidebar.badge` frontmatter", 0},
 		{"the `og.v1` subject family", 0},
-		{"the seeded `interface.reachable` verdict key", 0},
+		{"the seeded `interface-reachable` verdict key", 0},
 		{"an illustrative `event.ghost_column` example", 0},
 	}
 	for _, c := range cases {

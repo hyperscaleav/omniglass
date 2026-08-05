@@ -29,7 +29,7 @@ const (
 
 	// ShapeKeyspace: an operator types its name, on the dotted rule. The two rules
 	// share a character set and a segment shape; the only difference left is that a
-	// keyspace name is a dot-joined PATH of segments (icmp.rtt-avg) and an entity
+	// keyspace name is a dot-joined PATH of segments (icmp-rtt-avg) and an entity
 	// name is a path of one. An earlier comment here justified the split by claiming
 	// different character sets, which stopped being true when they were unified.
 	ShapeKeyspace IdentityShape = "keyspace"
@@ -68,8 +68,8 @@ var IdentityShapes = map[string]TableIdentity{
 	"vendor": {Shape: ShapeKeyBearing},
 
 	// Keyspace: a name, on the other rule.
-	"property_type": {ShapeKeyspace, "icmp.rtt-avg, a signal name referenced from drivers and templates"},
-	"event_type":    {ShapeKeyspace, "call.started, an occurrence name"},
+	"property_type": {ShapeKeyspace, "icmp-rtt-avg, a signal name referenced from drivers and templates"},
+	"event_type":    {ShapeKeyspace, "call-started, an occurrence name"},
 	"command_type":  {ShapeKeyspace, "set-input, a command name"},
 
 	// A human identifier that is not a name. These are the exceptions worth stating.

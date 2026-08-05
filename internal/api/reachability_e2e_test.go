@@ -90,31 +90,31 @@ func TestReachabilityAPI(t *testing.T) {
 	t0 := time.Now().UTC().Add(-3 * time.Minute)
 	t1 := t0.Add(time.Minute)
 	t2 := t1.Add(time.Minute)
-	// disp-1-tcp: up verdict + tcp.open=1 + connect_time.
+	// disp-1-tcp: up verdict + tcp-open=1 + connect_time.
 	if err := gw.InsertStateSamples(ctx, []storage.StateSampleWrite{
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "interface.reachable", Instance: "disp-1-tcp", Value: "up", Source: "tcp", TS: t2},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "interface-reachable", Instance: "disp-1-tcp", Value: "up", Source: "tcp", TS: t2},
 	}); err != nil {
 		t.Fatalf("insert tcp state: %v", err)
 	}
 	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp.open", Instance: "disp-1-tcp", Value: 1, Source: "tcp", TS: t2},
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp.connect-time", Instance: "disp-1-tcp", Value: 3.1, Source: "tcp", TS: t2},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp-open", Instance: "disp-1-tcp", Value: 1, Source: "tcp", TS: t2},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp-connect-time", Instance: "disp-1-tcp", Value: 3.1, Source: "tcp", TS: t2},
 	}); err != nil {
 		t.Fatalf("insert tcp metrics: %v", err)
 	}
-	// disp-1-icmp: down verdict with two transitions (up then down) + icmp.reachable=0.
+	// disp-1-icmp: down verdict with two transitions (up then down) + icmp-reachable=0.
 	if err := gw.InsertStateSamples(ctx, []storage.StateSampleWrite{
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "interface.reachable", Instance: "disp-1-icmp", Value: "up", Source: "icmp", TS: t0},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "interface-reachable", Instance: "disp-1-icmp", Value: "up", Source: "icmp", TS: t0},
 	}); err != nil {
 		t.Fatalf("insert icmp up: %v", err)
 	}
 	if err := gw.InsertStateSamples(ctx, []storage.StateSampleWrite{
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "interface.reachable", Instance: "disp-1-icmp", Value: "down", Source: "icmp", TS: t1},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "interface-reachable", Instance: "disp-1-icmp", Value: "down", Source: "icmp", TS: t1},
 	}); err != nil {
 		t.Fatalf("insert icmp down: %v", err)
 	}
 	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "icmp.reachable", Instance: "disp-1-icmp", Value: 0, Source: "icmp", TS: t1},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "icmp-reachable", Instance: "disp-1-icmp", Value: 0, Source: "icmp", TS: t1},
 	}); err != nil {
 		t.Fatalf("insert icmp metric: %v", err)
 	}

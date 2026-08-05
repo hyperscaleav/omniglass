@@ -44,20 +44,20 @@ server.
 resolves to.** `{"parent": "rack", "parent_id": "0198f..."}`. The name is what a body round-trips;
 the id is the stable handle that survives a rename.
 
-**The entity name rule is enforced on every table declared key-bearing.** An entity's name is the
-identifier an operator types and an address carries (the `rm215a` in `boi.17c.rm215a`): one segment
+**One name rule is enforced on every table declared to bear a name.** A name is the identifier an
+operator types and an address carries (the `rm215a` in `boi.17c.rm215a`): one kebab token
 on `^[a-z0-9][a-z0-9-]*$`, a 100 character ceiling, the uuid shape refused. One validator enforces
-it, `storage.ValidateName(table, name)`, which picks the rule from the table's declared identity
-shape rather than from whoever wrote the call site. The rule lives in the contract, not just below
+it, `storage.ValidateName(table, name)`, which reads the table's declared identity shape to settle
+whether that table bears an operator-typed name at all rather than trusting whoever wrote the call
+site. The rule lives in the contract, not just below
 it: the create body carries `pattern` and `maxLength`, so the generated OpenAPI, the typed client,
 the CLI, and the YAML JSONSchema all enforce it, and the Storage Gateway enforces it again for
 callers that never touch a route.
 
 **Every exception is named, in code.** `internal/storage/identity_shape.go` declares one of four
-identity shapes for every table: key-bearing (an operator types its name, on the entity name rule),
-keyspace (an operator types its name there too, on the dotted rule), a human identifier that is not
-a name, and id-only. The last two carry a written reason, and the guard refuses an exception without
-one.
+identity shapes for every table: key-bearing (an operator types its name), keyspace (an operator
+types its name there too, on that same rule), a human identifier that is not a name, and id-only.
+The last two carry a written reason, and the guard refuses an exception without one.
 
 Which table is which is **not written down here**, because a hand-copied list is the drift class the
 generate-first rule exists for. `identity_shape_test.go` checks the declaration against the generated
@@ -66,15 +66,16 @@ it into [core entities](/architecture/core-entities/). An earlier version of tha
 tables carrying a `name` column, which made it blind to 28 of the 51: absence of a `name` is not
 evidence of absence of an identifier, and a username and a content hash both escaped.
 
-The **keyspace** rule is not an exception to that one, it is the second of the two. `icmp.rtt-avg`
-is a legal keyspace name and an illegal entity name, and that is the whole of the difference: one
-character set and one segment shape, a dot-joined path of segments rather than a path of one, and a
-128 character ceiling rather than 100.
+There used to be a second rule beside that one, the **keyspace** rule: a dot-joined path of kebab
+segments on a 128 character ceiling (`icmp.rtt-avg`), with the validator selecting between the two
+from the table's declared shape. The two collapsed into one (#586). `icmp.rtt-avg` is now
+`icmp-rtt-avg`, a name is a single token on every table that carries one, and with no path left to
+parse there is one ceiling and nothing to select between.
 
-The exclusions are load-bearing rather than tidy. Barring `.` keeps one name from splitting into two
-segments. Barring `*` and `>` keeps a name from reading as a NATS subject pattern. Barring
-`$` is what lets an address use sigil accessors without reserving any word, so a location may still
-legitimately take the name `sys`.
+The exclusions are load-bearing rather than tidy. Barring `.` is the single-token rule itself: a
+name occupies exactly one position and can never split into two. Barring `*` and `>` keeps a name
+from reading as a NATS subject pattern. Barring `$` is what lets an address use sigil accessors
+without reserving any word, so a location may still legitimately take the name `sys`.
 
 The test is a **round trip**: a response body can be fed back to the write that produced it
 (create a component with `{"parent": "rack"}`, read it back as `{"parent": "rack"}`). When that

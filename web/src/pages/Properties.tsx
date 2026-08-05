@@ -44,7 +44,7 @@ function originBadge(official: boolean): JSX.Element {
     : <span class="badge badge-outline badge-sm">custom</span>;
 }
 
-// This catalog is a keyspace, so `name` holds a dotted value (icmp.rtt-avg) rather
+// This catalog is a keyspace, so `name` holds a dotted value (icmp-rtt-avg) rather
 // than the kebab the rest of the estate addresses rows by. That is a validation
 // difference, not a different concept, so the header is the one word every list
 // uses. The cell is the shared two-line treatment either way, which is what retires

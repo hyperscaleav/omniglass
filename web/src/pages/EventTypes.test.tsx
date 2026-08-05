@@ -10,8 +10,8 @@ import { ME_KEY, type Me } from "../lib/auth";
 // the caller holds event_type:create / event_type:update. Data is seeded into the
 // query cache so no server is needed.
 const seed: EventTypeRow[] = [
-  { name: "call.started", display_name: "Call Started", official: true },
-  { name: "cable.unplugged", display_name: "Cable unplugged", official: false },
+  { name: "call-started", display_name: "Call Started", official: true },
+  { name: "cable-unplugged", display_name: "Cable unplugged", official: false },
 ];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
@@ -33,21 +33,21 @@ describe("Event Types page", () => {
 
   it("lists the seeded event types", () => {
     mount();
-    expect(screen.getByText("call.started")).toBeTruthy();
-    expect(screen.getByText("cable.unplugged")).toBeTruthy();
+    expect(screen.getByText("call-started")).toBeTruthy();
+    expect(screen.getByText("cable-unplugged")).toBeTruthy();
   });
 
   // The identity cell puts the label on the primary line and the key beneath it, in
   // one cell, which is what makes this catalog read the same as every other list.
   it("renders the label above the key in a single identity cell", () => {
     mount();
-    const cell = screen.getByText("call.started").closest("td");
+    const cell = screen.getByText("call-started").closest("td");
     expect(cell?.textContent).toContain("Call Started");
     expect(screen.getAllByText("Call Started")).toHaveLength(1);
   });
 
   // One header word everywhere, "Name", even though this table's name is dotted
-  // (call.started) rather than kebab. The separate Label column goes: the cell
+  // (call-started) rather than kebab. The separate Label column goes: the cell
   // already renders the display name, so the column only repeated it.
   it("keeps the Name header and drops the redundant Label column", () => {
     mount();

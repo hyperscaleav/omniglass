@@ -84,7 +84,7 @@ export async function enrollNode(name: string): Promise<EnrollOutput> {
 
 // The node liveness window mirrors the server's node-down sweep default
 // (OMNIGLASS_NODE_DOWN_AFTER, 90s): a node whose last heartbeat predates it is
-// swept to `node.down` server-side, so the console pill uses the same threshold.
+// swept to `node-down` server-side, so the console pill uses the same threshold.
 export const NODE_DOWN_AFTER_MS = 90_000;
 
 export type NodeStatus = "up" | "down" | "never";

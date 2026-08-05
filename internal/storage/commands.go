@@ -26,7 +26,7 @@ type Command struct {
 
 // IssueCommand records a command invocation and, in one transaction, composes the two
 // halves of ADR-0063 it depends on: it writes a caused `event` (origin=caused, typed
-// command.issued, #395) and, when the command_type targets a property, opens an
+// command-issued, #395) and, when the command_type targets a property, opens an
 // `intended` value in the property cache (#394) that the target's observed value
 // settles against. Scope-guarded on the owner and audited. `value` is the intended
 // value for the target property (nil for a fire-and-forget command); `params` is the
@@ -54,7 +54,7 @@ func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, comm
 		return nil, err
 	}
 
-	// The caused event: a command.issued occurrence, origin=caused, carrying the
+	// The caused event: a command-issued occurrence, origin=caused, carrying the
 	// params. It is the lineage cause of the intended value.
 	var attrs any
 	if len(params) > 0 {
@@ -62,7 +62,7 @@ func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, comm
 	}
 	var causedID int64
 	eventSQL := fmt.Sprintf(`insert into event (owner_kind, %s, event_type_id, instance, origin, message, attributes, provenance, source)
-		values ($1, $2, (select id from event_type where name = 'command.issued'), $3, 'caused', $4, $5, 'observed', 'command')
+		values ($1, $2, (select id from event_type where name = 'command-issued'), $3, 'caused', $4, $5, 'observed', 'command')
 		returning id`, col)
 	msg := fmt.Sprintf("command %s issued", commandType)
 	if err := tx.QueryRow(ctx, eventSQL, ownerKind, arc, instance, msg, attrs).Scan(&causedID); err != nil {

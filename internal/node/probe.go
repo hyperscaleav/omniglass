@@ -49,7 +49,7 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 		}
 		// Compute and, on a transition only, append the interface reachability
 		// verdict as a state sample. The node remembers the last verdict per
-		// task and emits interface.reachable only on a flip or first observation,
+		// task and emits interface-reachable only on a flip or first observation,
 		// so the state series is transition-only, not one row per tick. The key is
 		// the task id, not the interface name: interface names are unique only per
 		// component, so a node routinely probes two components' interfaces that

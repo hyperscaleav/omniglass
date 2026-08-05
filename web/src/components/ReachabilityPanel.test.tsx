@@ -21,8 +21,8 @@ const seed: Reachability = {
       node: "node-a",
       verdict: { value: "up", ts: nowIso },
       layers: [
-        { layer: "ping", check: "icmp.reachable", value: 1, detail: "12.0 ms", ts: nowIso },
-        { layer: "port", check: "tcp.open", value: 1, detail: "3.1 ms", ts: nowIso },
+        { layer: "ping", check: "icmp-reachable", value: 1, detail: "12.0 ms", ts: nowIso },
+        { layer: "port", check: "tcp-open", value: 1, detail: "3.1 ms", ts: nowIso },
       ],
       history: [{ ts: ago(120_000), value: "up" }],
     },
@@ -33,8 +33,8 @@ const seed: Reachability = {
       node: "node-a",
       verdict: { value: "down", ts: nowIso },
       layers: [
-        { layer: "ping", check: "icmp.reachable", value: 1, ts: nowIso },
-        { layer: "port", check: "tcp.open", value: 0, ts: nowIso },
+        { layer: "ping", check: "icmp-reachable", value: 1, ts: nowIso },
+        { layer: "port", check: "tcp-open", value: 0, ts: nowIso },
       ],
       history: [
         { ts: ago(120_000), value: "up" },
@@ -78,8 +78,8 @@ describe("ReachabilityPanel", () => {
     fireEvent.click(getByText("disp-1-icmp"));
     expect(getByText(/service down, box up/i)).toBeTruthy();
     // the gate breakdown lists the layer checks and the verdict line
-    expect(getByText("icmp.reachable")).toBeTruthy();
-    expect(getByText("tcp.open")).toBeTruthy();
+    expect(getByText("icmp-reachable")).toBeTruthy();
+    expect(getByText("tcp-open")).toBeTruthy();
     expect(getByText(/probed by/)).toBeTruthy();
   });
 

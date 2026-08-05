@@ -248,7 +248,7 @@ health transitions and emitted as its own property (the temporal reducer,
 source: { property: health, over: 30d }
 reduce: time_in_state
 when: "value.healthy / value.total"   # an Expr leaf shapes it into a ratio
-# -> emits system.availability
+# -> emits system-availability
 ```
 
 An SLI is just another derived property, and transition-only recording's clearest payoff:
@@ -256,7 +256,7 @@ An SLI is just another derived property, and transition-only recording's cleares
 
 ## SLO and SLA: the target, and meeting it
 
-The **SLI** is the *measured indicator* (the `system.availability` calc above); the **SLO** is the
+The **SLI** is the *measured indicator* (the `system-availability` calc above); the **SLO** is the
 **target** (availability >= 99.9%), a [config](/architecture/variables/) value on the entity or
 standard; the **SLA** is **meeting the SLO**: an `event_rule` fires when the SLI breaches the
 target, and compliance over the contractual window is itself an SLI.
@@ -264,7 +264,7 @@ target, and compliance over the contractual window is itself an SLI.
 ```yaml
 event_rule:
   scope: 'system.standard == "meeting-room"'
-  property: system.availability
+  property: system-availability
   when: "value < $var:availability-slo"   # the SLO target, a config value
   severity: high
 ```

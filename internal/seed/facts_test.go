@@ -37,7 +37,7 @@ func TestSeedFactsGroundTruth(t *testing.T) {
 	for _, p := range doc.PropertyTypes {
 		props[p.Name] = true
 	}
-	for _, want := range []string{"health", "video.input", "icmp.reachable"} {
+	for _, want := range []string{"health", "video-input", "icmp-reachable"} {
 		if !props[want] {
 			t.Errorf("property_types missing %q (the hand-written guides omitted it; the artifact must not)", want)
 		}

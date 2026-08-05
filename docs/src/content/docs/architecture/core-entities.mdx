@@ -502,7 +502,7 @@ rather than one segment, and the tables carrying a human-readable identifier tha
 all.
 
 A **keyspace** table carries a `name` on the other name rule: the same characters and the same
-segment shape, joined into a dot-separated path (`icmp.rtt-avg`) instead of standing alone, and
+segment shape, joined into a dot-separated path (`icmp-rtt-avg`) instead of standing alone, and
 bounded at 128 characters rather than 100. The two rules stay two rules because only a keyspace name
 may carry the dot, but they are one validator: `storage.ValidateName` picks between them from the
 table's declared shape, so a call site cannot pick wrongly or forget to pick at all. The console

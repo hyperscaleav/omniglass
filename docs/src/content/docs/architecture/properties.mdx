@@ -14,11 +14,11 @@ Vocabulary is [ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-i
 :::
 
 :::note[Partial]
-Built observed **metric** path (reachability): the tcp probe produces `tcp.open` /
-`tcp.connect-time`, the icmp (ping) probe `icmp.reachable` / `icmp.rtt-avg`; the ingest consumer
+Built observed **metric** path (reachability): the tcp probe produces `tcp-open` /
+`tcp-connect-time`, the icmp (ping) probe `icmp-reachable` / `icmp-rtt-avg`; the ingest consumer
 writes them to `metric` with `provenance=observed`, owner bound server-side from the task's
 interface (`owner_kind=component`), reject-not-project against the `property_type` registry.
-First observed **state** producer: the node computes the per-interface verdict `interface.reachable`
+First observed **state** producer: the node computes the per-interface verdict `interface-reachable`
 (the AND of its probe results); the consumer **routes by the `property_type` kind**, landing it in
 `state` under the same owner-confinement, **transition-only** (one row per flip, guarded at the node
 and at ingest). No log sample kind: raw lines land on the `log_line` lane
@@ -88,7 +88,7 @@ An unnormalized raw occurrence (a syslog line, a raw webhook frame) is neither: 
 
 A sample and an event are different shapes, so each has its own registry: [`event_type`](/architecture/events/) for occurrences, `property_type` for sample keys. **`property_type`** describes every key as `(name, official, kind, data_type, unit, precision, fusion_policy, validation)`: the name globally unique, **`official`** deciding authority (the `scope` / `template_id` ladder is future design, [Key scope](#key-scope-template-org-official)). The kind is compiled into the edge unit, so a value routes to the right table with no runtime lookup; `fusion_policy` is a read-time **default** ([Fusion](#fusion)).
 
-**Property naming is owner-agnostic**: a key names a **measurement, never its owner** (`temperature`, not `room.temperature`): kebab dot segments, the canonical unit in the `unit` field (`fan.speed` + `unit: rpm`, not `fan_rpm`), no `system.` / `device.` / `room.` prefix, grouped by domain (`cpu.utilization`, `power.state`, `video.input`, `audio.level`, `network.icmp.rtt`). One canonical path is one comparable signal across vendors, the normalization cross-fleet dashboards and AI hinge on. The official set seeds from `internal/seed/properties.yaml`: today the eleven types the built collection vertical uses (`icmp.reachable`, `icmp.rtt-avg`, `tcp.open`, `tcp.connect-time`, `interface.reachable`, `health`, `video.input`, `serial-number`, `mac-address`, `firmware-version`, `model-number`); the OpenTelemetry-semconv-aligned IT leaves and the [OpenAV minimum-device-functionality guidelines](https://github.com/OpenAVCloud/specifications/blob/main/min-device-functionality/OAVC-AV-Device-Minimum-Functionality-Guidelines.md) set are still to come.
+**Property naming is owner-agnostic**: a key names a **measurement, never its owner** (`temperature`, not `room.temperature`): kebab dot segments, the canonical unit in the `unit` field (`fan.speed` + `unit: rpm`, not `fan_rpm`), no `system.` / `device.` / `room.` prefix, grouped by domain (`cpu.utilization`, `power-state`, `video-input`, `audio-level`, `network.icmp.rtt`). One canonical path is one comparable signal across vendors, the normalization cross-fleet dashboards and AI hinge on. The official set seeds from `internal/seed/properties.yaml`: today the eleven types the built collection vertical uses (`icmp-reachable`, `icmp-rtt-avg`, `tcp-open`, `tcp-connect-time`, `interface-reachable`, `health`, `video-input`, `serial-number`, `mac-address`, `firmware-version`, `model-number`); the OpenTelemetry-semconv-aligned IT leaves and the [OpenAV minimum-device-functionality guidelines](https://github.com/OpenAVCloud/specifications/blob/main/min-device-functionality/OAVC-AV-Device-Minimum-Functionality-Guidelines.md) set are still to come.
 
 ### One identity, three shapes
 
@@ -126,13 +126,13 @@ Template-scope conflicts are impossible (identity is `(template_id, name)`: two 
 
 **Every sample is typed by a registry row, just at some scope.** The sample -> `property_type` FK is **non-null**: template-scoped keys ARE `property_type` rows (`scope=template`, with a `template_id`), so no nullable type FK, no dual identity. Kind, unit, and validation live on the row at every scope, so the edge compiler routes identically for all three layers.
 
-**The promotion ladder is template -> org -> official**, each step a cheap re-scope or re-point, not a migration: lift a template's `input` to an org-canonical `video.input` and re-point the template; official is earned by shipping in the distribution. Collected samples keep resolving. Normalization is optional but encouraged: aligning buys cross-fleet comparability, and most templates just **reference** a shipped official key. Sharing is template-level (an import is **linked** or **copied**), its keys landing at template or org scope.
+**The promotion ladder is template -> org -> official**, each step a cheap re-scope or re-point, not a migration: lift a template's `input` to an org-canonical `video-input` and re-point the template; official is earned by shipping in the distribution. Collected samples keep resolving. Normalization is optional but encouraged: aligning buys cross-fleet comparability, and most templates just **reference** a shipped official key. Sharing is template-level (an import is **linked** or **copied**), its keys landing at template or org scope.
 
 **Governance is curation, not runtime enforcement**: Omniglass is a Postgres database an operator runs; we vouch for what we **ship**, you vet what you import. Commands sit at **template** scope with the same ladder ([templates](/architecture/templates/)).
 
 ## Provenance: how we know a value
 
-Kind is a property of the **key**, fixed once (`power.state` is always a state); provenance is a property of the **row**: the same key can be observed, calculated, or intended at different moments. Each provenance points at the immutable ground-truth record that produced it (its **lineage**), the populated lineage column mutually exclusive per provenance, CHECK-enforced.
+Kind is a property of the **key**, fixed once (`power-state` is always a state); provenance is a property of the **row**: the same key can be observed, calculated, or intended at different moments. Each provenance points at the immutable ground-truth record that produced it (its **lineage**), the populated lineage column mutually exclusive per provenance, CHECK-enforced.
 
 | Provenance | How we know it | Lineage points at |
 |---|---|---|

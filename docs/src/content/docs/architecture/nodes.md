@@ -236,13 +236,13 @@ signal are one always-on probe.
 **The layered availability gate** is an **OSI-layered** set of cheap checks run as a **concurrent
 pre-pass** (high concurrency, short timeouts) before a connection-interface's poll tasks. All
 applicable checks run, each shipping a built-in sample, instanced (the ping by host, the rest by
-interface) and owned by the queried component; the interface's **`interface.reachable`** verdict is
+interface) and owned by the queried component; the interface's **`interface-reachable`** verdict is
 their AND.
 
 | Layer | Check | Sample | Notes |
 |---|---|---|---|
-| L3 network | ICMP ping, **batched once per host** per tick | `icmp.reachable` / `icmp.rtt-avg` | **informational** (see verdict below); shared by every interface on the host |
-| L4 transport | TCP connect (tcp-family) **or** UDP presence (snmp/UDP) | `tcp.open`/`tcp.connect-time` · `udp.open` | a closed UDP port answers ICMP port-unreachable, so absence of that is "present"; this is why SNMP's transport check is L4, not its auth-dependent get |
+| L3 network | ICMP ping, **batched once per host** per tick | `icmp-reachable` / `icmp-rtt-avg` | **informational** (see verdict below); shared by every interface on the host |
+| L4 transport | TCP connect (tcp-family) **or** UDP presence (snmp/UDP) | `tcp-open`/`tcp-connect-time` · `udp.open` | a closed UDP port answers ICMP port-unreachable, so absence of that is "present"; this is why SNMP's transport check is L4, not its auth-dependent get |
 | L7 app | protocol handshake: SNMP `sysUpTime` get (**`snmp.reachable`**, default-on) · SSH handshake+auth · telnet login chain | (verdict) | the SNMP get is the **primary, default** SNMP liveness (ICMP-independent); SSH/telnet are **opt-in** (`ssh_check`/`telnet_check="on"`) because their liveness credential can differ from the device's |
 
 **The verdict respects each layer's definitiveness.** A TCP connect and any L7 handshake are
@@ -338,8 +338,8 @@ never fatal).
 
 A node that goes dark reports nothing, so a **node-liveness sweep** runs server-side: a node whose
 last heartbeat (or registration, if it never checked in) predates `OMNIGLASS_NODE_DOWN_AFTER`
-(default 90s) gets a node-owned **`node.down` alarm**, auto-resolved on the next heartbeat. The
-sweep raises it directly (no event_rule: a dead node emits no sample), keyed by `(node.down,
+(default 90s) gets a node-owned **`node-down` alarm**, auto-resolved on the next heartbeat. The
+sweep raises it directly (no event_rule: a dead node emits no sample), keyed by `(node-down,
 node owner)` for idempotency across sweeps; this is why the node owner arc reaches `event` and
 `alarm`, not just samples.
 

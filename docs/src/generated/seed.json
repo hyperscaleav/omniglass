@@ -215,14 +215,14 @@
  ],
  "property_types": [
   {
-   "name": "icmp.reachable",
+   "name": "icmp-reachable",
    "kind": "metric",
    "data_type": "int",
    "display_name": "ICMP Reachable",
    "description": "ICMP inline probe result (1 = at least one echo returned, 0 = none)."
   },
   {
-   "name": "icmp.rtt-avg",
+   "name": "icmp-rtt-avg",
    "kind": "metric",
    "data_type": "float",
    "unit": "ms",
@@ -230,14 +230,14 @@
    "description": "Average round-trip time over the task's echoes; absent when unreachable."
   },
   {
-   "name": "tcp.open",
+   "name": "tcp-open",
    "kind": "metric",
    "data_type": "int",
    "display_name": "TCP Port Open",
    "description": "TCP-connect probe result (1 = the port accepted a connection, 0 = refused/timeout)."
   },
   {
-   "name": "tcp.connect-time",
+   "name": "tcp-connect-time",
    "kind": "metric",
    "data_type": "float",
    "unit": "ms",
@@ -245,7 +245,7 @@
    "description": "Time to establish the TCP connection; absent when the port is closed."
   },
   {
-   "name": "interface.reachable",
+   "name": "interface-reachable",
    "kind": "state",
    "data_type": "string",
    "display_name": "Interface Reachable",
@@ -259,7 +259,7 @@
    "description": "The rolled-up health verdict for a component, system, or location, worst-wins over its inputs (a component's active alarms, a system's roles, the systems under a location). Recorded transition-only, so the series is the edges: when it broke and when it came back, not a sample per check."
   },
   {
-   "name": "video.input",
+   "name": "video-input",
    "kind": "state",
    "data_type": "string",
    "display_name": "Video Input",
@@ -292,12 +292,12 @@
  ],
  "event_types": [
   {
-   "name": "call.started",
+   "name": "call-started",
    "display_name": "Call Started",
    "description": "A conferencing endpoint entered an active call. A caught occurrence when the device reports it natively (an xAPI event), or a derived one when a rule infers it from other signals."
   },
   {
-   "name": "command.issued",
+   "name": "command-issued",
    "display_name": "Command Issued",
    "description": "A command was issued to a component (the caused event a command records). It opens the intended value the command sets and is the lineage cause of that intended value."
   }
@@ -306,7 +306,7 @@
   {
    "name": "set-input",
    "display_name": "Set Input",
-   "description": "Tell a display or switcher which video input to select. A settleable command: it opens an intended video.input and settles when the device reports that input within the settle window."
+   "description": "Tell a display or switcher which video input to select. A settleable command: it opens an intended video-input and settles when the device reports that input within the settle window."
   },
   {
    "name": "reboot",

@@ -44,7 +44,7 @@ func TestPropertyCacheUpsert(t *testing.T) {
 	up := func(val string, ts time.Time) {
 		t.Helper()
 		if err := gw.UpsertProperties(ctx, []storage.PropertyUpsert{{
-			OwnerKind: "component", OwnerID: "disp-1", Key: "interface.reachable",
+			OwnerKind: "component", OwnerID: "disp-1", Key: "interface-reachable",
 			Instance: "", Provenance: "observed", Value: json.RawMessage(`"` + val + `"`), TS: ts,
 		}}); err != nil {
 			t.Fatalf("upsert %s: %v", val, err)
@@ -53,7 +53,7 @@ func TestPropertyCacheUpsert(t *testing.T) {
 	up("up", t0)
 	up("down", t1)
 
-	cv, err := gw.LatestValue(ctx, "component", "disp-1", "interface.reachable", "", "observed", all)
+	cv, err := gw.LatestValue(ctx, "component", "disp-1", "interface-reachable", "", "observed", all)
 	if err != nil {
 		t.Fatalf("latest observed: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestPropertyCacheUpsert(t *testing.T) {
 
 	// Out-of-order guard: an older sample must not displace the newer latest.
 	up("stale", t0)
-	cv, err = gw.LatestValue(ctx, "component", "disp-1", "interface.reachable", "", "observed", all)
+	cv, err = gw.LatestValue(ctx, "component", "disp-1", "interface-reachable", "", "observed", all)
 	if err != nil {
 		t.Fatalf("latest after stale: %v", err)
 	}
@@ -73,20 +73,20 @@ func TestPropertyCacheUpsert(t *testing.T) {
 
 	// A declared value coexists as a separate provenance row (the declared path is
 	// untouched): observed stays, declared reads back its own value.
-	if _, err := gw.SetProperty(ctx, "", "component", "disp-1", "interface.reachable", "", json.RawMessage(`"up"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "component", "disp-1", "interface-reachable", "", json.RawMessage(`"up"`), all); err != nil {
 		t.Fatalf("set declared: %v", err)
 	}
-	obs, err := gw.LatestValue(ctx, "component", "disp-1", "interface.reachable", "", "observed", all)
+	obs, err := gw.LatestValue(ctx, "component", "disp-1", "interface-reachable", "", "observed", all)
 	if err != nil || obs == nil || string(obs.Value) != `"down"` {
 		t.Fatalf("observed after declared set: want down, got %+v (err %v)", obs, err)
 	}
-	dec, err := gw.LatestValue(ctx, "component", "disp-1", "interface.reachable", "", "declared", all)
+	dec, err := gw.LatestValue(ctx, "component", "disp-1", "interface-reachable", "", "declared", all)
 	if err != nil || dec == nil || string(dec.Value) != `"up"` {
 		t.Fatalf("declared read: want up, got %+v (err %v)", dec, err)
 	}
 
 	// A provenance with no row is a clean miss.
-	told, err := gw.LatestValue(ctx, "component", "disp-1", "interface.reachable", "", "intended", all)
+	told, err := gw.LatestValue(ctx, "component", "disp-1", "interface-reachable", "", "intended", all)
 	if err != nil {
 		t.Fatalf("latest intended: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestPropertyCacheUpsert(t *testing.T) {
 	}
 
 	// An out-of-scope owner is the non-disclosing not-found, not a disclosure.
-	if _, err := gw.LatestValue(ctx, "component", "ghost", "interface.reachable", "", "observed", all); err == nil {
+	if _, err := gw.LatestValue(ctx, "component", "ghost", "interface-reachable", "", "observed", all); err == nil {
 		t.Fatal("latest value for unknown component: want not-found error, got nil")
 	}
 }

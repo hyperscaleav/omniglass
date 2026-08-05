@@ -239,11 +239,22 @@ func TestEveryKeyspaceTableValidates(t *testing.T) {
 				}
 			})
 		}
+		// A dot is illegal on every table now (#586), so the keyspace tables refuse
+		// it through the gateway exactly as the entity tables always did.
+		t.Run(table+"/refuses a dotted name", func(t *testing.T) {
+			err := create(strings.ReplaceAll(table, "_", "-") + ".legal-name")
+			if err == nil {
+				t.Fatalf("%s accepted a dotted name; there is one name rule and it has no dots", table)
+			}
+			if !errors.Is(err, storage.ErrInvalidEntityName) {
+				t.Fatalf("%s refused a dotted name with %v, want it to wrap ErrInvalidEntityName", table, err)
+			}
+		})
 		// The positive case, so the refusals are not passing because the create is
 		// simply broken.
-		t.Run(table+"/accepts a dotted name", func(t *testing.T) {
-			if err := create(strings.ReplaceAll(table, "_", "-") + ".legal-name"); err != nil {
-				t.Fatalf("%s refused a legal dotted keyspace name: %v", table, err)
+		t.Run(table+"/accepts a kebab name", func(t *testing.T) {
+			if err := create(strings.ReplaceAll(table, "_", "-") + "-legal-name"); err != nil {
+				t.Fatalf("%s refused a legal kebab name: %v", table, err)
 			}
 		})
 	}

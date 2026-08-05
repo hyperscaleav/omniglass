@@ -3,31 +3,25 @@ package storage
 import (
 	"errors"
 	"fmt"
-	"strings"
 )
 
-// The name rule, selected by the table rather than by the caller.
+// The name rule. There is one, and it applies to every name-bearing table.
 //
-// There are two rules and there were three. An entity name is one segment
-// (hq-boardroom-dsp); a keyspace name is a dot-joined path of them
-// (icmp.rtt-avg). They share a character set and differ only in whether a dot is
-// legal and in how long a name may be, which is the whole of the distinction that
-// survived one-character-set-everywhere. A third pattern validated principal_group
-// at the API layer and admitted `.` and `_`; it is gone, folded into the entity rule.
+// There were three, then two, now one. A keyspace name used to be a dot-joined path
+// of segments (icmp.rtt-avg) while an entity name was a single segment, selected by
+// the table's declared shape. That distinction is retired (#586): a name is one kebab
+// token everywhere, so `icmp.rtt-avg` is `icmp-rtt-avg` and there is no path to
+// validate. One rule, one character set, one ceiling.
 //
-// The selection is the point. Before this, a caller picked ValidateEntityKey or
-// key.ValidateKey by hand at thirteen sites, and nothing checked that the choice
-// matched what the table was. Both wrong choices are silent, and not choosing at all
-// is silent too, which is how system_role reached production unvalidated. Here the
-// table's declared shape (identity_shape.go) selects, so a table nobody classified
-// cannot validate at all.
+// What survives from the two-rule design is the thing worth keeping: the table must be
+// DECLARED to bear a name at all. Before that, a caller picked between validators by
+// hand at thirteen sites and nothing checked the choice matched the table, which is how
+// system_role reached production unvalidated. A table nobody classified still cannot
+// validate, and that is deliberate.
 
-// MaxEntityNameLen bounds a single-segment entity name.
+// MaxEntityNameLen bounds every name. The keyspace ceiling of 128 existed because
+// that name was a path; with no paths there is one number.
 const MaxEntityNameLen = 100
-
-// MaxKeyspaceNameLen bounds a dot-joined keyspace name. It is larger because the
-// name is a path and the entity name is a path of one.
-const MaxKeyspaceNameLen = 128
 
 // ErrTableNotNameBearing is returned when a table has no declared name rule: either
 // it is not in the declaration at all, or it is declared as bearing no name (id-only,
@@ -46,17 +40,15 @@ func ValidateName(table, name string) error {
 		return fmt.Errorf("%w: %q is not in the identity declaration", ErrTableNotNameBearing, table)
 	}
 	switch id.Shape {
-	case ShapeKeyBearing:
+	case ShapeKeyBearing, ShapeKeyspace:
 		return validateEntityName(name)
-	case ShapeKeyspace:
-		return validateKeyspaceName(name)
 	default:
 		return fmt.Errorf("%w: %q is declared %q", ErrTableNotNameBearing, table, id.Shape)
 	}
 }
 
-// validateEntityName is the single-segment rule: no dots, so a name is exactly one
-// position in a topic and can never split into two.
+// validateEntityName is the rule: one kebab token, no dots, so a name is exactly one
+// position wherever it is carried and can never split into two.
 func validateEntityName(name string) error {
 	if len(name) > MaxEntityNameLen {
 		return fmt.Errorf("%w: %q exceeds %d characters", ErrInvalidEntityName, name, MaxEntityNameLen)
@@ -64,31 +56,6 @@ func validateEntityName(name string) error {
 	if !entityNameRe.MatchString(name) {
 		return fmt.Errorf("%w: %q must be lowercase letters, digits, and hyphens", ErrInvalidEntityName, name)
 	}
-	if isUUID(name) {
-		return fmt.Errorf("%w: %q", ErrEntityNameIsUUID, name)
-	}
-	return nil
-}
-
-// validateKeyspaceName is the dotted rule: every segment obeys the entity character
-// set, joined by dots. An empty segment (a leading, trailing, or doubled dot) fails
-// on the segment rule rather than needing a case of its own.
-func validateKeyspaceName(name string) error {
-	if name == "" {
-		return fmt.Errorf("%w: name is empty", ErrInvalidEntityName)
-	}
-	if len(name) > MaxKeyspaceNameLen {
-		return fmt.Errorf("%w: %q exceeds %d characters", ErrInvalidEntityName, name, MaxKeyspaceNameLen)
-	}
-	for _, seg := range strings.Split(name, ".") {
-		if !entityNameRe.MatchString(seg) {
-			return fmt.Errorf("%w: %q must be lowercase dot-separated segments of letters, digits, and hyphens",
-				ErrInvalidEntityName, name)
-		}
-	}
-	// A keyspace name may not be a uuid either. key.ValidateKey never checked this,
-	// so a uuid-shaped property key was legal; the reason to forbid it is the same as
-	// for an entity name, since both are resolved against a uuid first.
 	if isUUID(name) {
 		return fmt.Errorf("%w: %q", ErrEntityNameIsUUID, name)
 	}

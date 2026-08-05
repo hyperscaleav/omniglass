@@ -46,7 +46,7 @@ func TestCommandTypeAPI(t *testing.T) {
 	// Register a custom, settleable command type targeting a seeded property.
 	created := c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{
 		"name": "set-volume", "display_name": "Set volume",
-		"settle_window_seconds": 5, "target_property_type": "video.input",
+		"settle_window_seconds": 5, "target_property_type": "video-input",
 	}, http.StatusCreated)
 	var ct struct {
 		Name                string `json:"name"`
@@ -55,7 +55,7 @@ func TestCommandTypeAPI(t *testing.T) {
 		Official            bool   `json:"official"`
 	}
 	json.Unmarshal(created, &ct)
-	if ct.Name != "set-volume" || ct.SettleWindowSeconds != 5 || ct.TargetPropertyType != "video.input" || ct.Official {
+	if ct.Name != "set-volume" || ct.SettleWindowSeconds != 5 || ct.TargetPropertyType != "video-input" || ct.Official {
 		t.Fatalf("created = %+v", ct)
 	}
 

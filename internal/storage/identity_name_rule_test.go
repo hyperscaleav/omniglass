@@ -47,17 +47,26 @@ func TestValidateNameRefusesATableThatBearsNoName(t *testing.T) {
 	}
 }
 
-// The one difference between the two rules that survived c973a19: a keyspace name is
-// a dot-joined path (icmp.rtt-avg) and an entity name is a single segment. Both use
-// the same character set for a segment.
-func TestTheDotIsTheDifferenceBetweenTheTwoRules(t *testing.T) {
-	if err := storage.ValidateName("component", "boi.17c.rm215a"); err == nil {
-		t.Error("a key-bearing table accepted a dotted name; the dot separates segments in a topic, " +
-			"so a name carrying one would split into two")
+// There is ONE name rule, and a dot is illegal everywhere (#586). There used to be
+// two: an entity name was a single segment and a keyspace name was a dot-joined path
+// of them, selected by the table's declared shape. The dotted rule is gone, so a name
+// is always exactly one token and `icmp.rtt-avg` is now `icmp-rtt-avg`.
+func TestNoTableAcceptsADottedName(t *testing.T) {
+	for _, table := range []string{"component", "property_type", "event_type", "command_type"} {
+		if err := storage.ValidateName(table, "icmp.rtt-avg"); err == nil {
+			t.Errorf("ValidateName(%q, \"icmp.rtt-avg\") accepted a dotted name; there is one rule and it has no dots", table)
+		}
 	}
+}
+
+// The kebab form of every name that used to carry a dot is legal, so the backfill has
+// somewhere to land.
+func TestTheKebabFormOfAFormerlyDottedNameIsLegal(t *testing.T) {
 	for _, table := range []string{"property_type", "event_type", "command_type"} {
-		if err := storage.ValidateName(table, "icmp.rtt-avg"); err != nil {
-			t.Errorf("ValidateName(%q, \"icmp.rtt-avg\") = %v, want nil", table, err)
+		for _, name := range []string{"icmp-rtt-avg", "call-started", "video-input", "command-issued"} {
+			if err := storage.ValidateName(table, name); err != nil {
+				t.Errorf("ValidateName(%q, %q) = %v, want nil", table, name, err)
+			}
 		}
 	}
 }
@@ -103,23 +112,17 @@ func TestNoRuleAcceptsAUUIDShapedName(t *testing.T) {
 	}
 }
 
-// The ceilings differ because a keyspace name is a path and an entity name is one
-// segment of one. They are declared, not incidental.
-func TestEachRuleHasItsOwnCeiling(t *testing.T) {
-	entity := strings.Repeat("a", storage.MaxEntityNameLen)
-	if err := storage.ValidateName("component", entity); err != nil {
-		t.Errorf("a name at exactly the entity ceiling was refused: %v", err)
-	}
-	if err := storage.ValidateName("component", entity+"a"); err == nil {
-		t.Error("a name one over the entity ceiling was accepted")
-	}
-
-	keyspace := strings.Repeat("a", storage.MaxKeyspaceNameLen)
-	if err := storage.ValidateName("property_type", keyspace); err != nil {
-		t.Errorf("a name at exactly the keyspace ceiling was refused: %v", err)
-	}
-	if err := storage.ValidateName("property_type", keyspace+"a"); err == nil {
-		t.Error("a name one over the keyspace ceiling was accepted")
+// One rule, one ceiling. The keyspace ceiling of 128 existed because that name was a
+// path; with no paths there is one number.
+func TestOneCeilingAppliesToEveryTable(t *testing.T) {
+	atMax := strings.Repeat("a", storage.MaxEntityNameLen)
+	for _, table := range []string{"component", "property_type", "event_type", "command_type"} {
+		if err := storage.ValidateName(table, atMax); err != nil {
+			t.Errorf("ValidateName(%q, ...) refused a name at exactly the ceiling: %v", table, err)
+		}
+		if err := storage.ValidateName(table, atMax+"a"); err == nil {
+			t.Errorf("ValidateName(%q, ...) accepted a name one over the ceiling", table)
+		}
 	}
 }
 
@@ -130,8 +133,8 @@ func TestValidateNameAcceptsRealNames(t *testing.T) {
 		"location":      "rm215a",
 		"vendor":        "crestron",
 		"node":          "node-1",
-		"property_type": "interface.reachable",
-		"event_type":    "call.started",
+		"property_type": "interface-reachable",
+		"event_type":    "call-started",
 		"command_type":  "set-input",
 		"tag":           "asset-id",
 	} {

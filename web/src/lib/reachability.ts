@@ -74,8 +74,8 @@ export function uptime(history: ReachHistory[], verdict: ReachVerdict | null, no
 // empty string when the interface is not down or the layers do not explain it.
 export function reason(iface: ReachInterface, now: number = Date.now()): string {
   if (verdictWord(iface.verdict, now) !== "down") return "";
-  const ping = iface.layers.find((l) => l.check === "icmp.reachable");
-  const port = iface.layers.find((l) => l.check === "tcp.open");
+  const ping = iface.layers.find((l) => l.check === "icmp-reachable");
+  const port = iface.layers.find((l) => l.check === "tcp-open");
   if (ping && ping.value >= 1 && port && port.value < 1) {
     return "Host answers ping but the control port is refused: service down, box up.";
   }
@@ -91,6 +91,6 @@ export function reason(iface: ReachInterface, now: number = Date.now()): string 
 // layerWord renders a probe layer's boolean signal as its per-layer word.
 export function layerWord(l: ReachLayer): string {
   const up = l.value >= 1;
-  if (l.check === "tcp.open") return up ? "open" : "closed";
+  if (l.check === "tcp-open") return up ? "open" : "closed";
   return up ? "up" : "down";
 }
