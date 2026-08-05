@@ -267,9 +267,6 @@ telemetry: {
     shape: sql_table
     id: bigint {constraint: primary_key}
     component_id: uuid {constraint: foreign_key}
-    location_id: uuid {constraint: foreign_key}
-    node_id: uuid {constraint: foreign_key}
-    system_id: uuid {constraint: foreign_key}
   }
   metric: {
     shape: sql_table
@@ -306,6 +303,11 @@ collection: {
     shape: sql_table
     principal_id: uuid {constraint: primary_key}
     location_id: uuid {constraint: foreign_key}
+  }
+  node_log: {
+    shape: sql_table
+    id: bigint {constraint: primary_key}
+    node_id: uuid {constraint: foreign_key}
   }
   task: {
     shape: sql_table
@@ -397,6 +399,7 @@ catalog.standard_property.property_type_id -> telemetry.property_type.id
 catalog.standard_property.standard_id -> catalog.standard.id
 collection.node.location_id -> estate.location.id
 collection.node.principal_id -> identity.principal.id
+collection.node_log.node_id -> collection.node.principal_id
 collection.task.interface_id -> estate.interface.id
 config.credential.principal_id -> identity.principal.id
 config.secret.component_id -> estate.component.id
@@ -465,9 +468,6 @@ telemetry.event.source_event_id -> telemetry.event.id
 telemetry.event.source_log_line_id -> telemetry.log_line.id
 telemetry.event.system_id -> estate.system.id
 telemetry.log_line.component_id -> estate.component.id
-telemetry.log_line.location_id -> estate.location.id
-telemetry.log_line.node_id -> collection.node.principal_id
-telemetry.log_line.system_id -> estate.system.id
 telemetry.metric.component_id -> estate.component.id
 telemetry.metric.event_id -> telemetry.event.id
 telemetry.metric.location_id -> estate.location.id

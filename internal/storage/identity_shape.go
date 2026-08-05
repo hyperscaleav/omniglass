@@ -89,6 +89,7 @@ var IdentityShapes = map[string]TableIdentity{
 	"event": {Shape: ShapeIDOnly}, "impersonation_session": {Shape: ShapeIDOnly},
 	"location_type_metric": {Shape: ShapeIDOnly}, "location_type_property": {Shape: ShapeIDOnly},
 	"log_line": {Shape: ShapeIDOnly}, "metric": {Shape: ShapeIDOnly},
+	"node_log":  {Shape: ShapeIDOnly},
 	"principal": {Shape: ShapeIDOnly}, "principal_grant": {Shape: ShapeIDOnly},
 	"principal_group_member": {Shape: ShapeIDOnly}, "product_capability": {Shape: ShapeIDOnly},
 	"product_metric": {Shape: ShapeIDOnly}, "product_property": {Shape: ShapeIDOnly},

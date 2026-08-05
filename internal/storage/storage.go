@@ -372,9 +372,11 @@ type Gateway interface {
 	ListComponentEvents(ctx context.Context, componentName string, since time.Time, limit int) ([]Event, error)
 
 	// The raw-log lane (ADR-0066): log lines are untyped arrival, not events, so
-	// InsertLogLines has no registry gate. ListComponentLogs backs the component
-	// log panel; ListNodeLogs backs the node self-log panel (owner arc = node).
+	// neither insert has a registry gate. log_line is component-owned (#589);
+	// a node's self-logs land on node_log via InsertNodeLogs. ListComponentLogs
+	// backs the component log panel; ListNodeLogs backs the node self-log panel.
 	InsertLogLines(ctx context.Context, lines []LogLineWrite) error
+	InsertNodeLogs(ctx context.Context, lines []NodeLogWrite) error
 	ListComponentLogs(ctx context.Context, componentName string, since time.Time, limit int) ([]LogLine, error)
 	ListNodeLogs(ctx context.Context, nodeName string, since time.Time, limit int) ([]LogLine, error)
 

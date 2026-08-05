@@ -656,6 +656,65 @@
      }
     ]
    },
+   "node_log": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "bigint",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "ts",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "node_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "node.principal_id"
+     },
+     {
+      "name": "source",
+      "type": "text",
+      "nullable": false,
+      "default": "''::text"
+     },
+     {
+      "name": "severity",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "facility",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "message",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "attributes",
+      "type": "jsonb",
+      "nullable": true
+     },
+     {
+      "name": "labels",
+      "type": "jsonb",
+      "nullable": true
+     },
+     {
+      "name": "correlation_id",
+      "type": "text",
+      "nullable": true
+     }
+    ]
+   },
    "task": {
     "columns": [
      {
@@ -2947,11 +3006,6 @@
       "default": "now()"
      },
      {
-      "name": "owner_kind",
-      "type": "text",
-      "nullable": false
-     },
-     {
       "name": "instance",
       "type": "text",
       "nullable": false,
@@ -2960,30 +3014,9 @@
      {
       "name": "component_id",
       "type": "uuid",
-      "nullable": true,
+      "nullable": false,
       "fk": true,
       "fk_target": "component.id"
-     },
-     {
-      "name": "system_id",
-      "type": "uuid",
-      "nullable": true,
-      "fk": true,
-      "fk_target": "system.id"
-     },
-     {
-      "name": "location_id",
-      "type": "uuid",
-      "nullable": true,
-      "fk": true,
-      "fk_target": "location.id"
-     },
-     {
-      "name": "node_id",
-      "type": "uuid",
-      "nullable": true,
-      "fk": true,
-      "fk_target": "node.principal_id"
      },
      {
       "name": "source",
@@ -3020,16 +3053,6 @@
       "name": "correlation_id",
       "type": "text",
       "nullable": true
-     }
-    ],
-    "checks": [
-     {
-      "name": "log_line_owner_arc_check",
-      "expr": "CHECK ((((owner_kind = 'component'::text) AND (component_id IS NOT NULL) AND (system_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (component_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'location'::text) AND (location_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'node'::text) AND (node_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (location_id IS NULL))))"
-     },
-     {
-      "name": "log_line_owner_kind_check",
-      "expr": "CHECK ((owner_kind = ANY (ARRAY['component'::text, 'system'::text, 'location'::text, 'node'::text])))"
      }
     ]
    },

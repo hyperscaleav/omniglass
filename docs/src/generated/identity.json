@@ -114,6 +114,10 @@
       "shape": "key-bearing"
     },
     {
+      "table": "node_log",
+      "shape": "id only"
+    },
+    {
       "table": "principal",
       "shape": "id only"
     },

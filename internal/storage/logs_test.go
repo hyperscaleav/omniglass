@@ -12,7 +12,7 @@ import (
 )
 
 // TestInsertLogLines round-trips the raw-log lane (ADR-0066): log lines are
-// untyped arrival owned through the exclusive arc, read back newest-first, with
+// untyped arrival owned by a component (#589), read back newest-first, with
 // severity/facility (the retention/routing axes) and the freeform attributes and
 // labels preserved. A line whose owner does not exist violates the component FK.
 func TestInsertLogLines(t *testing.T) {
@@ -77,11 +77,12 @@ func TestInsertLogLines(t *testing.T) {
 	}
 }
 
-// TestInsertNodeLogLines round-trips the node arc of the raw-log lane (ADR-0066):
-// a node's self-logs are owned by the node (owner arc = node, resolved to its
-// principal_id), read back by ListNodeLogs, with empty severity/facility coalesced
-// to "". A node-owned line never surfaces on a component's log read.
-func TestInsertNodeLogLines(t *testing.T) {
+// TestInsertNodeLogs round-trips the self-log lane (ADR-0066) on its own table:
+// a node's log lines land in node_log keyed to the node's principal_id (#589
+// split them out of log_line), read back newest-first by ListNodeLogs, with
+// empty severity/facility coalesced to "". A node's line never surfaces on a
+// component's log read: the tables are disjoint by construction.
+func TestInsertNodeLogs(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -100,11 +101,11 @@ func TestInsertNodeLogLines(t *testing.T) {
 	}
 
 	now := time.Now().UTC()
-	if err := gw.InsertLogLines(ctx, []storage.LogLineWrite{
-		{OwnerKind: "node", OwnerID: "edge-1", Source: "node", Message: "connected to bus", TS: now.Add(-time.Minute)},
-		{OwnerKind: "node", OwnerID: "edge-1", Source: "node", Severity: "info", Facility: "collection", Message: "worklist pulled", Attributes: []byte(`{"tasks":2}`), TS: now},
+	if err := gw.InsertNodeLogs(ctx, []storage.NodeLogWrite{
+		{Node: "edge-1", Source: "node", Message: "connected to bus", TS: now.Add(-time.Minute)},
+		{Node: "edge-1", Source: "node", Severity: "info", Facility: "collection", Message: "worklist pulled", Attributes: []byte(`{"tasks":2}`), TS: now},
 	}); err != nil {
-		t.Fatalf("insert node log lines: %v", err)
+		t.Fatalf("insert node logs: %v", err)
 	}
 
 	got, err := gw.ListNodeLogs(ctx, "edge-1", now.Add(-time.Hour), 10)
@@ -114,7 +115,7 @@ func TestInsertNodeLogLines(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("list node logs: want 2, got %d", len(got))
 	}
-	if got[0].Message != "worklist pulled" || got[0].OwnerKind != "node" || got[0].Facility != "collection" ||
+	if got[0].Message != "worklist pulled" || got[0].Facility != "collection" ||
 		string(got[0].Attributes) != `{"tasks": 2}` {
 		t.Fatalf("newest node log: unexpected row %+v", got[0])
 	}
@@ -123,8 +124,8 @@ func TestInsertNodeLogLines(t *testing.T) {
 		t.Fatalf("oldest node log: want empty severity/facility, got %+v", got[1])
 	}
 
-	// A node-owned line does not surface on a component log read (owner arcs do not
-	// bleed): a fresh component sees nothing.
+	// A node's line does not surface on a component log read: a fresh component
+	// sees nothing.
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-x"}, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
@@ -133,13 +134,13 @@ func TestInsertNodeLogLines(t *testing.T) {
 		t.Fatalf("list component logs: %v", err)
 	}
 	if len(compLogs) != 0 {
-		t.Fatalf("component log read leaked node-owned lines: %+v", compLogs)
+		t.Fatalf("component log read leaked node lines: %+v", compLogs)
 	}
 
-	// An owner node that does not exist violates the node FK.
-	if err := gw.InsertLogLines(ctx, []storage.LogLineWrite{
-		{OwnerKind: "node", OwnerID: "ghost-node", Message: "x", TS: now},
+	// A node that does not exist is a named error, not an FK violation.
+	if err := gw.InsertNodeLogs(ctx, []storage.NodeLogWrite{
+		{Node: "ghost-node", Message: "x", TS: now},
 	}); err == nil {
-		t.Fatal("insert with unknown node owner: want error, got nil")
+		t.Fatal("insert with unknown node: want error, got nil")
 	}
 }

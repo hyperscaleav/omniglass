@@ -113,10 +113,11 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 		return
 	}
 
-	// The node lane's binding. Log lines are owned by the publishing NODE (ADR-0066
-	// self-logs: untyped, no task, no registry gate), while samples are owned by the
-	// task's COMPONENT, so one batch carries two owners and the binding states both.
-	bind := ingestBinding{LogOwnerKind: "node", LogOwnerID: node}
+	// The node lane's binding. Log lines are the publishing node's SELF-LOGS
+	// (ADR-0066: untyped, no task, no registry gate) and land on node_log, while
+	// samples are owned by the task's COMPONENT, so one batch carries two
+	// destinations and the binding states both.
+	bind := ingestBinding{LogNode: node}
 
 	// Samples are owner-bound to the task's component, resolved only when there are
 	// samples to bind: a logs-only batch (a node's self-log tick) carries no task_id,
@@ -150,36 +151,38 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 //
 // It returns false for a batch whose owner is missing or not addressable, which the
 // caller terminates rather than redelivers: a malformed owner will never resolve.
-// Only component owners are accepted for now, because deriveSamples still hardcodes
-// owner_kind=component downstream; widening to system and location is #422, and
-// rejecting here beats writing a sample to the wrong arc.
+// Only component owners are accepted: log_line is component-only (#589, a log
+// line comes off a component), and deriveSamples hardcodes owner_kind=component
+// downstream (widening the sample arms is #422). Refusing here with a named
+// error beats writing either row to the wrong home.
 func apiBinding(ev *ogv1.TelemetryBatch) (ingestBinding, bool) {
 	o := ev.GetOwner()
 	if o == nil || o.GetKind() == "" || o.GetRef() == "" {
 		return ingestBinding{}, false
 	}
 	if o.GetKind() != "component" {
-		slog.Warn("push batch owner kind not yet supported, dropped",
+		slog.Warn("push batch refused: samples and log lines are component-owned, batch dropped",
 			"kind", o.GetKind(), "ref", o.GetRef())
 		return ingestBinding{}, false
 	}
 	owner := storage.TaskOwner{Component: o.GetRef()}
 	return ingestBinding{
-		LogOwnerKind: o.GetKind(),
-		LogOwnerID:   o.GetRef(),
+		LogComponent: o.GetRef(),
 		SampleOwner:  &owner,
 	}, true
 }
 
-// ingestBinding is the resolved ownership for one batch: where its log lines land
-// and where its samples land. They differ by lane, which is the whole reason this
-// is explicit rather than a single owner. On the node lane, log lines are
-// node-owned self-logs while samples are owned by the task's component. On the
-// push lane, both are the owner the API authorized. A nil SampleOwner means the
-// batch's samples must not be written (no samples, or an orphan task).
+// ingestBinding is the resolved destination for one batch: where its log lines
+// land and where its samples land. They differ by lane, which is the whole
+// reason this is explicit rather than a single owner. On the node lane, log
+// lines are the node's self-logs (node_log) while samples are owned by the
+// task's component. On the push lane, both land under the component the API
+// authorized. Exactly one of LogNode / LogComponent is set per lane; a nil
+// SampleOwner means the batch's samples must not be written (no samples, or an
+// orphan task).
 type ingestBinding struct {
-	LogOwnerKind string
-	LogOwnerID   string
+	LogComponent string
+	LogNode      string
 	SampleOwner  *storage.TaskOwner
 }
 
@@ -201,7 +204,16 @@ type ingestBinding struct {
 // multi-tx-then-ack characteristic; atomic-or-idempotent ingest is tracked
 // separately.
 func (s *Server) land(ctx context.Context, ev *ogv1.TelemetryBatch, bind ingestBinding) error {
-	if logs := logLineWrites(ev, bind.LogOwnerKind, bind.LogOwnerID); len(logs) > 0 {
+	// The raw log sink, routed by lane: a node's self-logs to node_log, a push's
+	// component-owned lines to log_line (#589). The storage layer refuses any
+	// other binding, so a future lane cannot quietly widen the log owner.
+	if bind.LogNode != "" {
+		if logs := nodeLogWrites(ev, bind.LogNode); len(logs) > 0 {
+			if err := s.store.InsertNodeLogs(ctx, logs); err != nil {
+				return err
+			}
+		}
+	} else if logs := logLineWrites(ev, bind.LogComponent); len(logs) > 0 {
 		if err := s.store.InsertLogLines(ctx, logs); err != nil {
 			return err
 		}
@@ -233,7 +245,7 @@ func (s *Server) land(ctx context.Context, ev *ogv1.TelemetryBatch, bind ingestB
 
 	// Route by the registry kind: a metric name lands in metric, a state name in
 	// property, a registered event_type name in event as a caught occurrence (the
-	// ADR-0066 lanes; raw self-logs ride their own lane to log_line). All
+	// ADR-0066 lanes; raw logs ride their own lane to log_line or node_log). All
 	// survive the SAME owner binding and reject-not-project; the split is only the
 	// sink, not a second trust decision. The multi-transaction-then-ack
 	// redelivery characteristic is NOTE(#311) on land above.
@@ -320,49 +332,81 @@ func (s *Server) dedupeProperties(ctx context.Context, states []storage.Property
 	return fresh, nil
 }
 
-// logLineWrites turns a batch's raw log lines into log_line writes owned by the
-// caller-supplied arc (ADR-0066): the node lane passes owner_kind=node for a node's
-// self-logs, the push lane passes the owner the API authorized. Pure: no I/O and no
-// registry (a log line is untyped by design). Each line's own ts wins when set, else
-// the batch ts; empty severity/facility/correlation stay "" and the storage layer
-// maps them to NULL.
-func logLineWrites(ev *ogv1.TelemetryBatch, ownerKind, ownerID string) []storage.LogLineWrite {
+// logLineWrites turns a push batch's raw log lines into component-owned
+// log_line writes (ADR-0066, narrowed by #589): the component is the owner the
+// API authorized. Pure: no I/O and no registry (a log line is untyped by
+// design). Each line's own ts and source win when set, else the batch's; empty
+// severity/facility/correlation stay "" and the storage layer maps them to NULL.
+func logLineWrites(ev *ogv1.TelemetryBatch, component string) []storage.LogLineWrite {
 	logs := ev.GetLogs()
 	if len(logs) == 0 {
 		return nil
 	}
 	out := make([]storage.LogLineWrite, 0, len(logs))
 	for _, l := range logs {
-		// A line's own ts wins, else the batch ts; when neither is set leave TS zero
-		// so the storage layer stamps now() (GetTs().AsTime() on a nil timestamp is
-		// the 1970 epoch, not the zero time, and would slip past that guard).
-		var ts time.Time
-		switch {
-		case l.GetTs() != nil:
-			ts = l.GetTs().AsTime()
-		case ev.GetTs() != nil:
-			ts = ev.GetTs().AsTime()
-		}
-		// A line's own source wins, else the batch's (a push declares it once for the
-		// batch; a node's self-logs set it per line).
-		source := l.GetSource()
-		if source == "" {
-			source = ev.GetSource()
-		}
 		out = append(out, storage.LogLineWrite{
-			OwnerKind:     ownerKind,
-			OwnerID:       ownerID,
-			Source:        source,
+			OwnerKind:     "component",
+			OwnerID:       component,
+			Source:        lineSource(ev, l),
 			Severity:      l.GetSeverity(),
 			Facility:      l.GetFacility(),
 			Message:       l.GetMessage(),
 			Attributes:    l.GetAttributes(),
 			Labels:        l.GetLabels(),
 			CorrelationID: l.GetCorrelationId(),
-			TS:            ts,
+			TS:            lineTime(ev, l),
 		})
 	}
 	return out
+}
+
+// nodeLogWrites turns a node-lane batch's raw log lines into node_log writes:
+// the node's self-logs (ADR-0066), owned by the publishing node the subject
+// authenticated. Pure, and the same per-line ts and source resolution as
+// logLineWrites, so the two lanes cannot drift on the fallbacks.
+func nodeLogWrites(ev *ogv1.TelemetryBatch, node string) []storage.NodeLogWrite {
+	logs := ev.GetLogs()
+	if len(logs) == 0 {
+		return nil
+	}
+	out := make([]storage.NodeLogWrite, 0, len(logs))
+	for _, l := range logs {
+		out = append(out, storage.NodeLogWrite{
+			Node:          node,
+			Source:        lineSource(ev, l),
+			Severity:      l.GetSeverity(),
+			Facility:      l.GetFacility(),
+			Message:       l.GetMessage(),
+			Attributes:    l.GetAttributes(),
+			Labels:        l.GetLabels(),
+			CorrelationID: l.GetCorrelationId(),
+			TS:            lineTime(ev, l),
+		})
+	}
+	return out
+}
+
+// lineTime resolves one log line's timestamp: its own ts wins, else the batch
+// ts; when neither is set it stays zero so the storage layer stamps now()
+// (GetTs().AsTime() on a nil timestamp is the 1970 epoch, not the zero time,
+// and would slip past that guard).
+func lineTime(ev *ogv1.TelemetryBatch, l *ogv1.LogLine) time.Time {
+	switch {
+	case l.GetTs() != nil:
+		return l.GetTs().AsTime()
+	case ev.GetTs() != nil:
+		return ev.GetTs().AsTime()
+	}
+	return time.Time{}
+}
+
+// lineSource resolves one log line's source: its own wins, else the batch's (a
+// push declares it once for the batch; a node's self-logs set it per line).
+func lineSource(ev *ogv1.TelemetryBatch, l *ogv1.LogLine) string {
+	if s := l.GetSource(); s != "" {
+		return s
+	}
+	return ev.GetSource()
 }
 
 // deriveSamples turns a decoded TelemetryBatch + its resolved owner into the

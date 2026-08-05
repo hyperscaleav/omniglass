@@ -521,7 +521,7 @@ var exampleNodeLogs = []struct {
 
 // seedNodeLogs installs the edge node's example self-logs idempotently, guarded on
 // the node already carrying lines (ListNodeLogs from the epoch, limit 1) the same
-// way seedLogs guards, since log_line has an auto id and no natural unique key.
+// way seedLogs guards, since node_log has an auto id and no natural unique key.
 func seedNodeLogs(ctx context.Context, gw storage.Gateway) error {
 	existing, err := gw.ListNodeLogs(ctx, reachNode, time.Time{}, 1)
 	if err != nil {
@@ -531,11 +531,10 @@ func seedNodeLogs(ctx context.Context, gw storage.Gateway) error {
 		return nil
 	}
 	now := time.Now().UTC()
-	lines := make([]storage.LogLineWrite, 0, len(exampleNodeLogs))
+	lines := make([]storage.NodeLogWrite, 0, len(exampleNodeLogs))
 	for _, l := range exampleNodeLogs {
-		lines = append(lines, storage.LogLineWrite{
-			OwnerKind:  "node",
-			OwnerID:    reachNode,
+		lines = append(lines, storage.NodeLogWrite{
+			Node:       reachNode,
 			Source:     l.source,
 			Severity:   l.severity,
 			Facility:   l.facility,
@@ -544,7 +543,7 @@ func seedNodeLogs(ctx context.Context, gw storage.Gateway) error {
 			TS:         now.Add(-time.Duration(l.minsAgo) * time.Minute),
 		})
 	}
-	if err := gw.InsertLogLines(ctx, lines); err != nil {
+	if err := gw.InsertNodeLogs(ctx, lines); err != nil {
 		return fmt.Errorf("devseed: insert node logs: %w", err)
 	}
 	return nil

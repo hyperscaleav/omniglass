@@ -61,8 +61,8 @@ func TestAPIBindingOwnsBothLanesOfTheBatch(t *testing.T) {
 	if !ok {
 		t.Fatal("apiBinding refused a well-formed component owner")
 	}
-	if bind.LogOwnerKind != "component" || bind.LogOwnerID != "boardroom-a-bar" {
-		t.Fatalf("log owner = %s/%s, want component/boardroom-a-bar", bind.LogOwnerKind, bind.LogOwnerID)
+	if bind.LogComponent != "boardroom-a-bar" || bind.LogNode != "" {
+		t.Fatalf("log destination = component %q / node %q, want component boardroom-a-bar only", bind.LogComponent, bind.LogNode)
 	}
 	if bind.SampleOwner == nil || bind.SampleOwner.Component != "boardroom-a-bar" {
 		t.Fatalf("sample owner = %+v, want component boardroom-a-bar", bind.SampleOwner)
@@ -113,7 +113,7 @@ func TestLogLineSourceFallsBackToTheBatch(t *testing.T) {
 			{Message: "explicit", Source: "media"},
 			{Message: "inherited"},
 		},
-	}, "component", "boardroom-a-bar")
+	}, "boardroom-a-bar")
 	if len(logs) != 2 {
 		t.Fatalf("got %d log writes, want 2", len(logs))
 	}
@@ -125,7 +125,34 @@ func TestLogLineSourceFallsBackToTheBatch(t *testing.T) {
 	}
 	for _, l := range logs {
 		if l.OwnerKind != "component" || l.OwnerID != "boardroom-a-bar" {
-			t.Fatalf("log owner = %s/%s, want the supplied arc", l.OwnerKind, l.OwnerID)
+			t.Fatalf("log owner = %s/%s, want the authorized component", l.OwnerKind, l.OwnerID)
+		}
+	}
+}
+
+// A node's self-logs resolve ts and source exactly as a push's lines do (the
+// shared per-line helpers), and every write is stamped with the publishing
+// node: the origin-true landing #589 split out of log_line.
+func TestNodeLogWritesStampTheNode(t *testing.T) {
+	logs := nodeLogWrites(&ogv1.TelemetryBatch{
+		Source: "node",
+		Logs: []*ogv1.LogLine{
+			{Message: "explicit", Source: "collection", Severity: "warning"},
+			{Message: "inherited"},
+		},
+	}, "site-a")
+	if len(logs) != 2 {
+		t.Fatalf("got %d node log writes, want 2", len(logs))
+	}
+	if logs[0].Source != "collection" || logs[0].Severity != "warning" {
+		t.Fatalf("explicit line = %+v, want source collection severity warning", logs[0])
+	}
+	if logs[1].Source != "node" {
+		t.Fatalf("inherited line source = %q, want the batch's node", logs[1].Source)
+	}
+	for _, l := range logs {
+		if l.Node != "site-a" {
+			t.Fatalf("node log stamped %q, want the publishing node site-a", l.Node)
 		}
 	}
 }

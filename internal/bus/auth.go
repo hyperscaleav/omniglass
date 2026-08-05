@@ -37,9 +37,11 @@ type Store interface {
 	// The log sink: a log-kind sample routes here (by registry kind) as an
 	// occurrence, instead of being dropped.
 	InsertEvents(ctx context.Context, evs []storage.EventWrite) error
-	// The raw log-line sink (ADR-0066): untyped arrival off the ingest lane,
-	// owner-bound to the publishing node (self-logs), no registry gate.
+	// The raw log sinks (ADR-0066): untyped arrival off the ingest lane, no
+	// registry gate, split by origin (#589): a push's component-owned lines
+	// land on log_line, a node's self-logs on node_log.
 	InsertLogLines(ctx context.Context, lines []storage.LogLineWrite) error
+	InsertNodeLogs(ctx context.Context, lines []storage.NodeLogWrite) error
 }
 
 // nodeAuth implements server.Authentication (the in-process

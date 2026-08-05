@@ -28,7 +28,7 @@ var Subsystems = []Cluster{
 		"command_type", "command",
 	}},
 	{Name: "collection", Tables: []string{
-		"node", "task",
+		"node", "task", "node_log",
 	}},
 	{Name: "config", Tables: []string{
 		"setting_override", "variable",

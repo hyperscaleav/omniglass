@@ -162,11 +162,11 @@ func TestNodeLogsAPI(t *testing.T) {
 
 	t0 := time.Now().UTC().Add(-2 * time.Minute)
 	t1 := t0.Add(time.Minute)
-	if err := gw.InsertLogLines(ctx, []storage.LogLineWrite{
-		{OwnerKind: "node", OwnerID: "site-a", Source: "node", Severity: "info", Facility: "enrollment", Message: "connected to bus", TS: t0},
-		{OwnerKind: "node", OwnerID: "site-a", Source: "collection", Severity: "warning", Facility: "collection", Message: "task skipped", Attributes: []byte(`{"task":"t-a"}`), TS: t1},
+	if err := gw.InsertNodeLogs(ctx, []storage.NodeLogWrite{
+		{Node: "site-a", Source: "node", Severity: "info", Facility: "enrollment", Message: "connected to bus", TS: t0},
+		{Node: "site-a", Source: "collection", Severity: "warning", Facility: "collection", Message: "task skipped", Attributes: []byte(`{"task":"t-a"}`), TS: t1},
 	}); err != nil {
-		t.Fatalf("insert node log lines: %v", err)
+		t.Fatalf("insert node logs: %v", err)
 	}
 
 	srv := httptest.NewServer(api.NewHandler(gw))

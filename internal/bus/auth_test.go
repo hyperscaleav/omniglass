@@ -50,6 +50,9 @@ func (f fakeStore) InsertEvents(context.Context, []storage.EventWrite) error {
 func (f fakeStore) InsertLogLines(context.Context, []storage.LogLineWrite) error {
 	return nil
 }
+func (f fakeStore) InsertNodeLogs(context.Context, []storage.NodeLogWrite) error {
+	return nil
+}
 func (f fakeStore) ListEventTypes(context.Context) ([]storage.EventType, error) {
 	return nil, nil
 }

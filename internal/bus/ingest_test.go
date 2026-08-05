@@ -257,8 +257,9 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	})
 
 	// RAW LOG LANE (ADR-0066): node-a ships its own self-log as a LogLine on the
-	// telemetry Event (no task, no registry name, no sample). It lands on log_line
-	// owner-bound to the node, the separate raw ingest lane, never the event table.
+	// telemetry Event (no task, no registry name, no sample). It lands on
+	// node_log keyed to the publishing node (#589: the origin-true self-log
+	// home), the separate raw ingest lane, never the event table.
 	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		NodeId: "node-a",
 		Logs: []*ogv1.LogLine{{
@@ -271,7 +272,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	})
 	waitNodeLog(t, ctx, gw, "node-a", func(l storage.LogLine) bool {
 		return l.Message == "tcp probe on disp-1 timed out after 3 retries" &&
-			l.OwnerKind == "node" && l.Severity == "warning" && l.Source == "collection"
+			l.Severity == "warning" && l.Source == "collection"
 	})
 
 	// THE PUSH LANE IS NOT REACHABLE BY A NODE. This is the fence the whole
@@ -344,7 +345,7 @@ func waitEvent(t *testing.T, ctx context.Context, gw storage.Gateway, comp strin
 }
 
 // waitNodeLog polls a node's self-logs until one matches pred, or a deadline
-// passes. The raw log lane writes a node-owned log_line; this reads it back.
+// passes. The raw log lane writes the node's node_log rows; this reads them back.
 func waitNodeLog(t *testing.T, ctx context.Context, gw storage.Gateway, node string, pred func(storage.LogLine) bool) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)

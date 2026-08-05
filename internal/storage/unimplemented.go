@@ -373,6 +373,9 @@ func (UnimplementedGateway) ListComponentEvents(context.Context, string, time.Ti
 func (UnimplementedGateway) InsertLogLines(context.Context, []LogLineWrite) error {
 	return nil
 }
+func (UnimplementedGateway) InsertNodeLogs(context.Context, []NodeLogWrite) error {
+	return nil
+}
 func (UnimplementedGateway) ListComponentLogs(context.Context, string, time.Time, int) ([]LogLine, error) {
 	return nil, nil
 }
