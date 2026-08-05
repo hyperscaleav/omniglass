@@ -318,3 +318,24 @@ describe("Types addressing honesty (#469)", () => {
     expect(screen.queryByText("Campus")).toBeNull();
   });
 });
+
+// #581. The list renders the display name as the primary line (identityColumn), so
+// a heading that renders the NAME disagrees with the row that opened it: clicking
+// "Machine hall" opened a blade headed `server-room`. Different from #579, where
+// the heading was right and went stale; here it resolves correctly and reads the
+// wrong field off the row.
+describe("Types blade heading", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("heads the blade with the words the row showed, not the identifier", async () => {
+    mount();
+    fireEvent.click(await screen.findByText("Machine hall"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    const heading = blade.querySelector("header .truncate") as HTMLElement;
+    expect(heading.textContent).toBe("Machine hall");
+  });
+});

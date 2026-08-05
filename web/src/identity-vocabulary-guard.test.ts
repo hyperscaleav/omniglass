@@ -301,3 +301,58 @@ describe("a blade heading tracks its row", () => {
   });
 });
 
+// A blade heading renders through BladeTitle, or says why not.
+//
+// The third bug in this family, and the reason the rule became structural. The
+// first guard checks a heading RESOLVES its row (#572, three headings rendered
+// the raw id). The second checks it TRACKS its row (#579, eight headings
+// snapshotted the accessor). Both passed while a heading read the WRONG FIELD off
+// a correctly resolved, correctly tracked row: Types rendered the name where its
+// list rendered the display name, so clicking "Machine hall" opened a blade
+// headed `server-room` (#581).
+//
+// No regex catches "wrong field", so the check is membership instead: a blade
+// title either delegates to BladeTitle, which owns the rule, or is named here
+// with a reason. An exception list rots only when it is anonymous; each of these
+// names the entity and the reason, so the next entity that gains a display name
+// has an obvious place to be removed from.
+describe("a blade heading renders through the primitive", () => {
+  // Entities with NO display_name: the name is the only operator-facing string,
+  // so the heading renders it in the data face and BladeTitle would render the
+  // same thing. Remove the entry when the entity gains a display name.
+  const NO_DISPLAY_NAME = ["SecretBladeTitle", "VariableBladeTitle", "TagBladeTitle", "InterfaceBladeTitle"];
+  // Principals and roles label through their own helpers (principalName,
+  // groupName), which resolve a username or a group name rather than the estate
+  // entity triad, so they are not BladeTitle's shape.
+  const OWN_LABEL_RULE = ["UserTitle", "GroupTitle", "RoleTitle"];
+  const EXEMPT = new Set([...NO_DISPLAY_NAME, ...OWN_LABEL_RULE]);
+
+  it("lets no blade title hand-roll the heading rule", () => {
+    const offenders: string[] = [];
+    for (const file of walk(SRC, { tests: false })) {
+      const src = readFileSync(file, "utf8");
+      const lines = src.split("\n");
+      lines.forEach((line, i) => {
+        const m = /^(?:export\s+)?function\s+(\w+Title)\s*\(/.exec(line);
+        if (!m) return;
+        const name = m[1];
+        if (EXEMPT.has(name)) return;
+        // The component body, to its closing brace at column 0.
+        let end = i + 1;
+        while (end < lines.length && !/^\}/.test(lines[end])) end++;
+        const body = lines.slice(i, end).join("\n");
+        if (!/<BladeTitle\b/.test(body)) {
+          offenders.push(`${file.replace(SRC + "/", "")}:${i + 1}  ${name}`);
+        }
+      });
+    }
+    expect(
+      offenders,
+      `\nThese blade headings do not render through BladeTitle:\n  ${offenders.join("\n  ")}\n\n` +
+        `A heading is the words the row showed, which is entityLabel(row), tracked. Render\n` +
+        `<BladeTitle row={...} fallback={...} />. If the entity genuinely has no display\n` +
+        `name, add the component to NO_DISPLAY_NAME in this test with a comment saying so.\n`,
+    ).toEqual([]);
+  });
+});
+

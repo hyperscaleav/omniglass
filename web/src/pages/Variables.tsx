@@ -94,6 +94,10 @@ function useVariableById(id: string): () => Variable | undefined {
   return () => (variables.data ?? []).find((v) => v.id === id);
 }
 
+// The heading is the name, in the data face, because a variable carries no display
+// name: the name IS its only operator-facing string, so entityLabel would return
+// it anyway. Deliberate, not an oversight (#581); a variable blade would use BladeTitle
+// the moment the entity gained one.
 function VariableBladeTitle(p: { id: string }): JSX.Element {
   const variable = useVariableById(p.id);
   return <span class="font-data">{variable()?.name ?? "variable"}</span>;
