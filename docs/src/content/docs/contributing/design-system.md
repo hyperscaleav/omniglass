@@ -140,6 +140,7 @@ Three primitives cover every labelled thing on a detail surface, and nothing els
   `(i)` tooltip beside the label and a hint below. It generates the control's id and points
   `<label for>` at it, keeping the tooltip trigger outside the `<label>` so a labelable button
   never steals the control's accessible name.
+- **`BladeTitle`** is the **heading** of a blade: the row's display name, tracked reactively.
 - **`BladeField`** is a **blade field**: a fact when the blade is being read, a `FieldRow` when it
   is being edited, with the switch made once rather than per field. It takes the edit slot from
   `BladeEditContext`, or from an explicit `edit` prop for a detail body that also renders outside a
@@ -151,6 +152,13 @@ below three plain facts, so the same read-only state had two appearances on one 
 ([ADR-0078](/architecture/decisions/)). A blade the operator cannot edit now contains nothing shaped
 like a control. Both states label with the eyebrow, so the label does not change style when the
 pencil is clicked.
+
+**`BladeTitle` is the heading.** The display name of the row the operator clicked, falling back to
+the identifier in the data face. It reads its row accessor inside the JSX, which is the whole of the
+rule: eight pages wrote this heading by hand and all eight read the accessor once in the component
+body, where a Solid read subscribes to nothing, so the heading kept the old words after a rename
+until the blade was closed and reopened. `identity-vocabulary-guard.test.ts` now fails on a
+`*Title` component that snapshots its row.
 
 **Free text declares itself.** `multiline` reads wrapped with its newlines preserved and edits in a
 `textarea`. It is a prop rather than a second component because a component means every new page
