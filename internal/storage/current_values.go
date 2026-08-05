@@ -91,13 +91,13 @@ func (p *PG) LatestValue(ctx context.Context, ownerKind, ownerID, key, instance,
 // scope-checked the owner (the reconciliation resolver, command settlement) can
 // read many provenances without re-checking each time. ts desc, id desc: the
 // value's own time orders the series and the row id breaks same-instant ties,
-// the same rule LatestState applies.
+// the same rule LatestProperty applies.
 func (p *PG) latestValue(ctx context.Context, q querier, ownerKind, ownerID, key, instance, provenance string) (*CurrentValue, error) {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {
 		return nil, err
 	}
-	sql := fmt.Sprintf(`select `+declaredCurrentExpr+`, ts, provenance from state
+	sql := fmt.Sprintf(`select `+declaredCurrentExpr+`, ts, provenance from property
 		where owner_kind = $1 and %s = %s
 		  and property_type_id = (select id from property_type where name = $3)
 		  and instance = $4 and provenance = $5

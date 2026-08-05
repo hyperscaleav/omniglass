@@ -91,7 +91,7 @@ func TestReachabilityAPI(t *testing.T) {
 	t1 := t0.Add(time.Minute)
 	t2 := t1.Add(time.Minute)
 	// disp-1-tcp: up verdict + tcp-open=1 + connect_time.
-	if err := gw.InsertStateSamples(ctx, []storage.StateSampleWrite{
+	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "interface-reachable", Instance: "disp-1-tcp", Value: "up", Source: "tcp", TS: t2},
 	}); err != nil {
 		t.Fatalf("insert tcp state: %v", err)
@@ -103,12 +103,12 @@ func TestReachabilityAPI(t *testing.T) {
 		t.Fatalf("insert tcp metrics: %v", err)
 	}
 	// disp-1-icmp: down verdict with two transitions (up then down) + icmp-reachable=0.
-	if err := gw.InsertStateSamples(ctx, []storage.StateSampleWrite{
+	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "interface-reachable", Instance: "disp-1-icmp", Value: "up", Source: "icmp", TS: t0},
 	}); err != nil {
 		t.Fatalf("insert icmp up: %v", err)
 	}
-	if err := gw.InsertStateSamples(ctx, []storage.StateSampleWrite{
+	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "interface-reachable", Instance: "disp-1-icmp", Value: "down", Source: "icmp", TS: t1},
 	}); err != nil {
 		t.Fatalf("insert icmp down: %v", err)

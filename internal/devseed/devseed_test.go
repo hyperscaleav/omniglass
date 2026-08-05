@@ -216,7 +216,7 @@ func TestRunIdempotent(t *testing.T) {
 		t.Errorf("property-seed components = %d, want 1 (lobby-display)", comps)
 	}
 	if err := conn.QueryRow(ctx, `
-		select count(*) from state
+		select count(*) from property
 		where owner_kind = 'component'
 		  and component_id = (select id from component where name = 'lobby-display')
 		  and provenance = 'declared'`).Scan(&propVals); err != nil {
@@ -351,16 +351,16 @@ func TestRunIdempotent(t *testing.T) {
 		{iface: "http", transitions: 1},
 		{iface: "tcp", transitions: 3},
 	} {
-		verdict, err := gw.LatestState(ctx, "hq-boardroom-dsp", "interface-reachable", tc.iface)
+		verdict, err := gw.LatestProperty(ctx, "hq-boardroom-dsp", "interface-reachable", tc.iface)
 		if err != nil {
 			t.Fatalf("latest verdict %s: %v", tc.iface, err)
 		}
 		if verdict == nil || verdict.Value != "up" {
 			t.Fatalf("seeded %s verdict = %+v, want value up", tc.iface, verdict)
 		}
-		transitions, err := gw.StateTransitions(ctx, "hq-boardroom-dsp", "interface-reachable", tc.iface, time.Time{})
+		transitions, err := gw.PropertyTransitions(ctx, "hq-boardroom-dsp", "interface-reachable", tc.iface, time.Time{})
 		if err != nil {
-			t.Fatalf("state transitions %s: %v", tc.iface, err)
+			t.Fatalf("property transitions %s: %v", tc.iface, err)
 		}
 		if len(transitions) != tc.transitions {
 			t.Errorf("%s verdict transitions = %d, want %d (idempotent across two Runs)", tc.iface, len(transitions), tc.transitions)

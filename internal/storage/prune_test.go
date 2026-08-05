@@ -40,12 +40,12 @@ func TestPruneSamples(t *testing.T) {
 	fiveDays := now.Add(-5 * 24 * time.Hour)
 	cutoff := now.Add(-24 * time.Hour)
 
-	stateRow := func(ts time.Time, provenance, value string) {
+	propertyRow := func(ts time.Time, provenance, value string) {
 		t.Helper()
 		mustExec(t, conn, `
-			insert into state (ts, owner_kind, component_id, property_type_id, instance, provenance, value)
+			insert into property (ts, owner_kind, component_id, property_type_id, instance, provenance, value)
 			values ($1, 'component', (select id from component where name = 'prune-c1'),
-			        (select id from property_type where name = 'prune-power'), '', $2, $3)`, ts, provenance, value)
+			        (select id from property_type where name = 'prune-power'), '', $2, to_jsonb($3::text))`, ts, provenance, value)
 	}
 	metricRow := func(ts time.Time, value float64) {
 		t.Helper()
@@ -55,14 +55,14 @@ func TestPruneSamples(t *testing.T) {
 			        (select id from metric_type where name = 'prune-rtt'), '', 'observed', $2)`, ts, value)
 	}
 
-	// State lane: a two-year-old declared value (must survive: it is the truth,
-	// not a sample), a superseded declared edit even older (history, also never
-	// pruned), and an observed series whose every row is older than the cutoff,
-	// so only its latest row may survive.
-	stateRow(twoYears.Add(-24*time.Hour), "declared", "edit-1")
-	stateRow(twoYears, "declared", "edit-2")
-	stateRow(tenDays, "observed", "on")
-	stateRow(fiveDays, "observed", "off")
+	// Property lane: a two-year-old declared value (must survive: it is the
+	// truth, not a sample), a superseded declared edit even older (history, also
+	// never pruned), and an observed series whose every row is older than the
+	// cutoff, so only its latest row may survive.
+	propertyRow(twoYears.Add(-24*time.Hour), "declared", "edit-1")
+	propertyRow(twoYears, "declared", "edit-2")
+	propertyRow(tenDays, "observed", "on")
+	propertyRow(fiveDays, "observed", "off")
 
 	// Metric lane: the same shape, superseded old rows and an old latest.
 	metricRow(tenDays, 12)
@@ -82,13 +82,13 @@ func TestPruneSamples(t *testing.T) {
 	if err != nil {
 		t.Fatalf("prune: %v", err)
 	}
-	// Exactly the two superseded observed rows die: state's ten-day "on" and
+	// Exactly the two superseded observed rows die: property's ten-day "on" and
 	// metric's ten-day 12.
 	if deleted != 2 {
 		t.Fatalf("pruned %d rows, want 2 (the superseded observed row of each lane)", deleted)
 	}
-	if n := count("state"); n != 3 {
-		t.Fatalf("state rows after prune = %d, want 3 (two declared edits + the latest observed)", n)
+	if n := count("property"); n != 3 {
+		t.Fatalf("property rows after prune = %d, want 3 (two declared edits + the latest observed)", n)
 	}
 	if n := count("metric"); n != 1 {
 		t.Fatalf("metric rows after prune = %d, want 1 (the latest observed)", n)
@@ -97,13 +97,13 @@ func TestPruneSamples(t *testing.T) {
 	// The survivors are the right ones: both declared edits however old, and the
 	// latest observed row of each series however old.
 	var v string
-	if err := conn.QueryRow(ctx, `select value from state
+	if err := conn.QueryRow(ctx, `select value #>> '{}' from property
 		where component_id = (select id from component where name = 'prune-c1')
 		  and provenance = 'observed'`).Scan(&v); err != nil {
-		t.Fatalf("read surviving observed state: %v", err)
+		t.Fatalf("read surviving observed property: %v", err)
 	}
 	if v != "off" {
-		t.Fatalf("surviving observed state = %q, want the latest row off", v)
+		t.Fatalf("surviving observed property = %q, want the latest row off", v)
 	}
 	var mv float64
 	if err := conn.QueryRow(ctx, `select value from metric

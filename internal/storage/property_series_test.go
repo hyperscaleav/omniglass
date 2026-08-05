@@ -13,7 +13,7 @@ import (
 )
 
 // TestDeclaredValuesAppendToSeries proves the #591 model: a declared value is a
-// state-series row (provenance declared), an edit appends rather than updates
+// property-series row (provenance declared), an edit appends rather than updates
 // (history for free), the current value is the latest row of the series, and an
 // unset appends a tombstone rather than deleting history. A repeat set of the
 // value already current appends nothing, mirroring the transition-only guard on
@@ -41,7 +41,7 @@ func TestDeclaredValuesAppendToSeries(t *testing.T) {
 	declaredRows := func() int {
 		var n int
 		if err := conn.QueryRow(ctx, `
-			select count(*) from state
+			select count(*) from property
 			where owner_kind = 'component'
 			  and component_id = (select id from component where name = 'series-1')
 			  and property_type_id = (select id from property_type where name = 'firmware-version')
@@ -109,10 +109,11 @@ func TestDeclaredValuesAppendToSeries(t *testing.T) {
 	}
 }
 
-// TestPropertyValueStoreRetired asserts the #591 schema outcome: the value
-// store is gone (freeing the bare name `property` for #588), a stray reference
-// to it fails loudly rather than binding, and the state series re-admits
-// declared rows (the #460 narrowing is reversed) with the no-lineage arm.
+// TestPropertyValueStoreRetired asserts the #591 outcome as it stands after
+// #588 took the freed name: the value STORE is gone (the `property` table is
+// now the series, not a latest-value cache, so it carries no store shape), and
+// the series admits declared rows (the #460 narrowing is reversed) with the
+// no-lineage arm.
 func TestPropertyValueStoreRetired(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -120,30 +121,43 @@ func TestPropertyValueStoreRetired(t *testing.T) {
 	ctx := context.Background()
 	conn := connectMigrated(t)
 
-	var reg *string
-	if err := conn.QueryRow(ctx, `select to_regclass('property')::text`).Scan(&reg); err != nil {
-		t.Fatalf("to_regclass: %v", err)
+	// The store's cache shape (created_at/updated_at, the series-unique key) must
+	// not survive on the table that took its name: `property` is append-only
+	// series rows, keyed by nothing but its identity id.
+	for _, col := range []string{"created_at", "updated_at"} {
+		var present bool
+		if err := conn.QueryRow(ctx,
+			`select exists (select 1 from information_schema.columns
+			 where table_name = 'property' and column_name = $1)`, col).Scan(&present); err != nil {
+			t.Fatalf("check property.%s: %v", col, err)
+		}
+		if present {
+			t.Errorf("property carries %q, a value-store cache column; the store did not retire", col)
+		}
 	}
-	if reg != nil {
-		t.Fatalf("the table `property` still exists; the value store did not retire and #588 cannot take the name")
+	var seriesKey bool
+	if err := conn.QueryRow(ctx, `
+		select exists (select 1 from pg_constraint
+		where conrelid = 'property'::regclass and contype = 'u')`).Scan(&seriesKey); err != nil {
+		t.Fatalf("check unique constraints: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into property default values`); err == nil {
-		t.Fatal("an insert into `property` succeeded; a stray reference bound instead of failing loudly")
+	if seriesKey {
+		t.Error("property has a unique series key; the series is append-only, only the store deduped per series")
 	}
 
-	// The state series takes a declared row again, with no lineage.
+	// The series takes a declared row, with no lineage.
 	mustExec(t, conn, `insert into property_type (name, data_type) values ('retire-prop', 'string')`)
 	mustExec(t, conn, `insert into component (name) values ('retire-c1')`)
 	mustExec(t, conn, `
-		insert into state (owner_kind, component_id, property_type_id, instance, provenance, value, value_json)
+		insert into property (owner_kind, component_id, property_type_id, instance, provenance, value)
 		values ('component', (select id from component where name = 'retire-c1'),
-		        (select id from property_type where name = 'retire-prop'), '', 'declared', 'v1', '"v1"'::jsonb)`)
+		        (select id from property_type where name = 'retire-prop'), '', 'declared', to_jsonb('v1'::text))`)
 
 	// The lineage check holds its shape: a declared row must not carry an event.
 	if _, err := conn.Exec(ctx, `
-		insert into state (owner_kind, component_id, property_type_id, instance, provenance, value, event_id)
+		insert into property (owner_kind, component_id, property_type_id, instance, provenance, value, event_id)
 		values ('component', (select id from component where name = 'retire-c1'),
-		        (select id from property_type where name = 'retire-prop'), '', 'declared', 'v2', 1)`); err == nil {
-		t.Fatal("state accepted a declared row with event lineage; the declared arm of state_lineage_check is missing or wrong")
+		        (select id from property_type where name = 'retire-prop'), '', 'declared', to_jsonb('v2'::text), 1)`); err == nil {
+		t.Fatal("property accepted a declared row with event lineage; the declared arm of property_lineage_check is missing or wrong")
 	}
 }

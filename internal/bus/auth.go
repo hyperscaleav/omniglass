@@ -20,7 +20,7 @@ type Store interface {
 	// The telemetry ingest consumer surface: resolve+confine a task's owner,
 	// snapshot the sample registry (reject-not-project), and write the typed
 	// metric rows through cp1's insert path. The catalog is two lanes (#587):
-	// metric_type names route to the metric sink, property_type names to state.
+	// metric_type names route to the metric sink, property_type names to property.
 	ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (storage.TaskOwner, bool, error)
 	ListMetricTypes(ctx context.Context) ([]storage.MetricType, error)
 	ListPropertyTypes(ctx context.Context) ([]storage.PropertyType, error)
@@ -29,11 +29,11 @@ type Store interface {
 	// event, a trap) to the event sink (kind "event") as a caught event (ADR-0066).
 	ListEventTypes(ctx context.Context) ([]storage.EventType, error)
 	InsertMetricSamples(ctx context.Context, evs []storage.MetricSampleWrite) error
-	// The state sink and its transition-only guard: a state sample routes here
-	// (by registry kind), and LatestState lets the consumer skip a write whose
-	// value equals the latest stored value for the series.
-	InsertStateSamples(ctx context.Context, evs []storage.StateSampleWrite) error
-	LatestState(ctx context.Context, componentName, key, instance string) (*storage.StateSample, error)
+	// The property sink and its transition-only guard: a state-kind sample
+	// routes here (by registry kind), and LatestProperty lets the consumer skip
+	// a write whose value equals the latest stored value for the series.
+	InsertPropertySamples(ctx context.Context, evs []storage.PropertySampleWrite) error
+	LatestProperty(ctx context.Context, componentName, key, instance string) (*storage.PropertySample, error)
 	// The log sink: a log-kind sample routes here (by registry kind) as an
 	// occurrence, instead of being dropped.
 	InsertEvents(ctx context.Context, evs []storage.EventWrite) error

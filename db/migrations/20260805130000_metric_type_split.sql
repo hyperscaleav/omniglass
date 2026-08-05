@@ -216,6 +216,69 @@ end $$;
 
 -- migrate:down
 
--- No down. The split is a vocabulary change; reversing it would have to guess
--- which lane's facts to discard.
-select 1;
+-- The reverse fold: the catalog becomes one table again. Moved rows kept their
+-- ids in both directions, so the fold-back is insert-by-id with the numeric
+-- facts (unit, precision) carried and kind restored per lane; nothing is
+-- guessed and nothing orphans. The pre-split checks come back in the form the
+-- up found them (the #395 tightening had already dropped 'log' from kind).
+
+-- The wide columns first, and the wide data_type domain BEFORE the numeric
+-- rows return (an int row cannot enter under the narrowed check).
+alter table property_type add column if not exists kind text;
+alter table property_type add column if not exists unit text;
+alter table property_type add column if not exists "precision" integer;
+update property_type set kind = 'state' where kind is null;
+alter table property_type drop constraint if exists property_type_data_type_check;
+alter table property_type add constraint property_type_data_type_check
+    check (data_type = any (array['string'::text, 'int'::text, 'float'::text, 'bool'::text, 'json'::text]));
+alter table property_type drop constraint if exists property_type_kind_check;
+alter table property_type add constraint property_type_kind_check
+    check (kind = any (array['metric'::text, 'state'::text]));
+
+-- The numeric rows fold back, ids preserved, kind='metric'. Idempotent: a
+-- re-run finds them present and does nothing.
+insert into property_type (id, name, display_name, data_type, unit, "precision",
+                           fusion_policy, description, registered_at, official, kind)
+select id, name, display_name, data_type, unit, "precision",
+       fusion_policy, description, registered_at, official, 'metric'
+from metric_type
+on conflict (id) do nothing;
+
+-- Contract rows return to their property siblings, ids preserved.
+insert into product_property (id, default_value, required, created_at, updated_at, product_id, property_type_id)
+select id, default_value, required, created_at, updated_at, product_id, metric_type_id
+from product_metric
+on conflict (id) do nothing;
+
+insert into standard_property (id, default_value, required, created_at, updated_at, standard_id, property_type_id)
+select id, default_value, required, created_at, updated_at, standard_id, metric_type_id
+from standard_metric
+on conflict (id) do nothing;
+
+insert into location_type_property (id, default_value, required, created_at, updated_at, location_type_id, property_type_id)
+select id, default_value, required, created_at, updated_at, location_type_id, metric_type_id
+from location_type_metric
+on conflict (id) do nothing;
+
+-- The metric sample table repoints back at the one catalog: drop the lane FK,
+-- rename the column back, restore the old FK name. The fold-back above carried
+-- every numeric type across, so the FK validates.
+do $$ begin
+  if exists (select 1 from pg_constraint where conname = 'metric_metric_type_id_fkey') then
+    alter table metric drop constraint metric_metric_type_id_fkey;
+  end if;
+  if exists (select 1 from information_schema.columns where table_name = 'metric' and column_name = 'metric_type_id')
+     and not exists (select 1 from information_schema.columns where table_name = 'metric' and column_name = 'property_type_id') then
+    alter table metric rename column metric_type_id to property_type_id;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'metric_property_type_id_fkey') then
+    alter table metric add constraint metric_property_type_id_fkey
+      foreign key (property_type_id) references property_type(id) on delete cascade;
+  end if;
+end $$;
+
+-- With every reference repointed, the lane tables go.
+drop table if exists product_metric;
+drop table if exists standard_metric;
+drop table if exists location_type_metric;
+drop table if exists metric_type;

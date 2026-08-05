@@ -115,9 +115,9 @@ func (f *healthFixture) recorded(t *testing.T, ctx context.Context, ownerKind, o
 	// gateway never produced (#356).
 	owner := `(select id from ` + ownerKind + ` where name = $1)`
 	if err := f.conn.QueryRow(ctx, `
-		select count(*), (select value from state
+		select count(*), (select value #>> '{}' from property
 			where `+col+` = `+owner+` and property_type_id = (select id from property_type where name = 'health') order by id desc limit 1)
-		from state where `+col+` = `+owner+` and property_type_id = (select id from property_type where name = 'health')`, ownerID).Scan(&n, &latest); err != nil {
+		from property where `+col+` = `+owner+` and property_type_id = (select id from property_type where name = 'health')`, ownerID).Scan(&n, &latest); err != nil {
 		t.Fatalf("read recorded health %s/%s: %v", ownerKind, ownerID, err)
 	}
 	if latest == nil {

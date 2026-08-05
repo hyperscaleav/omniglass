@@ -285,11 +285,7 @@ telemetry: {
     shape: sql_table
     id: uuid {constraint: primary_key}
   }
-  property_type: {
-    shape: sql_table
-    id: uuid {constraint: primary_key}
-  }
-  state: {
+  property: {
     shape: sql_table
     id: bigint {constraint: primary_key}
     component_id: uuid {constraint: foreign_key}
@@ -298,6 +294,10 @@ telemetry: {
     node_id: uuid {constraint: foreign_key}
     property_type_id: uuid {constraint: foreign_key}
     system_id: uuid {constraint: foreign_key}
+  }
+  property_type: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
   }
 }
 
@@ -474,12 +474,12 @@ telemetry.metric.location_id -> estate.location.id
 telemetry.metric.metric_type_id -> telemetry.metric_type.id
 telemetry.metric.node_id -> collection.node.principal_id
 telemetry.metric.system_id -> estate.system.id
-telemetry.state.component_id -> estate.component.id
-telemetry.state.event_id -> telemetry.event.id
-telemetry.state.location_id -> estate.location.id
-telemetry.state.node_id -> collection.node.principal_id
-telemetry.state.property_type_id -> telemetry.property_type.id
-telemetry.state.system_id -> estate.system.id
+telemetry.property.component_id -> estate.component.id
+telemetry.property.event_id -> telemetry.event.id
+telemetry.property.location_id -> estate.location.id
+telemetry.property.node_id -> collection.node.principal_id
+telemetry.property.property_type_id -> telemetry.property_type.id
+telemetry.property.system_id -> estate.system.id
 ```
 
 <!-- erd:end -->

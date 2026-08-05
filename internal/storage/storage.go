@@ -356,16 +356,16 @@ type Gateway interface {
 	// layer signals are per-interface, so each interface resolves its own latest.
 	LatestMetricInstance(ctx context.Context, componentName, key, instance string) (*MetricSample, error)
 
-	// The observed-state sink: the mirror of the metric sink for categorical
+	// The observed-property sink: the mirror of the metric sink for categorical
 	// verdicts (interface-reachable). reject-not-project and the transition-only
-	// guard are applied by the caller before the write. LatestState backs the
-	// ingest-side transition guard; StateTransitions is the ordered flip series
+	// guard are applied by the caller before the write. LatestProperty backs the
+	// ingest-side transition guard; PropertyTransitions is the ordered flip series
 	// the availability strip reads.
-	InsertStateSamples(ctx context.Context, evs []StateSampleWrite) error
-	LatestState(ctx context.Context, componentName, key, instance string) (*StateSample, error)
-	StateTransitions(ctx context.Context, componentName, key, instance string, since time.Time) ([]StateSample, error)
+	InsertPropertySamples(ctx context.Context, evs []PropertySampleWrite) error
+	LatestProperty(ctx context.Context, componentName, key, instance string) (*PropertySample, error)
+	PropertyTransitions(ctx context.Context, componentName, key, instance string, since time.Time) ([]PropertySample, error)
 
-	// The observed-log sink: the mirror of the metric and state sinks for log-kind
+	// The observed-log sink: the mirror of the metric and property sinks for log-kind
 	// occurrences. reject-not-project and owner-confinement are applied by the caller
 	// before the write. ListComponentEvents backs the component event log panel.
 	InsertEvents(ctx context.Context, evs []EventWrite) error

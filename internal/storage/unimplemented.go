@@ -355,13 +355,13 @@ func (UnimplementedGateway) LatestMetric(context.Context, string, string) (*Metr
 func (UnimplementedGateway) LatestMetricInstance(context.Context, string, string, string) (*MetricSample, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) InsertStateSamples(context.Context, []StateSampleWrite) error {
+func (UnimplementedGateway) InsertPropertySamples(context.Context, []PropertySampleWrite) error {
 	return nil
 }
-func (UnimplementedGateway) LatestState(context.Context, string, string, string) (*StateSample, error) {
+func (UnimplementedGateway) LatestProperty(context.Context, string, string, string) (*PropertySample, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) StateTransitions(context.Context, string, string, string, time.Time) ([]StateSample, error) {
+func (UnimplementedGateway) PropertyTransitions(context.Context, string, string, string, time.Time) ([]PropertySample, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) InsertEvents(context.Context, []EventWrite) error {

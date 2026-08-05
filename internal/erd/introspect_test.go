@@ -10,7 +10,7 @@ import (
 )
 
 // TestIntrospectRealSchema runs Introspect against the real, migrated schema and
-// pins load-bearing facts: the estate's component table exists, the state series
+// pins load-bearing facts: the estate's component table exists, the property series
 // carries a foreign key to its property_type catalog, and the Subsystems cluster
 // map covers exactly the live tables (no unmapped table, no stale map entry). The
 // last check is what keeps the ERD legible: a new table with no home surfaces here.
@@ -37,13 +37,14 @@ func TestIntrospectRealSchema(t *testing.T) {
 		t.Error("component table not introspected")
 	}
 
-	// The value store is gone (#591); the text sample series carries the catalog FK.
-	if _, ok := byName["property"]; ok {
-		t.Error("the retired value store `property` was introspected; it should be dropped")
+	// `state` is gone (#588): the sample series took the freed bare noun
+	// `property` and carries the catalog FK.
+	if _, ok := byName["state"]; ok {
+		t.Error("the renamed `state` table was introspected; #588 renamed it to property")
 	}
-	st, ok := byName["state"]
+	st, ok := byName["property"]
 	if !ok {
-		t.Fatal("state table not introspected")
+		t.Fatal("property table not introspected")
 	}
 	hasTypeFK := false
 	for _, fk := range st.FKs {
@@ -52,7 +53,7 @@ func TestIntrospectRealSchema(t *testing.T) {
 		}
 	}
 	if !hasTypeFK {
-		t.Errorf("state has no foreign key to property_type; FKs=%+v", st.FKs)
+		t.Errorf("property has no foreign key to property_type; FKs=%+v", st.FKs)
 	}
 
 	mapped := map[string]bool{}

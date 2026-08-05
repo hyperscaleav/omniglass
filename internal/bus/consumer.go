@@ -232,7 +232,7 @@ func (s *Server) land(ctx context.Context, ev *ogv1.TelemetryBatch, bind ingestB
 	}
 
 	// Route by the registry kind: a metric name lands in metric, a state name in
-	// state, a registered event_type name in event as a caught occurrence (the
+	// property, a registered event_type name in event as a caught occurrence (the
 	// ADR-0066 lanes; raw self-logs ride their own lane to log_line). All
 	// survive the SAME owner binding and reject-not-project; the split is only the
 	// sink, not a second trust decision. The multi-transaction-then-ack
@@ -248,17 +248,17 @@ func (s *Server) land(ctx context.Context, ev *ogv1.TelemetryBatch, bind ingestB
 			return err
 		}
 	}
-	// The transition guard: a state series is transition-only, so skip a write whose
+	// The transition guard: a property series is transition-only, so skip a write whose
 	// value equals the latest stored value for that series. A producer's own change
 	// detection is the primary defense; this is the robustness net for a restart that
 	// re-emits an unchanged verdict. Nothing derives after the write: a sample's
 	// current value IS its latest series row, both lanes (#591 retired the cache).
-	fresh, err := s.dedupeStates(ctx, states)
+	fresh, err := s.dedupeProperties(ctx, states)
 	if err != nil {
 		return err
 	}
 	if len(fresh) > 0 {
-		if err := s.store.InsertStateSamples(ctx, fresh); err != nil {
+		if err := s.store.InsertPropertySamples(ctx, fresh); err != nil {
 			return err
 		}
 	}
@@ -287,10 +287,11 @@ func (s *Server) nakOrTerm(msg jetstream.Msg) {
 	_ = msg.Nak()
 }
 
-// dedupeStates drops any state event whose value equals the latest stored value
-// for its series (owner component + key + instance), so a repeated identical
-// verdict does not add a consecutive-duplicate row. A LatestState read error is
-// returned so the caller can leave the message unacked for redelivery.
+// dedupeProperties drops any property sample whose value equals the latest
+// stored value for its series (owner component + key + instance), so a repeated
+// identical verdict does not add a consecutive-duplicate row. A LatestProperty
+// read error is returned so the caller can leave the message unacked for
+// redelivery.
 //
 // Correctness of this read-then-insert guard depends on the telemetry consumer
 // dispatching messages serially (one fully processed before the next is read),
@@ -301,13 +302,13 @@ func (s *Server) nakOrTerm(msg jetstream.Msg) {
 // identical in-flight duplicates could both read an older latest and both
 // insert. Keep dispatch serial, or move the transition check into the insert (a
 // conditional write) before parallelizing.
-func (s *Server) dedupeStates(ctx context.Context, states []storage.StateSampleWrite) ([]storage.StateSampleWrite, error) {
+func (s *Server) dedupeProperties(ctx context.Context, states []storage.PropertySampleWrite) ([]storage.PropertySampleWrite, error) {
 	if len(states) == 0 {
 		return nil, nil
 	}
-	fresh := make([]storage.StateSampleWrite, 0, len(states))
+	fresh := make([]storage.PropertySampleWrite, 0, len(states))
 	for _, ev := range states {
-		latest, err := s.store.LatestState(ctx, ev.OwnerID, ev.Key, ev.Instance)
+		latest, err := s.store.LatestProperty(ctx, ev.OwnerID, ev.Key, ev.Instance)
 		if err != nil {
 			return nil, err
 		}
@@ -368,12 +369,12 @@ func logLineWrites(ev *ogv1.TelemetryBatch, ownerKind, ownerID string) []storage
 // typed rows to persist, split by sample kind. Pure: no I/O. reject-not-project
 // drops any sample whose name is not a registered property_type or event_type;
 // the registry kind then routes a metric to the metric slice, a state to the
-// state slice, and an event-type occurrence to the event slice. The owner is stamped identically for all three from the task's
+// property slice, and an event-type occurrence to the event slice. The owner is stamped identically for all three from the task's
 // interface: owner_kind=component, source=interface type, instance=interface name;
 // provenance is observed (the insert path fixes that).
-func deriveSamples(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collection.Registry) ([]storage.MetricSampleWrite, []storage.StateSampleWrite, []storage.EventWrite) {
+func deriveSamples(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collection.Registry) ([]storage.MetricSampleWrite, []storage.PropertySampleWrite, []storage.EventWrite) {
 	var metrics []storage.MetricSampleWrite
-	var states []storage.StateSampleWrite
+	var states []storage.PropertySampleWrite
 	var events []storage.EventWrite
 	// The wire value wins where the batch supplies one, else fall back to what the
 	// task's interface implies. The node lane sets neither (its interface name IS the
@@ -413,7 +414,7 @@ func deriveSamples(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collect
 			if !ok {
 				continue
 			}
-			states = append(states, storage.StateSampleWrite{
+			states = append(states, storage.PropertySampleWrite{
 				OwnerKind: "component",
 				OwnerID:   owner.Component,
 				Key:       dp.GetName(),

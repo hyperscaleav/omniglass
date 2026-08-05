@@ -83,9 +83,9 @@ func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, comm
 	// Appended, never upserted, so every command's want is history; the caused
 	// event above is the row's lineage (the command_id repoint is a later slice).
 	if ct.TargetPropertyType != "" && len(value) > 0 {
-		propSQL := fmt.Sprintf(`insert into state (owner_kind, %s, property_type_id, instance, provenance, value, value_json, source, event_id)
+		propSQL := fmt.Sprintf(`insert into property (owner_kind, %s, property_type_id, instance, provenance, value, source, event_id)
 			values ($1, $2, (select id from property_type where name = $3), $4, 'intended',
-			        coalesce($5::jsonb #>> '{}', ''), $5::jsonb, 'command', $6)`, col)
+			        $5::jsonb, 'command', $6)`, col)
 		if _, err := tx.Exec(ctx, propSQL, ownerKind, arc, ct.TargetPropertyType, instance, []byte(value), causedID); err != nil {
 			return nil, fmt.Errorf("storage: open intended value for %q: %w", commandType, err)
 		}

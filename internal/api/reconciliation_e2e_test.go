@@ -65,7 +65,7 @@ func TestReconciliationAPI(t *testing.T) {
 	if _, err := gw.SetProperty(ctx, "", "component", "disp-1", "firmware-version", "", json.RawMessage(`"1.0.0"`), all); err != nil {
 		t.Fatalf("set declared: %v", err)
 	}
-	if err := gw.InsertStateSamples(ctx, []storage.StateSampleWrite{{
+	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{
 		OwnerKind: "component", OwnerID: "disp-1", Key: "firmware-version",
 		Instance: "", Value: "2.0.0", TS: time.Now().UTC(),
 	}}); err != nil {

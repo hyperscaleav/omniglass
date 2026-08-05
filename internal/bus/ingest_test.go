@@ -187,7 +187,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 		NodeId:  "node-a",
 		Samples: []*ogv1.Sample{{Name: "interface-reachable", Value: &ogv1.Sample_StringValue{StringValue: "up"}}},
 	})
-	waitState(t, ctx, gw, "disp-1", "interface-reachable", "disp-1-tcp", func(d *storage.StateSample) bool { return d != nil && d.Value == "up" })
+	waitProperty(t, ctx, gw, "disp-1", "interface-reachable", "disp-1-tcp", func(d *storage.PropertySample) bool { return d != nil && d.Value == "up" })
 
 	// CONFINEMENT (state path): node-a publishes interface-reachable=up for t-b,
 	// which belongs to node-b (owner disp-2). The same fence that drops a foreign
@@ -200,7 +200,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 
 	// TRANSITION-ONLY (ingest guard): a repeated identical up must NOT add a second
 	// row (the latest-value guard skips it); only a flip to down writes. The first
-	// up is already committed (waitState above), so the guard sees it deterministically.
+	// up is already committed (waitProperty above), so the guard sees it deterministically.
 	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId:  "t-a",
 		NodeId:  "node-a",
@@ -211,22 +211,22 @@ func TestTelemetryRoundTrip(t *testing.T) {
 		NodeId:  "node-a",
 		Samples: []*ogv1.Sample{{Name: "interface-reachable", Value: &ogv1.Sample_StringValue{StringValue: "down"}}},
 	})
-	waitState(t, ctx, gw, "disp-1", "interface-reachable", "disp-1-tcp", func(d *storage.StateSample) bool { return d != nil && d.Value == "down" })
+	waitProperty(t, ctx, gw, "disp-1", "interface-reachable", "disp-1-tcp", func(d *storage.PropertySample) bool { return d != nil && d.Value == "down" })
 
 	// The series is exactly [up, down]: the duplicate up was guarded out, so the
 	// availability strip has one row per transition, not one per publish.
-	trans, err := gw.StateTransitions(ctx, "disp-1", "interface-reachable", "disp-1-tcp", time.Time{})
+	trans, err := gw.PropertyTransitions(ctx, "disp-1", "interface-reachable", "disp-1-tcp", time.Time{})
 	if err != nil {
-		t.Fatalf("state transitions: %v", err)
+		t.Fatalf("property transitions: %v", err)
 	}
 	if len(trans) != 2 || trans[0].Value != "up" || trans[1].Value != "down" {
 		t.Fatalf("transition-only breached: want [up down], got %+v", trans)
 	}
 
 	// The current value of a series IS its latest row, both lanes (#591 retired
-	// the derived cache): the state series resolves to the "down" flip and the
+	// the derived cache): the property series resolves to the "down" flip and the
 	// metric series to the probe value, each read by type, owner, and instance.
-	if got, err := gw.LatestState(ctx, "disp-1", "interface-reachable", "disp-1-tcp"); err != nil {
+	if got, err := gw.LatestProperty(ctx, "disp-1", "interface-reachable", "disp-1-tcp"); err != nil {
 		t.Fatalf("latest interface-reachable series row: %v", err)
 	} else if got == nil || got.Value != "down" {
 		t.Fatalf("latest interface-reachable series row = %+v, want value down", got)
@@ -238,8 +238,8 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	}
 
 	// Confinement held for the state path: disp-2 (node-b's component) got no verdict.
-	if got, err := gw.LatestState(ctx, "disp-2", "interface-reachable", "disp-2-tcp"); err != nil {
-		t.Fatalf("latest state disp-2: %v", err)
+	if got, err := gw.LatestProperty(ctx, "disp-2", "interface-reachable", "disp-2-tcp"); err != nil {
+		t.Fatalf("latest property disp-2: %v", err)
 	} else if got != nil {
 		t.Fatalf("state confinement breached: node-a landed a verdict on disp-2: %+v", got)
 	}
@@ -377,14 +377,14 @@ func publishEvent(t *testing.T, nc *nats.Conn, node string, ev *ogv1.TelemetryBa
 	_ = nc.Flush()
 }
 
-// waitState polls LatestState until pred is satisfied or a deadline passes.
-func waitState(t *testing.T, ctx context.Context, gw storage.Gateway, comp, key, instance string, pred func(*storage.StateSample) bool) *storage.StateSample {
+// waitProperty polls LatestProperty until pred is satisfied or a deadline passes.
+func waitProperty(t *testing.T, ctx context.Context, gw storage.Gateway, comp, key, instance string, pred func(*storage.PropertySample) bool) *storage.PropertySample {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		dp, err := gw.LatestState(ctx, comp, key, instance)
+		dp, err := gw.LatestProperty(ctx, comp, key, instance)
 		if err != nil {
-			t.Fatalf("latest state %s/%s[%s]: %v", comp, key, instance, err)
+			t.Fatalf("latest property %s/%s[%s]: %v", comp, key, instance, err)
 		}
 		if pred(dp) {
 			return dp

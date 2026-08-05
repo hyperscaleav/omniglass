@@ -13,7 +13,7 @@ import (
 )
 
 // Property is one declared-value series row (#591): a declared value is a row
-// in the state series like any other, distinguished by provenance='declared',
+// in the property series like any other, distinguished by provenance='declared',
 // and its current value is the latest row per (type, owner arc, instance,
 // provenance). It carries the same owner exclusive-arc as metric and event:
 // OwnerKind picks the arc, OwnerID is the estate address (the owner's name).
@@ -63,13 +63,12 @@ var (
 const declaredProvenance = "declared"
 
 // declaredCurrentExpr resolves a declared series row to its current jsonb
-// value: value_json when the write recorded one (the exact jsonb, so bool and
-// json round-trip), else the text value re-encoded; a value_json of JSON null
-// is the unset tombstone and resolves to SQL NULL (no value).
-const declaredCurrentExpr = `nullif(coalesce(value_json, to_jsonb(value)), 'null'::jsonb)`
+// value: the value column carries the exact jsonb (bool and json round-trip),
+// and a JSON null is the unset tombstone, resolving to SQL NULL (no value).
+const declaredCurrentExpr = `nullif(value, 'null'::jsonb)`
 
 // declaredSeriesCols is the read shape of one declared series row.
-const declaredSeriesCols = `id::text, owner_kind, (select pr.name from property_type pr where pr.id = state.property_type_id) as property_type_name, state.property_type_id as property_type_id, instance, provenance, value_json, ts`
+const declaredSeriesCols = `id::text, owner_kind, (select pr.name from property_type pr where pr.id = property.property_type_id) as property_type_name, property.property_type_id as property_type_id, instance, provenance, value, ts`
 
 // scanProperty reads a row into a Property. OwnerID is not in the column
 // list (it lives in whichever arc column the owner kind selects), so the caller
@@ -117,21 +116,20 @@ func (p *PG) SetProperty(ctx context.Context, actorID, ownerKind, ownerID, prope
 	}
 
 	// cur is the series' current value (its latest row); the insert appends only
-	// when the declared value actually changes. value keeps the human-readable
-	// scalar text, value_json the exact jsonb (ADR-0038's structured value).
+	// when the declared value actually changes. value is the exact jsonb
+	// (ADR-0038's structured value: bool and json round-trip without loss).
 	sql := fmt.Sprintf(`
 		with cur as (
 			select `+declaredCurrentExpr+` as value
-			from state
+			from property
 			where owner_kind = $1 and %s = $2
 			  and property_type_id = (select id from property_type where name = $3)
 			  and instance = $4 and provenance = '`+declaredProvenance+`'
 			order by ts desc, id desc
 			limit 1
 		)
-		insert into state (owner_kind, %s, property_type_id, instance, provenance, value, value_json)
-		select $1, $2, (select id from property_type where name = $3), $4, '`+declaredProvenance+`',
-		       coalesce($5::jsonb #>> '{}', ''), $5::jsonb
+		insert into property (owner_kind, %s, property_type_id, instance, provenance, value)
+		select $1, $2, (select id from property_type where name = $3), $4, '`+declaredProvenance+`', $5::jsonb
 		where not exists (select 1 from cur where cur.value = $5::jsonb)
 		returning `+declaredSeriesCols, col, col)
 	pv, err := scanProperty(tx.QueryRow(ctx, sql, ownerKind, arc, propertyName, instance, []byte(value)))
@@ -166,7 +164,7 @@ func (p *PG) SetProperty(ctx context.Context, actorID, ownerKind, ownerID, prope
 func (p *PG) currentDeclared(ctx context.Context, q querier, col, ownerKind, arc, propertyName, instance string) (*Property, error) {
 	sql := fmt.Sprintf(`
 		select `+declaredSeriesCols+`
-		from state
+		from property
 		where owner_kind = $1 and %s = $2
 		  and property_type_id = (select id from property_type where name = $3)
 		  and instance = $4 and provenance = '`+declaredProvenance+`'
@@ -180,7 +178,7 @@ func (p *PG) currentDeclared(ctx context.Context, q querier, col, ownerKind, arc
 }
 
 // ClearProperty unsets a declared value by appending a tombstone row (a
-// declared row whose value_json is JSON null), so the unset is itself an edit
+// declared row whose value is JSON null), so the unset is itself an edit
 // in the series' history and nothing is deleted. Clearing a property with no
 // current value (never set, or already tombstoned) stays the explicit
 // ErrPropertyNotFound miss. Scope-guarded and audited like the set.
@@ -208,15 +206,15 @@ func (p *PG) ClearProperty(ctx context.Context, actorID, ownerKind, ownerID, pro
 	sql := fmt.Sprintf(`
 		with cur as (
 			select `+declaredCurrentExpr+` as value
-			from state
+			from property
 			where owner_kind = $1 and %s = $2
 			  and property_type_id = (select id from property_type where name = $3)
 			  and instance = $4 and provenance = '`+declaredProvenance+`'
 			order by ts desc, id desc
 			limit 1
 		)
-		insert into state (owner_kind, %s, property_type_id, instance, provenance, value, value_json)
-		select $1, $2, (select id from property_type where name = $3), $4, '`+declaredProvenance+`', '', 'null'::jsonb
+		insert into property (owner_kind, %s, property_type_id, instance, provenance, value)
+		select $1, $2, (select id from property_type where name = $3), $4, '`+declaredProvenance+`', 'null'::jsonb
 		from cur
 		where cur.value is not null
 		returning id::text`, col, col)
@@ -292,13 +290,13 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 
 	// The current declared value per property: the latest series row of each
 	// (property, instance='') declared series on this owner's arc, a tombstone
-	// (JSON-null value_json) resolving to no value. Shared by both arms.
+	// (JSON-null value) resolving to no value. Shared by both arms.
 	declared := fmt.Sprintf(`
 		declared as (
 			select distinct on (s.property_type_id)
 			       s.property_type_id, s.id,
 			       `+declaredCurrentExpr+` as value
-			from state s
+			from property s
 			join inst on s.%[1]s = inst.arc
 			where s.instance = '' and s.provenance = 'declared'
 			order by s.property_type_id, s.ts desc, s.id desc

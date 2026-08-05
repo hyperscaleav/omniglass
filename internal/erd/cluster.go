@@ -23,7 +23,7 @@ var Subsystems = []Cluster{
 		"driver", "standard", "standard_property", "standard_metric",
 	}},
 	{Name: "telemetry", Tables: []string{
-		"property_type", "metric_type", "metric", "state",
+		"property_type", "metric_type", "metric", "property",
 		"event_type", "event", "log_line", "alarm", "alarm_capability",
 		"command_type", "command",
 	}},

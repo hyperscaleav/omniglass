@@ -220,9 +220,9 @@ func TestNodeVerdictPerInterface(t *testing.T) {
 	deadline := time.Now().Add(5 * time.Second)
 	for _, comp := range []string{"disp-1", "disp-2"} {
 		for {
-			v, err := gw.LatestState(ctx, comp, "interface-reachable", "api")
+			v, err := gw.LatestProperty(ctx, comp, "interface-reachable", "api")
 			if err != nil {
-				t.Fatalf("latest state %s: %v", comp, err)
+				t.Fatalf("latest property %s: %v", comp, err)
 			}
 			if v != nil && v.Value == "up" {
 				break

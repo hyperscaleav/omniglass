@@ -11,9 +11,9 @@ import (
 )
 
 // TestSampleProvenanceDomains pins each lane's provenance domain after #591
-// re-admitted declared rows on the state series (a declared value IS a series
-// row now, reversing the #460 narrowing for that lane): state accepts a
-// declared row with no lineage, while metric still refuses declared until a
+// re-admitted declared rows on the property series (a declared value IS a
+// series row now, reversing the #460 narrowing for that lane): property accepts
+// a declared row with no lineage, while metric still refuses declared until a
 // slice folds declared numeric values into it.
 func TestSampleProvenanceDomains(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
@@ -25,7 +25,7 @@ func TestSampleProvenanceDomains(t *testing.T) {
 	defer conn.Close(ctx)
 
 	// A minimal owner and a key per sink to satisfy the FKs: the metric sink keys
-	// on metric_type, the state sink on property_type (the #587 lanes).
+	// on metric_type, the property sink on property_type (the #587 lanes).
 	var compID, mtID, ptID string
 	if err := conn.QueryRow(ctx, `insert into component (name) values ('c1') returning id`).Scan(&compID); err != nil {
 		t.Fatalf("component: %v", err)
@@ -37,7 +37,7 @@ func TestSampleProvenanceDomains(t *testing.T) {
 	}
 	if err := conn.QueryRow(ctx, `
 		insert into property_type (name, official, data_type)
-		values ('t-state', false, 'string') returning id`).Scan(&ptID); err != nil {
+		values ('t-prop', false, 'string') returning id`).Scan(&ptID); err != nil {
 		t.Fatalf("property_type: %v", err)
 	}
 
@@ -50,12 +50,12 @@ func TestSampleProvenanceDomains(t *testing.T) {
 		t.Errorf("metric declared insert error = %v, want a provenance or lineage CHECK violation", err)
 	}
 
-	// The state lane holds declared values as series rows (#591), with the
+	// The property lane holds declared values as series rows (#591), with the
 	// no-lineage arm: no rule, no causing event.
 	if _, err := conn.Exec(ctx, `
-		insert into state (ts, owner_kind, component_id, property_type_id, value, provenance, source)
-		values (now(), 'component', $1, $2, 'on', 'declared', 'test')`, compID, ptID); err != nil {
-		t.Errorf("state declared insert error = %v, want accepted (a declared value is a series row)", err)
+		insert into property (ts, owner_kind, component_id, property_type_id, value, provenance, source)
+		values (now(), 'component', $1, $2, to_jsonb('on'::text), 'declared', 'test')`, compID, ptID); err != nil {
+		t.Errorf("property declared insert error = %v, want accepted (a declared value is a series row)", err)
 	}
 }
 

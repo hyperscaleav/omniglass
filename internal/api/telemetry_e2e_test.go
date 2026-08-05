@@ -108,8 +108,8 @@ func TestTelemetryPushAPI(t *testing.T) {
 		m, err := gw.LatestMetric(ctx, "bar-1", "icmp-rtt-avg")
 		return err == nil && m != nil && m.Value == 12.4 && m.Source == "webex-cloud"
 	})
-	waitFor(t, "the state row", func() bool {
-		s, err := gw.LatestState(ctx, "bar-1", "video-input", "")
+	waitFor(t, "the property row", func() bool {
+		s, err := gw.LatestProperty(ctx, "bar-1", "video-input", "")
 		return err == nil && s != nil && s.Value == "hdmi2"
 	})
 	waitFor(t, "the caught event", func() bool {

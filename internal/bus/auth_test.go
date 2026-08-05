@@ -38,10 +38,10 @@ func (f fakeStore) ListPropertyTypes(context.Context) ([]storage.PropertyType, e
 func (f fakeStore) InsertMetricSamples(context.Context, []storage.MetricSampleWrite) error {
 	return nil
 }
-func (f fakeStore) InsertStateSamples(context.Context, []storage.StateSampleWrite) error {
+func (f fakeStore) InsertPropertySamples(context.Context, []storage.PropertySampleWrite) error {
 	return nil
 }
-func (f fakeStore) LatestState(context.Context, string, string, string) (*storage.StateSample, error) {
+func (f fakeStore) LatestProperty(context.Context, string, string, string) (*storage.PropertySample, error) {
 	return nil, nil
 }
 func (f fakeStore) InsertEvents(context.Context, []storage.EventWrite) error {

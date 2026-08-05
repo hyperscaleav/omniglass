@@ -52,7 +52,7 @@ func TestCommandIssueAPI(t *testing.T) {
 	}
 	// The device already reports hdmi2 (an observed series row the command
 	// settles against; the current value is the latest row, #591).
-	if err := gw.InsertStateSamples(ctx, []storage.StateSampleWrite{{
+	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{
 		OwnerKind: "component", OwnerID: "disp-1", Key: "video-input", Instance: "",
 		Value: "hdmi2", TS: time.Now().UTC(),
 	}}); err != nil {

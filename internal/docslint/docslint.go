@@ -129,7 +129,7 @@ var Banned = []BannedTerm{
 	// all current vocabulary. Only the retired identifiers are named.
 	{
 		Pattern:     regexp.MustCompile(`\b(MetricSampleEvent|StateSampleEvent|EventOccurrence)\b`),
-		Replacement: "MetricSampleWrite, StateSampleWrite, or EventWrite",
+		Replacement: "MetricSampleWrite, PropertySampleWrite, or EventWrite",
 		Origin:      "ADR-0072",
 	},
 	{

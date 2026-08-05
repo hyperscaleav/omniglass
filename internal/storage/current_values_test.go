@@ -42,7 +42,7 @@ func TestCurrentValueReads(t *testing.T) {
 
 	obs := func(val string, ts time.Time) {
 		t.Helper()
-		if err := gw.InsertStateSamples(ctx, []storage.StateSampleWrite{{
+		if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{
 			OwnerKind: "component", OwnerID: "disp-1", Key: "interface-reachable",
 			Instance: "", Value: val, TS: ts,
 		}}); err != nil {
@@ -136,7 +136,7 @@ func TestReconciliation(t *testing.T) {
 		t.Fatalf("set declared firmware-version: %v", err)
 	}
 	// is: an observed series row that differs from the declared value.
-	if err := gw.InsertStateSamples(ctx, []storage.StateSampleWrite{{
+	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{
 		OwnerKind: "component", OwnerID: "disp-r", Key: "firmware-version",
 		Instance: "", Value: "2.0.0", TS: time.Now().UTC(),
 	}}); err != nil {
@@ -153,7 +153,7 @@ func TestReconciliation(t *testing.T) {
 	}
 
 	// Reality matching intent: no drift.
-	if err := gw.InsertStateSamples(ctx, []storage.StateSampleWrite{{
+	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{
 		OwnerKind: "component", OwnerID: "disp-r", Key: "firmware-version",
 		Instance: "", Value: "1.0.0", TS: time.Now().UTC().Add(time.Second),
 	}}); err != nil {

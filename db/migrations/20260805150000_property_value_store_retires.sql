@@ -131,7 +131,73 @@ drop table if exists property;
 
 -- migrate:down
 
--- No down. The fold is a representation change; reversing it would have to
--- guess which series rows had been store rows and rebuild a cache the model
--- no longer has.
-select 1;
+-- The down restores SHAPE, not rows. The fold moved the store's rows into the
+-- series and there is no marker to tell a folded row from one written natively
+-- since, so no un-fold is attempted: the value store comes back empty, exactly
+-- the table the July rename's down expects to find (its post-rename column and
+-- constraint names, including the ts column #394 added). Narrowing the series'
+-- provenance domain back refuses loudly (a CHECK violation) on a database that
+-- holds declared series rows, rather than deleting operator data.
+
+-- The series gives declared back: restore the narrowed #460 domain this
+-- migration's up widened.
+alter table state drop constraint if exists state_provenance_check;
+alter table state add constraint state_provenance_check
+    check (provenance = any (array['observed'::text, 'calculated'::text, 'intended'::text]));
+alter table state drop constraint if exists state_lineage_check;
+alter table state add constraint state_lineage_check
+    check ((((provenance = 'observed'::text) and (event_id is null))
+        or ((provenance = 'calculated'::text) and (source_rule is not null) and (event_id is null))
+        or ((provenance = 'intended'::text) and (event_id is not null) and (source_rule is null))));
+
+-- The value store, empty, in its pre-drop shape: the init columns plus the ts
+-- column (#394), under the post-July-rename names the older downs key on.
+create table if not exists property (
+    id uuid default uuidv7() constraint property_id_not_null not null,
+    owner_kind text constraint property_owner_kind_not_null not null,
+    instance text default ''::text constraint property_instance_not_null not null,
+    provenance text default 'declared'::text constraint property_provenance_not_null not null,
+    value jsonb constraint property_value_not_null not null,
+    created_at timestamptz default now() constraint property_created_at_not_null not null,
+    updated_at timestamptz default now() constraint property_updated_at_not_null not null,
+    component_id uuid,
+    system_id uuid,
+    location_id uuid,
+    node_id uuid,
+    property_type_id uuid constraint property_property_type_id_not_null not null,
+    ts timestamptz,
+    constraint property_owner_arc_check check ((((owner_kind = 'component'::text) and (component_id is not null) and (system_id is null) and (location_id is null) and (node_id is null)) or ((owner_kind = 'system'::text) and (system_id is not null) and (component_id is null) and (location_id is null) and (node_id is null)) or ((owner_kind = 'location'::text) and (location_id is not null) and (component_id is null) and (system_id is null) and (node_id is null)) or ((owner_kind = 'node'::text) and (node_id is not null) and (component_id is null) and (system_id is null) and (location_id is null)))),
+    constraint property_owner_kind_check check (owner_kind = any (array['component'::text, 'system'::text, 'location'::text, 'node'::text])),
+    constraint property_provenance_check check (provenance = any (array['observed'::text, 'calculated'::text, 'intended'::text, 'declared'::text]))
+);
+do $$ begin
+  if not exists (select 1 from pg_constraint where conrelid = 'property'::regclass and conname = 'property_pkey') then
+    alter table property add constraint property_pkey primary key (id);
+  end if;
+  if not exists (select 1 from pg_constraint where conrelid = 'property'::regclass and conname = 'property_series_key') then
+    alter table property add constraint property_series_key
+      unique nulls not distinct (owner_kind, component_id, system_id, location_id, node_id, property_type_id, instance, provenance);
+  end if;
+  if not exists (select 1 from pg_constraint where conrelid = 'property'::regclass and conname = 'property_component_id_fkey') then
+    alter table property add constraint property_component_id_fkey
+      foreign key (component_id) references component(id) on delete cascade;
+  end if;
+  if not exists (select 1 from pg_constraint where conrelid = 'property'::regclass and conname = 'property_location_id_fkey') then
+    alter table property add constraint property_location_id_fkey
+      foreign key (location_id) references location(id) on delete cascade;
+  end if;
+  if not exists (select 1 from pg_constraint where conrelid = 'property'::regclass and conname = 'property_node_id_fkey') then
+    alter table property add constraint property_node_id_fkey
+      foreign key (node_id) references node(principal_id) on delete cascade;
+  end if;
+  if not exists (select 1 from pg_constraint where conrelid = 'property'::regclass and conname = 'property_system_id_fkey') then
+    alter table property add constraint property_system_id_fkey
+      foreign key (system_id) references system(id) on delete cascade;
+  end if;
+  if not exists (select 1 from pg_constraint where conrelid = 'property'::regclass and conname = 'property_property_type_id_fkey') then
+    alter table property add constraint property_property_type_id_fkey
+      foreign key (property_type_id) references property_type(id) on delete cascade;
+  end if;
+end $$;
+create index if not exists property_component_idx on property using btree (component_id, property_type_id)
+    where (component_id is not null);

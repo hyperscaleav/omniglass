@@ -7,7 +7,7 @@ import (
 )
 
 // PruneSamples deletes series rows older than before from both sample tables
-// (metric and state), with two exceptions that make retention provenance-aware
+// (metric and property), with two exceptions that make retention provenance-aware
 // before any retention feature exists (#591): a declared row is never deleted
 // (an operator's assertion is the whole truth however old, not a sample), and
 // the latest row of every series (type, owner arc, instance, provenance) is
@@ -28,7 +28,7 @@ func (p *PG) PruneSamples(ctx context.Context, before time.Time) (int64, error) 
 	var total int64
 	for _, lane := range []struct{ table, typeCol string }{
 		{"metric", "metric_type_id"},
-		{"state", "property_type_id"},
+		{"property", "property_type_id"},
 	} {
 		sql := fmt.Sprintf(`
 			delete from %[1]s where id in (
