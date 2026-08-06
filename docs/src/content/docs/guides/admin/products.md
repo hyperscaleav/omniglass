@@ -5,7 +5,7 @@ description: "The Products catalog: a concrete SKU binding a vendor, a driver, a
 
 **Catalog > Products** (`/products`, with `product:read`, covered by every viewer's `*:read` floor)
 is the directory of **products**: the concrete SKUs the estate is built from, on the same
-flat-registry pattern as [Types](/guides/admin/types/) and [Tags](/guides/admin/tags/). A product is
+flat-registry pattern as [Location Types](/guides/admin/location-types/) and [Tags](/guides/admin/tags/). A product is
 a specific model (a **Cisco Room Bar**, a **Samsung QM55**), not an organization and not an installed
 unit. It is where the three leaf catalogs converge: the [vendor](/guides/admin/vendors/) that makes
 it, the [driver](/guides/admin/drivers/) that speaks to it, and the
@@ -54,7 +54,7 @@ a separate genus. The system side has the same arrangement one level up: a syste
   install to install; add a custom product for anything else.
 - **Delete** enforces the referential guard the leaf catalogs deferred: a product still referenced by a
   **component** (`component.product_id`) cannot be deleted (409), the same delete-refused-while-referenced
-  rule the [Types](/guides/admin/types/) registry enforces. Remove or repoint the component first. An
+  rule the [Location Types](/guides/admin/location-types/) registry enforces. Remove or repoint the component first. An
   official row is still refused (422) regardless.
 
 Minting a product is admin-gated, and the product form is where the vendor, driver, and capability

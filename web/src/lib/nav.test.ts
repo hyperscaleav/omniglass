@@ -96,6 +96,22 @@ describe("filterNav", () => {
     expect(section("Values", ["secret:read,reveal,create,update"])).toContain("Secrets");
     expect(section("Values", [">"])).toContain("Secrets");
   });
+
+  // #598 both ways: the split gives each registry its own tab with its own gate.
+  // Location Types rides the viewer floor (location_type is not sensitive);
+  // Secret Types gates on the secret resource, the same word the /secret-types
+  // route stamps, so the floor viewer loses exactly the tab whose route would
+  // 403 it, and nothing else.
+  it("keeps Location Types for a *:read floor viewer and hides Secret Types (#598)", () => {
+    const floor = section("Catalog", ["*:read"]);
+    expect(floor).toContain("Location Types");
+    expect(floor).not.toContain("Secret Types");
+  });
+
+  it("shows Secret Types to a secret:read holder and the owner", () => {
+    expect(section("Catalog", ["*:read", "secret:read"])).toContain("Secret Types");
+    expect(section("Catalog", [">"])).toContain("Secret Types");
+  });
 });
 
 // can mirrors the server's Allows, including the sensitive-resource set: a bare `*`
@@ -132,6 +148,11 @@ describe("routeTokens", () => {
     expect(routeTokens("/web/groups")).toEqual(["principal_group", "read", "admin"]);
     expect(routeTokens("/web/secrets")).toEqual(["secret", "read"]);
     expect(routeTokens("/web/audit")).toEqual(["audit", "read", "admin"]); // the admin tier
+    // The split registries (#598): each page's URL carries its own gate, and
+    // /secret-types requires the same secret resource its API route stamps, so
+    // the route guard blocks a floor viewer from the URL the sidebar hid.
+    expect(routeTokens("/web/location-types")).toEqual(["location_type", "read"]);
+    expect(routeTokens("/web/secret-types")).toEqual(["secret", "read"]);
   });
   it("inherits a section's gate on its detail route (longest prefix)", () => {
     expect(routeTokens("/web/locations/hq")).toEqual(["location", "read"]);

@@ -164,8 +164,8 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodGet,
 		Path:        "/location-types",
 		Summary:     "List location types",
-		Description: "Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by type:read.",
-	}, "type", "read"), func(ctx context.Context, _ *struct{}) (*listLocationTypesOutput, error) {
+		Description: "Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by location_type:read.",
+	}, "location_type", "read"), func(ctx context.Context, _ *struct{}) (*listLocationTypesOutput, error) {
 		types, err := gw.ListLocationTypes(ctx)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("list location types")
@@ -187,8 +187,8 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Path:          "/location-types",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a location type",
-		Description:   "Creates a custom (non-official) location_type. Gated by type:create.",
-	}, "type", "create"), func(ctx context.Context, in *createLocationTypeInput) (*locationTypeOutput, error) {
+		Description:   "Creates a custom (non-official) location_type. Gated by location_type:create.",
+	}, "location_type", "create"), func(ctx context.Context, in *createLocationTypeInput) (*locationTypeOutput, error) {
 		lt, err := gw.CreateLocationType(ctx, actorID(ctx), storage.LocationType{
 			Name: in.Body.Name, DisplayName: in.Body.DisplayName, Icon: in.Body.Icon,
 			AllowedParentTypes: in.Body.AllowedParentTypes,
@@ -207,8 +207,8 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPatch,
 		Path:        "/location-types/{id}",
 		Summary:     "Update a location type",
-		Description: "Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by type:update.",
-	}, "type", "update"), func(ctx context.Context, in *updateLocationTypeInput) (*locationTypeOutput, error) {
+		Description: "Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by location_type:update.",
+	}, "location_type", "update"), func(ctx context.Context, in *updateLocationTypeInput) (*locationTypeOutput, error) {
 		lt, err := gw.UpdateLocationType(ctx, actorID(ctx), in.ID, storage.LocationTypePatch{
 			DisplayName: in.Body.DisplayName, Icon: in.Body.Icon,
 			AllowedParentTypes: in.Body.AllowedParentTypes,
@@ -228,8 +228,8 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Path:          "/location-types/{id}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a location type",
-		Description:   "Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.",
-	}, "type", "delete"), func(ctx context.Context, in *locationTypePathInput) (*struct{}, error) {
+		Description:   "Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by location_type:delete.",
+	}, "location_type", "delete"), func(ctx context.Context, in *locationTypePathInput) (*struct{}, error) {
 		if err := gw.DeleteLocationType(ctx, actorID(ctx), in.ID); err != nil {
 			return nil, mapTypeErr(err, "location_type")
 		}

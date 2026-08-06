@@ -57,7 +57,7 @@ sits beside it on the forms that offer one; where it does not, the header **x** 
   the time you type one field and check the other. The classifier is the entity's shape: a component
   picks its [product](/guides/admin/products/), a system the
   [standard](/guides/admin/standards/) it conforms to, a location its
-  [type](/guides/admin/types/). On a component and a system the classifier is **optional**, so a
+  [type](/guides/admin/location-types/). On a component and a system the classifier is **optional**, so a
   one-off unit or a system that matches no blueprint is legitimate; a location's type is
   required, since for a location the type is the only shape-definer. **Create** commits it and
   drops you straight into the new entity's detail in **edit mode**, so you can tag it and finish

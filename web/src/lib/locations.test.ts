@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { listLocations, listLocationTypes, createLocation, updateLocation, deleteLocation } from "./locations";
+import { listLocations, createLocation, updateLocation, deleteLocation } from "./locations";
 import { uuidFor } from "./testids";
 
 // The data layer is the unit under test; fetch is the seam we fake, so these
@@ -24,17 +24,6 @@ describe("locations data layer", () => {
     expect(req.url).toContain("/api/v1/locations");
     // No bearer header is attached when no token is stored (the cookie path).
     expect(req.headers.get("Authorization")).toBeNull();
-  });
-
-  it("lists location types and unwraps the registry envelope", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ location_types: [{ id: "campus", display_name: "Campus", official: true, allowed_parent_types: ["root"] }] }),
-    );
-    const types = await listLocationTypes();
-    expect(types).toHaveLength(1);
-    expect(types[0]).toMatchObject({ id: "campus", display_name: "Campus", allowed_parent_types: ["root"] });
-    const req = fetchMock.mock.calls[0][0] as Request;
-    expect(req.url).toContain("/api/v1/location-types");
   });
 
   it("posts the create body", async () => {

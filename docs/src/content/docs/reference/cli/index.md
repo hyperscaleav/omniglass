@@ -1702,7 +1702,7 @@ Create a location type
 omniglass location-type create [flags]
 ```
 
-Creates a custom (non-official) location_type. Gated by type:create.
+Creates a custom (non-official) location_type. Gated by location_type:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1725,7 +1725,7 @@ Delete a location type
 omniglass location-type delete <id>
 ```
 
-Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.
+Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by location_type:delete.
 
 Example:
 
@@ -1741,7 +1741,7 @@ List location types
 omniglass location-type list
 ```
 
-Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by type:read.
+Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by location_type:read.
 
 Example:
 
@@ -1761,7 +1761,7 @@ Withdraw a property from a location type
 omniglass location-type property delete <id> <property>
 ```
 
-Removes one line from a custom location type's contract; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and an official type is read-only (422). Gated by type:delete.
+Removes one line from a custom location type's contract; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and an official type is read-only (422). Gated by location_type:delete.
 
 Example:
 
@@ -1777,7 +1777,7 @@ List a location type's declared properties
 omniglass location-type property list <id>
 ```
 
-Lists the location type's declared-property contract (what every location of the type exposes), ordered by property name, each with its optional default and required flag. Gated by type:read.
+Lists the location type's declared-property contract (what every location of the type exposes), ordered by property name, each with its optional default and required flag. Gated by location_type:read.
 
 Example:
 
@@ -1793,7 +1793,7 @@ Declare a property on a location type
 omniglass location-type property update <id> <property> [flags]
 ```
 
-Declares a catalog property on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a property the catalog does not know is a 422. Gated by type:update.
+Declares a catalog property on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a property the catalog does not know is a 422. Gated by location_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1814,7 +1814,7 @@ Update a location type
 omniglass location-type update <id> [flags]
 ```
 
-Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by type:update.
+Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by location_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|

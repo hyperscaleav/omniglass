@@ -1,28 +1,25 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
-import Types from "./Types";
-import { TYPES_KEY, type TypeRow } from "../lib/types";
+import LocationTypes from "./LocationTypes";
+import { LOCATION_TYPES_KEY, type LocationType } from "../lib/location_types";
 import { classifierPropertiesKey, type ClassifierProperty } from "../lib/classifier_properties";
 import { PROPERTIES_KEY, type PropertyRow } from "../lib/properties";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
-// The Types page is a segmented tab control (Location / Secret) over the shared
-// FlatList, one tab per type registry. Each tab rebuilds its own FlatList (keyed
-// on the active kind) over the same unified listTypes query, so switching tabs
-// swaps the visible rows without a refetch. Secret is read-only (no create); a
-// custom location row is writable only when the caller holds type:create, and its
-// detail carries the location type's declared-property contract. A system's shape
-// is the standard it conforms to, which has its own page. Data is seeded into the
-// query cache so no server is needed.
-const seed: TypeRow[] = [
-  { kind: "location", id: uuidFor("lt-campus"), name: "campus", display_name: "Campus", official: true, icon: "map-pin" },
-  { kind: "location", id: uuidFor("lt-wing"), name: "wing", display_name: "Wing", official: false, icon: "map-pin", allowed_parent_types: ["campus", "root"] },
-  { kind: "secret", id: uuidFor("st-oauth2-client"), name: "oauth2-client", display_name: "OAuth2 Client", official: false, fields: [] },
+// The Location Types page is the place classifier registry alone on the shared
+// FlatList: one registry, one query, no secret_type anywhere on its path (#598
+// split the old joint Types page). An official (seed-owned) row is read-only;
+// a custom row is writable for a caller holding location_type:*, and its detail
+// carries the location type's declared-property contract. Data is seeded into
+// the query cache so no server is needed (except where a test says otherwise).
+const seed: LocationType[] = [
+  { id: uuidFor("lt-campus"), name: "campus", display_name: "Campus", official: true, icon: "map-pin", allowed_parent_types: [] },
+  { id: uuidFor("lt-wing"), name: "wing", display_name: "Wing", official: false, icon: "map-pin", allowed_parent_types: ["campus", "root"] },
   // A handle its display name does not contain, so filtering by it can only
   // succeed through the name field (the addressing-honesty test below).
-  { kind: "location", id: uuidFor("lt-server-room"), name: "server-room", display_name: "Machine hall", official: false, icon: "map-pin" },
+  { id: uuidFor("lt-server-room"), name: "server-room", display_name: "Machine hall", official: false, icon: "map-pin", allowed_parent_types: [] },
 ];
 
 // The location type contract shown on the wing blade, plus the catalog the editor
@@ -40,51 +37,34 @@ const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { userna
 
 function mount(me: Me = admin) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  qc.setQueryData([...TYPES_KEY], seed);
+  qc.setQueryData([...LOCATION_TYPES_KEY], seed);
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...PROPERTIES_KEY], catalog);
   qc.setQueryData([...classifierPropertiesKey("location-type", "wing")], wingContract);
   qc.setQueryData([...classifierPropertiesKey("location-type", "campus")], []);
   return render(() => (
     <QueryClientProvider client={qc}>
-      <Types />
+      <LocationTypes />
     </QueryClientProvider>
   ));
 }
 
-describe("Types page", () => {
+describe("LocationTypes page", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("renders one tab per type registry, and none for the promoted standard", () => {
-    mount();
-    expect(screen.getByRole("tab", { name: "Location" })).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Secret" })).toBeTruthy();
-    // system_type was promoted to the standard, which has its own catalog page.
-    expect(screen.queryByRole("tab", { name: "System" })).toBeNull();
-  });
-
-  it("defaults to the Location tab: a location row shows, a secret-only row does not", () => {
+  it("lists the registry rows, alphabetical by display name", () => {
     mount();
     expect(screen.getByText("campus")).toBeTruthy();
-    expect(screen.queryByText("oauth2-client")).toBeNull();
-  });
-
-  it("switches rows on tab click: Secret shows its row and hides campus", async () => {
-    mount();
-    fireEvent.click(screen.getByRole("tab", { name: "Secret" }));
-    expect(await screen.findByText("oauth2-client")).toBeTruthy();
-    expect(screen.queryByText("campus")).toBeNull();
-  });
-
-  it("offers no New type control on the read-only Secret tab", async () => {
-    mount();
-    fireEvent.click(screen.getByRole("tab", { name: "Secret" }));
-    expect(await screen.findByText("oauth2-client")).toBeTruthy();
-    expect(screen.queryByText("New type")).toBeNull();
+    expect(screen.getByText("wing")).toBeTruthy();
+    const cells = screen.getAllByRole("cell").map((c) => c.textContent ?? "");
+    const campusAt = cells.findIndex((t) => t.includes("Campus"));
+    const hallAt = cells.findIndex((t) => t.includes("Machine hall"));
+    expect(campusAt).toBeGreaterThanOrEqual(0);
+    expect(hallAt).toBeGreaterThan(campusAt);
   });
 
   // One identity column carries both operator-facing identities (the display name
-  // above, the name beneath), so the separate display-name column is gone.
+  // above, the name beneath).
   it("carries the display name and the name in a single Name column", () => {
     mount();
     const headers = screen.getAllByRole("columnheader").map((h) => h.textContent?.trim());
@@ -94,19 +74,19 @@ describe("Types page", () => {
     expect(cell?.textContent).toContain("Machine hall");
   });
 
-  it("shows New type on a writable tab for a caller holding type:create", () => {
+  it("shows New location type for a caller holding location_type:create", () => {
     mount(admin);
-    expect(screen.getByText("New type")).toBeTruthy();
+    expect(screen.getByText("New location type")).toBeTruthy();
   });
 
-  it("hides New type on a writable tab for a caller without type:create", () => {
+  it("hides New location type for a caller without location_type:create", () => {
     mount(viewer);
-    expect(screen.queryByText("New type")).toBeNull();
+    expect(screen.queryByText("New location type")).toBeNull();
   });
 
-  it("shows the allowed-parents editor on the location create form, with a Root option", async () => {
+  it("shows the allowed-parents editor on the create form, with a Root option", async () => {
     mount();
-    fireEvent.click(screen.getByText("New type"));
+    fireEvent.click(screen.getByText("New location type"));
     expect(await screen.findByText("Allowed parents")).toBeTruthy();
     expect(screen.getByText("Root (no parent)")).toBeTruthy();
   });
@@ -116,7 +96,7 @@ describe("Types page", () => {
   // name, and relabelling after that leaves it alone.
   it("derives the name from the display name until the operator edits it", async () => {
     mount();
-    fireEvent.click(screen.getByText("New type"));
+    fireEvent.click(screen.getByText("New location type"));
     const display = (await screen.findByPlaceholderText("Wing")) as HTMLInputElement;
     const name = screen.getByPlaceholderText("wing") as HTMLInputElement;
 
@@ -131,24 +111,14 @@ describe("Types page", () => {
     expect(screen.queryByText(/Derived from the display name/)).toBeNull();
   });
 
-  it("offers no create form on the read-only Secret tab", async () => {
-    mount();
-    fireEvent.click(screen.getByRole("tab", { name: "Secret" }));
-    await screen.findByText("oauth2-client");
-    expect(screen.queryByText("New type")).toBeNull();
-    expect(screen.queryByText("Allowed parents")).toBeNull();
-  });
-
   // Regression for the nested-<label> bug: the picker used to live inside the
   // shared Field component, whose root is a for-less <label>. A click anywhere
   // in that label (the heading, the hint) forwards to the first labelable
-  // descendant, which was the Root checkbox. This must fail against that markup
-  // (see Root's checked state flip after the heading/hint click) and pass once
-  // the heading and hint render as plain, non-label text outside any wrapping
-  // <label>.
+  // descendant, which was the Root checkbox. The heading and hint must render
+  // as plain, non-label text outside any wrapping <label>.
   it("clicking the Allowed parents heading or hint does not check Root", async () => {
     mount();
-    fireEvent.click(screen.getByText("New type"));
+    fireEvent.click(screen.getByText("New location type"));
     await screen.findByText("Allowed parents");
     const root = screen.getByLabelText("Root (no parent)") as HTMLInputElement;
     expect(root.checked).toBe(false);
@@ -158,25 +128,19 @@ describe("Types page", () => {
     expect(root.checked).toBe(false);
   });
 
-  it("edit blade on a location type pre-checks the existing allowed_parent_types and saving sends that set", async () => {
+  it("edit blade pre-checks the existing allowed_parent_types and saving sends that set", async () => {
     let sent: unknown;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
-      const method = req.method;
-      const url = req.url;
-      if (method === "PATCH" && url.includes("/location-types/wing")) {
+      if (req.method === "PATCH" && req.url.includes("/location-types/wing")) {
         sent = JSON.parse(await req.clone().text());
         return new Response(
-          JSON.stringify({ id: "wing", display_name: "Wing", official: false, icon: "map-pin", allowed_parent_types: ["campus", "root"] }),
+          JSON.stringify({ id: uuidFor("lt-wing"), name: "wing", display_name: "Wing", official: false, icon: "map-pin", allowed_parent_types: ["campus", "root"] }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
       }
-      // The post-save invalidation refetches the unified listTypes query; any
-      // shape satisfies the parser (each registry reads only its own key).
-      return new Response(
-        JSON.stringify({ location_types: [], system_types: [], secret_types: [] }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      );
+      // The post-save invalidation refetches the registry query alone.
+      return new Response(JSON.stringify({ location_types: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
     });
 
     mount();
@@ -202,7 +166,7 @@ describe("Types page", () => {
   });
 
   it("read-only blade shows allowed parents by display name, with the root sentinel labeled", async () => {
-    mount();
+    mount(viewer);
     fireEvent.click(screen.getByText("wing"));
     const blade = await waitFor(() => {
       const el = asides()[0];
@@ -210,25 +174,12 @@ describe("Types page", () => {
       return el as HTMLElement;
     });
     // Read-only (no Edit): wing's set is [campus, root]. The chip resolves the
-    // type id to its display name (Campus, not the raw "campus"), and the sentinel
-    // renders as "Root", so the two read consistently.
+    // type name to its display name (Campus, not the raw "campus"), and the
+    // sentinel renders as "Root", so the two read consistently.
+    expect(within(blade).queryByLabelText("Edit")).toBeNull();
     expect(within(blade).getByText("Campus")).toBeTruthy();
     expect(within(blade).getByText("Root")).toBeTruthy();
     expect(within(blade).queryByText("campus")).toBeNull();
-  });
-
-  it("edit blade on a secret kind does not show the allowed-parents editor", async () => {
-    mount();
-    fireEvent.click(screen.getByRole("tab", { name: "Secret" }));
-    fireEvent.click(await screen.findByText("oauth2-client"));
-    const blade = await waitFor(() => {
-      const el = asides()[0];
-      if (!el) throw new Error("no blade yet");
-      return el as HTMLElement;
-    });
-    // A secret type is read-only: no pencil, and no location-only editor.
-    expect(within(blade).queryByLabelText("Edit")).toBeNull();
-    expect(within(blade).queryByText("Allowed parents")).toBeNull();
   });
 
   // The location type is a classifier: its blade carries the declared-property
@@ -299,11 +250,45 @@ describe("Types page", () => {
   });
 });
 
+// #598: the old joint Types page fanned /location-types and /secret-types out
+// behind one query and threw if EITHER failed, so a plain *:read viewer (no
+// secret:read; secret is a sensitive resource off the viewer floor) lost the
+// location registry it was entitled to. The split page must render from
+// /location-types alone and never have /secret-types on its path.
+describe("LocationTypes for a viewer-floor principal (#598)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("renders the registry from /location-types alone, never fetching /secret-types", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.url.includes("/location-types")) {
+        return new Response(
+          JSON.stringify({ location_types: [{ id: uuidFor("lt-campus"), name: "campus", display_name: "Campus", official: false, icon: "map-pin", allowed_parent_types: [] }] }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      // Anything else is what the server would say to this viewer: forbidden.
+      return new Response(JSON.stringify({ title: "Forbidden", status: 403 }), { status: 403, headers: { "Content-Type": "application/json" } });
+    });
+    // No seeded registry cache: the page fetches, as the console does live.
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...ME_KEY], viewer);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <LocationTypes />
+      </QueryClientProvider>
+    ));
+    expect(await screen.findByText("campus")).toBeTruthy();
+    const urls = fetchMock.mock.calls.map((c) => (c[0] as Request).url);
+    expect(urls.some((u) => u.includes("/secret-types"))).toBe(false);
+  });
+});
+
 // The catalog addresses rows by the name (ADR-0062): the first column
 // shows it, and the substring filter matches it. The server-room fixture's
 // display name ("Machine hall") does not contain the handle, so the filter can
 // only find it through the name field.
-describe("Types addressing honesty (#469)", () => {
+describe("LocationTypes addressing honesty (#469)", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("shows the handle in the Name column and finds the row by it in the filter", async () => {
@@ -319,12 +304,9 @@ describe("Types addressing honesty (#469)", () => {
   });
 });
 
-// #581. The list renders the display name as the primary line (identityColumn), so
-// a heading that renders the NAME disagrees with the row that opened it: clicking
-// "Machine hall" opened a blade headed `server-room`. Different from #579, where
-// the heading was right and went stale; here it resolves correctly and reads the
-// wrong field off the row.
-describe("Types blade heading", () => {
+// #581. The list renders the display name as the primary line (identityColumn),
+// so the blade heading must be the words the row showed, not the identifier.
+describe("LocationTypes blade heading", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("heads the blade with the words the row showed, not the identifier", async () => {

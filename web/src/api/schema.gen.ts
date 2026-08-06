@@ -1109,13 +1109,13 @@ export interface paths {
         };
         /**
          * List location types
-         * @description Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by type:read.
+         * @description Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by location_type:read.
          */
         get: operations["list-location-types"];
         put?: never;
         /**
          * Create a location type
-         * @description Creates a custom (non-official) location_type. Gated by type:create.
+         * @description Creates a custom (non-official) location_type. Gated by location_type:create.
          */
         post: operations["create-location-type"];
         delete?: never;
@@ -1136,14 +1136,14 @@ export interface paths {
         post?: never;
         /**
          * Delete a location type
-         * @description Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.
+         * @description Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by location_type:delete.
          */
         delete: operations["delete-location-type"];
         options?: never;
         head?: never;
         /**
          * Update a location type
-         * @description Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by type:update.
+         * @description Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by location_type:update.
          */
         patch: operations["update-location-type"];
         trace?: never;
@@ -1157,7 +1157,7 @@ export interface paths {
         };
         /**
          * List a location type's declared properties
-         * @description Lists the location type's declared-property contract (what every location of the type exposes), ordered by property name, each with its optional default and required flag. Gated by type:read.
+         * @description Lists the location type's declared-property contract (what every location of the type exposes), ordered by property name, each with its optional default and required flag. Gated by location_type:read.
          */
         get: operations["list-location-type-properties"];
         put?: never;
@@ -1178,13 +1178,13 @@ export interface paths {
         get?: never;
         /**
          * Declare a property on a location type
-         * @description Declares a catalog property on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a property the catalog does not know is a 422. Gated by type:update.
+         * @description Declares a catalog property on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a property the catalog does not know is a 422. Gated by location_type:update.
          */
         put: operations["set-location-type-property"];
         post?: never;
         /**
          * Withdraw a property from a location type
-         * @description Removes one line from a custom location type's contract; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and an official type is read-only (422). Gated by type:delete.
+         * @description Removes one line from a custom location type's contract; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and an official type is read-only (422). Gated by location_type:delete.
          */
         delete: operations["delete-location-type-property"];
         options?: never;

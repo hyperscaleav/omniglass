@@ -7389,7 +7389,7 @@ paths:
       x-omniglass-permission: interface:update
   /location-types:
     get:
-      description: Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by type:read.
+      description: Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by location_type:read.
       operationId: list-location-types
       responses:
         "200":
@@ -7405,9 +7405,9 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List location types
-      x-omniglass-permission: type:read
+      x-omniglass-permission: location_type:read
     post:
-      description: Creates a custom (non-official) location_type. Gated by type:create.
+      description: Creates a custom (non-official) location_type. Gated by location_type:create.
       operationId: create-location-type
       requestBody:
         content:
@@ -7429,10 +7429,10 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Create a location type
-      x-omniglass-permission: type:create
+      x-omniglass-permission: location_type:create
   /location-types/{id}:
     delete:
-      description: Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.
+      description: Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by location_type:delete.
       operationId: delete-location-type
       parameters:
         - description: The location_type id
@@ -7452,9 +7452,9 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Delete a location type
-      x-omniglass-permission: type:delete
+      x-omniglass-permission: location_type:delete
     patch:
-      description: Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by type:update.
+      description: Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by location_type:update.
       operationId: update-location-type
       parameters:
         - in: path
@@ -7482,10 +7482,10 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a location type
-      x-omniglass-permission: type:update
+      x-omniglass-permission: location_type:update
   /location-types/{id}/properties:
     get:
-      description: Lists the location type's declared-property contract (what every location of the type exposes), ordered by property name, each with its optional default and required flag. Gated by type:read.
+      description: Lists the location type's declared-property contract (what every location of the type exposes), ordered by property name, each with its optional default and required flag. Gated by location_type:read.
       operationId: list-location-type-properties
       parameters:
         - description: The location_type id
@@ -7509,10 +7509,10 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List a location type's declared properties
-      x-omniglass-permission: type:read
+      x-omniglass-permission: location_type:read
   /location-types/{id}/properties/{property}:
     delete:
-      description: Removes one line from a custom location type's contract; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and an official type is read-only (422). Gated by type:delete.
+      description: Removes one line from a custom location type's contract; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and an official type is read-only (422). Gated by location_type:delete.
       operationId: delete-location-type-property
       parameters:
         - description: The location type id
@@ -7539,9 +7539,9 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Withdraw a property from a location type
-      x-omniglass-permission: type:delete
+      x-omniglass-permission: location_type:delete
     put:
-      description: Declares a catalog property on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a property the catalog does not know is a 422. Gated by type:update.
+      description: Declares a catalog property on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a property the catalog does not know is a 422. Gated by location_type:update.
       operationId: set-location-type-property
       parameters:
         - description: The location type id
@@ -7578,7 +7578,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Declare a property on a location type
-      x-omniglass-permission: type:update
+      x-omniglass-permission: location_type:update
   /locations:
     get:
       description: Lists the locations the caller may read, each filtered to its scope subtree. Gated by location:read.

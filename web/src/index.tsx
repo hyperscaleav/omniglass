@@ -26,7 +26,8 @@ import Properties from "./pages/Properties";
 import EventTypes from "./pages/EventTypes";
 import CommandTypes from "./pages/CommandTypes";
 import Tags from "./pages/Tags";
-import Types from "./pages/Types";
+import LocationTypes from "./pages/LocationTypes";
+import SecretTypes from "./pages/SecretTypes";
 import Standards from "./pages/Standards";
 import Vendors from "./pages/Vendors";
 import Drivers from "./pages/Drivers";
@@ -96,7 +97,8 @@ render(
           <Route path="/secrets" component={Secrets} />
           <Route path="/variables" component={Variables} />
           <Route path="/tags" component={Tags} />
-          <Route path="/types" component={Types} />
+          <Route path="/location-types" component={LocationTypes} />
+          <Route path="/secret-types" component={SecretTypes} />
           <Route path="/standards" component={Standards} />
           <Route path="/metrics" component={Metrics} />
           <Route path="/properties" component={Properties} />

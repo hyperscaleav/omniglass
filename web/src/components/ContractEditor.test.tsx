@@ -176,12 +176,12 @@ describe("ContractEditor on a location type", () => {
     expect(put!.url).toContain("/location-types/meeting-room/properties/has_camera");
   });
 
-  // A location type's contract is part of the type registry, so the server gates it
-  // on type:update, not location:update. A principal holding only location writes
-  // must not see the write controls.
-  it("gates its write controls on type:update, not location:update", () => {
+  // A location type's contract is part of the location_type registry, so the
+  // server gates it on location_type:update, not location:update. A principal
+  // holding only location writes must not see the write controls.
+  it("gates its write controls on location_type:update, not location:update", () => {
     const locationWriter: Me = { principal: { id: "l", kind: "human" }, permissions: ["*:read", "location:update", "location:delete"], grants: [] };
-    const typeWriter: Me = { principal: { id: "t", kind: "human" }, permissions: ["*:read", "type:update", "type:delete"], grants: [] };
+    const typeWriter: Me = { principal: { id: "t", kind: "human" }, permissions: ["*:read", "location_type:update", "location_type:delete"], grants: [] };
     expect(mount("location-type", { me: locationWriter }).queryByLabelText("Property to declare")).toBeNull();
     expect(mount("location-type", { me: typeWriter }).getByLabelText("Property to declare")).toBeTruthy();
   });

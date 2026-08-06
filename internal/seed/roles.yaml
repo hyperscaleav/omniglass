@@ -103,7 +103,7 @@ roles:
       - "event_type:*"
       - "command_type:*"
       - "command:*"
-      - "type:create,update,delete"
+      - "location_type:create,update,delete"
       - "vendor:create,update,delete"
       - "driver:create,update,delete"
       - "capability:create,update,delete"

@@ -393,7 +393,7 @@ identical route shapes:
   `product:read` / `:update` / `:delete`; `GET /standards/{id}/properties`, `PUT` /
   `DELETE /standards/{id}/properties/{property}`, gated `standard:read` / `:update` / `:delete`.
 - `GET /location-types/{id}/properties`, `PUT` / `DELETE /location-types/{id}/properties/{property}`,
-  gated `type:read` / `:update` / `:delete` (the location type registry is still a `type` registry).
+  gated `location_type:read` / `:update` / `:delete`, the registry's own resource.
 
 The list returns the contract ordered by property name, each line
 `{property_type_name, property_type_id, default_value, required}`: the label and type are the catalog's

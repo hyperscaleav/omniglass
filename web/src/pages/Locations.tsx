@@ -14,14 +14,13 @@ import {
   type Location,
   type NameCheck,
   LOCATIONS_KEY,
-  LOCATION_TYPES_KEY,
   listLocations,
-  listLocationTypes,
   createLocation,
   updateLocation, renameLocation,
   checkLocationName,
   deleteLocation,
 } from "../lib/locations";
+import { LOCATION_TYPES_KEY, ROOT_PLACEMENT, listLocationTypes } from "../lib/location_types";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { openInEdit, consumePendingEdit } from "../lib/pendingedit";
@@ -29,7 +28,6 @@ import { ChevronRight, Pencil, Plus, Save, Search, X, resolveIcon } from "../com
 import Button from "../components/Button";
 import PropertiesPanel, { propertyResolutionBlade, ownerPropertyBladeId } from "../components/PropertiesPanel";
 import { LocationHealthPanel } from "../components/HealthPanel";
-import { ROOT_PLACEMENT } from "../lib/types";
 
 // Locations: the place tree on the generic TreeList (campuses, buildings, floors,
 // rooms). The same config-driven shell every inventory page uses: embedded filter,

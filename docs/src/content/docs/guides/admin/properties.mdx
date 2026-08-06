@@ -21,7 +21,7 @@ A property is used in three moves, and this page walks all three: the **catalog*
 **classifier declares** it (with a default, and whether it is required), and an **instance sets** it.
 There are three classifiers and they behave identically: a [product](/guides/admin/products/) declares
 for its components, a [standard](/guides/admin/standards/) for its systems, and a
-[location type](/guides/admin/types/) for its locations.
+[location type](/guides/admin/location-types/) for its locations.
 
 The catalog is estate-wide reference data, not a scoped resource, so every property is visible to
 every reader; the write gates decide who may change it.
@@ -77,7 +77,7 @@ and optionally marks it **required**.
 |---|---|---|---|
 | a **product** | its components | **Catalog > [Products](/guides/admin/products/)** | `product:update` / `:delete` |
 | a **standard** | the systems that conform to it | **Catalog > [Standards](/guides/admin/standards/)** | `standard:update` / `:delete` |
-| a **location type** | the locations of that type | **Catalog > [Types](/guides/admin/types/)** | `type:update` / `:delete` |
+| a **location type** | the locations of that type | **Catalog > [Location Types](/guides/admin/location-types/)** | `location_type:update` / `:delete` |
 
 Declaring `serial-number`, `firmware-version`, and `model-number` on a Samsung QM55 is what makes
 every QM55 in the estate carry those three, with the same names and the same types, without touching

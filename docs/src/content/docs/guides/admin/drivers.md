@@ -5,7 +5,7 @@ description: "The Drivers catalog: the implementations that get, emit, and set a
 
 **Catalog > Drivers** (`/drivers`, with `driver:read`, covered by every viewer's `*:read` floor)
 is the directory of **drivers**: the implementation that gets, emits, and sets a product's signals,
-on the same flat-registry pattern as [Types](/guides/admin/types/) and [Tags](/guides/admin/tags/).
+on the same flat-registry pattern as [Location Types](/guides/admin/location-types/) and [Tags](/guides/admin/tags/).
 Where a [vendor](/guides/admin/vendors/) names who a device comes from, a driver names how it is
 talked to (for example `Generic SNMP` or `Cisco xAPI`). Each row shows the **name** (the
 operator-facing name, for example `snmp-generic`), the **display name**, an optional
@@ -35,7 +35,7 @@ driver this way. It is a leaf catalog beside the vendor and
   through its optional `driver_id`, but that link is `on delete set null`, so deleting a driver
   detaches it from those products (their driver clears) rather than blocking. Removing a custom row
   is unconditional (still refused for an official row, 422). The 409 delete-refused-while-referenced
-  rule the [Types](/guides/admin/types/) registry enforces lives instead on `component.product_id`
+  rule the [Location Types](/guides/admin/location-types/) registry enforces lives instead on `component.product_id`
   (a product with components cannot be deleted), not on the driver.
 
 Minting a driver is admin-gated; the picker that consumes it lives on the

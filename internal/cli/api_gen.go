@@ -2167,7 +2167,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a location type",
-					Long:    "Creates a custom (non-official) location_type. Gated by type:create.",
+					Long:    "Creates a custom (non-official) location_type. Gated by location_type:create.",
 					Example: "  omniglass location-type create --display-name display_name --name name",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2203,7 +2203,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <id>",
 					Short:   "Delete a location type",
-					Long:    "Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.",
+					Long:    "Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by location_type:delete.",
 					Example: "  omniglass location-type delete <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2220,7 +2220,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List location types",
-					Long:    "Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by type:read.",
+					Long:    "Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by location_type:read.",
 					Example: "  omniglass location-type list",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2242,7 +2242,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "delete <id> <property>",
 						Short:   "Withdraw a property from a location type",
-						Long:    "Removes one line from a custom location type's contract; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and an official type is read-only (422). Gated by type:delete.",
+						Long:    "Removes one line from a custom location type's contract; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and an official type is read-only (422). Gated by location_type:delete.",
 						Example: "  omniglass location-type property delete <id> <property>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2259,7 +2259,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <id>",
 						Short:   "List a location type's declared properties",
-						Long:    "Lists the location type's declared-property contract (what every location of the type exposes), ordered by property name, each with its optional default and required flag. Gated by type:read.",
+						Long:    "Lists the location type's declared-property contract (what every location of the type exposes), ordered by property name, each with its optional default and required flag. Gated by location_type:read.",
 						Example: "  omniglass location-type property list <id>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2278,7 +2278,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "update <id> <property>",
 						Short:   "Declare a property on a location type",
-						Long:    "Declares a catalog property on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a property the catalog does not know is a 422. Gated by type:update.",
+						Long:    "Declares a catalog property on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a property the catalog does not know is a 422. Gated by location_type:update.",
 						Example: "  omniglass location-type property update <id> <property>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2309,7 +2309,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <id>",
 					Short:   "Update a location type",
-					Long:    "Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by type:update.",
+					Long:    "Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by location_type:update.",
 					Example: "  omniglass location-type update <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {

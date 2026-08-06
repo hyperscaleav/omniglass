@@ -16,7 +16,7 @@ import (
 // TestLocationTypesAPI drives the location_type registry read endpoint: an owner
 // lists the seeded official types in alphabetical order (by display_name), each
 // with its display_name, so a form can populate a type picker (value = id, label
-// = display_name). The 403 for a principal without type:read is covered
+// = display_name). The 403 for a principal without location_type:read is covered
 // generically by TestEveryRouteIsGated.
 func TestLocationTypesAPI(t *testing.T) {
 	dsn := storagetest.NewDSN(t)

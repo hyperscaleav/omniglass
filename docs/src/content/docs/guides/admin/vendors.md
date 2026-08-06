@@ -5,7 +5,7 @@ description: "The Vendors catalog: the organizations behind products (name, disp
 
 **Catalog > Vendors** (`/vendors`, with `vendor:read`, covered by every viewer's `*:read`
 floor) is the directory of **vendors**: the organizations behind the products in the estate, on
-the same flat-registry pattern as [Types](/guides/admin/types/) and [Tags](/guides/admin/tags/).
+the same flat-registry pattern as [Location Types](/guides/admin/location-types/) and [Tags](/guides/admin/tags/).
 A vendor is not a device; it is the company a device comes from. Each row shows the **name**
 (for example `crestron`), the **display name**, its **kind**
 (**manufacturer**, **integrator**, or **developer**), an optional **icon** glyph key, and its
@@ -44,7 +44,7 @@ the two leaf catalogs beside it.
   through its optional `vendor_id`, but that link is `on delete set null`, so deleting a vendor
   detaches it from those products (their vendor clears) rather than blocking. Removing a custom row
   is unconditional (still refused for an official row, 422). The 409 delete-refused-while-referenced
-  rule the [Types](/guides/admin/types/) registry enforces lives instead on `component.product_id`
+  rule the [Location Types](/guides/admin/location-types/) registry enforces lives instead on `component.product_id`
   (a product with components cannot be deleted), not on the vendor.
 
 Minting a vendor is admin-gated; the picker that consumes it lives on the

@@ -1,0 +1,87 @@
+---
+title: Location types
+description: "The Location Types catalog: the place classifier registry (campus, building, floor, room, and your own), operator-owned rows with an icon, an allowed-parents constraint, and a declared-property contract."
+---
+
+import SeededSet from '../../../../components/SeededSet.astro';
+
+**Catalog > Location Types** (`/location-types`, with `location_type:read`, covered by every
+viewer's `*:read` floor) is the registry of **place classifiers**: the `location_type` a
+[location](/guides/operator/entities/) is classified by. It is one registry with one page on
+purpose; its former home, a tabbed Types page, shared a fetch with the secret type registry, and
+a viewer without `secret:read` lost both. The two now stand alone (secret shapes live on
+[Secret Types](/guides/admin/secret-types/)), and two other kinds left even earlier, because a
+bare label registry was never what they were: a **component**'s shape comes from the
+[product](/guides/admin/products/) it points at, and a **system**'s from the
+[standard](/guides/admin/standards/) it conforms to.
+
+The page is that registry's directory: a table of its rows, sorted alphabetically by display
+name, each showing the **name** (for example `wing`), **display name**, an **icon** glyph key,
+and its **origin** (**official**, seed-owned, or **custom**). A type also carries an `id`, a
+uuid minted by the database, the internal address the handle resolves to
+([ADR-0062](/architecture/decisions/)); the handle is what you type and read.
+
+- **name** matches a name or display name, and **official** narrows the list to official or
+  custom rows.
+- **New location type** (with `location_type:create`, an admin permission) opens a create
+  **drawer**: give it a **name** (unique within the registry, e.g. `wing`), a **display name**,
+  an **icon** glyph key (defaults to `map-pin`), and its **allowed parents**: a checkbox list of
+  the other location types plus a **Root** option, the set of parent types (or the top of the
+  tree) a location of this type may be placed under. Leave every box unchecked for
+  **unconstrained** (any parent, or root), the default; `root` is a reserved **name** no real
+  type may take.
+- Pick a row to open its **detail blade**. The footer **Edit** pencil (with
+  `location_type:update`) edits the display name, the icon, and the allowed parents; the
+  **name** is fixed, since a catalog row carries no rename (`:rename` is a component, system,
+  location, and principal group affordance). **Delete** (with `location_type:delete`) removes
+  the row, behind a confirm.
+- **The shipped location types are yours to change.** They arrive as ordinary
+  **operator-owned** rows (origin **custom**, not official), so relabel them, re-parent them, or
+  delete the ones your estate does not use. They are forked from a template in the code, once,
+  with no inheritance, and the boot seed installs them **only if absent**, so a restart never
+  reverts your edits. This is the opposite ownership story from
+  [Secret Types](/guides/admin/secret-types/), whose registry the seed owns authoritatively. See
+  [the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs).
+  The shipped set, rendered from the seed itself:
+
+  <SeededSet kind="location_types" />
+- An **official** (seed-owned) row, where one exists, is read-only: no Edit, no Delete, and the
+  blade marks it "Seed-owned, read-only." That treatment is reserved for the **canonical
+  vocabulary** a release must be able to correct, above all the
+  [property catalog](/guides/admin/properties/), not for example content like a place type.
+- **Delete** is refused (409) while a location still uses that type: reclassify or remove the
+  referencing rows first.
+- A non-empty **allowed parents** set is enforced when a location is created or moved: an
+  out-of-order placement (for example a floor under a room) is refused with a message naming
+  both types. An empty set never blocks a placement. Existing locations are grandfathered:
+  adding or tightening a set does not touch a placement already made, only a later move.
+
+Minting a type is admin-gated; *using* one, classifying a location by picking it on the
+location's own create or edit form, is the ordinary entity write, gated by `location:update`.
+The same operations are `omniglass location-type list/create/update/delete` from the CLI (see
+the [CLI reference](/reference/cli/)).
+
+## Declared properties: the location type's contract
+
+A location type's blade carries a **Declared properties** panel, its **contract**: which
+[properties](/guides/admin/properties/) every location of that type exposes, and what each one
+defaults to. It is the same editor as a [product](/guides/admin/products/)'s or a
+[standard](/guides/admin/standards/)'s, and it keeps this page's permission story: the read
+rides `location_type:read`, declaring a line needs `location_type:update`, and withdrawing one
+needs `location_type:delete`.
+
+- **Declare a property** picks a name from the property catalog, optionally types a **default**,
+  and optionally marks it **required**. The property must already exist in the catalog; mint it
+  under [Catalog > Properties](/guides/admin/properties/) first. Declaring is **idempotent**.
+- **Type and validation are the catalog's**, not the contract's, so a location type cannot
+  redefine what a property means, only what a fresh location of that type starts with.
+- **Locations inherit live.** Change a default and every location of the type that has not
+  overridden that property picks up the new value. **Withdraw** removes the line; locations keep
+  any value they set, now **off contract**.
+
+From the CLI the contract is `omniglass location-type property list <id>`,
+`omniglass location-type property update <id> <property>`, and
+`omniglass location-type property delete <id> <property>`. The registry and its contract are one
+noun, mirroring the routes (`/location-types` for the registry,
+`/location-types/{id}/properties` for its contract): a hyphen joins a two-word noun, a space
+means the thing beneath it.
