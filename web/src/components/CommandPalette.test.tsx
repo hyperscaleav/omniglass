@@ -16,6 +16,12 @@ describe("command palette source", () => {
     expect(commands).toContainEqual(expect.objectContaining({ label: "Users", path: "/users", group: "Admin" }));
   });
 
+  // The Overview hub (#609) rides the same nav derivation: unsectioned, so its
+  // group tag is the bare Catalog, with no special-casing in the palette.
+  it("lists the Catalog Overview from the nav derivation", () => {
+    expect(commands).toContainEqual(expect.objectContaining({ label: "Overview", path: "/catalog", group: "Catalog" }));
+  });
+
   it("matches on label, group, and section: 'location' finds Catalog · Locations > Types", () => {
     const hits = commands.filter((c) => matches(c, "location"));
     expect(hits.map((c) => c.path)).toContain("/location-types");

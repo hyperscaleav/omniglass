@@ -27,6 +27,7 @@ import Properties from "./pages/Properties";
 import EventTypes from "./pages/EventTypes";
 import CommandTypes from "./pages/CommandTypes";
 import Tags from "./pages/Tags";
+import CatalogOverview from "./pages/CatalogOverview";
 import LocationTypes from "./pages/LocationTypes";
 import SecretTypes from "./pages/SecretTypes";
 import Standards from "./pages/Standards";
@@ -95,6 +96,9 @@ render(
           <Route path="/secrets" component={Secrets} />
           <Route path="/variables" component={Variables} />
           <Route path="/tags" component={Tags} />
+          {/* The Catalog overview hub (#609): ungated like Home; the page
+              filters its cards through the same nav gate as the rail. */}
+          <Route path="/catalog" component={CatalogOverview} />
           <Route path="/location-types" component={LocationTypes} />
           <Route path="/secret-types" component={SecretTypes} />
           <Route path="/standards" component={Standards} />

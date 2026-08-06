@@ -217,6 +217,7 @@ describe("Catalog sections (#608)", () => {
   it("orders the Catalog children by section, one run per estate noun", () => {
     const cat = navItems.find((i) => i.label === "Catalog")!;
     expect(cat.children!.map((c) => [c.section, c.label])).toEqual([
+      [undefined, "Overview"], // the unsectioned hub, before the first section (#609)
       ["Components", "Products"],
       ["Components", "Vendors"],
       ["Components", "Drivers"],
@@ -238,7 +239,7 @@ describe("Catalog sections (#608)", () => {
   it("keeps every existing entry's path, adds the two new stubs, and drops only Templates from the rail", () => {
     const cat = navItems.find((i) => i.label === "Catalog")!;
     expect(cat.children!.map((c) => c.path).sort()).toEqual([
-      "/capabilities", "/command-types", "/drivers", "/event-types",
+      "/capabilities", "/catalog", "/command-types", "/drivers", "/event-types",
       "/location-types", "/log-types", "/metrics", "/notifications", "/products",
       "/properties", "/rules", "/secret-types", "/standards", "/tags", "/vendors",
     ]);
@@ -263,6 +264,37 @@ describe("Catalog sections (#608)", () => {
     // An unsectioned entry keeps its single label.
     expect(sectionLabel("/web/components")).toBe("Components");
     expect(sectionLabel("/web/users")).toBe("Users");
+  });
+});
+
+// The Catalog overview entry (#609): a visible Overview opens /catalog, the hub
+// page. It sits FIRST among the Catalog children, before the Components section,
+// unsectioned (no header above it), live, and ungated like Home: every viewer may
+// open the page, which then shows only the cards whose entries filterNav keeps.
+describe("Catalog overview entry (#609)", () => {
+  it("puts Overview first among the Catalog children: live, at /catalog, unsectioned", () => {
+    const cat = navItems.find((i) => i.label === "Catalog")!;
+    const first = cat.children![0];
+    expect(first.label).toBe("Overview");
+    expect(first.path).toBe("/catalog");
+    expect(first.live).toBe(true);
+    expect(first.section).toBeUndefined();
+  });
+
+  it("leaves /catalog ungated, like Home", () => {
+    const cat = navItems.find((i) => i.label === "Catalog")!;
+    const first = cat.children![0];
+    expect(first.resource).toBeUndefined();
+    expect(first.perm).toBeUndefined();
+    expect(routeTokens("/web/catalog")).toBeNull();
+  });
+
+  it("keeps Overview for a principal who can read nothing gated", () => {
+    expect(catalog([]).some((c) => c.label === "Overview")).toBe(true);
+  });
+
+  it("labels the unsectioned Overview with its single label in the top bar", () => {
+    expect(sectionLabel("/web/catalog")).toBe("Overview");
   });
 });
 

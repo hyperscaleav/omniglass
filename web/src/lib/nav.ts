@@ -78,6 +78,12 @@ export const navItems: NavItem[] = [
     // non-folding labels in the sidebar, never as folds; filterNav still judges
     // each entry on its own gate.
     children: [
+      // The Overview hub (#609): one card per section below, teaching copy plus
+      // live registry counts, each card linking its pages. Unsectioned so no
+      // header precedes it, and ungated like Home: the page itself filters its
+      // cards through the same filterNav gate that shapes this rail, so a
+      // viewer opens it and sees exactly the sections whose entries survive.
+      { label: "Overview", path: "/catalog", live: true, hint: "The authored model at a glance: every Catalog section as a card, teaching what it holds, with live registry counts." },
       { section: "Components", label: "Products", path: "/products", live: true, resource: "product", hint: "A concrete SKU: a vendor's product, its driver, kind, and the capabilities it provides." },
       { section: "Components", label: "Vendors", path: "/vendors", live: true, resource: "vendor", hint: "The organizations behind products: manufacturers, integrators, developers." },
       { section: "Components", label: "Drivers", path: "/drivers", live: true, resource: "driver", hint: "The implementations that get, emit, and set a product's signals." },

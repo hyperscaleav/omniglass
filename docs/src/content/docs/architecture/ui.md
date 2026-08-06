@@ -136,12 +136,12 @@ Two layers, deliberately decoupled:
    redirects to maintain.
 2. **The sidebar groups those flat routes into clusters for browsing**: Home, Dashboards, Alarms,
    Inventory (locations, systems, components, nodes), Values (variables, secrets, config, files),
-   Catalog (sectioned by the estate noun each registry serves: Components with products, vendors,
-   drivers, and capabilities; Systems with standards; Locations and Secrets each with their types;
-   Telemetry with metrics, properties, events, and the future log catalog; Action with rules,
-   commands, and future notifications; General with tags), Explore, Learn, Admin (users, roles,
-   groups, audit, and the Settings leaf). A cluster is pure presentation, not a destination:
-   rearrangeable and user-customizable without touching a route.
+   Catalog (an Overview hub at `/catalog`, then sectioned by the estate noun each registry serves:
+   Components with products, vendors, drivers, and capabilities; Systems with standards; Locations
+   and Secrets each with their types; Telemetry with metrics, properties, events, and the future
+   log catalog; Action with rules, commands, and future notifications; General with tags), Explore,
+   Learn, Admin (users, roles, groups, audit, and the Settings leaf). A cluster is pure
+   presentation, not a destination: rearrangeable and user-customizable without touching a route.
 
 **Values is its own top-level group**, beside Inventory: values set on estate entities and resolved
 down the cascade, a distinct genus from the entities themselves. **Config is the CI store** (desired

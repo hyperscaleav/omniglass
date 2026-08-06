@@ -34,7 +34,9 @@ There are two ways to operate, and they are the same API with the same checks be
   they serve (Components, Systems, Locations, Secrets, Telemetry, Action, General), and a guide
   path reads all three levels: **Catalog > Locations > Types**. A live section is full strength; a
   section whose backend has not landed yet is dimmed with a **soon** tag (still clickable, with a
-  short note on what it will do).
+  short note on what it will do). The Catalog's first entry, **Overview** (`/catalog`), is the
+  hub: one card per section, teaching what it holds, with live registry counts linking to each
+  page; you see only the cards for sections you can enter.
 - The **top bar** shows the current section and a **Search (⌘K)** button. The console is
   dark-only today; the theme is an [Admin > Settings](/guides/admin/) value resolved by the
   settings engine, not a per-session toggle.
