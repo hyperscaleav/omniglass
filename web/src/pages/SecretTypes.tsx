@@ -7,14 +7,14 @@ import KVStacked from "../components/KVStacked";
 import { type SecretType, SECRET_TYPES_KEY, listSecretTypes } from "../lib/secret_types";
 import { type BladeDef } from "../lib/blades";
 
-// Secret Types: the shapes a secret can take (snmp-community, basic-auth, and
+// Secret types (Catalog > Secrets): the shapes a secret can take (snmp-community, basic-auth, and
 // the rest), read-only by design. The registry is authoritative seed-owned
 // reference data (the boot seed upserts it, so a release can correct it), so
 // there is no create, no edit, and no delete here for anyone, owner included;
 // the blade shows each type's declared fields. The whole page is gated by
 // secret:read (a sensitive resource off the *:read viewer floor), the same
 // permission that guards the secrets whose shape it teaches: a plain viewer
-// does not see this page, and no longer loses the Location Types registry over
+// does not see this page, and no longer loses the location registry over
 // it (#598, which split the old joint Types page).
 
 function officialBadge(official: boolean): JSX.Element {

@@ -23,7 +23,7 @@ import { createIdentity } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
-// Location Types: the place classifier registry (campus, building, floor, room,
+// Location types (Catalog > Locations): the place classifier registry (campus, building, floor, room,
 // and your own) on the FlatList surface. The registry is operator-owned example
 // content: the shipped rows seed only-if-absent, so every row here is normally
 // custom and writable (create, edit, delete, gated location_type:*); an official

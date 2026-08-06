@@ -67,11 +67,15 @@ export const navItems: NavItem[] = [
     label: "Catalog", icon: Icons.Layers, hint: "The authored model: templates, types, tags, and rules.",
     children: [
       { label: "Templates", path: "/templates", hint: "Example configurations you clone: start a location type, a standard, or a whole system from one, then own what you get." },
-      { label: "Location Types", path: "/location-types", live: true, resource: "location_type", hint: "The place classifier registry: campus, building, floor, room, and your own, each with its icon, allowed parents, and property contract." },
+      // Catalog entries take the bare plural noun: the group already says these
+      // are the shapes, and the palette and sidebar disambiguate the two that
+      // share a noun with an instance page (Inventory > Locations, Values >
+      // Secrets) by group.
+      { label: "Locations", path: "/location-types", live: true, resource: "location_type", hint: "The place classifier registry: campus, building, floor, room, and your own, each with its icon, allowed parents, and property contract." },
       // Gated on secret (a sensitive resource off the *:read floor), the same
       // permission as the /secret-types route it lists: a plain viewer sees
-      // neither, and never loses Location Types over it (#598).
-      { label: "Secret Types", path: "/secret-types", live: true, resource: "secret", hint: "The shapes a secret can take, read-only reference data seeded with the release." },
+      // neither, and never loses the location registry over it (#598).
+      { label: "Secrets", path: "/secret-types", live: true, resource: "secret", hint: "The shapes a secret can take, read-only reference data seeded with the release." },
       { label: "Standards", path: "/standards", live: true, resource: "standard", hint: "The blueprints a system conforms to, each declaring the properties every conforming system exposes." },
       { label: "Metrics", path: "/metrics", live: true, resource: "metric_type", hint: "The numeric signal catalog: the canonical series a sample measures, each carrying its unit and precision." },
       { label: "Properties", path: "/properties", live: true, resource: "property_type", hint: "The categorical signal catalog: the canonical properties a sample observes and a product contract declares." },

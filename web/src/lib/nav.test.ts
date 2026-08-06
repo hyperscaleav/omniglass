@@ -98,19 +98,20 @@ describe("filterNav", () => {
   });
 
   // #598 both ways: the split gives each registry its own tab with its own gate.
-  // Location Types rides the viewer floor (location_type is not sensitive);
-  // Secret Types gates on the secret resource, the same word the /secret-types
-  // route stamps, so the floor viewer loses exactly the tab whose route would
-  // 403 it, and nothing else.
-  it("keeps Location Types for a *:read floor viewer and hides Secret Types (#598)", () => {
+  // Catalog > Locations rides the viewer floor (location_type is not sensitive);
+  // Catalog > Secrets gates on the secret resource, the same word the
+  // /secret-types route stamps, so the floor viewer loses exactly the tab whose
+  // route would 403 it, and nothing else. The bare nouns are scoped to the
+  // Catalog section here, so they cannot match the Inventory and Values twins.
+  it("keeps Catalog > Locations for a *:read floor viewer and hides Catalog > Secrets (#598)", () => {
     const floor = section("Catalog", ["*:read"]);
-    expect(floor).toContain("Location Types");
-    expect(floor).not.toContain("Secret Types");
+    expect(floor).toContain("Locations");
+    expect(floor).not.toContain("Secrets");
   });
 
-  it("shows Secret Types to a secret:read holder and the owner", () => {
-    expect(section("Catalog", ["*:read", "secret:read"])).toContain("Secret Types");
-    expect(section("Catalog", [">"])).toContain("Secret Types");
+  it("shows Catalog > Secrets to a secret:read holder and the owner", () => {
+    expect(section("Catalog", ["*:read", "secret:read"])).toContain("Secrets");
+    expect(section("Catalog", [">"])).toContain("Secrets");
   });
 });
 
