@@ -16,7 +16,7 @@ import (
 // id and why an audit row keys on it.
 //
 // This is the ENTITY name rule: one segment, no dot. The other rule, the keyspace
-// one, is the same character set joined by dots (`icmp.rtt-avg`). They are two rules
+// one, is the same character set joined by dots (`icmp-rtt-avg`). They are two rules
 // and ONE validator: storage.ValidateName picks between them from the table's
 // declared identity shape (identity_shape.go), so a call site cannot pick the wrong
 // rule or forget to pick at all.

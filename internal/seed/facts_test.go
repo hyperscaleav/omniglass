@@ -24,6 +24,9 @@ func TestSeedFactsGroundTruth(t *testing.T) {
 		PropertyTypes []struct {
 			Name string `json:"name"`
 		} `json:"property_types"`
+		MetricTypes []struct {
+			Name string `json:"name"`
+		} `json:"metric_types"`
 		InterfaceTypes []struct {
 			Name  string `json:"name"`
 			Built bool   `json:"built"`
@@ -37,10 +40,23 @@ func TestSeedFactsGroundTruth(t *testing.T) {
 	for _, p := range doc.PropertyTypes {
 		props[p.Name] = true
 	}
-	for _, want := range []string{"health", "video.input", "icmp.reachable"} {
+	for _, want := range []string{"health", "video-input", "serial-number"} {
 		if !props[want] {
 			t.Errorf("property_types missing %q (the hand-written guides omitted it; the artifact must not)", want)
 		}
+	}
+	// The numeric canon renders on its own lane (#587).
+	metrics := map[string]bool{}
+	for _, m := range doc.MetricTypes {
+		metrics[m.Name] = true
+	}
+	for _, want := range []string{"icmp-reachable", "icmp-rtt-avg", "tcp-open", "tcp-connect-time"} {
+		if !metrics[want] {
+			t.Errorf("metric_types missing %q", want)
+		}
+	}
+	if props["icmp-reachable"] {
+		t.Error("icmp-reachable rendered under property_types; numbers are metric types")
 	}
 
 	if len(doc.Roles) == 0 {

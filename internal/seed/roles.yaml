@@ -15,7 +15,7 @@ roles:
     display_name: Operator
     description: >-
       Day-to-day operations: create or edit components, interfaces, secrets,
-      variables, and the property, event, and command catalogs, and issue
+      variables, and the property, metric, event, and command catalogs, and issue
       commands in scope.
       Sees and reveals the device secrets in its scope (never the admin-sensitive
       platform credentials). Inherits Viewer.
@@ -26,6 +26,7 @@ roles:
       - "secret:read,reveal,create,update"
       - "variable:create,update"
       - "property_type:create,update"
+      - "metric_type:create,update"
       - "event_type:create,update"
       - "command_type:create,update"
       - "command:issue"
@@ -98,6 +99,7 @@ roles:
       - "role:read:admin"
       - "audit:read:admin"
       - "property_type:*"
+      - "metric_type:*"
       - "event_type:*"
       - "command_type:*"
       - "command:*"

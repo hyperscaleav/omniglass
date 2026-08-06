@@ -25,8 +25,11 @@ var locationTypesYAML []byte
 //go:embed standards.yaml
 var standardsYAML []byte
 
-//go:embed properties.yaml
-var propertiesYAML []byte
+//go:embed property_types.yaml
+var propertyTypesYAML []byte
+
+//go:embed metric_types.yaml
+var metricTypesYAML []byte
 
 //go:embed event_types.yaml
 var eventTypesYAML []byte
@@ -87,16 +90,25 @@ type standardsDoc struct {
 	} `yaml:"standards"`
 }
 
-type propertiesDoc struct {
-	Properties []struct {
+type propertyTypesDoc struct {
+	PropertyTypes []struct {
 		Name        string         `yaml:"name"`
-		Kind        string         `yaml:"kind"`
 		DataType    string         `yaml:"data_type"`
-		Unit        string         `yaml:"unit"`
 		Validation  map[string]any `yaml:"validation"`
 		DisplayName string         `yaml:"display_name"`
 		Description string         `yaml:"description"`
-	} `yaml:"properties"`
+	} `yaml:"property_types"`
+}
+
+type metricTypesDoc struct {
+	MetricTypes []struct {
+		Name        string `yaml:"name"`
+		DataType    string `yaml:"data_type"`
+		Unit        string `yaml:"unit"`
+		Precision   *int   `yaml:"precision"`
+		DisplayName string `yaml:"display_name"`
+		Description string `yaml:"description"`
+	} `yaml:"metric_types"`
 }
 
 type interfaceTypesDoc struct {
@@ -181,7 +193,10 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedInterfaceTypes(ctx, gw); err != nil {
 		return err
 	}
-	if err := seedProperties(ctx, gw); err != nil {
+	if err := seedPropertyTypes(ctx, gw); err != nil {
+		return err
+	}
+	if err := seedMetricTypes(ctx, gw); err != nil {
 		return err
 	}
 	if err := seedEventTypes(ctx, gw); err != nil {
@@ -224,22 +239,12 @@ func seedInterfaceTypes(ctx context.Context, gw storage.Gateway) error {
 	return nil
 }
 
-func seedProperties(ctx context.Context, gw storage.Gateway) error {
-	var doc propertiesDoc
-	if err := yaml.Unmarshal(propertiesYAML, &doc); err != nil {
-		return fmt.Errorf("seed: parse properties: %w", err)
+func seedPropertyTypes(ctx context.Context, gw storage.Gateway) error {
+	var doc propertyTypesDoc
+	if err := yaml.Unmarshal(propertyTypesYAML, &doc); err != nil {
+		return fmt.Errorf("seed: parse property_types: %w", err)
 	}
-	for _, p := range doc.Properties {
-		var unit *string
-		if p.Unit != "" {
-			u := p.Unit
-			unit = &u
-		}
-		var kind *string
-		if p.Kind != "" {
-			kk := p.Kind
-			kind = &kk
-		}
+	for _, p := range doc.PropertyTypes {
 		var validation []byte
 		if len(p.Validation) > 0 {
 			b, err := json.Marshal(p.Validation)
@@ -249,8 +254,31 @@ func seedProperties(ctx context.Context, gw storage.Gateway) error {
 			validation = b
 		}
 		if err := gw.UpsertPropertyType(ctx, storage.PropertyType{
-			Name: p.Name, DisplayName: p.DisplayName, Kind: kind, DataType: p.DataType,
-			Unit: unit, Validation: validation, Description: p.Description, Official: true,
+			Name: p.Name, DisplayName: p.DisplayName, DataType: p.DataType,
+			Validation: validation, Description: p.Description, Official: true,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// seedMetricTypes installs the ship-with metric_type canon (the numeric lane of
+// the catalog, #587), authoritative on conflict like the property registry.
+func seedMetricTypes(ctx context.Context, gw storage.Gateway) error {
+	var doc metricTypesDoc
+	if err := yaml.Unmarshal(metricTypesYAML, &doc); err != nil {
+		return fmt.Errorf("seed: parse metric_types: %w", err)
+	}
+	for _, m := range doc.MetricTypes {
+		var unit *string
+		if m.Unit != "" {
+			u := m.Unit
+			unit = &u
+		}
+		if err := gw.UpsertMetricType(ctx, storage.MetricType{
+			Name: m.Name, DisplayName: m.DisplayName, DataType: m.DataType,
+			Unit: unit, Precision: m.Precision, Description: m.Description, Official: true,
 		}); err != nil {
 			return err
 		}

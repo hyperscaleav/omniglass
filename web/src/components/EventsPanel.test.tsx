@@ -13,7 +13,7 @@ const seed: ComponentEvents = {
   events: [
     {
       ts: nowIso,
-      key: "call.started",
+      key: "call-started",
       event_type_id: "0192a5f0-1111-7000-8000-0000000000a1",
       origin: "caught",
       message: "call started with room-204",
@@ -47,7 +47,7 @@ describe("EventsPanel", () => {
   it("renders one row per event with its key, message and source", () => {
     const { getByText } = mount();
     expect(getByText("2 in the last 24h")).toBeTruthy();
-    expect(getByText("call.started")).toBeTruthy();
+    expect(getByText("call-started")).toBeTruthy();
     expect(getByText("call started with room-204")).toBeTruthy();
     expect(getByText("meeting.ended")).toBeTruthy();
     expect(getByText("meeting ended (call dropped, no rejoin)")).toBeTruthy();

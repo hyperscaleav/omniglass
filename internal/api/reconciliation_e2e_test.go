@@ -65,11 +65,11 @@ func TestReconciliationAPI(t *testing.T) {
 	if _, err := gw.SetProperty(ctx, "", "component", "disp-1", "firmware-version", "", json.RawMessage(`"1.0.0"`), all); err != nil {
 		t.Fatalf("set declared: %v", err)
 	}
-	if err := gw.UpsertProperties(ctx, []storage.PropertyUpsert{{
+	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{
 		OwnerKind: "component", OwnerID: "disp-1", Key: "firmware-version",
-		Instance: "", Provenance: "observed", Value: json.RawMessage(`"2.0.0"`), TS: time.Now().UTC(),
+		Instance: "", Value: "2.0.0", TS: time.Now().UTC(),
 	}}); err != nil {
-		t.Fatalf("upsert observed: %v", err)
+		t.Fatalf("insert observed: %v", err)
 	}
 
 	srv := httptest.NewServer(api.NewHandler(gw))

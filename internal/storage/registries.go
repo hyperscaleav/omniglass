@@ -5,11 +5,12 @@ import (
 	"fmt"
 )
 
-// PropertyType is a canonical registered signal: the typed keyspace entry a sample
-// observes and a field declares. Unit/Precision are observed-only; Kind
-// (metric/state/log) is null for a declared-only property; Validation/FusionPolicy
-// are raw jsonb passed through. Official marks a seed-owned, read-only property. A
-// property is addressed by its key (a canonical dotted identifier).
+// PropertyType is a canonical registered signal on the property lane of the
+// catalog (#587): the non-numeric value domain a sample observes and a field
+// declares (string/bool/json). Numeric signals live in MetricType, which carries
+// the numeric facts (unit, precision); the lane IS the value type, so no kind
+// discriminator remains. Validation/FusionPolicy are raw jsonb passed through.
+// Official marks a seed-owned, read-only property.
 type PropertyType struct {
 	// ID is the uuid primary key; Name is the renameable handle (ADR-0062). A
 	// property is addressed by name on the wire, and the id is the stable form the
@@ -17,10 +18,7 @@ type PropertyType struct {
 	ID           string
 	Name         string
 	DisplayName  string
-	Kind         *string
 	DataType     string
-	Unit         *string
-	Precision    *int
 	Validation   []byte
 	FusionPolicy []byte
 	Description  string
@@ -41,13 +39,13 @@ type InterfaceType struct {
 // distinct name and untouched.
 func (p *PG) UpsertPropertyType(ctx context.Context, prop PropertyType) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into property_type (name, display_name, kind, data_type, unit, precision, validation, fusion_policy, description, official)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		insert into property_type (name, display_name, data_type, validation, fusion_policy, description, official)
+		values ($1, $2, $3, $4, $5, $6, $7)
 		on conflict (name) do update set
-			display_name = excluded.display_name, kind = excluded.kind, data_type = excluded.data_type,
-			unit = excluded.unit, precision = excluded.precision, validation = excluded.validation,
-			fusion_policy = excluded.fusion_policy, description = excluded.description, official = excluded.official`,
-		prop.Name, prop.DisplayName, prop.Kind, prop.DataType, prop.Unit, prop.Precision, prop.Validation, prop.FusionPolicy, prop.Description, prop.Official)
+			display_name = excluded.display_name, data_type = excluded.data_type,
+			validation = excluded.validation, fusion_policy = excluded.fusion_policy,
+			description = excluded.description, official = excluded.official`,
+		prop.Name, prop.DisplayName, prop.DataType, prop.Validation, prop.FusionPolicy, prop.Description, prop.Official)
 	if err != nil {
 		return fmt.Errorf("storage: upsert property %q: %w", prop.Name, err)
 	}
@@ -57,7 +55,7 @@ func (p *PG) UpsertPropertyType(ctx context.Context, prop PropertyType) error {
 // ListPropertyTypes returns every registered property (official and custom). No
 // scope.Set: the registry is estate-wide reference data, not a scoped resource.
 func (p *PG) ListPropertyTypes(ctx context.Context) ([]PropertyType, error) {
-	rows, err := p.pool.Query(ctx, `select id, name, coalesce(display_name, ''), kind, data_type, unit, precision, validation, fusion_policy, description, official from property_type`)
+	rows, err := p.pool.Query(ctx, `select `+propertyCols+` from property_type`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list properties: %w", err)
 	}
@@ -65,7 +63,7 @@ func (p *PG) ListPropertyTypes(ctx context.Context) ([]PropertyType, error) {
 	var out []PropertyType
 	for rows.Next() {
 		var prop PropertyType
-		if err := rows.Scan(&prop.ID, &prop.Name, &prop.DisplayName, &prop.Kind, &prop.DataType, &prop.Unit, &prop.Precision, &prop.Validation, &prop.FusionPolicy, &prop.Description, &prop.Official); err != nil {
+		if err := rows.Scan(&prop.ID, &prop.Name, &prop.DisplayName, &prop.DataType, &prop.Validation, &prop.FusionPolicy, &prop.Description, &prop.Official); err != nil {
 			return nil, fmt.Errorf("storage: scan property: %w", err)
 		}
 		out = append(out, prop)

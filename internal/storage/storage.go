@@ -313,6 +313,15 @@ type Gateway interface {
 	CreatePropertyType(ctx context.Context, actorID string, spec PropertyTypeSpec) (*PropertyType, error)
 	UpdatePropertyType(ctx context.Context, actorID, name string, patch PropertyTypePatch) (*PropertyType, error)
 	DeletePropertyType(ctx context.Context, actorID, name string) error
+	// The metric_type registry (#587): the numeric lane of the catalog, split
+	// from property_type so the numeric facts (unit, precision) live with the
+	// series keys they describe.
+	UpsertMetricType(ctx context.Context, mt MetricType) error
+	ListMetricTypes(ctx context.Context) ([]MetricType, error)
+	GetMetricType(ctx context.Context, name string) (*MetricType, error)
+	CreateMetricType(ctx context.Context, actorID string, spec MetricTypeSpec) (*MetricType, error)
+	UpdateMetricType(ctx context.Context, actorID, name string, patch MetricTypePatch) (*MetricType, error)
+	DeleteMetricType(ctx context.Context, actorID, name string) error
 	UpsertInterfaceType(ctx context.Context, it InterfaceType) error
 	ListInterfaceTypes(ctx context.Context) ([]InterfaceType, error)
 
@@ -347,25 +356,27 @@ type Gateway interface {
 	// layer signals are per-interface, so each interface resolves its own latest.
 	LatestMetricInstance(ctx context.Context, componentName, key, instance string) (*MetricSample, error)
 
-	// The observed-state sink: the mirror of the metric sink for categorical
-	// verdicts (interface.reachable). reject-not-project and the transition-only
-	// guard are applied by the caller before the write. LatestState backs the
-	// ingest-side transition guard; StateTransitions is the ordered flip series
+	// The observed-property sink: the mirror of the metric sink for categorical
+	// verdicts (interface-reachable). reject-not-project and the transition-only
+	// guard are applied by the caller before the write. LatestProperty backs the
+	// ingest-side transition guard; PropertyTransitions is the ordered flip series
 	// the availability strip reads.
-	InsertStateSamples(ctx context.Context, evs []StateSampleWrite) error
-	LatestState(ctx context.Context, componentName, key, instance string) (*StateSample, error)
-	StateTransitions(ctx context.Context, componentName, key, instance string, since time.Time) ([]StateSample, error)
+	InsertPropertySamples(ctx context.Context, evs []PropertySampleWrite) error
+	LatestProperty(ctx context.Context, componentName, key, instance string) (*PropertySample, error)
+	PropertyTransitions(ctx context.Context, componentName, key, instance string, since time.Time) ([]PropertySample, error)
 
-	// The observed-log sink: the mirror of the metric and state sinks for log-kind
+	// The observed-log sink: the mirror of the metric and property sinks for log-kind
 	// occurrences. reject-not-project and owner-confinement are applied by the caller
 	// before the write. ListComponentEvents backs the component event log panel.
 	InsertEvents(ctx context.Context, evs []EventWrite) error
 	ListComponentEvents(ctx context.Context, componentName string, since time.Time, limit int) ([]Event, error)
 
 	// The raw-log lane (ADR-0066): log lines are untyped arrival, not events, so
-	// InsertLogLines has no registry gate. ListComponentLogs backs the component
-	// log panel; ListNodeLogs backs the node self-log panel (owner arc = node).
+	// neither insert has a registry gate. log_line is component-owned (#589);
+	// a node's self-logs land on node_log via InsertNodeLogs. ListComponentLogs
+	// backs the component log panel; ListNodeLogs backs the node self-log panel.
 	InsertLogLines(ctx context.Context, lines []LogLineWrite) error
+	InsertNodeLogs(ctx context.Context, lines []NodeLogWrite) error
 	ListComponentLogs(ctx context.Context, componentName string, since time.Time, limit int) ([]LogLine, error)
 	ListNodeLogs(ctx context.Context, nodeName string, since time.Time, limit int) ([]LogLine, error)
 
@@ -443,17 +454,19 @@ type Gateway interface {
 	ClearProperty(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, write scope.Set) error
 	EffectiveProperties(ctx context.Context, ownerKind, ownerID string, read scope.Set) ([]EffectiveProperty, error)
 
-	// The property latest-value cache (ADR-0063 #394): the producer provenances
-	// (observed/calculated/intended) upserted latest per series, over the same owner
-	// arc. UpsertProperties is the non-gating ingest derive; LatestValue is the
-	// single-lookup current value. Declared is NOT cached here; it resolves live via
-	// EffectiveProperties.
-	UpsertProperties(ctx context.Context, ups []PropertyUpsert) error
-	LatestValue(ctx context.Context, ownerKind, ownerID, key, instance, provenance string, read scope.Set) (*CachedValue, error)
+	// The current value of a series is its latest row per (type, owner arc,
+	// instance, provenance); there is no maintained cache (#591). LatestValue is
+	// that read, scope-guarded per owner kind.
+	LatestValue(ctx context.Context, ownerKind, ownerID, key, instance, provenance string, read scope.Set) (*CurrentValue, error)
 	// Reconciliation pivots want (declared, resolved live) / told (intended) / is
 	// (observed) per declared property of an owner, with config-drift computed on
 	// read. It backs the reconciliation read surface.
 	Reconciliation(ctx context.Context, ownerKind, ownerID string, read scope.Set) ([]PropertyReconciliation, error)
+	// PruneSamples is the provenance-aware retention primitive over both series
+	// tables: delete samples older than before, never a declared row and never
+	// the latest row of a series. The retention feature that will call it is a
+	// later slice; the rule ships first (#591).
+	PruneSamples(ctx context.Context, before time.Time) (int64, error)
 
 	// Membership: the binding a role attaches to. Many-valued on purpose, since a
 	// shared device belongs to every system it serves, which a single pointer on

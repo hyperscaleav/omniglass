@@ -290,6 +290,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerSecretRoutes(api, a, gw)
 	registerVariableRoutes(api, a, gw)
 	registerPropertyRoutes(api, a, gw)
+	registerMetricTypeRoutes(api, a, gw)
 	registerTagRoutes(api, a, gw)
 	registerFileRoutes(api, a, gw)
 	registerPrincipalRoutes(api, a, gw)

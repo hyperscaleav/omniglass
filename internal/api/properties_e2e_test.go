@@ -42,10 +42,11 @@ func TestPropertyAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	// Register a custom property.
+	// Register a custom property. Numbers are the metric lane (#587), so the
+	// property fixture is a string.
 	created := c.do(ownerTok, http.MethodPost, "/property-types", map[string]any{
-		"name": "rack-unit", "data_type": "int", "display_name": "Rack unit",
-		"validation": map[string]any{"minimum": 1, "maximum": 48},
+		"name": "rack-unit", "data_type": "string", "display_name": "Rack unit",
+		"validation": map[string]any{"pattern": "^u[0-9]+$"},
 	}, http.StatusCreated)
 	var p struct {
 		Name     string `json:"name"`
@@ -53,12 +54,15 @@ func TestPropertyAPI(t *testing.T) {
 		Official bool   `json:"official"`
 	}
 	json.Unmarshal(created, &p)
-	if p.Name != "rack-unit" || p.DataType != "int" || p.Official {
+	if p.Name != "rack-unit" || p.DataType != "string" || p.Official {
 		t.Fatalf("created = %+v", p)
 	}
 
 	// Get it back.
 	c.do(ownerTok, http.MethodGet, "/property-types/rack-unit", nil, http.StatusOK)
+
+	// A numeric data type is refused by the enum: numbers register as metric types.
+	c.do(ownerTok, http.MethodPost, "/property-types", map[string]any{"name": "fan-rpm", "data_type": "int"}, http.StatusUnprocessableEntity)
 
 	// List includes the custom property and the seeded official ones.
 	var listed struct {
@@ -71,8 +75,11 @@ func TestPropertyAPI(t *testing.T) {
 	for _, pp := range listed.Properties {
 		names[pp.Name] = true
 	}
-	if !names["rack-unit"] || !names["serial-number"] || !names["icmp.reachable"] {
+	if !names["rack-unit"] || !names["serial-number"] || !names["interface-reachable"] {
 		t.Fatalf("list missing properties: %v", names)
+	}
+	if names["icmp-reachable"] {
+		t.Fatalf("icmp-reachable listed on the property lane; numbers are metric types")
 	}
 
 	// Update a mutable field.
@@ -82,7 +89,7 @@ func TestPropertyAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/property-types", map[string]any{"name": "Bad-Name", "data_type": "string"}, http.StatusUnprocessableEntity)
 
 	// A duplicate name is a 409.
-	c.do(ownerTok, http.MethodPost, "/property-types", map[string]any{"name": "rack-unit", "data_type": "int"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodPost, "/property-types", map[string]any{"name": "rack-unit", "data_type": "string"}, http.StatusConflict)
 
 	// An official (seeded) property is read-only (409).
 	c.do(ownerTok, http.MethodPatch, "/property-types/serial-number", map[string]any{"display_name": "x"}, http.StatusConflict)

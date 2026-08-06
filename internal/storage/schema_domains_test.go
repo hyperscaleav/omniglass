@@ -10,11 +10,12 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// TestSampleProvenanceDomainsNarrowed pins #460: `declared` is impossible on
-// the sample sinks (a declared value lives only in the property cache), so the
-// metric and state provenance CHECKs refuse it at the schema, not just by
-// writer convention.
-func TestSampleProvenanceDomainsNarrowed(t *testing.T) {
+// TestSampleProvenanceDomains pins each lane's provenance domain after #591
+// re-admitted declared rows on the property series (a declared value IS a
+// series row now, reversing the #460 narrowing for that lane): property accepts
+// a declared row with no lineage, while metric still refuses declared until a
+// slice folds declared numeric values into it.
+func TestSampleProvenanceDomains(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, dsn)
@@ -23,30 +24,38 @@ func TestSampleProvenanceDomainsNarrowed(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 
-	// A minimal owner and key to satisfy the FKs.
-	var compID, ptID string
+	// A minimal owner and a key per sink to satisfy the FKs: the metric sink keys
+	// on metric_type, the property sink on property_type (the #587 lanes).
+	var compID, mtID, ptID string
 	if err := conn.QueryRow(ctx, `insert into component (name) values ('c1') returning id`).Scan(&compID); err != nil {
 		t.Fatalf("component: %v", err)
 	}
 	if err := conn.QueryRow(ctx, `
-		insert into property_type (name, official, kind, data_type)
-		values ('t.metric', false, 'metric', 'float') returning id`).Scan(&ptID); err != nil {
+		insert into metric_type (name, official, data_type)
+		values ('t-metric', false, 'float') returning id`).Scan(&mtID); err != nil {
+		t.Fatalf("metric_type: %v", err)
+	}
+	if err := conn.QueryRow(ctx, `
+		insert into property_type (name, official, data_type)
+		values ('t-prop', false, 'string') returning id`).Scan(&ptID); err != nil {
 		t.Fatalf("property_type: %v", err)
 	}
 
-	for _, tbl := range []string{"metric", "state"} {
-		val := "1"
-		if tbl == "state" {
-			val = "'on'"
-		}
-		_, err := conn.Exec(ctx, `
-			insert into `+tbl+` (ts, owner_kind, component_id, property_type_id, value, provenance, source)
-			values (now(), 'component', $1, $2, `+val+`, 'declared', 'test')`, compID, ptID)
-		// Either narrowed constraint may report first; the claim is that the
-		// schema refuses the row.
-		if err == nil || (!strings.Contains(err.Error(), tbl+"_provenance_check") && !strings.Contains(err.Error(), tbl+"_lineage_check")) {
-			t.Errorf("%s declared insert error = %v, want a provenance or lineage CHECK violation", tbl, err)
-		}
+	// The metric lane has no declared writer, so its schema still refuses the
+	// row (either narrowed constraint may report first).
+	_, err = conn.Exec(ctx, `
+		insert into metric (ts, owner_kind, component_id, metric_type_id, value, provenance, source)
+		values (now(), 'component', $1, $2, 1, 'declared', 'test')`, compID, mtID)
+	if err == nil || (!strings.Contains(err.Error(), "metric_provenance_check") && !strings.Contains(err.Error(), "metric_lineage_check")) {
+		t.Errorf("metric declared insert error = %v, want a provenance or lineage CHECK violation", err)
+	}
+
+	// The property lane holds declared values as series rows (#591), with the
+	// no-lineage arm: no rule, no causing event.
+	if _, err := conn.Exec(ctx, `
+		insert into property (ts, owner_kind, component_id, property_type_id, value, provenance, source)
+		values (now(), 'component', $1, $2, to_jsonb('on'::text), 'declared', 'test')`, compID, ptID); err != nil {
+		t.Errorf("property declared insert error = %v, want accepted (a declared value is a series row)", err)
 	}
 }
 

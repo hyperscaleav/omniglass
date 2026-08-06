@@ -7,9 +7,9 @@ command_types:
     display_name: Set Input
     description: >-
       Tell a display or switcher which video input to select. A settleable command:
-      it opens an intended video.input and settles when the device reports that input
+      it opens an intended video-input and settles when the device reports that input
       within the settle window.
-    target_property_type: video.input
+    target_property_type: video-input
     settle_window_seconds: 15
   - name: reboot
     display_name: Reboot

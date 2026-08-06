@@ -206,29 +206,31 @@ one vocabulary.
 
 **A name is a value; a segment is a position.** A segment is one dot-separated component of an
 address, so `boi.17c.rm215a` is three segments and the room's name is the value in the third,
-`rm215a`. An entity name is one segment and may not carry a dot; only a keyspace name is a path. That makes "segment"
+`rm215a`. A name is one segment and may not carry a dot; only an address is a path. That makes "segment"
 right in prose about topic structure and wrong on a form, where the operator is typing a value and
 not choosing a position.
 
-**There are two name rules on one character set, and one validator.** An entity name is kebab
-(`crestron`, `rm215a`). A keyspace name is that same kebab token with an optional dot hierarchy
-(`icmp.rtt-avg`). Only a keyspace name may carry the dot. Both go through `storage.ValidateName`,
-which picks the rule from the table's declared identity shape rather than from whoever wrote the
+**There is one name rule on one character set, and one validator.** A name is a kebab token
+(`crestron`, `rm215a`, `icmp-rtt-avg`), capped at 100 characters, and it never carries a dot.
+Every name goes through `storage.ValidateName`, which reads the table's declared identity shape to
+settle whether the table bears an operator-typed name at all rather than trusting whoever wrote the
 call site. There used to be four separate validators and a caller chose between them by hand, which
-is how three tables reached production with no name validation at all.
+is how three tables reached production with no name validation at all; the last split to go was the
+dotted keyspace rule, retired with its 128 character ceiling (#586).
 
-That split is a **validation difference, not a second concept**, so it never surfaces as a second
-word. `property_type`, `event_type`, and `command_type` hold dotted names and head their column
-"Name" like every other page; the difference reaches the operator as a validation message.
+**One name concept gets one word for it.** `property_type`, `event_type`, and `command_type` carry
+the same kebab name as every other table and head their column "Name" like every other page.
 `identityColumn` therefore takes no `label` option at all, and the vocabulary guard scans the source
 for anyone passing one, which is the failure mode a per-page test cannot catch.
 
-The write side does split. `createIdentity` derives the name from the display name as an operator
-types and stops the moment they edit the name by hand, and an edit form seeds it with the existing
-name so relabelling can never rewrite a live address. The keyspace pages (`property_type`,
-`event_type`, `command_type`) do not wire it, because a dotted name has no sensible derivation from
-prose. `tag`, `variable`, and `secret` read as keyspace because their prose calls them keys, but
-none of them carries a dot, so all three are on the entity rule.
+The write side does differ, page by page. `createIdentity` derives the name from the display name as
+an operator types and stops the moment they edit the name by hand, and an edit form seeds it with
+the existing name so relabelling can never rewrite a live address. The three signal registries
+(`property_type`, `event_type`, `command_type`) do not wire it, because a signal name is chosen to
+match what an interface reports rather than derived from prose somebody typed, and that was as true
+when those names carried dots as it is now they are single tokens. `tag`, `variable`, and `secret`
+invite an exception because their prose calls them keys; they get none, and take the one rule like
+everything else.
 
 **A Save that changed the name is two calls, not one.** The update goes first and the `:rename`
 custom method goes last, because the rename is separately gated by `<resource>:rename` and is the

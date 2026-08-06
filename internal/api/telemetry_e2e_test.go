@@ -21,8 +21,10 @@ import (
 
 type pushResp struct {
 	Accepted struct {
-		Samples int `json:"samples"`
-		Logs    int `json:"logs"`
+		Metrics    int `json:"metrics"`
+		Properties int `json:"properties"`
+		Events     int `json:"events"`
+		Logs       int `json:"logs"`
 	} `json:"accepted"`
 	Rejected []struct {
 		Name   string `json:"name"`
@@ -74,16 +76,21 @@ func TestTelemetryPushAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	// One batch spanning both arrays and all three sample destinations, plus a name
-	// the registry does not know.
+	// One batch mixing every lane, plus a name the metric catalog does not know:
+	// the acceptance's mixed batch, each entry landing in its lane's table.
+	suppliedTS := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	body := map[string]any{
 		"owner":  map[string]any{"kind": "component", "ref": "bar-1"},
 		"source": "webex-cloud",
-		"samples": []map[string]any{
-			{"name": "video.input", "text": "hdmi2"},
-			{"name": "icmp.rtt-avg", "number": 12.4},
-			{"name": "call.started", "text": "call started, 4 participants"},
-			{"name": "audio.level", "number": -42.5},
+		"metrics": []map[string]any{
+			{"name": "icmp-rtt-avg", "value": 12.4, "ts": suppliedTS.Format(time.RFC3339)},
+			{"name": "audio-level", "value": -42.5},
+		},
+		"properties": []map[string]any{
+			{"name": "video-input", "value": "hdmi2"},
+		},
+		"events": []map[string]any{
+			{"name": "call-started", "message": "call started, 4 participants"},
 		},
 		"logs": []map[string]any{
 			{"message": "media channel renegotiated to 1080p30", "severity": "info", "facility": "media"},
@@ -94,22 +101,23 @@ func TestTelemetryPushAPI(t *testing.T) {
 	if err := json.Unmarshal(out, &r); err != nil {
 		t.Fatalf("decode push response: %v", err)
 	}
-	if r.Accepted.Samples != 3 || r.Accepted.Logs != 1 {
-		t.Fatalf("accepted = %+v, want 3 samples and 1 log", r.Accepted)
+	if r.Accepted.Metrics != 1 || r.Accepted.Properties != 1 || r.Accepted.Events != 1 || r.Accepted.Logs != 1 {
+		t.Fatalf("accepted = %+v, want 1 per lane", r.Accepted)
 	}
 	// Rejection is SYNCHRONOUS even though acceptance is not: that is the whole
 	// reason the route validates before publishing.
-	if len(r.Rejected) != 1 || r.Rejected[0].Name != "audio.level" {
-		t.Fatalf("rejected = %+v, want exactly audio.level", r.Rejected)
+	if len(r.Rejected) != 1 || r.Rejected[0].Name != "audio-level" {
+		t.Fatalf("rejected = %+v, want exactly audio-level", r.Rejected)
 	}
 
-	// The registry, not the caller, decided which table each name landed in.
+	// The lane the caller chose is the table the row landed in, and the supplied
+	// per-sample ts survived ingest verbatim (the #594 ts rule).
 	waitFor(t, "the metric row", func() bool {
-		m, err := gw.LatestMetric(ctx, "bar-1", "icmp.rtt-avg")
-		return err == nil && m != nil && m.Value == 12.4 && m.Source == "webex-cloud"
+		m, err := gw.LatestMetric(ctx, "bar-1", "icmp-rtt-avg")
+		return err == nil && m != nil && m.Value == 12.4 && m.Source == "webex-cloud" && m.TS.Equal(suppliedTS)
 	})
-	waitFor(t, "the state row", func() bool {
-		s, err := gw.LatestState(ctx, "bar-1", "video.input", "")
+	waitFor(t, "the property row", func() bool {
+		s, err := gw.LatestProperty(ctx, "bar-1", "video-input", "")
 		return err == nil && s != nil && s.Value == "hdmi2"
 	})
 	waitFor(t, "the caught event", func() bool {
@@ -118,7 +126,7 @@ func TestTelemetryPushAPI(t *testing.T) {
 			return false
 		}
 		for _, e := range evs {
-			if e.Key == "call.started" && e.Origin == "caught" && e.Source == "webex-cloud" {
+			if e.Key == "call-started" && e.Origin == "caught" && e.Source == "webex-cloud" {
 				return true
 			}
 		}
@@ -138,47 +146,74 @@ func TestTelemetryPushAPI(t *testing.T) {
 		return false
 	})
 	// An unregistered name reached no table at all.
-	if m, err := gw.LatestMetric(ctx, "bar-1", "audio.level"); err != nil {
-		t.Fatalf("latest audio.level: %v", err)
+	if m, err := gw.LatestMetric(ctx, "bar-1", "audio-level"); err != nil {
+		t.Fatalf("latest audio-level: %v", err)
 	} else if m != nil {
-		t.Fatalf("reject-not-project failed: audio.level landed as %+v", m)
+		t.Fatalf("reject-not-project failed: audio-level landed as %+v", m)
 	}
 
-	// KIND MISMATCH is reported, not silently dropped. The name resolves, so the
-	// old check (name only) passed it, returned 202 with an empty rejected list,
-	// and the batch then died in the consumer's numericValue/stringValue. That is
-	// precisely the mistake a human makes by hand, and it was the one case the
-	// synchronous-rejection report missed.
+	// SCHEMA VIOLATION IS A 422 (#594 acceptance): the name resolves, so the
+	// mistake is in the data, and the request is refused whole rather than
+	// half-landing a batch around it. video-input's seeded validation is an
+	// input-name enum, so "composite" violates it; the error must name the
+	// property so the refusal is actionable.
+	resp := c.do(ownerTok, http.MethodPost, "/telemetry:push", map[string]any{
+		"owner": map[string]any{"kind": "component", "ref": "bar-1"},
+		"properties": []map[string]any{
+			{"name": "video-input", "value": "composite"},
+		},
+	}, http.StatusUnprocessableEntity)
+	if !strings.Contains(string(resp), "video-input") {
+		t.Fatalf("schema-violation 422 does not name the property: %s", resp)
+	}
+	// A value of the wrong JSON shape for the data_type (a number for a string
+	// property) is the same refusal: the lane's type contract, not a kind guess.
+	c.do(ownerTok, http.MethodPost, "/telemetry:push", map[string]any{
+		"owner": map[string]any{"kind": "component", "ref": "bar-1"},
+		"properties": []map[string]any{
+			{"name": "video-input", "value": 3},
+		},
+	}, http.StatusUnprocessableEntity)
+	// And nothing landed for either refusal.
+	if s, err := gw.LatestProperty(ctx, "bar-1", "video-input", ""); err != nil {
+		t.Fatalf("latest video-input: %v", err)
+	} else if s != nil && s.Value != "hdmi2" {
+		t.Fatalf("a refused property value landed: %+v", s)
+	}
+
+	// A LANE MISMATCH is refused by name: the lane is the array, so a property
+	// name pushed as a metric is unknown to the metric catalog even though the
+	// property catalog knows it. The reason names the lane so the caller learns
+	// which array to use.
 	out = c.do(ownerTok, http.MethodPost, "/telemetry:push", map[string]any{
 		"owner": map[string]any{"kind": "component", "ref": "bar-1"},
-		"samples": []map[string]any{
-			{"name": "video.input", "number": 3},     // state property, sent a number
-			{"name": "icmp.rtt-avg", "text": "fast"}, // metric property, sent text
-			{"name": "call.started", "number": 1},    // event type, sent a number
-			{"name": "icmp.rtt-avg", "number": 9.5},  // correct, must still land
+		"metrics": []map[string]any{
+			{"name": "video-input", "value": 3},    // a property name on the metric lane
+			{"name": "icmp-rtt-avg", "value": 9.5}, // correct, must still land
+		},
+		"events": []map[string]any{
+			{"name": "icmp-rtt-avg", "message": "x"}, // a metric name on the event lane
 		},
 	}, http.StatusAccepted)
 	var mismatch pushResp
 	if err := json.Unmarshal(out, &mismatch); err != nil {
 		t.Fatalf("decode mismatch response: %v", err)
 	}
-	if mismatch.Accepted.Samples != 1 {
-		t.Fatalf("accepted = %d, want only the correctly-typed sample", mismatch.Accepted.Samples)
+	if mismatch.Accepted.Metrics != 1 || mismatch.Accepted.Events != 0 {
+		t.Fatalf("accepted = %+v, want only the correctly-laned metric", mismatch.Accepted)
 	}
-	if len(mismatch.Rejected) != 3 {
-		t.Fatalf("rejected = %+v, want all three mismatches reported", mismatch.Rejected)
+	if len(mismatch.Rejected) != 2 {
+		t.Fatalf("rejected = %+v, want both cross-lane names reported", mismatch.Rejected)
 	}
-	// The reason has to be actionable: it must name the kind the caller should
-	// have sent, not merely say "invalid".
 	for _, r := range mismatch.Rejected {
 		switch r.Name {
-		case "video.input", "call.started":
-			if !strings.Contains(r.Reason, "text") {
-				t.Errorf("%s rejection %q does not tell the caller to send text", r.Name, r.Reason)
+		case "video-input":
+			if !strings.Contains(r.Reason, "metric") {
+				t.Errorf("video-input rejection %q does not name the metric lane", r.Reason)
 			}
-		case "icmp.rtt-avg":
-			if !strings.Contains(r.Reason, "number") {
-				t.Errorf("%s rejection %q does not tell the caller to send a number", r.Name, r.Reason)
+		case "icmp-rtt-avg":
+			if !strings.Contains(r.Reason, "event") {
+				t.Errorf("icmp-rtt-avg rejection %q does not name the event lane", r.Reason)
 			}
 		default:
 			t.Errorf("unexpected rejection %+v", r)
@@ -188,22 +223,22 @@ func TestTelemetryPushAPI(t *testing.T) {
 	// A batch of nothing but rejects publishes nothing, and says so.
 	out = c.do(ownerTok, http.MethodPost, "/telemetry:push", map[string]any{
 		"owner":   map[string]any{"kind": "component", "ref": "bar-1"},
-		"samples": []map[string]any{{"name": "not.a.real.property", "number": 1}},
+		"metrics": []map[string]any{{"name": "not.a.real.property", "value": 1}},
 	}, http.StatusAccepted)
 	var allRejected pushResp
 	_ = json.Unmarshal(out, &allRejected)
-	if allRejected.Accepted.Samples != 0 || len(allRejected.Rejected) != 1 {
+	if allRejected.Accepted.Metrics != 0 || len(allRejected.Rejected) != 1 {
 		t.Fatalf("all-rejected batch = %+v, want 0 accepted and 1 rejected", allRejected)
 	}
 
 	// Validation: an empty batch and an unsupported owner arc are refused up front,
-	// the arc because deriveSamples still hardcodes component (#422).
+	// the arc because the lane derivations still hardcode component (#422).
 	c.do(ownerTok, http.MethodPost, "/telemetry:push", map[string]any{
 		"owner": map[string]any{"kind": "component", "ref": "bar-1"},
 	}, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodPost, "/telemetry:push", map[string]any{
-		"owner":   map[string]any{"kind": "system", "ref": "boardroom-a"},
-		"samples": []map[string]any{{"name": "video.input", "text": "hdmi2"}},
+		"owner":      map[string]any{"kind": "system", "ref": "boardroom-a"},
+		"properties": []map[string]any{{"name": "video-input", "value": "hdmi2"}},
 	}, http.StatusUnprocessableEntity)
 
 	// An oversized body is refused BEFORE the handler by Huma's 1 MiB request cap
@@ -241,13 +276,13 @@ func TestTelemetryPushAPI(t *testing.T) {
 	// An operator holds telemetry:push; scope decides which owners it reaches.
 	pusherTok := setupScopedViewer(t, ctx, dsn, "pusher", "operator", "component", otherID)
 	c.do(pusherTok, http.MethodPost, "/telemetry:push", map[string]any{
-		"owner":   map[string]any{"kind": "component", "ref": "bar-1"},
-		"samples": []map[string]any{{"name": "video.input", "text": "hdmi2"}},
+		"owner":      map[string]any{"kind": "component", "ref": "bar-1"},
+		"properties": []map[string]any{{"name": "video-input", "value": "hdmi2"}},
 	}, http.StatusNotFound)
 	// Its own component is fine.
 	c.do(pusherTok, http.MethodPost, "/telemetry:push", map[string]any{
-		"owner":   map[string]any{"kind": "component", "ref": "other-1"},
-		"samples": []map[string]any{{"name": "video.input", "text": "hdmi2"}},
+		"owner":      map[string]any{"kind": "component", "ref": "other-1"},
+		"properties": []map[string]any{{"name": "video-input", "value": "hdmi2"}},
 	}, http.StatusAccepted)
 
 	// PRIVILEGE ESCALATION, pinned closed. A principal can easily hold a WIDE read
@@ -260,20 +295,20 @@ func TestTelemetryPushAPI(t *testing.T) {
 		grantSpec{role: "operator", scopeKind: "component", scopeID: otherID},
 	)
 	c.do(wideReadNarrowPush, http.MethodPost, "/telemetry:push", map[string]any{
-		"owner":   map[string]any{"kind": "component", "ref": "bar-1"},
-		"samples": []map[string]any{{"name": "video.input", "text": "hdmi2"}},
+		"owner":      map[string]any{"kind": "component", "ref": "bar-1"},
+		"properties": []map[string]any{{"name": "video-input", "value": "hdmi2"}},
 	}, http.StatusNotFound)
 	// Its own push scope still works, so the fence is narrow, not broken.
 	c.do(wideReadNarrowPush, http.MethodPost, "/telemetry:push", map[string]any{
-		"owner":   map[string]any{"kind": "component", "ref": "other-1"},
-		"samples": []map[string]any{{"name": "video.input", "text": "hdmi2"}},
+		"owner":      map[string]any{"kind": "component", "ref": "other-1"},
+		"properties": []map[string]any{{"name": "video-input", "value": "hdmi2"}},
 	}, http.StatusAccepted)
 
 	// A viewer has the read floor but not telemetry:push.
 	viewerTok := setupScopedViewer(t, ctx, dsn, "just-viewer", "viewer", "component", otherID)
 	c.do(viewerTok, http.MethodPost, "/telemetry:push", map[string]any{
-		"owner":   map[string]any{"kind": "component", "ref": "other-1"},
-		"samples": []map[string]any{{"name": "video.input", "text": "hdmi2"}},
+		"owner":      map[string]any{"kind": "component", "ref": "other-1"},
+		"properties": []map[string]any{{"name": "video-input", "value": "hdmi2"}},
 	}, http.StatusForbidden)
 
 	// Unauthenticated is a 401.
@@ -312,8 +347,8 @@ func TestTelemetryPushWithoutBus(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 	c.do(ownerTok, http.MethodPost, "/telemetry:push", map[string]any{
-		"owner":   map[string]any{"kind": "component", "ref": "bar-1"},
-		"samples": []map[string]any{{"name": "video.input", "text": "hdmi2"}},
+		"owner":      map[string]any{"kind": "component", "ref": "bar-1"},
+		"properties": []map[string]any{{"name": "video-input", "value": "hdmi2"}},
 	}, http.StatusServiceUnavailable)
 }
 

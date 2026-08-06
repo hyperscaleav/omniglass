@@ -36,7 +36,7 @@ Internal traffic splits by what is moving:
   hop. **Trusted server-internal producers publish straight to the trusted stream**, no admission
   pass: calc output (owner from the validated `calc_rule` scope) and the action layer's intended
   write (owner from the command target). The rule engine consumes the trusted stream directly; a
-  **persistence consumer** batch-writes it to the Postgres `metric`, `state`, `event`, and
+  **persistence consumer** batch-writes it to the Postgres `metric`, `property`, `event`, and
   `log_line` tables as an async sink, idempotent on `(series, ts)`, and the sink never gates the
   rule engine: a slow persistence consumer holds up only the durable record, never the live signal.
   Confinement is at **consume time, ahead of evaluation**: a forged owner must be dropped before it
@@ -159,10 +159,10 @@ directly. On the record lane, an `event_rule` fire writes the event and alarm tr
 one transaction and the CDC publisher fans the commit onto JetStream, where `action_rule` consumers
 react; a command's intended sample then re-enters the data lane on the device round trip. The teal
 node is `audit_log`, the ground-truth record of operator writes (including config changes); observed
-and calculated samples carry `source_rule` on the row, and intended points at the command `event`
-via `event_id`. The raw payload is not stored: a parse or validation failure rides a
+and calculated samples carry `source_rule` on the row, and intended names its command via
+`command_id`. The raw payload is not stored: a parse or validation failure rides a
 `collection.failed` event. [config](/architecture/variables/) holds declared intent (PG-first),
-keyed to a state sample as its observed side.
+keyed to a property sample as its observed side.
 
 :::
 

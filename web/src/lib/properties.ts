@@ -1,25 +1,21 @@
 import { api } from "../api/client";
 
 // The Properties catalog data layer: thin typed wrappers over the /property-types
-// surface. A property is a canonical, typed signal named by a key (a dot-hierarchied
-// identifier) that a sample observes and a field declares. Official properties are
-// seed-owned and read-only; custom properties are operator created. validation is a
-// JSON Schema fragment.
+// surface. A property is a canonical, typed, non-numeric signal named by a key
+// that a sample observes and a field declares; numeric signals live on the metric
+// lane (/metric-types, lib/metric_types, the Metrics page). Official properties
+// are seed-owned and read-only; custom properties are operator created.
+// validation is a JSON Schema fragment.
 
-export type PropertyDataType = "string" | "int" | "float" | "bool" | "json";
+export type PropertyDataType = "string" | "bool" | "json";
 
-export const PROPERTY_DATA_TYPES: PropertyDataType[] = ["string", "int", "float", "bool", "json"];
-
-// The observed kind of a property (omitted for a declared attribute property).
-export type PropertyKind = "metric" | "state" | "log";
+export const PROPERTY_DATA_TYPES: PropertyDataType[] = ["string", "bool", "json"];
 
 export type PropertyRow = {
   name: string;
   data_type: string;
   display_name?: string;
   description?: string;
-  unit?: string;
-  kind?: string;
   validation?: unknown;
   official: boolean;
 };
@@ -37,8 +33,6 @@ export type CreateProperty = {
   data_type: PropertyDataType;
   display_name?: string;
   description?: string;
-  unit?: string;
-  kind?: PropertyKind;
   validation?: unknown;
 };
 
@@ -51,7 +45,6 @@ export async function createProperty(body: CreateProperty): Promise<PropertyRow>
 export type UpdateProperty = {
   display_name?: string;
   description?: string;
-  unit?: string;
   validation?: unknown;
 };
 

@@ -21,8 +21,8 @@ import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Event Types: the occurrence-key catalog (Catalog > Event Types), the twin of the
-// Properties catalog. An event type names a discrete happening (call.started,
-// call.started) that an occurrence is typed by. Official (seed-owned) event types are
+// Properties catalog. An event type names a discrete happening (call-started,
+// call-started) that an occurrence is typed by. Official (seed-owned) event types are
 // read-only; custom ones are operator-created. Estate-wide reference data, not scoped.
 
 function originBadge(official: boolean): JSX.Element {
@@ -33,7 +33,7 @@ function originBadge(official: boolean): JSX.Element {
 
 const columns: FlatColumn<EventTypeRow>[] = [
   // The shared identity cell under the one header word, "Name". An event type's
-  // `name` is dot-segmented (call.started) where most of the estate is kebab, but
+  // `name` is dot-segmented (call-started) where most of the estate is kebab, but
   // that is a validation difference, not a different concept. The cell renders the
   // display name above the name, which is why there is no longer a Label column.
   identityColumn<EventTypeRow>(),
@@ -225,8 +225,8 @@ export function CreateEventTypeForm(p: { onCreated: (r: EventTypeRow) => void })
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="name" hint="A lowercase, dot-hierarchied name, e.g. call.started or cable.unplugged.">
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="call.started" onInput={(e) => setName(e.currentTarget.value)} />
+      <FieldRow bind="name" hint="A lowercase, dot-hierarchied name, e.g. call-started or cable.unplugged.">
+        <input class="input input-bordered w-full font-data" value={name()} placeholder="call-started" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow bind="display_name">
         <input class="input input-bordered w-full" value={displayName()} placeholder="Call started" onInput={(e) => setDisplayName(e.currentTarget.value)} />

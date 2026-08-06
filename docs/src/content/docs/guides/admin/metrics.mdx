@@ -1,0 +1,100 @@
+---
+title: Metrics
+description: "The Metrics catalog and the series behind it: the canonical numeric names, the unit and precision they carry, the contract a product, standard, or location type declares, and where the values come from."
+---
+
+import SeededSet from '../../../../components/SeededSet.astro';
+
+**Catalog > Metrics** (with `metric_type:read`, covered by every viewer's `*:read` floor) is the
+**numeric lane** of the estate's signal catalog: the directory of the quantities the estate
+measures. A **metric** is a **quantity**: a numeric reading that **aggregates**, so an average, a
+p95, a rate over time all mean something, and beside its name and data type it carries the numeric
+facts, a display **unit** and a **precision**, that the property lane never holds. A
+[property](/guides/admin/properties/) is the other lane: a **value**, including a number used as a
+name (a serial number identifies a unit, it measures nothing).
+
+A metric is used in three moves, and this page walks all three: the **catalog** names it, a
+**classifier declares** it (with a default, and whether it is required), and **telemetry fills**
+it, one series row per reading, with the current value read from the series. The name is the
+metric's canonical identifier, a single lowercase kebab segment, and the same metric is the same
+comparable series wherever it appears: registering `icmp-rtt-avg` once means every device's
+round-trip time lands under one name, in one unit, across vendors.
+
+The catalog is estate-wide reference data, not a scoped resource, so every metric is visible to
+every reader; the write gates decide who may change it.
+
+- The directory lists every metric sorted by name, each showing its **name** (the canonical
+  identifier, with its display name on the line above it), **type** (`int` or `float`),
+  **unit**, and **origin** (**official**, seed-owned, or **custom**). **name** filters by the
+  name or its display name; **type**, **unit**, and **official** narrow the list.
+- **New metric** (with `metric_type:create`, granted to operators) opens a create **drawer**: give
+  it a **name** (a single lowercase kebab segment, for example `icmp-rtt-avg` or `cpu-load`),
+  choose its **data type** (`int` or `float`; a metric is always a number, a categorical signal is
+  a property), and optionally add a **display name**, a **description**, a **unit** (`ms`, `dB`,
+  `percent`), and a **precision** (the decimal places a rendered value keeps). An invalid name (an
+  uppercase letter, an underscore, a leading hyphen, a dot) is refused with a message.
+- The unit is **canonical**: stored values are always in it, so every threshold and calculation
+  compares like with like. A genuinely different measurement is a different metric; the unit names
+  the scale, it never rides along per sample.
+- Pick a row to open its **detail blade**. The footer **Edit** pencil (with `metric_type:update`)
+  edits the display name, description, unit, and precision; the name and data type are fixed at
+  creation, since changing a series' value type under the rows that already use it is unsafe and a
+  name is what every driver and contract maps onto. **Delete** (with `metric_type:delete`) removes
+  a custom metric, behind a confirm.
+- An **official** (seed-owned) metric is always read-only: no Edit, no Delete, and the blade marks
+  it "Seed-owned, read-only." The shared vocabulary is the same from install to install, the same
+  deliberate exception to the operator-owned rule the
+  [Properties catalog](/guides/admin/properties/) makes, and for the same reason: a metric name is
+  the vocabulary a driver maps onto, so a release has to be able to correct it
+  ([the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs)).
+
+  The baseline ships this catalog, rendered from the seed itself (`make gen`) so the list cannot
+  drift from the binary:
+
+  <SeededSet kind="metric_types" />
+- A **duplicate** name is refused (409), and an attempt to change an official metric is refused
+  too. The refusal reaches across lanes: the metric, property, and event catalogs share one
+  namespace, so a name one of them holds cannot be registered in another, which is what keeps
+  per-lane routing unambiguous.
+
+The catalog is also the collection vocabulary: a pushed sample lands in the metric series only if
+its name is registered here; an unregistered name is rejected and reported in the push response,
+not silently dropped and not invented.
+
+## Declare a metric on a classifier
+
+The catalog says a metric **exists**; a **classifier** says which metrics its instances **carry**.
+The contract shape is the same as the [property contract](/guides/admin/properties/#declare-a-property-on-a-classifier),
+held in the metric siblings of the property contract tables (`product_metric`,
+`standard_metric`, `location_type_metric`): a [product](/guides/admin/products/) declares for its
+components, a [standard](/guides/admin/standards/) for its systems, and a
+[location type](/guides/admin/types/) for the locations of that type. Each line names a catalog
+metric, optionally gives it a **default**, and optionally marks it **required**: a product ships a
+default sample rate, a standard requires a seat count.
+
+Type, unit, and precision are **not** repeated in the contract; they stay on the catalog entry, so
+a metric means one thing everywhere. The contract lines that predate the two-lane split moved into
+these tables when the catalog divided; the classifier blades' declared-values panel edits the
+property side only today, so editing a metric line from the console or CLI is a follow-up.
+
+## Where a metric's values come from
+
+A metric's values are **telemetry**, not something typed on an instance's detail:
+
+- An **observed** value arrives through [collection](/guides/operator/collection/): a task samples
+  the device and pushes the reading. The shipped probes are the seeded set above: the TCP-connect
+  probe writes `tcp-open` and `tcp-connect-time`, the ICMP probe writes `icmp-reachable` and
+  `icmp-rtt-avg`.
+- A **calculated** value is produced by a rule from other telemetry, and the row names the rule
+  that produced it, so a derived number is never mistaken for a reading.
+- A [command](/architecture/commands/) that targets a metric (set a volume) records the value it
+  **intends**, landing beside the observed series so intent and reality can be compared.
+
+The **current value** is the latest series row: "what is this metric now?" is answered by reading
+the newest row for that metric on that owner, not from a separately maintained copy
+([the sample lanes](/architecture/properties/)). A **declared** metric value is not writable
+today: the metric lane refuses `declared` provenance until a writer exists, so a number an
+operator asserts by hand has nowhere to land yet.
+
+From the CLI, the catalog is `omniglass metric-type list|get|create|update|delete` (see the
+[CLI reference](/reference/cli/)).

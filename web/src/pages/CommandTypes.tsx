@@ -37,7 +37,7 @@ function targetCell(target: string | undefined): JSX.Element {
     : <span class="text-base-content/30">fire-and-forget</span>;
 }
 
-// A command type's `name` may be dot-segmented (set-input, video.input) where the
+// A command type's `name` may be dot-segmented (set-input, video-input) where the
 // rest of the estate is kebab. That is a validation difference, not a different
 // concept, so the header is the one word every list uses.
 const columns: FlatColumn<CommandTypeRow>[] = [
@@ -250,7 +250,7 @@ export function CreateCommandTypeForm(p: { onCreated: (r: CommandTypeRow) => voi
         <input class="input input-bordered w-full" value={description()} onInput={(e) => setDescription(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Target property" hint="The property this command sets, for settlement. Leave blank for a fire-and-forget command.">
-        <input class="input input-bordered w-full font-data" value={target()} placeholder="video.input" onInput={(e) => setTarget(e.currentTarget.value)} />
+        <input class="input input-bordered w-full font-data" value={target()} placeholder="video-input" onInput={(e) => setTarget(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Settle window (seconds)" hint="How long the device is given to actuate before a mismatch is a failed command.">
         <input class="input input-bordered w-full font-data" type="number" min="0" value={settle()} onInput={(e) => setSettle(e.currentTarget.value)} />

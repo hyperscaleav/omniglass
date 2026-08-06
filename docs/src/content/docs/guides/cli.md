@@ -180,9 +180,9 @@ recent transitions the availability strip draws):
 omniglass component reachability list disp-1                              # needs component:read
 ```
 
-Read a component's property reconciliation, the want/told/is pivot (the declared value
-resolved live from the cascade, the intended value a command set, and the observed value
-from the latest-value cache) with drift computed on read:
+Read a component's property reconciliation, the want/told/is pivot (the current declared
+value with the contract default coalesced in, the intended value a command set, and the
+latest observed value, all series reads) with drift computed on read:
 
 ```sh
 omniglass component reconciliation list disp-1                                       # needs component:read
@@ -369,15 +369,15 @@ location types. See [the seed model](/architecture/core-entities/#the-seed-model
 ## Event types
 
 The [event type](/architecture/events/#the-event_type-registry) commands cover the occurrence keyspace,
-the twin of the property catalog: the discrete happenings an event is typed by (`call.started`,
-`cable.unplugged`). `event_type:read` sits on the viewer floor; `event_type:create`, `event_type:update`, and
+the twin of the property catalog: the discrete happenings an event is typed by (`call-started`,
+`cable-unplugged`). `event_type:read` sits on the viewer floor; `event_type:create`, `event_type:update`, and
 `event_type:delete` are admin-gated. Official (seed-owned) event types are read-only.
 
 ```sh
 omniglass event-type list                                           # the event type catalog
-omniglass event-type create --name cable.unplugged --display-name "Cable unplugged"
-omniglass event-type get call.started
-omniglass event-type delete cable.unplugged                        # 409 on an official type
+omniglass event-type create --name cable-unplugged --display-name "Cable unplugged"
+omniglass event-type get call-started
+omniglass event-type delete cable-unplugged                        # 409 on an official type
 ```
 
 ## Command types
@@ -390,7 +390,7 @@ settlement verdict.
 
 ```sh
 omniglass command-type list                                         # the command type catalog
-omniglass command-type create --name set-input --target-property-type video.input --settle-window-seconds 15
+omniglass command-type create --name set-input --target-property-type video-input --settle-window-seconds 15
 omniglass command-type get reboot
 omniglass component command issue disp-1 --command-type set-input --value '"hdmi2"'   # needs command:issue
 ```

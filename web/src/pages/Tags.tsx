@@ -38,7 +38,7 @@ function propagatesBadge(t: Tag): JSX.Element {
 
 const columns: FlatColumn<Tag>[] = [
   // The shared identity cell, under the one header word every list uses. A tag's
-  // name is validated as a keyspace key (icmp.rtt-avg is legal here and not in a
+  // name is validated as a keyspace key (icmp-rtt-avg is legal here and not in a
   // kebab name), but that is a validation difference, not a different concept: it
   // is still the row's name. A tag carries no display name, so the cell collapses
   // to the name alone in the data face, which is the same rule the pages with a

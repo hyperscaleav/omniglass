@@ -120,7 +120,7 @@ var Banned = []BannedTerm{
 	},
 	{
 		Pattern:     regexp.MustCompile(`\bfield_value\b`),
-		Replacement: "property (the value store)",
+		Replacement: "a declared property series row",
 		Origin:      "ADR-0047",
 	},
 
@@ -129,7 +129,7 @@ var Banned = []BannedTerm{
 	// all current vocabulary. Only the retired identifiers are named.
 	{
 		Pattern:     regexp.MustCompile(`\b(MetricSampleEvent|StateSampleEvent|EventOccurrence)\b`),
-		Replacement: "MetricSampleWrite, StateSampleWrite, or EventWrite",
+		Replacement: "MetricSampleWrite, PropertySampleWrite, or EventWrite",
 		Origin:      "ADR-0072",
 	},
 	{
@@ -155,12 +155,13 @@ var Banned = []BannedTerm{
 		Origin:      "ADR-0071",
 	},
 
-	// The ADR-0063 name foundation: the registry takes the _type suffix, the
-	// bare noun holds the data.
+	// The ADR-0063 name foundation retired property_value for the store; the
+	// ADR-0079 fold then retired the store itself, so the replacement names the
+	// series model rather than the intermediate cache.
 	{
 		Pattern:     regexp.MustCompile(`\bproperty_value\b`),
-		Replacement: "property (the latest-value store)",
-		Origin:      "ADR-0063",
+		Replacement: "a property series row (a declared value is a row with provenance='declared'; the current value is the latest row per series)",
+		Origin:      "ADR-0079",
 	},
 	{
 		// Safe against property_type_id, which does not contain property_id.
@@ -184,6 +185,28 @@ var Banned = []BannedTerm{
 		Pattern:     regexp.MustCompile(`(?i)protocol-and-style registry`),
 		Replacement: "transport registry",
 		Origin:      "ADR-0073",
+	},
+
+	// The five-lane wave (ADR-0079). The word "state" alone is NOT bannable
+	// (a health state is a concept, the record/state lane is current
+	// vocabulary), so only the precise table senses are named: the bare token
+	// in backticks (the only code entity ever called `state` was the sample
+	// table, now `property`; hyphenated names like `power-state` cannot match
+	// because the backtick must sit immediately before the word), the
+	// state-plus-storage-noun compounds, and the old two-table pairing.
+	{
+		// The compound arm refuses a leading hyphen ([^-\w]) rather than using \b,
+		// so "steady-state rows" and its solid-state cousins stay legal prose.
+		Pattern:     regexp.MustCompile("(?i)`state`|(?:^|[^-\\w])state (?:tables?|series|samples?|rows?|sinks?|kinds?)\\b|\\bmetric`? ?/ ?`?state\\b"),
+		Replacement: "property (the value lane): the sample tables are `metric` and `property`",
+		Origin:      "ADR-0079",
+	},
+	{
+		// The Go identifiers of the state-table era, deleted with the rename:
+		// the write struct, the insert, and the latest/transition readers.
+		Pattern:     regexp.MustCompile(`\b(?:StateSampleWrite|InsertStateSamples|LatestState\w*|StateTransitions)\b`),
+		Replacement: "PropertySampleWrite / InsertPropertySamples / LatestProperty / PropertyTransitions",
+		Origin:      "ADR-0079",
 	},
 }
 
@@ -210,7 +233,8 @@ var vocabularyAllowed = map[string]bool{
 // internal identifiers is a code change with its own ripple, not a lint.
 var operatorStrings = []string{
 	filepath.Join("..", "..", "internal", "seed", "event_types.yaml"),
-	filepath.Join("..", "..", "internal", "seed", "properties.yaml"),
+	filepath.Join("..", "..", "internal", "seed", "property_types.yaml"),
+	filepath.Join("..", "..", "internal", "seed", "metric_types.yaml"),
 	filepath.Join("..", "..", "internal", "seed", "command_types.yaml"),
 	filepath.Join("..", "..", "internal", "seed", "interface_types.yaml"),
 	filepath.Join("..", "..", "internal", "seed", "roles.yaml"),

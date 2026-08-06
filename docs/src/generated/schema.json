@@ -236,6 +236,60 @@
      }
     ]
    },
+   "product_metric": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "default_value",
+      "type": "jsonb",
+      "nullable": true
+     },
+     {
+      "name": "required",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "product_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "product.id"
+     },
+     {
+      "name": "metric_type_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "metric_type.id"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "product_metric_product_id_metric_type_id_key",
+      "definition": "CREATE UNIQUE INDEX product_metric_product_id_metric_type_id_key ON public.product_metric USING btree (product_id, metric_type_id)"
+     }
+    ]
+   },
    "product_property": {
     "columns": [
      {
@@ -339,6 +393,60 @@
      {
       "name": "standard_name_key",
       "definition": "CREATE UNIQUE INDEX standard_name_key ON public.standard USING btree (name)"
+     }
+    ]
+   },
+   "standard_metric": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "default_value",
+      "type": "jsonb",
+      "nullable": true
+     },
+     {
+      "name": "required",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "standard_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "standard.id"
+     },
+     {
+      "name": "metric_type_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "metric_type.id"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "standard_metric_standard_id_metric_type_id_key",
+      "definition": "CREATE UNIQUE INDEX standard_metric_standard_id_metric_type_id_key ON public.standard_metric USING btree (standard_id, metric_type_id)"
      }
     ]
    },
@@ -545,6 +653,65 @@
      {
       "name": "node_name_key",
       "definition": "CREATE UNIQUE INDEX node_name_key ON public.node USING btree (name)"
+     }
+    ]
+   },
+   "node_log": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "bigint",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "ts",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "node_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "node.principal_id"
+     },
+     {
+      "name": "source",
+      "type": "text",
+      "nullable": false,
+      "default": "''::text"
+     },
+     {
+      "name": "severity",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "facility",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "message",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "attributes",
+      "type": "jsonb",
+      "nullable": true
+     },
+     {
+      "name": "labels",
+      "type": "jsonb",
+      "nullable": true
+     },
+     {
+      "name": "correlation_id",
+      "type": "text",
+      "nullable": true
      }
     ]
    },
@@ -1555,6 +1722,60 @@
      }
     ]
    },
+   "location_type_metric": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "default_value",
+      "type": "jsonb",
+      "nullable": true
+     },
+     {
+      "name": "required",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "location_type_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "location_type.id"
+     },
+     {
+      "name": "metric_type_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "metric_type.id"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "location_type_metric_location_type_id_metric_type_id_key",
+      "definition": "CREATE UNIQUE INDEX location_type_metric_location_type_id_metric_type_id_key ON public.location_type_metric USING btree (location_type_id, metric_type_id)"
+     }
+    ]
+   },
    "location_type_property": {
     "columns": [
      {
@@ -2501,6 +2722,17 @@
       "nullable": true,
       "fk": true,
       "fk_target": "event.id"
+     },
+     {
+      "name": "status",
+      "type": "text",
+      "nullable": false,
+      "default": "'issued'::text"
+     },
+     {
+      "name": "settled_at",
+      "type": "timestamp with time zone",
+      "nullable": true
      }
     ],
     "checks": [
@@ -2511,6 +2743,14 @@
      {
       "name": "command_owner_kind_check",
       "expr": "CHECK ((owner_kind = ANY (ARRAY['component'::text, 'system'::text, 'location'::text, 'node'::text])))"
+     },
+     {
+      "name": "command_settlement_recorded_check",
+      "expr": "CHECK (((status = 'issued'::text) = (settled_at IS NULL)))"
+     },
+     {
+      "name": "command_status_check",
+      "expr": "CHECK ((status = ANY (ARRAY['issued'::text, 'settled'::text, 'failed'::text, 'timed-out'::text])))"
      }
     ]
    },
@@ -2568,6 +2808,19 @@
       "type": "timestamp with time zone",
       "nullable": false,
       "default": "now()"
+     },
+     {
+      "name": "target_metric_type_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "metric_type.id"
+     }
+    ],
+    "checks": [
+     {
+      "name": "command_type_target_arc_check",
+      "expr": "CHECK (((target_property_type_id IS NULL) OR (target_metric_type_id IS NULL)))"
      }
     ],
     "uniques": [
@@ -2785,11 +3038,6 @@
       "default": "now()"
      },
      {
-      "name": "owner_kind",
-      "type": "text",
-      "nullable": false
-     },
-     {
       "name": "instance",
       "type": "text",
       "nullable": false,
@@ -2798,30 +3046,9 @@
      {
       "name": "component_id",
       "type": "uuid",
-      "nullable": true,
+      "nullable": false,
       "fk": true,
       "fk_target": "component.id"
-     },
-     {
-      "name": "system_id",
-      "type": "uuid",
-      "nullable": true,
-      "fk": true,
-      "fk_target": "system.id"
-     },
-     {
-      "name": "location_id",
-      "type": "uuid",
-      "nullable": true,
-      "fk": true,
-      "fk_target": "location.id"
-     },
-     {
-      "name": "node_id",
-      "type": "uuid",
-      "nullable": true,
-      "fk": true,
-      "fk_target": "node.principal_id"
      },
      {
       "name": "source",
@@ -2858,16 +3085,6 @@
       "name": "correlation_id",
       "type": "text",
       "nullable": true
-     }
-    ],
-    "checks": [
-     {
-      "name": "log_line_owner_arc_check",
-      "expr": "CHECK ((((owner_kind = 'component'::text) AND (component_id IS NOT NULL) AND (system_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (component_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'location'::text) AND (location_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'node'::text) AND (node_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (location_id IS NULL))))"
-     },
-     {
-      "name": "log_line_owner_kind_check",
-      "expr": "CHECK ((owner_kind = ANY (ARRAY['component'::text, 'system'::text, 'location'::text, 'node'::text])))"
      }
     ]
    },
@@ -2959,17 +3176,24 @@
       "fk_target": "node.principal_id"
      },
      {
-      "name": "property_type_id",
+      "name": "metric_type_id",
       "type": "uuid",
       "nullable": false,
       "fk": true,
-      "fk_target": "property_type.id"
+      "fk_target": "metric_type.id"
+     },
+     {
+      "name": "command_id",
+      "type": "bigint",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "command.id"
      }
     ],
     "checks": [
      {
       "name": "metric_lineage_check",
-      "expr": "CHECK ((((provenance = 'observed'::text) AND (event_id IS NULL)) OR ((provenance = 'calculated'::text) AND (source_rule IS NOT NULL) AND (event_id IS NULL)) OR ((provenance = 'intended'::text) AND (event_id IS NOT NULL) AND (source_rule IS NULL))))"
+      "expr": "CHECK ((((provenance = 'observed'::text) AND (event_id IS NULL) AND (command_id IS NULL)) OR ((provenance = 'calculated'::text) AND (source_rule IS NOT NULL) AND (event_id IS NULL) AND (command_id IS NULL)) OR ((provenance = 'intended'::text) AND (command_id IS NOT NULL) AND (source_rule IS NULL))))"
      },
      {
       "name": "metric_owner_arc_check",
@@ -2985,112 +3209,7 @@
      }
     ]
    },
-   "property": {
-    "columns": [
-     {
-      "name": "id",
-      "type": "uuid",
-      "nullable": false,
-      "default": "uuidv7()",
-      "pk": true
-     },
-     {
-      "name": "owner_kind",
-      "type": "text",
-      "nullable": false
-     },
-     {
-      "name": "instance",
-      "type": "text",
-      "nullable": false,
-      "default": "''::text"
-     },
-     {
-      "name": "provenance",
-      "type": "text",
-      "nullable": false,
-      "default": "'declared'::text"
-     },
-     {
-      "name": "value",
-      "type": "jsonb",
-      "nullable": false
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "updated_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "component_id",
-      "type": "uuid",
-      "nullable": true,
-      "fk": true,
-      "fk_target": "component.id"
-     },
-     {
-      "name": "system_id",
-      "type": "uuid",
-      "nullable": true,
-      "fk": true,
-      "fk_target": "system.id"
-     },
-     {
-      "name": "location_id",
-      "type": "uuid",
-      "nullable": true,
-      "fk": true,
-      "fk_target": "location.id"
-     },
-     {
-      "name": "node_id",
-      "type": "uuid",
-      "nullable": true,
-      "fk": true,
-      "fk_target": "node.principal_id"
-     },
-     {
-      "name": "property_type_id",
-      "type": "uuid",
-      "nullable": false,
-      "fk": true,
-      "fk_target": "property_type.id"
-     },
-     {
-      "name": "ts",
-      "type": "timestamp with time zone",
-      "nullable": true
-     }
-    ],
-    "checks": [
-     {
-      "name": "property_owner_arc_check",
-      "expr": "CHECK ((((owner_kind = 'component'::text) AND (component_id IS NOT NULL) AND (system_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (component_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'location'::text) AND (location_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'node'::text) AND (node_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (location_id IS NULL))))"
-     },
-     {
-      "name": "property_owner_kind_check",
-      "expr": "CHECK ((owner_kind = ANY (ARRAY['component'::text, 'system'::text, 'location'::text, 'node'::text])))"
-     },
-     {
-      "name": "property_provenance_check",
-      "expr": "CHECK ((provenance = ANY (ARRAY['observed'::text, 'calculated'::text, 'intended'::text, 'declared'::text])))"
-     }
-    ],
-    "uniques": [
-     {
-      "name": "property_series_key",
-      "definition": "CREATE UNIQUE INDEX property_series_key ON public.property USING btree (owner_kind, component_id, system_id, location_id, node_id, property_type_id, instance, provenance) NULLS NOT DISTINCT"
-     }
-    ]
-   },
-   "property_type": {
+   "metric_type": {
     "columns": [
      {
       "name": "name",
@@ -3099,11 +3218,6 @@
      },
      {
       "name": "display_name",
-      "type": "text",
-      "nullable": true
-     },
-     {
-      "name": "kind",
       "type": "text",
       "nullable": true
      },
@@ -3124,11 +3238,6 @@
      },
      {
       "name": "fusion_policy",
-      "type": "jsonb",
-      "nullable": true
-     },
-     {
-      "name": "validation",
       "type": "jsonb",
       "nullable": true
      },
@@ -3160,22 +3269,18 @@
     ],
     "checks": [
      {
-      "name": "property_type_data_type_check",
-      "expr": "CHECK ((data_type = ANY (ARRAY['string'::text, 'int'::text, 'float'::text, 'bool'::text, 'json'::text])))"
-     },
-     {
-      "name": "property_type_kind_check",
-      "expr": "CHECK ((kind = ANY (ARRAY['metric'::text, 'state'::text])))"
+      "name": "metric_type_data_type_check",
+      "expr": "CHECK ((data_type = ANY (ARRAY['int'::text, 'float'::text])))"
      }
     ],
     "uniques": [
      {
-      "name": "property_type_handle_key",
-      "definition": "CREATE UNIQUE INDEX property_type_handle_key ON public.property_type USING btree (name)"
+      "name": "metric_type_handle_key",
+      "definition": "CREATE UNIQUE INDEX metric_type_handle_key ON public.metric_type USING btree (name)"
      }
     ]
    },
-   "state": {
+   "property": {
     "columns": [
      {
       "name": "id",
@@ -3199,16 +3304,6 @@
       "type": "text",
       "nullable": false,
       "default": "''::text"
-     },
-     {
-      "name": "value",
-      "type": "text",
-      "nullable": false
-     },
-     {
-      "name": "value_json",
-      "type": "jsonb",
-      "nullable": true
      },
      {
       "name": "provenance",
@@ -3273,24 +3368,102 @@
       "nullable": false,
       "fk": true,
       "fk_target": "property_type.id"
+     },
+     {
+      "name": "value",
+      "type": "jsonb",
+      "nullable": false
+     },
+     {
+      "name": "command_id",
+      "type": "bigint",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "command.id"
      }
     ],
     "checks": [
      {
-      "name": "state_lineage_check",
-      "expr": "CHECK ((((provenance = 'observed'::text) AND (event_id IS NULL)) OR ((provenance = 'calculated'::text) AND (source_rule IS NOT NULL) AND (event_id IS NULL)) OR ((provenance = 'intended'::text) AND (event_id IS NOT NULL) AND (source_rule IS NULL))))"
+      "name": "property_lineage_check",
+      "expr": "CHECK ((((provenance = 'observed'::text) AND (event_id IS NULL) AND (command_id IS NULL)) OR ((provenance = 'calculated'::text) AND (source_rule IS NOT NULL) AND (event_id IS NULL) AND (command_id IS NULL)) OR ((provenance = 'intended'::text) AND (command_id IS NOT NULL) AND (source_rule IS NULL)) OR ((provenance = 'declared'::text) AND (source_rule IS NULL) AND (event_id IS NULL) AND (command_id IS NULL))))"
      },
      {
-      "name": "state_owner_arc_check",
+      "name": "property_owner_arc_check",
       "expr": "CHECK ((((owner_kind = 'component'::text) AND (component_id IS NOT NULL) AND (system_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (component_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'location'::text) AND (location_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'node'::text) AND (node_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (location_id IS NULL))))"
      },
      {
-      "name": "state_owner_kind_check",
+      "name": "property_owner_kind_check",
       "expr": "CHECK ((owner_kind = ANY (ARRAY['component'::text, 'system'::text, 'location'::text, 'node'::text])))"
      },
      {
-      "name": "state_provenance_check",
-      "expr": "CHECK ((provenance = ANY (ARRAY['observed'::text, 'calculated'::text, 'intended'::text])))"
+      "name": "property_provenance_check",
+      "expr": "CHECK ((provenance = ANY (ARRAY['observed'::text, 'calculated'::text, 'intended'::text, 'declared'::text])))"
+     }
+    ]
+   },
+   "property_type": {
+    "columns": [
+     {
+      "name": "name",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "display_name",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "data_type",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "fusion_policy",
+      "type": "jsonb",
+      "nullable": true
+     },
+     {
+      "name": "validation",
+      "type": "jsonb",
+      "nullable": true
+     },
+     {
+      "name": "description",
+      "type": "text",
+      "nullable": false,
+      "default": "''::text"
+     },
+     {
+      "name": "registered_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "official",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+     },
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     }
+    ],
+    "checks": [
+     {
+      "name": "property_type_data_type_check",
+      "expr": "CHECK ((data_type = ANY (ARRAY['string'::text, 'bool'::text, 'json'::text])))"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "property_type_handle_key",
+      "definition": "CREATE UNIQUE INDEX property_type_handle_key ON public.property_type USING btree (name)"
      }
     ]
    }

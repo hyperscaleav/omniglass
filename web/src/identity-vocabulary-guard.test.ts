@@ -227,7 +227,7 @@ describe("the identity words are written in exactly one place", () => {
 //
 // A blade is opened from a row, and the row shows the display name over the name.
 // If the heading renders the id, clicking "ICMP RTT (avg)" opens a panel headed
-// `icmp.rtt-avg`, so the operator cannot tell they opened the thing they clicked.
+// `icmp-rtt-avg`, so the operator cannot tell they opened the thing they clicked.
 // Three pages did exactly that while 813 tests were green, because no test reads a
 // blade heading: the id IS the name for these entities, so the wrong value is a
 // plausible-looking string rather than an obvious defect.

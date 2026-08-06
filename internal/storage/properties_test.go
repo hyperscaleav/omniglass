@@ -25,10 +25,11 @@ func TestPropertyCRUD(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	// Create a custom property.
+	// Create a custom property. Numbers are the other lane (#587), so the
+	// property catalog's fixture is a string.
 	prop, err := gw.CreatePropertyType(ctx, "", storage.PropertyTypeSpec{
-		Name: "rack-unit", DataType: "int", DisplayName: "Rack unit",
-		Validation: json.RawMessage(`{"minimum":1,"maximum":48}`), Description: "U position.",
+		Name: "rack-unit", DataType: "string", DisplayName: "Rack unit",
+		Validation: json.RawMessage(`{"pattern":"^u[0-9]+$"}`), Description: "U position.",
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -39,7 +40,7 @@ func TestPropertyCRUD(t *testing.T) {
 
 	// Get it back.
 	got, err := gw.GetPropertyType(ctx, "rack-unit")
-	if err != nil || got.DataType != "int" || got.DisplayName != "Rack unit" {
+	if err != nil || got.DataType != "string" || got.DisplayName != "Rack unit" {
 		t.Fatalf("get: %v (%+v)", err, got)
 	}
 
@@ -52,8 +53,11 @@ func TestPropertyCRUD(t *testing.T) {
 	for _, pp := range props {
 		names[pp.Name] = true
 	}
-	if !names["rack-unit"] || !names["serial-number"] || !names["icmp.reachable"] {
+	if !names["rack-unit"] || !names["serial-number"] || !names["interface-reachable"] {
 		t.Fatalf("list missing properties: %v", names)
+	}
+	if names["icmp-reachable"] {
+		t.Fatalf("icmp-reachable listed on the property lane; numbers are metric types")
 	}
 
 	// Update a mutable field.
@@ -66,7 +70,7 @@ func TestPropertyCRUD(t *testing.T) {
 	}
 
 	// A duplicate name is ErrPropertyExists.
-	if _, err := gw.CreatePropertyType(ctx, "", storage.PropertyTypeSpec{Name: "rack-unit", DataType: "int"}); !errors.Is(err, storage.ErrPropertyTypeExists) {
+	if _, err := gw.CreatePropertyType(ctx, "", storage.PropertyTypeSpec{Name: "rack-unit", DataType: "string"}); !errors.Is(err, storage.ErrPropertyTypeExists) {
 		t.Fatalf("dup err = %v, want ErrPropertyExists", err)
 	}
 
@@ -120,25 +124,43 @@ func TestRegistryNamesAreUniqueAcrossBothRegistries(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	// video.input is seeded as a state property, so the event registry must refuse it.
+	// video-input is seeded as a state property, so the event registry must refuse it.
 	if _, err := gw.CreateEventType(ctx, "", storage.EventTypeSpec{
-		Name: "video.input", DisplayName: "Video Input",
+		Name: "video-input", DisplayName: "Video Input",
 	}); !errors.Is(err, storage.ErrEventTypeExists) {
 		t.Fatalf("CreateEventType on an existing property name = %v, want ErrEventTypeExists", err)
 	}
 
-	// The mirror: call.started is a seeded event type, so the property registry
+	// The mirror: call-started is a seeded event type, so the property registry
 	// must refuse it.
-	metric := "metric"
 	if _, err := gw.CreatePropertyType(ctx, "", storage.PropertyTypeSpec{
-		Name: "call.started", DisplayName: "Call Started", Kind: &metric, DataType: "float",
+		Name: "call-started", DisplayName: "Call Started", DataType: "string",
 	}); !errors.Is(err, storage.ErrPropertyTypeExists) {
 		t.Fatalf("CreatePropertyType on an existing event type name = %v, want ErrPropertyTypeExists", err)
 	}
 
+	// The split's new seams (#587): a seeded metric name is refused on the
+	// property lane, and a seeded property name is refused on the metric lane, so
+	// no name can route to two sinks.
+	if _, err := gw.CreatePropertyType(ctx, "", storage.PropertyTypeSpec{
+		Name: "icmp-rtt-avg", DisplayName: "RTT", DataType: "string",
+	}); !errors.Is(err, storage.ErrPropertyTypeExists) {
+		t.Fatalf("CreatePropertyType on an existing metric type name = %v, want ErrPropertyTypeExists", err)
+	}
+	if _, err := gw.CreateMetricType(ctx, "", storage.MetricTypeSpec{
+		Name: "video-input", DisplayName: "Video Input", DataType: "int",
+	}); !errors.Is(err, storage.ErrMetricTypeExists) {
+		t.Fatalf("CreateMetricType on an existing property name = %v, want ErrMetricTypeExists", err)
+	}
+	if _, err := gw.CreateMetricType(ctx, "", storage.MetricTypeSpec{
+		Name: "call-started", DisplayName: "Call Started", DataType: "int",
+	}); !errors.Is(err, storage.ErrMetricTypeExists) {
+		t.Fatalf("CreateMetricType on an existing event type name = %v, want ErrMetricTypeExists", err)
+	}
+
 	// A free name in either registry is unaffected.
 	if _, err := gw.CreateEventType(ctx, "", storage.EventTypeSpec{
-		Name: "cable.unplugged", DisplayName: "Cable Unplugged",
+		Name: "cable-unplugged", DisplayName: "Cable Unplugged",
 	}); err != nil {
 		t.Fatalf("CreateEventType on a free name: %v", err)
 	}

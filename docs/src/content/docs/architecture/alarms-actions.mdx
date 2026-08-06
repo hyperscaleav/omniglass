@@ -48,7 +48,7 @@ the `alarm_id`) and applied to the row. The timeline assembles by `alarm_id` acr
 
 An alarm write is **not sample-silent**: raising or clearing one recomputes
 [health](/architecture/health/) in the same transaction, and the rollup records the verdict
-transition as a **calculated-provenance `state` sample** (`provenance='calculated'`,
+transition as a **calculated-provenance `property` sample** (`provenance='calculated'`,
 `source_rule='health-rollup'`). Cycle safety therefore rests on **provenance, not topology**
 ([ADR-0069](/architecture/decisions/#adr-0069-cycle-safety-is-provenance-based-not-topology-based),
 see *Cycle safety*).
@@ -215,7 +215,7 @@ opens an alarm, fires the action again), closed with three rules:
 
 1. **Consequence writes are provenance-labeled, and a rule never routes on its own consequences.**
    Every consequence write carries `provenance='calculated'` with its producing rule named (the
-   health rollup's `state` row, `source_rule='health-rollup'`), and the routing layer refuses to
+   health rollup's `property` row, `source_rule='health-rollup'`), and the routing layer refuses to
    trigger a rule off its own output
    ([ADR-0069](/architecture/decisions/#adr-0069-cycle-safety-is-provenance-based-not-topology-based)).
 2. **ack / snooze transitions do not match `action_rule`s** (only open / resolve do).

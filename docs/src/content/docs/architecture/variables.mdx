@@ -9,8 +9,8 @@ sidebar:
 
 import SchemaTable from '../../../components/SchemaTable.astro';
 
-:::caution[Direction: ADR-0063 makes the value store a provenance-keyed cache]
-The store is now named `property` per [ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables) (was `property_value`, built). The **observed** latest-value cache and the **reconciliation** read are built: the ingest sink upserts the newest observed value per `(owner, property_type, instance, provenance)` series, and a per-component reconciliation read pivots want/told/is with **drift computed on read**, `declared` resolved live from the cascade (never a cache row). Still directional: `intended` is stored for command settlement, whose writer is the command pillar.
+:::caution[Direction: ADR-0079 folds declared values into the series]
+The separate value store retired: a declared value is a **series row** (`provenance='declared'`) in the `property` sample table, an edit appends, an unset is a tombstone row, and every current value is the latest series row per `(owner, type, instance, provenance)` ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)). The **reconciliation** read is built: a per-component pivot of want/told/is over series reads, with **drift computed on read**; `intended` rows are opened by the [command pillar](/architecture/commands/) and name their command.
 :::
 
 :::note[Partial: the secret and variable members are built; config is Design]
@@ -39,7 +39,7 @@ differ in what they are keyed to and what lifecycle they carry:
 | keyed by | a canonical signal (`property_type`) | its own `secret_type` shape name | its own `name`, an org-local cascade namespace |
 | has an observed side? | yes, a sample via a get function | its **validity**, not the secret value | no |
 | lifecycle | drift → reconcile (a set function) | refresh + rotation + expiry (deferred) | none; resolved and interpolated |
-| example | `video.input = HDMI1` | an `snmp-community`, a `basic-auth` | `poll-interval = 30s`, a base URL, a label |
+| example | `video-input = HDMI1` | an `snmp-community`, a `basic-auth` | `poll-interval = 30s`, a base URL, a label |
 
 The common thread is the cascade and an exclusive-arc scope (exactly one of
 `platform | template | location | system | component`): the same exclusive-arc ownership as samples,
@@ -49,13 +49,13 @@ plus a `template`-scoped binding the sample arc lacks (and unlike samples, confi
 ## config: declared device state, keyed to a signal
 
 ::::design[The `config` member, tracked in #153]
-A **config** item is the **declared side of a canonical signal**: `video.input` is one key with two
-sides, the **observed** value the device reports (a `state`, provenance=observed) and the
-**declared** value you set, sharing the **key** but not the **storage** (the declared value is
-**never a sample row**). Their gap is **drift**.
+A **config** item is the **declared side of a canonical signal**: `video-input` is one key with two
+sides, the **observed** value the device reports (a `property` sample, provenance=observed) and the
+**declared** value you set, sharing the **key**: under the lane model the declared value is itself
+a declared series row ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)). Their gap is **drift**.
 
 A component template **brings no keys, it references registered ones**: two display templates
-touching `video.input` are two references to one governed key, not a collision. Config reuses the
+touching `video-input` are two references to one governed key, not a collision. Config reuses the
 `property_type`'s value domain for validation.
 
 **The template is the source of truth for configurability**: a signal becomes settable on a device
@@ -67,10 +67,10 @@ Each piece of a config item has one home, joined by the canonical key:
 
 | Piece | What it holds | Lives in |
 |---|---|---|
-| signal definition | key, kind, value domain, unit | `property_type` (the registry) |
+| signal definition | name, value domain | `property_type` (the catalog; a numeric signal's unit lives on `metric_type`) |
 | get / set binding | how this device class reads and writes the signal | the component's **product** |
 | declared value | the intent (`HDMI1`), plus the per-item `reconcile` policy | the **config table** (cascaded) |
-| observed value | what the device reports (`HDMI2`) | `state` rows (observed) |
+| observed value | what the device reports (`HDMI2`) | `property` rows (observed) |
 | drift | declared ≠ observed | **computed on read**, not stored |
 
 ### Drift and reconcile
@@ -104,7 +104,7 @@ template bound (get alone: observe or warn; a set makes it enforceable).
 
 ### Declaring at the system level
 
-Because config rides the cascade, you rarely declare on the device: declare `video.input = HDMI1` for
+Because config rides the cascade, you rarely declare on the device: declare `video-input = HDMI1` for
 the **main-display role** on the system template and the cascade resolves it onto whichever display
 fills that role; drift and reconcile follow.
 
@@ -225,14 +225,15 @@ flagged secret (a webhook signing token) without being a full secret cell, since
 ## property: one typed name, a classifier contract, a stored value
 
 :::note[Partial: the catalog, the three classifier contracts, and the declared value on an instance]
-Three pieces are **built**. The **`property_type` catalog**: the primitive-agnostic registry of typed names
-(`name`, `data_type` over `string` / `int` / `float` / `bool` / `json`, optional label, unit, a JSON Schema
-`validation`, and a nullable observed `kind`), seed-owned `official` rows read-only
-([ADR-0043](/architecture/decisions/#adr-0043-the-property-catalog)). The three **classifier contracts**
+Three pieces are **built**. The **`property_type` catalog**: the registry of typed value names
+(`name`, `data_type` over `string` / `bool` / `json`, optional label, a JSON Schema
+`validation`), seed-owned `official` rows read-only; numeric names live in its `metric_type` sibling
+([ADR-0043](/architecture/decisions/#adr-0043-the-property-catalog),
+[ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)). The three **classifier contracts**
 (**`product_property`**, **`standard_property`**, **`location_type_property`**), one shape: a catalog property
-with an optional `default_value` and a `required` flag, unique per `(classifier, property)`. And **`property`**,
-the value store on the **same owner exclusive-arc** as the sample sinks and `event`, with an `instance`
-discriminator and a **`provenance`**; the write path fills `provenance=declared`. The read is
+with an optional `default_value` and a `required` flag, unique per `(classifier, property)`. And the declared rows in the
+**`property`** series, on the **same owner exclusive-arc** as every sample, with an `instance`
+discriminator; the write path appends `provenance=declared` rows. The read is
 **`EffectiveProperties(ownerKind, ownerID)`**, one parameterized query serving **component, system, location,
 and node**: `coalesce(the instance's value, the contract default)` plus the off-contract values, so a
 **productless** component, a **one-off** system, and a classifier-less **node** still resolve
@@ -310,7 +311,7 @@ synonyms) so `Prod`, `prod `, and `PROD` resolve to one value.
 
 :::design[The `config` member's observed-side worker, tracked in #153]
 The observed side of config is maintained by one **event-driven worker** (the one-worker-plus-stages
-model): when a `state` lands whose `(owner, key)` a config item is keyed to, it refreshes that item's
+model): when a `property` sample lands whose `(owner, key)` a config item is keyed to, it refreshes that item's
 cached observed value, reverse-indexed so "is this sample a config's observed side?" is a sargable
 lookup, not a scan. It is the one controlled, one-directional crossing from the timeseries back into
 current-value config.
@@ -339,7 +340,7 @@ command -> device
 Modeling declared state as **config** keeps **declared** out of the sample provenances: samples carry
 three ([observed, calculated, intended](/architecture/properties/#provenance-how-we-know-a-value)),
 and declared intent lives in config, keyed to the same signal but stored down the cascade. The
-`state` **kind** is unchanged (an observed `power.state = on` is still a `state`); only the
+lane is unchanged (an observed `power-state = on` is still a `property` sample); only the
 *declared* value moved.
 :::
 
@@ -393,5 +394,5 @@ exclusive arc. Typed inline (no `variable_type` registry: the value is validated
 
 The other value-bearing tables this page leans on are rendered on their home pages, once each:
 **`property_type`**, the classifier contracts (**`product_property`** and siblings), and the
-**`property`** value store on [properties](/architecture/properties/); **`tag`** and
+**`property`** series on [samples](/architecture/properties/); **`tag`** and
 **`tag_binding`** on [tags](/architecture/tags/).

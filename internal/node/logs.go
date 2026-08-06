@@ -32,7 +32,7 @@ const maxBufferedLogs = 1000
 // node console) and buffers them for shipment as node self-logs. It is the node
 // half of the raw log lane: the run loop drains the buffer each tick and
 // publishes the lines on the node's telemetry subject, where the ingest consumer
-// lands them owner-bound to the node. The buffer, its drop counter, and the lock
+// lands them in node_log. The buffer, its drop counter, and the lock
 // are shared by pointer across WithAttrs/WithGroup clones so every derived logger
 // (and the process default) appends to one bounded queue.
 type logSink struct {
@@ -111,7 +111,7 @@ func (h *logSink) drain() []capturedLog {
 	return out
 }
 
-// severityOf maps an slog level to the log_line severity vocabulary.
+// severityOf maps an slog level to the stored severity vocabulary.
 func severityOf(l slog.Level) string {
 	switch {
 	case l >= slog.LevelError:

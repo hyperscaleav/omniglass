@@ -94,7 +94,7 @@ export default defineConfig({
             { label: 'Core entities', slug: 'architecture/core-entities' },
             // the journey, in the order the data travels
             { label: 'Data collection', slug: 'architecture/collection' },
-            { label: 'Properties', slug: 'architecture/properties' },
+            { label: 'Metrics and properties', slug: 'architecture/properties' },
             { label: 'Events', slug: 'architecture/events' },
             { label: 'Commands', slug: 'architecture/commands' },
             { label: 'Config & credentials', slug: 'architecture/variables' },
@@ -172,6 +172,7 @@ export default defineConfig({
             { label: 'Files', slug: 'guides/admin/files' },
             { label: 'Types', slug: 'guides/admin/types' },
             { label: 'Properties', slug: 'guides/admin/properties' },
+            { label: 'Metrics', slug: 'guides/admin/metrics' },
             { label: 'Tags', slug: 'guides/admin/tags' },
             { label: 'Vendors', slug: 'guides/admin/vendors' },
             { label: 'Drivers', slug: 'guides/admin/drivers' },

@@ -355,7 +355,7 @@ export interface paths {
         put?: never;
         /**
          * Create a command type
-         * @description Registers a custom command type (official=false). The name must be a valid keyspace name (dot-joined kebab segments); a target property, when set, must be registered. Gated by command_type:create.
+         * @description Registers a custom command type (official=false). The name must be a single kebab token; a target, when set, must be a registered property or metric type. Gated by command_type:create.
          */
         post: operations["create-command-type"];
         delete?: never;
@@ -1408,6 +1408,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/metric-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List metric types
+         * @description Lists every registered metric type (official and custom). The catalog is estate-wide reference data. Gated by metric_type:read.
+         */
+        get: operations["list-metric-type"];
+        put?: never;
+        /**
+         * Create a metric type
+         * @description Registers a custom metric type (official=false). The name must be a valid metric key. Gated by metric_type:create.
+         */
+        post: operations["create-metric-type"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/metric-types/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a metric type
+         * @description Returns one metric type by name. Gated by metric_type:read.
+         */
+        get: operations["get-metric-type"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a metric type
+         * @description Removes a custom metric type by name. Official metric types are read-only. Gated by metric_type:delete.
+         */
+        delete: operations["delete-metric-type"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a metric type
+         * @description Patches a custom metric type's label, description, unit, or precision (a nil field is unchanged). Data type is fixed at creation. Official metric types are read-only. Gated by metric_type:update.
+         */
+        patch: operations["update-metric-type"];
+        trace?: never;
+    };
     "/nodes": {
         parameters: {
             query?: never;
@@ -2231,7 +2283,7 @@ export interface paths {
         head?: never;
         /**
          * Update a property
-         * @description Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property_type:update.
+         * @description Patches a custom property's label, description, or validation (a nil field is unchanged). Data type is fixed at creation. Official properties are read-only. Gated by property_type:update.
          */
         patch: operations["update-property-type"];
         trace?: never;
@@ -3095,7 +3147,7 @@ export interface paths {
         put?: never;
         /**
          * Push telemetry for an owner
-         * @description Accepts samples and raw log lines for one owner and publishes them onto the ingest lane. The registry decides where each sample lands (metric, state, or a caught event); an unregistered name is rejected and reported in the response rather than silently dropped. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.
+         * @description Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.
          */
         post: operations["push-telemetry"];
         delete?: never;
@@ -3210,9 +3262,13 @@ export interface components {
     schemas: {
         AcceptedStruct: {
             /** Format: int64 */
+            events: number;
+            /** Format: int64 */
             logs: number;
             /** Format: int64 */
-            samples: number;
+            metrics: number;
+            /** Format: int64 */
+            properties: number;
         };
         AddMemberInputBody: {
             /**
@@ -3386,6 +3442,8 @@ export interface components {
             instance?: string;
             /** @description The computed settlement verdict (none/pending/settled/failed) */
             settlement: string;
+            /** @description The recorded command status (issued/settled/failed/timed-out); issued until a settle-check records the terminal outcome */
+            status: string;
         };
         CommandTypeBody: {
             /**
@@ -3723,6 +3781,32 @@ export interface components {
             /** @description The bearer token, shown once. Store it now: it cannot be retrieved again. */
             token: string;
         };
+        CreateMetricTypeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateMetricTypeInputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * @description The value type; a metric is always a number
+             * @enum {string}
+             */
+            data_type: "int" | "float";
+            /** @description What the series measures */
+            description?: string;
+            /** @description A human label */
+            display_name?: string;
+            /** @description The metric type name (lowercase kebab) */
+            name: string;
+            /**
+             * Format: int64
+             * @description Decimal places a rendered value keeps
+             */
+            precision?: number;
+            /** @description The display unit of the series (ms, dB, percent) */
+            unit?: string;
+        };
         CreateNodeInputBody: {
             /**
              * Format: uri
@@ -3792,23 +3876,16 @@ export interface components {
              */
             readonly $schema?: string;
             /**
-             * @description The value type
+             * @description The value type; a numeric signal is a metric type
              * @enum {string}
              */
-            data_type: "string" | "int" | "float" | "bool" | "json";
+            data_type: "string" | "bool" | "json";
             /** @description What the property means */
             description?: string;
             /** @description A human label */
             display_name?: string;
-            /**
-             * @description The observed kind; omit for a declared-only property
-             * @enum {string}
-             */
-            kind?: "metric" | "state" | "log";
-            /** @description The property name (lowercase, dot-hierarchied) */
+            /** @description The property name (lowercase kebab) */
             name: string;
-            /** @description A display unit (observed properties) */
-            unit?: string;
             /** @description A JSON Schema fragment constraining the value */
             validation?: unknown;
         };
@@ -4149,7 +4226,7 @@ export interface components {
             event_type_id: string;
             /** @description The series discriminator (e.g. the interface), when set */
             instance?: string;
-            /** @description The event_type name of the occurrence (e.g. call.started) */
+            /** @description The event_type name of the occurrence (e.g. call-started) */
             key: string;
             /** @description The occurrence message */
             message: string;
@@ -4560,6 +4637,15 @@ export interface components {
             readonly $schema?: string;
             members: components["schemas"]["MemberBody"][] | null;
         };
+        ListMetricTypesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListMetricTypesOutputBody.json
+             */
+            readonly $schema?: string;
+            metric_types: components["schemas"]["MetricTypeBody"][] | null;
+        };
         ListNodesOutputBody: {
             /**
              * Format: uri
@@ -4871,6 +4957,28 @@ export interface components {
             principal_id: string;
             username?: string;
         };
+        MetricTypeBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/MetricTypeBody.json
+             */
+            readonly $schema?: string;
+            data_type: string;
+            description?: string;
+            display_name?: string;
+            /** @description The metric type's uuid, the stable form the contract and telemetry keys store */
+            id: string;
+            name: string;
+            official: boolean;
+            /**
+             * Format: int64
+             * @description Decimal places a rendered value keeps
+             */
+            precision?: number;
+            /** @description The display unit of the series (ms, dB, percent) */
+            unit?: string;
+        };
         NodeBody: {
             /**
              * Format: uri
@@ -5009,12 +5117,25 @@ export interface components {
             display_name?: string;
             /** @description The property's uuid, the stable form the contract and telemetry keys store */
             id: string;
-            kind?: string;
             name: string;
             official: boolean;
-            unit?: string;
             /** @description A JSON Schema fragment constraining the value */
             validation?: unknown;
+        };
+        PushEvent: {
+            /** @description Discriminates many occurrences of one name on one owner */
+            instance?: string;
+            /** @description The occurrence's human-readable line */
+            message?: string;
+            /** @description A registered event_type name */
+            name: string;
+            /** @description The occurrence's structured payload, validated against the event_type's payload schema */
+            payload?: unknown;
+            /**
+             * Format: date-time
+             * @description When this occurred; defaults to the batch timestamp, then to ingest time
+             */
+            ts?: string;
         };
         PushInputBody: {
             /**
@@ -5023,12 +5144,16 @@ export interface components {
              * @example /api/v1/schemas/PushInputBody.json
              */
             readonly $schema?: string;
+            /** @description Natively caught occurrences, validated against event_type */
+            events?: components["schemas"]["PushEvent"][] | null;
             /** @description Raw untyped log lines. No registry gate */
             logs?: components["schemas"]["PushLog"][] | null;
+            /** @description Numeric observations, validated against metric_type */
+            metrics?: components["schemas"]["PushMetric"][] | null;
             /** @description The entity every row in the batch lands under */
             owner: components["schemas"]["OwnerStruct"];
-            /** @description Registry-resolved observations. The registry decides which table each lands in */
-            samples?: components["schemas"]["PushSample"][] | null;
+            /** @description Categorical observations, validated against property_type and each type's validation schema */
+            properties?: components["schemas"]["PushProperty"][] | null;
             /** @description Who observed this batch (recorded as the provenance source on every row) */
             source?: string;
             /**
@@ -5054,6 +5179,22 @@ export interface components {
              */
             ts?: string;
         };
+        PushMetric: {
+            /** @description Discriminates many values of one name on one owner (three fan speeds, per-port counters) */
+            instance?: string;
+            /** @description A registered metric_type name */
+            name: string;
+            /**
+             * Format: date-time
+             * @description When this was observed; defaults to the batch timestamp, then to ingest time
+             */
+            ts?: string;
+            /**
+             * Format: double
+             * @description The numeric observation
+             */
+            value: number;
+        };
         PushOutputBody: {
             /**
              * Format: uri
@@ -5065,22 +5206,22 @@ export interface components {
             /** @description Names dropped by reject-not-project. Reported synchronously so a caller learns about a typo */
             rejected?: components["schemas"]["PushRejection"][] | null;
         };
+        PushProperty: {
+            /** @description Discriminates many values of one name on one owner */
+            instance?: string;
+            /** @description A registered property_type name */
+            name: string;
+            /**
+             * Format: date-time
+             * @description When this was observed; defaults to the batch timestamp, then to ingest time
+             */
+            ts?: string;
+            /** @description The observed value, shaped by the type's data_type and validated against its validation schema */
+            value: unknown;
+        };
         PushRejection: {
             name: string;
             reason: string;
-        };
-        PushSample: {
-            /** @description Discriminates many values of one name on one owner (three fan speeds, per-port counters) */
-            instance?: string;
-            /** @description The canonical property name, or a registered event_type name */
-            name: string;
-            /**
-             * Format: double
-             * @description The value for a metric-kind property
-             */
-            number?: number;
-            /** @description The value for a state-kind property, or the message for an event_type */
-            text?: string;
         };
         RaiseAlarmInputBody: {
             /**
@@ -5939,6 +6080,25 @@ export interface components {
             /** @description Your display name; empty clears it */
             display_name?: string;
         };
+        UpdateMetricTypeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateMetricTypeInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description What the series measures */
+            description?: string;
+            /** @description A human label */
+            display_name?: string;
+            /**
+             * Format: int64
+             * @description Decimal places a rendered value keeps
+             */
+            precision?: number;
+            /** @description The display unit of the series */
+            unit?: string;
+        };
         UpdateNodeInputBody: {
             /**
              * Format: uri
@@ -6001,8 +6161,6 @@ export interface components {
             description?: string;
             /** @description A human label */
             display_name?: string;
-            /** @description A display unit */
-            unit?: string;
             /** @description A JSON Schema fragment (replaces wholesale) */
             validation?: unknown;
         };
@@ -9243,6 +9401,166 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CheckNameOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-metric-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListMetricTypesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-metric-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMetricTypeInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-metric-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The metric type's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-metric-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The metric type's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-metric-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The metric type's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMetricTypeInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricTypeBody"];
                 };
             };
             /** @description Error */

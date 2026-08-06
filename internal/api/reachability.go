@@ -12,7 +12,7 @@ import (
 )
 
 // The reachability read BFF: a per-component, per-interface composition of the
-// verdict state (interface.reachable), the layer signals (the raw icmp/tcp probe
+// verdict property (interface-reachable), the layer signals (the raw icmp/tcp probe
 // metrics), and the recent transition history the availability strip reads. It is
 // a plain typed Huma GET (no ViewResult framework exists), gated by component:read
 // and scope-injected through GetComponent: an out-of-scope component is a
@@ -22,21 +22,21 @@ import (
 // reachHistoryWindow bounds the transition history returned for the strip.
 const reachHistoryWindow = 24 * time.Hour
 
-// verdictKey is the state sample that carries the per-interface verdict.
-const verdictKey = "interface.reachable"
+// verdictKey is the property sample that carries the per-interface verdict.
+const verdictKey = "interface-reachable"
 
 // reachLayer describes one probe layer the panel gates on: its primary signal
 // (0/1) and the optional companion metric that carries a timing detail.
 type reachLayer struct {
 	Layer     string // the layer word: "ping" (L3) or "port" (L4)
-	SignalKey string // the primary metric key (icmp.reachable / tcp.open)
-	TimingKey string // the companion timing metric (icmp.rtt-avg / tcp.connect-time)
+	SignalKey string // the primary metric key (icmp-reachable / tcp-open)
+	TimingKey string // the companion timing metric (icmp-rtt-avg / tcp-connect-time)
 }
 
 // reachLayers is the fixed probe-layer order, L3 then L4.
 var reachLayers = []reachLayer{
-	{Layer: "ping", SignalKey: "icmp.reachable", TimingKey: "icmp.rtt-avg"},
-	{Layer: "port", SignalKey: "tcp.open", TimingKey: "tcp.connect-time"},
+	{Layer: "ping", SignalKey: "icmp-reachable", TimingKey: "icmp-rtt-avg"},
+	{Layer: "port", SignalKey: "tcp-open", TimingKey: "tcp-connect-time"},
 }
 
 type reachVerdictBody struct {
@@ -107,7 +107,7 @@ func registerReachabilityRoutes(api huma.API, a *authenticator, gw storage.Gatew
 	})
 }
 
-// composeInterface assembles one interface's reachability row from the state and
+// composeInterface assembles one interface's reachability row from the property and
 // metric sinks. All reads are keyed by the verified component name and the
 // interface name (the sample instance).
 func composeInterface(ctx context.Context, gw storage.Gateway, comp string, it storage.ComponentInterface, since time.Time) (reachInterfaceBody, error) {
@@ -120,7 +120,7 @@ func composeInterface(ctx context.Context, gw storage.Gateway, comp string, it s
 		History:   []reachHistoryBody{},
 	}
 
-	verdict, err := gw.LatestState(ctx, comp, verdictKey, it.Name)
+	verdict, err := gw.LatestProperty(ctx, comp, verdictKey, it.Name)
 	if err != nil {
 		return row, err
 	}
@@ -147,7 +147,7 @@ func composeInterface(ctx context.Context, gw storage.Gateway, comp string, it s
 		row.Layers = append(row.Layers, lb)
 	}
 
-	transitions, err := gw.StateTransitions(ctx, comp, verdictKey, it.Name, since)
+	transitions, err := gw.PropertyTransitions(ctx, comp, verdictKey, it.Name, since)
 	if err != nil {
 		return row, err
 	}

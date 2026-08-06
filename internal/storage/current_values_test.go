@@ -12,12 +12,12 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// TestPropertyCacheUpsert proves the latest-value cache: an upsert writes the
-// newest value per series in one lookup, the out-of-order guard keeps a late older
-// sample from displacing a newer latest, and a declared value coexists with the
-// observed one as a separate provenance row (so making property a producer cache
-// does not disturb the declared path).
-func TestPropertyCacheUpsert(t *testing.T) {
+// TestCurrentValueReads proves the #591 model on the read side: the current
+// value of a series is its latest row by the value's own time (a late-arriving
+// older sample lands in the series but never displaces the newer current
+// value), a declared value coexists as its own provenance series, and a
+// provenance with no rows is a clean miss.
+func TestCurrentValueReads(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -40,20 +40,19 @@ func TestPropertyCacheUpsert(t *testing.T) {
 	t0 := time.Now().UTC().Truncate(time.Microsecond).Add(-2 * time.Minute)
 	t1 := t0.Add(time.Minute)
 
-	// Insert, then a newer value updates in place: one row, the newer value.
-	up := func(val string, ts time.Time) {
+	obs := func(val string, ts time.Time) {
 		t.Helper()
-		if err := gw.UpsertProperties(ctx, []storage.PropertyUpsert{{
-			OwnerKind: "component", OwnerID: "disp-1", Key: "interface.reachable",
-			Instance: "", Provenance: "observed", Value: json.RawMessage(`"` + val + `"`), TS: ts,
+		if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{
+			OwnerKind: "component", OwnerID: "disp-1", Key: "interface-reachable",
+			Instance: "", Value: val, TS: ts,
 		}}); err != nil {
-			t.Fatalf("upsert %s: %v", val, err)
+			t.Fatalf("insert observed %s: %v", val, err)
 		}
 	}
-	up("up", t0)
-	up("down", t1)
+	obs("up", t0)
+	obs("down", t1)
 
-	cv, err := gw.LatestValue(ctx, "component", "disp-1", "interface.reachable", "", "observed", all)
+	cv, err := gw.LatestValue(ctx, "component", "disp-1", "interface-reachable", "", "observed", all)
 	if err != nil {
 		t.Fatalf("latest observed: %v", err)
 	}
@@ -61,32 +60,33 @@ func TestPropertyCacheUpsert(t *testing.T) {
 		t.Fatalf("latest observed: want down@t1, got %+v", cv)
 	}
 
-	// Out-of-order guard: an older sample must not displace the newer latest.
-	up("stale", t0)
-	cv, err = gw.LatestValue(ctx, "component", "disp-1", "interface.reachable", "", "observed", all)
+	// A late-arriving older sample joins the series but the current value stays
+	// the newest by the value's own time.
+	obs("stale", t0)
+	cv, err = gw.LatestValue(ctx, "component", "disp-1", "interface-reachable", "", "observed", all)
 	if err != nil {
 		t.Fatalf("latest after stale: %v", err)
 	}
 	if cv == nil || string(cv.Value) != `"down"` || !cv.TS.Equal(t1) {
-		t.Fatalf("out-of-order guard failed: want down@t1, got %+v", cv)
+		t.Fatalf("late old sample displaced the current value: want down@t1, got %+v", cv)
 	}
 
-	// A declared value coexists as a separate provenance row (the declared path is
-	// untouched): observed stays, declared reads back its own value.
-	if _, err := gw.SetProperty(ctx, "", "component", "disp-1", "interface.reachable", "", json.RawMessage(`"up"`), all); err != nil {
+	// A declared value coexists as its own provenance series: observed stays,
+	// declared reads back its own value.
+	if _, err := gw.SetProperty(ctx, "", "component", "disp-1", "interface-reachable", "", json.RawMessage(`"up"`), all); err != nil {
 		t.Fatalf("set declared: %v", err)
 	}
-	obs, err := gw.LatestValue(ctx, "component", "disp-1", "interface.reachable", "", "observed", all)
-	if err != nil || obs == nil || string(obs.Value) != `"down"` {
-		t.Fatalf("observed after declared set: want down, got %+v (err %v)", obs, err)
+	obsAfter, err := gw.LatestValue(ctx, "component", "disp-1", "interface-reachable", "", "observed", all)
+	if err != nil || obsAfter == nil || string(obsAfter.Value) != `"down"` {
+		t.Fatalf("observed after declared set: want down, got %+v (err %v)", obsAfter, err)
 	}
-	dec, err := gw.LatestValue(ctx, "component", "disp-1", "interface.reachable", "", "declared", all)
+	dec, err := gw.LatestValue(ctx, "component", "disp-1", "interface-reachable", "", "declared", all)
 	if err != nil || dec == nil || string(dec.Value) != `"up"` {
 		t.Fatalf("declared read: want up, got %+v (err %v)", dec, err)
 	}
 
 	// A provenance with no row is a clean miss.
-	told, err := gw.LatestValue(ctx, "component", "disp-1", "interface.reachable", "", "intended", all)
+	told, err := gw.LatestValue(ctx, "component", "disp-1", "interface-reachable", "", "intended", all)
 	if err != nil {
 		t.Fatalf("latest intended: %v", err)
 	}
@@ -95,15 +95,15 @@ func TestPropertyCacheUpsert(t *testing.T) {
 	}
 
 	// An out-of-scope owner is the non-disclosing not-found, not a disclosure.
-	if _, err := gw.LatestValue(ctx, "component", "ghost", "interface.reachable", "", "observed", all); err == nil {
+	if _, err := gw.LatestValue(ctx, "component", "ghost", "interface-reachable", "", "observed", all); err == nil {
 		t.Fatal("latest value for unknown component: want not-found error, got nil")
 	}
 }
 
-// TestReconciliation proves the want/told/is pivot: the declared value is resolved
-// live from the cascade (want), the observed value is the cache (is), and drift is
-// computed on read (want present, is present, differ). Declared equal to observed
-// is no drift. Declared is never a cache row.
+// TestReconciliation proves the want/told/is pivot: the declared value is
+// resolved live from the cascade (want), the observed value is the series'
+// latest row (is), and drift is computed on read (want present, is present,
+// differ). Declared equal to observed is no drift.
 func TestReconciliation(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -135,12 +135,12 @@ func TestReconciliation(t *testing.T) {
 	if _, err := gw.SetProperty(ctx, "", "component", "disp-r", "firmware-version", "", json.RawMessage(`"1.0.0"`), all); err != nil {
 		t.Fatalf("set declared firmware-version: %v", err)
 	}
-	// is: an observed value that differs from the declared one.
-	if err := gw.UpsertProperties(ctx, []storage.PropertyUpsert{{
+	// is: an observed series row that differs from the declared value.
+	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{
 		OwnerKind: "component", OwnerID: "disp-r", Key: "firmware-version",
-		Instance: "", Provenance: "observed", Value: json.RawMessage(`"2.0.0"`), TS: time.Now().UTC(),
+		Instance: "", Value: "2.0.0", TS: time.Now().UTC(),
 	}}); err != nil {
-		t.Fatalf("upsert observed firmware-version: %v", err)
+		t.Fatalf("insert observed firmware-version: %v", err)
 	}
 
 	recs, err := gw.Reconciliation(ctx, "component", "disp-r", all)
@@ -153,11 +153,11 @@ func TestReconciliation(t *testing.T) {
 	}
 
 	// Reality matching intent: no drift.
-	if err := gw.UpsertProperties(ctx, []storage.PropertyUpsert{{
+	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{
 		OwnerKind: "component", OwnerID: "disp-r", Key: "firmware-version",
-		Instance: "", Provenance: "observed", Value: json.RawMessage(`"1.0.0"`), TS: time.Now().UTC().Add(time.Second),
+		Instance: "", Value: "1.0.0", TS: time.Now().UTC().Add(time.Second),
 	}}); err != nil {
-		t.Fatalf("upsert observed match: %v", err)
+		t.Fatalf("insert observed match: %v", err)
 	}
 	recs, err = gw.Reconciliation(ctx, "component", "disp-r", all)
 	if err != nil {

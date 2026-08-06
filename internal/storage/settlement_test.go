@@ -12,12 +12,12 @@ import (
 // window a match is settled and anything else (mismatch or absent) is failed.
 func TestSettle(t *testing.T) {
 	now := time.Date(2026, 7, 24, 12, 0, 0, 0, time.UTC)
-	cv := func(v string, ts time.Time) *storage.CachedValue {
-		return &storage.CachedValue{Value: []byte(v), TS: ts}
+	cv := func(v string, ts time.Time) *storage.CurrentValue {
+		return &storage.CurrentValue{Value: []byte(v), TS: ts}
 	}
 	cases := []struct {
 		name               string
-		intended, observed *storage.CachedValue
+		intended, observed *storage.CurrentValue
 		window             int
 		want               storage.SettlementVerdict
 	}{

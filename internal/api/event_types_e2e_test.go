@@ -44,7 +44,7 @@ func TestEventTypeAPI(t *testing.T) {
 
 	// Register a custom event type.
 	created := c.do(ownerTok, http.MethodPost, "/event-types", map[string]any{
-		"name": "cable.unplugged", "display_name": "Cable unplugged",
+		"name": "cable-unplugged", "display_name": "Cable unplugged",
 		"payload_schema": map[string]any{"type": "object"},
 	}, http.StatusCreated)
 	var et struct {
@@ -52,12 +52,12 @@ func TestEventTypeAPI(t *testing.T) {
 		Official bool   `json:"official"`
 	}
 	json.Unmarshal(created, &et)
-	if et.Name != "cable.unplugged" || et.Official {
+	if et.Name != "cable-unplugged" || et.Official {
 		t.Fatalf("created = %+v", et)
 	}
 
 	// Get it back.
-	c.do(ownerTok, http.MethodGet, "/event-types/cable.unplugged", nil, http.StatusOK)
+	c.do(ownerTok, http.MethodGet, "/event-types/cable-unplugged", nil, http.StatusOK)
 
 	// List includes the custom event type and the seeded official ones.
 	var listed struct {
@@ -70,28 +70,28 @@ func TestEventTypeAPI(t *testing.T) {
 	for _, e := range listed.EventTypes {
 		names[e.Name] = true
 	}
-	if !names["cable.unplugged"] || !names["call.started"] {
+	if !names["cable-unplugged"] || !names["call-started"] {
 		t.Fatalf("list missing event types: %v", names)
 	}
 
 	// Update a mutable field.
-	c.do(ownerTok, http.MethodPatch, "/event-types/cable.unplugged", map[string]any{"display_name": "Cable Unplugged"}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, "/event-types/cable-unplugged", map[string]any{"display_name": "Cable Unplugged"}, http.StatusOK)
 
 	// A malformed name is a 422.
 	c.do(ownerTok, http.MethodPost, "/event-types", map[string]any{"name": "Bad-Name"}, http.StatusUnprocessableEntity)
 
 	// A duplicate name is a 409.
-	c.do(ownerTok, http.MethodPost, "/event-types", map[string]any{"name": "cable.unplugged"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodPost, "/event-types", map[string]any{"name": "cable-unplugged"}, http.StatusConflict)
 
 	// An official (seeded) event type is read-only (409).
-	c.do(ownerTok, http.MethodPatch, "/event-types/call.started", map[string]any{"display_name": "x"}, http.StatusConflict)
-	c.do(ownerTok, http.MethodDelete, "/event-types/call.started", nil, http.StatusConflict)
+	c.do(ownerTok, http.MethodPatch, "/event-types/call-started", map[string]any{"display_name": "x"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodDelete, "/event-types/call-started", nil, http.StatusConflict)
 
 	// An unknown event type is a 404.
 	c.do(ownerTok, http.MethodGet, "/event-types/nope", nil, http.StatusNotFound)
 
 	// Delete the custom event type.
-	c.do(ownerTok, http.MethodDelete, "/event-types/cable.unplugged", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/event-types/cable-unplugged", nil, http.StatusNoContent)
 
 	// An ungranted principal is forbidden to create.
 	noneTok := principalWithGrants(t, ctx, dsn, "noevents", nil)

@@ -3,14 +3,22 @@ components:
     AcceptedStruct:
       additionalProperties: false
       properties:
+        events:
+          format: int64
+          type: integer
         logs:
           format: int64
           type: integer
-        samples:
+        metrics:
+          format: int64
+          type: integer
+        properties:
           format: int64
           type: integer
       required:
-        - samples
+        - metrics
+        - properties
+        - events
         - logs
       type: object
     AddMemberInputBody:
@@ -316,11 +324,15 @@ components:
         settlement:
           description: The computed settlement verdict (none/pending/settled/failed)
           type: string
+        status:
+          description: The recorded command status (issued/settled/failed/timed-out); issued until a settle-check records the terminal outcome
+          type: string
       required:
         - id
         - command_type
         - caused_event_id
         - settlement
+        - status
       type: object
     CommandTypeBody:
       additionalProperties: false
@@ -904,6 +916,43 @@ components:
         - description
         - expires_at
       type: object
+    CreateMetricTypeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateMetricTypeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        data_type:
+          description: The value type; a metric is always a number
+          enum:
+            - int
+            - float
+          type: string
+        description:
+          description: What the series measures
+          type: string
+        display_name:
+          description: A human label
+          type: string
+        name:
+          description: The metric type name (lowercase kebab)
+          minLength: 1
+          type: string
+        precision:
+          description: Decimal places a rendered value keeps
+          format: int64
+          type: integer
+        unit:
+          description: The display unit of the series (ms, dB, percent)
+          type: string
+      required:
+        - name
+        - data_type
+      type: object
     CreateNodeInputBody:
       additionalProperties: false
       properties:
@@ -1025,11 +1074,9 @@ components:
           readOnly: true
           type: string
         data_type:
-          description: The value type
+          description: The value type; a numeric signal is a metric type
           enum:
             - string
-            - int
-            - float
             - bool
             - json
           type: string
@@ -1039,19 +1086,9 @@ components:
         display_name:
           description: A human label
           type: string
-        kind:
-          description: The observed kind; omit for a declared-only property
-          enum:
-            - metric
-            - state
-            - log
-          type: string
         name:
-          description: The property name (lowercase, dot-hierarchied)
+          description: The property name (lowercase kebab)
           minLength: 1
-          type: string
-        unit:
-          description: A display unit (observed properties)
           type: string
         validation:
           description: A JSON Schema fragment constraining the value
@@ -1673,7 +1710,7 @@ components:
           description: The series discriminator (e.g. the interface), when set
           type: string
         key:
-          description: The event_type name of the occurrence (e.g. call.started)
+          description: The event_type name of the occurrence (e.g. call-started)
           type: string
         message:
           description: The occurrence message
@@ -2458,6 +2495,25 @@ components:
       required:
         - members
       type: object
+    ListMetricTypesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListMetricTypesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        metric_types:
+          items:
+            $ref: "#/components/schemas/MetricTypeBody"
+          type:
+            - array
+            - "null"
+      required:
+        - metric_types
+      type: object
     ListNodesOutputBody:
       additionalProperties: false
       properties:
@@ -3088,6 +3144,42 @@ components:
         - principal_id
         - kind
       type: object
+    MetricTypeBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/MetricTypeBody.json
+          format: uri
+          readOnly: true
+          type: string
+        data_type:
+          type: string
+        description:
+          type: string
+        display_name:
+          type: string
+        id:
+          description: The metric type's uuid, the stable form the contract and telemetry keys store
+          type: string
+        name:
+          type: string
+        official:
+          type: boolean
+        precision:
+          description: Decimal places a rendered value keeps
+          format: int64
+          type: integer
+        unit:
+          description: The display unit of the series (ms, dB, percent)
+          type: string
+      required:
+        - id
+        - name
+        - data_type
+        - official
+      type: object
     NodeBody:
       additionalProperties: false
       properties:
@@ -3351,14 +3443,10 @@ components:
         id:
           description: The property's uuid, the stable form the contract and telemetry keys store
           type: string
-        kind:
-          type: string
         name:
           type: string
         official:
           type: boolean
-        unit:
-          type: string
         validation:
           description: A JSON Schema fragment constraining the value
       required:
@@ -3366,6 +3454,28 @@ components:
         - name
         - data_type
         - official
+      type: object
+    PushEvent:
+      additionalProperties: false
+      properties:
+        instance:
+          description: Discriminates many occurrences of one name on one owner
+          type: string
+        message:
+          description: The occurrence's human-readable line
+          type: string
+        name:
+          description: A registered event_type name
+          minLength: 1
+          type: string
+        payload:
+          description: The occurrence's structured payload, validated against the event_type's payload schema
+        ts:
+          description: When this occurred; defaults to the batch timestamp, then to ingest time
+          format: date-time
+          type: string
+      required:
+        - name
       type: object
     PushInputBody:
       additionalProperties: false
@@ -3377,6 +3487,13 @@ components:
           format: uri
           readOnly: true
           type: string
+        events:
+          description: Natively caught occurrences, validated against event_type
+          items:
+            $ref: "#/components/schemas/PushEvent"
+          type:
+            - array
+            - "null"
         logs:
           description: Raw untyped log lines. No registry gate
           items:
@@ -3384,13 +3501,20 @@ components:
           type:
             - array
             - "null"
+        metrics:
+          description: Numeric observations, validated against metric_type
+          items:
+            $ref: "#/components/schemas/PushMetric"
+          type:
+            - array
+            - "null"
         owner:
           $ref: "#/components/schemas/OwnerStruct"
           description: The entity every row in the batch lands under
-        samples:
-          description: Registry-resolved observations. The registry decides which table each lands in
+        properties:
+          description: Categorical observations, validated against property_type and each type's validation schema
           items:
-            $ref: "#/components/schemas/PushSample"
+            $ref: "#/components/schemas/PushProperty"
           type:
             - array
             - "null"
@@ -3430,6 +3554,28 @@ components:
       required:
         - message
       type: object
+    PushMetric:
+      additionalProperties: false
+      properties:
+        instance:
+          description: Discriminates many values of one name on one owner (three fan speeds, per-port counters)
+          type: string
+        name:
+          description: A registered metric_type name
+          minLength: 1
+          type: string
+        ts:
+          description: When this was observed; defaults to the batch timestamp, then to ingest time
+          format: date-time
+          type: string
+        value:
+          description: The numeric observation
+          format: double
+          type: number
+      required:
+        - name
+        - value
+      type: object
     PushOutputBody:
       additionalProperties: false
       properties:
@@ -3452,6 +3598,26 @@ components:
       required:
         - accepted
       type: object
+    PushProperty:
+      additionalProperties: false
+      properties:
+        instance:
+          description: Discriminates many values of one name on one owner
+          type: string
+        name:
+          description: A registered property_type name
+          minLength: 1
+          type: string
+        ts:
+          description: When this was observed; defaults to the batch timestamp, then to ingest time
+          format: date-time
+          type: string
+        value:
+          description: The observed value, shaped by the type's data_type and validated against its validation schema
+      required:
+        - name
+        - value
+      type: object
     PushRejection:
       additionalProperties: false
       properties:
@@ -3462,26 +3628,6 @@ components:
       required:
         - name
         - reason
-      type: object
-    PushSample:
-      additionalProperties: false
-      properties:
-        instance:
-          description: Discriminates many values of one name on one owner (three fan speeds, per-port counters)
-          type: string
-        name:
-          description: The canonical property name, or a registered event_type name
-          minLength: 1
-          type: string
-        number:
-          description: The value for a metric-kind property
-          format: double
-          type: number
-        text:
-          description: The value for a state-kind property, or the message for an event_type
-          type: string
-      required:
-        - name
       type: object
     RaiseAlarmInputBody:
       additionalProperties: false
@@ -4985,6 +5131,30 @@ components:
           maxLength: 200
           type: string
       type: object
+    UpdateMetricTypeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateMetricTypeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        description:
+          description: What the series measures
+          type: string
+        display_name:
+          description: A human label
+          type: string
+        precision:
+          description: Decimal places a rendered value keeps
+          format: int64
+          type: integer
+        unit:
+          description: The display unit of the series
+          type: string
+      type: object
     UpdateNodeInputBody:
       additionalProperties: false
       properties:
@@ -5081,9 +5251,6 @@ components:
           type: string
         display_name:
           description: A human label
-          type: string
-        unit:
-          description: A display unit
           type: string
         validation:
           description: A JSON Schema fragment (replaces wholesale)
@@ -5802,7 +5969,7 @@ paths:
       summary: List command types
       x-omniglass-permission: command_type:read
     post:
-      description: Registers a custom command type (official=false). The name must be a valid keyspace name (dot-joined kebab segments); a target property, when set, must be registered. Gated by command_type:create.
+      description: Registers a custom command type (official=false). The name must be a single kebab token; a target, when set, must be a registered property or metric type. Gated by command_type:create.
       operationId: create-command-type
       requestBody:
         content:
@@ -7804,6 +7971,130 @@ paths:
           description: Error
       summary: Check a location name
       x-omniglass-permission: location:update
+  /metric-types:
+    get:
+      description: Lists every registered metric type (official and custom). The catalog is estate-wide reference data. Gated by metric_type:read.
+      operationId: list-metric-type
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListMetricTypesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List metric types
+      x-omniglass-permission: metric_type:read
+    post:
+      description: Registers a custom metric type (official=false). The name must be a valid metric key. Gated by metric_type:create.
+      operationId: create-metric-type
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMetricTypeInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricTypeBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a metric type
+      x-omniglass-permission: metric_type:create
+  /metric-types/{name}:
+    delete:
+      description: Removes a custom metric type by name. Official metric types are read-only. Gated by metric_type:delete.
+      operationId: delete-metric-type
+      parameters:
+        - description: The metric type's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The metric type's name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a metric type
+      x-omniglass-permission: metric_type:delete
+    get:
+      description: Returns one metric type by name. Gated by metric_type:read.
+      operationId: get-metric-type
+      parameters:
+        - description: The metric type's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The metric type's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricTypeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a metric type
+      x-omniglass-permission: metric_type:read
+    patch:
+      description: Patches a custom metric type's label, description, unit, or precision (a nil field is unchanged). Data type is fixed at creation. Official metric types are read-only. Gated by metric_type:update.
+      operationId: update-metric-type
+      parameters:
+        - description: The metric type's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The metric type's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMetricTypeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricTypeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a metric type
+      x-omniglass-permission: metric_type:update
   /nodes:
     get:
       description: Lists the edge nodes. A node is estate-wide, so listing requires an all-scope read. Gated by node:read.
@@ -9348,7 +9639,7 @@ paths:
       summary: Get a property
       x-omniglass-permission: property_type:read
     patch:
-      description: Patches a custom property's label, description, unit, or validation (a nil field is unchanged). Data type and kind are fixed at creation. Official properties are read-only. Gated by property_type:update.
+      description: Patches a custom property's label, description, or validation (a nil field is unchanged). Data type is fixed at creation. Official properties are read-only. Gated by property_type:update.
       operationId: update-property-type
       parameters:
         - description: The property's name
@@ -10906,7 +11197,7 @@ paths:
       x-omniglass-permission: task:read
   /telemetry:push:
     post:
-      description: Accepts samples and raw log lines for one owner and publishes them onto the ingest lane. The registry decides where each sample lands (metric, state, or a caught event); an unregistered name is rejected and reported in the response rather than silently dropped. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.
+      description: "Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404."
       operationId: push-telemetry
       requestBody:
         content:

@@ -10,8 +10,13 @@ sidebar:
 import SchemaTable from '../../../components/SchemaTable.astro';
 
 :::note[Partial: the record and reconcile half is built; actuation is deferred]
-The `command_type` registry, the `command` invocation log, and computed settlement are built
-([ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables)).
+The `command_type` registry, the `command` invocation log, computed settlement, the **recorded
+status** (`issued` / `settled` / `failed` / `timed-out`), and the **two-armed target** (a command
+may set a property or a metric; the metric arm is schema-and-storage deep, its authoring surface
+deferred until a metric command exists)
+are built
+([ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables),
+[ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).
 #396 is the do primitive's record-and-reconcile half.
 :::
 
@@ -22,30 +27,30 @@ producers. A command issued today is recorded, opens its intended value, and set
 observed value; nothing yet carries the invocation to the device.
 :::
 
-A **command** is the "do" half of the telemetry model, alongside a [property](/architecture/properties/) (**know**) and an [event](/architecture/events/) (**happen**): it records what a component was **told**. Its registry is `command_type`, the driver-owned twin of `property_type` and `event_type`.
+A **command** is the "do" half of the telemetry model, alongside a [metric or property](/architecture/properties/) (**know**) and an [event](/architecture/events/) (**happen**): it records what a component was **told**. Its registry is `command_type`, the driver-owned twin of the sample and event catalogs.
 
 ## The command_type registry
 
-`command_type` describes every command: `(name, display_name, params_schema, settle_window_seconds, target_property_type_id, official)`. Two facts are the driver's, not the abstract signal's:
+`command_type` describes every command: `(name, display_name, params_schema, settle_window_seconds, target_property_type_id, target_metric_type_id, official)`. Two facts are the driver's, not the abstract signal's:
 
 - **`settle_window_seconds`**: how long the device physically takes to actuate (a projector warms up in twenty seconds, a matrix switch flips in one), so a difference from the reported value is not called drift until the device has had time to act.
-- **`target_property_type_id`**: the uuid FK to the property a **settleable** command sets (`set-input` targets `video.input`). A command with no target is **fire-and-forget** (`reboot`): it records the invocation and a caused event, with no value to settle.
+- **The two-armed target**: a **settleable** command names the value it sets in exactly one lane, `target_property_type_id` (`set-input` targets `video-input`) **or** `target_metric_type_id` (`set-volume` targets a numeric level), never both (a CHECK enforces the arc). A command with no target is **fire-and-forget** (`reboot`): it records the invocation and a caused event, with no value to settle.
 
-The registry is seeded official and operator-extensible, official rows read-only, on the same shape as the [property](/architecture/properties/#the-property_type-registry) and [event](/architecture/events/#the-event_type-registry) catalogs (a console **Command Types** page, `/command-types` CRUD gated by `command_type:*`).
+The registry is seeded official and operator-extensible, official rows read-only, on the same shape as the [sample](/architecture/properties/#the-two-catalogs) and [event](/architecture/events/#the-event_type-registry) catalogs (a console **Command Types** page, `/command-types` CRUD gated by `command_type:*`).
 
 ## Issuing a command composes the whole model
 
 Issuing is one transaction writing three things:
 
-1. the **`command`** row (the invocation: owner, command_type, params, actor), over the same [exclusive owner arc](/architecture/properties/#ownership-the-exclusive-arc) as every sample and event;
-2. a **caused `event`** ([`origin=caused`](/architecture/events/#events-caught-caused-derived-scheduled), typed `command.issued`), the lineage record that a command happened; and
-3. for a settleable command, an **`intended`** value in the [property cache](/architecture/properties/) (`provenance=intended`, its `ts` the moment of issue), the **told** in the want/told/is pivot.
+1. the **`command`** row (the invocation: owner, command_type, params, actor, `status='issued'`), over the same [exclusive owner arc](/architecture/properties/#ownership-the-exclusive-arc) as every sample and event;
+2. a **caused `event`** ([`origin=caused`](/architecture/events/#events-caught-caused-derived-scheduled), typed `command-issued`), the record that a command happened; and
+3. for a settleable command, an **`intended`** series row in the target lane (`provenance=intended`, its `ts` the moment of issue, `command_id` naming this command as its lineage), the **told** in the want/told/is pivot.
 
 `POST /components/{name}/commands:issue` is the write, gated by `command:issue` and scope-injected through the component.
 
-## Settlement is computed, never stored
+## Settlement: the verdict is computed, the outcome is recorded
 
-A command's effect is judged, not recorded: a pure function of the intended value, the observed value, and the settle window:
+A command's effect is judged as a pure function of the intended value, the observed value, and the settle window:
 
 - **none**: nothing was told (fire-and-forget, or no intended value).
 - **pending**: still within the settle window, so a difference from observed is not yet drift.
@@ -53,6 +58,13 @@ A command's effect is judged, not recorded: a pure function of the intended valu
 - **failed**: past the window, observed does not match (or is absent).
 
 This is the windowed form of the `told` versus `is` comparison the [reconciliation read](/architecture/variables/) opens.
+
+Beside the computed verdict, the `command` row **records its lifecycle**: `status` is `issued`
+until a terminal `settled`, `failed`, or `timed-out`, and `settled_at` stamps the terminal moment
+(a CHECK ties the two: `issued` exactly while `settled_at` is null). The recorded status carries
+the finer vocabulary the verdict collapses (failed versus timed-out; a fire-and-forget records
+`settled` while its verdict stays `none`), so a stuck command is distinguishable from one nobody
+has checked ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).
 
 ## Storage
 
@@ -63,7 +75,8 @@ The physical layout (the owner arc, the caused-event lineage, partitioning) live
   notes={{
     params_schema: 'The JSON Schema an invocation&#39;s params must satisfy',
     settle_window_seconds: 'How long settlement watches for the observed value to agree',
-    target_property_type_id: 'The property the command intends to change, when it targets one',
+    target_property_type_id: 'One arm of the target arc: the property the command intends to set',
+    target_metric_type_id: 'The other arm: the metric the command intends to set; never both',
     official: 'Shipped-canonical versus org-local; seed-owned rows are read-only',
   }}
 />
@@ -74,6 +87,8 @@ The physical layout (the owner arc, the caused-event lineage, partitioning) live
     command_type_id: 'What the component was told to do',
     params: 'The invocation arguments, validated against the registry schema',
     actor: 'Who told it',
+    status: 'The recorded lifecycle: issued until a terminal settled, failed, or timed-out',
+    settled_at: 'The terminal moment; null exactly while status is issued',
     caused_event_id: 'The recorded event this invocation caused',
   }}
 />

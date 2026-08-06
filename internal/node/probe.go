@@ -49,7 +49,7 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 		}
 		// Compute and, on a transition only, append the interface reachability
 		// verdict as a state sample. The node remembers the last verdict per
-		// task and emits interface.reachable only on a flip or first observation,
+		// task and emits interface-reachable only on a flip or first observation,
 		// so the state series is transition-only, not one row per tick. The key is
 		// the task id, not the interface name: interface names are unique only per
 		// component, so a node routinely probes two components' interfaces that
@@ -170,9 +170,13 @@ func parseICMPTask(task collection.TaskSpec) (collection.ICMPTask, error) {
 	return collection.ICMPTask{Target: p.Target, Count: p.Count, Timeout: timeout}, nil
 }
 
-// buildBatch maps produced samples to a telemetry Event. Pure: no I/O. The
-// numeric probe values ride double_value; the per-sample labels are carried
-// but not persisted in this checkpoint.
+// buildBatch maps produced samples to a per-lane TelemetryBatch (#594). Pure:
+// no I/O. The probes know their lanes statically: a numeric probe value rides
+// the metric lane, a text verdict rides the property lane as canonical JSON
+// text. A sample the probe did not stamp carries NO per-sample ts (the batch ts
+// governs at ingest); stamping the zero time would read as the year one
+// downstream. The per-sample labels are carried but not persisted in this
+// checkpoint.
 func buildBatch(taskID, node string, dps []collection.Sample) *ogv1.TelemetryBatch {
 	ev := &ogv1.TelemetryBatch{
 		TaskId: taskID,
@@ -180,17 +184,27 @@ func buildBatch(taskID, node string, dps []collection.Sample) *ogv1.TelemetryBat
 		Ts:     timestamppb.New(time.Now().UTC()),
 	}
 	for _, d := range dps {
-		pd := &ogv1.Sample{
-			Name:   d.Name,
-			Ts:     timestamppb.New(d.TS),
-			Labels: d.Labels,
+		var ts *timestamppb.Timestamp
+		if !d.TS.IsZero() {
+			ts = timestamppb.New(d.TS)
 		}
 		if d.IsText {
-			pd.Value = &ogv1.Sample_StringValue{StringValue: d.Text}
-		} else {
-			pd.Value = &ogv1.Sample_DoubleValue{DoubleValue: d.Value}
+			// json.Marshal of a string cannot fail; it yields the quoted canonical form.
+			vj, _ := json.Marshal(d.Text)
+			ev.Properties = append(ev.Properties, &ogv1.PropertySample{
+				Name:      d.Name,
+				ValueJson: string(vj),
+				Ts:        ts,
+				Labels:    d.Labels,
+			})
+			continue
 		}
-		ev.Samples = append(ev.Samples, pd)
+		ev.Metrics = append(ev.Metrics, &ogv1.MetricSample{
+			Name:   d.Name,
+			Value:  d.Value,
+			Ts:     ts,
+			Labels: d.Labels,
+		})
 	}
 	return ev
 }

@@ -7,13 +7,13 @@ import (
 )
 
 // The canonical reachability sample names the tcp probe emits. They are
-// seeded property_types (internal/seed/properties.yaml); the ingest
+// seeded metric_types (internal/seed/metric_types.yaml); the ingest
 // consumer's reject-not-project drops any name absent from that registry.
 const (
-	SignalTCPOpen        = "tcp.open"
-	SignalTCPConnectTime = "tcp.connect-time"
-	SignalICMPReachable  = "icmp.reachable"
-	SignalICMPRTTAvg     = "icmp.rtt-avg"
+	SignalTCPOpen        = "tcp-open"
+	SignalTCPConnectTime = "tcp-connect-time"
+	SignalICMPReachable  = "icmp-reachable"
+	SignalICMPRTTAvg     = "icmp-rtt-avg"
 )
 
 // defaultTCPTimeout bounds a connect attempt when the task sets none.
@@ -28,7 +28,7 @@ const (
 
 // Sample is one observation produced by a probe or computed by the node: a
 // canonical name, a value, a timestamp, and labels. A metric rides Value (float);
-// a state verdict (interface.reachable) rides Text with IsText set, so the same
+// a state verdict (interface-reachable) rides Text with IsText set, so the same
 // list carries both to buildBatch, which maps a text sample to the proto
 // string_value and a metric to double_value. Labels (the reason) are not
 // persisted yet, but the probe still produces them.
@@ -69,8 +69,8 @@ type Runner struct {
 }
 
 // CollectTCP runs one tcp task and returns its samples. A tcp probe always
-// emits tcp.open (1.0 open, 0.0 closed) carrying the verdict reason as a label,
-// and emits tcp.connect-time (ms) ONLY when open (absent when closed). A failed
+// emits tcp-open (1.0 open, 0.0 closed) carrying the verdict reason as a label,
+// and emits tcp-connect-time (ms) ONLY when open (absent when closed). A failed
 // connect is data, not an error; err is returned only when the target could not
 // be attempted (an unresolved host), so the caller skips the task rather than
 // recording a false down.
@@ -129,8 +129,8 @@ type Pinger interface {
 }
 
 // CollectICMP runs one icmp (ping) task and returns its samples. A ping probe
-// always emits icmp.reachable (1.0 if any echo returned, 0.0 otherwise) carrying
-// the verdict reason as a label, and emits icmp.rtt-avg (ms) ONLY when reachable
+// always emits icmp-reachable (1.0 if any echo returned, 0.0 otherwise) carrying
+// the verdict reason as a label, and emits icmp-rtt-avg (ms) ONLY when reachable
 // (absent when unreachable). A target that does not answer is data, not an error;
 // err is returned only when the node cannot attempt the probe at all (no ICMP
 // capability, or an unresolvable host), so the caller skips the task rather than

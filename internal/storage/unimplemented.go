@@ -322,6 +322,24 @@ func (UnimplementedGateway) UpdatePropertyType(context.Context, string, string, 
 func (UnimplementedGateway) DeletePropertyType(context.Context, string, string) error {
 	return nil
 }
+func (UnimplementedGateway) UpsertMetricType(context.Context, MetricType) error {
+	return nil
+}
+func (UnimplementedGateway) ListMetricTypes(context.Context) ([]MetricType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) GetMetricType(context.Context, string) (*MetricType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateMetricType(context.Context, string, MetricTypeSpec) (*MetricType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateMetricType(context.Context, string, string, MetricTypePatch) (*MetricType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteMetricType(context.Context, string, string) error {
+	return nil
+}
 func (UnimplementedGateway) UpsertInterfaceType(context.Context, InterfaceType) error {
 	return nil
 }
@@ -337,13 +355,13 @@ func (UnimplementedGateway) LatestMetric(context.Context, string, string) (*Metr
 func (UnimplementedGateway) LatestMetricInstance(context.Context, string, string, string) (*MetricSample, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) InsertStateSamples(context.Context, []StateSampleWrite) error {
+func (UnimplementedGateway) InsertPropertySamples(context.Context, []PropertySampleWrite) error {
 	return nil
 }
-func (UnimplementedGateway) LatestState(context.Context, string, string, string) (*StateSample, error) {
+func (UnimplementedGateway) LatestProperty(context.Context, string, string, string) (*PropertySample, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) StateTransitions(context.Context, string, string, string, time.Time) ([]StateSample, error) {
+func (UnimplementedGateway) PropertyTransitions(context.Context, string, string, string, time.Time) ([]PropertySample, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) InsertEvents(context.Context, []EventWrite) error {
@@ -353,6 +371,9 @@ func (UnimplementedGateway) ListComponentEvents(context.Context, string, time.Ti
 	return nil, nil
 }
 func (UnimplementedGateway) InsertLogLines(context.Context, []LogLineWrite) error {
+	return nil
+}
+func (UnimplementedGateway) InsertNodeLogs(context.Context, []NodeLogWrite) error {
 	return nil
 }
 func (UnimplementedGateway) ListComponentLogs(context.Context, string, time.Time, int) ([]LogLine, error) {
@@ -506,11 +527,11 @@ func (UnimplementedGateway) ClearProperty(context.Context, string, string, strin
 func (UnimplementedGateway) EffectiveProperties(context.Context, string, string, scope.Set) ([]EffectiveProperty, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpsertProperties(context.Context, []PropertyUpsert) error {
-	return nil
-}
-func (UnimplementedGateway) LatestValue(context.Context, string, string, string, string, string, scope.Set) (*CachedValue, error) {
+func (UnimplementedGateway) LatestValue(context.Context, string, string, string, string, string, scope.Set) (*CurrentValue, error) {
 	return nil, nil
+}
+func (UnimplementedGateway) PruneSamples(context.Context, time.Time) (int64, error) {
+	return 0, nil
 }
 func (UnimplementedGateway) Reconciliation(context.Context, string, string, scope.Set) ([]PropertyReconciliation, error) {
 	return nil, nil

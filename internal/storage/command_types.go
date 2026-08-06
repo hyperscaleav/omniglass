@@ -12,9 +12,11 @@ import (
 // CommandType is a registered command in the driver-owned catalog: what a component
 // can be told, the "do" half of the telemetry model (the twin of property_type and
 // event_type). SettleWindowSeconds is a driver fact (how long the device takes to
-// actuate); TargetPropertyType names the property a settleable command sets (empty
-// for a fire-and-forget command like reboot); ParamsSchema is an optional JSON
-// Schema for the invocation params. Official marks a seed-owned, read-only type.
+// actuate); the target is a two-armed exclusive arc (#590): TargetPropertyType
+// names the property a settleable command sets, TargetMetricType the metric ("set
+// volume to 50" opens an intended numeric), at most one set and both empty for a
+// fire-and-forget command like reboot. ParamsSchema is an optional JSON Schema for
+// the invocation params. Official marks a seed-owned, read-only type.
 type CommandType struct {
 	ID                  string
 	Name                string
@@ -23,6 +25,7 @@ type CommandType struct {
 	ParamsSchema        []byte
 	SettleWindowSeconds int
 	TargetPropertyType  string
+	TargetMetricType    string
 	Official            bool
 }
 
@@ -34,15 +37,16 @@ var (
 	ErrCommandTypeInvalid  = errors.New("storage: command type is invalid")
 )
 
-// commandTypeCols selects a command type with its target property resolved to a name
+// commandTypeCols selects a command type with each target arm resolved to a name
 // (the both-forms handle), NULL rendered as the empty string.
 const commandTypeCols = `id, name, coalesce(display_name, ''), description, params_schema, settle_window_seconds,
-	coalesce((select pt.name from property_type pt where pt.id = command_type.target_property_type_id), '') as target, official`
+	coalesce((select pt.name from property_type pt where pt.id = command_type.target_property_type_id), '') as target,
+	coalesce((select mt.name from metric_type mt where mt.id = command_type.target_metric_type_id), '') as metric_target, official`
 
 func scanCommandType(row pgx.Row) (*CommandType, error) {
 	var ct CommandType
 	if err := row.Scan(&ct.ID, &ct.Name, &ct.DisplayName, &ct.Description, &ct.ParamsSchema,
-		&ct.SettleWindowSeconds, &ct.TargetPropertyType, &ct.Official); err != nil {
+		&ct.SettleWindowSeconds, &ct.TargetPropertyType, &ct.TargetMetricType, &ct.Official); err != nil {
 		return nil, err
 	}
 	return &ct, nil

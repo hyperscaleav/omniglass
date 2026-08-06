@@ -5,10 +5,13 @@ description: "The Properties catalog and the values behind it: the canonical typ
 
 import SeededSet from '../../../../components/SeededSet.astro';
 
-**Catalog > Properties** (with `property_type:read`, covered by every viewer's `*:read` floor) is the
-estate's **signal catalog**: one directory of the typed names that identify what is tracked. A
-**property** is a **name** plus a data type, with an optional display name, unit, and validation. The
-name is its canonical identifier, a dot-hierarchied path of lowercase kebab segments, and the same
+**Catalog > Properties** (with `property_type:read`, covered by every viewer's `*:read` floor) is
+one of the estate's **two signal catalogs**: the **value lane**. A **property** is a **value**,
+what something *is*, including a number used as a name (a serial number identifies a unit, it
+measures nothing); a numeric **quantity** you would average or graph is a
+[metric](/guides/admin/metrics/), the other lane, with its own catalog and its own page. Here, a
+property is a **name** plus a data type, with an optional display name and validation. The
+name is its canonical identifier, a single lowercase kebab segment, and the same
 property is the same concept wherever it appears,
 whether a device **reports** it (an observed value) or an operator **types** it (a declared value).
 Registering `serial-number` once means it cannot drift into `serialNumber` in one place and
@@ -24,26 +27,26 @@ The catalog is estate-wide reference data, not a scoped resource, so every prope
 every reader; the write gates decide who may change it.
 
 - The directory lists every property sorted by name, each showing its **name** (the canonical
-  identifier, with its display name on the line above it), **type** (`string`, `int`, `float`, `bool`,
-  or `json`), **kind**, and **origin** (**official**, seed-owned, or **custom**). **name** filters by
+  identifier, with its display name on the line above it), **type** (`string`, `bool`,
+  or `json`), and **origin** (**official**, seed-owned, or **custom**). **name** filters by
   the name or its display name; **type** and **official** narrow the list.
-- **Kind** marks a property that is **observed** as telemetry: `metric` (a continuous measure),
-  `state` (a discrete condition), or `log` (an event). A property with no kind is a **declared**
-  attribute, something an operator sets, like `serial-number`, that is never collected off a
-  device.
+- A property is a **value** (what something *is*: an input, a firmware version, a reachability
+  verdict); a numeric **quantity** is a **metric**, its own catalog beside this one
+  ([**Catalog > Metrics**](/guides/admin/metrics/)), carrying the numeric facts (unit, precision).
+  The two catalogs share one name rule and refuse a name the other holds. A property nothing
+  observes is simply declared-only, something an operator sets, like `serial-number`.
 - **New property** (with `property_type:create`, granted to operators) opens a create **drawer**: give
-  it a **name** (lowercase kebab segments joined by dots, for example `serial-number` or
-  `interface.reachable`), choose its **data type**, and optionally add a **display name**,
-  **description**, **unit**, and **kind**. Leave the kind as **declared** for an operator-set
-  attribute. An invalid name (an uppercase letter, an underscore, a leading hyphen, a stray dot) is
+  it a **name** (a single lowercase kebab segment, for example `serial-number` or
+  `interface-reachable`), choose its **data type**, and optionally add a **display name** and
+  **description**. An invalid name (an uppercase letter, an underscore, a leading hyphen, a dot) is
   refused with a message.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `property_type:update`) edits
-  the display name, description, and unit; the name, data type, and kind are fixed at creation, since
+  the display name and description; the name and data type are fixed at creation, since
   changing a property's type under the values that already use it is unsafe and a name is what every
   driver and contract maps onto. **Delete** (with
   `property_type:delete`) removes a custom property, behind a confirm.
-- A property can carry a **validation** JSON Schema (for example a `pattern` on a MAC address, an
-  `enum` on a state, or `minimum` / `maximum` on a number), shown read-only on the blade. Editing
+- A property can carry a **validation** JSON Schema (for example a `pattern` on a MAC address or an
+  `enum` on a discrete value), shown read-only on the blade. Editing
   the schema in the console is a follow-up; set it through the API for now.
 - An **official** (seed-owned) property is always read-only: no Edit, no Delete, and the blade marks
   it "Seed-owned, read-only." The shared vocabulary is the same from install to install. This
@@ -59,9 +62,9 @@ every reader; the write gates decide who may change it.
 - A **duplicate** name is refused (409), and an attempt to change an official property is refused
   too: the catalog has exactly one entry per name.
 
-The catalog is also the collection vocabulary: a telemetry sample lands only if its name is a
-registered property with a `metric`, `state`, or `log` kind (an unregistered name is dropped, not
-invented).
+The catalog is also the collection vocabulary: a telemetry sample lands only if its name is
+registered in its lane's catalog, a property here or a metric in the Metrics catalog (an
+unregistered name is dropped, not invented).
 
 ## Declare a property on a classifier
 

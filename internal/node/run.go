@@ -48,7 +48,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// default is the right scope; the prior default is restored on return so a test
 	// binary (many Runs in one process) does not leak a dead sink. Emitting a new
 	// self-log is one slog call, conventionally carrying a `facility` attr (and
-	// optionally `source`), which the mapping lifts into the log_line columns.
+	// optionally `source`), which the mapping lifts into the node_log columns.
 	sink := newLogSink(slog.NewTextHandler(os.Stderr, nil))
 	logger := slog.New(sink).With("node", cfg.Name)
 	prior := slog.Default()
@@ -81,7 +81,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 
 	// verdicts remembers the last reachability verdict per task (keyed by the
 	// node-unique task id, since interface names collide across components) across
-	// ticks, so the node emits interface.reachable only on a flip or first
+	// ticks, so the node emits interface-reachable only on a flip or first
 	// observation (transition-only). It lives for the whole run, not per tick.
 	verdicts := map[string]string{}
 
@@ -145,7 +145,7 @@ func pullWorklist(nc *nats.Conn, name string) (collection.WorklistReply, error) 
 
 // publishSelfLogs drains the node's captured log records and publishes them as a
 // logs-only telemetry Event on the node's own subject, where the ingest consumer
-// lands them owner-bound to the node (ADR-0066). Non-fatal: a marshal or publish
+// lands them in node_log (ADR-0066, #589). Non-fatal: a marshal or publish
 // failure drops this batch and the loop continues. It deliberately does not log its
 // own failure, since emitting from the drain path would feed the buffer it just
 // emptied; a publish outage is visible as a gap on the lane and in the heartbeat.

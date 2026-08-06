@@ -62,7 +62,7 @@ whatever it drives, never twice:
 | schedule-tick | a trigger | an `event` (`origin=scheduled`) |
 | for-sustain | the alarm opens | an `event` (alarm edge) |
 | runbook-wait | the action advances | the `action` row |
-| watchdog | the property goes stale | `metric` / `state` (a derived staleness sample) |
+| watchdog | the property goes stale | `metric` / `property` (a derived staleness sample) |
 
 The high-churn watchdog never floods an event log with its resets. A schedule fire is an ordinary
 **`event` with `origin=scheduled`**, manufactured by the clock into the `event` log in a PG

@@ -54,7 +54,7 @@
     {
       "table": "event_type",
       "shape": "keyspace",
-      "reason": "call.started, an occurrence name"
+      "reason": "call-started, an occurrence name"
     },
     {
       "table": "file",
@@ -89,6 +89,10 @@
       "shape": "key-bearing"
     },
     {
+      "table": "location_type_metric",
+      "shape": "id only"
+    },
+    {
       "table": "location_type_property",
       "shape": "id only"
     },
@@ -101,8 +105,17 @@
       "shape": "id only"
     },
     {
+      "table": "metric_type",
+      "shape": "keyspace",
+      "reason": "icmp-rtt-avg, a numeric-series name referenced from drivers and templates"
+    },
+    {
       "table": "node",
       "shape": "key-bearing"
+    },
+    {
+      "table": "node_log",
+      "shape": "id only"
     },
     {
       "table": "principal",
@@ -129,6 +142,10 @@
       "shape": "id only"
     },
     {
+      "table": "product_metric",
+      "shape": "id only"
+    },
+    {
       "table": "product_property",
       "shape": "id only"
     },
@@ -139,7 +156,7 @@
     {
       "table": "property_type",
       "shape": "keyspace",
-      "reason": "icmp.rtt-avg, a signal name referenced from drivers and templates"
+      "reason": "serial-number, a signal name referenced from drivers and templates"
     },
     {
       "table": "role",
@@ -168,11 +185,11 @@
       "shape": "key-bearing"
     },
     {
-      "table": "standard_property",
+      "table": "standard_metric",
       "shape": "id only"
     },
     {
-      "table": "state",
+      "table": "standard_property",
       "shape": "id only"
     },
     {

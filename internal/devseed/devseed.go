@@ -421,7 +421,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 	if err := seedReachability(ctx, gw, actorID); err != nil {
 		return err
 	}
-	// A handful of native call.started events on a boardroom video bar, so the
+	// A handful of native call-started events on a boardroom video bar, so the
 	// console's event panel comes up populated instead of empty.
 	if err := seedEvents(ctx, gw); err != nil {
 		return err
@@ -521,7 +521,7 @@ var exampleNodeLogs = []struct {
 
 // seedNodeLogs installs the edge node's example self-logs idempotently, guarded on
 // the node already carrying lines (ListNodeLogs from the epoch, limit 1) the same
-// way seedLogs guards, since log_line has an auto id and no natural unique key.
+// way seedLogs guards, since node_log has an auto id and no natural unique key.
 func seedNodeLogs(ctx context.Context, gw storage.Gateway) error {
 	existing, err := gw.ListNodeLogs(ctx, reachNode, time.Time{}, 1)
 	if err != nil {
@@ -531,11 +531,10 @@ func seedNodeLogs(ctx context.Context, gw storage.Gateway) error {
 		return nil
 	}
 	now := time.Now().UTC()
-	lines := make([]storage.LogLineWrite, 0, len(exampleNodeLogs))
+	lines := make([]storage.NodeLogWrite, 0, len(exampleNodeLogs))
 	for _, l := range exampleNodeLogs {
-		lines = append(lines, storage.LogLineWrite{
-			OwnerKind:  "node",
-			OwnerID:    reachNode,
+		lines = append(lines, storage.NodeLogWrite{
+			Node:       reachNode,
 			Source:     l.source,
 			Severity:   l.severity,
 			Facility:   l.facility,
@@ -544,7 +543,7 @@ func seedNodeLogs(ctx context.Context, gw storage.Gateway) error {
 			TS:         now.Add(-time.Duration(l.minsAgo) * time.Minute),
 		})
 	}
-	if err := gw.InsertLogLines(ctx, lines); err != nil {
+	if err := gw.InsertNodeLogs(ctx, lines); err != nil {
 		return fmt.Errorf("devseed: insert node logs: %w", err)
 	}
 	return nil
@@ -680,28 +679,28 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string) e
 }
 
 // seedReachSamples writes one interface's reachability samples: the
-// interface.reachable state (a fresh "up"; when flapped, an up baseline then a brief
+// interface-reachable state (a fresh "up"; when flapped, an up baseline then a brief
 // outage then the recovery, so the strip reads mostly up with a thin blip) and the
 // probe-layer metrics (ping + port). Owner = the component, instance = the interface
 // name. Only canonical property_type names are used (reject-not-project).
 func seedReachSamples(ctx context.Context, gw storage.Gateway, iface string, flapped bool, rttMs, connMs float64, now time.Time) error {
 	recovered := now.Add(-30 * time.Second)
-	states := []storage.StateSampleWrite{}
+	states := []storage.PropertySampleWrite{}
 	if flapped {
 		states = append(states,
-			storage.StateSampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "interface.reachable", Instance: iface, Value: "up", Source: "reachability", TS: now.Add(-2 * time.Hour)},
-			storage.StateSampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "interface.reachable", Instance: iface, Value: "down", Source: "reachability", TS: now.Add(-6 * time.Minute)},
+			storage.PropertySampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "interface-reachable", Instance: iface, Value: "up", Source: "reachability", TS: now.Add(-2 * time.Hour)},
+			storage.PropertySampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "interface-reachable", Instance: iface, Value: "down", Source: "reachability", TS: now.Add(-6 * time.Minute)},
 		)
 	}
-	states = append(states, storage.StateSampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "interface.reachable", Instance: iface, Value: "up", Source: "reachability", TS: recovered})
-	if err := gw.InsertStateSamples(ctx, states); err != nil {
-		return fmt.Errorf("devseed: insert %s state samples: %w", iface, err)
+	states = append(states, storage.PropertySampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "interface-reachable", Instance: iface, Value: "up", Source: "reachability", TS: recovered})
+	if err := gw.InsertPropertySamples(ctx, states); err != nil {
+		return fmt.Errorf("devseed: insert %s property samples: %w", iface, err)
 	}
 	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
-		{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp.reachable", Instance: iface, Value: 1, Source: "icmp", TS: recovered},
-		{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp.rtt-avg", Instance: iface, Value: rttMs, Source: "icmp", TS: recovered},
-		{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp.open", Instance: iface, Value: 1, Source: "tcp", TS: recovered},
-		{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp.connect-time", Instance: iface, Value: connMs, Source: "tcp", TS: recovered},
+		{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp-reachable", Instance: iface, Value: 1, Source: "icmp", TS: recovered},
+		{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp-rtt-avg", Instance: iface, Value: rttMs, Source: "icmp", TS: recovered},
+		{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp-open", Instance: iface, Value: 1, Source: "tcp", TS: recovered},
+		{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp-connect-time", Instance: iface, Value: connMs, Source: "tcp", TS: recovered},
 	}); err != nil {
 		return fmt.Errorf("devseed: insert %s metric samples: %w", iface, err)
 	}
@@ -709,16 +708,16 @@ func seedReachSamples(ctx context.Context, gw storage.Gateway, iface string, fla
 }
 
 // The example events the dev seed installs on a boardroom video bar: a conferencing
-// endpoint publishes call.started natively (an xAPI event) so the console's event
+// endpoint publishes call-started natively (an xAPI event) so the console's event
 // panel comes up populated instead of empty. eventComponent names an existing fixture
 // component (a video bar seeded above), so the event's component_id foreign key
-// resolves. Every row uses the registered event_type key call.started
+// resolves. Every row uses the registered event_type key call-started
 // (reject-not-project) and is stamped origin=caught: the device reported it, the
 // platform did not derive it. Raw device logs are a separate ingest lane (ADR-0066),
 // not seeded here.
 const eventComponent = "boardroom-a-bar"
 
-// exampleEvents are the bar's recent call.started occurrences, each offset back from
+// exampleEvents are the bar's recent call-started occurrences, each offset back from
 // now so the panel reads as a recent window (spread over the last day, newest last).
 // Two rows carry a structured attributes payload (the call's peer and protocol); the
 // rest are plain messages. minsAgo is minutes before the seed's now.
@@ -754,7 +753,7 @@ func seedEvents(ctx context.Context, gw storage.Gateway) error {
 		evs = append(evs, storage.EventWrite{
 			OwnerKind:  "component",
 			OwnerID:    eventComponent,
-			Key:        "call.started",
+			Key:        "call-started",
 			Origin:     "caught",
 			Message:    e.message,
 			Attributes: e.attrs,

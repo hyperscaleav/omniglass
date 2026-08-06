@@ -141,6 +141,12 @@ estate: {
     shape: sql_table
     id: uuid {constraint: primary_key}
   }
+  location_type_metric: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+    location_type_id: uuid {constraint: foreign_key}
+    metric_type_id: uuid {constraint: foreign_key}
+  }
   location_type_property: {
     shape: sql_table
     id: uuid {constraint: primary_key}
@@ -180,6 +186,12 @@ catalog: {
     capability_id: uuid {constraint: foreign_key}
     product_id: uuid {constraint: foreign_key}
   }
+  product_metric: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+    metric_type_id: uuid {constraint: foreign_key}
+    product_id: uuid {constraint: foreign_key}
+  }
   product_property: {
     shape: sql_table
     id: uuid {constraint: primary_key}
@@ -190,6 +202,12 @@ catalog: {
     shape: sql_table
     id: uuid {constraint: primary_key}
     parent_standard_id: uuid {constraint: foreign_key}
+  }
+  standard_metric: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+    metric_type_id: uuid {constraint: foreign_key}
+    standard_id: uuid {constraint: foreign_key}
   }
   standard_property: {
     shape: sql_table
@@ -228,6 +246,7 @@ telemetry: {
   command_type: {
     shape: sql_table
     id: uuid {constraint: primary_key}
+    target_metric_type_id: uuid {constraint: foreign_key}
     target_property_type_id: uuid {constraint: foreign_key}
   }
   event: {
@@ -249,24 +268,28 @@ telemetry: {
     shape: sql_table
     id: bigint {constraint: primary_key}
     component_id: uuid {constraint: foreign_key}
-    location_id: uuid {constraint: foreign_key}
-    node_id: uuid {constraint: foreign_key}
-    system_id: uuid {constraint: foreign_key}
   }
   metric: {
     shape: sql_table
     id: bigint {constraint: primary_key}
+    command_id: bigint {constraint: foreign_key}
     component_id: uuid {constraint: foreign_key}
     event_id: bigint {constraint: foreign_key}
     location_id: uuid {constraint: foreign_key}
+    metric_type_id: uuid {constraint: foreign_key}
     node_id: uuid {constraint: foreign_key}
-    property_type_id: uuid {constraint: foreign_key}
     system_id: uuid {constraint: foreign_key}
+  }
+  metric_type: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
   }
   property: {
     shape: sql_table
-    id: uuid {constraint: primary_key}
+    id: bigint {constraint: primary_key}
+    command_id: bigint {constraint: foreign_key}
     component_id: uuid {constraint: foreign_key}
+    event_id: bigint {constraint: foreign_key}
     location_id: uuid {constraint: foreign_key}
     node_id: uuid {constraint: foreign_key}
     property_type_id: uuid {constraint: foreign_key}
@@ -276,16 +299,6 @@ telemetry: {
     shape: sql_table
     id: uuid {constraint: primary_key}
   }
-  state: {
-    shape: sql_table
-    id: bigint {constraint: primary_key}
-    component_id: uuid {constraint: foreign_key}
-    event_id: bigint {constraint: foreign_key}
-    location_id: uuid {constraint: foreign_key}
-    node_id: uuid {constraint: foreign_key}
-    property_type_id: uuid {constraint: foreign_key}
-    system_id: uuid {constraint: foreign_key}
-  }
 }
 
 collection: {
@@ -293,6 +306,11 @@ collection: {
     shape: sql_table
     principal_id: uuid {constraint: primary_key}
     location_id: uuid {constraint: foreign_key}
+  }
+  node_log: {
+    shape: sql_table
+    id: bigint {constraint: primary_key}
+    node_id: uuid {constraint: foreign_key}
   }
   task: {
     shape: sql_table
@@ -373,13 +391,18 @@ catalog.product.parent_product_id -> catalog.product.id
 catalog.product.vendor_id -> catalog.vendor.id
 catalog.product_capability.capability_id -> identity.capability.id
 catalog.product_capability.product_id -> catalog.product.id
+catalog.product_metric.metric_type_id -> telemetry.metric_type.id
+catalog.product_metric.product_id -> catalog.product.id
 catalog.product_property.product_id -> catalog.product.id
 catalog.product_property.property_type_id -> telemetry.property_type.id
 catalog.standard.parent_standard_id -> catalog.standard.id
+catalog.standard_metric.metric_type_id -> telemetry.metric_type.id
+catalog.standard_metric.standard_id -> catalog.standard.id
 catalog.standard_property.property_type_id -> telemetry.property_type.id
 catalog.standard_property.standard_id -> catalog.standard.id
 collection.node.location_id -> estate.location.id
 collection.node.principal_id -> identity.principal.id
+collection.node_log.node_id -> collection.node.principal_id
 collection.task.interface_id -> estate.interface.id
 config.credential.principal_id -> identity.principal.id
 config.secret.component_id -> estate.component.id
@@ -405,6 +428,8 @@ estate.interface.node_name -> collection.node.principal_id
 estate.interface.type -> estate.interface_type.id
 estate.location.location_type -> estate.location_type.id
 estate.location.parent_id -> estate.location.id
+estate.location_type_metric.location_type_id -> estate.location_type.id
+estate.location_type_metric.metric_type_id -> telemetry.metric_type.id
 estate.location_type_property.location_type_id -> estate.location_type.id
 estate.location_type_property.property_type_id -> telemetry.property_type.id
 estate.system.location_id -> estate.location.id
@@ -437,6 +462,7 @@ telemetry.command.component_id -> estate.component.id
 telemetry.command.location_id -> estate.location.id
 telemetry.command.node_id -> collection.node.principal_id
 telemetry.command.system_id -> estate.system.id
+telemetry.command_type.target_metric_type_id -> telemetry.metric_type.id
 telemetry.command_type.target_property_type_id -> telemetry.property_type.id
 telemetry.event.component_id -> estate.component.id
 telemetry.event.event_type_id -> telemetry.event_type.id
@@ -446,26 +472,20 @@ telemetry.event.source_event_id -> telemetry.event.id
 telemetry.event.source_log_line_id -> telemetry.log_line.id
 telemetry.event.system_id -> estate.system.id
 telemetry.log_line.component_id -> estate.component.id
-telemetry.log_line.location_id -> estate.location.id
-telemetry.log_line.node_id -> collection.node.principal_id
-telemetry.log_line.system_id -> estate.system.id
+telemetry.metric.command_id -> telemetry.command.id
 telemetry.metric.component_id -> estate.component.id
 telemetry.metric.event_id -> telemetry.event.id
 telemetry.metric.location_id -> estate.location.id
+telemetry.metric.metric_type_id -> telemetry.metric_type.id
 telemetry.metric.node_id -> collection.node.principal_id
-telemetry.metric.property_type_id -> telemetry.property_type.id
 telemetry.metric.system_id -> estate.system.id
+telemetry.property.command_id -> telemetry.command.id
 telemetry.property.component_id -> estate.component.id
+telemetry.property.event_id -> telemetry.event.id
 telemetry.property.location_id -> estate.location.id
 telemetry.property.node_id -> collection.node.principal_id
 telemetry.property.property_type_id -> telemetry.property_type.id
 telemetry.property.system_id -> estate.system.id
-telemetry.state.component_id -> estate.component.id
-telemetry.state.event_id -> telemetry.event.id
-telemetry.state.location_id -> estate.location.id
-telemetry.state.node_id -> collection.node.principal_id
-telemetry.state.property_type_id -> telemetry.property_type.id
-telemetry.state.system_id -> estate.system.id
 ```
 
 <!-- erd:end -->
@@ -478,12 +498,15 @@ telemetry.state.system_id -> estate.system.id
   interfaces a component exposes.
 - **catalog** - the shared reference library: vendors, products, drivers, and
   standards, plus the capabilities and properties they define.
-- **telemetry** - the observability model of [ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables):
-  the typed registries (`property_type`, `event_type`, `command_type`) over the
-  bare-noun data tables (`property`, `metric`, `state`, `event`, `log_line`,
-  `command`) and the alarms raised off them (`alarm`, `alarm_capability`).
-- **collection** - where and how telemetry is gathered: the nodes that run probes
-  and the tasks they execute.
+- **telemetry** - the five-lane observability model
+  ([ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables),
+  [ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)):
+  the typed registries (`metric_type`, `property_type`, `event_type`,
+  `command_type`) over the bare-noun data tables (`metric`, `property`, `event`,
+  `command`, `log_line`) and the alarms raised off them (`alarm`,
+  `alarm_capability`).
+- **collection** - where and how telemetry is gathered: the nodes that run probes,
+  the tasks they execute, and the `node_log` self-log lane.
 - **config** - the settings, variables, secrets, and credentials that parameterize
   everything above.
 - **content** - the cross-cutting attachments: blobs, files, and the tag bindings

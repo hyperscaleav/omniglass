@@ -101,8 +101,9 @@ func TestNodeRunOnce(t *testing.T) {
 
 	// The node's self-logs landed (ADR-0066): its own operational records
 	// ("connected to bus", "worklist pulled") rode the telemetry lane as LogLines
-	// and the ingest consumer wrote them to log_line owner-bound to the node, not
-	// to any component. This closes the raw-log-lane producer loop end to end.
+	// and the ingest consumer wrote them to node_log (#589: the origin-true
+	// self-log home, not any component's log_line). This closes the raw-log-lane
+	// producer loop end to end.
 	deadline = time.Now().Add(3 * time.Second)
 	for {
 		logs, err := gw.ListNodeLogs(ctx, "site-a", time.Now().Add(-time.Hour), 50)
@@ -111,7 +112,7 @@ func TestNodeRunOnce(t *testing.T) {
 		}
 		var pulled bool
 		for _, l := range logs {
-			if l.Message == "worklist pulled" && l.OwnerKind == "node" && l.Facility == "collection" {
+			if l.Message == "worklist pulled" && l.Facility == "collection" {
 				pulled = true
 			}
 		}
@@ -119,7 +120,7 @@ func TestNodeRunOnce(t *testing.T) {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("node self-log 'worklist pulled' never landed in log_line")
+			t.Fatalf("node self-log 'worklist pulled' never landed in node_log")
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
@@ -220,9 +221,9 @@ func TestNodeVerdictPerInterface(t *testing.T) {
 	deadline := time.Now().Add(5 * time.Second)
 	for _, comp := range []string{"disp-1", "disp-2"} {
 		for {
-			v, err := gw.LatestState(ctx, comp, "interface.reachable", "api")
+			v, err := gw.LatestProperty(ctx, comp, "interface-reachable", "api")
 			if err != nil {
-				t.Fatalf("latest state %s: %v", comp, err)
+				t.Fatalf("latest property %s: %v", comp, err)
 			}
 			if v != nil && v.Value == "up" {
 				break

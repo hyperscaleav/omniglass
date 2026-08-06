@@ -19,7 +19,7 @@ func (f *healthFixture) healthSeries(t *testing.T, ctx context.Context, ownerKin
 	if col == "" {
 		t.Fatalf("unknown owner kind %q", ownerKind)
 	}
-	rows, err := f.conn.Query(ctx, `select value from state
+	rows, err := f.conn.Query(ctx, `select value #>> '{}' from property
 		where `+col+` = (select id from `+ownerKind+` where name = $1)
 		  and property_type_id = (select id from property_type where name = 'health') order by ts asc, id asc`, ownerID)
 	if err != nil {
@@ -53,8 +53,8 @@ func (f *healthFixture) assertTransitionOnly(t *testing.T, ctx context.Context) 
 	// owner resolves back to a NAME here: the invariant groups by owner, and a
 	// failure message naming the entity is worth more than one printing a uuid.
 	rows, err := f.conn.Query(ctx, `
-		select coalesce(c.name, s.name, l.name, n.name) as owner, sd.owner_kind, sd.value
-		from state sd
+		select coalesce(c.name, s.name, l.name, n.name) as owner, sd.owner_kind, sd.value #>> '{}'
+		from property sd
 		left join component c on c.id = sd.component_id
 		left join system    s on s.id = sd.system_id
 		left join location  l on l.id = sd.location_id

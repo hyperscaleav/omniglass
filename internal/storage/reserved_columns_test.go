@@ -12,10 +12,11 @@ import (
 // was never wired, typed bigint against a uuid audit_log.id so it could never FK,
 // and served only a 'declared' sample provenance the design does not use
 // (declared values are config, not observations). It is dropped. The neighbouring
-// source_rule_version and value_json are DELIBERATELY kept: they are designed-but-
-// unbuilt on-row lineage (the backtest version hinge and ADR-0038's structured
-// state value), so this test also pins them present, guarding against a cleanup
-// that mistakes "unbuilt" for "dead".
+// source_rule_version is DELIBERATELY kept: it is designed-but-unbuilt on-row
+// lineage (the backtest version hinge), so this test also pins it present,
+// guarding against a cleanup that mistakes "unbuilt" for "dead". value_json was
+// once in that set; #588 delivered its design by folding it into property's one
+// jsonb value column, so it no longer appears here.
 func TestReservedLineageColumnsDropped(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -37,7 +38,7 @@ func TestReservedLineageColumnsDropped(t *testing.T) {
 		return exists
 	}
 
-	for _, table := range []string{"metric", "state"} {
+	for _, table := range []string{"metric", "property"} {
 		if has(table, "audit_id") {
 			t.Errorf("%s.audit_id still exists, want it dropped (a never-wired, mistyped declared-lineage placeholder)", table)
 		}
@@ -46,9 +47,8 @@ func TestReservedLineageColumnsDropped(t *testing.T) {
 	// Kept by design: unbuilt does not mean dead.
 	kept := []struct{ table, column string }{
 		{"metric", "source_rule_version"},
-		{"state", "source_rule_version"},
+		{"property", "source_rule_version"},
 		{"event", "source_rule_version"},
-		{"state", "value_json"},
 	}
 	for _, c := range kept {
 		if !has(c.table, c.column) {

@@ -97,9 +97,9 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0060](#adr-0060-a-resource-is-one-kebab-case-noun-nesting-means-ownership) | 2026-07-22 | Accepted | A resource is one kebab-case noun; nesting means ownership |
 | [ADR-0061](#adr-0061-a-calculated-series-is-current-at-its-highest-id-not-its-newest-timestamp) | 2026-07-22 | Accepted | A calculated series is current at its highest id, not its newest timestamp |
 | [ADR-0062](#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle) | 2026-07-22 | Accepted | A registry takes a uuid primary key and a renameable handle |
-| [ADR-0063](#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables) | 2026-07-23 | Accepted | The telemetry model is typed registries over bare-noun data tables |
+| [ADR-0063](#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables) | 2026-07-23 | Accepted; superseded in part by [ADR-0079](#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus) | The telemetry model is typed registries over bare-noun data tables |
 | [ADR-0064](#adr-0064-placement-and-classification-are-mutable-after-create) | 2026-07-23 | Accepted | Placement and classification are mutable after create |
-| [ADR-0065](#adr-0065-property-sample-and-current-value-replace-the-datapoint) | 2026-07-28 | Accepted | Property, sample, and current value replace the datapoint |
+| [ADR-0065](#adr-0065-property-sample-and-current-value-replace-the-datapoint) | 2026-07-28 | Accepted; superseded in part by [ADR-0079](#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus) | Property, sample, and current value replace the datapoint |
 | [ADR-0066](#adr-0066-logs-are-a-raw-ingest-lane-not-events) | 2026-07-28 | Accepted | Logs are a raw ingest lane, not events |
 | [ADR-0067](#adr-0067-bookings-are-exclusive-arc-owned-schedules-reconciled-against-observed-usage) | 2026-07-28 | Accepted | Bookings are exclusive-arc-owned schedules, reconciled against observed usage |
 | [ADR-0068](#adr-0068-the-api-error-model-is-the-stock-rfc-9457-shape) | 2026-07-30 | Accepted | The API error model is Huma's stock RFC 9457 problem+json (`ErrorModel` with `ErrorDetail` `{location, message, value}`); the custom `code` plus `violations` envelope sketched on the API page is retired |
@@ -113,6 +113,8 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0076](#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid) | 2026-08-04 | Accepted | the name stays renameable and addressable; rename is a custom method, every write returns the uuid, and one validator applies one of two rules |
 | [ADR-0077](#adr-0077-a-group-name-obeys-the-entity-name-rule-tightening-a-pattern-the-code-had-excused) | 2026-08-04 | Accepted | principal_group.name moves to the entity name rule, retiring the looser API-layer pattern |
 | [ADR-0078](#adr-0078-a-read-only-field-renders-as-a-fact-not-as-a-box-that-refuses-typing) | 2026-08-04 | Accepted | a blade the operator cannot edit contains nothing shaped like a control; BladeField owns the read-or-edit switch |
+| [ADR-0079](#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus) | 2026-08-05 | Accepted | five telemetry lanes with five names: the catalog splits on data_type, state renames to property, the value store folds into the series (tombstone unset, current values derived), the wire goes per-lane, logs split by origin, and a command records its status; reverses the property-as-genus half of ADR-0063/0065 |
+| [ADR-0080](#adr-0080-retention-is-provenance-aware-never-declared-never-the-latest-row-per-series) | 2026-08-05 | Accepted | retention is provenance-aware: a prune never deletes a declared row and never the latest row of any series, shipped as the PruneSamples primitive before any retention feature exists |
 
 ## Entries
 
@@ -2652,3 +2654,91 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   of #573 by construction, because text in a fact wraps. Shipped by
   [#575](https://github.com/hyperscaleav/omniglass/issues/575) in the
   [#574](https://github.com/hyperscaleav/omniglass/issues/574) loop.
+
+### ADR-0079: Five telemetry lanes, and property stops being the genus
+
+- **Date:** 2026-08-05 | **Status:** Accepted | **Pages:** [samples](/architecture/properties/),
+  [storage](/architecture/storage/), [core entities](/architecture/core-entities/),
+  [collection](/architecture/collection/), [commands](/architecture/commands/),
+  [events](/architecture/events/), [data model](/architecture/data-model/),
+  [health](/architecture/health/), [glossary](/architecture/glossary/)
+- **Decision:** the telemetry model is **five lanes** with five names and no overlap: a **metric**
+  is a quantity (numeric, aggregates, carries unit and precision), a **property** is a value (what
+  something is, including a number used as a name; values have duration, not averages), an
+  **event** is a typed happening, a **command** is an instruction with a target, and a **log line**
+  is raw arrival. "Property" stops being the genus of every reading and becomes one of the five,
+  and the word "state" retires as a table name: a health state is a concept, not a table. Shipped
+  as epic [#584](https://github.com/hyperscaleav/omniglass/issues/584) in seven slices:
+  - **The catalog splits on `data_type`, the lane key** (#587): `int` / `float` rows become
+    `metric_type` (taking the numeric facts: unit, precision), `string` / `bool` / `json` rows stay
+    `property_type` (keeping the value domain: validation), and the per-key `kind` column retires,
+    since catalog membership routes a sample and partitions every row cleanly where `kind` did not
+    (four kind-less declared names were properties by ruling, and `data_type='string'` already put
+    them there). Each classifier contract gains a metric sibling (`product_metric`,
+    `standard_metric`, `location_type_metric`). The three ingest catalogs share one resolution
+    namespace: a create is refused when a sibling holds the name.
+  - **The value store folds into the series** (#591): a declared value is an ordinary series row
+    (`provenance='declared'`, no lineage), an edit appends, and the **unset is a tombstone** (an
+    appended declared row whose value is JSON null, resolved as absence by every reader). The
+    **current value of every provenance is derived**: the latest series row per
+    `(type, owner arc, instance, provenance)`, never a maintained cache. The separate `property`
+    value store and its upsert-on-intake cache retire outright.
+  - **The `state` table becomes `property`** (#588): the record takes the bare noun and the catalog
+    keeps the `_type` suffix, matching `event_type`/`event`; the two value columns converge into
+    one `value jsonb NOT NULL`. The word "state" was overloaded (a health verdict is a state, a
+    reachability verdict is a state, and neither was that table); the lane is a value over time,
+    and its name now says so.
+  - **A log line belongs to a component, and node self-logs split into `node_log`** (#589):
+    `log_line`'s four-armed arc narrows to component-only, and a node's self-logs move to an
+    origin-true `node_log` table keyed to the node, the amended ruling recorded on the slice issue.
+  - **A command records its status, and an intended value names its command** (#590): `command`
+    gains a recorded `status` (`issued` until a terminal `settled` / `failed` / `timed-out`, with
+    `settled_at` stamping the terminal moment) beside the still-computed settlement verdict, and
+    `command_type` gains the **two-armed target** (`target_property_type_id` or
+    `target_metric_type_id`, never both), because a metric is commandable. An intended sample's
+    lineage moves from the command's caused event to the **command itself** (`command_id`): the
+    value points at its cause, not at a derivation of it.
+  - **The push wire goes per-lane** (#594): `TelemetryBatch` carries `metrics`, `properties`,
+    `events`, and `logs` arrays, each entry validated against its own catalog at ingest; the
+    polymorphic samples array retires.
+  - **One name rule, no dots** (#586): a name is a single kebab token, at most 100 characters, on
+    every table; the dot-joined keyspace rule and its 128-character ceiling retire, and the seeded
+    dotted names backfill to their hyphenated forms (`icmp.rtt-avg` to `icmp-rtt-avg`).
+- **What this reverses, and why.** ADR-0063 and ADR-0065 recorded the previous taxonomy as the
+  settled model: **property** as the canonical signal over every sample, one `property_type`
+  catalog with a `kind` column spanning numeric and categorical names, and a maintained `property`
+  latest-value cache as the architecture-of-record for current values. This ADR reverses that
+  recorded call in part. The root defect was the **property-as-genus overreach**: one word carried
+  the signal, the store, and the whole sample family, so "property" meant three things on one page,
+  the catalog carried facts (unit, precision) that only half its rows could use, and the cache
+  duplicated a fact the series already held. The registry-over-bare-noun pattern of ADR-0063
+  survives intact; what changes is that property becomes one lane among five rather than the genus
+  of all of them. Recorded as the current-best model on the evidence above, and like every entry in
+  this log it is revisable if the evidence changes.
+- **Context:** verified against the live schema before building, which produced one mid-loop stop:
+  the epic was first drafted against the pre-July init-dump names, where `property` was the catalog
+  and `property_value` held current values, and three of its claims pointed at tables that no
+  longer existed under those names. The definition was corrected against the running database
+  before any slice built on it, and two rulings rode the correction: the partition key is
+  `data_type` rather than `kind`, and a current value is derived from its series rather than
+  stored. The retired vocabulary (`state` as a sample table, `property_value`,
+  `StateSampleWrite` and its siblings) joins the docslint denylist with this entry.
+
+### ADR-0080: Retention is provenance-aware: never declared, never the latest row per series
+
+- **Date:** 2026-08-05 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/),
+  [samples](/architecture/properties/)
+- **Decision:** any retention pass over the sample tables obeys two invariants: it **never deletes
+  a `declared` row** (an operator's assertion is the whole truth however old, not a sample that
+  ages out), and it **never deletes the latest row of any series** `(type, owner arc, instance,
+  provenance)` (a prune must not erase a current value). The rule ships as the **`PruneSamples`**
+  Storage Gateway primitive, tested for both invariants, **before any retention feature exists**;
+  no caller wires it yet, and any future retention feature calls the primitive rather than writing
+  its own delete.
+- **Context:** a blanket "delete older than N days" is the obvious first retention feature, and it
+  would silently erase a declared value set two years ago, because for declared provenance the
+  single row is the record itself, not one sample among many. With current values now derived from
+  the series ([ADR-0079](#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)), a
+  naive prune would also delete the newest row of a quiet series and blank a current reading. Both
+  traps are cheap to close before the feature and expensive to discover after a purge, so the floor
+  shipped ahead of the feature (#591).

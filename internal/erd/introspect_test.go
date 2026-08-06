@@ -10,10 +10,10 @@ import (
 )
 
 // TestIntrospectRealSchema runs Introspect against the real, migrated schema and
-// pins load-bearing facts: the estate's component table exists, property carries
-// a foreign key to property_type, and the Subsystems cluster map covers exactly
-// the live tables (no unmapped table, no stale map entry). The last check is what
-// keeps the ERD legible: a new table with no home surfaces here.
+// pins load-bearing facts: the estate's component table exists, the property series
+// carries a foreign key to its property_type catalog, and the Subsystems cluster
+// map covers exactly the live tables (no unmapped table, no stale map entry). The
+// last check is what keeps the ERD legible: a new table with no home surfaces here.
 func TestIntrospectRealSchema(t *testing.T) {
 	dsn := storagetest.NewDSN(t) // skips under -short
 	ctx := context.Background()
@@ -37,18 +37,23 @@ func TestIntrospectRealSchema(t *testing.T) {
 		t.Error("component table not introspected")
 	}
 
-	prop, ok := byName["property"]
+	// `state` is gone (#588): the sample series took the freed bare noun
+	// `property` and carries the catalog FK.
+	if _, ok := byName["state"]; ok {
+		t.Error("the renamed `state` table was introspected; #588 renamed it to property")
+	}
+	st, ok := byName["property"]
 	if !ok {
 		t.Fatal("property table not introspected")
 	}
 	hasTypeFK := false
-	for _, fk := range prop.FKs {
+	for _, fk := range st.FKs {
 		if fk.RefTable == "property_type" {
 			hasTypeFK = true
 		}
 	}
 	if !hasTypeFK {
-		t.Errorf("property has no foreign key to property_type; FKs=%+v", prop.FKs)
+		t.Errorf("property has no foreign key to property_type; FKs=%+v", st.FKs)
 	}
 
 	mapped := map[string]bool{}

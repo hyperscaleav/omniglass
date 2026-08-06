@@ -29,16 +29,19 @@ func (f fakeStore) RecordHeartbeat(context.Context, string) error { return nil }
 func (f fakeStore) ResolveTaskOwner(context.Context, string, string) (storage.TaskOwner, bool, error) {
 	return storage.TaskOwner{}, false, nil
 }
+func (f fakeStore) ListMetricTypes(context.Context) ([]storage.MetricType, error) {
+	return nil, nil
+}
 func (f fakeStore) ListPropertyTypes(context.Context) ([]storage.PropertyType, error) {
 	return nil, nil
 }
 func (f fakeStore) InsertMetricSamples(context.Context, []storage.MetricSampleWrite) error {
 	return nil
 }
-func (f fakeStore) InsertStateSamples(context.Context, []storage.StateSampleWrite) error {
+func (f fakeStore) InsertPropertySamples(context.Context, []storage.PropertySampleWrite) error {
 	return nil
 }
-func (f fakeStore) LatestState(context.Context, string, string, string) (*storage.StateSample, error) {
+func (f fakeStore) LatestProperty(context.Context, string, string, string) (*storage.PropertySample, error) {
 	return nil, nil
 }
 func (f fakeStore) InsertEvents(context.Context, []storage.EventWrite) error {
@@ -47,7 +50,7 @@ func (f fakeStore) InsertEvents(context.Context, []storage.EventWrite) error {
 func (f fakeStore) InsertLogLines(context.Context, []storage.LogLineWrite) error {
 	return nil
 }
-func (f fakeStore) UpsertProperties(context.Context, []storage.PropertyUpsert) error {
+func (f fakeStore) InsertNodeLogs(context.Context, []storage.NodeLogWrite) error {
 	return nil
 }
 func (f fakeStore) ListEventTypes(context.Context) ([]storage.EventType, error) {

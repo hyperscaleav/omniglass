@@ -6,9 +6,15 @@
 //
 // The batch is deliberately NOT called an Event. An event in this platform is a
 // semantic occurrence (event_type-registered, with an origin, see ADR-0066); a batch
-// is the envelope that carries samples and raw log lines, and will carry natively
-// caught events too. Naming the envelope after one of its passengers is what the
-// rename in #424 corrected.
+// is the envelope that carries samples, natively caught events, and raw log lines.
+// Naming the envelope after one of its passengers is what the rename in #424
+// corrected.
+//
+// The batch is PER-LANE (#594): each observation rides the typed array of its
+// catalog (metrics, properties, events, logs), so the lane is the routing and each
+// lane validates against its own registry. The polymorphic samples array (a name
+// plus a value oneof, routed by a registry kind string) retired with #594; its
+// field number and name are reserved below.
 
 syntax = "proto3";
 
@@ -19,11 +25,15 @@ option go_package = "github.com/hyperscaleav/omniglass/proto/og/v1;ogv1";
 import "google/protobuf/timestamp.proto";
 
 // TelemetryBatch is one batch a task collected, already normalized to the platform's
-// property-name vocabulary. The node stamps NO component identity: the server binds
+// canonical signal vocabulary. The node stamps NO component identity: the server binds
 // the owner at ingest from the task's interface (task_id -> interface -> component).
 // The node's only identity assertion is the subject (its own name, carried as
 // node_id) plus the task_id.
 message TelemetryBatch {
+  // The polymorphic samples array retired with the per-lane wire (#594).
+  reserved 5;
+  reserved "samples";
+
   // task_id is the identity of the task that produced this batch. The server
   // resolves the owner (and confines the node to its own tasks) from it.
   string task_id = 1;
@@ -32,16 +42,13 @@ message TelemetryBatch {
   // run"; the authoritative node identity is the publishing subject.
   string node_id = 2;
 
-  // ts is the batch-side timestamp. Per-sample Sample.ts overrides this when set.
+  // ts is the batch-side timestamp. A per-sample ts overrides this when set; when
+  // neither is set the server stamps ingest time.
   google.protobuf.Timestamp ts = 3;
 
   // labels are batch-level dimensional metadata common to every sample. Not
   // persisted in checkpoint 3 (only the typed sample row lands).
   map<string, string> labels = 4;
-
-  // samples is the observations in this batch (a tcp probe carries tcp.open and,
-  // when open, tcp.connect-time).
-  repeated Sample samples = 5;
 
   // raw is the original wire payload, preserved verbatim for replay. Empty for
   // the inline tcp probe (no protocol payload). Raw-batch persistence is deferred
@@ -66,6 +73,21 @@ message TelemetryBatch {
   // fills it from the task's interface_type; a push has no interface, so without
   // this its rows would be unattributable.
   string source = 9;
+
+  // metrics is the numeric lane: each entry must name a registered metric_type
+  // (reject-not-project, checked per lane at ingest) and lands in metric.
+  repeated MetricSample metrics = 10;
+
+  // properties is the categorical lane: each entry must name a registered
+  // property_type, its value must be valid JSON of the type's data_type, and when
+  // the type carries a validation schema the value must satisfy it. Lands in
+  // property, transition-only.
+  repeated PropertySample properties = 11;
+
+  // events is the occurrence lane: each entry must name a registered event_type
+  // and lands in event with origin caught (a natively published occurrence, an
+  // xAPI event or an SNMP trap; ADR-0066). Raw log text rides logs instead.
+  repeated EventSample events = 12;
 }
 
 // Owner is an exclusive-arc address: which kind of estate entity owns the batch,
@@ -78,41 +100,79 @@ message Owner {
   string ref = 2;
 }
 
-// Sample is one observation: a registry-resolved property name plus a typed value.
-// The registry (property_type) says the kind and value type; the ingest consumer
-// validates the name (reject-not-project) before writing.
-message Sample {
-  // name is the canonical property name (e.g. "tcp.open"). Validated against
-  // property_type at ingest; an unregistered name is dropped.
+// MetricSample is one numeric observation: a registered metric_type name plus a
+// double value. The lane is the type: no value oneof, no kind routing.
+message MetricSample {
+  // name is the canonical metric_type name (e.g. "tcp-open"). Validated against
+  // metric_type at ingest; an unregistered name is dropped.
   string name = 1;
 
-  // value carries the observation. The oneof keeps the wire compact and typed.
-  // The tcp probe populates double_value.
-  oneof value {
-    int64 int_value = 2;
-    double double_value = 3;
-    string string_value = 4;
-    bytes json_value = 5;
-  }
+  // value is the observation. All numeric signals ride a double (the metric
+  // column's own type); an integer count fits it exactly up to 2^53.
+  double value = 2;
 
-  // ts is the per-sample timestamp; defaults to the batch ts when unset.
-  google.protobuf.Timestamp ts = 6;
+  // ts is the per-sample timestamp. When unset the batch ts governs; when both
+  // are unset the server stamps ingest time. A supplied ts survives verbatim.
+  google.protobuf.Timestamp ts = 3;
 
-  // instance discriminates many values of ONE property name on one owner (three
-  // fan speeds, per-port counters), the first-class dimension of the data model
-  // (instance text NOT NULL DEFAULT ''). The node lane leaves it empty and the
-  // server fills it from the interface name, which doubles as the discriminator
-  // there; a push has no interface, so without this a caller could not express
-  // per-instance data at all.
-  string instance = 8;
+  // instance discriminates many values of ONE name on one owner (three fan
+  // speeds, per-port counters). The node lane leaves it empty and the server
+  // fills it from the interface name; a push sets it directly.
+  string instance = 4;
 
   // labels are sample-specific dimensional metadata (e.g. the reason). Not
-  // persisted in checkpoint 3.
-  map<string, string> labels = 7;
+  // persisted in this checkpoint.
+  map<string, string> labels = 5;
+}
+
+// PropertySample is one categorical observation: a registered property_type name
+// plus its value as canonical JSON text ("\"up\"", "true"), so one field carries
+// every data_type the catalog declares (string/bool/json) and the ingest
+// validator can run the type's JSON Schema against it unchanged.
+message PropertySample {
+  // name is the canonical property_type name (e.g. "interface-reachable").
+  // Validated against property_type at ingest; an unregistered name is dropped.
+  string name = 1;
+
+  // value_json is the observed value as canonical JSON text. It must parse as
+  // the property_type's data_type and satisfy the type's validation schema when
+  // one is declared; a violating value is refused at ingest.
+  string value_json = 2;
+
+  // ts follows the same rule as MetricSample.ts.
+  google.protobuf.Timestamp ts = 3;
+
+  // instance follows the same rule as MetricSample.instance.
+  string instance = 4;
+
+  // labels follow the same rule as MetricSample.labels.
+  map<string, string> labels = 5;
+}
+
+// EventSample is one natively caught occurrence: a registered event_type name
+// plus a human-readable message and/or a structured JSON payload. An entry
+// carrying neither says nothing and is dropped at ingest.
+message EventSample {
+  // name is the registered event_type name (e.g. "call-started"). Validated
+  // against event_type at ingest; an unregistered name is dropped.
+  string name = 1;
+
+  // message is the occurrence's human-readable line.
+  string message = 2;
+
+  // payload is the occurrence's structured payload as JSON bytes. It must be
+  // valid JSON and, when the event_type declares a payload_schema, satisfy it.
+  bytes payload = 3;
+
+  // ts follows the same rule as MetricSample.ts.
+  google.protobuf.Timestamp ts = 4;
+
+  // instance follows the same rule as MetricSample.instance.
+  string instance = 5;
 }
 
 // LogLine is one raw log line off the ingest lane (ADR-0066): untyped text, not a
-// registry-resolved Sample. The consumer writes it to log_line, owner-confined to
+// registry-resolved sample. The consumer writes it to log_line, owner-confined to
 // the publishing node (self-logs) or the task's component. severity and facility
 // are the retention/routing axes; attributes and labels are freeform JSON.
 message LogLine {
