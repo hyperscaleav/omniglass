@@ -66,9 +66,9 @@ it into [core entities](/architecture/core-entities/). An earlier version of tha
 tables carrying a `name` column, which made it blind to 28 of the 51: absence of a `name` is not
 evidence of absence of an identifier, and a username and a content hash both escaped.
 
-There used to be a second rule beside that one, the **keyspace** rule: a dot-joined path of kebab
-segments on a 128 character ceiling (`icmp.rtt-avg`), with the validator selecting between the two
-from the table's declared shape. The two collapsed into one (#586). `icmp.rtt-avg` is now
+There used to be a second rule beside that one, the **keyspace** rule, since retired: a dot-joined
+path of kebab segments on a 128 character ceiling (`icmp.rtt-avg`), with the validator selecting
+between the two from the table's declared shape. The two collapsed into one (#586). `icmp.rtt-avg` is now
 `icmp-rtt-avg`, a name is a single token on every table that carries one, and with no path left to
 parse there is one ceiling and nothing to select between.
 

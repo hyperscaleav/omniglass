@@ -13,13 +13,12 @@ import {
   type Secret,
   type OwnerKind,
   SECRETS_KEY,
-  SECRET_TYPES_KEY,
   listSecrets,
-  listSecretTypes,
   createSecret,
   updateSecret,
   deleteSecret,
 } from "../lib/secrets";
+import { SECRET_TYPES_KEY, listSecretTypes } from "../lib/secret_types";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { COMPONENTS_KEY, listComponents } from "../lib/components";
 import { useMe, can, canAtPlatform, platformTierGap, platformAuthorityHint } from "../lib/auth";

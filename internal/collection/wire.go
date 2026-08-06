@@ -40,7 +40,8 @@ func WorklistSubject(node string) string { return subjectPrefix + "worklist." + 
 // HeartbeatSubject is where a node publishes its liveness heartbeat.
 func HeartbeatSubject(node string) string { return subjectPrefix + "heartbeat." + node }
 
-// TelemetrySubject is reserved for the checkpoint-3 telemetry Event stream.
+// TelemetrySubject is a node's telemetry publish subject, bound into the
+// OG_TELEMETRY JetStream stream.
 func TelemetrySubject(node string) string { return subjectPrefix + "telemetry." + node }
 
 // WorklistChangedSubject is reserved: the server publishes here to nudge a node

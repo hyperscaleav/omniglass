@@ -311,7 +311,9 @@ func seedEventTypes(ctx context.Context, gw storage.Gateway) error {
 
 // seedCommandTypes installs the ship-with command_type registry (the "do" catalog),
 // authoritative on conflict like the other registries. A settleable command carries
-// a target property and a settle window; a fire-and-forget one carries neither.
+// a settle window and one target arm (a property or a metric, never both); a
+// fire-and-forget one carries neither. An unregistered or double target fails the
+// seed run with the row named (the upsert refuses rather than silently NULLing).
 func seedCommandTypes(ctx context.Context, gw storage.Gateway) error {
 	var doc struct {
 		CommandTypes []struct {
@@ -319,6 +321,7 @@ func seedCommandTypes(ctx context.Context, gw storage.Gateway) error {
 			DisplayName         string `yaml:"display_name"`
 			Description         string `yaml:"description"`
 			TargetPropertyType  string `yaml:"target_property_type"`
+			TargetMetricType    string `yaml:"target_metric_type"`
 			SettleWindowSeconds int    `yaml:"settle_window_seconds"`
 		} `yaml:"command_types"`
 	}
@@ -328,7 +331,8 @@ func seedCommandTypes(ctx context.Context, gw storage.Gateway) error {
 	for _, c := range doc.CommandTypes {
 		if err := gw.UpsertCommandType(ctx, storage.CommandType{
 			Name: c.Name, DisplayName: c.DisplayName, Description: c.Description,
-			TargetPropertyType: c.TargetPropertyType, SettleWindowSeconds: c.SettleWindowSeconds, Official: true,
+			TargetPropertyType: c.TargetPropertyType, TargetMetricType: c.TargetMetricType,
+			SettleWindowSeconds: c.SettleWindowSeconds, Official: true,
 		}); err != nil {
 			return err
 		}

@@ -14,7 +14,7 @@ import (
 )
 
 // nodePermissions is the subject grant for one node: it may publish only its own
-// worklist request, heartbeat, and (reserved) telemetry subjects, and subscribe
+// worklist request, heartbeat, and telemetry subjects, and subscribe
 // only to its own worklist-changed signal and its own request-reply inbox
 // namespace. This is the per-node credential isolation, expressed as subject
 // permissions. Pure: no I/O, unit-testable.

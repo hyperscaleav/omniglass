@@ -46,7 +46,7 @@ type eventTypeNameInput struct {
 
 type createEventTypeInput struct {
 	Body struct {
-		Name          string `json:"name" minLength:"1" doc:"The event type name (lowercase, dot-hierarchied)"`
+		Name          string `json:"name" minLength:"1" doc:"The event type name (lowercase kebab)"`
 		DisplayName   string `json:"display_name,omitempty" doc:"A human label"`
 		Description   string `json:"description,omitempty" doc:"What the occurrence means"`
 		PayloadSchema any    `json:"payload_schema,omitempty" doc:"A JSON Schema fragment for the payload"`
@@ -107,7 +107,7 @@ func registerEventTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Path:          "/event-types",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create an event type",
-		Description:   "Registers a custom event type (official=false). The name must be a valid keyspace name (dot-joined kebab segments). Gated by event_type:create.",
+		Description:   "Registers a custom event type (official=false). The name must be a single kebab token, e.g. call-started. Gated by event_type:create.",
 	}, "event_type", "create"), func(ctx context.Context, in *createEventTypeInput) (*eventTypeOutput, error) {
 		schema, err := marshalValidation(in.Body.PayloadSchema)
 		if err != nil {

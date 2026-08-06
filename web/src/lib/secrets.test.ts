@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { listSecrets, listSecretTypes, createSecret, updateSecret, deleteSecret, revealSecret, copySecret } from "./secrets";
+import { listSecrets, createSecret, updateSecret, deleteSecret, revealSecret, copySecret } from "./secrets";
 import { uuidFor } from "./testids";
 
 // The data layer is the unit under test; fetch is the seam we fake, so these
@@ -23,17 +23,6 @@ describe("secrets data layer", () => {
     expect(secrets[0].fields[0].secret).toBe(true);
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.url).toContain("/api/v1/secrets");
-  });
-
-  it("lists secret types and unwraps the registry envelope", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ secret_types: [{ id: uuidFor("snmp-community"), name: "snmp-community", display_name: "SNMP Community", official: true, fields: [{ name: "community", type: "string", secret: true, origin: "operator" }] }] }),
-    );
-    const types = await listSecretTypes();
-    expect(types).toHaveLength(1);
-    expect(types[0]).toMatchObject({ id: uuidFor("snmp-community"), name: "snmp-community", official: true });
-    const req = fetchMock.mock.calls[0][0] as Request;
-    expect(req.url).toContain("/api/v1/secret-types");
   });
 
   it("posts the create body with the field map", async () => {

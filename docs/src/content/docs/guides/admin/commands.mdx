@@ -1,0 +1,99 @@
+---
+title: Commands
+description: "The Commands catalog and the invocations behind it: the canonical names for what a component can be told, the two-armed target and settle window each carries, and the recorded status an issued command earns."
+---
+
+import SeededSet from '../../../../components/SeededSet.astro';
+
+**Catalog > Commands** (with `command_type:read`, covered by every viewer's `*:read` floor) is
+the estate's **"do" catalog**: the directory of what a component can be **told**. The other
+catalogs name what the estate knows (a [property](/guides/admin/properties/) is a value, a
+[metric](/guides/admin/metrics/) is a quantity) and what happened (an
+[event](/guides/admin/events/) is an occurrence); a **command type** names an instruction
+(`set-input`, `reboot`) and carries the two facts that belong to the driver, not the abstract
+signal: the **target** it sets and the **settle window** the device needs to act. The name is
+its canonical identifier, a single lowercase kebab segment.
+
+A command type is used in two moves, and this page walks both: the **catalog** names the
+instruction, and **issuing records** an invocation typed by it, which a settleable command then
+reconciles against what the device reports ([commands](/architecture/commands/)).
+
+The console page lives at `/command-types`, and the nav says why: the address reserves
+`/commands` for the command history surface when it lands, so the catalog keeps the type-named
+route.
+
+The catalog is estate-wide reference data, not a scoped resource, so every command type is
+visible to every reader; the write gates decide who may change it.
+
+- The directory lists every command type sorted by name, each showing its **name** (the
+  canonical identifier, with its display name on the line above it), **target** (the property or
+  metric it sets, labelled with its lane, or fire-and-forget), **settle window** (seconds), and
+  **origin** (**official**, seed-owned, or **custom**). **name** filters by the name or its
+  display name; **official** narrows the list.
+- The **target is two-armed**: a **settleable** command names the value it sets in exactly one
+  lane, a property (`set-input` targets `video-input`) or a metric (a volume command targets a
+  numeric level), **never both**. A command with no target is **fire-and-forget** (`reboot`): it
+  records that it was told, with no value to settle. The create and edit forms offer **one
+  picker over both catalogs**, grouped by lane, so a selection sets exactly one arm; through the
+  API, naming both arms is refused (422, naming the exclusive arc), and a target must be a
+  registered property or metric type.
+- The **settle window** is the driver's fact about actuation time: how long the device is given
+  to act before a mismatch between what was told and what is observed counts as failure. Within
+  the window, a difference is not yet a verdict.
+- **New command type** (with `command_type:create`, granted to operators) opens a create
+  **drawer**: give it a **name** (a single lowercase kebab segment, for example `set-input` or
+  `reboot`), optionally add a **display name** and **description**, pick a **target** (or None),
+  and set the **settle window**. An invalid name (an uppercase letter, an underscore, a leading
+  hyphen, a dot) is refused with a message.
+- Pick a row to open its **detail blade**. The footer **Edit** pencil (with
+  `command_type:update`) edits the display name, description, target, and settle window; the
+  name is fixed at creation, since it is what every invocation is typed by. **Delete** (with
+  `command_type:delete`) removes a custom command type, behind a confirm.
+- A command type can carry a **params schema** (a JSON Schema for the invocation params), set
+  through the API for now; the console does not surface it yet. A schema whose `required` list
+  names a property its `properties` block does not declare is refused at write with the name,
+  and the stored schema is **enforced at issue**: an invocation whose params violate it is
+  refused (422, naming the violated constraint), and absent params validate as the empty
+  object, so a schema with required fields refuses a bare invocation.
+- An **official** (seed-owned) command type is always read-only: no Edit, no Delete, and the
+  blade marks it "Seed-owned, read-only." The shared vocabulary is the same from install to
+  install, the same deliberate exception to the operator-owned rule the
+  [Properties catalog](/guides/admin/properties/) makes, and for the same reason: a command type
+  name is the vocabulary a driver maps onto, so a release has to be able to correct it
+  ([the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs)).
+
+  The baseline ships this catalog, rendered from the seed itself (`make gen`) so the list cannot
+  drift from the binary:
+
+  <SeededSet kind="command_types" />
+- A **duplicate** name is refused (409), and an attempt to change an official command type is
+  refused too: the catalog has exactly one entry per name.
+
+## Issue a command
+
+Issuing is `POST /components/{name}/commands:issue` (with `command:issue`, granted to
+operators); the component resolves within your read scope, so a component outside it is a
+non-disclosing 404. One transaction records three things:
+
+- the **command row**: the invocation itself, with its params and who issued it;
+- a **caused event**, typed `command-issued`, on the component's
+  [event log](/guides/admin/events/#the-occurrences-behind-the-catalog); and
+- for a settleable command given a **value**, an **intended** series row in the target's lane:
+  the value the device was told to hold, landing beside the observed series so intent and
+  reality can be compared. The row names the command that opened it (its `command_id` lineage),
+  so every want traces to the invocation that wanted it. A metric target's intended value must
+  be a JSON number (422 otherwise).
+
+The issue response returns the computed **settlement verdict** (`none` for fire-and-forget,
+else `pending`, `settled`, or `failed`): within the settle window the verdict is pending, and
+past it the latest observed value either matches the intended one or does not. The command row
+also records a terminal **status**, `issued` until a settle-check stamps `settled`, `failed`
+(the device reported a different value), or `timed-out` (the window expired with nothing
+observed), with `settled_at` as the terminal moment. The settle-check runs wherever settlement
+is evaluated, at issue and on every settlement read, so a zero-window command returns already
+terminal, and a fire-and-forget command records `settled` at issue since it has nothing to wait
+on. This surface records and reconciles; carrying the invocation to the device is not part of
+it.
+
+From the CLI, the catalog is `omniglass command-type list|get|create|update|delete`, and
+issuing is `omniglass component command issue` (see the [CLI reference](/reference/cli/)).

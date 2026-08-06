@@ -100,7 +100,7 @@ diverging from the scaling page's "materialized in Postgres" sketch.
 
 The two-layer authorization model has one exception here: Settings Gateway methods are
 **unscoped**. Settings describe the platform and its principals, not the estate, so the ABAC
-storage-scope invariant is **not applicable** (as with the registry-type reads, `GET /types/...`);
+storage-scope invariant is **not applicable** (as with the registry-type reads, `GET /property-types` and its catalog siblings);
 only the `settings:<action>` permission gates them, a recorded carve-out
 ([ADR-0034](/architecture/decisions/#adr-0034-the-settings-gateway-is-unscoped-only-the-permission-gates-it)),
 not a missed invariant. The group and user levels will constrain override reads and writes by the

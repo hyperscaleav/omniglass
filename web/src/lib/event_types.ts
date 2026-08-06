@@ -2,7 +2,7 @@ import { api } from "../api/client";
 
 // The Event Types catalog data layer: thin typed wrappers over the /event-types
 // surface, the twin of the Properties catalog. An event type is a registered
-// occurrence key (a dot-hierarchied name) that an occurrence is typed by. Official
+// occurrence key (a single kebab name) that an occurrence is typed by. Official
 // event types are seed-owned and read-only; custom ones are operator-created.
 // payload_schema is an optional JSON Schema fragment for the occurrence payload.
 

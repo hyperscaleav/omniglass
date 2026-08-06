@@ -61,9 +61,9 @@ type setLocationTypePropertyInput struct {
 }
 
 // registerLocationTypePropertyRoutes wires the location type's declared-property
-// contract. The type registry it hangs off is gated by type:*, so the contract
-// keeps that permission story: the read rides the type:read viewer floor, the
-// writes sit at type:update / type:delete. Official location types ship their
+// contract. The registry it hangs off is gated by location_type:*, so the
+// contract keeps that permission story: the read rides the location_type:read
+// viewer floor, the writes sit at location_type:update / location_type:delete. Official location types ship their
 // contract with the release, so an operator write against one is refused (422)
 // the same way its registry row is.
 func registerLocationTypePropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
@@ -72,8 +72,8 @@ func registerLocationTypePropertyRoutes(api huma.API, a *authenticator, gw stora
 		Method:      http.MethodGet,
 		Path:        "/location-types/{id}/properties",
 		Summary:     "List a location type's declared properties",
-		Description: "Lists the location type's declared-property contract (what every location of the type exposes), ordered by property name, each with its optional default and required flag. Gated by type:read.",
-	}, "type", "read"), func(ctx context.Context, in *locationTypePathInput) (*listLocationTypePropertiesOutput, error) {
+		Description: "Lists the location type's declared-property contract (what every location of the type exposes), ordered by property name, each with its optional default and required flag. Gated by location_type:read.",
+	}, "location_type", "read"), func(ctx context.Context, in *locationTypePathInput) (*listLocationTypePropertiesOutput, error) {
 		items, err := gw.ListLocationTypeProperties(ctx, in.ID)
 		if err != nil {
 			return nil, mapLocationTypePropertyErr(err)
@@ -91,8 +91,8 @@ func registerLocationTypePropertyRoutes(api huma.API, a *authenticator, gw stora
 		Method:      http.MethodPut,
 		Path:        "/location-types/{id}/properties/{property}",
 		Summary:     "Declare a property on a location type",
-		Description: "Declares a catalog property on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a property the catalog does not know is a 422. Gated by type:update.",
-	}, "type", "update"), func(ctx context.Context, in *setLocationTypePropertyInput) (*locationTypePropertyOutput, error) {
+		Description: "Declares a catalog property on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a property the catalog does not know is a 422. Gated by location_type:update.",
+	}, "location_type", "update"), func(ctx context.Context, in *setLocationTypePropertyInput) (*locationTypePropertyOutput, error) {
 		def, err := encodePropertyJSON(in.Body.DefaultValue, "default_value")
 		if err != nil {
 			return nil, err
@@ -114,8 +114,8 @@ func registerLocationTypePropertyRoutes(api huma.API, a *authenticator, gw stora
 		Path:          "/location-types/{id}/properties/{property}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Withdraw a property from a location type",
-		Description:   "Removes one line from a custom location type's contract; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and an official type is read-only (422). Gated by type:delete.",
-	}, "type", "delete"), func(ctx context.Context, in *locationTypePropertyPathInput) (*struct{}, error) {
+		Description:   "Removes one line from a custom location type's contract; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and an official type is read-only (422). Gated by location_type:delete.",
+	}, "location_type", "delete"), func(ctx context.Context, in *locationTypePropertyPathInput) (*struct{}, error) {
 		if err := gw.DeleteLocationTypeProperty(ctx, actorID(ctx), in.ID, in.Property); err != nil {
 			return nil, mapLocationTypePropertyErr(err)
 		}

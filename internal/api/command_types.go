@@ -12,9 +12,11 @@ import (
 
 // commandTypeBody is the wire shape of a command type: an entry in the driver-owned
 // catalog of what a component can be told (the "do" half). settle_window_seconds is
-// the driver's fact about actuation timing; target_property_type names the property a
-// settleable command sets (empty for fire-and-forget); params_schema is an optional
-// JSON Schema for the invocation params. official marks a seed-owned, read-only type.
+// the driver's fact about actuation timing; the target is a two-armed exclusive arc,
+// target_property_type or target_metric_type naming the value a settleable command
+// sets, at most one set and both empty for a fire-and-forget command; params_schema
+// is an optional JSON Schema for the invocation params. official marks a seed-owned,
+// read-only type.
 type commandTypeBody struct {
 	ID                  string          `json:"id" doc:"The command type's uuid, the stable form of name"`
 	Name                string          `json:"name"`
@@ -22,14 +24,16 @@ type commandTypeBody struct {
 	Description         string          `json:"description,omitempty"`
 	ParamsSchema        json.RawMessage `json:"params_schema,omitempty" doc:"A JSON Schema fragment for the invocation params"`
 	SettleWindowSeconds int             `json:"settle_window_seconds" doc:"How long the device is given to actuate before a mismatch is a failed command"`
-	TargetPropertyType  string          `json:"target_property_type,omitempty" doc:"The property this command sets (empty for a fire-and-forget command)"`
+	TargetPropertyType  string          `json:"target_property_type,omitempty" doc:"The property this command sets (one arm of the exclusive target arc; empty for fire-and-forget or a metric target)"`
+	TargetMetricType    string          `json:"target_metric_type,omitempty" doc:"The metric this command sets (the other arm of the arc; never set together with target_property_type)"`
 	Official            bool            `json:"official"`
 }
 
 func toCommandTypeBody(ct *storage.CommandType) commandTypeBody {
 	b := commandTypeBody{
 		ID: ct.ID, Name: ct.Name, DisplayName: ct.DisplayName, Description: ct.Description,
-		SettleWindowSeconds: ct.SettleWindowSeconds, TargetPropertyType: ct.TargetPropertyType, Official: ct.Official,
+		SettleWindowSeconds: ct.SettleWindowSeconds, TargetPropertyType: ct.TargetPropertyType,
+		TargetMetricType: ct.TargetMetricType, Official: ct.Official,
 	}
 	if len(ct.ParamsSchema) > 0 {
 		b.ParamsSchema = json.RawMessage(ct.ParamsSchema)
@@ -51,12 +55,13 @@ type commandTypeNameInput struct {
 
 type createCommandTypeInput struct {
 	Body struct {
-		Name                string `json:"name" minLength:"1" doc:"The command type name (lowercase, dot-hierarchied)"`
+		Name                string `json:"name" minLength:"1" doc:"The command type name (lowercase kebab)"`
 		DisplayName         string `json:"display_name,omitempty" doc:"A human label"`
 		Description         string `json:"description,omitempty" doc:"What the command does"`
 		ParamsSchema        any    `json:"params_schema,omitempty" doc:"A JSON Schema fragment for the params"`
 		SettleWindowSeconds int    `json:"settle_window_seconds,omitempty" doc:"The actuation window in seconds (0 = fire-and-forget)"`
-		TargetPropertyType  string `json:"target_property_type,omitempty" doc:"The property this command sets, for settlement"`
+		TargetPropertyType  string `json:"target_property_type,omitempty" doc:"The property this command sets, for settlement (at most one target arm)"`
+		TargetMetricType    string `json:"target_metric_type,omitempty" doc:"The metric this command sets, for settlement (at most one target arm)"`
 	}
 }
 
@@ -67,7 +72,8 @@ type updateCommandTypeInput struct {
 		Description         *string `json:"description,omitempty" doc:"What the command does"`
 		ParamsSchema        any     `json:"params_schema,omitempty" doc:"A JSON Schema fragment (replaces wholesale)"`
 		SettleWindowSeconds *int    `json:"settle_window_seconds,omitempty" doc:"The actuation window in seconds"`
-		TargetPropertyType  *string `json:"target_property_type,omitempty" doc:"The property this command sets (empty clears it)"`
+		TargetPropertyType  *string `json:"target_property_type,omitempty" doc:"The property this command sets (empty clears it; a non-empty arm clears the other)"`
+		TargetMetricType    *string `json:"target_metric_type,omitempty" doc:"The metric this command sets (empty clears it; a non-empty arm clears the other)"`
 	}
 }
 
@@ -128,6 +134,7 @@ func registerCommandTypeRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 			ParamsSchema:        schema,
 			SettleWindowSeconds: in.Body.SettleWindowSeconds,
 			TargetPropertyType:  in.Body.TargetPropertyType,
+			TargetMetricType:    in.Body.TargetMetricType,
 		})
 		if err != nil {
 			return nil, mapCommandTypeErr(err)
@@ -140,7 +147,7 @@ func registerCommandTypeRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 		Method:      http.MethodPatch,
 		Path:        "/command-types/{name}",
 		Summary:     "Update a command type",
-		Description: "Patches a custom command type's label, description, params schema, settle window, or target (a nil field is unchanged; an empty target clears it). The name is fixed at creation. Official types are read-only. Gated by command_type:update.",
+		Description: "Patches a custom command type's label, description, params schema, settle window, or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.",
 	}, "command_type", "update"), func(ctx context.Context, in *updateCommandTypeInput) (*commandTypeOutput, error) {
 		schema, err := marshalValidation(in.Body.ParamsSchema)
 		if err != nil {
@@ -152,6 +159,7 @@ func registerCommandTypeRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 			ParamsSchema:        schema,
 			SettleWindowSeconds: in.Body.SettleWindowSeconds,
 			TargetPropertyType:  in.Body.TargetPropertyType,
+			TargetMetricType:    in.Body.TargetMetricType,
 		})
 		if err != nil {
 			return nil, mapCommandTypeErr(err)
@@ -183,6 +191,9 @@ func mapCommandTypeErr(err error) error {
 		return huma.Error409Conflict("a command type with this name already exists")
 	case errors.Is(err, storage.ErrCommandTypeOfficial):
 		return huma.Error409Conflict("an official command type is read-only")
+	// The arc refusal keeps its own message so the 422 names the exclusive arc.
+	case errors.Is(err, storage.ErrCommandTypeTargetArc):
+		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, storage.ErrCommandTypeInvalid):
 		return huma.Error422UnprocessableEntity(err.Error())
 	default:

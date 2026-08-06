@@ -5,7 +5,7 @@ description: "The Capabilities catalog: the vocabulary of what a component can d
 
 **Catalog > Capabilities** (`/capabilities`, with `capability:read`, covered by every viewer's
 `*:read` floor) is the directory of **capabilities**: the flat vocabulary of what a component can
-do, on the same flat-registry pattern as [Types](/guides/admin/types/) and [Tags](/guides/admin/tags/).
+do, on the same flat-registry pattern as [Location Types](/guides/admin/location-types/) and [Tags](/guides/admin/tags/).
 A capability is a plain name of a function (a microphone, a display, a camera), not a device and
 not a measurement. Each row shows the **name** (for example
 `microphone`), the **display name**, and its **origin** (**official**, seed-owned, or
@@ -34,7 +34,7 @@ what makes those two sides line up.
   capability is `on delete cascade`, so deleting one drops it from every product's set, from every
   component's own declarations, **and from every role that requires it**. A role that loses its last
   requirement admits any component. Removing a custom row is unconditional (still refused for an
-  official row, 422); the 409 delete-refused-while-referenced rule the [Types](/guides/admin/types/)
+  official row, 422); the 409 delete-refused-while-referenced rule the [Location Types](/guides/admin/location-types/)
   registry enforces lives instead on `component.product_id` (a product with components cannot be
   deleted).
 

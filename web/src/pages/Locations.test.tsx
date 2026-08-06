@@ -3,7 +3,8 @@ import { render, screen, waitFor, fireEvent, within } from "@solidjs/testing-lib
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Locations from "./Locations";
-import { LOCATIONS_KEY, LOCATION_TYPES_KEY, type Location, type LocationType } from "../lib/locations";
+import { LOCATIONS_KEY, type Location } from "../lib/locations";
+import { LOCATION_TYPES_KEY, type LocationType } from "../lib/location_types";
 import { ownerPropertiesKey, type EffectiveProperty } from "../lib/owner_properties";
 import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY, entityTagsKey } from "../lib/tags";

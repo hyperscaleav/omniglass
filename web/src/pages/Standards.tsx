@@ -185,6 +185,7 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
             <ParentStandardSelect value={parentId()} exclude={r().name} onChange={setParentId} />
           </BladeField>
           <ContractEditor classifier="standard" id={r().name} official={r().official} />
+          <ContractEditor classifier="standard" lane="metric" id={r().name} official={r().official} />
           <RoleEditor id={r().id} official={r().official} />
           <Show when={r().official}>
             <div role="alert" class="alert alert-soft text-sm"><span>Seed-owned, read-only.</span></div>

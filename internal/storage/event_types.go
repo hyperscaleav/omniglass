@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/hyperscaleav/omniglass/internal/key"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -50,8 +51,11 @@ type EventTypePatch struct {
 
 // UpsertEventType installs an official event type, authoritative on conflict (the
 // boot-seed bucket): an operator's custom event types (official=false) are keyed by
-// a distinct name and untouched. Mirrors UpsertPropertyType.
+// a distinct name and untouched. Mirrors UpsertPropertyType, schema guard included.
 func (p *PG) UpsertEventType(ctx context.Context, et EventType) error {
+	if err := checkSchemaFragment(et.PayloadSchema, "payload_schema"); err != nil {
+		return fmt.Errorf("storage: upsert event type %q: %w: %w", et.Name, ErrEventTypeInvalid, err)
+	}
 	var schema any
 	if len(et.PayloadSchema) > 0 {
 		schema = string(et.PayloadSchema)
@@ -127,6 +131,24 @@ func schemaArg(b []byte) any {
 	return nil
 }
 
+// checkSchemaFragment guards a stored JSON Schema fragment at the door of every
+// catalog write: well-formed JSON first (the yaml loader underneath would accept
+// more), then the bare-required refusal (key.ValidateSchema), so a schema that
+// would silently not enforce is refused with the offending property named. col
+// names the column in the error, matching each catalog's vocabulary.
+func checkSchemaFragment(fragment []byte, col string) error {
+	if len(fragment) == 0 {
+		return nil
+	}
+	if !json.Valid(fragment) {
+		return fmt.Errorf("%s is not valid JSON", col)
+	}
+	if err := key.ValidateSchema(fragment); err != nil {
+		return fmt.Errorf("%s: %w", col, err)
+	}
+	return nil
+}
+
 // CreateEventType inserts a custom (official=false) event type and audits it. The
 // name must be a valid canonical key and the payload_schema must be well-formed
 // JSON. A duplicate name is ErrEventTypeExists.
@@ -134,8 +156,8 @@ func (p *PG) CreateEventType(ctx context.Context, actorID string, spec EventType
 	if err := ValidateName("event_type", spec.Name); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrEventTypeInvalid, err)
 	}
-	if len(spec.PayloadSchema) > 0 && !json.Valid(spec.PayloadSchema) {
-		return nil, fmt.Errorf("%w: payload_schema is not valid JSON", ErrEventTypeInvalid)
+	if err := checkSchemaFragment(spec.PayloadSchema, "payload_schema"); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrEventTypeInvalid, err)
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -185,8 +207,8 @@ func (p *PG) CreateEventType(ctx context.Context, actorID string, spec EventType
 // audits it. Official event types are read-only; an unknown name is
 // ErrEventTypeNotFound.
 func (p *PG) UpdateEventType(ctx context.Context, actorID, name string, patch EventTypePatch) (*EventType, error) {
-	if len(patch.PayloadSchema) > 0 && !json.Valid(patch.PayloadSchema) {
-		return nil, fmt.Errorf("%w: payload_schema is not valid JSON", ErrEventTypeInvalid)
+	if err := checkSchemaFragment(patch.PayloadSchema, "payload_schema"); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrEventTypeInvalid, err)
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {

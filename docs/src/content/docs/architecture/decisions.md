@@ -115,6 +115,8 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0078](#adr-0078-a-read-only-field-renders-as-a-fact-not-as-a-box-that-refuses-typing) | 2026-08-04 | Accepted | a blade the operator cannot edit contains nothing shaped like a control; BladeField owns the read-or-edit switch |
 | [ADR-0079](#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus) | 2026-08-05 | Accepted | five telemetry lanes with five names: the catalog splits on data_type, state renames to property, the value store folds into the series (tombstone unset, current values derived), the wire goes per-lane, logs split by origin, and a command records its status; reverses the property-as-genus half of ADR-0063/0065 |
 | [ADR-0080](#adr-0080-retention-is-provenance-aware-never-declared-never-the-latest-row-per-series) | 2026-08-05 | Accepted | retention is provenance-aware: a prune never deletes a declared row and never the latest row of any series, shipped as the PruneSamples primitive before any retention feature exists |
+| [ADR-0081](#adr-0081-the-control-plane-wire-is-one-subject-grammar-node-anchored-and-batch-granular) | 2026-08-06 | Accepted | the control-plane wire is one subject grammar, og.v1.verb.node with the node name exactly one token: the api.telemetry lane sits in its own segment, per-record subjects are rejected, and the core-NATS consumers (worklist, heartbeat) are singletons by construction with their HA fork named and deferred |
+| [ADR-0082](#adr-0082-the-type-resource-renames-to-location_type) | 2026-08-06 | Accepted | the permission resource type renames to location_type on every surface (route stamps, roles seed, console gates, guard fixtures); the generic word retires from the permission vocabulary |
 
 ## Entries
 
@@ -2742,3 +2744,45 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   naive prune would also delete the newest row of a quiet series and blank a current reading. Both
   traps are cheap to close before the feature and expensive to discover after a purge, so the floor
   shipped ahead of the feature (#591).
+
+### ADR-0081: The control-plane wire is one subject grammar, node-anchored and batch-granular
+
+- **Date:** 2026-08-06 | **Status:** Accepted | **Pages:** [messaging](/architecture/messaging/),
+  [scaling](/architecture/scaling/)
+- **Decision:** every control-plane subject is `og.v1.<verb>.<node>`, the node name the last token
+  and **exactly one token**, so the server subscribes per-verb single-token wildcards and a node's
+  credential is an explicit allow-list of its own subjects plus its private `_INBOX.<node>` reply
+  namespace. The verb family is `worklist`, `heartbeat`, and `telemetry`, with `worklist-changed`
+  reserved for the re-pull nudge and `og.v1.command.<node>` the committed future per-node command
+  queue. The trusted push lane is **`og.v1.api.telemetry`, its own segment**; the rejected
+  alternative was a reserved node name under `og.v1.telemetry.*`, where the single-token wildcard
+  would hand a node named `api` the trusted subject, so its own segment makes the forgery
+  structurally impossible rather than dependent on nobody choosing an awkward name. Addressing is
+  **node-anchored and batch-granular**: a record's name is payload, never topic, and per-record
+  subjects (the MQTT-style topic tree) are rejected. One recorded correction rides the entry: the
+  one-token name rule (#586) was never justified by names as topic tokens; it stands on its own
+  grounds. One consequence is named and deferred: the core-NATS verbs' server-side consumers
+  (worklist, heartbeat) are singletons by construction, and their HA fork (queue groups versus
+  worklist reassignment) is a scaling decision for the day a second server exists. Telemetry does
+  not face that fork: its ingest is a named durable JetStream consumer a second server joins.
+- **Context:** the topics conversation (recorded until now only in #584's issue body) weighed a
+  user-facing MQTT-style topic tree against the internal contract and split the two concerns: the
+  internal bus follows KISS (NATS subjects carrying batches between the node and the server), and
+  any future user-facing subscription surface is its own design with its own grammar, reachable
+  over an MQTT bridge if wanted. Wire constants live in `internal/collection/wire.go`; the grammar
+  section on [messaging](/architecture/messaging/) is the page-of-record.
+
+### ADR-0082: The type resource renames to location_type
+
+- **Date:** 2026-08-06 | **Status:** Accepted | **Pages:**
+  [identity and access](/architecture/identity-access/), [API](/architecture/api/)
+- **Decision:** the permission resource `type` renames to `location_type` on every surface: the
+  route stamps, the roles seed, the console gate strings, and the authz guard fixtures. The
+  location-type property contract routes follow the same resource (`location_type:update` declares,
+  `location_type:delete` withdraws). The generic word `type` retires from the permission
+  vocabulary; no route stamps it and no role grants it.
+- **Context:** one word hid two registries: the Types console page held location types and secret
+  types behind one nav word while `type:*` gated only the location registry, and the contract
+  routes gating `type:*` beside `product` and `standard` gating their own nouns was a live
+  asymmetry. The same one-word-hides-two-things shape the catalog arc exists to end, renamed
+  pre-release while the rename is cheap; the Types page split carried it (#598, the epic #601).

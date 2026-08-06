@@ -1,7 +1,9 @@
 # The ship-with command_type registry (ADR-0063): the driver-owned catalog of what a
 # component can be told, the "do" half of the telemetry model. A settleable command
-# targets a property (it opens an intended value and settles when observed matches);
-# a fire-and-forget command has no target and just records the invocation.
+# names one target arm, target_property_type or target_metric_type, never both (it
+# opens an intended value and settles when observed matches); a fire-and-forget
+# command has no target and just records the invocation. An unregistered or double
+# target fails the seed run naming the row.
 command_types:
   - name: set-input
     display_name: Set Input

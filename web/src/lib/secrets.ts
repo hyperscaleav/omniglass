@@ -12,22 +12,9 @@ export type SecretField = {
   secret: boolean;
 };
 
-export type SecretTypeField = {
-  name: string;
-  type: string;
-  secret: boolean;
-  origin: string;
-};
-
-export type SecretType = {
-  id: string;
-  // The name, the operator-facing address (ADR-0062): pickers post and
-  // look up by name, never the uuid.
-  name: string;
-  display_name: string;
-  official: boolean;
-  fields: SecretTypeField[];
-};
+// The secret_type registry (the shapes a secret can take) lives in
+// lib/secret_types.ts, its own module, so a page that only needs secrets never
+// couples to the registry fetch and vice versa (#598).
 
 export type Secret = {
   id: string;
@@ -40,13 +27,6 @@ export type Secret = {
 };
 
 export const SECRETS_KEY = ["secrets"] as const;
-export const SECRET_TYPES_KEY = ["types", "secret"] as const;
-
-export async function listSecretTypes(): Promise<SecretType[]> {
-  const { data, error } = await api.GET("/secret-types");
-  if (error) throw error;
-  return (data?.secret_types ?? []) as SecretType[];
-}
 
 export async function listSecrets(): Promise<Secret[]> {
   const { data, error } = await api.GET("/secrets");

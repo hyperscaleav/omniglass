@@ -27,11 +27,11 @@ const (
 	// (^[a-z0-9][a-z0-9-]*$), enforced by ValidateName.
 	ShapeKeyBearing IdentityShape = "key-bearing"
 
-	// ShapeKeyspace: an operator types its name, on the dotted rule. The two rules
-	// share a character set and a segment shape; the only difference left is that a
-	// keyspace name is a dot-joined PATH of segments (icmp-rtt-avg) and an entity
-	// name is a path of one. An earlier comment here justified the split by claiming
-	// different character sets, which stopped being true when they were unified.
+	// ShapeKeyspace: an operator types its name, on the same one kebab rule as
+	// every other name (the dotted path rule retired with the one-name-rule
+	// collapse, #586). The shape survives as a declaration of what the name is
+	// for: estate-wide vocabulary a telemetry record is typed by (icmp-rtt-avg),
+	// where an entity name addresses one row under a parent.
 	ShapeKeyspace IdentityShape = "keyspace"
 
 	// ShapeHumanNotAKey: it carries a human-readable identifier that is NOT a name in

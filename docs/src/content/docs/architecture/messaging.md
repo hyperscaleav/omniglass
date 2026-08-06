@@ -185,6 +185,30 @@ subject permissions cannot see, so the **admission consumer** is the authoritati
 authorization stays authoritative in the [Storage Gateway](/architecture/storage/).
 :::
 
+### The control-plane subject grammar
+
+Every control-plane subject is `og.v1.<verb>.<node>`
+([ADR-0081](/architecture/decisions/#adr-0081-the-control-plane-wire-is-one-subject-grammar-node-anchored-and-batch-granular)):
+the node name is the **last token, exactly one token**, which is what lets the server subscribe
+per-verb single-token wildcards (`og.v1.worklist.*`) and lets a node's credential be an explicit
+allow-list of its own subjects plus its private reply namespace (`_INBOX.<node>`). The verb family
+today is `worklist` (request-reply), `heartbeat`, and `telemetry` (the JetStream firehose);
+`worklist-changed` is reserved for the server's re-pull nudge, and `og.v1.command.<node>` is the
+committed future per-node command queue. The trusted push lane `og.v1.api.telemetry` deliberately
+sits in its **own segment** rather than as a reserved node name under `og.v1.telemetry.*` (above):
+structural impossibility beats a naming convention.
+
+Addressing is **node-anchored and batch-granular**: a record has no subject of its own, and its
+name is payload, not topic. Per-record subjects (the MQTT-style
+`og.v1.telemetry.<node>.<component>.<metric>` tree) were rejected: the consumer needs the whole
+batch anyway, a subject per record explodes the permission grammar without adding a fence (the
+admission consumer owns the owner fence), and the one-token name rule was never justified by names
+as topic tokens. One consequence is that the core-NATS verbs' server-side consumers (worklist,
+heartbeat) are **singletons by construction**; the HA fork for them (queue groups versus worklist
+reassignment) is named and deferred ([scaling](/architecture/scaling/)). Telemetry does not face
+that fork: its ingest is a named durable JetStream consumer, and a second server attaching the
+same durable joins it and splits deliveries.
+
 ## Request-reply: service to service
 
 Synchronous internal calls use **NATS request-reply**: an in-process call in single-binary mode, a request over the bus when modes split across pods. The public API never uses request-reply (it is HTTP); request-reply is the east-west wire only.

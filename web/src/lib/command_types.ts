@@ -3,8 +3,9 @@ import { api } from "../api/client";
 // The Command Types catalog data layer: thin typed wrappers over the /command-types
 // surface, the "do" twin of the Properties and Event Types catalogs. A command type
 // is the driver-owned catalog entry for what a component can be told. settle_window_seconds
-// is the driver's actuation-timing fact; target_property_type names the property a
-// settleable command sets (empty for fire-and-forget). Official types are read-only.
+// is the driver's actuation-timing fact; the target is a two-armed exclusive arc,
+// target_property_type or target_metric_type naming the value a settleable command
+// sets (at most one set, both empty for fire-and-forget). Official types are read-only.
 
 export type CommandTypeRow = {
   name: string;
@@ -13,6 +14,7 @@ export type CommandTypeRow = {
   params_schema?: unknown;
   settle_window_seconds: number;
   target_property_type?: string;
+  target_metric_type?: string;
   official: boolean;
 };
 
@@ -30,6 +32,7 @@ export type CreateCommandType = {
   description?: string;
   settle_window_seconds?: number;
   target_property_type?: string;
+  target_metric_type?: string;
 };
 
 export async function createCommandType(body: CreateCommandType): Promise<CommandTypeRow> {
@@ -43,6 +46,7 @@ export type UpdateCommandType = {
   description?: string;
   settle_window_seconds?: number;
   target_property_type?: string;
+  target_metric_type?: string;
 };
 
 export async function updateCommandType(name: string, body: UpdateCommandType): Promise<void> {

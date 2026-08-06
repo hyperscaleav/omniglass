@@ -76,6 +76,12 @@ func mapLocationTypePropertyWriteErr(err error) error {
 // and the boot-seed path so both keep the same semantics. It runs on any
 // querier, so the seed path needs no transaction for its single statement.
 func upsertLocationTypePropertyRow(ctx context.Context, q querier, locationTypeID string, spec LocationTypePropertySpec) (*LocationTypeProperty, error) {
+	// The classifier-existence guard the product (resolveProductRef) and standard
+	// (inline select) rows already had; without it an unknown location type on
+	// the seed path was a raw not-null violation rather than ErrTypeNotFound.
+	if err := requireRegistryRow(ctx, q, "location_type", locationTypeID); err != nil {
+		return nil, err
+	}
 	if err := requireProperty(ctx, q, spec.PropertyTypeName); err != nil {
 		return nil, err
 	}

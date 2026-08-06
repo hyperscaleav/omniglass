@@ -73,8 +73,8 @@ func registerCommandRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 // mapCommandErr maps the command sentinels: a request that names a command_type that
 // does not exist (or an invalid one) is a 422, as is a non-numeric intended value for
-// a metric target; an out-of-scope component falls through to the component mapping
-// (a non-disclosing 404).
+// a metric target or a params payload that violates the type's params_schema; an
+// out-of-scope component falls through to the component mapping (a non-disclosing 404).
 func mapCommandErr(err error) error {
 	switch {
 	case err == nil:
@@ -83,6 +83,10 @@ func mapCommandErr(err error) error {
 		return huma.Error422UnprocessableEntity("unknown or invalid command_type")
 	case errors.Is(err, storage.ErrCommandValueNotNumeric):
 		return huma.Error422UnprocessableEntity("intended value for a metric target must be numeric")
+	// The params refusal keeps the storage detail: the 422 names the violated
+	// constraint, not just the fact of violation.
+	case errors.Is(err, storage.ErrCommandParamsInvalid):
+		return huma.Error422UnprocessableEntity(err.Error())
 	default:
 		return mapComponentErr(err)
 	}

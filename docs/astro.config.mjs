@@ -23,6 +23,9 @@ export default defineConfig({
   redirects: {
     '/guides/console/': '/guides/operator/',
     '/architecture/datapoints/': '/architecture/properties/',
+    // The joint Types guide split into one page per registry (#598); the old
+    // URL lands on the location half, which inherited most of its content.
+    '/guides/admin/types/': '/guides/admin/location-types/',
   },
   integrations: [
     // Diagrams are authored in D2 and rendered to inline SVG. ELK layout; dark theme
@@ -170,9 +173,12 @@ export default defineConfig({
             { label: 'Secrets', slug: 'guides/admin/secrets' },
             { label: 'Variables', slug: 'guides/admin/variables' },
             { label: 'Files', slug: 'guides/admin/files' },
-            { label: 'Types', slug: 'guides/admin/types' },
+            { label: 'Location types', slug: 'guides/admin/location-types' },
+            { label: 'Secret types', slug: 'guides/admin/secret-types' },
             { label: 'Properties', slug: 'guides/admin/properties' },
             { label: 'Metrics', slug: 'guides/admin/metrics' },
+            { label: 'Events', slug: 'guides/admin/events' },
+            { label: 'Commands', slug: 'guides/admin/commands' },
             { label: 'Tags', slug: 'guides/admin/tags' },
             { label: 'Vendors', slug: 'guides/admin/vendors' },
             { label: 'Drivers', slug: 'guides/admin/drivers' },

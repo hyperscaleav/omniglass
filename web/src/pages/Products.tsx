@@ -222,6 +222,7 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
             <CapabilitiesPicker value={capabilities()} onChange={setCapabilities} />
           </BladeField>
           <ProductContractEditor productId={r().name} official={r().official} />
+          <ProductContractEditor productId={r().name} official={r().official} lane="metric" />
           <Show when={r().official}>
             <div role="alert" class="alert alert-soft text-sm"><span>Seed-owned, read-only.</span></div>
           </Show>

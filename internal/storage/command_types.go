@@ -2,9 +2,9 @@ package storage
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -35,6 +35,9 @@ var (
 	ErrCommandTypeExists   = errors.New("storage: command type name already exists")
 	ErrCommandTypeOfficial = errors.New("storage: official command type is read-only")
 	ErrCommandTypeInvalid  = errors.New("storage: command type is invalid")
+	// ErrCommandTypeTargetArc names the exclusive arc: the arc CHECK in the
+	// schema is the backstop, this sentinel is the message the caller sees.
+	ErrCommandTypeTargetArc = errors.New("storage: a command type targets a property or a metric, never both")
 )
 
 // commandTypeCols selects a command type with each target arm resolved to a name
@@ -52,27 +55,30 @@ func scanCommandType(row pgx.Row) (*CommandType, error) {
 	return &ct, nil
 }
 
-// targetArg resolves the target property name to a SQL argument: the empty string
-// stays a nil (NULL target), so a fire-and-forget command carries no target.
-func targetArg(name string) any {
-	if name == "" {
-		return nil
-	}
-	return name
-}
-
 // UpsertCommandType installs an official command type, authoritative on conflict (the
-// boot-seed bucket). The target property, when set, resolves by name. Mirrors
-// UpsertEventType.
+// boot-seed bucket). Either target arm, when set, resolves by name up front rather
+// than with a bare subselect in the insert: a subselect silently NULLs an
+// unregistered name, and a seed file must refuse, naming the row, instead of
+// quietly dropping its target. Mirrors UpsertEventType otherwise.
 func (p *PG) UpsertCommandType(ctx context.Context, ct CommandType) error {
-	_, err := p.pool.Exec(ctx, `
-		insert into command_type (name, display_name, description, params_schema, settle_window_seconds, target_property_type_id, official)
-		values ($1, $2, $3, $4, $5, (select id from property_type where name = $6), $7)
+	// The same schema guard as the CRUD lane: the seed must not ship a
+	// params_schema an operator would be refused.
+	if err := checkSchemaFragment(ct.ParamsSchema, "params_schema"); err != nil {
+		return fmt.Errorf("storage: upsert command type %q: %w: %w", ct.Name, ErrCommandTypeInvalid, err)
+	}
+	propID, metricID, err := resolveTargets(ctx, p.pool, ct.TargetPropertyType, ct.TargetMetricType)
+	if err != nil {
+		return fmt.Errorf("storage: upsert command type %q: %w", ct.Name, err)
+	}
+	_, err = p.pool.Exec(ctx, `
+		insert into command_type (name, display_name, description, params_schema, settle_window_seconds, target_property_type_id, target_metric_type_id, official)
+		values ($1, $2, $3, $4, $5, $6, $7, $8)
 		on conflict (name) do update set
 			display_name = excluded.display_name, description = excluded.description,
 			params_schema = excluded.params_schema, settle_window_seconds = excluded.settle_window_seconds,
-			target_property_type_id = excluded.target_property_type_id, official = excluded.official`,
-		ct.Name, ct.DisplayName, ct.Description, schemaArg(ct.ParamsSchema), ct.SettleWindowSeconds, targetArg(ct.TargetPropertyType), ct.Official)
+			target_property_type_id = excluded.target_property_type_id,
+			target_metric_type_id = excluded.target_metric_type_id, official = excluded.official`,
+		ct.Name, ct.DisplayName, ct.Description, schemaArg(ct.ParamsSchema), ct.SettleWindowSeconds, propID, metricID, ct.Official)
 	if err != nil {
 		return fmt.Errorf("storage: upsert command type %q: %w", ct.Name, err)
 	}
@@ -109,7 +115,8 @@ func (p *PG) GetCommandType(ctx context.Context, name string) (*CommandType, err
 	return ct, nil
 }
 
-// CommandTypeSpec is the create input for a custom command type.
+// CommandTypeSpec is the create input for a custom command type. The target is a
+// two-armed exclusive arc: at most one of TargetPropertyType and TargetMetricType.
 type CommandTypeSpec struct {
 	Name                string
 	DisplayName         string
@@ -117,16 +124,20 @@ type CommandTypeSpec struct {
 	ParamsSchema        []byte
 	SettleWindowSeconds int
 	TargetPropertyType  string
+	TargetMetricType    string
 }
 
 // CommandTypePatch carries the mutable fields; a nil field is unchanged. The name is
-// fixed at create.
+// fixed at create. The target is one fact with two forms: setting either arm
+// non-empty replaces it wholesale (the other arm clears), the empty string clears
+// the named arm, and naming both arms non-empty is the arc refusal.
 type CommandTypePatch struct {
 	DisplayName         *string
 	Description         *string
 	ParamsSchema        []byte
 	SettleWindowSeconds *int
 	TargetPropertyType  *string
+	TargetMetricType    *string
 }
 
 func guardCommandTypeMutable(ctx context.Context, q querier, name string) error {
@@ -144,32 +155,52 @@ func guardCommandTypeMutable(ctx context.Context, q querier, name string) error 
 	return nil
 }
 
-// resolveTarget checks a target property name exists (within the tx) and returns its
-// id, or an invalid error. An empty name is a nil id (no target).
-func resolveTarget(ctx context.Context, q querier, name string) (*string, error) {
+// resolveTarget checks a target name exists in the named classifier catalog and
+// returns its id, or an invalid error naming the target. An empty name is a nil
+// id (no target on that arm). The catalog is a compile-time constant at every
+// call site ("property_type" or "metric_type"), never caller input.
+func resolveTarget(ctx context.Context, q querier, catalog, name string) (*string, error) {
 	if name == "" {
 		return nil, nil
 	}
+	noun := strings.TrimSuffix(catalog, "_type")
 	var id string
-	err := q.QueryRow(ctx, `select id from property_type where name = $1`, name).Scan(&id)
+	err := q.QueryRow(ctx, `select id from `+catalog+` where name = $1`, name).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, fmt.Errorf("%w: target property %q is not registered", ErrCommandTypeInvalid, name)
+		return nil, fmt.Errorf("%w: target %s %q is not registered", ErrCommandTypeInvalid, noun, name)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("storage: resolve target property %q: %w", name, err)
+		return nil, fmt.Errorf("storage: resolve target %s %q: %w", noun, name, err)
 	}
 	return &id, nil
 }
 
+// resolveTargets resolves both target arms at once, refusing when both are set:
+// the exclusive arc surfaces here as a named refusal, with the schema's CHECK as
+// the backstop rather than the message.
+func resolveTargets(ctx context.Context, q querier, propertyName, metricName string) (propID, metricID *string, err error) {
+	if propertyName != "" && metricName != "" {
+		return nil, nil, ErrCommandTypeTargetArc
+	}
+	if propID, err = resolveTarget(ctx, q, "property_type", propertyName); err != nil {
+		return nil, nil, err
+	}
+	if metricID, err = resolveTarget(ctx, q, "metric_type", metricName); err != nil {
+		return nil, nil, err
+	}
+	return propID, metricID, nil
+}
+
 // CreateEventType-style create: a custom (official=false) command type, audited. The
 // name must be a valid key, the params_schema well-formed JSON, and the target (when
-// set) a registered property. A duplicate name is ErrCommandTypeExists.
+// set) a registered property or metric type, at most one arm of the exclusive arc.
+// A duplicate name is ErrCommandTypeExists.
 func (p *PG) CreateCommandType(ctx context.Context, actorID string, spec CommandTypeSpec) (*CommandType, error) {
 	if err := ValidateName("command_type", spec.Name); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrCommandTypeInvalid, err)
 	}
-	if len(spec.ParamsSchema) > 0 && !json.Valid(spec.ParamsSchema) {
-		return nil, fmt.Errorf("%w: params_schema is not valid JSON", ErrCommandTypeInvalid)
+	if err := checkSchemaFragment(spec.ParamsSchema, "params_schema"); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrCommandTypeInvalid, err)
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -177,7 +208,7 @@ func (p *PG) CreateCommandType(ctx context.Context, actorID string, spec Command
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	target, err := resolveTarget(ctx, tx, spec.TargetPropertyType)
+	propTarget, metricTarget, err := resolveTargets(ctx, tx, spec.TargetPropertyType, spec.TargetMetricType)
 	if err != nil {
 		return nil, err
 	}
@@ -185,10 +216,10 @@ func (p *PG) CreateCommandType(ctx context.Context, actorID string, spec Command
 	// key, which survives a later rename, rather than on the name.
 	var ctID string
 	if err := tx.QueryRow(ctx,
-		`insert into command_type (name, display_name, description, params_schema, settle_window_seconds, target_property_type_id, official)
-		 values ($1, $2, $3, $4, $5, $6, false)
+		`insert into command_type (name, display_name, description, params_schema, settle_window_seconds, target_property_type_id, target_metric_type_id, official)
+		 values ($1, $2, $3, $4, $5, $6, $7, false)
 		 returning id`,
-		spec.Name, spec.DisplayName, spec.Description, schemaArg(spec.ParamsSchema), spec.SettleWindowSeconds, target).Scan(&ctID); err != nil {
+		spec.Name, spec.DisplayName, spec.Description, schemaArg(spec.ParamsSchema), spec.SettleWindowSeconds, propTarget, metricTarget).Scan(&ctID); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrCommandTypeExists
 		}
@@ -205,8 +236,8 @@ func (p *PG) CreateCommandType(ctx context.Context, actorID string, spec Command
 
 // UpdateCommandType patches a custom command type's mutable fields (nil unchanged).
 func (p *PG) UpdateCommandType(ctx context.Context, actorID, name string, patch CommandTypePatch) (*CommandType, error) {
-	if len(patch.ParamsSchema) > 0 && !json.Valid(patch.ParamsSchema) {
-		return nil, fmt.Errorf("%w: params_schema is not valid JSON", ErrCommandTypeInvalid)
+	if err := checkSchemaFragment(patch.ParamsSchema, "params_schema"); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrCommandTypeInvalid, err)
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -224,24 +255,44 @@ func (p *PG) UpdateCommandType(ctx context.Context, actorID, name string, patch 
 		}
 		return nil, fmt.Errorf("storage: audit image command_type %q: %w", name, err)
 	}
-	// The target is resolved and replaced only when the patch sets it.
-	var target *string
+	// Each arm is resolved and replaced only when the patch sets it. Naming both
+	// arms non-empty in one patch is the arc refusal, before any SQL runs.
+	if patch.TargetPropertyType != nil && patch.TargetMetricType != nil &&
+		*patch.TargetPropertyType != "" && *patch.TargetMetricType != "" {
+		return nil, ErrCommandTypeTargetArc
+	}
+	var propTarget, metricTarget *string
 	if patch.TargetPropertyType != nil {
-		target, err = resolveTarget(ctx, tx, *patch.TargetPropertyType)
+		propTarget, err = resolveTarget(ctx, tx, "property_type", *patch.TargetPropertyType)
 		if err != nil {
 			return nil, err
 		}
 	}
+	if patch.TargetMetricType != nil {
+		metricTarget, err = resolveTarget(ctx, tx, "metric_type", *patch.TargetMetricType)
+		if err != nil {
+			return nil, err
+		}
+	}
+	// The target is one fact with two forms: writing a non-empty arm clears the
+	// other, so the arc CHECK can never trip on a patch that names one target.
 	if _, err := tx.Exec(ctx, `
 		update command_type set
 			display_name          = coalesce($2, display_name),
 			description           = coalesce($3, description),
 			params_schema         = coalesce($4, params_schema),
 			settle_window_seconds = coalesce($5, settle_window_seconds),
-			target_property_type_id = case when $6::boolean then $7 else target_property_type_id end
+			target_property_type_id = case
+				when $6::boolean then $7::uuid
+				when $8::boolean and $9::uuid is not null then null
+				else target_property_type_id end,
+			target_metric_type_id = case
+				when $8::boolean then $9::uuid
+				when $6::boolean and $7::uuid is not null then null
+				else target_metric_type_id end
 		where name = $1`,
 		name, patch.DisplayName, patch.Description, schemaArg(patch.ParamsSchema), patch.SettleWindowSeconds,
-		patch.TargetPropertyType != nil, target); err != nil {
+		patch.TargetPropertyType != nil, propTarget, patch.TargetMetricType != nil, metricTarget); err != nil {
 		return nil, fmt.Errorf("storage: update command type %q: %w", name, err)
 	}
 	ct, err := scanCommandType(tx.QueryRow(ctx, `select `+commandTypeCols+` from command_type where name = $1`, name))

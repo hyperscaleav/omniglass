@@ -2,7 +2,6 @@ package storage
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -82,8 +81,8 @@ func (p *PG) CreatePropertyType(ctx context.Context, actorID string, spec Proper
 	if err := ValidateName("property_type", spec.Name); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrPropertyTypeInvalid, err)
 	}
-	if len(spec.Validation) > 0 && !json.Valid(spec.Validation) {
-		return nil, fmt.Errorf("%w: validation is not valid JSON", ErrPropertyTypeInvalid)
+	if err := checkSchemaFragment(spec.Validation, "validation"); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrPropertyTypeInvalid, err)
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -130,8 +129,8 @@ func (p *PG) CreatePropertyType(ctx context.Context, actorID string, spec Proper
 // UpdatePropertyType patches a custom property's mutable fields (nil unchanged) and audits
 // it. Official properties are read-only; an unknown name is ErrPropertyTypeNotFound.
 func (p *PG) UpdatePropertyType(ctx context.Context, actorID, name string, patch PropertyTypePatch) (*PropertyType, error) {
-	if len(patch.Validation) > 0 && !json.Valid(patch.Validation) {
-		return nil, fmt.Errorf("%w: validation is not valid JSON", ErrPropertyTypeInvalid)
+	if err := checkSchemaFragment(patch.Validation, "validation"); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrPropertyTypeInvalid, err)
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {

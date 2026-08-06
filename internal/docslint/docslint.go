@@ -208,6 +208,25 @@ var Banned = []BannedTerm{
 		Replacement: "PropertySampleWrite / InsertPropertySamples / LatestProperty / PropertyTransitions",
 		Origin:      "ADR-0079",
 	},
+	{
+		// The dotted-name vocabulary of the two-rule era, retired when the name
+		// rule collapsed to one kebab token (#586). The bare word "dotted" stays
+		// legal (retirement prose needs it); these compounds only ever described
+		// the dead rule, and each survived a manual sweep at least once before
+		// this entry existed.
+		Pattern:     regexp.MustCompile(`(?i)\bdot-(?:joined|hierarchied|segmented)\b`),
+		Replacement: "a single kebab token: every name is one segment, no dots",
+		Origin:      "ADR-0079",
+	},
+	{
+		// The generic permission resource of the pre-split Types page. The bare
+		// word "type" is everywhere and legal; only the resource:action stamp
+		// form is dead, and the verb suffix keeps "Issue Type" and its cousins
+		// out of reach.
+		Pattern:     regexp.MustCompile("`?\\btype:(?:read|create|update|delete)\\b`?"),
+		Replacement: "location_type:<action>, the registry's own resource",
+		Origin:      "ADR-0082",
+	},
 }
 
 // vocabularyAllowed lists files (relative to DocsRoot) exempt from the

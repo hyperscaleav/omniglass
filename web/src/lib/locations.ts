@@ -15,39 +15,14 @@ export type Location = {
 
 export const LOCATIONS_KEY = ["locations"] as const;
 
-// A location_type registry row: the type picker on the location form lists these
-// (value = name, label = display_name), so a location is classified by a known type
-// rather than a free-typed string.
-export type LocationType = {
-  // The uuid, the stable handle that survives a rename. Everything a location
-  // stores or the API echoes back (location.location_type, allowed_parent_types)
-  // is the kebab name, so console joins go through name, not id (ADR-0062).
-  id: string;
-  name: string;
-  display_name: string;
-  // A glyph key (kebab, e.g. "building") resolved to an SVG for the tree's leading
-  // icon; resolveIcon falls back to map-pin for an unknown key.
-  icon: string;
-  official: boolean;
-  // The placement constraint: a set of location_type names and/or the reserved
-  // "root" sentinel (lib/types.ts's ROOT_PLACEMENT) this type may be placed
-  // under. Empty means unconstrained. Drives the reparent picker's candidate
-  // filter on the location detail form.
-  allowed_parent_types: string[];
-};
-
-export const LOCATION_TYPES_KEY = ["types", "location"] as const;
+// The location_type registry (the type picker's rows) lives in
+// lib/location_types.ts, its own module beside its page, so the registry and the
+// entity never share a fetch or a cache key (#598).
 
 export async function listLocations(): Promise<Location[]> {
   const { data, error } = await api.GET("/locations");
   if (error) throw error;
   return (data?.locations ?? []) as Location[];
-}
-
-export async function listLocationTypes(): Promise<LocationType[]> {
-  const { data, error } = await api.GET("/location-types");
-  if (error) throw error;
-  return (data?.location_types ?? []) as LocationType[];
 }
 
 export async function getLocation(name: string): Promise<Location> {

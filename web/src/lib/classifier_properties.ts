@@ -41,12 +41,12 @@ export type SetClassifierProperty = {
 export const classifierPropertiesKey = (kind: ClassifierKind, id: string) => [`${kind}-properties`, id] as const;
 
 // The authorization resource each classifier's contract writes are gated by,
-// matching the server routes (a location type's contract is part of the type
-// registry, so it is gated by type:*, not location:*).
+// matching the server routes (a location type's contract is part of the
+// location_type registry, so it is gated by location_type:*, not location:*).
 export const CLASSIFIER_RESOURCE: Record<ClassifierKind, string> = {
   product: "product",
   standard: "standard",
-  "location-type": "type",
+  "location-type": "location_type",
 };
 
 export async function classifierProperties(kind: ClassifierKind, id: string): Promise<ClassifierProperty[]> {

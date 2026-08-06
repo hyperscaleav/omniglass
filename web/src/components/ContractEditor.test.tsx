@@ -3,7 +3,9 @@ import { render, fireEvent, waitFor } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import ContractEditor from "./ContractEditor";
 import { classifierPropertiesKey, type ClassifierKind, type ClassifierProperty } from "../lib/classifier_properties";
+import { classifierMetricsKey, type ClassifierMetric } from "../lib/classifier_metrics";
 import { PROPERTIES_KEY, type PropertyRow } from "../lib/properties";
+import { METRICS_KEY, type MetricRow } from "../lib/metric_types";
 import { ME_KEY, type Me } from "../lib/auth";
 
 // One editor curates the declared-properties contract of all three classifiers: a
@@ -176,12 +178,12 @@ describe("ContractEditor on a location type", () => {
     expect(put!.url).toContain("/location-types/meeting-room/properties/has_camera");
   });
 
-  // A location type's contract is part of the type registry, so the server gates it
-  // on type:update, not location:update. A principal holding only location writes
-  // must not see the write controls.
-  it("gates its write controls on type:update, not location:update", () => {
+  // A location type's contract is part of the location_type registry, so the
+  // server gates it on location_type:update, not location:update. A principal
+  // holding only location writes must not see the write controls.
+  it("gates its write controls on location_type:update, not location:update", () => {
     const locationWriter: Me = { principal: { id: "l", kind: "human" }, permissions: ["*:read", "location:update", "location:delete"], grants: [] };
-    const typeWriter: Me = { principal: { id: "t", kind: "human" }, permissions: ["*:read", "type:update", "type:delete"], grants: [] };
+    const typeWriter: Me = { principal: { id: "t", kind: "human" }, permissions: ["*:read", "location_type:update", "location_type:delete"], grants: [] };
     expect(mount("location-type", { me: locationWriter }).queryByLabelText("Property to declare")).toBeNull();
     expect(mount("location-type", { me: typeWriter }).getByLabelText("Property to declare")).toBeTruthy();
   });
@@ -189,5 +191,109 @@ describe("ContractEditor on a location type", () => {
   it("shows the empty state when a location type declares nothing", () => {
     const { getByText } = mount("location-type", { lines: [] });
     expect(getByText("This location type declares no properties.")).toBeTruthy();
+  });
+});
+
+// The metric lane: the same editor over the metric contract routes and the
+// metric catalog. The lane switches the data layer, the copy, and the picker's
+// catalog; the row mechanics (PUT upsert, DELETE withdraw, official read-only)
+// are shared with the property lane.
+const metricContract: ClassifierMetric[] = [
+  { metric_type_name: "icmp-rtt-avg", metric_type_id: "icmp-rtt-avg-id", default_value: 10.5, required: true },
+  { metric_type_name: "tcp-open", metric_type_id: "tcp-open-id", required: false },
+];
+
+const metricCatalog: MetricRow[] = [
+  { name: "icmp-rtt-avg", data_type: "float", display_name: "ICMP RTT (avg)", official: true },
+  { name: "tcp-open", data_type: "int", display_name: "TCP Port Open", official: true },
+  { name: "tcp-connect-time", data_type: "float", display_name: "TCP Connect Time", official: true },
+];
+
+function mountMetric(kind: ClassifierKind, opts: { me?: Me; official?: boolean; lines?: ClassifierMetric[] } = {}) {
+  const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+  qc.setQueryData([...classifierMetricsKey(kind, "meeting-room")], opts.lines ?? metricContract);
+  qc.setQueryData([...METRICS_KEY], metricCatalog);
+  qc.setQueryData([...ME_KEY], opts.me ?? owner);
+  return render(() => (
+    <QueryClientProvider client={qc}>
+      <ContractEditor classifier={kind} lane="metric" id="meeting-room" official={opts.official ?? false} />
+    </QueryClientProvider>
+  ));
+}
+
+describe("ContractEditor's metric lane", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("lists each declared metric with its default and required marker", () => {
+    const { getByText } = mountMetric("product");
+    expect(getByText("Declared metrics")).toBeTruthy();
+    expect(getByText("the product contract")).toBeTruthy();
+    // The copy speaks the metric lane: the value side is the series, not an
+    // override typed on a detail page.
+    expect(getByText(/A component of this product carries every metric declared here/)).toBeTruthy();
+    expect(getByText("icmp-rtt-avg")).toBeTruthy();
+    expect(getByText("10.5")).toBeTruthy(); // the declared default
+    expect(getByText("no default")).toBeTruthy();
+    expect(getByText("required")).toBeTruthy();
+    expect(getByText("optional")).toBeTruthy();
+  });
+
+  it("declares a picked catalog metric, PUTting to the products metric route", async () => {
+    let put: Request | undefined;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "PUT") {
+        put = req.clone();
+        return json({ metric_type_name: "tcp-connect-time", metric_type_id: "tcp-connect-time-id", default_value: 42, required: false });
+      }
+      return json({ metrics: metricContract });
+    });
+
+    const { getByLabelText } = mountMetric("product");
+    // Only the metrics NOT already declared are offered.
+    const picker = getByLabelText("Metric to declare") as HTMLSelectElement;
+    expect(Array.from(picker.options).map((o) => o.value)).toEqual(["", "tcp-connect-time"]);
+
+    fireEvent.change(picker, { target: { value: "tcp-connect-time" } });
+    fireEvent.input(getByLabelText("Default for the new metric"), { target: { value: "42" } });
+    fireEvent.click(getByLabelText("Declare metric"));
+
+    await waitFor(() => expect(put).toBeTruthy());
+    expect(put!.url).toContain("/products/meeting-room/metrics/tcp-connect-time");
+    expect(await put!.json()).toEqual({ required: false, default_value: 42 }); // coerced to number
+  });
+
+  it("withdraws a line after confirmation, calling DELETE on the standards metric route", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    let del: Request | undefined;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "DELETE") {
+        del = req.clone();
+        return new Response(null, { status: 204 });
+      }
+      return json({ metrics: metricContract });
+    });
+
+    const { getByLabelText } = mountMetric("standard");
+    fireEvent.click(getByLabelText("Withdraw icmp-rtt-avg"));
+
+    await waitFor(() => expect(del).toBeTruthy());
+    expect(confirmSpy.mock.calls[0][0]).toContain("standard's contract"); // the copy names the classifier
+    expect(del!.url).toContain("/standards/meeting-room/metrics/icmp-rtt-avg");
+  });
+
+  it("renders an official classifier's metric contract read-only", () => {
+    const { getByText, queryByLabelText } = mountMetric("product", { official: true });
+    expect(getByText("icmp-rtt-avg")).toBeTruthy(); // the list still renders
+    expect(getByText("seed-owned, read-only")).toBeTruthy();
+    expect(queryByLabelText("Metric to declare")).toBeNull();
+    expect(queryByLabelText("Edit icmp-rtt-avg")).toBeNull();
+    expect(queryByLabelText("Withdraw icmp-rtt-avg")).toBeNull();
+  });
+
+  it("shows the metric empty state when a location type declares nothing", () => {
+    const { getByText } = mountMetric("location-type", { lines: [] });
+    expect(getByText("This location type declares no metrics.")).toBeTruthy();
   });
 });

@@ -379,10 +379,11 @@ Registers a custom command type (official=false). The name must be a single keba
 |---|---|---|---|
 | `--description` | string | (none) | What the command does |
 | `--display-name` | string | (none) | A human label |
-| `--name` | string | (none) | The command type name (lowercase, dot-hierarchied) |
+| `--name` | string | (none) | The command type name (lowercase kebab) |
 | `--params-schema` | string | (none) | A JSON Schema fragment for the params |
 | `--settle-window-seconds` | string | (none) | The actuation window in seconds (0 = fire-and-forget) |
-| `--target-property-type` | string | (none) | The property this command sets, for settlement |
+| `--target-metric-type` | string | (none) | The metric this command sets, for settlement (at most one target arm) |
+| `--target-property-type` | string | (none) | The property this command sets, for settlement (at most one target arm) |
 
 Example:
 
@@ -446,7 +447,7 @@ Update a command type
 omniglass command-type update <name> [flags]
 ```
 
-Patches a custom command type's label, description, params schema, settle window, or target (a nil field is unchanged; an empty target clears it). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
+Patches a custom command type's label, description, params schema, settle window, or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -454,7 +455,8 @@ Patches a custom command type's label, description, params schema, settle window
 | `--display-name` | string | (none) | A human label |
 | `--params-schema` | string | (none) | A JSON Schema fragment (replaces wholesale) |
 | `--settle-window-seconds` | string | (none) | The actuation window in seconds |
-| `--target-property-type` | string | (none) | The property this command sets (empty clears it) |
+| `--target-metric-type` | string | (none) | The metric this command sets (empty clears it; a non-empty arm clears the other) |
+| `--target-property-type` | string | (none) | The property this command sets (empty clears it; a non-empty arm clears the other) |
 
 Example:
 
@@ -845,6 +847,26 @@ Example:
 omniglass component membership list <name>
 ```
 
+### `omniglass component metric`
+
+Commands for the metric resource
+
+#### `omniglass component metric list`
+
+List a component's effective metrics
+
+```
+omniglass component metric list <name>
+```
+
+Every metric the component's product declares, resolved to the series' latest observed or calculated sample or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass component metric list <name>
+```
+
 ### `omniglass component property`
 
 Commands for the property resource
@@ -1132,13 +1154,13 @@ Create an event type
 omniglass event-type create [flags]
 ```
 
-Registers a custom event type (official=false). The name must be a valid keyspace name (dot-joined kebab segments). Gated by event_type:create.
+Registers a custom event type (official=false). The name must be a single kebab token, e.g. call-started. Gated by event_type:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the occurrence means |
 | `--display-name` | string | (none) | A human label |
-| `--name` | string | (none) | The event type name (lowercase, dot-hierarchied) |
+| `--name` | string | (none) | The event type name (lowercase kebab) |
 | `--payload-schema` | string | (none) | A JSON Schema fragment for the payload |
 
 Example:
@@ -1551,6 +1573,26 @@ Example:
 omniglass location listTags <name>
 ```
 
+### `omniglass location metric`
+
+Commands for the metric resource
+
+#### `omniglass location metric list`
+
+List a location's effective metrics
+
+```
+omniglass location metric list <name>
+```
+
+Every metric the location's type declares, resolved to the series' latest observed or calculated sample or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass location metric list <name>
+```
+
 ### `omniglass location property`
 
 Commands for the property resource
@@ -1702,7 +1744,7 @@ Create a location type
 omniglass location-type create [flags]
 ```
 
-Creates a custom (non-official) location_type. Gated by type:create.
+Creates a custom (non-official) location_type. Gated by location_type:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1725,7 +1767,7 @@ Delete a location type
 omniglass location-type delete <id>
 ```
 
-Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by type:delete.
+Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by location_type:delete.
 
 Example:
 
@@ -1741,12 +1783,69 @@ List location types
 omniglass location-type list
 ```
 
-Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by type:read.
+Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by location_type:read.
 
 Example:
 
 ```sh
 omniglass location-type list
+```
+
+### `omniglass location-type metric`
+
+Commands for the metric resource
+
+#### `omniglass location-type metric delete`
+
+Withdraw a metric from a location type
+
+```
+omniglass location-type metric delete <id> <metric>
+```
+
+Removes one line from a custom location type's contract; locations of the type keep any samples the series already holds, now off-contract. A metric the type does not declare is a 404, and an official type is read-only (422). Gated by location_type:delete.
+
+Example:
+
+```sh
+omniglass location-type metric delete <id> <metric>
+```
+
+#### `omniglass location-type metric list`
+
+List a location type's declared metrics
+
+```
+omniglass location-type metric list <id>
+```
+
+Lists the location type's declared-metric contract (which metrics every location of the type carries), ordered by metric name, each with its optional default and required flag. Gated by location_type:read.
+
+Example:
+
+```sh
+omniglass location-type metric list <id>
+```
+
+#### `omniglass location-type metric update`
+
+Declare a metric on a location type
+
+```
+omniglass location-type metric update <id> <metric> [flags]
+```
+
+Declares a catalog metric on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a metric the catalog does not know is a 422. Gated by location_type:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--default-value` | string | (none) | The contract default, validated against the metric's data_type; omit for no default |
+| `--required` | string | (none) | Whether every location of this type must carry the metric; defaults to false |
+
+Example:
+
+```sh
+omniglass location-type metric update <id> <metric>
 ```
 
 ### `omniglass location-type property`
@@ -1761,7 +1860,7 @@ Withdraw a property from a location type
 omniglass location-type property delete <id> <property>
 ```
 
-Removes one line from a custom location type's contract; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and an official type is read-only (422). Gated by type:delete.
+Removes one line from a custom location type's contract; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and an official type is read-only (422). Gated by location_type:delete.
 
 Example:
 
@@ -1777,7 +1876,7 @@ List a location type's declared properties
 omniglass location-type property list <id>
 ```
 
-Lists the location type's declared-property contract (what every location of the type exposes), ordered by property name, each with its optional default and required flag. Gated by type:read.
+Lists the location type's declared-property contract (what every location of the type exposes), ordered by property name, each with its optional default and required flag. Gated by location_type:read.
 
 Example:
 
@@ -1793,7 +1892,7 @@ Declare a property on a location type
 omniglass location-type property update <id> <property> [flags]
 ```
 
-Declares a catalog property on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a property the catalog does not know is a 422. Gated by type:update.
+Declares a catalog property on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a property the catalog does not know is a 422. Gated by location_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1814,7 +1913,7 @@ Update a location type
 omniglass location-type update <id> [flags]
 ```
 
-Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by type:update.
+Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by location_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2833,6 +2932,63 @@ Example:
 omniglass product list
 ```
 
+### `omniglass product metric`
+
+Commands for the metric resource
+
+#### `omniglass product metric delete`
+
+Withdraw a metric from a product
+
+```
+omniglass product metric delete <id> <metric>
+```
+
+Removes one line from a custom product's contract; instances keep any samples the series already holds, now off-contract. A metric the product does not declare is a 404, and an official product is read-only (422). Gated by product:delete.
+
+Example:
+
+```sh
+omniglass product metric delete <id> <metric>
+```
+
+#### `omniglass product metric list`
+
+List a product's declared metrics
+
+```
+omniglass product metric list <id>
+```
+
+Lists the product's declared-metric contract (which metrics every instance of the product carries), ordered by metric name, each with its optional default and required flag. Gated by product:read.
+
+Example:
+
+```sh
+omniglass product metric list <id>
+```
+
+#### `omniglass product metric update`
+
+Declare a metric on a product
+
+```
+omniglass product metric update <id> <metric> [flags]
+```
+
+Declares a catalog metric on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422); an unknown product is a 404 and a metric the catalog does not know is a 422. Gated by product:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--default-value` | string | (none) | The contract default, validated against the metric's data_type; omit for no default |
+| `--required` | string | (none) | Whether every instance of this product must carry the metric; defaults to false |
+
+Example:
+
+```sh
+omniglass product metric update <id> <metric>
+```
+
 ### `omniglass product property`
 
 Commands for the property resource
@@ -2877,7 +3033,7 @@ Declare a property on a product
 omniglass product property update <id> <property> [flags]
 ```
 
-Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422), and an unknown product or property is a 422. Gated by product:update.
+Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422); an unknown product is a 404 and a property the catalog does not know is a 422. Gated by product:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -3416,6 +3572,63 @@ Example:
 omniglass standard list
 ```
 
+### `omniglass standard metric`
+
+Commands for the metric resource
+
+#### `omniglass standard metric delete`
+
+Withdraw a metric from a standard
+
+```
+omniglass standard metric delete <id> <metric>
+```
+
+Removes one line from a custom standard's contract; conforming systems keep any samples the series already holds, now off-contract. A metric the standard does not declare is a 404, and an official standard is read-only (422). Gated by standard:delete.
+
+Example:
+
+```sh
+omniglass standard metric delete <id> <metric>
+```
+
+#### `omniglass standard metric list`
+
+List a standard's declared metrics
+
+```
+omniglass standard metric list <id>
+```
+
+Lists the standard's declared-metric contract (which metrics every system conforming to it carries), ordered by metric name, each with its optional default and required flag. Gated by standard:read.
+
+Example:
+
+```sh
+omniglass standard metric list <id>
+```
+
+#### `omniglass standard metric update`
+
+Declare a metric on a standard
+
+```
+omniglass standard metric update <id> <metric> [flags]
+```
+
+Declares a catalog metric on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a metric the catalog does not know is a 422. Gated by standard:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--default-value` | string | (none) | The contract default, validated against the metric's data_type; omit for no default |
+| `--required` | string | (none) | Whether every system conforming to this standard must carry the metric; defaults to false |
+
+Example:
+
+```sh
+omniglass standard metric update <id> <metric>
+```
+
 ### `omniglass standard property`
 
 Commands for the property resource
@@ -3751,6 +3964,26 @@ Example:
 
 ```sh
 omniglass system member update <name> <component>
+```
+
+### `omniglass system metric`
+
+Commands for the metric resource
+
+#### `omniglass system metric list`
+
+List a system's effective metrics
+
+```
+omniglass system metric list <name>
+```
+
+Every metric the system's standard declares, resolved to the series' latest observed or calculated sample or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass system metric list <name>
 ```
 
 ### `omniglass system property`

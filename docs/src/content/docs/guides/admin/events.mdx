@@ -1,0 +1,92 @@
+---
+title: Events
+description: "The Events catalog and the occurrences behind it: the canonical happening names, the payload schema an entry can carry, and the four-way origin vocabulary an occurrence records."
+---
+
+import SeededSet from '../../../../components/SeededSet.astro';
+
+**Catalog > Events** (with `event_type:read`, covered by every viewer's `*:read` floor) is the
+estate's **occurrence catalog**: the directory of the discrete happenings the estate can assert.
+An **event** is an **occurrence**, something that *happened* at a moment (a call started, a cable
+came unplugged), not a value something holds; a **value** is a
+[property](/guides/admin/properties/) and a numeric **quantity** is a
+[metric](/guides/admin/metrics/), the two sample lanes with their own catalogs and their own
+pages. Here, an **event type** is a **name** plus an optional display name, description, and
+payload schema. The name is its canonical identifier, a single lowercase kebab segment, and the
+same event type is the same happening wherever it appears: registering `call-started` once means
+every endpoint's call, however it is detected, lands under one name.
+
+An event type is used in two moves, and this page walks both: the **catalog** names the
+happening, and an **occurrence asserts** it happened, typed by its catalog entry. There is no
+contract lane here: unlike a property or a metric, an event is not declared on a product or a
+standard, it simply occurs.
+
+The console page lives at `/event-types`, and the nav says why: the address reserves `/events`
+for the events instance surface when it lands, so the catalog keeps the type-named route.
+
+The catalog is estate-wide reference data, not a scoped resource, so every event type is visible
+to every reader; the write gates decide who may change it.
+
+- The directory lists every event type sorted by name, each showing its **name** (the canonical
+  identifier, with its display name on the line above it) and **origin** (**official**,
+  seed-owned, or **custom**). **name** filters by the name or its display name; **official**
+  narrows the list.
+- **New event type** (with `event_type:create`, granted to operators) opens a create **drawer**:
+  give it a **name** (a single lowercase kebab segment, for example `call-started` or
+  `cable-unplugged`), and optionally add a **display name** and **description**. An invalid name
+  (an uppercase letter, an underscore, a leading hyphen, a dot) is refused with a message. The
+  drawer deliberately omits the payload schema; set it through the API for now.
+- Pick a row to open its **detail blade**. The footer **Edit** pencil (with `event_type:update`)
+  edits the display name and description; the name is fixed at creation, since it is what every
+  occurrence and every push is typed by. **Delete** (with `event_type:delete`) removes a custom
+  event type, behind a confirm.
+- An event type can carry a **payload schema** (a JSON Schema for the occurrence payload, for
+  example a `required` call id on `call-started`), shown read-only on the blade. Editing the
+  schema in the console is a follow-up; set it through the API for now. A schema whose
+  `required` list names a property its `properties` block does not declare is refused with the
+  name: the validator would never enforce it, and the catalog does not store a schema that means
+  less than it says.
+- An **official** (seed-owned) event type is always read-only: no Edit, no Delete, and the blade
+  marks it "Seed-owned, read-only." The shared vocabulary is the same from install to install,
+  the same deliberate exception to the operator-owned rule the
+  [Properties catalog](/guides/admin/properties/) makes, and for the same reason: an event type
+  name is the vocabulary a driver and a rule map onto, so a release has to be able to correct it
+  ([the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs)).
+
+  The baseline ships this catalog, rendered from the seed itself (`make gen`) so the list cannot
+  drift from the binary:
+
+  <SeededSet kind="event_types" />
+- A **duplicate** name is refused (409), and an attempt to change an official event type is
+  refused too. The refusal reaches across lanes: the metric, property, and event catalogs share
+  one namespace, so a name one of them holds cannot be registered in another, which is what
+  keeps per-lane routing unambiguous.
+
+The catalog is also the ingest vocabulary: a pushed occurrence lands only if its name is
+registered here; an unregistered name is rejected and reported in the push response, not
+silently dropped and not invented.
+
+## The occurrences behind the catalog
+
+An **occurrence** is a stored row typed by its catalog entry (the row keeps the entry's id, so
+the name resolves through the catalog), stamped with when it happened, a message, an optional
+structured payload, and an **origin**, the four-way vocabulary for how it arrived: **caught**,
+**caused**, **derived**, or **scheduled** ([events](/architecture/events/)). Two origins have
+writers today:
+
+- A **caught** occurrence is one the device published natively (an xAPI event, a trap), arriving
+  through the telemetry push. Its payload **validates against the entry's payload schema at
+  ingest**: a violating payload is refused with the reason, so a schema on the catalog entry is
+  a real contract, not advice.
+- A **caused** occurrence is the record a [command](/guides/admin/commands/) writes when it is
+  issued: every invocation lands a `command-issued` event beside the command row.
+
+**derived** (a rule infers the happening from other signals) and **scheduled** (the clock fires)
+complete the vocabulary; nothing writes them yet.
+
+A component's detail carries an **Events** panel reading its recent occurrences, newest first
+over the last 24 hours; the same read is `GET /components/{name}/events`, gated by
+`component:read`, and a component outside your read scope is a non-disclosing 404.
+
+From the CLI, the catalog is `omniglass event-type list|get|create|update|delete`, and the
+occurrence read is `omniglass component event list` (see the [CLI reference](/reference/cli/)).
