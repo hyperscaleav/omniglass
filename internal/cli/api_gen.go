@@ -1076,6 +1076,30 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			parent := &cobra.Command{
+				Use:   "metric",
+				Short: "Commands for the metric resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <name>",
+						Short:   "List a component's effective metrics",
+						Long:    "Every metric the component's product declares, resolved to the series' latest observed or calculated sample or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+						Example: "  omniglass component metric list <name>",
+						Args:    cobra.ExactArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/metrics", url.PathEscape(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
 				Use:   "property",
 				Short: "Commands for the property resource",
 			}
@@ -1977,6 +2001,30 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			parent := &cobra.Command{
+				Use:   "metric",
+				Short: "Commands for the metric resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <name>",
+						Short:   "List a location's effective metrics",
+						Long:    "Every metric the location's type declares, resolved to the series' latest observed or calculated sample or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.",
+						Example: "  omniglass location metric list <name>",
+						Args:    cobra.ExactArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/locations/%s/metrics", url.PathEscape(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
 				Use:   "property",
 				Short: "Commands for the property resource",
 			}
@@ -2231,6 +2279,75 @@ func generatedCommands() []*cobra.Command {
 				return cmd
 			}()
 			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "metric",
+				Short: "Commands for the metric resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "delete <id> <metric>",
+						Short:   "Withdraw a metric from a location type",
+						Long:    "Removes one line from a custom location type's contract; locations of the type keep any samples the series already holds, now off-contract. A metric the type does not declare is a 404, and an official type is read-only (422). Gated by location_type:delete.",
+						Example: "  omniglass location-type metric delete <id> <metric>",
+						Args:    cobra.ExactArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/location-types/%s/metrics/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							return runAPICommand(cmd, "DELETE", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <id>",
+						Short:   "List a location type's declared metrics",
+						Long:    "Lists the location type's declared-metric contract (which metrics every location of the type carries), ordered by metric name, each with its optional default and required flag. Gated by location_type:read.",
+						Example: "  omniglass location-type metric list <id>",
+						Args:    cobra.ExactArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/location-types/%s/metrics", url.PathEscape(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fDefaultValue string
+					var fRequired string
+					cmd := &cobra.Command{
+						Use:     "update <id> <metric>",
+						Short:   "Declare a metric on a location type",
+						Long:    "Declares a catalog metric on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a metric the catalog does not know is a 422. Gated by location_type:update.",
+						Example: "  omniglass location-type metric update <id> <metric>",
+						Args:    cobra.ExactArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/location-types/%s/metrics/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("default-value") {
+								body["default_value"] = jsonOrString(fDefaultValue)
+							}
+							if cmd.Flags().Changed("required") {
+								body["required"] = jsonOrString(fRequired)
+							}
+							return runAPICommand(cmd, "PUT", path, body)
+						},
+					}
+					cmd.Flags().StringVar(&fDefaultValue, "default-value", "", "The contract default, validated against the metric's data_type; omit for no default")
+					cmd.Flags().StringVar(&fRequired, "required", "", "Whether every location of this type must carry the metric; defaults to false")
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			parent := &cobra.Command{
@@ -3616,6 +3733,75 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			parent := &cobra.Command{
+				Use:   "metric",
+				Short: "Commands for the metric resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "delete <id> <metric>",
+						Short:   "Withdraw a metric from a product",
+						Long:    "Removes one line from a custom product's contract; instances keep any samples the series already holds, now off-contract. A metric the product does not declare is a 404, and an official product is read-only (422). Gated by product:delete.",
+						Example: "  omniglass product metric delete <id> <metric>",
+						Args:    cobra.ExactArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/products/%s/metrics/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							return runAPICommand(cmd, "DELETE", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <id>",
+						Short:   "List a product's declared metrics",
+						Long:    "Lists the product's declared-metric contract (which metrics every instance of the product carries), ordered by metric name, each with its optional default and required flag. Gated by product:read.",
+						Example: "  omniglass product metric list <id>",
+						Args:    cobra.ExactArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/products/%s/metrics", url.PathEscape(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fDefaultValue string
+					var fRequired string
+					cmd := &cobra.Command{
+						Use:     "update <id> <metric>",
+						Short:   "Declare a metric on a product",
+						Long:    "Declares a catalog metric on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422); an unknown product is a 404 and a metric the catalog does not know is a 422. Gated by product:update.",
+						Example: "  omniglass product metric update <id> <metric>",
+						Args:    cobra.ExactArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/products/%s/metrics/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("default-value") {
+								body["default_value"] = jsonOrString(fDefaultValue)
+							}
+							if cmd.Flags().Changed("required") {
+								body["required"] = jsonOrString(fRequired)
+							}
+							return runAPICommand(cmd, "PUT", path, body)
+						},
+					}
+					cmd.Flags().StringVar(&fDefaultValue, "default-value", "", "The contract default, validated against the metric's data_type; omit for no default")
+					cmd.Flags().StringVar(&fRequired, "required", "", "Whether every instance of this product must carry the metric; defaults to false")
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
 				Use:   "property",
 				Short: "Commands for the property resource",
 			}
@@ -3660,7 +3846,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "update <id> <property>",
 						Short:   "Declare a property on a product",
-						Long:    "Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422), and an unknown product or property is a 422. Gated by product:update.",
+						Long:    "Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422); an unknown product is a 404 and a property the catalog does not know is a 422. Gated by product:update.",
 						Example: "  omniglass product property update <id> <property>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -4325,6 +4511,75 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			parent := &cobra.Command{
+				Use:   "metric",
+				Short: "Commands for the metric resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "delete <id> <metric>",
+						Short:   "Withdraw a metric from a standard",
+						Long:    "Removes one line from a custom standard's contract; conforming systems keep any samples the series already holds, now off-contract. A metric the standard does not declare is a 404, and an official standard is read-only (422). Gated by standard:delete.",
+						Example: "  omniglass standard metric delete <id> <metric>",
+						Args:    cobra.ExactArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/standards/%s/metrics/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							return runAPICommand(cmd, "DELETE", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <id>",
+						Short:   "List a standard's declared metrics",
+						Long:    "Lists the standard's declared-metric contract (which metrics every system conforming to it carries), ordered by metric name, each with its optional default and required flag. Gated by standard:read.",
+						Example: "  omniglass standard metric list <id>",
+						Args:    cobra.ExactArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/standards/%s/metrics", url.PathEscape(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fDefaultValue string
+					var fRequired string
+					cmd := &cobra.Command{
+						Use:     "update <id> <metric>",
+						Short:   "Declare a metric on a standard",
+						Long:    "Declares a catalog metric on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a metric the catalog does not know is a 422. Gated by standard:update.",
+						Example: "  omniglass standard metric update <id> <metric>",
+						Args:    cobra.ExactArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/standards/%s/metrics/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("default-value") {
+								body["default_value"] = jsonOrString(fDefaultValue)
+							}
+							if cmd.Flags().Changed("required") {
+								body["required"] = jsonOrString(fRequired)
+							}
+							return runAPICommand(cmd, "PUT", path, body)
+						},
+					}
+					cmd.Flags().StringVar(&fDefaultValue, "default-value", "", "The contract default, validated against the metric's data_type; omit for no default")
+					cmd.Flags().StringVar(&fRequired, "required", "", "Whether every system conforming to this standard must carry the metric; defaults to false")
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
 				Use:   "property",
 				Short: "Commands for the property resource",
 			}
@@ -4733,6 +4988,30 @@ func generatedCommands() []*cobra.Command {
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/systems/%s/members/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
 							return runAPICommand(cmd, "PUT", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "metric",
+				Short: "Commands for the metric resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <name>",
+						Short:   "List a system's effective metrics",
+						Long:    "Every metric the system's standard declares, resolved to the series' latest observed or calculated sample or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+						Example: "  omniglass system metric list <name>",
+						Args:    cobra.ExactArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/systems/%s/metrics", url.PathEscape(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
 					return cmd

@@ -672,6 +672,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components/{name}/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a component's effective metrics
+         * @description Every metric the component's product declares, resolved to the series' latest observed or calculated sample or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.
+         */
+        get: operations["list-component-metrics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/components/{name}/properties": {
         parameters: {
             query?: never;
@@ -1148,6 +1168,50 @@ export interface paths {
         patch: operations["update-location-type"];
         trace?: never;
     };
+    "/location-types/{id}/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a location type's declared metrics
+         * @description Lists the location type's declared-metric contract (which metrics every location of the type carries), ordered by metric name, each with its optional default and required flag. Gated by location_type:read.
+         */
+        get: operations["list-location-type-metrics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/location-types/{id}/metrics/{metric}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Declare a metric on a location type
+         * @description Declares a catalog metric on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a metric the catalog does not know is a 422. Gated by location_type:update.
+         */
+        put: operations["set-location-type-metric"];
+        post?: never;
+        /**
+         * Withdraw a metric from a location type
+         * @description Removes one line from a custom location type's contract; locations of the type keep any samples the series already holds, now off-contract. A metric the type does not declare is a 404, and an official type is read-only (422). Gated by location_type:delete.
+         */
+        delete: operations["delete-location-type-metric"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/location-types/{id}/properties": {
         parameters: {
             query?: never;
@@ -1256,6 +1320,26 @@ export interface paths {
          * @description The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, the capability, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
          */
         get: operations["get-location-health"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/locations/{name}/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a location's effective metrics
+         * @description Every metric the location's type declares, resolved to the series' latest observed or calculated sample or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.
+         */
+        get: operations["list-location-metrics"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2192,6 +2276,50 @@ export interface paths {
         patch: operations["update-product"];
         trace?: never;
     };
+    "/products/{id}/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a product's declared metrics
+         * @description Lists the product's declared-metric contract (which metrics every instance of the product carries), ordered by metric name, each with its optional default and required flag. Gated by product:read.
+         */
+        get: operations["list-product-metrics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/{id}/metrics/{metric}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Declare a metric on a product
+         * @description Declares a catalog metric on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422); an unknown product is a 404 and a metric the catalog does not know is a 422. Gated by product:update.
+         */
+        put: operations["set-product-metric"];
+        post?: never;
+        /**
+         * Withdraw a metric from a product
+         * @description Removes one line from a custom product's contract; instances keep any samples the series already holds, now off-contract. A metric the product does not declare is a 404, and an official product is read-only (422). Gated by product:delete.
+         */
+        delete: operations["delete-product-metric"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/{id}/properties": {
         parameters: {
             query?: never;
@@ -2222,7 +2350,7 @@ export interface paths {
         get?: never;
         /**
          * Declare a property on a product
-         * @description Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422), and an unknown product or property is a 422. Gated by product:update.
+         * @description Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422); an unknown product is a 404 and a property the catalog does not know is a 422. Gated by product:update.
          */
         put: operations["set-product-property"];
         post?: never;
@@ -2552,6 +2680,50 @@ export interface paths {
         patch: operations["update-standard"];
         trace?: never;
     };
+    "/standards/{id}/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a standard's declared metrics
+         * @description Lists the standard's declared-metric contract (which metrics every system conforming to it carries), ordered by metric name, each with its optional default and required flag. Gated by standard:read.
+         */
+        get: operations["list-standard-metrics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/standards/{id}/metrics/{metric}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Declare a metric on a standard
+         * @description Declares a catalog metric on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a metric the catalog does not know is a 422. Gated by standard:update.
+         */
+        put: operations["set-standard-metric"];
+        post?: never;
+        /**
+         * Withdraw a metric from a standard
+         * @description Removes one line from a custom standard's contract; conforming systems keep any samples the series already holds, now off-contract. A metric the standard does not declare is a 404, and an official standard is read-only (422). Gated by standard:delete.
+         */
+        delete: operations["delete-standard-metric"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/standards/{id}/properties": {
         parameters: {
             query?: never;
@@ -2770,6 +2942,26 @@ export interface paths {
          * @description Moves the component's default to this membership. The default answers questions asked without a system in hand; it does not decide anything that names a system explicitly. A component that was not a member here is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
          */
         post: operations["set-primary-member"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems/{name}/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a system's effective metrics
+         * @description Every metric the system's standard declares, resolved to the series' latest observed or calculated sample or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.
+         */
+        get: operations["list-system-metrics"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3517,6 +3709,16 @@ export interface components {
             capabilities: string[] | null;
             component: string;
         };
+        ComponentMetricsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ComponentMetricsOutputBody.json
+             */
+            readonly $schema?: string;
+            component: string;
+            metrics: components["schemas"]["EffectiveMetricBody"][] | null;
+        };
         ComponentPropertiesOutputBody: {
             /**
              * Format: uri
@@ -4036,6 +4238,28 @@ export interface components {
             name: string;
             official: boolean;
             version?: string;
+        };
+        EffectiveMetricBody: {
+            /** @description The numeric value type, from the metric catalog */
+            data_type: string;
+            /** @description The contract default; omitted when the contract sets none */
+            default_value?: unknown;
+            /** @description The metric's human label; omitted when unset */
+            display_name?: string;
+            /** @description True when the owner's classifier declares the metric; false for a series landing directly on the owner */
+            from_contract: boolean;
+            /** @description True when the series holds an observed or calculated sample */
+            is_sampled: boolean;
+            /** @description The catalog metric's uuid, the stable form of metric_type_name */
+            metric_type_id: string;
+            /** @description The catalog metric name */
+            metric_type_name: string;
+            /** @description Whether the contract requires the metric; always false off-contract */
+            required: boolean;
+            /** @description The series' latest sample; omitted when none has arrived */
+            sample_value?: unknown;
+            /** @description The effective value: the latest sample, or the contract default until one arrives */
+            value?: unknown;
         };
         EffectivePropertyBody: {
             /** @description The declared value type, from the property catalog */
@@ -4592,6 +4816,15 @@ export interface components {
             readonly $schema?: string;
             interfaces: components["schemas"]["InterfaceBody"][] | null;
         };
+        ListLocationTypeMetricsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListLocationTypeMetricsOutputBody.json
+             */
+            readonly $schema?: string;
+            metrics: components["schemas"]["LocationTypeMetricBody"][] | null;
+        };
         ListLocationTypePropertiesOutputBody: {
             /**
              * Format: uri
@@ -4673,6 +4906,15 @@ export interface components {
             readonly $schema?: string;
             principals: components["schemas"]["PrincipalBody"][] | null;
         };
+        ListProductMetricsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListProductMetricsOutputBody.json
+             */
+            readonly $schema?: string;
+            metrics: components["schemas"]["ProductMetricBody"][] | null;
+        };
         ListProductPropertiesOutputBody: {
             /**
              * Format: uri
@@ -4717,6 +4959,15 @@ export interface components {
              */
             readonly $schema?: string;
             secrets: components["schemas"]["SecretBody"][] | null;
+        };
+        ListStandardMetricsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListStandardMetricsOutputBody.json
+             */
+            readonly $schema?: string;
+            metrics: components["schemas"]["StandardMetricBody"][] | null;
         };
         ListStandardPropertiesOutputBody: {
             /**
@@ -4835,6 +5086,16 @@ export interface components {
             /** @description The parent location's id, the canonical handle */
             parent_id?: string;
         };
+        LocationMetricsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/LocationMetricsOutputBody.json
+             */
+            readonly $schema?: string;
+            location: string;
+            metrics: components["schemas"]["EffectiveMetricBody"][] | null;
+        };
         LocationPropertiesOutputBody: {
             /**
              * Format: uri
@@ -4876,6 +5137,22 @@ export interface components {
             /** @description The name an operator reads and types; renameable */
             name: string;
             official: boolean;
+        };
+        LocationTypeMetricBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/LocationTypeMetricBody.json
+             */
+            readonly $schema?: string;
+            /** @description The contract default, a number shaped by the metric's data_type; omitted when the contract sets none */
+            default_value?: unknown;
+            /** @description The catalog metric's uuid, the stable form of metric_type_name */
+            metric_type_id: string;
+            /** @description The catalog metric this location type declares */
+            metric_type_name: string;
+            /** @description Whether every location of this type must carry the metric */
+            required: boolean;
         };
         LocationTypePropertyBody: {
             /**
@@ -5088,6 +5365,22 @@ export interface components {
             vendor?: string;
             /** @description The vendor's uuid; the stable form of vendor */
             vendor_id?: string;
+        };
+        ProductMetricBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ProductMetricBody.json
+             */
+            readonly $schema?: string;
+            /** @description The contract default, a number shaped by the metric's data_type; omitted when the contract sets none */
+            default_value?: unknown;
+            /** @description The catalog metric's uuid, the stable form of metric_type_name */
+            metric_type_id: string;
+            /** @description The catalog metric this product declares */
+            metric_type_name: string;
+            /** @description Whether every instance of this product must carry the metric */
+            required: boolean;
         };
         ProductPropertyBody: {
             /**
@@ -5666,6 +5959,18 @@ export interface components {
             /** @description The value to declare, shape given by the property's data_type */
             value: unknown;
         };
+        SetLocationTypeMetricInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SetLocationTypeMetricInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The contract default, validated against the metric's data_type; omit for no default */
+            default_value?: unknown;
+            /** @description Whether every location of this type must carry the metric; defaults to false */
+            required?: boolean;
+        };
         SetLocationTypePropertyInputBody: {
             /**
              * Format: uri
@@ -5678,6 +5983,18 @@ export interface components {
             /** @description Whether every location of this type must set the property; defaults to false */
             required?: boolean;
         };
+        SetProductMetricInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SetProductMetricInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The contract default, validated against the metric's data_type; omit for no default */
+            default_value?: unknown;
+            /** @description Whether every instance of this product must carry the metric; defaults to false */
+            required?: boolean;
+        };
         SetProductPropertyInputBody: {
             /**
              * Format: uri
@@ -5688,6 +6005,18 @@ export interface components {
             /** @description The contract default, validated against the property's data_type; omit for no default */
             default_value?: unknown;
             /** @description Whether every instance of this product must set the property; defaults to false */
+            required?: boolean;
+        };
+        SetStandardMetricInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SetStandardMetricInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The contract default, validated against the metric's data_type; omit for no default */
+            default_value?: unknown;
+            /** @description Whether every system conforming to this standard must carry the metric; defaults to false */
             required?: boolean;
         };
         SetStandardPropertyInputBody: {
@@ -5760,6 +6089,22 @@ export interface components {
             /** @description The parent standard's uuid; the stable form of parent_standard */
             parent_standard_id?: string;
         };
+        StandardMetricBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/StandardMetricBody.json
+             */
+            readonly $schema?: string;
+            /** @description The contract default, a number shaped by the metric's data_type; omitted when the contract sets none */
+            default_value?: unknown;
+            /** @description The catalog metric's uuid, the stable form of metric_type_name */
+            metric_type_id: string;
+            /** @description The catalog metric this standard declares */
+            metric_type_name: string;
+            /** @description Whether every system conforming to this standard must carry the metric */
+            required: boolean;
+        };
         StandardPropertyBody: {
             /**
              * Format: uri
@@ -5825,6 +6170,16 @@ export interface components {
              * @description How many systems this component belongs to in total; more than one means it is shared
              */
             system_count: number;
+        };
+        SystemMetricsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SystemMetricsOutputBody.json
+             */
+            readonly $schema?: string;
+            metrics: components["schemas"]["EffectiveMetricBody"][] | null;
+            system: string;
         };
         SystemPropertiesOutputBody: {
             /**
@@ -7721,6 +8076,38 @@ export interface operations {
             };
         };
     };
+    "list-component-metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentMetricsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-component-properties": {
         parameters: {
             query?: never;
@@ -8848,6 +9235,108 @@ export interface operations {
             };
         };
     };
+    "list-location-type-metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location_type id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListLocationTypeMetricsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-location-type-metric": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location type id */
+                id: string;
+                /** @description The metric name */
+                metric: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetLocationTypeMetricInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationTypeMetricBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-location-type-metric": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location type id */
+                id: string;
+                /** @description The metric name */
+                metric: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-location-type-properties": {
         parameters: {
             query?: never;
@@ -9128,6 +9617,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EstateHealthOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-location-metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationMetricsOutputBody"];
                 };
             };
             /** @description Error */
@@ -11230,6 +11751,108 @@ export interface operations {
             };
         };
     };
+    "list-product-metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The product id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListProductMetricsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-product-metric": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The product id */
+                id: string;
+                /** @description The metric name */
+                metric: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetProductMetricInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductMetricBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-product-metric": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The product id */
+                id: string;
+                /** @description The metric name */
+                metric: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-product-properties": {
         parameters: {
             query?: never;
@@ -12054,6 +12677,108 @@ export interface operations {
             };
         };
     };
+    "list-standard-metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The standard id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListStandardMetricsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-standard-metric": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The standard id */
+                id: string;
+                /** @description The metric name */
+                metric: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetStandardMetricInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StandardMetricBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-standard-metric": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The standard id */
+                id: string;
+                /** @description The metric name */
+                metric: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-standard-properties": {
         parameters: {
             query?: never;
@@ -12565,6 +13290,38 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-system-metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemMetricsOutputBody"];
+                };
             };
             /** @description Error */
             default: {

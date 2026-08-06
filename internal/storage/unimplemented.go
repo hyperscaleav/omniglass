@@ -527,6 +527,45 @@ func (UnimplementedGateway) ClearProperty(context.Context, string, string, strin
 func (UnimplementedGateway) EffectiveProperties(context.Context, string, string, scope.Set) ([]EffectiveProperty, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) ListProductMetrics(context.Context, string) ([]ProductMetric, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpsertProductMetric(context.Context, string, ProductMetricSpec) error {
+	return nil
+}
+func (UnimplementedGateway) SetProductMetric(context.Context, string, string, ProductMetricSpec) (*ProductMetric, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteProductMetric(context.Context, string, string, string) error {
+	return nil
+}
+func (UnimplementedGateway) ListStandardMetrics(context.Context, string) ([]StandardMetric, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpsertStandardMetric(context.Context, string, StandardMetricSpec) error {
+	return nil
+}
+func (UnimplementedGateway) SetStandardMetric(context.Context, string, string, StandardMetricSpec) (*StandardMetric, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteStandardMetric(context.Context, string, string, string) error {
+	return nil
+}
+func (UnimplementedGateway) ListLocationTypeMetrics(context.Context, string) ([]LocationTypeMetric, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpsertLocationTypeMetric(context.Context, string, LocationTypeMetricSpec) error {
+	return nil
+}
+func (UnimplementedGateway) SetLocationTypeMetric(context.Context, string, string, LocationTypeMetricSpec) (*LocationTypeMetric, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteLocationTypeMetric(context.Context, string, string, string) error {
+	return nil
+}
+func (UnimplementedGateway) EffectiveMetrics(context.Context, string, string, scope.Set) ([]EffectiveMetric, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) LatestValue(context.Context, string, string, string, string, string, scope.Set) (*CurrentValue, error) {
 	return nil, nil
 }

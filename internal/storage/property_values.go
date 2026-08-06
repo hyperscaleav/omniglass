@@ -254,15 +254,20 @@ type ownerContract struct {
 	// converts. Naming it here keeps the query shape identical across kinds.
 	arcMatch string
 	notFound error
+	// metricContractTable is where the classifier declares its metrics, the #587
+	// sibling of contractTable keyed by the same contractKeyCol; "" = no metric
+	// contract. The metric sample table carries the same arc columns as the
+	// property series, so arcCol serves both resolutions.
+	metricContractTable string
 }
 
 var ownerContracts = map[string]ownerContract{
-	"component": {"component", "product_id", "product_property", "product_id", "component_id", "id", ErrComponentNotFound},
-	"system":    {"system", "standard_id", "standard_property", "standard_id", "system_id", "id", ErrSystemNotFound},
-	"location":  {"location", "location_type", "location_type_property", "location_type_id", "location_id", "id", ErrLocationNotFound},
+	"component": {"component", "product_id", "product_property", "product_id", "component_id", "id", ErrComponentNotFound, "product_metric"},
+	"system":    {"system", "standard_id", "standard_property", "standard_id", "system_id", "id", ErrSystemNotFound, "standard_metric"},
+	"location":  {"location", "location_type", "location_type_property", "location_type_id", "location_id", "id", ErrLocationNotFound, "location_type_metric"},
 	// A node has the arc but no classifier, so it resolves ad-hoc values only. Its
 	// arc points at principal_id, the node's primary key.
-	"node": {"node", "", "", "", "node_id", "principal_id", ErrNodeNotFound},
+	"node": {"node", "", "", "", "node_id", "principal_id", ErrNodeNotFound, ""},
 }
 
 // EffectiveProperties resolves an instance's declared properties: every property

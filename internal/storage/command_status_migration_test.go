@@ -174,8 +174,10 @@ func TestIntendedLineageNamesCommand(t *testing.T) {
 // and migrate forward over it.
 func TestIntendedLineageBackfill(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
-	if err := migrate.RollbackOne(dsn); err != nil {
-		t.Fatalf("rollback one: %v", err)
+	// Below the command-status migration itself, wherever it now sits in the
+	// stack: this test writes rows in the shape that migration retired.
+	if err := migrate.RollbackBelow(dsn, "20260805210000"); err != nil {
+		t.Fatalf("rollback below the lineage migration: %v", err)
 	}
 	conn := connectDSN(t, dsn)
 	ctx := context.Background()
@@ -212,8 +214,10 @@ func TestIntendedLineageBackfill(t *testing.T) {
 // of guessing or leaving a row the new CHECK would refuse.
 func TestIntendedLineageBackfillRefusesOrphan(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
-	if err := migrate.RollbackOne(dsn); err != nil {
-		t.Fatalf("rollback one: %v", err)
+	// Below the command-status migration itself, wherever it now sits in the
+	// stack: this test writes rows in the shape that migration retired.
+	if err := migrate.RollbackBelow(dsn, "20260805210000"); err != nil {
+		t.Fatalf("rollback below the lineage migration: %v", err)
 	}
 	conn := connectDSN(t, dsn)
 	ctx := context.Background()

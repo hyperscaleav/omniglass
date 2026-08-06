@@ -454,6 +454,28 @@ components:
         - component
         - capabilities
       type: object
+    ComponentMetricsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ComponentMetricsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component:
+          type: string
+        metrics:
+          items:
+            $ref: "#/components/schemas/EffectiveMetricBody"
+          type:
+            - array
+            - "null"
+      required:
+        - component
+        - metrics
+      type: object
     ComponentPropertiesOutputBody:
       additionalProperties: false
       properties:
@@ -1368,6 +1390,44 @@ components:
         - name
         - display_name
         - official
+      type: object
+    EffectiveMetricBody:
+      additionalProperties: false
+      properties:
+        data_type:
+          description: The numeric value type, from the metric catalog
+          type: string
+        default_value:
+          description: The contract default; omitted when the contract sets none
+        display_name:
+          description: The metric's human label; omitted when unset
+          type: string
+        from_contract:
+          description: True when the owner's classifier declares the metric; false for a series landing directly on the owner
+          type: boolean
+        is_sampled:
+          description: True when the series holds an observed or calculated sample
+          type: boolean
+        metric_type_id:
+          description: The catalog metric's uuid, the stable form of metric_type_name
+          type: string
+        metric_type_name:
+          description: The catalog metric name
+          type: string
+        required:
+          description: Whether the contract requires the metric; always false off-contract
+          type: boolean
+        sample_value:
+          description: The series' latest sample; omitted when none has arrived
+        value:
+          description: "The effective value: the latest sample, or the contract default until one arrives"
+      required:
+        - metric_type_name
+        - metric_type_id
+        - data_type
+        - required
+        - is_sampled
+        - from_contract
       type: object
     EffectivePropertyBody:
       additionalProperties: false
@@ -2400,6 +2460,25 @@ components:
       required:
         - interfaces
       type: object
+    ListLocationTypeMetricsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListLocationTypeMetricsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        metrics:
+          items:
+            $ref: "#/components/schemas/LocationTypeMetricBody"
+          type:
+            - array
+            - "null"
+      required:
+        - metrics
+      type: object
     ListLocationTypePropertiesOutputBody:
       additionalProperties: false
       properties:
@@ -2571,6 +2650,25 @@ components:
       required:
         - principals
       type: object
+    ListProductMetricsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListProductMetricsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        metrics:
+          items:
+            $ref: "#/components/schemas/ProductMetricBody"
+          type:
+            - array
+            - "null"
+      required:
+        - metrics
+      type: object
     ListProductPropertiesOutputBody:
       additionalProperties: false
       properties:
@@ -2665,6 +2763,25 @@ components:
             - "null"
       required:
         - secrets
+      type: object
+    ListStandardMetricsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListStandardMetricsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        metrics:
+          items:
+            $ref: "#/components/schemas/StandardMetricBody"
+          type:
+            - array
+            - "null"
+      required:
+        - metrics
       type: object
     ListStandardPropertiesOutputBody:
       additionalProperties: false
@@ -2908,6 +3025,28 @@ components:
         - location_type
         - location_type_id
       type: object
+    LocationMetricsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/LocationMetricsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        location:
+          type: string
+        metrics:
+          items:
+            $ref: "#/components/schemas/EffectiveMetricBody"
+          type:
+            - array
+            - "null"
+      required:
+        - location
+        - metrics
+      type: object
     LocationPropertiesOutputBody:
       additionalProperties: false
       properties:
@@ -2994,6 +3133,32 @@ components:
         - icon
         - allowed_parent_types
         - official
+      type: object
+    LocationTypeMetricBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/LocationTypeMetricBody.json
+          format: uri
+          readOnly: true
+          type: string
+        default_value:
+          description: The contract default, a number shaped by the metric's data_type; omitted when the contract sets none
+        metric_type_id:
+          description: The catalog metric's uuid, the stable form of metric_type_name
+          type: string
+        metric_type_name:
+          description: The catalog metric this location type declares
+          type: string
+        required:
+          description: Whether every location of this type must carry the metric
+          type: boolean
+      required:
+        - metric_type_name
+        - metric_type_id
+        - required
       type: object
     LocationTypePropertyBody:
       additionalProperties: false
@@ -3397,6 +3562,32 @@ components:
         - kind
         - capabilities
         - official
+      type: object
+    ProductMetricBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ProductMetricBody.json
+          format: uri
+          readOnly: true
+          type: string
+        default_value:
+          description: The contract default, a number shaped by the metric's data_type; omitted when the contract sets none
+        metric_type_id:
+          description: The catalog metric's uuid, the stable form of metric_type_name
+          type: string
+        metric_type_name:
+          description: The catalog metric this product declares
+          type: string
+        required:
+          description: Whether every instance of this product must carry the metric
+          type: boolean
+      required:
+        - metric_type_name
+        - metric_type_id
+        - required
       type: object
     ProductPropertyBody:
       additionalProperties: false
@@ -4456,6 +4647,22 @@ components:
       required:
         - value
       type: object
+    SetLocationTypeMetricInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SetLocationTypeMetricInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        default_value:
+          description: The contract default, validated against the metric's data_type; omit for no default
+        required:
+          description: Whether every location of this type must carry the metric; defaults to false
+          type: boolean
+      type: object
     SetLocationTypePropertyInputBody:
       additionalProperties: false
       properties:
@@ -4472,6 +4679,22 @@ components:
           description: Whether every location of this type must set the property; defaults to false
           type: boolean
       type: object
+    SetProductMetricInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SetProductMetricInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        default_value:
+          description: The contract default, validated against the metric's data_type; omit for no default
+        required:
+          description: Whether every instance of this product must carry the metric; defaults to false
+          type: boolean
+      type: object
     SetProductPropertyInputBody:
       additionalProperties: false
       properties:
@@ -4486,6 +4709,22 @@ components:
           description: The contract default, validated against the property's data_type; omit for no default
         required:
           description: Whether every instance of this product must set the property; defaults to false
+          type: boolean
+      type: object
+    SetStandardMetricInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SetStandardMetricInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        default_value:
+          description: The contract default, validated against the metric's data_type; omit for no default
+        required:
+          description: Whether every system conforming to this standard must carry the metric; defaults to false
           type: boolean
       type: object
     SetStandardPropertyInputBody:
@@ -4604,6 +4843,32 @@ components:
         - display_name
         - official
       type: object
+    StandardMetricBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/StandardMetricBody.json
+          format: uri
+          readOnly: true
+          type: string
+        default_value:
+          description: The contract default, a number shaped by the metric's data_type; omitted when the contract sets none
+        metric_type_id:
+          description: The catalog metric's uuid, the stable form of metric_type_name
+          type: string
+        metric_type_name:
+          description: The catalog metric this standard declares
+          type: string
+        required:
+          description: Whether every system conforming to this standard must carry the metric
+          type: boolean
+      required:
+        - metric_type_name
+        - metric_type_id
+        - required
+      type: object
     StandardPropertyBody:
       additionalProperties: false
       properties:
@@ -4714,6 +4979,28 @@ components:
         - component
         - primary
         - system_count
+      type: object
+    SystemMetricsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SystemMetricsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        metrics:
+          items:
+            $ref: "#/components/schemas/EffectiveMetricBody"
+          type:
+            - array
+            - "null"
+        system:
+          type: string
+      required:
+        - system
+        - metrics
       type: object
     SystemPropertiesOutputBody:
       additionalProperties: false
@@ -6585,6 +6872,33 @@ paths:
           description: Error
       summary: List the systems a component is in
       x-omniglass-permission: component:read
+  /components/{name}/metrics:
+    get:
+      description: Every metric the component's product declares, resolved to the series' latest observed or calculated sample or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.
+      operationId: list-component-metrics
+      parameters:
+        - description: The component's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentMetricsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a component's effective metrics
+      x-omniglass-permission: component:read
   /components/{name}/properties:
     get:
       description: Every property the component's product declares, resolved to the component's own value or the contract default (is_set marks the override), plus any property set directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.
@@ -7483,6 +7797,102 @@ paths:
           description: Error
       summary: Update a location type
       x-omniglass-permission: location_type:update
+  /location-types/{id}/metrics:
+    get:
+      description: Lists the location type's declared-metric contract (which metrics every location of the type carries), ordered by metric name, each with its optional default and required flag. Gated by location_type:read.
+      operationId: list-location-type-metrics
+      parameters:
+        - description: The location_type id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The location_type id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListLocationTypeMetricsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a location type's declared metrics
+      x-omniglass-permission: location_type:read
+  /location-types/{id}/metrics/{metric}:
+    delete:
+      description: Removes one line from a custom location type's contract; locations of the type keep any samples the series already holds, now off-contract. A metric the type does not declare is a 404, and an official type is read-only (422). Gated by location_type:delete.
+      operationId: delete-location-type-metric
+      parameters:
+        - description: The location type id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The location type id
+            type: string
+        - description: The metric name
+          in: path
+          name: metric
+          required: true
+          schema:
+            description: The metric name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Withdraw a metric from a location type
+      x-omniglass-permission: location_type:delete
+    put:
+      description: Declares a catalog metric on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a metric the catalog does not know is a 422. Gated by location_type:update.
+      operationId: set-location-type-metric
+      parameters:
+        - description: The location type id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The location type id
+            type: string
+        - description: The metric name
+          in: path
+          name: metric
+          required: true
+          schema:
+            description: The metric name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetLocationTypeMetricInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationTypeMetricBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Declare a metric on a location type
+      x-omniglass-permission: location_type:update
   /location-types/{id}/properties:
     get:
       description: Lists the location type's declared-property contract (what every location of the type exposes), ordered by property name, each with its optional default and required flag. Gated by location_type:read.
@@ -7727,6 +8137,33 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Read a location's health
+      x-omniglass-permission: location:read
+  /locations/{name}/metrics:
+    get:
+      description: Every metric the location's type declares, resolved to the series' latest observed or calculated sample or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.
+      operationId: list-location-metrics
+      parameters:
+        - description: The location's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The location's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationMetricsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a location's effective metrics
       x-omniglass-permission: location:read
   /locations/{name}/properties:
     get:
@@ -9450,6 +9887,102 @@ paths:
           description: Error
       summary: Update a product
       x-omniglass-permission: product:update
+  /products/{id}/metrics:
+    get:
+      description: Lists the product's declared-metric contract (which metrics every instance of the product carries), ordered by metric name, each with its optional default and required flag. Gated by product:read.
+      operationId: list-product-metrics
+      parameters:
+        - description: The product id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The product id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListProductMetricsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a product's declared metrics
+      x-omniglass-permission: product:read
+  /products/{id}/metrics/{metric}:
+    delete:
+      description: Removes one line from a custom product's contract; instances keep any samples the series already holds, now off-contract. A metric the product does not declare is a 404, and an official product is read-only (422). Gated by product:delete.
+      operationId: delete-product-metric
+      parameters:
+        - description: The product id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The product id
+            type: string
+        - description: The metric name
+          in: path
+          name: metric
+          required: true
+          schema:
+            description: The metric name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Withdraw a metric from a product
+      x-omniglass-permission: product:delete
+    put:
+      description: Declares a catalog metric on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422); an unknown product is a 404 and a metric the catalog does not know is a 422. Gated by product:update.
+      operationId: set-product-metric
+      parameters:
+        - description: The product id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The product id
+            type: string
+        - description: The metric name
+          in: path
+          name: metric
+          required: true
+          schema:
+            description: The metric name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetProductMetricInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductMetricBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Declare a metric on a product
+      x-omniglass-permission: product:update
   /products/{id}/properties:
     get:
       description: Lists the product's declared-property contract (what every instance of the product exposes), ordered by property name, each with its optional default and required flag. Gated by product:read.
@@ -9508,7 +10041,7 @@ paths:
       summary: Withdraw a property from a product
       x-omniglass-permission: product:delete
     put:
-      description: Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422), and an unknown product or property is a 422. Gated by product:update.
+      description: Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422); an unknown product is a 404 and a property the catalog does not know is a 422. Gated by product:update.
       operationId: set-product-property
       parameters:
         - description: The product id
@@ -10097,6 +10630,102 @@ paths:
           description: Error
       summary: Update a standard
       x-omniglass-permission: standard:update
+  /standards/{id}/metrics:
+    get:
+      description: Lists the standard's declared-metric contract (which metrics every system conforming to it carries), ordered by metric name, each with its optional default and required flag. Gated by standard:read.
+      operationId: list-standard-metrics
+      parameters:
+        - description: The standard id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The standard id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListStandardMetricsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a standard's declared metrics
+      x-omniglass-permission: standard:read
+  /standards/{id}/metrics/{metric}:
+    delete:
+      description: Removes one line from a custom standard's contract; conforming systems keep any samples the series already holds, now off-contract. A metric the standard does not declare is a 404, and an official standard is read-only (422). Gated by standard:delete.
+      operationId: delete-standard-metric
+      parameters:
+        - description: The standard id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The standard id
+            type: string
+        - description: The metric name
+          in: path
+          name: metric
+          required: true
+          schema:
+            description: The metric name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Withdraw a metric from a standard
+      x-omniglass-permission: standard:delete
+    put:
+      description: Declares a catalog metric on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a metric the catalog does not know is a 422. Gated by standard:update.
+      operationId: set-standard-metric
+      parameters:
+        - description: The standard id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The standard id
+            type: string
+        - description: The metric name
+          in: path
+          name: metric
+          required: true
+          schema:
+            description: The metric name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetStandardMetricInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardMetricBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Declare a metric on a standard
+      x-omniglass-permission: standard:update
   /standards/{id}/properties:
     get:
       description: Lists the standard's declared-property contract (what every system conforming to it exposes), ordered by property name, each with its optional default and required flag. Gated by standard:read.
@@ -10554,6 +11183,33 @@ paths:
           description: Error
       summary: Make this the component's default system
       x-omniglass-permission: system:update
+  /systems/{name}/metrics:
+    get:
+      description: Every metric the system's standard declares, resolved to the series' latest observed or calculated sample or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.
+      operationId: list-system-metrics
+      parameters:
+        - description: The system's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemMetricsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a system's effective metrics
+      x-omniglass-permission: system:read
   /systems/{name}/properties:
     get:
       description: Every property the system's standard declares, resolved to the system's own value or the contract default (is_set marks the override), plus any property set directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.

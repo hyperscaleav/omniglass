@@ -4,7 +4,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import LocationTypes from "./LocationTypes";
 import { LOCATION_TYPES_KEY, type LocationType } from "../lib/location_types";
 import { classifierPropertiesKey, type ClassifierProperty } from "../lib/classifier_properties";
+import { classifierMetricsKey } from "../lib/classifier_metrics";
 import { PROPERTIES_KEY, type PropertyRow } from "../lib/properties";
+import { METRICS_KEY } from "../lib/metric_types";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
@@ -42,6 +44,11 @@ function mount(me: Me = admin) {
   qc.setQueryData([...PROPERTIES_KEY], catalog);
   qc.setQueryData([...classifierPropertiesKey("location-type", "wing")], wingContract);
   qc.setQueryData([...classifierPropertiesKey("location-type", "campus")], []);
+  // The metric lane mounts beside the property one; empty contracts and an
+  // empty catalog keep it inert without a server.
+  qc.setQueryData([...METRICS_KEY], []);
+  qc.setQueryData([...classifierMetricsKey("location-type", "wing")], []);
+  qc.setQueryData([...classifierMetricsKey("location-type", "campus")], []);
   return render(() => (
     <QueryClientProvider client={qc}>
       <LocationTypes />
@@ -194,7 +201,9 @@ describe("LocationTypes page", () => {
       return el as HTMLElement;
     });
     expect(within(blade).getByText("Declared properties")).toBeTruthy();
-    expect(within(blade).getByText("the location type contract")).toBeTruthy();
+    // Both catalog lanes mount: the property contract and its metric sibling.
+    expect(within(blade).getByText("Declared metrics")).toBeTruthy();
+    expect(within(blade).getAllByText("the location type contract")).toHaveLength(2);
     expect(within(blade).getByText(/A location of this type inherits every property/)).toBeTruthy();
     expect(within(blade).getByText("floor_area_sqm")).toBeTruthy();
     expect(within(blade).getByText("40")).toBeTruthy(); // the declared default
@@ -211,9 +220,11 @@ describe("LocationTypes page", () => {
       if (!el) throw new Error("no blade yet");
       return el as HTMLElement;
     });
-    expect(within(blade).getByText("seed-owned, read-only")).toBeTruthy();
+    // Both lanes render read-only: neither panel offers a declare picker.
+    expect(within(blade).getAllByText("seed-owned, read-only")).toHaveLength(2);
     expect(within(blade).getByText("This location type declares no properties.")).toBeTruthy();
     expect(within(blade).queryByLabelText("Property to declare")).toBeNull();
+    expect(within(blade).queryByLabelText("Metric to declare")).toBeNull();
   });
 
   it("declares a property on a location type, PUTting to the location-types contract route", async () => {

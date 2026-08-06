@@ -178,3 +178,25 @@ func requireProperty(ctx context.Context, q querier, ref string) error {
 	}
 	return nil
 }
+
+// requireMetricType is requireProperty on the metric lane: an unknown metric on
+// a contract write is ErrMetricTypeNotFound, never a NULL tripping the arc.
+func requireMetricType(ctx context.Context, q querier, ref string) error {
+	var known bool
+	if err := q.QueryRow(ctx, `select true from metric_type where `+registryRefCol(ref)+` = $1`, ref).Scan(&known); err != nil {
+		return ErrMetricTypeNotFound
+	}
+	return nil
+}
+
+// requireRegistryRow resolves any registry reference (handle or uuid) against
+// its table and returns ErrTypeNotFound when it names nothing: the classifier-
+// existence guard the contract seed paths share, so an unknown classifier is
+// the named error rather than a not-null violation from a NULL subselect.
+func requireRegistryRow(ctx context.Context, q querier, table, ref string) error {
+	var known bool
+	if err := q.QueryRow(ctx, `select true from `+table+` where `+registryRefCol(ref)+` = $1`, ref).Scan(&known); err != nil {
+		return ErrTypeNotFound
+	}
+	return nil
+}

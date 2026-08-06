@@ -214,10 +214,12 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
           >
             <AllowedParentsPicker options={typeOptions()} value={allowedParents()} onChange={setAllowedParents} />
           </BladeField>
-          {/* The location type's declared-property contract: what every location
-              of this type exposes. Writes are immediate (a PUT per line), so the
-              panel sits outside the blade's edit slot, which the core facts own. */}
+          {/* The location type's declared contracts, one panel per catalog lane:
+              what every location of this type exposes (properties) and carries
+              (metrics). Writes are immediate (a PUT per line), so the panels sit
+              outside the blade's edit slot, which the core facts own. */}
           <ContractEditor classifier="location-type" id={r().name} official={r().official} />
+          <ContractEditor classifier="location-type" lane="metric" id={r().name} official={r().official} />
           <Show when={r().official}>
             <div role="alert" class="alert alert-soft text-sm"><span>Seed-owned, read-only.</span></div>
           </Show>

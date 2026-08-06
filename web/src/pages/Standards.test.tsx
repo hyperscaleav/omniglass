@@ -5,7 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Standards from "./Standards";
 import { STANDARDS_KEY, type Standard } from "../lib/standards";
 import { classifierPropertiesKey, type ClassifierProperty } from "../lib/classifier_properties";
+import { classifierMetricsKey } from "../lib/classifier_metrics";
 import { PROPERTIES_KEY, type PropertyRow } from "../lib/properties";
+import { METRICS_KEY } from "../lib/metric_types";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
@@ -36,6 +38,11 @@ function mount(me: Me = admin) {
   qc.setQueryData([...PROPERTIES_KEY], catalog);
   qc.setQueryData([...classifierPropertiesKey("standard", "huddle-space")], contract);
   qc.setQueryData([...classifierPropertiesKey("standard", "meeting-room")], []);
+  // The metric lane mounts beside the property one; empty contracts and an
+  // empty catalog keep it inert without a server.
+  qc.setQueryData([...METRICS_KEY], []);
+  qc.setQueryData([...classifierMetricsKey("standard", "huddle-space")], []);
+  qc.setQueryData([...classifierMetricsKey("standard", "meeting-room")], []);
   qc.setQueryData([...ME_KEY], me);
   return render(() => (
     <QueryClientProvider client={qc}>
@@ -68,8 +75,10 @@ describe("Standards page", () => {
     const blade = await openBlade("Meeting room");
     expect(within(blade).queryByLabelText("Edit")).not.toBeInTheDocument();
     expect(within(blade).queryByRole("button", { name: /delete/i })).not.toBeInTheDocument();
-    expect(within(blade).getByText("seed-owned, read-only")).toBeInTheDocument();
+    // Both contract lanes render read-only: neither panel offers a declare picker.
+    expect(within(blade).getAllByText("seed-owned, read-only")).toHaveLength(2);
     expect(within(blade).queryByLabelText("Property to declare")).not.toBeInTheDocument();
+    expect(within(blade).queryByLabelText("Metric to declare")).not.toBeInTheDocument();
   });
 
   it("a custom row carries edit, delete, and the variant-parent picker", async () => {
@@ -87,7 +96,9 @@ describe("Standards page", () => {
     mount();
     const blade = await openBlade("Huddle space");
     expect(within(blade).getByText("Declared properties")).toBeInTheDocument();
-    expect(within(blade).getByText("the standard contract")).toBeInTheDocument();
+    // Both catalog lanes mount: the property contract and its metric sibling.
+    expect(within(blade).getByText("Declared metrics")).toBeInTheDocument();
+    expect(within(blade).getAllByText("the standard contract")).toHaveLength(2);
     expect(within(blade).getByText("seat_count")).toBeInTheDocument();
     expect(within(blade).getByText("8")).toBeInTheDocument(); // the declared default
     expect(within(blade).getByText("required")).toBeInTheDocument();

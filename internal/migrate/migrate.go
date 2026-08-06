@@ -46,6 +46,35 @@ func RollbackOne(dsn string) error {
 	return withDBMate(dsn, func(mate *dbmate.DB) error { return mate.Rollback() })
 }
 
+// RollbackBelow rolls applied migrations back until none at or after version
+// remains, leaving the database at the schema immediately before the named
+// migration. A backfill test names the migration it exercises rather than
+// assuming it is the newest (RollbackOne), so the test stays honest as later
+// migrations land on top. Versions are the dbmate timestamps, so string
+// comparison orders them.
+func RollbackBelow(dsn, version string) error {
+	return withDBMate(dsn, func(mate *dbmate.DB) error {
+		for {
+			migs, err := mate.FindMigrations()
+			if err != nil {
+				return err
+			}
+			head := ""
+			for _, m := range migs {
+				if m.Applied && m.Version > head {
+					head = m.Version
+				}
+			}
+			if head == "" || head < version {
+				return nil
+			}
+			if err := mate.Rollback(); err != nil {
+				return err
+			}
+		}
+	})
+}
+
 func withDBMate(dsn string, fn func(*dbmate.DB) error) error {
 	u, err := url.Parse(dsn)
 	if err != nil {

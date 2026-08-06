@@ -74,8 +74,13 @@ default sample rate, a standard requires a seat count.
 
 Type, unit, and precision are **not** repeated in the contract; they stay on the catalog entry, so
 a metric means one thing everywhere. The contract lines that predate the two-lane split moved into
-these tables when the catalog divided; the classifier blades' declared-values panel edits the
-property side only today, so editing a metric line from the console or CLI is a follow-up.
+these tables when the catalog divided, and the classifier blades edit both lanes: a **Declared
+metrics** panel sits beside the declared-properties one on the product, standard, and location
+type blades, over the contract's own routes (`/products/{id}/metrics` and its standard and
+location-type siblings, mirrored in the generated CLI). An instance **resolves** a declared
+metric to its series' latest observed or calculated sample, falling back to the contract default
+until one arrives; the per-owner reads (`/components/{name}/metrics` and its system and location
+siblings) answer that resolution beside any off-contract series the owner holds.
 
 ## Where a metric's values come from
 

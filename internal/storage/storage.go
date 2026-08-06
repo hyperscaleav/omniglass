@@ -454,6 +454,26 @@ type Gateway interface {
 	ClearProperty(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, write scope.Set) error
 	EffectiveProperties(ctx context.Context, ownerKind, ownerID string, read scope.Set) ([]EffectiveProperty, error)
 
+	// The declared-metric contracts (#600): the metric siblings of the three
+	// property contracts, mirrored function for function. A declared metric's
+	// value side is the metric SERIES, not a value store (the #587 split bars
+	// declared numerics from the property store), so EffectiveMetrics resolves
+	// each contract line against the series' latest observed or calculated
+	// sample, defaulting until one arrives.
+	ListProductMetrics(ctx context.Context, productID string) ([]ProductMetric, error)
+	UpsertProductMetric(ctx context.Context, productID string, spec ProductMetricSpec) error
+	SetProductMetric(ctx context.Context, actorID, productID string, spec ProductMetricSpec) (*ProductMetric, error)
+	DeleteProductMetric(ctx context.Context, actorID, productID, metricName string) error
+	ListStandardMetrics(ctx context.Context, standardID string) ([]StandardMetric, error)
+	UpsertStandardMetric(ctx context.Context, standardID string, spec StandardMetricSpec) error
+	SetStandardMetric(ctx context.Context, actorID, standardID string, spec StandardMetricSpec) (*StandardMetric, error)
+	DeleteStandardMetric(ctx context.Context, actorID, standardID, metricName string) error
+	ListLocationTypeMetrics(ctx context.Context, locationTypeID string) ([]LocationTypeMetric, error)
+	UpsertLocationTypeMetric(ctx context.Context, locationTypeID string, spec LocationTypeMetricSpec) error
+	SetLocationTypeMetric(ctx context.Context, actorID, locationTypeID string, spec LocationTypeMetricSpec) (*LocationTypeMetric, error)
+	DeleteLocationTypeMetric(ctx context.Context, actorID, locationTypeID, metricName string) error
+	EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, read scope.Set) ([]EffectiveMetric, error)
+
 	// The current value of a series is its latest row per (type, owner arc,
 	// instance, provenance); there is no maintained cache (#591). LatestValue is
 	// that read, scope-guarded per owner kind.
