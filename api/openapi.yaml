@@ -571,7 +571,7 @@ components:
           description: A human label
           type: string
         name:
-          description: The command type name (lowercase, dot-hierarchied)
+          description: The command type name (lowercase kebab)
           minLength: 1
           type: string
         params_schema:
@@ -667,7 +667,7 @@ components:
           description: A human label
           type: string
         name:
-          description: The event type name (lowercase, dot-hierarchied)
+          description: The event type name (lowercase kebab)
           minLength: 1
           type: string
         payload_schema:
@@ -7347,7 +7347,7 @@ paths:
       summary: List event types
       x-omniglass-permission: event_type:read
     post:
-      description: Registers a custom event type (official=false). The name must be a valid keyspace name (dot-joined kebab segments). Gated by event_type:create.
+      description: Registers a custom event type (official=false). The name must be a single kebab token, e.g. call-started. Gated by event_type:create.
       operationId: create-event-type
       requestBody:
         content:

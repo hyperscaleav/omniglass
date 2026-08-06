@@ -98,9 +98,8 @@ function TargetSelect(p: { value: string; onChange: (v: string) => void }): JSX.
   );
 }
 
-// A command type's `name` may be dot-segmented (set-input, video-input) where the
-// rest of the estate is kebab. That is a validation difference, not a different
-// concept, so the header is the one word every list uses.
+// A command type's `name` is a single kebab token (set-input, reboot) on the same
+// rule as every other name, so the header is the one word every list uses.
 const columns: FlatColumn<CommandTypeRow>[] = [
   identityColumn<CommandTypeRow>(),
   { key: "target", label: "Target", cell: (r) => targetCell(r) },
@@ -311,7 +310,7 @@ export function CreateCommandTypeForm(p: { onCreated: (r: CommandTypeRow) => voi
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="name" hint="A lowercase, dot-hierarchied name, e.g. set-input or reboot.">
+      <FieldRow bind="name" hint="A lowercase kebab name, e.g. set-input or reboot.">
         <input class="input input-bordered w-full font-data" value={name()} placeholder="set-input" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow bind="display_name">

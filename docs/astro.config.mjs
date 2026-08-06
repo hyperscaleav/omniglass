@@ -177,6 +177,8 @@ export default defineConfig({
             { label: 'Secret types', slug: 'guides/admin/secret-types' },
             { label: 'Properties', slug: 'guides/admin/properties' },
             { label: 'Metrics', slug: 'guides/admin/metrics' },
+            { label: 'Events', slug: 'guides/admin/events' },
+            { label: 'Commands', slug: 'guides/admin/commands' },
             { label: 'Tags', slug: 'guides/admin/tags' },
             { label: 'Vendors', slug: 'guides/admin/vendors' },
             { label: 'Drivers', slug: 'guides/admin/drivers' },

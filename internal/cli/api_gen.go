@@ -474,7 +474,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the command does")
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A human label")
-				cmd.Flags().StringVar(&fName, "name", "", "The command type name (lowercase, dot-hierarchied)")
+				cmd.Flags().StringVar(&fName, "name", "", "The command type name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParamsSchema, "params-schema", "", "A JSON Schema fragment for the params")
 				cmd.Flags().StringVar(&fSettleWindowSeconds, "settle-window-seconds", "", "The actuation window in seconds (0 = fire-and-forget)")
@@ -1474,7 +1474,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create an event type",
-					Long:    "Registers a custom event type (official=false). The name must be a valid keyspace name (dot-joined kebab segments). Gated by event_type:create.",
+					Long:    "Registers a custom event type (official=false). The name must be a single kebab token, e.g. call-started. Gated by event_type:create.",
 					Example: "  omniglass event-type create --name name",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1497,7 +1497,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the occurrence means")
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A human label")
-				cmd.Flags().StringVar(&fName, "name", "", "The event type name (lowercase, dot-hierarchied)")
+				cmd.Flags().StringVar(&fName, "name", "", "The event type name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fPayloadSchema, "payload-schema", "", "A JSON Schema fragment for the payload")
 				return cmd

@@ -40,11 +40,9 @@ function originBadge(official: boolean): JSX.Element {
     : <span class="badge badge-outline badge-sm">custom</span>;
 }
 
-// This catalog is a keyspace, so `name` holds a dotted value (icmp-rtt-avg) rather
-// than the kebab the rest of the estate addresses rows by. That is a validation
-// difference, not a different concept, so the header is the one word every list
-// uses. The cell is the shared two-line treatment either way, which is what retires
-// the separate "Label" column.
+// A property type's `name` is a single kebab token (icmp-rtt-avg) on the same rule
+// as every other name, so the header is the one word every list uses. The cell is
+// the shared two-line treatment, which is what retires the separate "Label" column.
 const columns: FlatColumn<PropertyRow>[] = [
   identityColumn<PropertyRow>(),
   { key: "data_type", label: "Type", width: "90px", sortVal: (r) => r.data_type, cell: (r) => typeBadge(r.data_type) },

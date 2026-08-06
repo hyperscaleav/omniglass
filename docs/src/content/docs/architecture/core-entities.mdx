@@ -503,17 +503,17 @@ with no `name` in the `PATCH` body at all
 
 Every exception is declared in `internal/storage/identity_shape.go` and rendered below, so this page
 cannot drift from the code. Most tables bear a name on the ordinary entity rule and the shape
-explains itself. Two groups need a reason: the keyspace tables, whose name is a dot-joined path
-rather than one segment, and the tables carrying a human-readable identifier that is not a name at
-all.
+explains itself. Two groups need a reason: the keyspace tables, the catalog registries whose names
+are estate-wide vocabulary rather than rows inside a parent, and the tables carrying a
+human-readable identifier that is not a name at all.
 
-A **keyspace** table carries a `name` on the other name rule: the same characters and the same
-segment shape, joined into a dot-separated path (`icmp-rtt-avg`) instead of standing alone, and
-bounded at 128 characters rather than 100. The two rules stay two rules because only a keyspace name
-may carry the dot, but they are one validator: `storage.ValidateName` picks between them from the
-table's declared shape, so a call site cannot pick wrongly or forget to pick at all. The console
-labels the identifier **Name** under both rules and the friendly string **Display name**, so the one
-difference surfaces as a validation message rather than as a second word.
+A **keyspace** table carries a `name` on the same one kebab rule as every other name; the shape
+survives as a declaration of what the name is for, not a second rule. A keyspace name (`icmp-rtt-avg`)
+is estate-wide vocabulary a telemetry record is typed by, where an entity name addresses one row
+under a parent. The dotted path rule and its 128-character ceiling retired with the one-name-rule collapse
+(#586): `storage.ValidateName` applies the one rule to every declared name-bearing table, so a call
+site cannot skip validation or invent a second rule. The console labels the identifier **Name** and
+the friendly string **Display name** under both shapes.
 
 <IdentityShapes shape="keyspace" />
 

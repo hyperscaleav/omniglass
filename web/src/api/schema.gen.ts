@@ -943,7 +943,7 @@ export interface paths {
         put?: never;
         /**
          * Create an event type
-         * @description Registers a custom event type (official=false). The name must be a valid keyspace name (dot-joined kebab segments). Gated by event_type:create.
+         * @description Registers a custom event type (official=false). The name must be a single kebab token, e.g. call-started. Gated by event_type:create.
          */
         post: operations["create-event-type"];
         delete?: never;
@@ -3770,7 +3770,7 @@ export interface components {
             description?: string;
             /** @description A human label */
             display_name?: string;
-            /** @description The command type name (lowercase, dot-hierarchied) */
+            /** @description The command type name (lowercase kebab) */
             name: string;
             /** @description A JSON Schema fragment for the params */
             params_schema?: unknown;
@@ -3829,7 +3829,7 @@ export interface components {
             description?: string;
             /** @description A human label */
             display_name?: string;
-            /** @description The event type name (lowercase, dot-hierarchied) */
+            /** @description The event type name (lowercase kebab) */
             name: string;
             /** @description A JSON Schema fragment for the payload */
             payload_schema?: unknown;

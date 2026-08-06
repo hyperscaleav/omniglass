@@ -55,7 +55,7 @@ type commandTypeNameInput struct {
 
 type createCommandTypeInput struct {
 	Body struct {
-		Name                string `json:"name" minLength:"1" doc:"The command type name (lowercase, dot-hierarchied)"`
+		Name                string `json:"name" minLength:"1" doc:"The command type name (lowercase kebab)"`
 		DisplayName         string `json:"display_name,omitempty" doc:"A human label"`
 		Description         string `json:"description,omitempty" doc:"What the command does"`
 		ParamsSchema        any    `json:"params_schema,omitempty" doc:"A JSON Schema fragment for the params"`

@@ -379,7 +379,7 @@ Registers a custom command type (official=false). The name must be a single keba
 |---|---|---|---|
 | `--description` | string | (none) | What the command does |
 | `--display-name` | string | (none) | A human label |
-| `--name` | string | (none) | The command type name (lowercase, dot-hierarchied) |
+| `--name` | string | (none) | The command type name (lowercase kebab) |
 | `--params-schema` | string | (none) | A JSON Schema fragment for the params |
 | `--settle-window-seconds` | string | (none) | The actuation window in seconds (0 = fire-and-forget) |
 | `--target-metric-type` | string | (none) | The metric this command sets, for settlement (at most one target arm) |
@@ -1154,13 +1154,13 @@ Create an event type
 omniglass event-type create [flags]
 ```
 
-Registers a custom event type (official=false). The name must be a valid keyspace name (dot-joined kebab segments). Gated by event_type:create.
+Registers a custom event type (official=false). The name must be a single kebab token, e.g. call-started. Gated by event_type:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the occurrence means |
 | `--display-name` | string | (none) | A human label |
-| `--name` | string | (none) | The event type name (lowercase, dot-hierarchied) |
+| `--name` | string | (none) | The event type name (lowercase kebab) |
 | `--payload-schema` | string | (none) | A JSON Schema fragment for the payload |
 
 Example:
