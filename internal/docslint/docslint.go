@@ -218,6 +218,15 @@ var Banned = []BannedTerm{
 		Replacement: "a single kebab token: every name is one segment, no dots",
 		Origin:      "ADR-0079",
 	},
+	{
+		// The generic permission resource of the pre-split Types page. The bare
+		// word "type" is everywhere and legal; only the resource:action stamp
+		// form is dead, and the verb suffix keeps "Issue Type" and its cousins
+		// out of reach.
+		Pattern:     regexp.MustCompile("`?\\btype:(?:read|create|update|delete)\\b`?"),
+		Replacement: "location_type:<action>, the registry's own resource",
+		Origin:      "ADR-0082",
+	},
 }
 
 // vocabularyAllowed lists files (relative to DocsRoot) exempt from the

@@ -144,6 +144,11 @@ binary.nats -- ext: "swap embedded for BYO" { style.stroke-dash: 4 }
   ([nodes](/architecture/nodes/)).
 - **singletons** (the clock and the CDC publisher): **leader-elected via a NATS KV lock**, exactly one
   active, failover by re-election. No separate election service.
+- **the control-plane consumers** (worklist, heartbeat) are today **singletons by construction**:
+  one server holds each per-verb wildcard subscription
+  ([ADR-0081](/architecture/decisions/#adr-0081-the-control-plane-wire-is-one-subject-grammar-node-anchored-and-batch-granular)).
+  The HA fork, queue groups versus worklist reassignment, is named and deferred to the day a
+  second server exists.
 
 :::
 
