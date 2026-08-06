@@ -30,8 +30,11 @@ There are two ways to operate, and they are the same API with the same checks be
 ## Getting around
 
 - The **sidebar** is the information architecture: sections grouped into Inventory, Values,
-  Catalog, and Admin. A live section is full strength; a section whose backend has not landed yet
-  is dimmed with a **soon** tag (still clickable, with a short note on what it will do).
+  Catalog, and Admin. Inside Catalog, non-folding labels split the registries by the estate noun
+  they serve (Components, Systems, Locations, Secrets, Telemetry, Action, General), and a guide
+  path reads all three levels: **Catalog > Locations > Types**. A live section is full strength; a
+  section whose backend has not landed yet is dimmed with a **soon** tag (still clickable, with a
+  short note on what it will do).
 - The **top bar** shows the current section and a **Search (⌘K)** button. The console is
   dark-only today; the theme is an [Admin > Settings](/guides/admin/) value resolved by the
   settings engine, not a per-session toggle.

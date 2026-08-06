@@ -3,7 +3,7 @@ title: Vendors
 description: "The Vendors catalog: the organizations behind products (name, display name, kind of manufacturer/integrator/developer, icon, support phone, website), seed-owned official rows read-only, admin-gated custom ones."
 ---
 
-**Catalog > Vendors** (`/vendors`, with `vendor:read`, covered by every viewer's `*:read`
+**Catalog > Components > Vendors** (`/vendors`, with `vendor:read`, covered by every viewer's `*:read`
 floor) is the directory of **vendors**: the organizations behind the products in the estate, on
 the same flat-registry pattern as [Location Types](/guides/admin/location-types/) and [Tags](/guides/admin/tags/).
 A vendor is not a device; it is the company a device comes from. Each row shows the **name**

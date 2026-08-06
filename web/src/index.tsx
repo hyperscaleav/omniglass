@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import "./app.css";
 import { setUnauthorizedHandler, clearToken } from "./api/client";
 import { ME_KEY } from "./lib/auth";
+import { STUBS } from "./lib/nav";
 import App from "./App";
 import { AuthGuard } from "./components/AuthGuard";
 import { RouteGuard } from "./components/RouteGuard";
@@ -64,11 +65,8 @@ const ProtectedShell: ParentComponent = (props) => (
 );
 
 // Stubbed sections: backends not built yet. The design draws them as stubs too.
-const STUBS = [
-  "/dashboards", "/alarms",
-  "/templates", "/rules", "/explore", "/learn",
-  "/config",
-];
+// The list lives in nav.ts beside the entries it backs, so the nav tests can
+// assert every unlive rail entry resolves to a registered stub, not NotFound.
 
 render(
   () => (

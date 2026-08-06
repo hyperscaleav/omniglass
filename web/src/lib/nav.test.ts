@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { filterNav, navItems, routeTokens, type NavItem } from "./nav";
+import { filterNav, lookupNav, navItems, routeTokens, sectionLabel, STUBS, type NavItem } from "./nav";
 import { can, type Me } from "./auth";
 
 const Dummy = () => null;
@@ -9,6 +9,10 @@ const Dummy = () => null;
 const meWith = (permissions: string[]): Me => ({ principal: { id: "p", kind: "human" }, permissions, grants: [] });
 const section = (label: string, permissions: string[]): string[] =>
   filterNav(navItems, (tokens) => can(meWith(permissions), ...tokens)).find((i) => i.label === label)?.children?.map((c) => c.label) ?? [];
+// The Catalog children as objects: its entries are addressed by (section, label)
+// since the naming rule reuses Types under both Locations and Secrets.
+const catalog = (permissions: string[]) =>
+  filterNav(navItems, (tokens) => can(meWith(permissions), ...tokens)).find((i) => i.label === "Catalog")?.children ?? [];
 
 describe("filterNav", () => {
   it("keeps every tab for a principal that can read everything", () => {
@@ -98,20 +102,22 @@ describe("filterNav", () => {
   });
 
   // #598 both ways: the split gives each registry its own tab with its own gate.
-  // Catalog > Locations rides the viewer floor (location_type is not sensitive);
-  // Catalog > Secrets gates on the secret resource, the same word the
-  // /secret-types route stamps, so the floor viewer loses exactly the tab whose
-  // route would 403 it, and nothing else. The bare nouns are scoped to the
-  // Catalog section here, so they cannot match the Inventory and Values twins.
-  it("keeps Catalog > Locations for a *:read floor viewer and hides Catalog > Secrets (#598)", () => {
-    const floor = section("Catalog", ["*:read"]);
-    expect(floor).toContain("Locations");
-    expect(floor).not.toContain("Secrets");
+  // Catalog > Locations > Types rides the viewer floor (location_type is not
+  // sensitive); Catalog > Secrets > Types gates on the secret resource, the same
+  // word the /secret-types route stamps, so the floor viewer loses exactly the tab
+  // whose route would 403 it, and nothing else. Both entries are labeled Types, so
+  // they are addressed by their (section, label) pair.
+  it("keeps Catalog > Locations > Types for a *:read floor viewer and hides the whole Secrets section (#598)", () => {
+    const floor = catalog(["*:read"]);
+    expect(floor.some((c) => c.section === "Locations" && c.label === "Types")).toBe(true);
+    // The Secrets section vanishes wholesale: its only entry is gated on secret,
+    // so the floor viewer loses the entry and (in the sidebar) the header with it.
+    expect(floor.some((c) => c.section === "Secrets")).toBe(false);
   });
 
-  it("shows Catalog > Secrets to a secret:read holder and the owner", () => {
-    expect(section("Catalog", ["*:read", "secret:read"])).toContain("Secrets");
-    expect(section("Catalog", [">"])).toContain("Secrets");
+  it("shows Catalog > Secrets > Types to a secret:read holder and the owner", () => {
+    expect(catalog(["*:read", "secret:read"]).some((c) => c.section === "Secrets" && c.label === "Types")).toBe(true);
+    expect(catalog([">"]).some((c) => c.section === "Secrets" && c.label === "Types")).toBe(true);
   });
 });
 
@@ -201,5 +207,74 @@ describe("nav IA rework", () => {
     expect(routeTokens("/web/config")).toBeNull();
     expect(routeTokens("/web/settings")).toBeNull();
     expect(routeTokens("/web/nodes")).toEqual(["node", "read"]); // node directory is live, gated on node:read
+  });
+});
+
+// The Catalog rail gains non-folding section headers (#608): a section is named
+// for the estate noun it serves, an entry keeps the registry's own word, and
+// where the registry's only word is "type" the entry is Types.
+describe("Catalog sections (#608)", () => {
+  it("orders the Catalog children by section, one run per estate noun", () => {
+    const cat = navItems.find((i) => i.label === "Catalog")!;
+    expect(cat.children!.map((c) => [c.section, c.label])).toEqual([
+      ["Components", "Products"],
+      ["Components", "Vendors"],
+      ["Components", "Drivers"],
+      ["Components", "Capabilities"],
+      ["Systems", "Standards"],
+      ["Locations", "Types"],
+      ["Secrets", "Types"],
+      ["Telemetry", "Metrics"],
+      ["Telemetry", "Properties"],
+      ["Telemetry", "Events"],
+      ["Telemetry", "Logs"],
+      ["Action", "Rules"],
+      ["Action", "Commands"],
+      ["Action", "Notifications"],
+      ["General", "Tags"],
+    ]);
+  });
+
+  it("keeps every existing entry's path, adds the two new stubs, and drops only Templates from the rail", () => {
+    const cat = navItems.find((i) => i.label === "Catalog")!;
+    expect(cat.children!.map((c) => c.path).sort()).toEqual([
+      "/capabilities", "/command-types", "/drivers", "/event-types",
+      "/location-types", "/log-types", "/metrics", "/notifications", "/products",
+      "/properties", "/rules", "/secret-types", "/standards", "/tags", "/vendors",
+    ]);
+  });
+
+  it("leaves the three soon-stubs unlive and ungated so every viewer sees them", () => {
+    const cat = navItems.find((i) => i.label === "Catalog")!;
+    for (const path of ["/log-types", "/notifications", "/rules"]) {
+      const c = cat.children!.find((x) => x.path === path)!;
+      expect(c.live).toBeFalsy();
+      expect(c.resource).toBeUndefined();
+      expect(c.perm).toBeUndefined();
+    }
+  });
+
+  it("labels a sectioned entry group · section · entry in the top bar, unsectioned entries unchanged", () => {
+    expect(sectionLabel("/web/location-types")).toBe("Catalog · Locations · Types");
+    expect(sectionLabel("/web/secret-types")).toBe("Catalog · Secrets · Types");
+    expect(sectionLabel("/web/metrics")).toBe("Catalog · Telemetry · Metrics");
+    // A detail route resolves to its section by longest prefix, as before.
+    expect(sectionLabel("/web/metrics/temperature-c")).toBe("Catalog · Telemetry · Metrics");
+    // An unsectioned entry keeps its single label.
+    expect(sectionLabel("/web/components")).toBe("Components");
+    expect(sectionLabel("/web/users")).toBe("Users");
+  });
+});
+
+describe("nav paths bind to routes (#608)", () => {
+  it("resolves every unlive nav path to a registered stub, never NotFound", () => {
+    const unlive = navItems.flatMap((i) => (i.children ?? []).filter((c) => !c.live).map((c) => c.path));
+    for (const path of unlive) expect(STUBS, `${path} has a rail entry but no stub route`).toContain(path);
+  });
+
+  it("keeps the off-rail /templates stub its identity", () => {
+    expect(STUBS).toContain("/templates");
+    expect(lookupNav("/web/templates").label).toBe("Templates");
+    expect(sectionLabel("/web/templates")).toBe("Templates");
   });
 });

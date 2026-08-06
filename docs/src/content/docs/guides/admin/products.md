@@ -3,7 +3,7 @@ title: Products
 description: "The Products catalog: a concrete SKU binding a vendor, a driver, a kind, and the capabilities it provides; a component points at the product it is; seed-owned official rows read-only, admin-gated custom ones."
 ---
 
-**Catalog > Products** (`/products`, with `product:read`, covered by every viewer's `*:read` floor)
+**Catalog > Components > Products** (`/products`, with `product:read`, covered by every viewer's `*:read` floor)
 is the directory of **products**: the concrete SKUs the estate is built from, on the same
 flat-registry pattern as [Location Types](/guides/admin/location-types/) and [Tags](/guides/admin/tags/). A product is
 a specific model (a **Cisco Room Bar**, a **Samsung QM55**), not an organization and not an installed
@@ -72,7 +72,7 @@ say what the product can **do**, the contract says what it **carries**.
 - **Declare a property** (with `product:update`) picks a name from the property catalog, optionally
   types a **default**, and optionally marks it **required**. The property must already exist in the
   catalog, since the contract only names it: mint it under
-  [Catalog > Properties](/guides/admin/properties/) first. Declaring is **idempotent**, so declaring a
+  [Catalog > Telemetry > Properties](/guides/admin/properties/) first. Declaring is **idempotent**, so declaring a
   property already on the contract revises that line in place rather than adding a second.
 - **The default is typed by the catalog, not here.** The panel labels the input with the property's
   data type, coerces what you type to it, and refuses a value that will not parse. Type and validation

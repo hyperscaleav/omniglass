@@ -8,13 +8,26 @@ import { Search, ArrowRight } from "./icons";
 // page's own filter). Built on Kobalte Dialog (focus-trap, Esc, scroll-lock for
 // free); the command source is the nav IA flattened to destinations. Arrow keys
 // move the active row, Enter navigates.
-type Command = { label: string; path: string; group?: string };
+export type Command = { label: string; path: string; group?: string; section?: string };
 
-const commands: Command[] = navItems.flatMap((item) =>
+// A sectioned child folds its section into the group tag ("Catalog · Locations"),
+// so the two Types registries stay tellable apart in the list; an unsectioned
+// child keeps the bare group label. Exported for the source-of-commands test.
+export const commands: Command[] = navItems.flatMap((item) =>
   item.path
     ? [{ label: item.label, path: item.path }]
-    : (item.children ?? []).map((c) => ({ label: c.label, path: c.path, group: item.label })),
+    : (item.children ?? []).map((c) => ({
+        label: c.label,
+        path: c.path,
+        group: c.section ? `${item.label} · ${c.section}` : item.label,
+        section: c.section,
+      })),
 );
+
+// matches is the palette filter: label, group, or section ("location" finds
+// Catalog · Locations > Types through its section word).
+export const matches = (c: Command, q: string): boolean =>
+  c.label.toLowerCase().includes(q) || (c.group ?? "").toLowerCase().includes(q) || (c.section ?? "").toLowerCase().includes(q);
 
 export default function CommandPalette(props: { open: boolean; onClose: () => void }) {
   const navigate = useNavigate();
@@ -26,7 +39,7 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
   const results = createMemo(() => {
     const q = query().trim().toLowerCase();
     if (!q) return commands;
-    return commands.filter((c) => c.label.toLowerCase().includes(q) || (c.group ?? "").toLowerCase().includes(q));
+    return commands.filter((c) => matches(c, q));
   });
 
   // Reset query + selection each time it opens; keep active in range as results change.

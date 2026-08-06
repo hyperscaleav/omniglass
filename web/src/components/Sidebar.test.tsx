@@ -63,3 +63,33 @@ describe("Sidebar identity avatar", () => {
     expect(document.querySelector('img[alt="Your profile picture"]')).toBeNull();
   });
 });
+
+// The Catalog cluster renders a non-folding menu-title header before each run of
+// children sharing a section (#608). Headers derive from the permission-filtered
+// children, so a section whose entries are all hidden renders no header either.
+function mountPerms(permissions: string[]) {
+  const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+  qc.setQueryData([...ME_KEY], { ...meWith(false), permissions });
+  return render(() => (
+    <QueryClientProvider client={qc}>
+      <Router>
+        <Route path="*" component={() => <Sidebar collapsed={false} onToggle={() => {}} />} />
+      </Router>
+    </QueryClientProvider>
+  ));
+}
+
+describe("Sidebar catalog section headers", () => {
+  const titles = () => Array.from(document.querySelectorAll("li.menu-title")).map((el) => el.textContent);
+
+  it("renders one header per Catalog section, in order, for the owner", () => {
+    mountPerms([">"]);
+    expect(titles()).toEqual(["Components", "Systems", "Locations", "Secrets", "Telemetry", "Action", "General"]);
+  });
+
+  it("drops the header of a fully hidden section: the floor viewer loses Secrets, keeps Locations", () => {
+    mountPerms(["*:read"]);
+    expect(titles()).toContain("Locations");
+    expect(titles()).not.toContain("Secrets");
+  });
+});

@@ -90,9 +90,10 @@ Which high-frequency surfaces move from polling to the SSE relay, and what laten
 ## Configuration UIs
 
 CRUD forms over the typed resource API, one per primitive (components, templates, types, tags,
-rules, config, groups, schedules, severity levels, the IAM resources). **Types** spans several
-registries: a tab per kind (location and secret; the system and component kinds moved to Standards
-and Products), CRUD on location, read-only on secret ([build log](/architecture/build-log/)).
+rules, config, groups, schedules, severity levels, the IAM resources). The type registries each
+hold their own page: location types (CRUD, Catalog > Locations > Types) and secret types
+(read-only, Catalog > Secrets > Types), the former tabbed Types page having split with the
+system and component kinds already moved to Standards and Products ([build log](/architecture/build-log/)).
 Editing a setting is editing **[config](/architecture/variables/)**, an audited mutation, not a
 separate prop store ([audit](/architecture/audit/)).
 
@@ -134,11 +135,13 @@ Two layers, deliberately decoupled:
    menu, so deep links stay stable however the menu is reorganized. No taxonomy-nested routes, no
    redirects to maintain.
 2. **The sidebar groups those flat routes into clusters for browsing**: Home, Dashboards, Alarms,
-   Inventory (locations, systems, components, nodes), Values (variables, secrets, config, files), Catalog
-   (templates, types, standards, properties, event types, command types, tags, vendors, drivers,
-   capabilities, products, rules), Explore, Learn, Admin (users, roles, groups, audit, and the
-   Settings leaf). A cluster is pure presentation, not a destination: rearrangeable and
-   user-customizable without touching a route.
+   Inventory (locations, systems, components, nodes), Values (variables, secrets, config, files),
+   Catalog (sectioned by the estate noun each registry serves: Components with products, vendors,
+   drivers, and capabilities; Systems with standards; Locations and Secrets each with their types;
+   Telemetry with metrics, properties, events, and the future log catalog; Action with rules,
+   commands, and future notifications; General with tags), Explore, Learn, Admin (users, roles,
+   groups, audit, and the Settings leaf). A cluster is pure presentation, not a destination:
+   rearrangeable and user-customizable without touching a route.
 
 **Values is its own top-level group**, beside Inventory: values set on estate entities and resolved
 down the cascade, a distinct genus from the entities themselves. **Config is the CI store** (desired

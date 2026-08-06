@@ -3,7 +3,7 @@ title: Tags
 description: "The Tags directory: mint the governed key vocabulary, set what each key applies to and whether it cascades, and edit or delete a key."
 ---
 
-**Catalog > Tags** (with `tag:read`) is the directory of the governed [tag](/architecture/tags/) key
+**Catalog > General > Tags** (with `tag:read`) is the directory of the governed [tag](/architecture/tags/) key
 vocabulary: the tenant-wide set of `key: value` label names an operator binds onto the estate. Each row
 shows the **name** (the key a binding then carries), its **Applies to** (the entity kinds it may bind to,
 or **Any**), and its **Binding** (**cascades** to descendants, or **flat**, a per-entity label).
