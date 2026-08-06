@@ -47,7 +47,10 @@ every reader; the write gates decide who may change it.
   `property_type:delete`) removes a custom property, behind a confirm.
 - A property can carry a **validation** JSON Schema (for example a `pattern` on a MAC address or an
   `enum` on a discrete value), shown read-only on the blade. Editing
-  the schema in the console is a follow-up; set it through the API for now.
+  the schema in the console is a follow-up; set it through the API for now. A schema whose
+  `required` list names a property its `properties` block does not declare is refused with the
+  name: the validator would never enforce it, and the catalog does not store a schema that means
+  less than it says.
 - An **official** (seed-owned) property is always read-only: no Edit, no Delete, and the blade marks
   it "Seed-owned, read-only." The shared vocabulary is the same from install to install. This
   catalog is the deliberate **exception** to the operator-owned rule that shipped

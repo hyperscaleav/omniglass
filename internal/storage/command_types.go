@@ -2,7 +2,6 @@ package storage
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -62,6 +61,11 @@ func scanCommandType(row pgx.Row) (*CommandType, error) {
 // unregistered name, and a seed file must refuse, naming the row, instead of
 // quietly dropping its target. Mirrors UpsertEventType otherwise.
 func (p *PG) UpsertCommandType(ctx context.Context, ct CommandType) error {
+	// The same schema guard as the CRUD lane: the seed must not ship a
+	// params_schema an operator would be refused.
+	if err := checkSchemaFragment(ct.ParamsSchema, "params_schema"); err != nil {
+		return fmt.Errorf("storage: upsert command type %q: %w: %w", ct.Name, ErrCommandTypeInvalid, err)
+	}
 	propID, metricID, err := resolveTargets(ctx, p.pool, ct.TargetPropertyType, ct.TargetMetricType)
 	if err != nil {
 		return fmt.Errorf("storage: upsert command type %q: %w", ct.Name, err)
@@ -195,8 +199,8 @@ func (p *PG) CreateCommandType(ctx context.Context, actorID string, spec Command
 	if err := ValidateName("command_type", spec.Name); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrCommandTypeInvalid, err)
 	}
-	if len(spec.ParamsSchema) > 0 && !json.Valid(spec.ParamsSchema) {
-		return nil, fmt.Errorf("%w: params_schema is not valid JSON", ErrCommandTypeInvalid)
+	if err := checkSchemaFragment(spec.ParamsSchema, "params_schema"); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrCommandTypeInvalid, err)
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -232,8 +236,8 @@ func (p *PG) CreateCommandType(ctx context.Context, actorID string, spec Command
 
 // UpdateCommandType patches a custom command type's mutable fields (nil unchanged).
 func (p *PG) UpdateCommandType(ctx context.Context, actorID, name string, patch CommandTypePatch) (*CommandType, error) {
-	if len(patch.ParamsSchema) > 0 && !json.Valid(patch.ParamsSchema) {
-		return nil, fmt.Errorf("%w: params_schema is not valid JSON", ErrCommandTypeInvalid)
+	if err := checkSchemaFragment(patch.ParamsSchema, "params_schema"); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrCommandTypeInvalid, err)
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {

@@ -36,8 +36,12 @@ type InterfaceType struct {
 
 // UpsertPropertyType installs an official property, authoritative on conflict (the
 // boot-seed bucket): an operator's custom properties (official=false) are keyed by a
-// distinct name and untouched.
+// distinct name and untouched. The validation fragment passes the same schema guard
+// as the CRUD lane: the seed must not ship a schema an operator would be refused.
 func (p *PG) UpsertPropertyType(ctx context.Context, prop PropertyType) error {
+	if err := checkSchemaFragment(prop.Validation, "validation"); err != nil {
+		return fmt.Errorf("storage: upsert property %q: %w: %w", prop.Name, ErrPropertyTypeInvalid, err)
+	}
 	_, err := p.pool.Exec(ctx, `
 		insert into property_type (name, display_name, data_type, validation, fusion_policy, description, official)
 		values ($1, $2, $3, $4, $5, $6, $7)

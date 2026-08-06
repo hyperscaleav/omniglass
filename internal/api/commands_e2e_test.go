@@ -131,6 +131,20 @@ func TestCommandIssueAPI(t *testing.T) {
 	// An unknown command_type is a 422.
 	c.do(ownerTok, http.MethodPost, "/components/disp-1/commands:issue", map[string]any{"command_type": "no_such_command"}, http.StatusUnprocessableEntity)
 
+	// A params payload that violates the type's params_schema is a 422 (#595);
+	// one within the schema issues as before.
+	if _, err := gw.CreateCommandType(ctx, "", storage.CommandTypeSpec{
+		Name: "set-level", ParamsSchema: []byte(`{"type":"object","required":["level"],"properties":{"level":{"type":"integer"}}}`),
+	}); err != nil {
+		t.Fatalf("create parameterized command type: %v", err)
+	}
+	c.do(ownerTok, http.MethodPost, "/components/disp-1/commands:issue", map[string]any{
+		"command_type": "set-level", "params": map[string]any{"level": "loud"},
+	}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPost, "/components/disp-1/commands:issue", map[string]any{
+		"command_type": "set-level", "params": map[string]any{"level": 50},
+	}, http.StatusOK)
+
 	// An operator with command:issue but scoped to a different component gets a
 	// non-disclosing 404 on disp-1 (permission gate passes, scope injection hides it).
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "other-1"}, all); err != nil {

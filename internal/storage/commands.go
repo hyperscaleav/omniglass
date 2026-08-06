@@ -1,18 +1,26 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/key"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 )
 
 // ErrCommandValueNotNumeric refuses an intended value that cannot open a metric
 // series row: the metric lane stores doubles, so the value must be a JSON number.
 var ErrCommandValueNotNumeric = errors.New("storage: intended value for a metric target must be numeric")
+
+// ErrCommandParamsInvalid refuses an invocation whose params violate the command
+// type's params_schema: the schema is the published contract for the params, so a
+// violating payload refuses before anything is written rather than being recorded
+// as if it satisfied it (#595).
+var ErrCommandParamsInvalid = errors.New("storage: command params violate the command type's params_schema")
 
 // Command is a recorded invocation: a component was told to do something. It carries
 // the same owner exclusive-arc as a sample and an event, the command_type it
@@ -53,6 +61,19 @@ func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, comm
 	ct, err := p.GetCommandType(ctx, commandType)
 	if err != nil {
 		return nil, err
+	}
+	// The params contract enforces at the door (#595): a violating payload
+	// refuses before the transaction opens, so a refusal projects nothing.
+	// Absent params validate as the empty object, so a schema with required
+	// fields refuses them and one of optional fields accepts them.
+	if len(bytes.TrimSpace(ct.ParamsSchema)) > 0 {
+		checked := params
+		if len(bytes.TrimSpace(checked)) == 0 {
+			checked = json.RawMessage(`{}`)
+		}
+		if err := key.ValidateValue("json", checked, ct.ParamsSchema); err != nil {
+			return nil, fmt.Errorf("%w: %w", ErrCommandParamsInvalid, err)
+		}
 	}
 	opensIntended := (ct.TargetPropertyType != "" || ct.TargetMetricType != "") && len(value) > 0
 	// A metric target's intended value parses before anything is written, so a
