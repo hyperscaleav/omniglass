@@ -117,6 +117,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0080](#adr-0080-retention-is-provenance-aware-never-declared-never-the-latest-row-per-series) | 2026-08-05 | Accepted | retention is provenance-aware: a prune never deletes a declared row and never the latest row of any series, shipped as the PruneSamples primitive before any retention feature exists |
 | [ADR-0081](#adr-0081-the-control-plane-wire-is-one-subject-grammar-node-anchored-and-batch-granular) | 2026-08-06 | Accepted | the control-plane wire is one subject grammar, og.v1.verb.node with the node name exactly one token: the api.telemetry lane sits in its own segment, per-record subjects are rejected, and the core-NATS consumers (worklist, heartbeat) are singletons by construction with their HA fork named and deferred |
 | [ADR-0082](#adr-0082-the-type-resource-renames-to-location_type) | 2026-08-06 | Accepted | the permission resource type renames to location_type on every surface (route stamps, roles seed, console gates, guard fixtures); the generic word retires from the permission vocabulary |
+| [ADR-0083](#adr-0083-the-catalog-rail-is-sectioned-by-the-estate-noun-each-registry-serves) | 2026-08-06 | Accepted | the Catalog rail is sectioned by the estate noun each registry serves, entries keep the registry's own word (Types where that is all there is), Telemetry holds what gets recorded and Action what the platform does, and the /catalog hub teaches the map with live counts |
 
 ## Entries
 
@@ -2786,3 +2787,29 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   routes gating `type:*` beside `product` and `standard` gating their own nouns was a live
   asymmetry. The same one-word-hides-two-things shape the catalog arc exists to end, renamed
   pre-release while the rename is cheap; the Types page split carried it (#598, the epic #601).
+
+### ADR-0083: The Catalog rail is sectioned by the estate noun each registry serves
+
+- **Date:** 2026-08-06 | **Status:** Accepted | **Pages:** [UI](/architecture/ui/)
+- **Decision:** the Catalog nav cluster renders non-folding section headers under one naming rule:
+  a **section is named for the estate noun it serves** and an **entry keeps the registry's own
+  word**, collapsing to plain **Types** where the registry has no other word (Locations > Types,
+  Secrets > Types). The sections, mirroring Inventory's order: Components (products, vendors,
+  drivers, capabilities), Systems (standards), Locations, Secrets, Telemetry (metrics, properties,
+  events, and the future log catalog as a soon entry), Action (rules, commands, and the future
+  notifications), General (tags). The organizing line: **Telemetry is what gets recorded, Action
+  is what the platform does**; Commands left Telemetry on the observed-versus-issued split, and
+  Events stays in Telemetry because the shipped lane records happenings (caught from the estate,
+  caused by the platform) and never sends them. Headers render from the permission-filtered entry
+  list, so a fully gated section disappears with its entries; the palette tags sectioned entries
+  `Catalog · <section>`; a visible Overview entry opens the `/catalog` hub, one card per visible
+  section with live registry counts. Templates leaves the rail until the registry is real. Routes,
+  tables, resources, and API surfaces are untouched: the rule governs presentation only.
+- **Context:** fourteen flat entries hid five real clusters: products, vendors, drivers, and
+  capabilities serve components with nothing saying so, and standards served systems invisibly.
+  Rejected along the way: a flat rail with hub-only teaching (daily wayfinding regresses to the
+  soup), hover flyouts (hiding is the disease being treated, hostile to touch and keyboard, and a
+  "Types" flyout bucket recreates the one-word-hides-many shape ADR-0082 retired), and a uniform
+  Types suffix (reverses the lane-noun labels the five-lane epic settled). The nav word for the
+  rule registry is Rules; the vocabulary beneath it (table, API, resource words for rules and the
+  alarm rows they raise) is unsettled and tracked in #606, out of this decision's scope.

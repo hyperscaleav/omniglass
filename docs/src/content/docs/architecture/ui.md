@@ -143,6 +143,20 @@ Two layers, deliberately decoupled:
    Learn, Admin (users, roles, groups, audit, and the Settings leaf). A cluster is pure
    presentation, not a destination: rearrangeable and user-customizable without touching a route.
 
+The Catalog cluster carries **one naming rule**
+([ADR-0083](/architecture/decisions/#adr-0083-the-catalog-rail-is-sectioned-by-the-estate-noun-each-registry-serves)):
+a section is named for the estate noun it serves, an entry keeps the registry's own word, and where
+the registry's only word is "type" the entry is Types with the section completing the sentence
+(Locations > Types). The organizing line the sections teach: **Telemetry is what gets recorded,
+Action is what the platform does**; an event is a record of a happening (caught from the estate or
+caused by the platform), never an outbound message, which is why Events sits in Telemetry while
+Rules, Commands, and the future Notifications sit in Action. Section headers are labels, not folds:
+they render from the permission-filtered entry list, so a section whose entries are all gated away
+disappears with them, and the palette tags a sectioned entry `Catalog · <section>` so the two Types
+rows stay unambiguous in search. The Overview hub at `/catalog` renders one card per visible
+section with live registry counts through the same permission filter, the
+[learning-tool](/contributing/learning-tool/) answer to "what is all this".
+
 **Values is its own top-level group**, beside Inventory: values set on estate entities and resolved
 down the cascade, a distinct genus from the entities themselves. **Config is the CI store** (desired
 configuration, optionally observed back to detect drift and reconcile), distinct from platform
