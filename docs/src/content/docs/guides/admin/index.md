@@ -44,8 +44,10 @@ Every task on these pages has two front doors, and they call the same API with t
   onto a component.
 - **[Files](/guides/admin/files/)** is the content kept with the estate: uploads in the blob
   store, owned at a scope like the other values.
-- **[Tags](/guides/admin/tags/)** is the governed key vocabulary behind the tag chips, and
-  **[properties](/guides/admin/properties/)** is the signal catalog of canonical typed names.
+- **[Tags](/guides/admin/tags/)** is the governed key vocabulary behind the tag chips, and the
+  signal catalog is two lane pages: **[properties](/guides/admin/properties/)** for the canonical
+  typed values and **[metrics](/guides/admin/metrics/)** for the numeric quantities, with their
+  units and precision.
 - The classifier catalogs shape the estate's entities:
   **[types](/guides/admin/types/)** for locations, **[standards](/guides/admin/standards/)** for
   systems, and **[products](/guides/admin/products/)** for components, with

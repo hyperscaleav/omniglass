@@ -172,6 +172,7 @@ export default defineConfig({
             { label: 'Files', slug: 'guides/admin/files' },
             { label: 'Types', slug: 'guides/admin/types' },
             { label: 'Properties', slug: 'guides/admin/properties' },
+            { label: 'Metrics', slug: 'guides/admin/metrics' },
             { label: 'Tags', slug: 'guides/admin/tags' },
             { label: 'Vendors', slug: 'guides/admin/vendors' },
             { label: 'Drivers', slug: 'guides/admin/drivers' },

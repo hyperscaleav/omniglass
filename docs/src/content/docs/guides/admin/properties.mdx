@@ -5,9 +5,12 @@ description: "The Properties catalog and the values behind it: the canonical typ
 
 import SeededSet from '../../../../components/SeededSet.astro';
 
-**Catalog > Properties** (with `property_type:read`, covered by every viewer's `*:read` floor) is the
-estate's **signal catalog**: one directory of the typed names that identify what is tracked. A
-**property** is a **name** plus a data type, with an optional display name and validation. The
+**Catalog > Properties** (with `property_type:read`, covered by every viewer's `*:read` floor) is
+one of the estate's **two signal catalogs**: the **value lane**. A **property** is a **value**,
+what something *is*, including a number used as a name (a serial number identifies a unit, it
+measures nothing); a numeric **quantity** you would average or graph is a
+[metric](/guides/admin/metrics/), the other lane, with its own catalog and its own page. Here, a
+property is a **name** plus a data type, with an optional display name and validation. The
 name is its canonical identifier, a single lowercase kebab segment, and the same
 property is the same concept wherever it appears,
 whether a device **reports** it (an observed value) or an operator **types** it (a declared value).
@@ -28,8 +31,8 @@ every reader; the write gates decide who may change it.
   or `json`), and **origin** (**official**, seed-owned, or **custom**). **name** filters by
   the name or its display name; **type** and **official** narrow the list.
 - A property is a **value** (what something *is*: an input, a firmware version, a reachability
-  verdict); a numeric **quantity** is a **metric**, its own catalog beside this one (**Catalog >
-  Metrics**, `/metric-types`, gated `metric_type:*`), carrying the numeric facts (unit, precision).
+  verdict); a numeric **quantity** is a **metric**, its own catalog beside this one
+  ([**Catalog > Metrics**](/guides/admin/metrics/)), carrying the numeric facts (unit, precision).
   The two catalogs share one name rule and refuse a name the other holds. A property nothing
   observes is simply declared-only, something an operator sets, like `serial-number`.
 - **New property** (with `property_type:create`, granted to operators) opens a create **drawer**: give
