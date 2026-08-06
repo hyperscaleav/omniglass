@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
@@ -84,6 +85,55 @@ func TestCommandTypeAPI(t *testing.T) {
 
 	// A duplicate name is a 409.
 	c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{"name": "set-volume"}, http.StatusConflict)
+
+	// The other arm of the exclusive arc (#596): a metric-targeted type created by
+	// name round-trips through the read, on the create response and on GET.
+	var armed struct {
+		TargetPropertyType string `json:"target_property_type"`
+		TargetMetricType   string `json:"target_metric_type"`
+	}
+	json.Unmarshal(c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{
+		"name": "set-gain", "settle_window_seconds": 5, "target_metric_type": "icmp-rtt-avg",
+	}, http.StatusCreated), &armed)
+	if armed.TargetMetricType != "icmp-rtt-avg" || armed.TargetPropertyType != "" {
+		t.Fatalf("metric-targeted create = %+v, want the metric arm carried", armed)
+	}
+	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/command-types/set-gain", nil, http.StatusOK), &armed)
+	if armed.TargetMetricType != "icmp-rtt-avg" {
+		t.Fatalf("read dropped the metric arm: %+v", armed)
+	}
+
+	// A patch naming the other arm switches the target wholesale (one target,
+	// two forms), and an empty arm clears it outright. The struct is zeroed
+	// between decodes because a cleared arm is omitted from the body entirely.
+	armed.TargetPropertyType, armed.TargetMetricType = "", ""
+	json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/command-types/set-gain",
+		map[string]any{"target_property_type": "video-input"}, http.StatusOK), &armed)
+	if armed.TargetPropertyType != "video-input" || armed.TargetMetricType != "" {
+		t.Fatalf("arm switch = %+v, want the property arm set and the metric arm cleared", armed)
+	}
+	armed.TargetPropertyType, armed.TargetMetricType = "", ""
+	json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/command-types/set-gain",
+		map[string]any{"target_property_type": ""}, http.StatusOK), &armed)
+	if armed.TargetPropertyType != "" || armed.TargetMetricType != "" {
+		t.Fatalf("cleared target = %+v, want fire-and-forget", armed)
+	}
+
+	// Both targets in one request is the arc refusal, named: a 422 whose message
+	// says never both (the DB CHECK is the backstop, not the message).
+	arc := c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{
+		"name": "both-arms", "target_property_type": "video-input", "target_metric_type": "icmp-rtt-avg",
+	}, http.StatusUnprocessableEntity)
+	if !strings.Contains(string(arc), "never both") {
+		t.Fatalf("both-targets 422 body %s does not name the arc", arc)
+	}
+
+	// An unregistered metric target is a 422 naming the name.
+	miss := c.do(ownerTok, http.MethodPost, "/command-types",
+		map[string]any{"name": "set-gain-m", "target_metric_type": "no-such-metric"}, http.StatusUnprocessableEntity)
+	if !strings.Contains(string(miss), "no-such-metric") {
+		t.Fatalf("unregistered metric target 422 body %s does not name the target", miss)
+	}
 
 	// An official (seeded) command type is read-only.
 	c.do(ownerTok, http.MethodPatch, "/command-types/set-input", map[string]any{"display_name": "x"}, http.StatusConflict)

@@ -437,6 +437,7 @@ func generatedCommands() []*cobra.Command {
 				var fName string
 				var fParamsSchema string
 				var fSettleWindowSeconds string
+				var fTargetMetricType string
 				var fTargetPropertyType string
 				cmd := &cobra.Command{
 					Use:     "create",
@@ -462,6 +463,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("settle-window-seconds") {
 							body["settle_window_seconds"] = jsonOrString(fSettleWindowSeconds)
 						}
+						if cmd.Flags().Changed("target-metric-type") {
+							body["target_metric_type"] = fTargetMetricType
+						}
 						if cmd.Flags().Changed("target-property-type") {
 							body["target_property_type"] = fTargetPropertyType
 						}
@@ -474,7 +478,8 @@ func generatedCommands() []*cobra.Command {
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParamsSchema, "params-schema", "", "A JSON Schema fragment for the params")
 				cmd.Flags().StringVar(&fSettleWindowSeconds, "settle-window-seconds", "", "The actuation window in seconds (0 = fire-and-forget)")
-				cmd.Flags().StringVar(&fTargetPropertyType, "target-property-type", "", "The property this command sets, for settlement")
+				cmd.Flags().StringVar(&fTargetMetricType, "target-metric-type", "", "The metric this command sets, for settlement (at most one target arm)")
+				cmd.Flags().StringVar(&fTargetPropertyType, "target-property-type", "", "The property this command sets, for settlement (at most one target arm)")
 				return cmd
 			}()
 			return cmd
@@ -536,11 +541,12 @@ func generatedCommands() []*cobra.Command {
 				var fDisplayName string
 				var fParamsSchema string
 				var fSettleWindowSeconds string
+				var fTargetMetricType string
 				var fTargetPropertyType string
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a command type",
-					Long:    "Patches a custom command type's label, description, params schema, settle window, or target (a nil field is unchanged; an empty target clears it). The name is fixed at creation. Official types are read-only. Gated by command_type:update.",
+					Long:    "Patches a custom command type's label, description, params schema, settle window, or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.",
 					Example: "  omniglass command-type update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -558,6 +564,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("settle-window-seconds") {
 							body["settle_window_seconds"] = jsonOrString(fSettleWindowSeconds)
 						}
+						if cmd.Flags().Changed("target-metric-type") {
+							body["target_metric_type"] = fTargetMetricType
+						}
 						if cmd.Flags().Changed("target-property-type") {
 							body["target_property_type"] = fTargetPropertyType
 						}
@@ -568,7 +577,8 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A human label")
 				cmd.Flags().StringVar(&fParamsSchema, "params-schema", "", "A JSON Schema fragment (replaces wholesale)")
 				cmd.Flags().StringVar(&fSettleWindowSeconds, "settle-window-seconds", "", "The actuation window in seconds")
-				cmd.Flags().StringVar(&fTargetPropertyType, "target-property-type", "", "The property this command sets (empty clears it)")
+				cmd.Flags().StringVar(&fTargetMetricType, "target-metric-type", "", "The metric this command sets (empty clears it; a non-empty arm clears the other)")
+				cmd.Flags().StringVar(&fTargetPropertyType, "target-property-type", "", "The property this command sets (empty clears it; a non-empty arm clears the other)")
 				return cmd
 			}()
 			return cmd

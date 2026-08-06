@@ -382,7 +382,8 @@ Registers a custom command type (official=false). The name must be a single keba
 | `--name` | string | (none) | The command type name (lowercase, dot-hierarchied) |
 | `--params-schema` | string | (none) | A JSON Schema fragment for the params |
 | `--settle-window-seconds` | string | (none) | The actuation window in seconds (0 = fire-and-forget) |
-| `--target-property-type` | string | (none) | The property this command sets, for settlement |
+| `--target-metric-type` | string | (none) | The metric this command sets, for settlement (at most one target arm) |
+| `--target-property-type` | string | (none) | The property this command sets, for settlement (at most one target arm) |
 
 Example:
 
@@ -446,7 +447,7 @@ Update a command type
 omniglass command-type update <name> [flags]
 ```
 
-Patches a custom command type's label, description, params schema, settle window, or target (a nil field is unchanged; an empty target clears it). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
+Patches a custom command type's label, description, params schema, settle window, or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -454,7 +455,8 @@ Patches a custom command type's label, description, params schema, settle window
 | `--display-name` | string | (none) | A human label |
 | `--params-schema` | string | (none) | A JSON Schema fragment (replaces wholesale) |
 | `--settle-window-seconds` | string | (none) | The actuation window in seconds |
-| `--target-property-type` | string | (none) | The property this command sets (empty clears it) |
+| `--target-metric-type` | string | (none) | The metric this command sets (empty clears it; a non-empty arm clears the other) |
+| `--target-property-type` | string | (none) | The property this command sets (empty clears it; a non-empty arm clears the other) |
 
 Example:
 

@@ -387,7 +387,7 @@ export interface paths {
         head?: never;
         /**
          * Update a command type
-         * @description Patches a custom command type's label, description, params schema, settle window, or target (a nil field is unchanged; an empty target clears it). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
+         * @description Patches a custom command type's label, description, params schema, settle window, or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
          */
         patch: operations["update-command-type"];
         trace?: never;
@@ -3657,7 +3657,9 @@ export interface components {
              * @description How long the device is given to actuate before a mismatch is a failed command
              */
             settle_window_seconds: number;
-            /** @description The property this command sets (empty for a fire-and-forget command) */
+            /** @description The metric this command sets (the other arm of the arc; never set together with target_property_type) */
+            target_metric_type?: string;
+            /** @description The property this command sets (one arm of the exclusive target arc; empty for fire-and-forget or a metric target) */
             target_property_type?: string;
         };
         ComponentBody: {
@@ -3777,7 +3779,9 @@ export interface components {
              * @description The actuation window in seconds (0 = fire-and-forget)
              */
             settle_window_seconds?: number;
-            /** @description The property this command sets, for settlement */
+            /** @description The metric this command sets, for settlement (at most one target arm) */
+            target_metric_type?: string;
+            /** @description The property this command sets, for settlement (at most one target arm) */
             target_property_type?: string;
         };
         CreateComponentInputBody: {
@@ -6328,7 +6332,9 @@ export interface components {
              * @description The actuation window in seconds
              */
             settle_window_seconds?: number;
-            /** @description The property this command sets (empty clears it) */
+            /** @description The metric this command sets (empty clears it; a non-empty arm clears the other) */
+            target_metric_type?: string;
+            /** @description The property this command sets (empty clears it; a non-empty arm clears the other) */
             target_property_type?: string;
         };
         UpdateComponentInputBody: {

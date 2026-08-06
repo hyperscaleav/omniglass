@@ -361,8 +361,11 @@ components:
           description: How long the device is given to actuate before a mismatch is a failed command
           format: int64
           type: integer
+        target_metric_type:
+          description: The metric this command sets (the other arm of the arc; never set together with target_property_type)
+          type: string
         target_property_type:
-          description: The property this command sets (empty for a fire-and-forget command)
+          description: The property this command sets (one arm of the exclusive target arc; empty for fire-and-forget or a metric target)
           type: string
       required:
         - id
@@ -577,8 +580,11 @@ components:
           description: The actuation window in seconds (0 = fire-and-forget)
           format: int64
           type: integer
+        target_metric_type:
+          description: The metric this command sets, for settlement (at most one target arm)
+          type: string
         target_property_type:
-          description: The property this command sets, for settlement
+          description: The property this command sets, for settlement (at most one target arm)
           type: string
       required:
         - name
@@ -5263,8 +5269,11 @@ components:
           description: The actuation window in seconds
           format: int64
           type: integer
+        target_metric_type:
+          description: The metric this command sets (empty clears it; a non-empty arm clears the other)
+          type: string
         target_property_type:
-          description: The property this command sets (empty clears it)
+          description: The property this command sets (empty clears it; a non-empty arm clears the other)
           type: string
       type: object
     UpdateComponentInputBody:
@@ -6329,7 +6338,7 @@ paths:
       summary: Get a command type
       x-omniglass-permission: command_type:read
     patch:
-      description: Patches a custom command type's label, description, params schema, settle window, or target (a nil field is unchanged; an empty target clears it). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
+      description: Patches a custom command type's label, description, params schema, settle window, or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
       operationId: update-command-type
       parameters:
         - description: The command type's name
