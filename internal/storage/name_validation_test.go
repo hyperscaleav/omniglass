@@ -75,6 +75,10 @@ func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key str
 			_, err := gw.CreateProduct(ctx, "", storage.Product{Name: s, DisplayName: "X"})
 			return err
 		},
+		"component_type": func(s string) error {
+			_, err := gw.CreateComponentType(ctx, "", storage.ComponentType{Name: s, DisplayName: "X"})
+			return err
+		},
 		// A role's key arrives as a bare {role} path param on PUT
 		// /systems/{name}/roles/{role}, so an operator types it directly.
 		"system_role": func(s string) error {

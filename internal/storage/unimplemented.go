@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 )
 
@@ -451,8 +452,30 @@ func (UnimplementedGateway) UpdateCapability(context.Context, string, string, Ca
 	return nil, nil
 }
 func (UnimplementedGateway) DeleteCapability(context.Context, string, string) error { return nil }
-func (UnimplementedGateway) UpsertProduct(context.Context, Product) error           { return nil }
-func (UnimplementedGateway) ListProducts(context.Context) ([]Product, error)        { return nil, nil }
+
+func (UnimplementedGateway) UpsertComponentType(context.Context, ComponentType) error { return nil }
+func (UnimplementedGateway) ListComponentTypes(context.Context) ([]ComponentType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) GetComponentType(context.Context, string) (*ComponentType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateComponentType(context.Context, string, ComponentType) (*ComponentType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateComponentType(context.Context, string, string, ComponentTypePatch) (*ComponentType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteComponentType(context.Context, string, string) error { return nil }
+func (UnimplementedGateway) ResolveTypeFacts(context.Context, uuid.UUID) (string, string, string, []string, error) {
+	return "", "", "", nil, nil
+}
+func (UnimplementedGateway) TypeIsWithin(context.Context, uuid.UUID, uuid.UUID) (bool, error) {
+	return false, nil
+}
+
+func (UnimplementedGateway) UpsertProduct(context.Context, Product) error    { return nil }
+func (UnimplementedGateway) ListProducts(context.Context) ([]Product, error) { return nil, nil }
 func (UnimplementedGateway) GetProduct(context.Context, string) (*Product, error) {
 	return nil, nil
 }

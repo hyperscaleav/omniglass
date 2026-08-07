@@ -3467,6 +3467,82 @@
      }
     ]
    }
+  },
+  "unclustered": {
+   "component_type": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "gen_random_uuid()",
+      "pk": true
+     },
+     {
+      "name": "name",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "display_name",
+      "type": "text",
+      "nullable": false,
+      "default": "''::text"
+     },
+     {
+      "name": "stem",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "icon",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "abbrev",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "default_tags",
+      "type": "ARRAY",
+      "nullable": false,
+      "default": "'{}'::text[]"
+     },
+     {
+      "name": "official",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+     },
+     {
+      "name": "parent_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "component_type.id"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "component_type_name_key",
+      "definition": "CREATE UNIQUE INDEX component_type_name_key ON public.component_type USING btree (name)"
+     }
+    ]
+   }
   }
  }
 }

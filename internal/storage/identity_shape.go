@@ -65,7 +65,7 @@ var IdentityShapes = map[string]TableIdentity{
 	"secret_type": {Shape: ShapeKeyBearing}, "standard": {Shape: ShapeKeyBearing},
 	"system": {Shape: ShapeKeyBearing}, "system_role": {Shape: ShapeKeyBearing},
 	"tag": {Shape: ShapeKeyBearing}, "variable": {Shape: ShapeKeyBearing},
-	"vendor": {Shape: ShapeKeyBearing},
+	"vendor": {Shape: ShapeKeyBearing}, "component_type": {Shape: ShapeKeyBearing},
 
 	// Keyspace: a name, on the other rule.
 	"property_type": {ShapeKeyspace, "serial-number, a signal name referenced from drivers and templates"},

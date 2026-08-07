@@ -40,6 +40,10 @@
       "shape": "id only"
     },
     {
+      "table": "component_type",
+      "shape": "key-bearing"
+    },
+    {
       "table": "credential",
       "shape": "id only"
     },

@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"gopkg.in/yaml.v3"
@@ -48,6 +49,9 @@ var driversYAML []byte
 
 //go:embed capabilities.yaml
 var capabilitiesYAML []byte
+
+//go:embed component_types.yaml
+var componentTypesYAML []byte
 
 //go:embed products.yaml
 var productsYAML []byte
@@ -144,6 +148,18 @@ type capabilitiesDoc struct {
 	} `yaml:"capabilities"`
 }
 
+type componentTypesDoc struct {
+	ComponentTypes []struct {
+		ID          string   `yaml:"id"`
+		DisplayName string   `yaml:"display_name"`
+		Stem        string   `yaml:"stem"`
+		Icon        string   `yaml:"icon"`
+		Abbrev      string   `yaml:"abbrev"`
+		DefaultTags []string `yaml:"default_tags"`
+		ParentID    string   `yaml:"parent_id"`
+	} `yaml:"component_types"`
+}
+
 type productsDoc struct {
 	Products []struct {
 		ID              string   `yaml:"id"`
@@ -212,6 +228,9 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 		return err
 	}
 	if err := seedCapabilities(ctx, gw); err != nil {
+		return err
+	}
+	if err := seedComponentTypes(ctx, gw); err != nil {
 		return err
 	}
 	// After the capability registry: a declared role's requirements point into it.
@@ -411,6 +430,50 @@ func seedCapabilities(ctx context.Context, gw storage.Gateway) error {
 		}); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// seedComponentTypes installs the ship-with component_type taxonomy,
+// authoritative on conflict like the other registries. The YAML lists a
+// parent before any child that names it (parent_id), so a single pass works:
+// each row upserts, then reloads to learn the uuid the database assigned it
+// (Upsert only returns an error, matching the other registries), and that id
+// is what a later row's parent_id resolves against, since ComponentType.ParentID
+// is a real uuid, not a name reference resolved in SQL like the other trees.
+func seedComponentTypes(ctx context.Context, gw storage.Gateway) error {
+	var doc componentTypesDoc
+	if err := yaml.Unmarshal(componentTypesYAML, &doc); err != nil {
+		return fmt.Errorf("seed: parse component_types: %w", err)
+	}
+	nz := func(s string) *string {
+		if s == "" {
+			return nil
+		}
+		return &s
+	}
+	resolved := make(map[string]uuid.UUID, len(doc.ComponentTypes))
+	for _, ct := range doc.ComponentTypes {
+		var parentID *uuid.UUID
+		if ct.ParentID != "" {
+			pid, ok := resolved[ct.ParentID]
+			if !ok {
+				return fmt.Errorf("seed: component_type %s: parent %s not seeded yet (list parents before children)", ct.ID, ct.ParentID)
+			}
+			parentID = &pid
+		}
+		if err := gw.UpsertComponentType(ctx, storage.ComponentType{
+			Name: ct.ID, Official: true, DisplayName: ct.DisplayName,
+			Stem: nz(ct.Stem), Icon: nz(ct.Icon), Abbrev: nz(ct.Abbrev),
+			DefaultTags: ct.DefaultTags, ParentID: parentID,
+		}); err != nil {
+			return fmt.Errorf("seed: component_type %s: %w", ct.ID, err)
+		}
+		got, err := gw.GetComponentType(ctx, ct.ID)
+		if err != nil {
+			return fmt.Errorf("seed: component_type %s: reload after upsert: %w", ct.ID, err)
+		}
+		resolved[ct.ID] = got.ID
 	}
 	return nil
 }

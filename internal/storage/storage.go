@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/blob"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
@@ -278,6 +279,19 @@ type Gateway interface {
 	CreateCapability(ctx context.Context, actorID string, c Capability) (*Capability, error)
 	UpdateCapability(ctx context.Context, actorID, id string, patch CapabilityPatch) (*Capability, error)
 	DeleteCapability(ctx context.Context, actorID, id string) error
+
+	// The component_type registry: the hierarchical taxonomy a product is
+	// classified by (mic, camera, wireless-mic under mic). ResolveTypeFacts
+	// and TypeIsWithin walk the tree in Go; no DB logic.
+	UpsertComponentType(ctx context.Context, ct ComponentType) error
+	ListComponentTypes(ctx context.Context) ([]ComponentType, error)
+	GetComponentType(ctx context.Context, ref string) (*ComponentType, error)
+	CreateComponentType(ctx context.Context, actorID string, ct ComponentType) (*ComponentType, error)
+	UpdateComponentType(ctx context.Context, actorID, ref string, patch ComponentTypePatch) (*ComponentType, error)
+	DeleteComponentType(ctx context.Context, actorID, ref string) error
+	ResolveTypeFacts(ctx context.Context, id uuid.UUID) (stem, icon, abbrev string, tags []string, err error)
+	TypeIsWithin(ctx context.Context, id, ancestor uuid.UUID) (bool, error)
+
 	UpsertProduct(ctx context.Context, m Product) error
 	ListProducts(ctx context.Context) ([]Product, error)
 	GetProduct(ctx context.Context, id string) (*Product, error)

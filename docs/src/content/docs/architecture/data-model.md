@@ -384,6 +384,14 @@ audit: {
   }
 }
 
+unclustered: {
+  component_type: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+    parent_id: uuid {constraint: foreign_key}
+  }
+}
+
 audit.audit_log.actor_principal_id -> identity.principal.id
 audit.audit_log.real_actor_principal_id -> identity.principal.id
 catalog.product.driver_id -> catalog.driver.id
@@ -486,6 +494,7 @@ telemetry.property.location_id -> estate.location.id
 telemetry.property.node_id -> collection.node.principal_id
 telemetry.property.property_type_id -> telemetry.property_type.id
 telemetry.property.system_id -> estate.system.id
+unclustered.component_type.parent_id -> unclustered.component_type.id
 ```
 
 <!-- erd:end -->
