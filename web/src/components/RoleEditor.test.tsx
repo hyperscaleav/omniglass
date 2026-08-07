@@ -155,7 +155,7 @@ describe("RoleEditor on a standard", () => {
   it("renders an official standard's roles read-only", () => {
     const { getByText, queryByLabelText } = mount({ official: true });
     expect(getByText("table-mic")).toBeTruthy(); // the list still renders
-    expect(getByText("seed-owned roles, read-only")).toBeTruthy();
+    expect(getByText("official roles, read-only")).toBeTruthy();
     expect(queryByLabelText("Role name")).toBeNull();
     expect(queryByLabelText("Edit table-mic")).toBeNull();
     expect(queryByLabelText("Withdraw table-mic")).toBeNull();

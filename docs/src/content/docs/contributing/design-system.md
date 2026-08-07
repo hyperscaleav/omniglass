@@ -147,7 +147,7 @@ Three primitives cover every labelled thing on a detail surface, and nothing els
   provider (the tree pages render one body in both places).
 
 **A read-only field renders as a fact, never as a box.** A bordered input that rejects typing reads
-as broken rather than as read-only, and a seed-owned blade rendered five of them at once, directly
+as broken rather than as read-only, and an official-row blade rendered five of them at once, directly
 below three plain facts, so the same read-only state had two appearances on one panel
 ([ADR-0078](/architecture/decisions/)). A blade the operator cannot edit now contains nothing shaped
 like a control. Both states label with the eyebrow, so the label does not change style when the

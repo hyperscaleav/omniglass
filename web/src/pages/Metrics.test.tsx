@@ -9,7 +9,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 // The Metrics page is a single FlatList over the /metric-types catalog: the
 // numeric lane of the signal registry, the twin of the Properties page. A metric
 // type carries the numeric facts the property lane never holds (unit, precision)
-// and its data type is int|float. Official (seed-owned) rows are read-only;
+// and its data type is int|float. Official rows are read-only;
 // custom rows are writable only when the caller holds metric_type:*. Data is
 // seeded into the query cache so no server is needed.
 const seed: MetricRow[] = [
@@ -79,9 +79,13 @@ describe("Metrics page", () => {
     expect(within(blade).getByText("ms")).toBeInTheDocument();
     expect(within(blade).getByText("Precision")).toBeInTheDocument();
     expect(within(blade).getByText("1")).toBeInTheDocument();
-    // Seed-owned: no pencil, no delete.
-    expect(within(blade).queryByLabelText("Edit")).not.toBeInTheDocument();
-    expect(within(blade).queryByRole("button", { name: /delete/i })).not.toBeInTheDocument();
+    // Official row: the Edit / Delete pair stays in the footer, greyed, with the
+    // lock reason on each button's tooltip wrapper.
+    const editBtn = within(blade).getByLabelText("Edit") as HTMLButtonElement;
+    const deleteBtn = within(blade).getByRole("button", { name: /delete/i }) as HTMLButtonElement;
+    expect(editBtn.disabled).toBe(true);
+    expect(deleteBtn.disabled).toBe(true);
+    expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Official: ships with Omniglass and updates with it.");
   });
 
   it("lets a role-scoped metric_type principal edit a custom row", async () => {

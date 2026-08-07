@@ -19,6 +19,7 @@ import {
   deleteLocationType,
 } from "../lib/location_types";
 import { useMe, can } from "../lib/auth";
+import { registryLock } from "../lib/catalog";
 import { createIdentity } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
@@ -27,7 +28,7 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // and your own) on the FlatList surface. The registry is operator-owned example
 // content: the shipped rows seed only-if-absent, so every row here is normally
 // custom and writable (create, edit, delete, gated location_type:*); an official
-// row, where one exists, is seed-owned and read-only. A row's detail carries the
+// row, where one exists, is official and read-only. A row's detail carries the
 // location type's declared-property contract on the shared ContractEditor.
 //
 // This page names ONE registry on purpose. Its former home, the tabbed Types
@@ -88,7 +89,7 @@ export default function LocationTypes() {
 }
 
 // locationTypeBlade renders one registry row on the shared blade stack. An
-// official (seed-owned) row is read-only; a custom row carries Edit + Delete.
+// official row is read-only; a custom row carries Edit + Delete.
 export const locationTypeBlade: BladeDef = {
   Title: (p) => <LocationTypeBladeTitle id={p.id} />,
   Body: (p) => <LocationTypeBladeBody id={p.id} />,
@@ -165,6 +166,7 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
       row() && !row()!.official && can(me.data, "location_type", "delete")
         ? { label: "Delete", tone: "danger", onClick: removeType }
         : undefined,
+    locked: () => registryLock(row(), me.data, "location_type"),
   });
 
   return (
@@ -221,9 +223,6 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
               writes stay immediate (a PUT per line) once revealed. */}
           <ContractEditor classifier="location-type" id={r().name} official={r().official} />
           <ContractEditor classifier="location-type" lane="metric" id={r().name} official={r().official} />
-          <Show when={r().official}>
-            <div role="alert" class="alert alert-soft text-sm"><span>Seed-owned, read-only.</span></div>
-          </Show>
         </div>
       )}
     </Show>

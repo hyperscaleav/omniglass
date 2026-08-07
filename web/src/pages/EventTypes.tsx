@@ -17,12 +17,13 @@ import {
   deleteEventType,
 } from "../lib/event_types";
 import { useMe, can } from "../lib/auth";
+import { registryLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Event Types: the occurrence-key catalog (Catalog > Events), the twin of the
 // Properties catalog. An event type names a discrete happening (call-started,
-// cable-unplugged) that an occurrence is typed by. Official (seed-owned) event types
+// cable-unplugged) that an occurrence is typed by. Official event types
 // are read-only; custom ones are operator-created. Estate-wide reference data, not scoped.
 
 function originBadge(official: boolean): JSX.Element {
@@ -72,7 +73,7 @@ export default function EventTypes(): JSX.Element {
 }
 
 // eventTypeBlade renders one event type on the shared blade stack. The title is the
-// mono key; official event types are read-only (no pencil, no delete).
+// mono key; official event types are read-only (the Edit / Delete pair greys).
 export const eventTypeBlade: BladeDef = {
   Title: (p) => <EventTypeBladeTitle name={p.id} />,
   Body: (p) => <EventTypeBladeBody name={p.id} />,
@@ -142,6 +143,7 @@ function EventTypeBladeBody(p: { name: string }): JSX.Element {
       row() && !row()!.official && can(me.data, "event_type", "delete")
         ? { label: "Delete", tone: "danger", onClick: removeEventType }
         : undefined,
+    locked: () => registryLock(row(), me.data, "event_type"),
   });
 
   return (
@@ -174,9 +176,6 @@ function EventTypeBladeBody(p: { name: string }): JSX.Element {
               <pre class="overflow-x-auto rounded-box border border-base-300 bg-base-200 p-2.5 font-data text-xs">{JSON.stringify(r().payload_schema, null, 2)}</pre>
               <span class="text-[11px] text-base-content/40">Editing the schema is a follow-up; set it via the API for now.</span>
             </div>
-          </Show>
-          <Show when={r().official}>
-            <div role="alert" class="alert alert-soft text-sm"><span>Seed-owned, read-only.</span></div>
           </Show>
         </div>
       )}

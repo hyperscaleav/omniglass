@@ -15,7 +15,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
 // Products is the product catalog on the flat FlatList surface (the model a
-// component is an instance of). An official (seed-owned) row is read-only, same
+// component is an instance of). An official row is read-only, same
 // invariant as the Types catalog's official rows: no edit pencil, no Delete.
 // Data is seeded into the query cache so no server is needed; the vendor,
 // driver, and capability registries the pickers read are seeded too, so the
@@ -71,19 +71,22 @@ function mount(me: Me = admin) {
 describe("Products page", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("lists a seeded product, an official row has no edit/delete, and create opens for an admin", async () => {
+  it("lists a seeded product, an official row greys edit/delete, and create opens for an admin", async () => {
     mount();
     expect(await screen.findByText("Crestron TSW-1070")).toBeInTheDocument();
 
-    // official row has no edit/delete
+    // official row: the pair renders greyed with the official reason
     fireEvent.click(screen.getByText("Crestron TSW-1070"));
     const blade = await waitFor(() => {
       const el = asides()[0];
       if (!el) throw new Error("no blade yet");
       return el as HTMLElement;
     });
-    expect(within(blade).queryByRole("button", { name: /delete/i })).not.toBeInTheDocument();
-    expect(within(blade).queryByLabelText("Edit")).not.toBeInTheDocument();
+    const deleteBtn = within(blade).getByRole("button", { name: /delete/i }) as HTMLButtonElement;
+    const editBtn = within(blade).getByLabelText("Edit") as HTMLButtonElement;
+    expect(deleteBtn.disabled).toBe(true);
+    expect(editBtn.disabled).toBe(true);
+    expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Official: ships with Omniglass and updates with it.");
 
     // create is available to an admin. The label match is anchored because the
     // Name field's hint mentions the display name too.
@@ -146,9 +149,10 @@ describe("Products page", () => {
     expect(within(blade).getByLabelText("Withdraw serial-number")).toBeInTheDocument();
   });
 
-  // The permissionless arm of the same rule: a viewer binds no edit slot, so
-  // there is no pencil and therefore no route into the controls at all.
-  it("gives a viewer no pencil and no contract controls on a custom row", async () => {
+  // The permissionless arm of the same rule: a viewer's blade is locked, so
+  // the pencil renders greyed (naming the missing permission) and there is
+  // still no route into the controls.
+  it("gives a viewer a greyed pencil and no contract controls on a custom row", async () => {
     mount(viewer);
     fireEvent.click(screen.getByText("Acme Panel"));
     const blade = await waitFor(() => {
@@ -157,7 +161,9 @@ describe("Products page", () => {
       return el as HTMLElement;
     });
     expect(within(blade).getByText("serial-number")).toBeInTheDocument();
-    expect(within(blade).queryByLabelText("Edit")).not.toBeInTheDocument();
+    const editBtn = within(blade).getByLabelText("Edit") as HTMLButtonElement;
+    expect(editBtn.disabled).toBe(true);
+    expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Requires product:update");
     expect(within(blade).queryByLabelText("Property to declare")).not.toBeInTheDocument();
     expect(within(blade).queryByLabelText("Withdraw serial-number")).not.toBeInTheDocument();
   });

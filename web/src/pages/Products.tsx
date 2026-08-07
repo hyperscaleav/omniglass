@@ -23,14 +23,15 @@ import { type Vendor, VENDORS_KEY, listVendors } from "../lib/vendors";
 import { type Driver, DRIVERS_KEY, listDrivers } from "../lib/drivers";
 import { type Capability, CAPABILITIES_KEY, listCapabilities } from "../lib/capabilities";
 import { useMe, can } from "../lib/auth";
+import { registryLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Products: the product catalog (the model a component is an instance of, e.g.
 // "Crestron TSW-1070"), on the flat FlatList surface. A product is addressed by
 // its kebab name (ADR-0062: the uuid is identity, the name is what an operator
-// reads and types); official (seed-owned) rows are read-only,
-// same as the Types catalog's official rows: no Edit pencil, no Delete. A
+// reads and types); official rows are read-only,
+// same as the Types catalog's official rows: the Edit / Delete pair greys. A
 // product carries a kind (device/app/service/vm), an optional vendor and driver
 // (picked from those registries), and a set of capability names it exposes.
 
@@ -98,7 +99,7 @@ export default function Products() {
 }
 
 // productBlade renders an id on the shared blade stack. An official row is
-// read-only (no pencil, no destructive action); a custom row carries Edit +
+// read-only (the Edit / Delete pair greys); a custom row carries Edit +
 // Delete.
 export const productBlade: BladeDef = {
   Title: (p) => <ProductBladeTitle id={p.id} />,
@@ -178,6 +179,7 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
       row() && !row()!.official && can(me.data, "product", "delete")
         ? { label: "Delete", tone: "danger", onClick: removeProduct }
         : undefined,
+    locked: () => registryLock(row(), me.data, "product"),
   });
 
   return (
@@ -223,9 +225,6 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
           </BladeField>
           <ProductContractEditor productId={r().name} official={r().official} />
           <ProductContractEditor productId={r().name} official={r().official} lane="metric" />
-          <Show when={r().official}>
-            <div role="alert" class="alert alert-soft text-sm"><span>Seed-owned, read-only.</span></div>
-          </Show>
         </div>
       )}
     </Show>

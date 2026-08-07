@@ -46,7 +46,7 @@ import { describeError } from "../lib/format";
 // the tag panel, so the panel has no Save of its own; the blade's edit slot still
 // gates it (#621): the controls render only while the hosting blade is in edit
 // mode, and in read mode the declared lines render as facts alone. Declaring needs
-// the classifier's :update, withdrawing its :delete, and an official (seed-owned)
+// the classifier's :update, withdrawing its :delete, and an official
 // classifier's contract is read-only: the list renders, the controls do not.
 
 export type ContractLane = "property" | "metric";
@@ -206,7 +206,7 @@ export default function ContractEditor(props: {
   // the panel renders read-only, the same rule BladeField follows.
   const blade = useContext(BladeEditContext);
   const bladeEditing = () => !!blade?.editing();
-  // A read-only contract: an official classifier is seed-owned, and declaring is
+  // A read-only contract: an official classifier is release-owned, and declaring is
   // the classifier's own :update (withdrawing its :delete, as the server gates them).
   const resource = () => CLASSIFIER_RESOURCE[props.classifier];
   const canDeclare = () => bladeEditing() && !props.official && can(me.data, resource(), "update");
@@ -323,7 +323,7 @@ export default function ContractEditor(props: {
       <div class="flex items-baseline justify-between gap-2">
         <span class="eyebrow">{lane().heading}</span>
         <span class="shrink-0 text-[10.5px] text-base-content/40">
-          {props.official ? "seed-owned, read-only" : copy().hint}
+          {props.official ? "official, read-only" : copy().hint}
         </span>
       </div>
       <p class="text-[11px] text-base-content/50">{copy().lede}</p>

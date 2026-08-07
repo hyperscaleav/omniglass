@@ -319,7 +319,7 @@ omniglass capability create --name projector --display-name Projector
 omniglass capability delete projector                               # refused (422) if official
 ```
 
-A seed-owned (**official**) row, for example the `crestron` vendor or the `microphone` capability, is
+An **official** row, for example the `crestron` vendor or the `microphone` capability, is
 read-only: `update` and `delete` both 422. A vendor's `website` is validated to an `http`/`https` scheme
 on write; any other scheme (for example `javascript:`) is a 422.
 
@@ -343,7 +343,7 @@ omniglass product update barco-ub12 --capabilities '["projector","speaker"]'  # 
 omniglass product delete barco-ub12                                 # 422 if official, 409 if a component points at it
 ```
 
-A seed-owned (**official**) product, for example `cisco-room-bar`, is read-only: `update` and `delete`
+An **official** product, for example `cisco-room-bar`, is read-only: `update` and `delete`
 both 422. A product still referenced by a **component** (`component.product_id`) cannot be deleted (409);
 an unknown vendor, driver, parent, or capability id is a 422.
 
@@ -371,7 +371,7 @@ location types. See [the seed model](/architecture/core-entities/#the-seed-model
 The [event type](/architecture/events/#the-event_type-registry) commands cover the occurrence keyspace,
 the twin of the property catalog: the discrete happenings an event is typed by (`call-started`,
 `cable-unplugged`). `event_type:read` sits on the viewer floor; `event_type:create`, `event_type:update`, and
-`event_type:delete` are admin-gated. Official (seed-owned) event types are read-only.
+`event_type:delete` are admin-gated. Official event types are read-only.
 
 ```sh
 omniglass event-type list                                           # the event type catalog

@@ -9,6 +9,8 @@ import { PROPERTIES_KEY, listProperties } from "./properties";
 import { EVENT_TYPES_KEY, listEventTypes } from "./event_types";
 import { COMMAND_TYPES_KEY, listCommandTypes } from "./command_types";
 import { TAGS_KEY, listTags } from "./tags";
+import { type Me, can } from "./auth";
+import { type BladeLock } from "./blades";
 
 // The Catalog group table: the single source of truth for the catalog area's
 // IA. The CatalogShell subrail renders it as navigation (one link per entry,
@@ -110,6 +112,35 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
     entries: [{ label: "Tags", path: "/tags", gate: ["tag", "read"], key: TAGS_KEY, list: listTags }],
   },
 ];
+
+// The registries' shared official-row sentence, formerly each blade's in-body
+// banner, now the lock reason on the greyed Edit / Delete pair. Operator copy
+// says official, never seed: the seeding mechanics are not operator vocabulary.
+export const OFFICIAL_LOCK = "Official: ships with Omniglass and updates with it.";
+
+// registryLock is the catalog blades' one read-only verdict: the value the
+// edit slot's `locked` binding carries, one voice on every registry page. An
+// official row wears the OFFICIAL_LOCK string for everyone, owner included:
+// both buttons greyed with the one sentence. A custom row locks per verb: each
+// side of the footer pair greys only when the caller lacks THAT side's
+// permission, named exactly (`Requires <resource>:update` on Edit, `Requires
+// <resource>:delete` on Delete), so a delete-only caller sees a live Delete
+// beside a greyed Edit and vice versa, and a greyed button never names a
+// permission that would not unlock it. Both verbs held collapses to null (no
+// lock; the body's live bindings render untouched). A row that has not
+// resolved locks nothing; a row with no official flag (a tag) is judged on
+// the permission arm alone.
+export function registryLock(
+  row: { official?: boolean } | undefined,
+  me: Me | null | undefined,
+  resource: string,
+): BladeLock {
+  if (!row) return null;
+  if (row.official) return OFFICIAL_LOCK;
+  const edit = can(me, resource, "update") ? null : `Requires ${resource}:update`;
+  const del = can(me, resource, "delete") ? null : `Requires ${resource}:delete`;
+  return edit == null && del == null ? null : { edit, delete: del };
+}
 
 // The Overview landing's route, the subrail's first entry.
 export const OVERVIEW_PATH = "/catalog";

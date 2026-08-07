@@ -143,7 +143,7 @@ describe("ContractEditor on a standard", () => {
   it("renders an official standard's contract read-only", () => {
     const { getByText, queryByLabelText } = mount("standard", { official: true });
     expect(getByText("seat_count")).toBeTruthy(); // the list still renders
-    expect(getByText("seed-owned, read-only")).toBeTruthy();
+    expect(getByText("official, read-only")).toBeTruthy();
     expect(queryByLabelText("Property to declare")).toBeNull();
     expect(queryByLabelText("Edit seat_count")).toBeNull();
     expect(queryByLabelText("Withdraw seat_count")).toBeNull();
@@ -311,7 +311,7 @@ describe("ContractEditor's metric lane", () => {
   it("renders an official classifier's metric contract read-only", () => {
     const { getByText, queryByLabelText } = mountMetric("product", { official: true });
     expect(getByText("icmp-rtt-avg")).toBeTruthy(); // the list still renders
-    expect(getByText("seed-owned, read-only")).toBeTruthy();
+    expect(getByText("official, read-only")).toBeTruthy();
     expect(queryByLabelText("Metric to declare")).toBeNull();
     expect(queryByLabelText("Edit icmp-rtt-avg")).toBeNull();
     expect(queryByLabelText("Withdraw icmp-rtt-avg")).toBeNull();

@@ -1,6 +1,6 @@
 ---
 title: Drivers
-description: "The Drivers catalog: the implementations that get, emit, and set a product's signals (name, display name, version), seed-owned official rows read-only, admin-gated custom ones."
+description: "The Drivers catalog: the implementations that get, emit, and set a product's signals (name, display name, version), official rows read-only, admin-gated custom ones."
 ---
 
 **Catalog, under Components: Drivers** (`/drivers`, with `driver:read`, covered by every viewer's `*:read` floor)
@@ -9,7 +9,7 @@ on the same flat-registry pattern as [Location Types](/guides/admin/location-typ
 Where a [vendor](/guides/admin/vendors/) names who a device comes from, a driver names how it is
 talked to (for example `Generic SNMP` or `Cisco xAPI`). Each row shows the **name** (the
 operator-facing name, for example `snmp-generic`), the **display name**, an optional
-**version**, and its **origin** (**official**, seed-owned, or **custom**). A driver also carries
+**version**, and its **origin** (**official** or **custom**). A driver also carries
 an `id`, a uuid minted by the database, the internal address the handle resolves to
 ([ADR-0062](/architecture/decisions/)); the handle is what you type and read.
 
@@ -26,9 +26,12 @@ driver this way. It is a leaf catalog beside the vendor and
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `driver:update`) edits
   the display name and version; the **name** is fixed, since a catalog row carries no rename
   (`:rename` is a component, system, location, and principal group affordance). **Delete**
-  (with `driver:delete`) removes the row, behind a confirm.
-- An **official** (seed-owned) row is always read-only: no Edit, no Delete, and the blade marks it
-  "Seed-owned, read-only." Omniglass ships a starter set of official drivers (Generic SNMP, Cisco
+  (with `driver:delete`) removes the row, behind a confirm. A verb you lack greys just that
+  button, its hover reason naming the permission (`Requires driver:update`, `Requires driver:delete`);
+  the pair never disappears.
+- An **official** row is always read-only: the blade keeps the Edit and Delete pair in place,
+  greyed, with the reason on hover: "Official: ships with Omniglass and updates with it."
+  Omniglass ships a starter set of official drivers (Generic SNMP, Cisco
   xAPI, Crestron CIP, HTTP JSON), upserted idempotently at boot so the shared set cannot drift
   install to install; add a custom driver for anything else.
 - **Delete** carries no in-use guard: a [product](/guides/admin/products/) references a `driver`

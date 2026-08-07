@@ -227,7 +227,7 @@ flagged secret (a webhook signing token) without being a full secret cell, since
 :::note[Partial: the catalog, the three classifier contracts, and the declared value on an instance]
 Three pieces are **built**. The **`property_type` catalog**: the registry of typed value names
 (`name`, `data_type` over `string` / `bool` / `json`, optional label, a JSON Schema
-`validation`), seed-owned `official` rows read-only; numeric names live in its `metric_type` sibling
+`validation`), `official` rows read-only; numeric names live in its `metric_type` sibling
 ([ADR-0043](/architecture/decisions/#adr-0043-the-property-catalog),
 [ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)). The three **classifier contracts**
 (**`product_property`**, **`standard_property`**, **`location_type_property`**), one shape: a catalog property
@@ -362,7 +362,7 @@ cascade and the exclusive-arc scope either way.
   table="secret_type"
   notes={{
     schema: 'The per-field shape: {name, type, secret, origin} per field',
-    official: 'Shipped-canonical versus org-local; seed-owned rows are read-only',
+    official: 'Shipped-canonical versus org-local; official rows are read-only',
   }}
 />
 

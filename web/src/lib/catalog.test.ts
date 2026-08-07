@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { CATALOG_GROUPS, CATALOG_STUB_PATHS, visibleGroups } from "./catalog";
+import { CATALOG_GROUPS, CATALOG_STUB_PATHS, OFFICIAL_LOCK, registryLock, visibleGroups } from "./catalog";
+import { type Me } from "./auth";
 import { navByPath, routeTokens, STUBS } from "./nav";
 
 const entry = (header: string, label: string) =>
@@ -79,5 +80,61 @@ describe("shell route nesting (source-level pin)", () => {
     ];
     for (const p of paths) expect(block, `${p} escaped the shell block`).toContain(`path="${p}"`);
     expect(block).toContain("CATALOG_STUB_PATHS.map");
+  });
+});
+
+// registryLock is the catalog blades' one read-only verdict, the value the edit
+// slot's `locked` binding carries. Three arms: an official row returns the one
+// string (both buttons greyed, everyone, owner included); a custom row returns a
+// per-side object, each side null when the caller holds that verb and otherwise
+// naming exactly the permission that would unlock THAT button (so a delete-only
+// caller keeps a live Delete beside a greyed Edit, and a greyed Delete never
+// claims update would unlock it); both verbs held collapses to null (no lock).
+describe("registryLock", () => {
+  const owner: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
+  const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "v" }, permissions: ["*:read"], grants: [] };
+  const deleteOnly: Me = { principal: { id: "u-del", kind: "human" }, human: { username: "d" }, permissions: ["*:read", "vendor:delete"], grants: [] };
+  const updateOnly: Me = { principal: { id: "u-upd", kind: "human" }, human: { username: "u" }, permissions: ["*:read", "vendor:update"], grants: [] };
+
+  it("locks an official row with the official sentence, for the owner too", () => {
+    expect(registryLock({ official: true }, owner, "vendor")).toBe(OFFICIAL_LOCK);
+    expect(registryLock({ official: true }, viewer, "vendor")).toBe(OFFICIAL_LOCK);
+  });
+
+  it("locks both sides for a caller holding neither verb, each side naming its own permission", () => {
+    expect(registryLock({ official: false }, viewer, "vendor")).toEqual({
+      edit: "Requires vendor:update",
+      delete: "Requires vendor:delete",
+    });
+  });
+
+  it("greys only Edit for a delete-only caller, keeping Delete live", () => {
+    expect(registryLock({ official: false }, deleteOnly, "vendor")).toEqual({
+      edit: "Requires vendor:update",
+      delete: null,
+    });
+  });
+
+  it("greys only Delete for an update-only caller, keeping Edit live", () => {
+    expect(registryLock({ official: false }, updateOnly, "vendor")).toEqual({
+      edit: null,
+      delete: "Requires vendor:delete",
+    });
+  });
+
+  it("returns null (no lock) for a caller holding both verbs", () => {
+    expect(registryLock({ official: false }, owner, "vendor")).toBeNull();
+  });
+
+  it("locks nothing while the row has not resolved", () => {
+    expect(registryLock(undefined, viewer, "vendor")).toBeNull();
+  });
+
+  it("treats a row without an official flag (a tag) on the permission arm alone", () => {
+    expect(registryLock({}, viewer, "tag")).toEqual({
+      edit: "Requires tag:update",
+      delete: "Requires tag:delete",
+    });
+    expect(registryLock({}, owner, "tag")).toBeNull();
   });
 });

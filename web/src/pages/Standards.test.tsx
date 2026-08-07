@@ -14,7 +14,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
 // Standards is the catalog of blueprints a system conforms to, on the flat
-// FlatList surface beside Products. An official (seed-owned) row is read-only (no
+// FlatList surface beside Products. An official row is read-only (no
 // pencil, no Delete, and a read-only contract); a custom row carries Edit, Delete,
 // and a writable declared-property contract on its detail blade. Data is seeded
 // into the query cache so no server is needed.
@@ -82,13 +82,16 @@ describe("Standards page", () => {
     expect(screen.getByText("Variant of")).toBeInTheDocument();
   });
 
-  it("an official row is read-only: no pencil, no delete, and a read-only contract", async () => {
+  it("an official row is read-only: greyed pencil and delete, and a read-only contract", async () => {
     mount();
     const blade = await openBlade("Meeting room");
-    expect(within(blade).queryByLabelText("Edit")).not.toBeInTheDocument();
-    expect(within(blade).queryByRole("button", { name: /delete/i })).not.toBeInTheDocument();
+    const editBtn = within(blade).getByLabelText("Edit") as HTMLButtonElement;
+    const deleteBtn = within(blade).getByRole("button", { name: /delete/i }) as HTMLButtonElement;
+    expect(editBtn.disabled).toBe(true);
+    expect(deleteBtn.disabled).toBe(true);
+    expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Official: ships with Omniglass and updates with it.");
     // Both contract lanes render read-only: neither panel offers a declare picker.
-    expect(within(blade).getAllByText("seed-owned, read-only")).toHaveLength(2);
+    expect(within(blade).getAllByText("official, read-only")).toHaveLength(2);
     expect(within(blade).queryByLabelText("Property to declare")).not.toBeInTheDocument();
     expect(within(blade).queryByLabelText("Metric to declare")).not.toBeInTheDocument();
   });
@@ -148,13 +151,16 @@ describe("Standards page", () => {
     expect(within(blade).getByLabelText("Withdraw table-mic")).toBeInTheDocument();
   });
 
-  // The permissionless arm of the same rule: a viewer binds no edit slot, so
-  // there is no pencil and therefore no route into the controls at all.
-  it("gives a viewer no pencil and no contract or role controls on a custom row", async () => {
+  // The permissionless arm of the same rule: a viewer's blade is locked, so
+  // the pencil renders greyed (naming the missing permission) and there is
+  // still no route into the controls.
+  it("gives a viewer a greyed pencil and no contract or role controls on a custom row", async () => {
     mount(viewer);
     const blade = await openBlade("Huddle space");
     expect(within(blade).getByText("seat_count")).toBeInTheDocument();
-    expect(within(blade).queryByLabelText("Edit")).not.toBeInTheDocument();
+    const editBtn = within(blade).getByLabelText("Edit") as HTMLButtonElement;
+    expect(editBtn.disabled).toBe(true);
+    expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Requires standard:update");
     expect(within(blade).queryByLabelText("Property to declare")).not.toBeInTheDocument();
     expect(within(blade).queryByLabelText("Role name")).not.toBeInTheDocument();
     expect(within(blade).queryByLabelText("Withdraw seat_count")).not.toBeInTheDocument();

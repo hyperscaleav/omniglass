@@ -1,6 +1,6 @@
 ---
 title: Products
-description: "The Products catalog: a concrete SKU binding a vendor, a driver, a kind, and the capabilities it provides; a component points at the product it is; seed-owned official rows read-only, admin-gated custom ones."
+description: "The Products catalog: a concrete SKU binding a vendor, a driver, a kind, and the capabilities it provides; a component points at the product it is; official rows read-only, admin-gated custom ones."
 ---
 
 **Catalog, under Components: Products** (`/products`, with `product:read`, covered by every viewer's `*:read` floor)
@@ -11,7 +11,7 @@ unit. It is where the three leaf catalogs converge: the [vendor](/guides/admin/v
 it, the [driver](/guides/admin/drivers/) that speaks to it, and the
 [capabilities](/guides/admin/capabilities/) it provides, classified by a **kind**. Each row shows the
 **name** (for example `cisco-room-bar`), the **display name**, its
-**vendor**, **driver**, **kind**, and its **origin** (**official**, seed-owned, or **custom**). A
+**vendor**, **driver**, **kind**, and its **origin** (**official** or **custom**). A
 product also carries an `id`, a uuid minted by the database, the internal address the handle resolves
 to ([ADR-0062](/architecture/decisions/)); the handle is what you type and read.
 
@@ -47,9 +47,12 @@ a separate genus. The system side has the same arrangement one level up: a syste
   and **capabilities**.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `product:update`) edits the
   display name, vendor, driver, kind, parent, and capabilities; the **name** is fixed, since a catalog
-  row carries no rename. **Delete** (with `product:delete`) removes the row, behind a confirm.
-- An **official** (seed-owned) row is always read-only: no Edit, no Delete, and the blade marks it
-  "Seed-owned, read-only." Omniglass ships a starter set of official products (Cisco Room Bar, Samsung
+  row carries no rename. **Delete** (with `product:delete`) removes the row, behind a confirm. A
+  verb you lack greys just that button, its hover reason naming the permission
+  (`Requires product:update`, `Requires product:delete`); the pair never disappears.
+- An **official** row is always read-only: the blade keeps the Edit and Delete pair in place,
+  greyed, with the reason on hover: "Official: ships with Omniglass and updates with it."
+  Omniglass ships a starter set of official products (Cisco Room Bar, Samsung
   QM55, Shure MXA920, Crestron TSS-1070), upserted idempotently at boot so the shared set cannot drift
   install to install; add a custom product for anything else.
 - **Delete** enforces the referential guard the leaf catalogs deferred: a product still referenced by a
@@ -84,8 +87,8 @@ say what the product can **do**, the contract says what it **carries**.
 - **Withdraw** (with `product:delete`, from the blade's edit mode, so the pencil's `product:update` is also in the path; behind a confirm) removes a line from the contract. Components
   **keep** any value they set for it; the value simply reads as **off contract** from then on, since
   nothing declares it any more.
-- An **official** (seed-owned) product's contract is read-only, like the rest of the row: the seeded
-  Cisco Room Bar and Samsung QM55 ship declaring `serial-number`, `firmware-version`, and
+- An **official** product's contract is read-only, like the rest of the row: the shipped
+  Cisco Room Bar and Samsung QM55 declare `serial-number`, `firmware-version`, and
   `model-number`, and those declarations come with the release.
 
 From the CLI the contract is `omniglass product property list <id>`,

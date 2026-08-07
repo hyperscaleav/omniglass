@@ -231,7 +231,7 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   with **drift** (observed present and disagreeing with declared) computed on read.
 
 **Three registries ride the `/property-types` shape** (estate-wide reference data, no scope injection;
-official seed-owned types read-only, a 409). The **metric_type catalog is the numeric keyspace**:
+official types are read-only, a 409). The **metric_type catalog is the numeric keyspace**:
 `GET/POST/PATCH/DELETE /metric-types[/{name}]`, gated `metric_type:read` / `:create` / `:update` /
 `:delete`, each type carrying the numeric facts (`unit`, `precision`); the two sample catalogs and
 `event_type` share one resolution namespace, so a create is refused when a sibling holds the name
@@ -328,8 +328,8 @@ are flat official-vs-custom registries the `product` layer references, on the sa
 display name, and each list and per-id `GET` sits on the viewer floor (`vendor:read` / `driver:read` /
 `capability:read` / `product:read` / `standard:read`, which `*:read` carries); `POST` mints a custom
 row (201) and `PATCH` updates and `DELETE` removes (204), gated `<resource>:create` /
-`<resource>:update` / `<resource>:delete`, all at the admin tier. An **official** (seed-owned) row is
-read-only (`PATCH` and `DELETE` both 422).
+`<resource>:update` / `<resource>:delete`, all at the admin tier. An **official** row refuses the write
+(`PATCH` and `DELETE` both 422).
 
 A registry body carries **both handles** like every other name-bearing resource
 ([above](#shape-resources-and-verb-methods),
@@ -399,7 +399,7 @@ The list returns the contract ordered by property name, each line
 `{property_type_name, property_type_id, default_value, required}`: the label and type are the catalog's
 to serve, so a surface that wants them reads `/property-types` alongside. `PUT` takes
 `{default_value?, required?}`; `DELETE` withdraws the line (204), and instances **keep** any value they
-set for it, now off contract. An **official** (seed-owned) classifier is read-only (422), an unknown
+set for it, now off contract. An **official** classifier refuses the write (422), an unknown
 classifier is a 404, and a property the catalog does not know is a 422.
 
 An instance's **values** are the other side of the contract, and unlike the classifier routes they are

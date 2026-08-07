@@ -68,7 +68,7 @@ describe("ProductContractEditor", () => {
   it("renders an official product's contract read-only (no declare, edit, or withdraw)", () => {
     const { getByText, queryByLabelText } = mount({ official: true });
     expect(getByText("serial-number")).toBeTruthy(); // the list still renders
-    expect(getByText("seed-owned, read-only")).toBeTruthy();
+    expect(getByText("official, read-only")).toBeTruthy();
     expect(queryByLabelText("Property to declare")).toBeNull();
     expect(queryByLabelText("Edit serial-number")).toBeNull();
     expect(queryByLabelText("Withdraw serial-number")).toBeNull();

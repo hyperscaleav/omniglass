@@ -17,6 +17,7 @@ import {
   deleteDriver,
 } from "../lib/drivers";
 import { useMe, can } from "../lib/auth";
+import { registryLock } from "../lib/catalog";
 import { createIdentity } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
@@ -24,8 +25,8 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // Drivers: the driver registry (the driver picker on the product form), on the
 // flat FlatList surface. A driver is addressed by its kebab name (ADR-0062:
 // the uuid is identity, the name is what an operator reads and types);
-// official (seed-owned) rows are read-only, same as the Types catalog's
-// official rows: no Edit pencil, no Delete.
+// official rows are read-only, same as the Types catalog's
+// official rows: the Edit / Delete pair greys.
 
 function officialBadge(official: boolean): JSX.Element {
   return official
@@ -74,7 +75,7 @@ export default function Drivers() {
 }
 
 // driverBlade renders an id on the shared blade stack. An official row is
-// read-only (no pencil, no destructive action); a custom row carries Edit +
+// read-only (the Edit / Delete pair greys); a custom row carries Edit +
 // Delete.
 export const driverBlade: BladeDef = {
   Title: (p) => <DriverBladeTitle id={p.id} />,
@@ -145,6 +146,7 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
       row() && !row()!.official && can(me.data, "driver", "delete")
         ? { label: "Delete", tone: "danger", onClick: removeDriver }
         : undefined,
+    locked: () => registryLock(row(), me.data, "driver"),
   });
 
   return (
@@ -173,9 +175,6 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
             draft={version}
             onInput={setVersion}
           />
-          <Show when={r().official}>
-            <div role="alert" class="alert alert-soft text-sm"><span>Seed-owned, read-only.</span></div>
-          </Show>
         </div>
       )}
     </Show>

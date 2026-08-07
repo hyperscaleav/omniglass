@@ -7,7 +7,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 
 // The Properties page is a single FlatList over the /property-types catalog: the
 // categorical lane of the signal registry (its numeric twin is the Metrics page).
-// Official (seed-owned) properties are read-only; a custom property is writable
+// Official properties are read-only; a custom property is writable
 // only when the caller holds property_type:create / property_type:update, the
 // resource the API stamps. Data is seeded into the query cache so no server is
 // needed.

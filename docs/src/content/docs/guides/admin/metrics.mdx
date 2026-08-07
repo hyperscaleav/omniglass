@@ -25,7 +25,7 @@ every reader; the write gates decide who may change it.
 
 - The directory lists every metric sorted by name, each showing its **name** (the canonical
   identifier, with its display name on the line above it), **type** (`int` or `float`),
-  **unit**, and **origin** (**official**, seed-owned, or **custom**). **name** filters by the
+  **unit**, and **origin** (**official** or **custom**). **name** filters by the
   name or its display name; **type**, **unit**, and **official** narrow the list.
 - **New metric** (with `metric_type:create`, granted to operators) opens a create **drawer**: give
   it a **name** (a single lowercase kebab segment, for example `icmp-rtt-avg` or `cpu-load`),
@@ -40,9 +40,12 @@ every reader; the write gates decide who may change it.
   edits the display name, description, unit, and precision; the name and data type are fixed at
   creation, since changing a series' value type under the rows that already use it is unsafe and a
   name is what every driver and contract maps onto. **Delete** (with `metric_type:delete`) removes
-  a custom metric, behind a confirm.
-- An **official** (seed-owned) metric is always read-only: no Edit, no Delete, and the blade marks
-  it "Seed-owned, read-only." The shared vocabulary is the same from install to install, the same
+  a custom metric, behind a confirm. A verb you lack greys just that button, its hover reason
+  naming the permission (`Requires metric_type:update`, `Requires metric_type:delete`); the pair
+  never disappears.
+- An **official** metric is always read-only: the blade keeps the Edit and Delete pair in place,
+  greyed, with the reason on hover: "Official: ships with Omniglass and updates with it." The
+  shared vocabulary is the same from install to install, the same
   deliberate exception to the operator-owned rule the
   [Properties catalog](/guides/admin/properties/) makes, and for the same reason: a metric name is
   the vocabulary a driver maps onto, so a release has to be able to correct it

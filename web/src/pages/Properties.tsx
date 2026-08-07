@@ -19,13 +19,14 @@ import {
   deleteProperty,
 } from "../lib/properties";
 import { useMe, can } from "../lib/auth";
+import { registryLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Properties: the categorical lane of the signal catalog (Catalog > Properties),
 // the twin of the Metrics page. A property is a typed, registered non-numeric
 // signal named by a key that a sample observes and a field declares; a numeric
-// signal is a metric type. Official (seed-owned) properties are read-only; custom
+// signal is a metric type. Official properties are read-only; custom
 // properties are operator-created. The catalog is estate-wide reference data, not
 // a scoped resource, and every affordance gates on property_type, the resource
 // the API stamps.
@@ -84,7 +85,7 @@ export default function Properties(): JSX.Element {
 
 // propertyBlade renders one property on the shared blade stack. The title is what the
 // list shows, the display name, falling back to the name; official properties are
-// read-only (no pencil, no delete).
+// read-only (the Edit / Delete pair greys).
 export const propertyBlade: BladeDef = {
   Title: (p) => <PropertyBladeTitle name={p.id} />,
   Body: (p) => <PropertyBladeBody name={p.id} />,
@@ -154,6 +155,7 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
       row() && !row()!.official && can(me.data, "property_type", "delete")
         ? { label: "Delete", tone: "danger", onClick: removeProperty }
         : undefined,
+    locked: () => registryLock(row(), me.data, "property_type"),
   });
 
   return (
@@ -187,9 +189,6 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
               <pre class="overflow-x-auto rounded-box border border-base-300 bg-base-200 p-2.5 font-data text-xs">{JSON.stringify(r().validation, null, 2)}</pre>
               <span class="text-[11px] text-base-content/40">Editing the schema is a follow-up; set it via the API for now.</span>
             </div>
-          </Show>
-          <Show when={r().official}>
-            <div role="alert" class="alert alert-soft text-sm"><span>Seed-owned, read-only.</span></div>
           </Show>
         </div>
       )}

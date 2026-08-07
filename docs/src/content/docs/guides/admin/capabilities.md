@@ -8,7 +8,7 @@ description: "The Capabilities catalog: the vocabulary of what a component can d
 do, on the same flat-registry pattern as [Location Types](/guides/admin/location-types/) and [Tags](/guides/admin/tags/).
 A capability is a plain name of a function (a microphone, a display, a camera), not a device and
 not a measurement. Each row shows the **name** (for example
-`microphone`), the **display name**, and its **origin** (**official**, seed-owned, or
+`microphone`), the **display name**, and its **origin** (**official** or
 **custom**). A capability also carries an `id`, a uuid minted by the database, the internal
 address the handle resolves to ([ADR-0062](/architecture/decisions/)); the handle is what you
 type and read.
@@ -25,9 +25,12 @@ what makes those two sides line up.
   name**.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `capability:update`)
   edits the display name; the **name** is fixed, since a catalog row carries no rename. **Delete** (with
-  `capability:delete`) removes the row, behind a confirm.
-- An **official** (seed-owned) row is always read-only: no Edit, no Delete, and the blade marks it
-  "Seed-owned, read-only." Omniglass ships a starter set of official capabilities (Microphone,
+  `capability:delete`) removes the row, behind a confirm. A verb you lack greys just that button,
+  its hover reason naming the permission (`Requires capability:update`, `Requires capability:delete`);
+  the pair never disappears.
+- An **official** row is always read-only: the blade keeps the Edit and Delete pair in place,
+  greyed, with the reason on hover: "Official: ships with Omniglass and updates with it."
+  Omniglass ships a starter set of official capabilities (Microphone,
   Speaker, Display, Flat Panel Display, Camera, Codec, Touch Panel), upserted idempotently at boot
   so the shared set cannot drift install to install; add a custom capability for anything else.
 - **Delete carries no in-use guard, and it reaches further than it used to.** Every link to a

@@ -39,7 +39,12 @@ commits them together, **Cancel** discards them. The **destructive** action sits
 available, with no need to enter edit mode: a red **Delete** for a group (a user instead has the escalating
 [lifecycle](/guides/admin/users/) of **Disable**, then **Archive**, then **Purge**, so its left slot is
 **Disable / Enable** and the stronger steps sit in the kebab), each behind a confirm. Secondary actions like **Impersonate** fold into a
-**⋯** menu. Edit appears only if your grants allow it, and a read-only blade (a role) shows no bar at all.
+**⋯** menu. A blade you may not write keeps the Edit and Delete pair in place, **greyed**, with the
+reason on hover (or on keyboard focus): an **official** catalog row reads "Official: ships with
+Omniglass and updates with it." on both buttons, while a missing permission greys **just that
+button** and names the permission that would unlock it (`Requires <resource>:update` on Edit,
+`Requires <resource>:delete` on Delete), so a verb you do hold stays live beside the one you lack.
+A blade with no actions at all (a role) shows no bar.
 
 The same bar carries **create**. A form that opens in a slide-over (New user, New tag, Upload
 file) or as its own blade (New interface) puts its **Create** button in the bar at the foot of the

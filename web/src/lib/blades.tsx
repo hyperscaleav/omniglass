@@ -91,6 +91,12 @@ export type BladePrimary = {
   disabled?: () => boolean;
   busy?: () => boolean;
 };
+// The lock verdict a detail body binds (see `locked` below). Null is no lock.
+// A string locks BOTH footer sides with that one reason (the official row) and
+// overrides every live slot. An object locks each side independently: a side
+// with a reason renders greyed carrying it, a null / absent side keeps its live
+// binding, so a live Delete can sit beside a greyed Edit.
+export type BladeLock = string | { edit?: string | null; delete?: string | null } | null;
 
 export type BladeEdit = {
   editable: () => boolean;
@@ -111,6 +117,14 @@ export type BladeEdit = {
   destructive: () => BladeDestructive | undefined;
   secondary: () => BladeSecondary[];
   primary: () => BladePrimary | undefined;
+  // The lock (human copy: an official row, a missing permission). A string
+  // reason greys the Edit / Delete pair in their usual spots, both carrying it
+  // as a tooltip, overriding every live slot; an object greys only the sides
+  // it names, each with its own reason, leaving the other side's live binding
+  // in place. Null (or an unbound lock) is today's behavior exactly. Detail
+  // blades only: never bind `locked` beside `primary` (a create blade under a
+  // lock renders a dead form); BladeStack warns once in dev on the composition.
+  locked: () => BladeLock;
   bind: (h: {
     editable?: () => boolean;
     valid?: () => boolean;
@@ -119,6 +133,7 @@ export type BladeEdit = {
     destructive?: () => BladeDestructive | undefined;
     secondary?: () => BladeSecondary[];
     primary?: () => BladePrimary | undefined;
+    locked?: () => BladeLock;
   }) => void;
 };
 
@@ -132,6 +147,7 @@ export function createEditSlot(): BladeEdit {
   let destructivePred: () => BladeDestructive | undefined = () => undefined;
   let secondaryPred: () => BladeSecondary[] = () => [];
   let primaryPred: () => BladePrimary | undefined = () => undefined;
+  let lockedPred: () => BladeLock = () => null;
   // Extra savers panels contribute (the fields panel, etc.), flushed before the
   // primary save.
   const contributors = new Set<() => Promise<void>>();
@@ -162,6 +178,7 @@ export function createEditSlot(): BladeEdit {
     destructive: () => (bound() ? destructivePred() : undefined),
     secondary: () => (bound() ? secondaryPred() : []),
     primary: () => (bound() ? primaryPred() : undefined),
+    locked: () => (bound() ? lockedPred() : null),
     bind: (h) => {
       // A body that supplies a saver is editable (unless it gates with `editable`);
       // one that only registers a destructive / secondary action is not.
@@ -171,6 +188,7 @@ export function createEditSlot(): BladeEdit {
       destructivePred = h.destructive ?? (() => undefined);
       secondaryPred = h.secondary ?? (() => []);
       primaryPred = h.primary ?? (() => undefined);
+      lockedPred = h.locked ?? (() => null);
       setBound(true);
     },
   };

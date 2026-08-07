@@ -19,6 +19,7 @@ import {
   deleteStandard,
 } from "../lib/standards";
 import { useMe, can } from "../lib/auth";
+import { registryLock } from "../lib/catalog";
 import { createIdentity } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
@@ -29,8 +30,8 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // (ADR-0062: the uuid is identity, the name is what an operator reads and
 // types), it may be a VARIANT of another standard, and it declares the
 // property CONTRACT every conforming system exposes (the ContractEditor on the
-// detail). Official (seed-owned) rows are read-only, same as the product catalog:
-// no Edit pencil, no Delete, and a read-only contract.
+// detail). Official rows are read-only, same as the product catalog:
+// the Edit / Delete pair greys, and the contract is read-only.
 //
 // A standard lives here rather than as a Types tab because it is no longer a bare
 // classifier registry row: it carries a contract and its own authorization
@@ -88,7 +89,7 @@ export default function Standards() {
 }
 
 // standardBlade renders an id on the shared blade stack. An official row is
-// read-only (no pencil, no destructive action); a custom row carries Edit + Delete
+// read-only (the Edit / Delete pair greys); a custom row carries Edit + Delete
 // plus a writable contract.
 export const standardBlade: BladeDef = {
   Title: (p) => <StandardBladeTitle id={p.id} />,
@@ -156,6 +157,7 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
       row() && !row()!.official && can(me.data, "standard", "delete")
         ? { label: "Delete", tone: "danger", onClick: removeStandard }
         : undefined,
+    locked: () => registryLock(row(), me.data, "standard"),
   });
 
   return (
@@ -187,9 +189,6 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
           <ContractEditor classifier="standard" id={r().name} official={r().official} />
           <ContractEditor classifier="standard" lane="metric" id={r().name} official={r().official} />
           <RoleEditor id={r().id} official={r().official} />
-          <Show when={r().official}>
-            <div role="alert" class="alert alert-soft text-sm"><span>Seed-owned, read-only.</span></div>
-          </Show>
         </div>
       )}
     </Show>

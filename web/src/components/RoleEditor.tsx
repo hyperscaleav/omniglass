@@ -37,7 +37,7 @@ import { describeError } from "../lib/format";
 // blade's edit slot still gates the controls (#621): they render only while the
 // hosting blade is in edit mode, and in read mode the declared roles render as
 // facts alone. Declaring needs the standard's :update, withdrawing its :delete,
-// and an official (seed-owned) standard's roles are read-only: the list renders,
+// and an official standard's roles are read-only: the list renders,
 // the controls do not.
 
 // The draft a row (or the add row) edits: everything a RoleSpec carries.
@@ -76,7 +76,7 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
   // the panel renders read-only, the same rule BladeField follows.
   const blade = useContext(BladeEditContext);
   const bladeEditing = () => !!blade?.editing();
-  // An official standard is seed-owned; declaring is its own :update, withdrawing
+  // An official standard is release-owned; declaring is its own :update, withdrawing
   // its :delete, as the server gates them.
   const canDeclare = () => bladeEditing() && !props.official && can(me.data, "standard", "update");
   const canWithdraw = () => bladeEditing() && !props.official && can(me.data, "standard", "delete");
@@ -211,7 +211,7 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
       <div class="flex items-baseline justify-between gap-2">
         <span class="eyebrow">Declared roles</span>
         <span class="shrink-0 text-[10.5px] text-base-content/40">
-          {props.official ? "seed-owned roles, read-only" : "the standard's roles"}
+          {props.official ? "official roles, read-only" : "the standard's roles"}
         </span>
       </div>
       <p class="text-[11px] text-base-content/50">
