@@ -13,6 +13,7 @@ describe("the catalog table's soon slots", () => {
     expect(entry("Systems", "Templates").issue).toBe(616);
     expect(entry("Locations", "Templates").issue).toBe(617);
     expect(entry("Actions", "Notifications").issue).toBe(618);
+    expect(entry("Actions", "Rules").issue).toBe(624);
   });
 
   it("mirrors nav.ts on every routed soon slot, so the stub page shows the number the table names", () => {

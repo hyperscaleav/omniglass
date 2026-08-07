@@ -137,7 +137,7 @@ export const OFF_RAIL: { path: string; label: string; hint: string; resource?: s
   { path: "/event-types", label: "Events", resource: "event_type", hint: "The occurrence catalog: the discrete happenings an event is typed by." },
   { path: "/command-types", label: "Commands", resource: "command_type", hint: "The do catalog: what a component can be told, with a target and a settle window." },
   { path: "/tags", label: "Tags", resource: "tag", hint: "The governed tag key vocabulary applied across the inventory." },
-  { path: "/rules", label: "Rules", hint: "Transform, calc, and event rules, with CEL and blast-radius preview." },
+  { path: "/rules", label: "Rules", hint: "Transform, calc, and event rules, with CEL and blast-radius preview.", issue: 624 },
   { path: "/log-types", label: "Logs", hint: "The log shape catalog. The log lane arrives untyped today; typing what a line can be is still to come." },
   { path: "/notifications", label: "Notifications", hint: "The outbound notification shapes: how a firing event reaches an operator, still to come.", issue: 618 },
   { path: "/templates", label: "Templates", hint: "Example configurations you clone: start a location type, a standard, or a whole system from one, then own what you get." },

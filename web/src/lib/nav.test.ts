@@ -248,9 +248,9 @@ describe("Catalog single entry", () => {
     expect(lookupNav("/web/log-types").label).toBe("Logs");
   });
 
-  it("surfaces a pending off-rail page's tracking issue on its stub, exactly Rules' current state (none)", () => {
+  it("surfaces each pending off-rail page's tracking issue on its stub", () => {
     expect(lookupNav("/web/notifications").issue).toBe(618);
-    expect(lookupNav("/web/rules").issue).toBeUndefined();
+    expect(lookupNav("/web/rules").issue).toBe(624);
   });
 
   // The shell is presentation over existing routes: every pre-shell URL keeps

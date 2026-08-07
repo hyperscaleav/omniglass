@@ -54,9 +54,9 @@ export type CatalogGroup = {
 
 // Each soon slot names its tracking issue (the no-bare-TODO rule): the
 // template registries are #615 (component), #616 (system), #617 (location);
-// notifications is #618. Rules mirrors its nav.ts off-rail entry, which
-// carries no issue today. Group copy follows the direction axis: Telemetry is
-// what you receive, Actions is what you send or run.
+// notifications is #618, rules is #624 (its vocabulary is fenced separately
+// in #606). Group copy follows the direction axis: Telemetry is what you
+// receive, Actions is what you send or run.
 export const CATALOG_GROUPS: CatalogGroup[] = [
   {
     header: "Telemetry",
@@ -72,7 +72,7 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
     copy: "What you send or run: commands (the instructions you issue, with a target and a settle window), rules (soon), notifications (soon).",
     entries: [
       { label: "Commands", path: "/command-types", gate: ["command_type", "read"], key: COMMAND_TYPES_KEY, list: listCommandTypes },
-      { label: "Rules", path: "/rules", soon: true },
+      { label: "Rules", path: "/rules", soon: true, issue: 624 },
       { label: "Notifications", path: "/notifications", soon: true, issue: 618 },
     ],
   },

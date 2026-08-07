@@ -227,6 +227,16 @@ var Banned = []BannedTerm{
 		Replacement: "location_type:<action>, the registry's own resource",
 		Origin:      "ADR-0082",
 	},
+	{
+		// The lane collective noun. Four lanes are telemetry; the command lane
+		// is an instruction you issue, so calling all five "telemetry" makes a
+		// command a reading. The lane STRUCTURE (ADR-0079) stands; only the
+		// noun retired. ADR anchors and history quote it under the standing
+		// exemptions.
+		Pattern:     regexp.MustCompile(`(?i)\btelemetry lanes\b`),
+		Replacement: "signal lanes (four inbound, one outbound; a command is not a reading)",
+		Origin:      "ADR-0084",
+	},
 }
 
 // vocabularyAllowed lists files (relative to DocsRoot) exempt from the
