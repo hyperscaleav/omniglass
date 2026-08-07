@@ -68,7 +68,8 @@ A location type's blade carries a **Declared properties** panel, its **contract*
 defaults to. It is the same editor as a [product](/guides/admin/products/)'s or a
 [standard](/guides/admin/standards/)'s, and it keeps this page's permission story: the read
 rides `location_type:read`, declaring a line needs `location_type:update`, and withdrawing one
-needs `location_type:delete`.
+needs `location_type:delete`. Every contract control lives in the blade's edit mode, so the
+pencil's `location_type:update` is in the path either way.
 
 - **Declare a property** picks a name from the property catalog, optionally types a **default**,
   and optionally marks it **required**. The property must already exist in the catalog; mint it

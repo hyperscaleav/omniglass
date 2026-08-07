@@ -5,12 +5,16 @@ import RoleEditor from "./RoleEditor";
 import { standardRolesKey, type DeclaredRole } from "../lib/system_roles";
 import { CAPABILITIES_KEY, type Capability } from "../lib/capabilities";
 import { ME_KEY, type Me } from "../lib/auth";
+import { BladeEditContext, createEditSlot } from "../lib/blades";
 import { uuidFor } from "../lib/testids";
 
 // The editor curates the roles a standard declares: the slots every conforming
 // system needs filled, each with the capabilities a component must provide and how
 // many components the slot wants. Data is seeded into the query cache so no server
-// is needed; the PUT / DELETE fetches are faked where a test drives them.
+// is needed; the PUT / DELETE fetches are faked where a test drives them. The
+// mount hosts the editor inside a blade edit slot, as the standard blade does:
+// the controls are edit-state affordances (#621), so the default mount enters
+// edit mode; `editing: false` witnesses the read state.
 const declared: DeclaredRole[] = [
   { name: "table-mic", display_name: "Table microphone", quorum: 2, capabilities: ["microphone"], impact: "degraded" },
   { name: "main-display", display_name: "Main display", quorum: 1, capabilities: ["display", "hdmi-in"], impact: "outage" },
@@ -31,16 +35,21 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-function mount(opts: { me?: Me; official?: boolean; rows?: DeclaredRole[] } = {}) {
+function mount(opts: { me?: Me; official?: boolean; rows?: DeclaredRole[]; editing?: boolean } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...standardRolesKey("meeting-room")], opts.rows ?? declared);
   qc.setQueryData([...CAPABILITIES_KEY], catalog);
   qc.setQueryData([...ME_KEY], opts.me ?? owner);
-  return render(() => (
+  const edit = createEditSlot();
+  if (opts.editing ?? true) edit.begin();
+  const result = render(() => (
     <QueryClientProvider client={qc}>
-      <RoleEditor id="meeting-room" official={opts.official ?? false} />
+      <BladeEditContext.Provider value={edit}>
+        <RoleEditor id="meeting-room" official={opts.official ?? false} />
+      </BladeEditContext.Provider>
     </QueryClientProvider>
   ));
+  return { ...result, edit };
 }
 
 const roleRow = (name: HTMLElement) => name.closest("div.flex-col") as HTMLElement;
@@ -163,5 +172,35 @@ describe("RoleEditor on a standard", () => {
   it("shows the empty state when a standard declares no roles", () => {
     const { getByText } = mount({ rows: [] });
     expect(getByText("This standard declares no roles.")).toBeTruthy();
+  });
+
+  // The blade model (#621): outside blade edit mode the panel is facts alone,
+  // whatever the caller may do; the pencil is the one route to the controls.
+  it("renders the roles as facts alone while the blade is in read mode", () => {
+    const { getByText, queryByLabelText } = mount({ editing: false });
+    expect(getByText("table-mic")).toBeTruthy();
+    expect(getByText("2 wanted")).toBeTruthy();
+    expect(queryByLabelText("Role name")).toBeNull();
+    expect(queryByLabelText("Edit table-mic")).toBeNull();
+    expect(queryByLabelText("Withdraw table-mic")).toBeNull();
+  });
+});
+
+
+// Symmetric with ContractEditor: leaving blade edit mode discards the open
+// role drafts, so nothing resurrects on the next pencil press (#621's review).
+describe("RoleEditor drafts die with the edit session", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("closes an open role edit when edit mode ends and stays closed on re-entry", async () => {
+    const { edit, getByLabelText, queryByLabelText } = mount();
+    fireEvent.click(getByLabelText("Edit main-display"));
+    expect(queryByLabelText("Name for main-display")).toBeTruthy();
+    edit.cancel();
+    await Promise.resolve();
+    expect(queryByLabelText("Name for main-display")).toBeNull();
+    edit.begin();
+    await Promise.resolve();
+    expect(queryByLabelText("Name for main-display")).toBeNull();
   });
 });

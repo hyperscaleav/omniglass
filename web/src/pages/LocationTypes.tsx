@@ -216,8 +216,9 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
           </BladeField>
           {/* The location type's declared contracts, one panel per catalog lane:
               what every location of this type exposes (properties) and carries
-              (metrics). Writes are immediate (a PUT per line), so the panels sit
-              outside the blade's edit slot, which the core facts own. */}
+              (metrics). The panels read the blade's edit slot from context, so
+              their declare/edit/withdraw controls render only in edit mode;
+              writes stay immediate (a PUT per line) once revealed. */}
           <ContractEditor classifier="location-type" id={r().name} official={r().official} />
           <ContractEditor classifier="location-type" lane="metric" id={r().name} official={r().official} />
           <Show when={r().official}>

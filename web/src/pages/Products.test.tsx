@@ -7,6 +7,10 @@ import { PRODUCTS_KEY, type Product } from "../lib/products";
 import { VENDORS_KEY, type Vendor } from "../lib/vendors";
 import { DRIVERS_KEY, type Driver } from "../lib/drivers";
 import { CAPABILITIES_KEY, type Capability } from "../lib/capabilities";
+import { classifierPropertiesKey, type ClassifierProperty } from "../lib/classifier_properties";
+import { classifierMetricsKey } from "../lib/classifier_metrics";
+import { PROPERTIES_KEY, type PropertyRow } from "../lib/properties";
+import { METRICS_KEY } from "../lib/metric_types";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
@@ -30,6 +34,15 @@ const vendors: Vendor[] = [
 const drivers: Driver[] = [{ id: uuidFor("drv-crestron-ct"), name: "crestron-ct", display_name: "Crestron CT", official: true }];
 const capabilities: Capability[] = [{ id: uuidFor("cap-touchscreen"), name: "touchscreen", display_name: "Touchscreen", official: true }];
 
+// The custom product's declared-property contract and the catalog its editor
+// joins each line to; the metric lane mounts beside it, kept inert with empty
+// seeds.
+const contract: ClassifierProperty[] = [{ property_type_name: "serial-number", property_type_id: "serial-number-id", required: true }];
+const propertyCatalog: PropertyRow[] = [
+  { name: "serial-number", data_type: "string", display_name: "Serial number", official: true },
+  { name: "port-count", data_type: "int", display_name: "Port count", official: true },
+];
+
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], grants: [] };
 
@@ -41,6 +54,12 @@ function mount(me: Me = admin) {
   qc.setQueryData([...VENDORS_KEY], vendors);
   qc.setQueryData([...DRIVERS_KEY], drivers);
   qc.setQueryData([...CAPABILITIES_KEY], capabilities);
+  qc.setQueryData([...PROPERTIES_KEY], propertyCatalog);
+  qc.setQueryData([...METRICS_KEY], []);
+  qc.setQueryData([...classifierPropertiesKey("product", "acme-panel")], contract);
+  qc.setQueryData([...classifierPropertiesKey("product", "crestron-tsw-1070")], []);
+  qc.setQueryData([...classifierMetricsKey("product", "acme-panel")], []);
+  qc.setQueryData([...classifierMetricsKey("product", "crestron-tsw-1070")], []);
   qc.setQueryData([...ME_KEY], me);
   return render(() => (
     <QueryClientProvider client={qc}>
@@ -99,6 +118,48 @@ describe("Products page", () => {
     expect(within(blade).getByRole("option", { name: "Crestron CT" })).toBeInTheDocument();
     // capability checkbox for the seeded capability
     expect(within(blade).getByText("Touchscreen")).toBeInTheDocument();
+  });
+
+  // The blade model (#621): a blade opens read-only, and EVERY mutating control,
+  // the contract panels' declare picker and per-line edit/withdraw included,
+  // appears only after the pencil flips the blade into edit mode.
+  it("keeps the contract's declare/edit/withdraw controls out of read mode until the pencil flips edit", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Acme Panel"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    // Read mode: the declared line renders as a fact row...
+    expect(within(blade).getByText("serial-number")).toBeInTheDocument();
+    expect(within(blade).getByText("required")).toBeInTheDocument();
+    // ...and nothing shaped like a mutating control renders, even for an admin.
+    expect(within(blade).queryByLabelText("Property to declare")).not.toBeInTheDocument();
+    expect(within(blade).queryByLabelText("Metric to declare")).not.toBeInTheDocument();
+    expect(within(blade).queryByLabelText("Edit serial-number")).not.toBeInTheDocument();
+    expect(within(blade).queryByLabelText("Withdraw serial-number")).not.toBeInTheDocument();
+    // The pencil enters edit mode; the existing controls return as they were.
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    expect(within(blade).getByLabelText("Property to declare")).toBeInTheDocument();
+    expect(within(blade).getByLabelText("Edit serial-number")).toBeInTheDocument();
+    expect(within(blade).getByLabelText("Withdraw serial-number")).toBeInTheDocument();
+  });
+
+  // The permissionless arm of the same rule: a viewer binds no edit slot, so
+  // there is no pencil and therefore no route into the controls at all.
+  it("gives a viewer no pencil and no contract controls on a custom row", async () => {
+    mount(viewer);
+    fireEvent.click(screen.getByText("Acme Panel"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    expect(within(blade).getByText("serial-number")).toBeInTheDocument();
+    expect(within(blade).queryByLabelText("Edit")).not.toBeInTheDocument();
+    expect(within(blade).queryByLabelText("Property to declare")).not.toBeInTheDocument();
+    expect(within(blade).queryByLabelText("Withdraw serial-number")).not.toBeInTheDocument();
   });
 
   it("hides New product for a caller without product:create", () => {

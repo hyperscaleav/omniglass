@@ -5,10 +5,14 @@ import ProductContractEditor from "./ProductContractEditor";
 import { productPropertiesKey, type ProductProperty } from "../lib/product_properties";
 import { PROPERTIES_KEY, type PropertyRow } from "../lib/properties";
 import { ME_KEY, type Me } from "../lib/auth";
+import { BladeEditContext, createEditSlot } from "../lib/blades";
 
 // The contract editor curates which catalog properties a product declares and what
 // each defaults to. Data is seeded into the query cache so no server is needed; the
-// PUT / DELETE fetches are faked where a test drives them.
+// PUT / DELETE fetches are faked where a test drives them. The mount hosts the
+// editor inside a blade edit slot, as the product blade does: the controls are
+// edit-state affordances (#621), so the default mount enters edit mode;
+// `editing: false` witnesses the read state.
 const contract: ProductProperty[] = [
   { property_type_name: "serial-number", property_type_id: "serial-number-id", required: true },
   { property_type_name: "firmware-version", property_type_id: "firmware-version-id", default_value: "1.4.2", required: false },
@@ -27,14 +31,18 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-function mount(opts: { me?: Me; official?: boolean; lines?: ProductProperty[] } = {}) {
+function mount(opts: { me?: Me; official?: boolean; lines?: ProductProperty[]; editing?: boolean } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...productPropertiesKey("tsw-1070")], opts.lines ?? contract);
   qc.setQueryData([...PROPERTIES_KEY], catalog);
   qc.setQueryData([...ME_KEY], opts.me ?? owner);
+  const edit = createEditSlot();
+  if (opts.editing ?? true) edit.begin();
   return render(() => (
     <QueryClientProvider client={qc}>
-      <ProductContractEditor productId="tsw-1070" official={opts.official ?? false} />
+      <BladeEditContext.Provider value={edit}>
+        <ProductContractEditor productId="tsw-1070" official={opts.official ?? false} />
+      </BladeEditContext.Provider>
     </QueryClientProvider>
   ));
 }
@@ -143,5 +151,16 @@ describe("ProductContractEditor", () => {
   it("shows the empty state when a product declares nothing", () => {
     const { getByText } = mount({ lines: [] });
     expect(getByText("This product declares no properties.")).toBeTruthy();
+  });
+
+  // The blade model (#621): outside blade edit mode the panel is facts alone,
+  // whatever the caller may do; the pencil is the one route to the controls.
+  it("renders the contract as facts alone while the blade is in read mode", () => {
+    const { getByText, queryByLabelText } = mount({ editing: false });
+    expect(getByText("serial-number")).toBeTruthy();
+    expect(getByText("1.4.2")).toBeTruthy();
+    expect(queryByLabelText("Property to declare")).toBeNull();
+    expect(queryByLabelText("Edit serial-number")).toBeNull();
+    expect(queryByLabelText("Withdraw serial-number")).toBeNull();
   });
 });

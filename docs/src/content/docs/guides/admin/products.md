@@ -81,7 +81,7 @@ say what the product can **do**, the contract says what it **carries**.
 - **Required** means an instance must resolve the property to a value. A component of the product
   cannot save with a required property empty (see
   [set a property on an instance](/guides/admin/properties/#set-a-property-on-an-instance)).
-- **Withdraw** (with `product:delete`, behind a confirm) removes a line from the contract. Components
+- **Withdraw** (with `product:delete`, from the blade's edit mode, so the pencil's `product:update` is also in the path; behind a confirm) removes a line from the contract. Components
   **keep** any value they set for it; the value simply reads as **off contract** from then on, since
   nothing declares it any more.
 - An **official** (seed-owned) product's contract is read-only, like the rest of the row: the seeded

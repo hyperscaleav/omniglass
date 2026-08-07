@@ -187,6 +187,9 @@ describe("LocationTypes page", () => {
     expect(within(blade).getByText("Campus")).toBeTruthy();
     expect(within(blade).getByText("Root")).toBeTruthy();
     expect(within(blade).queryByText("campus")).toBeNull();
+    // No pencil means no route into edit mode: the contract panels stay facts.
+    expect(within(blade).queryByLabelText("Property to declare")).toBeNull();
+    expect(within(blade).queryByLabelText("Withdraw floor_area_sqm")).toBeNull();
   });
 
   // The location type is a classifier: its blade carries the declared-property
@@ -207,7 +210,9 @@ describe("LocationTypes page", () => {
     expect(within(blade).getByText(/A location of this type inherits every property/)).toBeTruthy();
     expect(within(blade).getByText("floor_area_sqm")).toBeTruthy();
     expect(within(blade).getByText("40")).toBeTruthy(); // the declared default
-    // Writable for this caller (owner), so the picker offers what is not declared.
+    // Writable for this caller (owner) once the pencil flips edit mode (#621),
+    // so the picker offers what is not declared.
+    fireEvent.click(within(blade).getByLabelText("Edit"));
     const picker = within(blade).getByLabelText("Property to declare") as HTMLSelectElement;
     expect(Array.from(picker.options).map((o) => o.value)).toEqual(["", "seat_count"]);
   });
@@ -225,6 +230,33 @@ describe("LocationTypes page", () => {
     expect(within(blade).getByText("This location type declares no properties.")).toBeTruthy();
     expect(within(blade).queryByLabelText("Property to declare")).toBeNull();
     expect(within(blade).queryByLabelText("Metric to declare")).toBeNull();
+  });
+
+  // The blade model (#621): a blade opens read-only, and EVERY mutating control,
+  // the contract panels' declare picker and per-line edit/withdraw included,
+  // appears only after the pencil flips the blade into edit mode. Read mode
+  // renders the declared lines as facts alone.
+  it("keeps the contract's declare/edit/withdraw controls out of read mode until the pencil flips edit", async () => {
+    mount();
+    fireEvent.click(screen.getByText("wing"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    // Read mode: the declared line renders as a fact row...
+    expect(within(blade).getByText("floor_area_sqm")).toBeTruthy();
+    expect(within(blade).getByText("40")).toBeTruthy();
+    // ...and nothing shaped like a mutating control renders, even for an admin.
+    expect(within(blade).queryByLabelText("Property to declare")).toBeNull();
+    expect(within(blade).queryByLabelText("Metric to declare")).toBeNull();
+    expect(within(blade).queryByLabelText("Edit floor_area_sqm")).toBeNull();
+    expect(within(blade).queryByLabelText("Withdraw floor_area_sqm")).toBeNull();
+    // The pencil enters edit mode; the existing controls return as they were.
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    expect(within(blade).getByLabelText("Property to declare")).toBeTruthy();
+    expect(within(blade).getByLabelText("Edit floor_area_sqm")).toBeTruthy();
+    expect(within(blade).getByLabelText("Withdraw floor_area_sqm")).toBeTruthy();
   });
 
   it("declares a property on a location type, PUTting to the location-types contract route", async () => {
@@ -251,6 +283,8 @@ describe("LocationTypes page", () => {
       if (!el) throw new Error("no blade yet");
       return el as HTMLElement;
     });
+    // The declare row lives behind the blade's pencil (#621).
+    fireEvent.click(within(blade).getByLabelText("Edit"));
     fireEvent.change(within(blade).getByLabelText("Property to declare"), { target: { value: "seat_count" } });
     fireEvent.input(within(blade).getByLabelText("Default for the new property"), { target: { value: "12" } });
     fireEvent.click(within(blade).getByLabelText("Declare property"));
