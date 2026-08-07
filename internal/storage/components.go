@@ -63,13 +63,20 @@ type ComponentSpec struct {
 	ProductName  *string
 }
 
-// ComponentPatch is the update input: nil fields unchanged. ProductName,
-// LocationName, and ParentName all follow the house three-state convention: nil
-// unchanged, an explicit empty string CLEARS (a productless component that carries
-// only its own capability facts, an unplaced component, a root component), and a
-// name resolves to its id. ParentName is cycle-guarded and scope-injected like a
-// location reparent: the new parent must be inside the caller's update scope and
-// must not be the component itself or one of its own descendants.
+// ComponentPatch is the update input: nil fields unchanged. LocationName and
+// ParentName follow the house three-state convention: nil unchanged, an
+// explicit empty string CLEARS (an unplaced component, a root component), and
+// a name resolves to its id. ParentName is cycle-guarded and scope-injected
+// like a location reparent: the new parent must be inside the caller's update
+// scope and must not be the component itself or one of its own descendants.
+//
+// ProductName does NOT follow the clear convention: the #614 floor made
+// product_id required (every component is an instance of a product, the
+// "productless component" this comment used to describe no longer exists),
+// so nil is unchanged and a name reclassifies, but an explicit empty string
+// reclassifies to generic-device rather than clearing (see UpdateComponent's
+// product_id CASE). The API refuses an empty-string product outright (422)
+// before this is ever reached.
 //
 // There is deliberately no Name here. A rename is RenameComponent, its own act
 // under its own permission, because it breaks the references an operator stored
@@ -333,13 +340,20 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 	after, err := scanComponent(tx.QueryRow(ctx, `
 		update component set
 			display_name = coalesce($2, display_name),
-			-- product_id takes the house three states: a nil field is unchanged, an
-			-- explicit empty string clears it, anything else names a product by
-			-- handle or uuid and is resolved to its id (an unknown one lands as NULL
-			-- and is caught below).
+			-- product_id has no clear state: the floor makes it NOT NULL, so unlike
+			-- location_id/parent_id below there is no empty-string-means-null branch
+			-- here to attempt (that used to be the case before the #614 floor, and
+			-- would now fail loudly on the column's NOT NULL). A nil field is
+			-- unchanged; an explicit empty string reclassifies to generic-device,
+			-- the same fallback CreateComponent applies to an unclassified create,
+			-- rather than attempting a write the column can no longer accept.
+			-- Anything else names a product by handle or uuid, resolved to its id
+			-- (an unknown one lands as NULL and is caught below). The API refuses an
+			-- empty-string product before this is ever reached (422), so this branch
+			-- only matters to a caller that writes the gateway directly.
 			product_id   = case
 				when $3::text is null then product_id
-				when $3 = '' then null
+				when $3 = '' then (select id from product where name = 'generic-device')
 				else $4::uuid
 			end,
 			-- location_id and parent_id take the same three states, already resolved

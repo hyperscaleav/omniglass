@@ -94,6 +94,36 @@ func TestComponentRelocate(t *testing.T) {
 	}
 }
 
+// TestComponentUpdateEmptyProductReclassifiesToGeneric proves UpdateComponent
+// stays consistent with CreateComponent now that product_id is NOT NULL (the
+// #614 floor): an explicit empty-string product patch used to clear the
+// column to null (the old "productless component" state); that state no
+// longer exists, so the patch must not attempt the null write the column can
+// no longer accept. This calls the gateway directly (the API refuses an
+// empty-string product before it ever reaches here), so it is the only place
+// this path is still exercised.
+func TestComponentUpdateEmptyProductReclassifiesToGeneric(t *testing.T) {
+	gw := storagetest.NewDB(t)
+	ctx := context.Background()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	bar := "cisco-room-bar"
+	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "reclass", ProductName: &bar}, all)
+
+	after, err := gw.UpdateComponent(ctx, "", "reclass", storage.ComponentPatch{ProductName: strptr("")}, all, all)
+	if err != nil {
+		t.Fatalf("empty-string product patch: %v (want a clean reclassify to generic-device, not a not-null violation)", err)
+	}
+	if after.ProductHandle == nil || *after.ProductHandle != "generic-device" {
+		t.Fatalf("product after empty-string patch = %v, want generic-device", after.ProductHandle)
+	}
+	if after.ProductID == nil || *after.ProductID == "" {
+		t.Fatalf("product_id after empty-string patch = %v, want a resolved generic-device id", after.ProductID)
+	}
+}
+
 // TestComponentProductSwapKeepsSetValues is the quiet-wrong-answer guard: swapping a
 // component's product keeps every explicitly-set property value (they key by
 // component and property_type, not by product) while the new product's contract
