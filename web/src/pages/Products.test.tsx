@@ -4,6 +4,7 @@ import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-lib
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Products from "./Products";
 import { PRODUCTS_KEY, type Product } from "../lib/products";
+import { COMPONENT_TYPES_KEY, type ComponentType } from "../lib/component_types";
 import { VENDORS_KEY, type Vendor } from "../lib/vendors";
 import { DRIVERS_KEY, type Driver } from "../lib/drivers";
 import { CAPABILITIES_KEY, type Capability } from "../lib/capabilities";
@@ -23,8 +24,17 @@ import { uuidFor } from "../lib/testids";
 // Wire truth (api/products.go): vendor/driver/parent arrive as BOTH the kebab
 // handle (vendor) and the uuid (vendor_id); capabilities is a list of NAMES.
 const seed: Product[] = [
-  { id: uuidFor("prod-crestron-tsw-1070"), name: "crestron-tsw-1070", display_name: "Crestron TSW-1070", kind: "device", vendor: "crestron", vendor_id: uuidFor("ven-crestron"), driver: "crestron-ct", driver_id: uuidFor("drv-crestron-ct"), capabilities: ["touchscreen"], official: true },
-  { id: uuidFor("prod-acme-panel"), name: "acme-panel", display_name: "Acme Panel", kind: "device", vendor: "acme-av", vendor_id: uuidFor("ven-acme-av"), capabilities: ["touchscreen"], official: false },
+  { id: uuidFor("prod-crestron-tsw-1070"), name: "crestron-tsw-1070", display_name: "Crestron TSW-1070", kind: "device", component_type: "touch-panel", component_type_id: uuidFor("ct-touch-panel"), vendor: "crestron", vendor_id: uuidFor("ven-crestron"), driver: "crestron-ct", driver_id: uuidFor("drv-crestron-ct"), capabilities: ["touchscreen"], official: true },
+  { id: uuidFor("prod-acme-panel"), name: "acme-panel", display_name: "Acme Panel", kind: "device", component_type: "display", component_type_id: uuidFor("ct-display"), vendor: "acme-av", vendor_id: uuidFor("ven-acme-av"), capabilities: ["touchscreen"], official: false },
+];
+
+// The seeded component_type tree this page's Type picker renders (a slice of
+// internal/seed/component_types.yaml): display is a root with its own icon,
+// interactive-display a child that inherits it, touch-panel a sibling root.
+const componentTypes: ComponentType[] = [
+  { id: uuidFor("ct-display"), name: "display", display_name: "Display", official: true, stem: "display", abbrev: "fp", icon: "monitor", default_tags: [] },
+  { id: uuidFor("ct-interactive-display"), name: "interactive-display", display_name: "Interactive Display", official: true, parent: "display", parent_id: uuidFor("ct-display"), default_tags: [] },
+  { id: uuidFor("ct-touch-panel"), name: "touch-panel", display_name: "Touch Panel", official: true, stem: "panel", abbrev: "tp", icon: "touchpad", default_tags: [] },
 ];
 
 const vendors: Vendor[] = [
@@ -51,6 +61,7 @@ const asides = () => document.querySelectorAll("aside[data-blade]");
 function mount(me: Me = admin) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...PRODUCTS_KEY], seed);
+  qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
   qc.setQueryData([...VENDORS_KEY], vendors);
   qc.setQueryData([...DRIVERS_KEY], drivers);
   qc.setQueryData([...CAPABILITIES_KEY], capabilities);
@@ -171,6 +182,123 @@ describe("Products page", () => {
   it("hides New product for a caller without product:create", () => {
     mount(viewer);
     expect(screen.queryByText(/New product/i)).toBeNull();
+  });
+});
+
+// #614: the component_type registry returns as the product's genus (ADR-0085),
+// so classifying a product is now a required, pickable fact, not an implicit
+// derivation from kind. The picker offers the seeded tree, indented by depth,
+// so a nested type (interactive-display under display) reads as nested.
+describe("Products type picker (#614)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("renders the seeded component_type tree, a child option after its parent", async () => {
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: /new product/i }));
+    const typeSelect = (await screen.findByLabelText("Type")) as HTMLSelectElement;
+    const labels = Array.from(typeSelect.options).map((o) => o.textContent?.trim());
+    expect(labels).toEqual(["Display", "Interactive Display", "Touch Panel"]);
+    // The child renders indented with a leading non-breaking space run (an
+    // ordinary space would collapse in a <select>, ComponentTypeSelect.tsx);
+    // the parent and the sibling root carry none. textContent, not .text: the
+    // latter strips leading/trailing whitespace per the HTMLOptionElement
+    // spec, which would silently defeat this exact assertion.
+    const nbsp = String.fromCharCode(160);
+    const raw = Array.from(typeSelect.options).map((o) => o.textContent ?? "");
+    expect(raw[0].startsWith(nbsp)).toBe(false);
+    expect(raw[1].startsWith(nbsp)).toBe(true);
+    expect(raw[2].startsWith(nbsp)).toBe(false);
+  });
+
+  it("blocks Create product until a type is chosen, even with a display name and a kind", async () => {
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: /new product/i }));
+    const display = screen.getByPlaceholderText("Crestron TSW-1070") as HTMLInputElement;
+    fireEvent.input(display, { target: { value: "Acme Screen" } });
+    const submit = screen.getByRole("button", { name: /create product/i }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    fireEvent.change(await screen.findByLabelText("Type"), { target: { value: "display" } });
+    expect(submit.disabled).toBe(false);
+  });
+
+  it("sends the chosen component_type on create", async () => {
+    let sent: unknown;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes("/products")) {
+        sent = JSON.parse(await req.clone().text());
+        return new Response(JSON.stringify({ ...seed[1], name: "acme-screen", component_type: "display" }), { status: 201, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ products: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: /new product/i }));
+    fireEvent.input(screen.getByPlaceholderText("Crestron TSW-1070"), { target: { value: "Acme Screen" } });
+    fireEvent.change(await screen.findByLabelText("Type"), { target: { value: "display" } });
+    fireEvent.click(screen.getByRole("button", { name: /create product/i }));
+    await waitFor(() => expect(sent).toBeTruthy());
+    expect((sent as { component_type: string }).component_type).toBe("display");
+  });
+});
+
+// #614: kind narrows to device/app/service; vm folds into app.
+describe("Products kind options (#614/ADR-0086)", () => {
+  it("offers device, app, and service, and never vm", async () => {
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: /new product/i }));
+    const kindSelect = screen.getByLabelText("Kind") as HTMLSelectElement;
+    const values = Array.from(kindSelect.options).map((o) => o.value);
+    expect(values).toEqual(["device", "app", "service"]);
+  });
+});
+
+// #614: the icon lives on the type, a product may override it (ADR-0085's
+// "product.icon becomes an override" clause). The preview resolves the type's
+// icon until the operator sets one, then resolves the override instead.
+describe("Products icon fallback and override (#614)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("previews the classified type's icon on the create form until an override is typed", async () => {
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: /new product/i }));
+    fireEvent.change(await screen.findByLabelText("Type"), { target: { value: "display" } });
+    // No override yet: the icon input carries the type's icon as its
+    // placeholder, not a value (nothing has been typed).
+    const iconInput = screen.getByLabelText("Icon") as HTMLInputElement;
+    expect(iconInput.value).toBe("");
+    expect(iconInput.placeholder).toBe("monitor");
+    // Typing an override changes the placeholder's role: the value now wins.
+    fireEvent.input(iconInput, { target: { value: "tv" } });
+    expect(iconInput.value).toBe("tv");
+  });
+
+  it("shows a custom row's own icon in the blade, not the type's, once one is set", async () => {
+    const withOverride: Product = { ...seed[1], icon: "tv" };
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...PRODUCTS_KEY], [seed[0], withOverride]);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
+    qc.setQueryData([...VENDORS_KEY], vendors);
+    qc.setQueryData([...DRIVERS_KEY], drivers);
+    qc.setQueryData([...CAPABILITIES_KEY], capabilities);
+    qc.setQueryData([...PROPERTIES_KEY], propertyCatalog);
+    qc.setQueryData([...METRICS_KEY], []);
+    qc.setQueryData([...classifierPropertiesKey("product", "acme-panel")], contract);
+    qc.setQueryData([...classifierMetricsKey("product", "acme-panel")], []);
+    qc.setQueryData([...ME_KEY], admin);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Products />
+      </QueryClientProvider>
+    ));
+    fireEvent.click(await screen.findByText("Acme Panel"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    // Read mode: the icon key text is the override, not the type's monitor.
+    expect(within(blade).getByText("tv")).toBeInTheDocument();
+    expect(within(blade).queryByText("monitor")).not.toBeInTheDocument();
   });
 });
 

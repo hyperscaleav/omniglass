@@ -1,4 +1,5 @@
 import { PRODUCTS_KEY, listProducts } from "./products";
+import { COMPONENT_TYPES_KEY, listComponentTypes } from "./component_types";
 import { VENDORS_KEY, listVendors } from "./vendors";
 import { DRIVERS_KEY, listDrivers } from "./drivers";
 import { CAPABILITIES_KEY, listCapabilities } from "./capabilities";
@@ -86,6 +87,10 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
       { label: "Products", path: "/products", gate: ["product", "read"], key: PRODUCTS_KEY, list: listProducts },
       { label: "Drivers", path: "/drivers", gate: ["driver", "read"], key: DRIVERS_KEY, list: listDrivers },
       { label: "Capabilities", path: "/capabilities", gate: ["capability", "read"], key: CAPABILITIES_KEY, list: listCapabilities },
+      // "Types": the Components header already says where it lives (mirrors
+      // Locations' own Types entry below). The device-class genus registry
+      // (ADR-0085): a product is classified under one of its nodes.
+      { label: "Types", path: "/component-types", gate: ["component_type", "read"], key: COMPONENT_TYPES_KEY, list: listComponentTypes },
       { label: "Templates", soon: true, issue: 615 },
     ],
   },

@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
@@ -6,6 +6,7 @@ import Components from "./Components";
 import { COMPONENTS_KEY, type Component } from "../lib/components";
 import { SYSTEMS_KEY } from "../lib/systems";
 import { LOCATIONS_KEY } from "../lib/locations";
+import { PRODUCTS_KEY, type Product } from "../lib/products";
 import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 import { uuidFor } from "../lib/testids";
@@ -18,11 +19,23 @@ import { uuidFor } from "../lib/testids";
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 const comp: Component = { id: uuidFor("c-1"), name: "mic-2", display_name: "Ceiling Mic 2", product_id: "shure-mxa920", system_count: 0, effective_tags: {} };
 
+// #614: every component is an instance of a product; the create form's
+// Product picker offers the real catalog plus the three generics that make
+// the classification floor total for anything not yet modeled more
+// specifically.
+const products: Product[] = [
+  { id: uuidFor("prod-shure"), name: "shure-mxa920", display_name: "Shure MXA920", kind: "device", component_type: "ceiling-mic", component_type_id: uuidFor("ct-ceiling-mic"), capabilities: [], official: true },
+  { id: uuidFor("prod-generic-device"), name: "generic-device", display_name: "Generic Device", kind: "device", component_type: "generic-device", component_type_id: uuidFor("ct-generic-device"), capabilities: [], official: true },
+  { id: uuidFor("prod-generic-app"), name: "generic-app", display_name: "Generic App", kind: "app", component_type: "generic-app", component_type_id: uuidFor("ct-generic-app"), capabilities: [], official: true },
+  { id: uuidFor("prod-generic-service"), name: "generic-service", display_name: "Generic Service", kind: "service", component_type: "generic-service", component_type_id: uuidFor("ct-generic-service"), capabilities: [], official: true },
+];
+
 function mount(path: string) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...COMPONENTS_KEY], [comp]);
   qc.setQueryData([...SYSTEMS_KEY], []);
   qc.setQueryData([...LOCATIONS_KEY], []);
+  qc.setQueryData([...PRODUCTS_KEY], products);
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...TAGS_KEY], []);
   qc.setQueryData([...entityTagsKey("component", "mic-2")], []);
@@ -97,5 +110,57 @@ describe("Components create-as-route", () => {
     const submit = screen.getByText("Create interface").closest("button")!;
     expect(top.querySelector("footer")!.contains(submit)).toBe(true);
     expect(top.querySelector("form")!.querySelectorAll("button").length).toBe(0);
+  });
+});
+
+// #614: component.product_id is NOT NULL. A component cannot exist without a
+// product, so the create form makes Product a required field and offers the
+// three generics (generic-device/app/service) as the fallback choice for
+// anything not yet modeled as a real SKU.
+describe("Components create requires a product (#614)", () => {
+  afterEach(() => {
+    window.history.pushState({}, "", "/");
+    vi.restoreAllMocks();
+  });
+
+  it("renders a Product field and blocks Create component until one is chosen", async () => {
+    mount("/components/create");
+    await waitFor(() => expect(screen.getByText("New component")).toBeTruthy());
+    fireEvent.input(screen.getByPlaceholderText("Ceiling Mic 2"), { target: { value: "Spare Panel" } });
+    const submit = screen.getByText("Create component").closest("button") as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    const productSelect = screen.getByLabelText("Product") as HTMLSelectElement;
+    fireEvent.change(productSelect, { target: { value: "shure-mxa920" } });
+    expect(submit.disabled).toBe(false);
+  });
+
+  it("offers the generics as fallback choices in the Product picker", async () => {
+    mount("/components/create");
+    await waitFor(() => expect(screen.getByText("New component")).toBeTruthy());
+    const productSelect = screen.getByLabelText("Product") as HTMLSelectElement;
+    const labels = Array.from(productSelect.options).map((o) => o.textContent);
+    expect(labels).toContain("Shure MXA920");
+    expect(labels).toContain("Generic Device");
+    expect(labels).toContain("Generic App");
+    expect(labels).toContain("Generic Service");
+  });
+
+  it("sends the chosen product on create, generic or real", async () => {
+    let sent: unknown;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.endsWith("/components")) {
+        sent = JSON.parse(await req.clone().text());
+        return new Response(JSON.stringify({ ...comp, name: "spare-panel", product: "generic-device" }), { status: 201, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ components: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    mount("/components/create");
+    await waitFor(() => expect(screen.getByText("New component")).toBeTruthy());
+    fireEvent.input(screen.getByPlaceholderText("Ceiling Mic 2"), { target: { value: "Spare Panel" } });
+    fireEvent.change(screen.getByLabelText("Product"), { target: { value: "generic-device" } });
+    fireEvent.click(screen.getByText("Create component"));
+    await waitFor(() => expect(sent).toBeTruthy());
+    expect((sent as { product: string }).product).toBe("generic-device");
   });
 });

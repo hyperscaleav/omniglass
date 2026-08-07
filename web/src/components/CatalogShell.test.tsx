@@ -98,7 +98,7 @@ describe("CatalogShell", () => {
       "/catalog",
       "/metrics", "/properties", "/event-types",
       "/command-types", "/rules", "/notifications",
-      "/vendors", "/products", "/drivers", "/capabilities",
+      "/vendors", "/products", "/drivers", "/capabilities", "/component-types",
       "/standards",
       "/location-types",
       "/tags",
@@ -161,7 +161,7 @@ describe("CatalogShell", () => {
 
   it("keeps every entry for a *:read floor viewer: nothing on the subrail is off the read floor", () => {
     mount(viewer);
-    expect(hrefs()).toHaveLength(14);
+    expect(hrefs()).toHaveLength(15);
     expect([...nav().querySelectorAll("button[disabled]")]).toHaveLength(3);
   });
 

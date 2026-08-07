@@ -189,15 +189,73 @@ export const DoorOpen: Component<P> = (p) => (
   <Svg size={p.size}><path d="M13 4h3a2 2 0 0 1 2 2v14" /><path d="M2 20h3M13 20h9" /><path d="M13 4.5 5 6v14l8 1.5z" /><path d="M10 12v.01" /></Svg>
 );
 
-// resolveIcon maps a location_type icon key to its glyph component, falling back
-// to MapPin for an unknown or missing key, so the API can add a new type icon
-// without a coordinated console release (the tree stays renderable meanwhile).
+// Device-class glyphs: the leading icon a component_type wears (the seeded
+// tree's icon keys, internal/seed/component_types.yaml), resolved the same
+// way a location_type's icon is (see resolveIcon below).
+export const Monitor: Component<P> = (p) => (
+  <Svg size={p.size}><rect x="2" y="4" width="20" height="13" rx="1.5" /><path d="M8 21h8M12 17v4" /></Svg>
+);
+export const Projector: Component<P> = (p) => (
+  <Svg size={p.size}><rect x="2" y="7" width="16" height="10" rx="1.5" /><circle cx="7" cy="12" r="2.2" /><path d="M13 10h.01" /><path d="M18 10.5 22 8v8l-4-2.5" /></Svg>
+);
+export const Tv: Component<P> = (p) => (
+  <Svg size={p.size}><rect x="2" y="6" width="20" height="14" rx="1.5" /><path d="M8 3h8M9 6l3-3 3 3" /></Svg>
+);
+export const Shuffle: Component<P> = (p) => (
+  <Svg size={p.size}><path d="M3 6h3.5l9 12H21M14.5 6H21M18 3l3 3-3 3M18 18l3 3-3 3M3 18h3.5l3.5-4.7" /></Svg>
+);
+export const Video: Component<P> = (p) => (
+  <Svg size={p.size}><rect x="2" y="6" width="13" height="12" rx="1.5" /><path d="m15 10 6-3.5v11L15 14" /></Svg>
+);
+export const Cpu: Component<P> = (p) => (
+  <Svg size={p.size}><rect x="6" y="6" width="12" height="12" rx="1.5" /><rect x="9" y="9" width="6" height="6" /><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3" /></Svg>
+);
+export const Speaker: Component<P> = (p) => (
+  <Svg size={p.size}><rect x="4" y="2" width="16" height="20" rx="2" /><circle cx="12" cy="15" r="4" /><path d="M12 14.5v1" /><path d="M12 6h.01" /></Svg>
+);
+export const Mic: Component<P> = (p) => (
+  <Svg size={p.size}><rect x="9" y="2" width="6" height="12" rx="3" /><path d="M5 10a7 7 0 0 0 14 0" /><path d="M12 17v4M9 21h6" /></Svg>
+);
+export const Camera: Component<P> = (p) => (
+  <Svg size={p.size}><path d="M4 8h3l2-2h6l2 2h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" /><circle cx="12" cy="14" r="3.5" /></Svg>
+);
+export const Touchpad: Component<P> = (p) => (
+  <Svg size={p.size}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 14h18M12 14v6" /></Svg>
+);
+export const Network: Component<P> = (p) => (
+  <Svg size={p.size}><rect x="9" y="2" width="6" height="5" rx="1" /><rect x="2" y="17" width="6" height="5" rx="1" /><rect x="16" y="17" width="6" height="5" rx="1" /><path d="M12 7v5M12 12H5v5M12 12h7v5" /></Svg>
+);
+export const Box: Component<P> = (p) => (
+  <Svg size={p.size}><path d="m3 8 9-5 9 5-9 5-9-5z" /><path d="M3 8v9l9 5 9-5V8" /><path d="M12 13v9" /></Svg>
+);
+export const AppWindow: Component<P> = (p) => (
+  <Svg size={p.size}><rect x="2" y="4" width="20" height="16" rx="2" /><path d="M2 9h20" /><path d="M5.5 6.5h.01" /></Svg>
+);
+
+// resolveIcon maps an icon key (a location_type's or a component_type's) to
+// its glyph component, falling back to MapPin for an unknown or missing key,
+// so the API can add a new type icon without a coordinated console release
+// (the tree stays renderable meanwhile).
 export const iconByName: Record<string, Component<P>> = {
   landmark: Landmark,
   building: Building,
   layers: Layers,
   "door-open": DoorOpen,
   "map-pin": MapPin,
+  monitor: Monitor,
+  projector: Projector,
+  tv: Tv,
+  shuffle: Shuffle,
+  video: Video,
+  cpu: Cpu,
+  speaker: Speaker,
+  mic: Mic,
+  camera: Camera,
+  touchpad: Touchpad,
+  network: Network,
+  box: Box,
+  "app-window": AppWindow,
+  server: Server,
 };
 export const resolveIcon = (name: string | undefined | null): Component<P> =>
   (name && iconByName[name]) || MapPin;

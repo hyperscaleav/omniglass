@@ -129,6 +129,7 @@ export const OFF_RAIL: { path: string; label: string; hint: string; resource?: s
   { path: "/vendors", label: "Vendors", resource: "vendor", hint: "The organizations behind products: manufacturers, integrators, developers." },
   { path: "/drivers", label: "Drivers", resource: "driver", hint: "The implementations that get, emit, and set a product's signals." },
   { path: "/capabilities", label: "Capabilities", resource: "capability", hint: "What a component can do: microphone, display, and the rest." },
+  { path: "/component-types", label: "Component types", resource: "component_type", hint: "The device-class genus registry: display, projector, mic, and your own, each carrying the icon, stem, and abbreviation its products inherit." },
   { path: "/standards", label: "Standards", resource: "standard", hint: "The blueprints a system conforms to, each declaring the properties every conforming system exposes." },
   { path: "/location-types", label: "Location types", resource: "location_type", hint: "The place classifier registry: campus, building, floor, room, and your own." },
   { path: "/secret-types", label: "Secret types", resource: "secret", hint: "The shapes a secret can take, read-only reference data that ships with Omniglass." },

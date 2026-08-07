@@ -23,6 +23,8 @@ const product: Product = {
   name: "crestron-tsw",
   display_name: "Crestron TSW",
   kind: "device",
+  component_type: "touch-panel",
+  component_type_id: "ct-touch-panel",
   capabilities: ["touch-panel", "speaker"],
   official: true,
 };

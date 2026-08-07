@@ -19,6 +19,7 @@ import {
 } from "../lib/components";
 import { SYSTEMS_KEY, listSystems } from "../lib/systems";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
+import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { openInEdit, consumePendingEdit } from "../lib/pendingedit";
@@ -83,6 +84,10 @@ export default function Components() {
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
   const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
+  // The product catalog for the create form's required Product picker (#614:
+  // component.product_id is NOT NULL, so every component is an instance of a
+  // product; the generics fit anything not yet modeled more specifically).
+  const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
 
   const sysByName = createMemo(() => new Map((systems.data ?? []).map((s) => [s.name, s] as const)));
   const locById = createMemo(() => new Map((locations.data ?? []).map((l) => [l.id, l] as const)));
@@ -402,8 +407,16 @@ export default function Components() {
     const [system, setSystem] = createSignal("");
     const [location, setLocation] = createSignal("");
     const [parent, setParent] = createSignal("");
+    const [product, setProduct] = createSignal("");
     const [busy, setBusy] = createSignal(false);
     const [formErr, setFormErr] = createSignal<string | null>(null);
+
+    // Sorted by display name, generics included: the fallback choice for
+    // anything not yet modeled as a real SKU sits in the same list as every
+    // named product, not behind a separate affordance.
+    const productOptions = createMemo(() =>
+      [...(products.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name)),
+    );
 
     async function create(e: Event) {
       e.preventDefault();
@@ -417,6 +430,7 @@ export default function Components() {
           system: system() || undefined,
           location: location() || undefined,
           parent: parent() || undefined,
+          product: product(),
         });
         await qc.invalidateQueries({ queryKey: COMPONENTS_KEY });
         openInEdit(nm);
@@ -471,12 +485,21 @@ export default function Components() {
           >
             <TreeSelect items={(components.data ?? []).map((c) => ({ id: c.id, value: c.name, label: entityLabel(c), parentId: c.parent }))} value={parent()} onChange={setParent} rootLabel="Root (no parent)" />
           </FieldRow>
+          <FieldRow
+            label="Product"
+            hint="What this component is an instance of. Required; use a generic until a real product is modeled."
+          >
+            <select class="select select-bordered w-full" value={product()} onChange={(e) => setProduct(e.currentTarget.value)}>
+              <option value="" disabled>Choose a product…</option>
+              <For each={productOptions()}>{(p) => <option value={p.name}>{p.display_name}</option>}</For>
+            </select>
+          </FieldRow>
         </div>
 
         <div class="flex items-center gap-2 border-t border-base-300 pt-4">
           <Button icon={X} onClick={() => navigate("/components")}>Cancel</Button>
           <span class="flex-1" />
-          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !name().trim()}>Create component</Button>
+          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !name().trim() || !product()}>Create component</Button>
         </div>
 
         <div class="flex flex-col gap-1 opacity-50">
