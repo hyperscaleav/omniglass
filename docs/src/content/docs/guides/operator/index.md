@@ -44,7 +44,12 @@ There are two ways to operate, and they are the same API with the same checks be
   settings engine, not a per-session toggle.
 - Press **⌘K** (or Ctrl-K) to open the command palette and jump to any section by name. Arrow
   keys move the selection, Enter navigates, Esc closes. This is a global jump, distinct from a
-  page's own [filter](/guides/operator/inventory/#filter).
+  page's own [filter](/guides/operator/inventory/#filter). It searches every destination you can
+  reach: the sidebar's own sections and, though the sidebar shows Catalog as one entry, each
+  catalog registry by its own name, tagged with its group (typing `products` jumps straight to
+  **Catalog, under Components: Products**). Typing a group name finds everything under it, so
+  `telemetry` lists Metrics, Properties, and Events. The palette offers only what you may read,
+  the same rule that hides a sidebar tab.
 - You only see what you can use: a tab you have no read grant for is **hidden**, and an
   action you cannot perform does not render. The same permission map also **guards the route**,
   so a hidden tab is an unreachable URL: typing or bookmarking a page you cannot read redirects

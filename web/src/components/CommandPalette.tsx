@@ -1,37 +1,60 @@
 import { For, Show, createMemo, createSignal, createEffect, createUniqueId } from "solid-js";
 import { Dialog } from "@kobalte/core/dialog";
 import { useNavigate } from "@solidjs/router";
-import { navItems } from "../lib/nav";
+import { navItems, filterNav } from "../lib/nav";
+import { visibleGroups } from "../lib/catalog";
+import { useMe, can } from "../lib/auth";
 import { Search, ArrowRight } from "./icons";
 
 // The ⌘K command palette: a global jump across the whole app (distinct from a
 // page's own filter). Built on Kobalte Dialog (focus-trap, Esc, scroll-lock for
-// free); the command source is the nav IA flattened to destinations. Arrow keys
-// move the active row, Enter navigates.
+// free). Arrow keys move the active row, Enter navigates.
 export type Command = { label: string; path: string; group?: string; section?: string };
 
-// A sectioned child folds its section into the group tag; no nav child carries
-// a section today (the catalog registries left the rail for the shell's subrail,
-// pinned by this component's test), so the machinery is currently instanceless
-// and every entry wears its bare group label. Exported for the source test.
-export const commands: Command[] = navItems.flatMap((item) =>
-  item.path
-    ? [{ label: item.label, path: item.path }]
-    : (item.children ?? []).map((c) => ({
-        label: c.label,
-        path: c.path,
-        group: c.section ? `${item.label} · ${c.section}` : item.label,
-        section: c.section,
-      })),
-);
+// buildCommands is the palette's source: every destination the caller may
+// reach, flattened to one searchable list.
+//
+// Two halves, each judged through the SAME `allow` its own surface uses, so the
+// palette can never offer a jump the route guard would bounce (and never hides
+// one the rail shows). The rail half runs through nav.ts's filterNav, the very
+// function that hides a sidebar button. The catalog half runs through
+// catalog.ts's visibleGroups, the very function the shell's subrail and the
+// Overview cards render from: the registries left the rail for that subrail
+// (#625), and reading them from CATALOG_GROUPS is what keeps them findable by
+// name here without a second membership list to drift (#628).
+//
+// A registry wears its catalog group as a section, so the group tag reads
+// `Catalog · Telemetry` and a lane name finds its registries. A pathless soon
+// slot (the Templates reservations) is no destination and is left out; a routed
+// soon slot (Rules, Notifications) jumps to its stub, exactly as the rail's own
+// unbuilt sections do.
+export function buildCommands(allow: (tokens: string[]) => boolean): Command[] {
+  const rail: Command[] = filterNav(navItems, allow).flatMap((item) =>
+    item.path
+      ? [{ label: item.label, path: item.path }]
+      : (item.children ?? []).map((c) => ({
+          label: c.label,
+          path: c.path,
+          group: c.section ? `${item.label} · ${c.section}` : item.label,
+          section: c.section,
+        })),
+  );
+  const catalog: Command[] = visibleGroups(allow).flatMap((g) =>
+    g.entries
+      .filter((e) => e.path)
+      .map((e) => ({ label: e.label, path: e.path!, group: `Catalog · ${g.header}`, section: g.header })),
+  );
+  return [...rail, ...catalog];
+}
 
-// matches is the palette filter: label, group, or section (the section clause
-// is instanceless today; it holds for any future sectioned child).
+// matches is the palette filter: label, group, or section.
 export const matches = (c: Command, q: string): boolean =>
   c.label.toLowerCase().includes(q) || (c.group ?? "").toLowerCase().includes(q) || (c.section ?? "").toLowerCase().includes(q);
 
 export default function CommandPalette(props: { open: boolean; onClose: () => void }) {
   const navigate = useNavigate();
+  const me = useMe();
+  const commands = createMemo(() => buildCommands((tokens) => can(me.data, ...tokens)));
   const [query, setQuery] = createSignal("");
   const [active, setActive] = createSignal(0);
   const listId = createUniqueId();
@@ -39,8 +62,8 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
 
   const results = createMemo(() => {
     const q = query().trim().toLowerCase();
-    if (!q) return commands;
-    return commands.filter((c) => matches(c, q));
+    if (!q) return commands();
+    return commands().filter((c) => matches(c, q));
   });
 
   // Reset query + selection each time it opens; keep active in range as results change.
