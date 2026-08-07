@@ -19,14 +19,15 @@ import {
   deleteVendor,
 } from "../lib/vendors";
 import { useMe, can } from "../lib/auth";
+import { registryLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Vendors: the vendor registry (the vendor picker on the product form), on the
 // flat FlatList surface. A vendor is addressed by its kebab name (ADR-0062:
 // the uuid is identity, the name is what an operator reads and types);
-// official (seed-owned) rows are read-only, same as the Types catalog's
-// official rows: no Edit pencil, no Delete. Each vendor carries a kind
+// official rows are read-only, same as the Types catalog's
+// official rows: the Edit / Delete pair greys. Each vendor carries a kind
 // (manufacturer/integrator/developer).
 
 const VENDOR_KINDS: VendorKind[] = ["manufacturer", "integrator", "developer"];
@@ -99,7 +100,7 @@ export default function Vendors() {
 }
 
 // vendorBlade renders an id on the shared blade stack. An official row is
-// read-only (no pencil, no destructive action); a custom row carries Edit +
+// read-only (the Edit / Delete pair greys); a custom row carries Edit +
 // Delete.
 export const vendorBlade: BladeDef = {
   Title: (p) => <VendorBladeTitle id={p.id} />,
@@ -179,6 +180,7 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
       row() && !row()!.official && can(me.data, "vendor", "delete")
         ? { label: "Delete", tone: "danger", onClick: removeVendor }
         : undefined,
+    locked: () => registryLock(row(), me.data, "vendor"),
   });
 
   return (
@@ -233,9 +235,6 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
               </Show>
             }
           />
-          <Show when={r().official}>
-            <div role="alert" class="alert alert-soft text-sm"><span>Seed-owned, read-only.</span></div>
-          </Show>
         </div>
       )}
     </Show>

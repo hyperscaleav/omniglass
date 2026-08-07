@@ -62,7 +62,22 @@ export type FlatConfig<T> = {
   // the single Drawer detail. `rootKind` is the kind a row opens; `registry` maps
   // each kind to its blade renderers; a body drills via useBlades(). Requires rowId.
   // The blade stack and the Drawer detail are mutually exclusive; a config sets one.
-  blades?: { registry: Record<string, BladeDef>; rootKind: string; controller?: BladeController };
+  // `rowKind` maps a ROW to its kind for a mixed-kind surface; absent, every row
+  // opens under `rootKind`, exactly the single-kind behavior every entity page
+  // relies on. No shipped page maps rowKind today (the merged Catalog browse that
+  // motivated it was retired for the shell); the contract stays pinned by
+  // FlatList.test for the next mixed-kind surface.
+  blades?: { registry: Record<string, BladeDef>; rootKind: string; rowKind?: (r: T) => string; controller?: BladeController };
+  // Controlled chip state (optional, forwarded to ListShell): a page whose own
+  // controls construct chips owns the signal and passes both; omit both for the
+  // shell-owned default every shipped page uses today (no page passes these yet).
+  chips?: Accessor<Chip[]>;
+  onChips?: (chips: Chip[]) => void;
+  // Fill mode (optional, forwarded to ListShell): for a page that caps its own
+  // height, the table region takes the surplus and scrolls internally under
+  // sticky column headers instead of growing the page. Off (every shipped page
+  // today), the list grows with content exactly as before.
+  fill?: boolean;
 };
 
 type SortState = { key: string; dir: 1 | -1 } | null;
@@ -76,7 +91,7 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
   // A row opens either a blade (cross-entity stack) or the single Drawer detail.
   const blades = cfg.blades?.controller ?? createBladeController();
   const openRow = (r: T) => {
-    if (cfg.blades && cfg.rowId) blades.push({ kind: cfg.blades.rootKind, id: cfg.rowId(r) });
+    if (cfg.blades && cfg.rowId) blades.push({ kind: cfg.blades.rowKind?.(r) ?? cfg.blades.rootKind, id: cfg.rowId(r) });
     else setSelected(() => r);
   };
 
@@ -142,6 +157,9 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
         rows={cfg.rows()}
         placeholder={cfg.filterPlaceholder}
         initialChips={cfg.initialChips}
+        chips={cfg.chips}
+        onChips={cfg.onChips}
+        fill={cfg.fill}
         error={cfg.error?.()}
         errorLabel={`Could not load ${cfg.entity.plural.toLowerCase()}`}
         trailing={trailing}
@@ -153,7 +171,15 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
           const span = () => cfg.columns.length + (openable ? 1 : 0);
           return (
             <>
-              <div class="overflow-x-auto">
+              <div
+                class="overflow-x-auto"
+                classList={{
+                  // Fill mode: this region absorbs the card's surplus height and
+                  // scrolls; the headers stick to its top (bg matches the card so
+                  // rows pass beneath them cleanly).
+                  "min-h-0 flex-1 overflow-y-auto [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-base-200": cfg.fill,
+                }}
+              >
                 <table class="table table-sm">
                   <Show when={cfg.columns.some((c) => c.width)}>
                     <colgroup>

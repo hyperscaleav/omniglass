@@ -21,6 +21,13 @@ export type NavChild = {
   // requires the admin tier `audit:read:admin`). Takes precedence over `resource`,
   // so the sidebar hides the tab from exactly whoever the server would 403.
   perm?: string;
+  // The section this entry sits under inside its group. A section is named for
+  // the estate noun it serves; the entry keeps the registry's own word (and where
+  // the registry's only word is "type", the entry is Types). The sidebar renders
+  // a section header as a non-folding label before each run of children sharing a
+  // section, never as a collapsible fold; filterNav still judges each entry on
+  // its own gate, so a section whose entries are all hidden loses its header too.
+  section?: string;
 };
 
 export type NavItem = {
@@ -63,32 +70,15 @@ export const navItems: NavItem[] = [
       { label: "Files", path: "/files", live: true, resource: "file", hint: "Firmware images, config dumps, runbooks, and captures kept with the estate, deduplicated and searchable." },
     ],
   },
-  {
-    label: "Catalog", icon: Icons.Layers, hint: "The authored model: templates, types, tags, and rules.",
-    children: [
-      { label: "Templates", path: "/templates", hint: "Example configurations you clone: start a location type, a standard, or a whole system from one, then own what you get." },
-      // Catalog entries take the bare plural noun: the group already says these
-      // are the shapes, and the palette and sidebar disambiguate the two that
-      // share a noun with an instance page (Inventory > Locations, Values >
-      // Secrets) by group.
-      { label: "Locations", path: "/location-types", live: true, resource: "location_type", hint: "The place classifier registry: campus, building, floor, room, and your own, each with its icon, allowed parents, and property contract." },
-      // Gated on secret (a sensitive resource off the *:read floor), the same
-      // permission as the /secret-types route it lists: a plain viewer sees
-      // neither, and never loses the location registry over it (#598).
-      { label: "Secrets", path: "/secret-types", live: true, resource: "secret", hint: "The shapes a secret can take, read-only reference data seeded with the release." },
-      { label: "Standards", path: "/standards", live: true, resource: "standard", hint: "The blueprints a system conforms to, each declaring the properties every conforming system exposes." },
-      { label: "Metrics", path: "/metrics", live: true, resource: "metric_type", hint: "The numeric signal catalog: the canonical series a sample measures, each carrying its unit and precision." },
-      { label: "Properties", path: "/properties", live: true, resource: "property_type", hint: "The categorical signal catalog: the canonical properties a sample observes and a product contract declares." },
-      { label: "Events", path: "/event-types", live: true, resource: "event_type", hint: "The occurrence catalog: the discrete happenings an event is typed by, the twin of the metric and property catalogs. The address keeps event-types; the events instance surface takes /events when it lands." },
-      { label: "Commands", path: "/command-types", live: true, resource: "command_type", hint: "The do catalog: what a component can be told, with a target and a settle window, the driver-owned twin of the other lane catalogs. The address keeps command-types; the command history surface takes /commands when it lands." },
-      { label: "Tags", path: "/tags", live: true, resource: "tag", hint: "The governed tag key vocabulary applied across the inventory." },
-      { label: "Vendors", path: "/vendors", live: true, resource: "vendor", hint: "The organizations behind products: manufacturers, integrators, developers." },
-      { label: "Drivers", path: "/drivers", live: true, resource: "driver", hint: "The implementations that get, emit, and set a product's signals." },
-      { label: "Capabilities", path: "/capabilities", live: true, resource: "capability", hint: "What a component can do: microphone, display, and the rest." },
-      { label: "Products", path: "/products", live: true, resource: "product", hint: "A concrete SKU: a vendor's product, its driver, kind, and the capabilities it provides." },
-      { label: "Rules", path: "/rules", hint: "Transform, calc, and event rules, with CEL and blast-radius preview." },
-    ],
-  },
+  // Catalog is a single live entry opening the catalog area: a layout shell
+  // (CatalogShell) whose subrail navigates between the registries' own routed
+  // pages, with the /catalog Overview as its landing. Ungated like Home: the
+  // subrail and the Overview permission-filter their entries (and count queries)
+  // with the same can() this rail uses, so a floor viewer opens it and sees
+  // exactly the registries it may read, while each registry page keeps its own
+  // route-guard gate. The per-registry pages stay declared off-rail (OFF_RAIL
+  // below): that carries their top-bar identity and their route-guard gates.
+  { label: "Catalog", path: "/catalog", icon: Icons.Layers, live: true, hint: "Everything the estate is typed by: every registry, browsable in one place." },
   { label: "Explore", path: "/explore", icon: Icons.Compass, hint: "Sample history, the event log, and the cascade resolve view." },
   { label: "Learn", path: "/learn", icon: Icons.GraduationCap, hint: "How collection turns a device into owned samples." },
   {
@@ -124,18 +114,64 @@ export function filterNav(items: NavItem[], allow: (tokens: string[]) => boolean
   return out;
 }
 
+// Off-rail pages: routed surfaces with no rail entry of their own. The Catalog
+// rail collapsed to the single /catalog entry (the shell's subrail navigates
+// the registries now), but every registry keeps its own routed page (where the
+// create and edit surfaces live), its identity in the top bar, and its
+// permission gate in the route guard, all declared here.
+// /templates set the precedent when it left the rail (#608). Each entry's
+// resource/perm feeds navPerms exactly as a rail entry's would, so collapsing
+// the rail loosened no gate: /secret-types still demands secret:read. A
+// not-yet-built page's tracking issue rides here too, shown on its stub
+// through navByPath exactly as a rail entry's would be.
+export const OFF_RAIL: { path: string; label: string; hint: string; resource?: string; perm?: string; issue?: number }[] = [
+  { path: "/products", label: "Products", resource: "product", hint: "A concrete SKU: a vendor's product, its driver, kind, and the capabilities it provides." },
+  { path: "/vendors", label: "Vendors", resource: "vendor", hint: "The organizations behind products: manufacturers, integrators, developers." },
+  { path: "/drivers", label: "Drivers", resource: "driver", hint: "The implementations that get, emit, and set a product's signals." },
+  { path: "/capabilities", label: "Capabilities", resource: "capability", hint: "What a component can do: microphone, display, and the rest." },
+  { path: "/standards", label: "Standards", resource: "standard", hint: "The blueprints a system conforms to, each declaring the properties every conforming system exposes." },
+  { path: "/location-types", label: "Location types", resource: "location_type", hint: "The place classifier registry: campus, building, floor, room, and your own." },
+  { path: "/secret-types", label: "Secret types", resource: "secret", hint: "The shapes a secret can take, read-only reference data that ships with Omniglass." },
+  { path: "/metrics", label: "Metrics", resource: "metric_type", hint: "The numeric signal catalog: the canonical series a sample measures, each carrying its unit and precision." },
+  { path: "/properties", label: "Properties", resource: "property_type", hint: "The categorical signal catalog: the canonical properties a sample observes and a product contract declares." },
+  { path: "/event-types", label: "Events", resource: "event_type", hint: "The occurrence catalog: the discrete happenings an event is typed by." },
+  { path: "/command-types", label: "Commands", resource: "command_type", hint: "The do catalog: what a component can be told, with a target and a settle window." },
+  { path: "/tags", label: "Tags", resource: "tag", hint: "The governed tag key vocabulary applied across the inventory." },
+  { path: "/rules", label: "Rules", hint: "Transform, calc, and event rules, with CEL and blast-radius preview.", issue: 624 },
+  { path: "/log-types", label: "Logs", hint: "The log shape catalog. The log lane arrives untyped today; typing what a line can be is still to come." },
+  { path: "/notifications", label: "Notifications", hint: "The outbound notification shapes: how a firing event reaches an operator, still to come.", issue: 618 },
+  { path: "/templates", label: "Templates", hint: "Example configurations you clone: start a location type, a standard, or a whole system from one, then own what you get." },
+];
+
 // Flattened title + hint (+ icon + tracking issue) lookup by base-relative path,
 // for the generic stub. A child inherits its parent group's icon (that is the icon
-// the sidebar shows it under), so the placeholder matches the sidebar.
-export type NavMeta = { label: string; hint: string; issue?: number; icon: Component<{ size?: number }> };
+// the sidebar shows it under), so the placeholder matches the sidebar. A sectioned
+// child also carries its group and section labels so the top bar can spell out the
+// full address. Off-rail pages keep their identity here too: a bookmark to
+// /products must still read "Products", not the anonymous fallback.
+export type NavMeta = { label: string; hint: string; issue?: number; icon: Component<{ size?: number }>; group?: string; section?: string };
 export const navByPath: Record<string, NavMeta> = (() => {
   const m: Record<string, NavMeta> = {};
   for (const item of navItems) {
     if (item.path) m[item.path] = { label: item.label, hint: item.hint, issue: item.issue, icon: item.icon };
-    for (const child of item.children ?? []) m[child.path] = { label: child.label, hint: child.hint, issue: child.issue, icon: item.icon };
+    for (const child of item.children ?? [])
+      m[child.path] = { label: child.label, hint: child.hint, issue: child.issue, icon: item.icon, group: item.label, section: child.section };
   }
+  for (const o of OFF_RAIL) m[o.path] = { label: o.label, hint: o.hint, issue: o.issue, icon: Icons.Layers };
   return m;
 })();
+
+// Stubbed sections: backends not built yet, each rendering SectionStub in the
+// router. /templates keeps its stub page though its rail entry is gone (#608).
+// /rules and /notifications mount INSIDE the CatalogShell (their stubs render
+// in the catalog pane; index.tsx filters them out of the top-level loop).
+// Lives here beside the entries it backs so the nav tests can assert every
+// unlive rail entry resolves to a registered stub rather than NotFound.
+export const STUBS = [
+  "/dashboards", "/alarms",
+  "/templates", "/rules", "/explore", "/learn",
+  "/config", "/log-types", "/notifications",
+];
 
 // The router base; nav paths are base-relative.
 const BASE = "/web";
@@ -149,7 +185,10 @@ export function lookupNav(pathname: string): NavMeta {
 }
 
 // sectionLabel resolves a pathname to its top-bar section by longest prefix, so
-// a detail route (/locations/hq) still resolves to "Locations".
+// a detail route (/locations/hq) still resolves to "Locations". A sectioned entry
+// spells out its full address (group · section · entry) because a bare label
+// would not identify it alone; instanceless today, since no nav child carries a
+// section after the shell landed. An unsectioned entry keeps its single label.
 export function sectionLabel(pathname: string): string {
   const path = relative(pathname);
   // Profile is reached from the sidebar footer, not a nav item, so it has no
@@ -160,7 +199,7 @@ export function sectionLabel(pathname: string): string {
   for (const [p, meta] of Object.entries(navByPath)) {
     const hit = p === "/" ? path === "/" : path === p || path.startsWith(`${p}/`);
     if (hit && p.length > best) {
-      label = meta.label;
+      label = meta.section ? `${meta.group} · ${meta.section} · ${meta.label}` : meta.label;
       best = p.length;
     }
   }
@@ -169,8 +208,9 @@ export function sectionLabel(pathname: string): string {
 
 // navPerms maps a gated route path to the permission tokens it requires, from the
 // SAME nav config that hides the sidebar button (an explicit `perm`, else
-// `<resource>:read`). An ungated path (Home, Profile, the stubs) is absent. This is
-// the single source both the sidebar (hide the button) and the route guard (block
+// `<resource>:read`), plus the off-rail pages, whose gates outlive their rail
+// entries. An ungated path (Home, Profile, the stubs) is absent. This is the
+// single source both the sidebar (hide the button) and the route guard (block
 // the URL) read, so the two can never diverge.
 const navPerms: Record<string, string[]> = (() => {
   const m: Record<string, string[]> = {};
@@ -183,6 +223,7 @@ const navPerms: Record<string, string[]> = (() => {
     add(item);
     for (const child of item.children ?? []) add(child);
   }
+  for (const o of OFF_RAIL) add(o);
   return m;
 })();
 

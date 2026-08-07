@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, useContext, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
 import { Check, Pencil, Plus, Trash, X } from "./icons";
@@ -21,6 +21,7 @@ import {
 } from "../lib/classifier_metrics";
 import { displayValue, parseInput, type ValueType } from "../lib/variables";
 import { useMe, can } from "../lib/auth";
+import { BladeEditContext } from "../lib/blades";
 import { describeError } from "../lib/format";
 
 // ContractEditor is the classifier detail-blade panel for curating a declared
@@ -42,9 +43,10 @@ import { describeError } from "../lib/format";
 //
 // Each line is addressed by name, so a write is a PUT (idempotent: an edit
 // revises the line in place) and a withdraw is a DELETE. Writes are immediate, like
-// the tag panel, so the panel has no Save of its own and does not contend with the
-// blade's edit slot (which the classifier's core facts already own). Declaring needs
-// the classifier's :update, withdrawing its :delete, and an official (seed-owned)
+// the tag panel, so the panel has no Save of its own; the blade's edit slot still
+// gates it (#621): the controls render only while the hosting blade is in edit
+// mode, and in read mode the declared lines render as facts alone. Declaring needs
+// the classifier's :update, withdrawing its :delete, and an official
 // classifier's contract is read-only: the list renders, the controls do not.
 
 export type ContractLane = "property" | "metric";
@@ -198,11 +200,17 @@ export default function ContractEditor(props: {
       .map((r) => ({ ...r, meta: byName().get(r.name) })),
   );
 
-  // A read-only contract: an official classifier is seed-owned, and declaring is
+  // The hosting blade's edit slot, read from the ambient context: the panel's
+  // controls are edit-state affordances, rendered only while the blade is in
+  // edit mode (the pencil is the one route to them). Outside any blade context
+  // the panel renders read-only, the same rule BladeField follows.
+  const blade = useContext(BladeEditContext);
+  const bladeEditing = () => !!blade?.editing();
+  // A read-only contract: an official classifier is release-owned, and declaring is
   // the classifier's own :update (withdrawing its :delete, as the server gates them).
   const resource = () => CLASSIFIER_RESOURCE[props.classifier];
-  const canDeclare = () => !props.official && can(me.data, resource(), "update");
-  const canWithdraw = () => !props.official && can(me.data, resource(), "delete");
+  const canDeclare = () => bladeEditing() && !props.official && can(me.data, resource(), "update");
+  const canWithdraw = () => bladeEditing() && !props.official && can(me.data, resource(), "delete");
 
   // The catalog minus what the classifier already declares: an entry is declared
   // at most once, so the picker cannot offer a duplicate.
@@ -221,6 +229,22 @@ export default function ContractEditor(props: {
   const [addName, setAddName] = createSignal("");
   const [addDefault, setAddDefault] = createSignal("");
   const [addRequired, setAddRequired] = createSignal(false);
+
+  // Leaving blade edit mode (Save or Cancel alike) discards the panel's open
+  // drafts and clears any stale error. Without this, a draft typed before
+  // Cancel resurrects pre-filled on the next pencil press, and a reflexive
+  // confirm click would PUT a line the operator believed discarded. Writes
+  // here are immediate-apply, so an open draft at footer Save is dropped, not
+  // flushed: the blade's Save concerns the fields it staged, never these.
+  createEffect((was: boolean | undefined) => {
+    const now = bladeEditing();
+    if (was && !now) {
+      setEditing(null);
+      resetAdd();
+      setErr(null);
+    }
+    return now;
+  });
 
   function openEdit(r: ContractRow) {
     setEditing(r.name);
@@ -299,7 +323,7 @@ export default function ContractEditor(props: {
       <div class="flex items-baseline justify-between gap-2">
         <span class="eyebrow">{lane().heading}</span>
         <span class="shrink-0 text-[10.5px] text-base-content/40">
-          {props.official ? "seed-owned, read-only" : copy().hint}
+          {props.official ? "official, read-only" : copy().hint}
         </span>
       </div>
       <p class="text-[11px] text-base-content/50">{copy().lede}</p>
@@ -351,8 +375,11 @@ export default function ContractEditor(props: {
                   </Show>
                 </div>
 
+                {/* canDeclare in the condition collapses a line left open when
+                    the blade drops out of edit mode (Cancel resets nothing
+                    here; the fact row is the only read-mode rendering). */}
                 <Show
-                  when={editing() === r.name}
+                  when={canDeclare() && editing() === r.name}
                   fallback={
                     <div class="flex items-center gap-2 text-[11px]">
                       <span class="text-base-content/40">default</span>

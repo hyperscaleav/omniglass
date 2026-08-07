@@ -146,17 +146,25 @@
 @layer components {
   .btn-action { @apply btn-primary; }
   .btn-quiet  { @apply btn-ghost; }
+  .btn-danger { @apply btn-ghost; }
+  .btn-warn   { @apply btn-ghost; }
+  .btn-ok     { @apply btn-ghost; }
 }
 
 /* The ghost intents carry their emphasis through `text-error/warning/success`, but
    daisyUI's own `.btn` color sits in the later `daisyui` layer and would override a
    layered utility, so the destructive Delete/Revoke and the Disable/Enable state
-   toggles rendered daisyUI's near-white instead of their intent color. Define them
-   UNLAYERED (like the .btn-action foreground override below) so the intent color
-   wins once, at the source, with no per-intent patch. */
-.btn-danger { @apply btn-ghost text-error; }
-.btn-warn   { @apply btn-ghost text-warning; }
-.btn-ok     { @apply btn-ghost text-success; }
+   toggles rendered daisyUI's near-white instead of their intent color. The COLOR is
+   defined UNLAYERED (like the .btn-action foreground override below) so it wins
+   once, at the source, with no per-intent patch; the ghost base stays in the
+   components layer with .btn-quiet. Both halves of that split are load-bearing for
+   the disabled state: unlayered, the color (or an unlayered ghost base) would also
+   beat daisyUI's `.btn:disabled` muted foreground, and a greyed-out Delete kept its
+   full error red and read as live next to a properly muted Edit. The :not(:disabled)
+   scope hands disabled buttons back to daisyUI. */
+.btn-danger:not(:disabled) { @apply text-error; }
+.btn-warn:not(:disabled)   { @apply text-warning; }
+.btn-ok:not(:disabled)     { @apply text-success; }
 
 /* The primary button takes the theme's own primary + primary-content (the brand
    teal fill with dark ink, both themes). daisyUI 5's `@apply btn-primary` drops the
@@ -226,6 +234,20 @@ html[data-density="compact"] { --og-row-h: 2.1rem; --og-pad-card: 0.9rem; --og-g
 .fade-in { animation: og-fade-in .18s ease both; }
 @keyframes og-fade-in { from { opacity: 0; transform: translateY(2px) } to { opacity: 1; transform: none } }
 @media (prefers-reduced-motion: reduce) { .fade-in { animation: none } }
+
+/* Tooltip on a focusable wrapper (the greyed lock buttons): daisyUI 5 reveals a
+   tooltip on `:hover` or `:has(:focus-visible)`, but a disabled button can never
+   take focus, so the wrapper span (tabindex=0) is the tab stop and the reveal
+   must also fire when the wrapper ITSELF is focus-visible. Same pseudo-element
+   pair daisyUI's own reveal targets (the `[data-tip]:before` bubble and the
+   `:after` tail), flipping the same opacity + --tt-pos. Unlayered, so it wins
+   over daisyUI's layered rule. The wrapper also carries the reason as
+   aria-label: the CSS reveal is the sighted keyboard path, the label the AT one. */
+.tooltip[data-tip]:not([data-tip=""]):focus-visible::before,
+.tooltip[data-tip]:not([data-tip=""]):focus-visible::after {
+  opacity: 1;
+  --tt-pos: 0rem;
+}
 
 /* apply theme/var changes instantly during a switch. */
 .theme-switching, .theme-switching * { transition: none !important; }

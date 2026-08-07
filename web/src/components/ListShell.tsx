@@ -27,6 +27,12 @@ export default function ListShell<T>(props: {
   // (uncontrolled), which is the flat case (FlatList) and the plain-catalog case.
   chips?: Accessor<Chip[]>;
   onChips?: (chips: Chip[]) => void;
+  // Fill mode (optional): the shell stretches to its parent's fixed height and
+  // hands the surplus to the body, whose scroll region scrolls internally
+  // instead of growing the page. The FilterBar header (and any footer) stay
+  // pinned. Off (the default), the shell grows with content exactly as every
+  // list page does today.
+  fill?: boolean;
   children: (filtered: Accessor<T[]>, chips: Accessor<Chip[]>) => JSX.Element;
 }) {
   const [ownChips, setOwnChips] = createSignal<Chip[]>(props.initialChips ?? []);
@@ -36,13 +42,13 @@ export default function ListShell<T>(props: {
   // memo never runs for it (Solid memos are pull-based).
   const filtered = createMemo(() => props.rows.filter(buildPredicate(props.filterKeys, chips())));
   return (
-    <div class="og-stack flex flex-col">
+    <div class="og-stack flex flex-col" classList={{ "h-full min-h-0": props.fill }}>
       <Show when={props.error}>
         <div role="alert" class="alert alert-error alert-soft text-sm">
           <span>{props.errorLabel ? `${props.errorLabel}: ` : ""}{describeError(props.error)}</span>
         </div>
       </Show>
-      <div class="card overflow-hidden border border-base-300 bg-base-200 p-0">
+      <div class="card overflow-hidden border border-base-300 bg-base-200 p-0" classList={{ "flex min-h-0 flex-1 flex-col": props.fill }}>
         <div class="border-b border-base-300 px-3 py-2.5">
           <FilterBar
             keys={props.filterKeys}

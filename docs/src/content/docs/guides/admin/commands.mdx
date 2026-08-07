@@ -5,7 +5,7 @@ description: "The Commands catalog and the invocations behind it: the canonical 
 
 import SeededSet from '../../../../components/SeededSet.astro';
 
-**Catalog > Commands** (with `command_type:read`, covered by every viewer's `*:read` floor) is
+**Catalog, under Actions: Commands** (with `command_type:read`, covered by every viewer's `*:read` floor) is
 the estate's **"do" catalog**: the directory of what a component can be **told**. The other
 catalogs name what the estate knows (a [property](/guides/admin/properties/) is a value, a
 [metric](/guides/admin/metrics/) is a quantity) and what happened (an
@@ -28,7 +28,7 @@ visible to every reader; the write gates decide who may change it.
 - The directory lists every command type sorted by name, each showing its **name** (the
   canonical identifier, with its display name on the line above it), **target** (the property or
   metric it sets, labelled with its lane, or fire-and-forget), **settle window** (seconds), and
-  **origin** (**official**, seed-owned, or **custom**). **name** filters by the name or its
+  **origin** (**official** or **custom**). **name** filters by the name or its
   display name; **official** narrows the list.
 - The **target is two-armed**: a **settleable** command names the value it sets in exactly one
   lane, a property (`set-input` targets `video-input`) or a metric (a volume command targets a
@@ -48,15 +48,18 @@ visible to every reader; the write gates decide who may change it.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with
   `command_type:update`) edits the display name, description, target, and settle window; the
   name is fixed at creation, since it is what every invocation is typed by. **Delete** (with
-  `command_type:delete`) removes a custom command type, behind a confirm.
+  `command_type:delete`) removes a custom command type, behind a confirm. A verb you lack greys
+  just that button, its hover reason naming the permission (`Requires command_type:update`,
+  `Requires command_type:delete`); the pair never disappears.
 - A command type can carry a **params schema** (a JSON Schema for the invocation params), set
   through the API for now; the console does not surface it yet. A schema whose `required` list
   names a property its `properties` block does not declare is refused at write with the name,
   and the stored schema is **enforced at issue**: an invocation whose params violate it is
   refused (422, naming the violated constraint), and absent params validate as the empty
   object, so a schema with required fields refuses a bare invocation.
-- An **official** (seed-owned) command type is always read-only: no Edit, no Delete, and the
-  blade marks it "Seed-owned, read-only." The shared vocabulary is the same from install to
+- An **official** command type is always read-only: the blade keeps the Edit and Delete pair in
+  place, greyed, with the reason on hover: "Official: ships with Omniglass and updates with it."
+  The shared vocabulary is the same from install to
   install, the same deliberate exception to the operator-owned rule the
   [Properties catalog](/guides/admin/properties/) makes, and for the same reason: a command type
   name is the vocabulary a driver maps onto, so a release has to be able to correct it

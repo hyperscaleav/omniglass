@@ -1,5 +1,5 @@
 import { type JSX, For, Show, createEffect, onCleanup } from "solid-js";
-import { Dynamic } from "solid-js/web";
+import { Dynamic, Portal } from "solid-js/web";
 import { Ban, ChevronLeft, MoreHorizontal, Pencil, RotateCcw, Save, Trash, X } from "./icons";
 import Button from "./Button";
 import PanelFooter from "./PanelFooter";
@@ -68,8 +68,13 @@ export default function BladeStack(props: {
     }
   });
 
+  // Portaled to body: `fixed` inside the page tree resolves against any
+  // transformed ancestor, and the page shell's fade-in animation leaves a
+  // filled transform behind, so a scrolled page would carry the stack
+  // off-screen with it (the portal-to-escape rule every overlay follows).
   return (
     <Show when={stack().length}>
+      <Portal>
       <div class="fixed inset-0 z-60 bg-black/45" onClick={() => props.controller.close()} />
       <For each={stack()}>
         {(ref, i) => {
@@ -80,6 +85,37 @@ export default function BladeStack(props: {
           // Save / Cancel (edit); the body reads it to switch its sections. Provided
           // via context so the header chrome and the body share one editing state.
           const edit = createEditSlot();
+          // The lock, split per footer side. A string reason locks both sides
+          // (the official row) and overrides every live slot; an object locks
+          // only the sides it names, each with its own reason.
+          const lockAll = () => {
+            const l = edit.locked();
+            return typeof l === "string" ? l : null;
+          };
+          const editLock = () => {
+            const l = edit.locked();
+            return typeof l === "string" ? l : (l?.edit ?? null);
+          };
+          const deleteLock = () => {
+            const l = edit.locked();
+            return typeof l === "string" ? l : (l?.delete ?? null);
+          };
+          // Composition guard: `locked` is a detail-blade binding and must not
+          // ride beside `primary` (a create blade under a lock renders a dead
+          // form; the guard in lib/blades documents the constraint). Warn once
+          // per blade, dev builds only.
+          if (import.meta.env.DEV) {
+            let warned = false;
+            createEffect(() => {
+              if (warned || !edit.primary()) return;
+              if (editLock() == null && deleteLock() == null) return;
+              warned = true;
+              console.warn(
+                `BladeStack: blade ${ref.kind}:${ref.id} binds primary and a non-null locked together; ` +
+                  "locked is for detail blades only and leaves the primary create form dead. Bind one or the other.",
+              );
+            });
+          }
           return (
             <Show when={def()}>
               {(d) => (
@@ -117,49 +153,83 @@ export default function BladeStack(props: {
                         Destructive (Delete / Disable) sits left and is always available;
                         secondary actions fold into a kebab; Edit / Save / Cancel is the
                         right cluster. Rendered only when the body registers an action, so
-                        a read-only blade (a role) has no bar. */}
-                    <Show when={edit.editable() || !!edit.destructive() || edit.secondary().length > 0 || !!edit.primary()}>
+                        a read-only blade (a role) has no bar. Each side honors its own
+                        lock: a side with a lock reason (an official row, a missing
+                        permission) renders its button greyed in its usual spot with the
+                        reason riding a tooltip, while the other side keeps its live
+                        binding; a string lock reasons both sides at once and overrides
+                        the kebab and primary slots too. The tooltip sits on a focusable
+                        wrapper span (a disabled button swallows the pointer events
+                        daisyUI's tooltip listens for, and can never take focus), which
+                        carries the reason as aria-label for AT; app.css reveals the
+                        tooltip when the wrapper itself is focus-visible, the keyboard
+                        path. */}
+                    <Show when={edit.editable() || !!edit.destructive() || edit.secondary().length > 0 || !!edit.primary() || editLock() != null || deleteLock() != null}>
                       <PanelFooter dimmed={!isTop()}>
-                        <Show when={edit.destructive()}>
-                          {(dst) => (
-                            <Button
-                              intent={dst().tone === "warn" ? "warn" : dst().tone === "ok" ? "ok" : "danger"}
-                              icon={dst().tone === "warn" ? Ban : dst().tone === "ok" ? RotateCcw : Trash}
-                              onClick={() => dst().onClick()}
-                            >
-                              {dst().label}
-                            </Button>
+                        <Show
+                          when={deleteLock()}
+                          fallback={
+                            <Show when={edit.destructive()}>
+                              {(dst) => (
+                                <Button
+                                  intent={dst().tone === "warn" ? "warn" : dst().tone === "ok" ? "ok" : "danger"}
+                                  icon={dst().tone === "warn" ? Ban : dst().tone === "ok" ? RotateCcw : Trash}
+                                  onClick={() => dst().onClick()}
+                                >
+                                  {dst().label}
+                                </Button>
+                              )}
+                            </Show>
+                          }
+                        >
+                          {(reason) => (
+                            <span class="tooltip tooltip-right" data-tip={reason()} aria-label={reason()} tabindex={0}>
+                              <Button intent="danger" icon={Trash} label="Delete" disabled>Delete</Button>
+                            </span>
                           )}
                         </Show>
                         <div class="ml-auto flex items-center gap-2">
-                          <Show when={!edit.editing() && edit.secondary().length > 0}>
-                            <div class="dropdown dropdown-top dropdown-end">
-                              <Button square icon={MoreHorizontal} label="More actions" tabindex={0} />
-                              <ul tabindex={0} class="dropdown-content menu z-50 mb-1.5 w-48 rounded-box border border-base-300 bg-base-100 p-1.5 shadow-2xl">
-                                <For each={edit.secondary()}>{(s) => <li><button class="flex items-center gap-2.5" classList={{ "text-error": s.tone === "danger" }} onClick={() => s.onClick()}>{s.icon}{s.label}</button></li>}</For>
-                              </ul>
-                            </div>
-                          </Show>
-                          <Show when={!edit.editing() && edit.primary()}>
-                            {(pr) => (
-                              <Button
-                                intent="action"
-                                onClick={() => pr().onClick()}
-                                loading={pr().busy?.()}
-                                disabled={pr().disabled?.()}
-                              >
-                                {pr().icon}{pr().label}
-                              </Button>
-                            )}
-                          </Show>
-                          <Show when={edit.editable()}>
-                            <Show
-                              when={edit.editing()}
-                              fallback={<Button intent="action" icon={Pencil} label="Edit" onClick={() => edit.begin()}>Edit</Button>}
-                            >
-                              <Button icon={X} onClick={() => edit.cancel()} disabled={edit.saving()}>Cancel</Button>
-                              <Button intent="action" icon={Save} onClick={() => { edit.save().catch(() => {}); }} loading={edit.saving()} disabled={!edit.valid()}>Save</Button>
+                          <Show when={!lockAll()}>
+                            <Show when={!edit.editing() && edit.secondary().length > 0}>
+                              <div class="dropdown dropdown-top dropdown-end">
+                                <Button square icon={MoreHorizontal} label="More actions" tabindex={0} />
+                                <ul tabindex={0} class="dropdown-content menu z-50 mb-1.5 w-48 rounded-box border border-base-300 bg-base-100 p-1.5 shadow-2xl">
+                                  <For each={edit.secondary()}>{(s) => <li><button class="flex items-center gap-2.5" classList={{ "text-error": s.tone === "danger" }} onClick={() => s.onClick()}>{s.icon}{s.label}</button></li>}</For>
+                                </ul>
+                              </div>
                             </Show>
+                            <Show when={!edit.editing() && edit.primary()}>
+                              {(pr) => (
+                                <Button
+                                  intent="action"
+                                  onClick={() => pr().onClick()}
+                                  loading={pr().busy?.()}
+                                  disabled={pr().disabled?.()}
+                                >
+                                  {pr().icon}{pr().label}
+                                </Button>
+                              )}
+                            </Show>
+                          </Show>
+                          <Show
+                            when={editLock()}
+                            fallback={
+                              <Show when={edit.editable()}>
+                                <Show
+                                  when={edit.editing()}
+                                  fallback={<Button intent="action" icon={Pencil} label="Edit" onClick={() => edit.begin()}>Edit</Button>}
+                                >
+                                  <Button icon={X} onClick={() => edit.cancel()} disabled={edit.saving()}>Cancel</Button>
+                                  <Button intent="action" icon={Save} onClick={() => { edit.save().catch(() => {}); }} loading={edit.saving()} disabled={!edit.valid()}>Save</Button>
+                                </Show>
+                              </Show>
+                            }
+                          >
+                            {(reason) => (
+                              <span class="tooltip tooltip-left" data-tip={reason()} aria-label={reason()} tabindex={0}>
+                                <Button intent="action" icon={Pencil} label="Edit" disabled>Edit</Button>
+                              </span>
+                            )}
                           </Show>
                         </div>
                       </PanelFooter>
@@ -176,6 +246,7 @@ export default function BladeStack(props: {
           );
         }}
       </For>
+      </Portal>
     </Show>
   );
 }

@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import "./app.css";
 import { setUnauthorizedHandler, clearToken } from "./api/client";
 import { ME_KEY } from "./lib/auth";
+import { STUBS } from "./lib/nav";
 import App from "./App";
 import { AuthGuard } from "./components/AuthGuard";
 import { RouteGuard } from "./components/RouteGuard";
@@ -26,6 +27,9 @@ import Properties from "./pages/Properties";
 import EventTypes from "./pages/EventTypes";
 import CommandTypes from "./pages/CommandTypes";
 import Tags from "./pages/Tags";
+import CatalogShell from "./components/CatalogShell";
+import CatalogOverview from "./pages/CatalogOverview";
+import { CATALOG_STUB_PATHS } from "./lib/catalog";
 import LocationTypes from "./pages/LocationTypes";
 import SecretTypes from "./pages/SecretTypes";
 import Standards from "./pages/Standards";
@@ -64,11 +68,8 @@ const ProtectedShell: ParentComponent = (props) => (
 );
 
 // Stubbed sections: backends not built yet. The design draws them as stubs too.
-const STUBS = [
-  "/dashboards", "/alarms",
-  "/templates", "/rules", "/explore", "/learn",
-  "/config",
-];
+// The list lives in nav.ts beside the entries it backs, so the nav tests can
+// assert every unlive rail entry resolves to a registered stub, not NotFound.
 
 render(
   () => (
@@ -96,21 +97,32 @@ render(
           <Route path="/groups" component={Groups} />
           <Route path="/secrets" component={Secrets} />
           <Route path="/variables" component={Variables} />
-          <Route path="/tags" component={Tags} />
-          <Route path="/location-types" component={LocationTypes} />
-          <Route path="/secret-types" component={SecretTypes} />
-          <Route path="/standards" component={Standards} />
-          <Route path="/metrics" component={Metrics} />
-          <Route path="/properties" component={Properties} />
-          <Route path="/event-types" component={EventTypes} />
-          <Route path="/command-types" component={CommandTypes} />
-          <Route path="/vendors" component={Vendors} />
-          <Route path="/drivers" component={Drivers} />
-          <Route path="/capabilities" component={Capabilities} />
-          <Route path="/products" component={Products} />
+          {/* The Catalog area is a layout route: CatalogShell draws the subrail
+              navigation around each registry's own page while the URL stays
+              canonical (/products, /metrics, ...). /catalog is the Overview
+              landing; the routed soon slots (/rules, /notifications) render
+              their SectionStub inside the pane; /secret-types renders in the
+              pane too but holds no subrail entry (the standing ruling). Each
+              page keeps its own route-guard gate. */}
+          <Route component={CatalogShell}>
+            <Route path="/catalog" component={CatalogOverview} />
+            <Route path="/metrics" component={Metrics} />
+            <Route path="/properties" component={Properties} />
+            <Route path="/event-types" component={EventTypes} />
+            <Route path="/command-types" component={CommandTypes} />
+            <Route path="/vendors" component={Vendors} />
+            <Route path="/products" component={Products} />
+            <Route path="/drivers" component={Drivers} />
+            <Route path="/capabilities" component={Capabilities} />
+            <Route path="/standards" component={Standards} />
+            <Route path="/location-types" component={LocationTypes} />
+            <Route path="/secret-types" component={SecretTypes} />
+            <Route path="/tags" component={Tags} />
+            {CATALOG_STUB_PATHS.map((p) => <Route path={p} component={SectionStub} />)}
+          </Route>
           <Route path="/audit" component={Audit} />
           <Route path="/settings" component={Settings} />
-          {STUBS.map((p) => <Route path={p} component={SectionStub} />)}
+          {STUBS.filter((p) => !CATALOG_STUB_PATHS.includes(p)).map((p) => <Route path={p} component={SectionStub} />)}
           <Route path="*" component={NotFound} />
         </Route>
       </Router>

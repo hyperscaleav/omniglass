@@ -8,7 +8,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
 // Vendors is the manufacturer catalog on the flat FlatList surface (the
-// vendor picker on the component_model form). An official (seed-owned) row is
+// vendor picker on the component_model form). An official row is
 // read-only, same invariant as the Types catalog's official rows: no edit
 // pencil, no Delete. Data is seeded into the query cache so no server is needed.
 const seed: Vendor[] = [
@@ -36,19 +36,22 @@ function mount(me: Me = admin) {
 describe("Vendors page", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("lists a seeded vendor, an official row has no edit/delete, and create opens for an admin", async () => {
+  it("lists a seeded vendor, an official row greys edit/delete, and create opens for an admin", async () => {
     mount();
     expect(await screen.findByText("Crestron")).toBeInTheDocument();
 
-    // official row has no edit/delete
+    // official row: the pair renders greyed with the official reason
     fireEvent.click(screen.getByText("Crestron"));
     const blade = await waitFor(() => {
       const el = asides()[0];
       if (!el) throw new Error("no blade yet");
       return el as HTMLElement;
     });
-    expect(within(blade).queryByRole("button", { name: /delete/i })).not.toBeInTheDocument();
-    expect(within(blade).queryByLabelText("Edit")).not.toBeInTheDocument();
+    const deleteBtn = within(blade).getByRole("button", { name: /delete/i }) as HTMLButtonElement;
+    const editBtn = within(blade).getByLabelText("Edit") as HTMLButtonElement;
+    expect(deleteBtn.disabled).toBe(true);
+    expect(editBtn.disabled).toBe(true);
+    expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Official: ships with Omniglass and updates with it.");
 
     // create is available to an admin. Anchored, because the Name field's hint
     // mentions the display name it derives from.

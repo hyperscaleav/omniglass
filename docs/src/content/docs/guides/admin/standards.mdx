@@ -5,7 +5,7 @@ description: "The Standards catalog: the blueprint a system conforms to, its var
 
 import SeededSet from '../../../../components/SeededSet.astro';
 
-**Catalog > Standards** (`/standards`, with `standard:read`, covered by every viewer's `*:read` floor)
+**Catalog, under Systems: Standards** (`/standards`, with `standard:read`, covered by every viewer's `*:read` floor)
 is the directory of **standards**: the blueprints your systems are built against. A **Huddle Room**, a
 **Classroom**, an **Auditorium** are standards; the meeting room on the third floor is a
 [system](/guides/operator/inventory/) that **conforms** to one. Each row shows the **name** (the
@@ -69,7 +69,7 @@ defaults to. It is the same editor as a product's contract, on the system side.
 - **Declare a property** (with `standard:update`) picks a name from the property catalog, optionally
   types a **default**, and optionally marks it **required**. The property must already exist in the
   catalog, since the contract only names it: mint it under
-  [Catalog > Properties](/guides/admin/properties/) first. Declaring is **idempotent**, so declaring a
+  [Catalog, under Telemetry: Properties](/guides/admin/properties/) first. Declaring is **idempotent**, so declaring a
   property already on the contract revises that line in place.
 - **The default is typed by the catalog, not here.** Type and validation live on the property, so a
   standard cannot redefine what `room-capacity` means, only what a system conforming to it starts with.
@@ -78,7 +78,7 @@ defaults to. It is the same editor as a product's contract, on the system side.
   immediately. Only a system's own override survives the change.
 - **Required** means a conforming system must resolve the property to a value; the system's Properties
   panel blocks Save while a required property is empty.
-- **Withdraw** (with `standard:delete`, behind a confirm) removes a line. Conforming systems **keep**
+- **Withdraw** (with `standard:delete`, from the blade's edit mode, so the pencil's `standard:update` is also in the path; behind a confirm) removes a line. Conforming systems **keep**
   any value they set for it; it simply reads as **off contract** from then on.
 
 From the CLI the contract is `omniglass standard property list <id>`,
@@ -129,7 +129,7 @@ is the gap between what you staffed and what you need.
 
 Declaring is **idempotent**, so saving a role that already exists revises it in place, and the capability
 list **replaces** the previous requirement wholesale (drop one by leaving it out). **Withdrawing** a role
-(with `standard:delete`) also removes every assignment conforming systems made to it, so withdraw only
+(with `standard:delete`, from edit mode like every contract control) also removes every assignment conforming systems made to it, so withdraw only
 when the slot itself is gone, not when one room's component changed. Changing a quorum or an impact
 **re-evaluates every conforming system immediately**, so a retune shows up in the estate's health without
 waiting for anything to poll.

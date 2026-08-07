@@ -18,14 +18,15 @@ import {
   deleteCapability,
 } from "../lib/capabilities";
 import { useMe, can } from "../lib/auth";
+import { registryLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Capabilities: the capability registry (the capability picker on the product
 // form), on the flat FlatList surface. A capability is addressed by its kebab
 // name (ADR-0062: the uuid is identity, the name is what an operator reads and
-// types); official (seed-owned) rows are read-only, same as the Types
-// catalog's official rows: no Edit pencil, no Delete.
+// types); official rows are read-only, same as the Types
+// catalog's official rows: the Edit / Delete pair greys.
 
 function officialBadge(official: boolean): JSX.Element {
   return official
@@ -73,7 +74,7 @@ export default function Capabilities() {
 }
 
 // capabilityBlade renders an id on the shared blade stack. An official row is
-// read-only (no pencil, no destructive action); a custom row carries Edit +
+// read-only (the Edit / Delete pair greys); a custom row carries Edit +
 // Delete.
 export const capabilityBlade: BladeDef = {
   Title: (p) => <CapabilityBladeTitle id={p.id} />,
@@ -141,6 +142,7 @@ function CapabilityBladeBody(p: { id: string }): JSX.Element {
       row() && !row()!.official && can(me.data, "capability", "delete")
         ? { label: "Delete", tone: "danger", onClick: removeCapability }
         : undefined,
+    locked: () => registryLock(row(), me.data, "capability"),
   });
 
   return (
@@ -161,9 +163,6 @@ function CapabilityBladeBody(p: { id: string }): JSX.Element {
             draft={displayName}
             onInput={setDisplayName}
           />
-          <Show when={r().official}>
-            <div role="alert" class="alert alert-soft text-sm"><span>Seed-owned, read-only.</span></div>
-          </Show>
         </div>
       )}
     </Show>

@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, useContext, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
 import { Check, Pencil, Plus, Trash, X } from "./icons";
@@ -12,6 +12,7 @@ import {
   type RoleSpec,
 } from "../lib/system_roles";
 import { useMe, can } from "../lib/auth";
+import { BladeEditContext } from "../lib/blades";
 import { describeError } from "../lib/format";
 
 // RoleEditor is the standard detail-blade panel for curating the ROLES a standard
@@ -32,9 +33,12 @@ import { describeError } from "../lib/format";
 // which is the component, so the honest move is a sibling that reads the same.
 //
 // Each role is addressed by name, so a write is a PUT (idempotent: an edit revises
-// the role in place) and a withdraw is a DELETE. Declaring needs the standard's
-// :update, withdrawing its :delete, and an official (seed-owned) standard's roles
-// are read-only: the list renders, the controls do not.
+// the role in place) and a withdraw is a DELETE. Writes are immediate, but the
+// blade's edit slot still gates the controls (#621): they render only while the
+// hosting blade is in edit mode, and in read mode the declared roles render as
+// facts alone. Declaring needs the standard's :update, withdrawing its :delete,
+// and an official standard's roles are read-only: the list renders,
+// the controls do not.
 
 // The draft a row (or the add row) edits: everything a RoleSpec carries.
 type RoleDraft = { display: string; quorum: string; capabilities: string[] };
@@ -66,10 +70,16 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
 
   const rows = createMemo<DeclaredRole[]>(() => [...(q.data ?? [])].sort((a, b) => a.name.localeCompare(b.name)));
 
-  // An official standard is seed-owned; declaring is its own :update, withdrawing
+  // The hosting blade's edit slot, read from the ambient context: the panel's
+  // controls are edit-state affordances, rendered only while the blade is in
+  // edit mode (the pencil is the one route to them). Outside any blade context
+  // the panel renders read-only, the same rule BladeField follows.
+  const blade = useContext(BladeEditContext);
+  const bladeEditing = () => !!blade?.editing();
+  // An official standard is release-owned; declaring is its own :update, withdrawing
   // its :delete, as the server gates them.
-  const canDeclare = () => !props.official && can(me.data, "standard", "update");
-  const canWithdraw = () => !props.official && can(me.data, "standard", "delete");
+  const canDeclare = () => bladeEditing() && !props.official && can(me.data, "standard", "update");
+  const canWithdraw = () => bladeEditing() && !props.official && can(me.data, "standard", "delete");
 
   const [err, setErr] = createSignal<string | null>(null);
   const [busy, setBusy] = createSignal(false);
@@ -79,6 +89,20 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
   // The add row's draft: the invented name, plus the same fields.
   const [addName, setAddName] = createSignal("");
   const [addDraft, setAddDraft] = createSignal<RoleDraft>(emptyDraft());
+
+  // Leaving blade edit mode (Save or Cancel alike) discards the open drafts
+  // and clears any stale error; see ContractEditor for the rationale (a draft
+  // surviving Cancel resurrects on the next pencil press). Immediate-apply
+  // writes mean an open draft at footer Save is dropped, never flushed.
+  createEffect((was: boolean | undefined) => {
+    const now = bladeEditing();
+    if (was && !now) {
+      setEditing(null);
+      resetAdd();
+      setErr(null);
+    }
+    return now;
+  });
 
   function openEdit(r: DeclaredRole) {
     setEditing(r.name);
@@ -187,7 +211,7 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
       <div class="flex items-baseline justify-between gap-2">
         <span class="eyebrow">Declared roles</span>
         <span class="shrink-0 text-[10.5px] text-base-content/40">
-          {props.official ? "seed-owned roles, read-only" : "the standard's roles"}
+          {props.official ? "official roles, read-only" : "the standard's roles"}
         </span>
       </div>
       <p class="text-[11px] text-base-content/50">
@@ -227,8 +251,10 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
                   </Show>
                 </div>
 
+                {/* canDeclare in the condition collapses a role left open when
+                    the blade drops out of edit mode. */}
                 <Show
-                  when={editing() === r.name}
+                  when={canDeclare() && editing() === r.name}
                   fallback={
                     <div class="flex flex-wrap items-center gap-1.5">
                       <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">requires</span>

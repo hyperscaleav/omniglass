@@ -12,7 +12,7 @@ import { uuidFor } from "../lib/testids";
 
 // The Location Types page is the place classifier registry alone on the shared
 // FlatList: one registry, one query, no secret_type anywhere on its path (#598
-// split the old joint Types page). An official (seed-owned) row is read-only;
+// split the old joint Types page). An official row is read-only;
 // a custom row is writable for a caller holding location_type:*, and its detail
 // carries the location type's declared-property contract. Data is seeded into
 // the query cache so no server is needed (except where a test says otherwise).
@@ -180,13 +180,36 @@ describe("LocationTypes page", () => {
       if (!el) throw new Error("no blade yet");
       return el as HTMLElement;
     });
-    // Read-only (no Edit): wing's set is [campus, root]. The chip resolves the
-    // type name to its display name (Campus, not the raw "campus"), and the
-    // sentinel renders as "Root", so the two read consistently.
-    expect(within(blade).queryByLabelText("Edit")).toBeNull();
+    // Read-only (the Edit pair is greyed by the lock): wing's set is [campus,
+    // root]. The chip resolves the type name to its display name (Campus, not
+    // the raw "campus"), and the sentinel renders as "Root", so the two read
+    // consistently.
+    expect((within(blade).getByLabelText("Edit") as HTMLButtonElement).disabled).toBe(true);
     expect(within(blade).getByText("Campus")).toBeTruthy();
     expect(within(blade).getByText("Root")).toBeTruthy();
     expect(within(blade).queryByText("campus")).toBeNull();
+    // No pencil means no route into edit mode: the contract panels stay facts.
+    expect(within(blade).queryByLabelText("Property to declare")).toBeNull();
+    expect(within(blade).queryByLabelText("Withdraw floor_area_sqm")).toBeNull();
+  });
+
+  // The permission arm of the lock: a custom row a viewer cannot write greys
+  // the Edit / Delete pair in place, each side naming the permission that
+  // would unlock THAT button, instead of hiding the affordances.
+  it("greys Edit and Delete for a viewer on a custom row, each naming its own missing permission", async () => {
+    mount(viewer);
+    fireEvent.click(screen.getByText("wing"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    const editBtn = within(blade).getByLabelText("Edit") as HTMLButtonElement;
+    const deleteBtn = within(blade).getByText("Delete").closest("button") as HTMLButtonElement;
+    expect(editBtn.disabled).toBe(true);
+    expect(deleteBtn.disabled).toBe(true);
+    expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Requires location_type:update");
+    expect(deleteBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Requires location_type:delete");
   });
 
   // The location type is a classifier: its blade carries the declared-property
@@ -207,7 +230,9 @@ describe("LocationTypes page", () => {
     expect(within(blade).getByText(/A location of this type inherits every property/)).toBeTruthy();
     expect(within(blade).getByText("floor_area_sqm")).toBeTruthy();
     expect(within(blade).getByText("40")).toBeTruthy(); // the declared default
-    // Writable for this caller (owner), so the picker offers what is not declared.
+    // Writable for this caller (owner) once the pencil flips edit mode (#621),
+    // so the picker offers what is not declared.
+    fireEvent.click(within(blade).getByLabelText("Edit"));
     const picker = within(blade).getByLabelText("Property to declare") as HTMLSelectElement;
     expect(Array.from(picker.options).map((o) => o.value)).toEqual(["", "seat_count"]);
   });
@@ -221,10 +246,37 @@ describe("LocationTypes page", () => {
       return el as HTMLElement;
     });
     // Both lanes render read-only: neither panel offers a declare picker.
-    expect(within(blade).getAllByText("seed-owned, read-only")).toHaveLength(2);
+    expect(within(blade).getAllByText("official, read-only")).toHaveLength(2);
     expect(within(blade).getByText("This location type declares no properties.")).toBeTruthy();
     expect(within(blade).queryByLabelText("Property to declare")).toBeNull();
     expect(within(blade).queryByLabelText("Metric to declare")).toBeNull();
+  });
+
+  // The blade model (#621): a blade opens read-only, and EVERY mutating control,
+  // the contract panels' declare picker and per-line edit/withdraw included,
+  // appears only after the pencil flips the blade into edit mode. Read mode
+  // renders the declared lines as facts alone.
+  it("keeps the contract's declare/edit/withdraw controls out of read mode until the pencil flips edit", async () => {
+    mount();
+    fireEvent.click(screen.getByText("wing"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    // Read mode: the declared line renders as a fact row...
+    expect(within(blade).getByText("floor_area_sqm")).toBeTruthy();
+    expect(within(blade).getByText("40")).toBeTruthy();
+    // ...and nothing shaped like a mutating control renders, even for an admin.
+    expect(within(blade).queryByLabelText("Property to declare")).toBeNull();
+    expect(within(blade).queryByLabelText("Metric to declare")).toBeNull();
+    expect(within(blade).queryByLabelText("Edit floor_area_sqm")).toBeNull();
+    expect(within(blade).queryByLabelText("Withdraw floor_area_sqm")).toBeNull();
+    // The pencil enters edit mode; the existing controls return as they were.
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    expect(within(blade).getByLabelText("Property to declare")).toBeTruthy();
+    expect(within(blade).getByLabelText("Edit floor_area_sqm")).toBeTruthy();
+    expect(within(blade).getByLabelText("Withdraw floor_area_sqm")).toBeTruthy();
   });
 
   it("declares a property on a location type, PUTting to the location-types contract route", async () => {
@@ -251,6 +303,8 @@ describe("LocationTypes page", () => {
       if (!el) throw new Error("no blade yet");
       return el as HTMLElement;
     });
+    // The declare row lives behind the blade's pencil (#621).
+    fireEvent.click(within(blade).getByLabelText("Edit"));
     fireEvent.change(within(blade).getByLabelText("Property to declare"), { target: { value: "seat_count" } });
     fireEvent.input(within(blade).getByLabelText("Default for the new property"), { target: { value: "12" } });
     fireEvent.click(within(blade).getByLabelText("Declare property"));

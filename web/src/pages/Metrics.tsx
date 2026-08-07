@@ -19,13 +19,14 @@ import {
   deleteMetricType,
 } from "../lib/metric_types";
 import { useMe, can } from "../lib/auth";
+import { registryLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Metrics: the numeric lane of the signal catalog (Catalog > Metrics), the twin
 // of the Properties page. A metric type is a canonical numeric series a sample
 // measures, carrying the facts the property lane never holds: a unit and a
-// precision. Official (seed-owned) rows are read-only; custom rows are
+// precision. Official rows are read-only; custom rows are
 // operator-created. The catalog is estate-wide reference data, not a scoped
 // resource, and every affordance gates on metric_type, the resource the API
 // stamps.
@@ -83,7 +84,7 @@ export default function Metrics(): JSX.Element {
 
 // metricBlade renders one metric type on the shared blade stack. The title is
 // what the list shows, the display name, falling back to the name; official
-// metric types are read-only (no pencil, no delete).
+// metric types are read-only (the Edit / Delete pair greys).
 export const metricBlade: BladeDef = {
   Title: (p) => <MetricBladeTitle name={p.id} />,
   Body: (p) => <MetricBladeBody name={p.id} />,
@@ -174,6 +175,7 @@ function MetricBladeBody(p: { name: string }): JSX.Element {
       row() && !row()!.official && can(me.data, "metric_type", "delete")
         ? { label: "Delete", tone: "danger", onClick: removeMetric }
         : undefined,
+    locked: () => registryLock(row(), me.data, "metric_type"),
   });
 
   return (
@@ -218,9 +220,6 @@ function MetricBladeBody(p: { name: string }): JSX.Element {
             draft={precision}
             onInput={setPrecision}
           />
-          <Show when={r().official}>
-            <div role="alert" class="alert alert-soft text-sm"><span>Seed-owned, read-only.</span></div>
-          </Show>
         </div>
       )}
     </Show>

@@ -113,10 +113,12 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0076](#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid) | 2026-08-04 | Accepted | the name stays renameable and addressable; rename is a custom method, every write returns the uuid, and one validator applies one of two rules |
 | [ADR-0077](#adr-0077-a-group-name-obeys-the-entity-name-rule-tightening-a-pattern-the-code-had-excused) | 2026-08-04 | Accepted | principal_group.name moves to the entity name rule, retiring the looser API-layer pattern |
 | [ADR-0078](#adr-0078-a-read-only-field-renders-as-a-fact-not-as-a-box-that-refuses-typing) | 2026-08-04 | Accepted | a blade the operator cannot edit contains nothing shaped like a control; BladeField owns the read-or-edit switch |
-| [ADR-0079](#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus) | 2026-08-05 | Accepted | five telemetry lanes with five names: the catalog splits on data_type, state renames to property, the value store folds into the series (tombstone unset, current values derived), the wire goes per-lane, logs split by origin, and a command records its status; reverses the property-as-genus half of ADR-0063/0065 |
+| [ADR-0079](#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus) | 2026-08-05 | Accepted; the collective noun revised to signal lanes by [ADR-0084](#adr-0084-the-catalog-shell-and-five-signal-lanes) | five telemetry lanes with five names: the catalog splits on data_type, state renames to property, the value store folds into the series (tombstone unset, current values derived), the wire goes per-lane, logs split by origin, and a command records its status; reverses the property-as-genus half of ADR-0063/0065 |
 | [ADR-0080](#adr-0080-retention-is-provenance-aware-never-declared-never-the-latest-row-per-series) | 2026-08-05 | Accepted | retention is provenance-aware: a prune never deletes a declared row and never the latest row of any series, shipped as the PruneSamples primitive before any retention feature exists |
 | [ADR-0081](#adr-0081-the-control-plane-wire-is-one-subject-grammar-node-anchored-and-batch-granular) | 2026-08-06 | Accepted | the control-plane wire is one subject grammar, og.v1.verb.node with the node name exactly one token: the api.telemetry lane sits in its own segment, per-record subjects are rejected, and the core-NATS consumers (worklist, heartbeat) are singletons by construction with their HA fork named and deferred |
 | [ADR-0082](#adr-0082-the-type-resource-renames-to-location_type) | 2026-08-06 | Accepted | the permission resource type renames to location_type on every surface (route stamps, roles seed, console gates, guard fixtures); the generic word retires from the permission vocabulary |
+| [ADR-0083](#adr-0083-the-catalog-rail-is-sectioned-by-the-estate-noun-each-registry-serves) | 2026-08-06 | Superseded by [ADR-0084](#adr-0084-the-catalog-shell-and-five-signal-lanes) | the Catalog rail is sectioned by the estate noun each registry serves, entries keep the registry's own word (Types where that is all there is), Telemetry holds what gets recorded and Action what the platform does, and the /catalog hub teaches the map with live counts |
+| [ADR-0084](#adr-0084-the-catalog-shell-and-five-signal-lanes) | 2026-08-07 | Accepted | Catalog is one rail entry opening a shell: a grouped subrail (Telemetry, Actions, Components, Systems, Locations, Metadata) navigating to the per-registry pages at canonical URLs, with an Overview landing; the organizing axis is direction (Telemetry is what you receive, Actions what you send or run), the lane collective noun becomes five signal lanes, and secret types loses its nav slot |
 
 ## Entries
 
@@ -2786,3 +2788,65 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   routes gating `type:*` beside `product` and `standard` gating their own nouns was a live
   asymmetry. The same one-word-hides-two-things shape the catalog arc exists to end, renamed
   pre-release while the rename is cheap; the Types page split carried it (#598, the epic #601).
+
+### ADR-0083: The Catalog rail is sectioned by the estate noun each registry serves
+
+- **Date:** 2026-08-06 | **Status:** Superseded by [ADR-0084](#adr-0084-the-catalog-shell-and-five-signal-lanes) | **Pages:** [UI](/architecture/ui/)
+- **Decision:** the Catalog nav cluster renders non-folding section headers under one naming rule:
+  a **section is named for the estate noun it serves** and an **entry keeps the registry's own
+  word**, collapsing to plain **Types** where the registry has no other word (Locations > Types,
+  Secrets > Types). The sections, mirroring Inventory's order: Components (products, vendors,
+  drivers, capabilities), Systems (standards), Locations, Secrets, Telemetry (metrics, properties,
+  events, and the future log catalog as a soon entry), Action (rules, commands, and the future
+  notifications), General (tags). The organizing line: **Telemetry is what gets recorded, Action
+  is what the platform does**; Commands left Telemetry on the observed-versus-issued split, and
+  Events stays in Telemetry because the shipped lane records happenings (caught from the estate,
+  caused by the platform) and never sends them. Headers render from the permission-filtered entry
+  list, so a fully gated section disappears with its entries; the palette tags sectioned entries
+  `Catalog · <section>`; a visible Overview entry opens the `/catalog` hub, one card per visible
+  section with live registry counts. Templates leaves the rail until the registry is real. Routes,
+  tables, resources, and API surfaces are untouched: the rule governs presentation only.
+- **Context:** fourteen flat entries hid five real clusters: products, vendors, drivers, and
+  capabilities serve components with nothing saying so, and standards served systems invisibly.
+  Rejected along the way: a flat rail with hub-only teaching (daily wayfinding regresses to the
+  soup), hover flyouts (hiding is the disease being treated, hostile to touch and keyboard, and a
+  "Types" flyout bucket recreates the one-word-hides-many shape ADR-0082 retired), and a uniform
+  Types suffix (reverses the lane-noun labels the five-lane epic settled). The nav word for the
+  rule registry is Rules; the vocabulary beneath it (table, API, resource words for rules and the
+  alarm rows they raise) is unsettled and tracked in #606, out of this decision's scope.
+
+### ADR-0084: The catalog shell, and five signal lanes
+
+- **Date:** 2026-08-07 | **Status:** Accepted | **Pages:** [UI](/architecture/ui/),
+  [glossary](/architecture/glossary/)
+- **Decision:** Catalog is a single rail entry opening a **shell**: a grouped subrail whose
+  entries navigate to the real per-registry pages, rendered in the pane at their canonical flat
+  URLs, with an **Overview** landing of teaching cards; the subrail and the Overview derive from
+  one group table, judged through the same permission filter the rail uses. The groups, ordered:
+  **Telemetry** (metrics, properties, events), **Actions** (commands, with rules and
+  notifications as tracked stubs), **Components** (vendors, products, drivers, capabilities, a
+  templates stub), **Systems** (standards, a templates stub), **Locations** (types, a templates
+  stub), **Metadata** (tags). The organizing axis is **direction, not genus**: Telemetry is what
+  you receive, Actions what you send or run; a command targeting a property or metric is a form
+  dependency, not a menu adjacency. Consequences ruled with it: **secret types loses its nav
+  slot** (the URL stays reachable and gated; the table's retirement is the schema phase's call);
+  **Logs stays out** of Telemetry until a log_type exists; the Systems entry reads **Standards**
+  until the system_blueprint rename lands with the schema phase, because splitting operator
+  vocabulary across surfaces to ship a label early is drift by construction; and the blade model
+  holds on every field (read facts until the pencil, per the epic's approval caveat). The lane
+  collective noun becomes **five signal lanes**, four inbound and one outbound: a command is an
+  instruction you issue, not a telemetry reading, so "five telemetry lanes" retires as prose
+  while ADR-0079's structure (a command is a genuine peer lane: type table, instance table,
+  registry) stands unrevised.
+- **Context:** the sectioned rail (ADR-0083) shipped its sections as rail geography and a hub
+  that restated the rail; four design rounds against the live console replaced it: a
+  single-surface browse table (identity-first rows, rejected for parallel-table drift against
+  the real pages), a filter subrail (rejected because facets that filter one merged table
+  cannot host each page's own search and create flows), and finally the shell, which keeps the
+  IA as wayfinding and the pages as the single surfaces. Grouping by subject entity rather than
+  artifact class survived every round: an operator arrives knowing the entity, not the taxonomy,
+  and a component template and a location template share only a word. ADR-0083 is superseded;
+  its estate-noun instinct survives in the group names. The genus-naming discussion that
+  produced the direction axis also queued the schema phase (system_blueprint, location contract
+  removal, secret_type retirement, the four-class taxonomy), deliberately sequenced ahead of the
+  #379 migration collapse and deferred from this decision.

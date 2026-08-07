@@ -5,7 +5,7 @@ description: "The Location Types catalog: the place classifier registry (campus,
 
 import SeededSet from '../../../../components/SeededSet.astro';
 
-**Catalog > Locations** (`/location-types`, with `location_type:read`, covered by every
+**Catalog, under Locations: Types** (`/location-types`, with `location_type:read`, covered by every
 viewer's `*:read` floor) is the registry of **place classifiers**: the `location_type` a
 [location](/guides/operator/entities/) is classified by. It is one registry with one page on
 purpose; its former home, a tabbed Types page, shared a fetch with the secret type registry, and
@@ -17,7 +17,7 @@ bare label registry was never what they were: a **component**'s shape comes from
 
 The page is that registry's directory: a table of its rows, sorted alphabetically by display
 name, each showing the **name** (for example `wing`), **display name**, an **icon** glyph key,
-and its **origin** (**official**, seed-owned, or **custom**). A type also carries an `id`, a
+and its **origin** (**official** or **custom**). A type also carries an `id`, a
 uuid minted by the database, the internal address the handle resolves to
 ([ADR-0062](/architecture/decisions/)); the handle is what you type and read.
 
@@ -34,7 +34,9 @@ uuid minted by the database, the internal address the handle resolves to
   `location_type:update`) edits the display name, the icon, and the allowed parents; the
   **name** is fixed, since a catalog row carries no rename (`:rename` is a component, system,
   location, and principal group affordance). **Delete** (with `location_type:delete`) removes
-  the row, behind a confirm.
+  the row, behind a confirm. A verb you lack greys just that button, its hover reason naming
+  the permission (`Requires location_type:update`, `Requires location_type:delete`); the pair
+  never disappears.
 - **The shipped location types are yours to change.** They arrive as ordinary
   **operator-owned** rows (origin **custom**, not official), so relabel them, re-parent them, or
   delete the ones your estate does not use. They are forked from a template in the code, once,
@@ -45,8 +47,9 @@ uuid minted by the database, the internal address the handle resolves to
   The shipped set, rendered from the seed itself:
 
   <SeededSet kind="location_types" />
-- An **official** (seed-owned) row, where one exists, is read-only: no Edit, no Delete, and the
-  blade marks it "Seed-owned, read-only." That treatment is reserved for the **canonical
+- An **official** row, where one exists, is read-only: the blade keeps the Edit and Delete pair
+  in place, greyed, with the reason on hover: "Official: ships with Omniglass and updates with
+  it." That treatment is reserved for the **canonical
   vocabulary** a release must be able to correct, above all the
   [property catalog](/guides/admin/properties/), not for example content like a place type.
 - **Delete** is refused (409) while a location still uses that type: reclassify or remove the
@@ -68,11 +71,12 @@ A location type's blade carries a **Declared properties** panel, its **contract*
 defaults to. It is the same editor as a [product](/guides/admin/products/)'s or a
 [standard](/guides/admin/standards/)'s, and it keeps this page's permission story: the read
 rides `location_type:read`, declaring a line needs `location_type:update`, and withdrawing one
-needs `location_type:delete`.
+needs `location_type:delete`. Every contract control lives in the blade's edit mode, so the
+pencil's `location_type:update` is in the path either way.
 
 - **Declare a property** picks a name from the property catalog, optionally types a **default**,
   and optionally marks it **required**. The property must already exist in the catalog; mint it
-  under [Catalog > Properties](/guides/admin/properties/) first. Declaring is **idempotent**.
+  under [Catalog, under Telemetry: Properties](/guides/admin/properties/) first. Declaring is **idempotent**.
 - **Type and validation are the catalog's**, not the contract's, so a location type cannot
   redefine what a property means, only what a fresh location of that type starts with.
 - **Locations inherit live.** Change a default and every location of the type that has not

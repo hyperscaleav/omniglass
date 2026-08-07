@@ -6,7 +6,7 @@ import { SECRET_TYPES_KEY, type SecretType } from "../lib/secret_types";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
-// The Secret Types page is the seed-owned registry of secret shapes, read-only
+// The Secret Types page is the release-owned registry of secret shapes, read-only
 // by DESIGN, not by permission: the seed upserts it authoritatively (ON
 // CONFLICT DO UPDATE) so a release can correct it, and no write route exists.
 // The read-only-ness must therefore hold for an owner exactly as for anyone
@@ -67,7 +67,7 @@ describe("SecretTypes page", () => {
     expect(screen.queryByText(/New secret type/)).toBeNull();
   });
 
-  it("blade shows the declared fields and no edit pencil, even for the owner", async () => {
+  it("blade shows the declared fields and a greyed Edit / Delete pair with the official reason, even for the owner", async () => {
     mount(admin);
     fireEvent.click(screen.getByText("snmp-community"));
     const blade = await waitFor(() => {
@@ -80,10 +80,20 @@ describe("SecretTypes page", () => {
     expect(within(blade).getByText("string")).toBeTruthy();
     expect(within(blade).getByText("secret")).toBeTruthy();
     expect(within(blade).getByText("operator")).toBeTruthy();
-    // The seeded-only note, and no write affordance of any kind.
-    expect(within(blade).getByText(/seeded with the release and read-only/)).toBeTruthy();
-    expect(within(blade).queryByLabelText("Edit")).toBeNull();
-    expect(within(blade).queryByText("Delete")).toBeNull();
+    // The read-only note moved off the body into the locked pair's tooltip:
+    // both buttons sit in their usual footer spots, greyed, and the tooltip
+    // wrapper carries the shared official-row sentence (never seed language,
+    // which is not operator vocabulary).
+    expect(within(blade).queryByText(/seeded with the release and read-only/)).toBeNull();
+    const editBtn = within(blade).getByLabelText("Edit") as HTMLButtonElement;
+    const deleteBtn = within(blade).getByText("Delete").closest("button") as HTMLButtonElement;
+    expect(editBtn.disabled).toBe(true);
+    expect(deleteBtn.disabled).toBe(true);
+    expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Official: ships with Omniglass and updates with it.");
+    expect(deleteBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Official: ships with Omniglass and updates with it.");
+    // Greyed is not live: clicking enters no edit mode.
+    fireEvent.click(editBtn);
+    expect(within(blade).queryByText("Save")).toBeNull();
   });
 
   it("blade renders an empty fields list with its placeholder", async () => {

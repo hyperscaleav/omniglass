@@ -135,3 +135,26 @@ new class appends one. Entries are never silently deleted; a fixed class is mark
 - **Fix:** gate outside the render path: a pre-build script wired into `pnpm build`
   (exemplar: `docs/scripts/check-design-fences.mjs`) or a lint in `internal/docslint`,
   and verify the exit code, not the log line.
+
+## vacuous-async-spy (live)
+
+A synchronous `expect(spy).not.toHaveBeenCalled()` guarding the absence of a network call or
+effect that is inherently a microtask away (an async middleware, a queued promise, a Solid
+effect). The assertion runs before the effect could ever fire, so it passes under any
+implementation, leaking or not: a pin that cannot fail pins nothing. Found in #609's
+gated-fetch test, where the api client's async onRequest middleware deferred every fetch past
+the synchronous assertion. Detection cue: a sync spy assertion immediately after `render()`
+or `mount()` claiming an effect did NOT happen. Fix: assert the structural fact synchronously
+(the query cache holds no entry for the gated key), or flush a tick before the spy assertion
+and prove the test can fail by breaking the guard.
+
+## css-only-tooltip-on-disabled-control (live)
+
+- **Cue:** a tooltip carrying essential information whose only reveal path is hover /
+  `:has(:focus-visible)` around a **disabled** control.
+- **Failure:** a disabled button can never take focus, so keyboard and AT users get a
+  focus ring on the wrapper and no information; the reason the control is disabled is
+  exactly the information they came for.
+- **Fix:** reveal the tooltip when the wrapper itself is focused (`:focus-visible` on the
+  wrapper, matching the library's pseudo-element structure) plus `aria-label` with the
+  reason on the wrapper, or use a managed tooltip primitive.

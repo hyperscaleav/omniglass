@@ -81,6 +81,28 @@ describe("Command Types page", () => {
 
   // The Target column shows whichever arm is set, with the lane named so a
   // property target and a metric target are distinguishable at a glance.
+  // An official row keeps its footer: the Edit / Delete pair renders in the
+  // usual spots, greyed, with the official reason on each button's tooltip
+  // wrapper. The old in-body banner is gone; the reason lives on the buttons.
+  it("an official row greys Edit and Delete with the official reason instead of a body banner", async () => {
+    mount(admin);
+    fireEvent.click(screen.getByText("set-input"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    expect(within(blade).queryByRole("alert")).toBeNull();
+    const editBtn = within(blade).getByLabelText("Edit") as HTMLButtonElement;
+    const deleteBtn = within(blade).getByText("Delete").closest("button") as HTMLButtonElement;
+    expect(editBtn.disabled).toBe(true);
+    expect(deleteBtn.disabled).toBe(true);
+    expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Official: ships with Omniglass and updates with it.");
+    expect(deleteBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Official: ships with Omniglass and updates with it.");
+    fireEvent.click(editBtn);
+    expect(within(blade).queryByText("Save")).toBeNull();
+  });
+
   it("shows a metric-armed target with its lane hint", () => {
     mount();
     expect(screen.getByText("mic-gain")).toBeTruthy();

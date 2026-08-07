@@ -63,3 +63,34 @@ describe("Sidebar identity avatar", () => {
     expect(document.querySelector('img[alt="Your profile picture"]')).toBeNull();
   });
 });
+
+// The Catalog rail collapsed to a single leaf (the browse prototype): no
+// section headers remain in the rail, and the entry is ungated, so the floor
+// viewer keeps it (the page itself permission-filters its rows).
+function mountPerms(permissions: string[]) {
+  const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+  qc.setQueryData([...ME_KEY], { ...meWith(false), permissions });
+  return render(() => (
+    <QueryClientProvider client={qc}>
+      <Router>
+        <Route path="*" component={() => <Sidebar collapsed={false} onToggle={() => {}} />} />
+      </Router>
+    </QueryClientProvider>
+  ));
+}
+
+describe("Sidebar catalog entry", () => {
+  const titles = () => Array.from(document.querySelectorAll("li.menu-title")).map((el) => el.textContent);
+
+  it("renders Catalog as a single leaf link, with no section headers left in the rail", () => {
+    mountPerms([">"]);
+    const link = document.querySelector('a[href="/catalog"]');
+    expect(link?.textContent).toContain("Catalog");
+    expect(titles()).toEqual([]);
+  });
+
+  it("keeps the Catalog leaf for a *:read floor viewer", () => {
+    mountPerms(["*:read"]);
+    expect(document.querySelector('a[href="/catalog"]')).toBeTruthy();
+  });
+});

@@ -6,7 +6,7 @@ import { EVENT_TYPES_KEY, type EventTypeRow } from "../lib/event_types";
 import { ME_KEY, type Me } from "../lib/auth";
 
 // The Event Types page is a single FlatList over the /event-types catalog. Official
-// (seed-owned) event types are read-only; a custom event type is writable only when
+// event types are read-only; a custom event type is writable only when
 // the caller holds event_type:create / event_type:update. Data is seeded into the
 // query cache so no server is needed.
 const seed: EventTypeRow[] = [

@@ -5,10 +5,11 @@ import BladeTitle from "../components/BladeTitle";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { type SecretType, SECRET_TYPES_KEY, listSecretTypes } from "../lib/secret_types";
-import { type BladeDef } from "../lib/blades";
+import { type BladeDef, useBladeEdit } from "../lib/blades";
+import { OFFICIAL_LOCK } from "../lib/catalog";
 
 // Secret types (Catalog > Secrets): the shapes a secret can take (snmp-community, basic-auth, and
-// the rest), read-only by design. The registry is authoritative seed-owned
+// the rest), read-only by design. The registry is authoritative release-owned
 // reference data (the boot seed upserts it, so a release can correct it), so
 // there is no create, no edit, and no delete here for anyone, owner included;
 // the blade shows each type's declared fields. The whole page is gated by
@@ -59,9 +60,10 @@ export default function SecretTypes() {
   );
 }
 
-// secretTypeBlade renders one registry row read-only: the body never binds the
-// edit slot, so no pencil and no destructive action render, whatever the caller
-// holds. The fields list is the payload: what a secret of this type expects.
+// secretTypeBlade renders one registry row read-only: the body binds only the
+// edit slot's lock, so the footer's Edit / Delete pair renders greyed with the
+// seeded-only reason on each tooltip, whatever the caller holds. The fields
+// list is the payload: what a secret of this type expects.
 export const secretTypeBlade: BladeDef = {
   Title: (p) => <SecretTypeBladeTitle id={p.id} />,
   Body: (p) => <SecretTypeBladeBody id={p.id} />,
@@ -78,6 +80,13 @@ function SecretTypeBladeTitle(p: { id: string }): JSX.Element {
 
 function SecretTypeBladeBody(p: { id: string }): JSX.Element {
   const row = useSecretTypeRow(p.id);
+
+  // Always locked, for everyone: this registry has no write route at all, so
+  // the reason is release ownership itself, not a permission. Same official
+  // sentence as every other registry's official rows.
+  useBladeEdit().bind({
+    locked: () => (row() ? OFFICIAL_LOCK : null),
+  });
 
   return (
     <Show when={row()} fallback={<p class="text-sm text-base-content/50">Secret type not found.</p>}>
@@ -103,7 +112,6 @@ function SecretTypeBladeBody(p: { id: string }): JSX.Element {
                 )}
               </For>
             </div>
-            <span class="text-[11px] text-base-content/40">Secret types are seeded with the release and read-only here; a release revision updates them.</span>
           </div>
         </div>
       )}

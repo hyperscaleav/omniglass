@@ -5,7 +5,7 @@ description: "The Events catalog and the occurrences behind it: the canonical ha
 
 import SeededSet from '../../../../components/SeededSet.astro';
 
-**Catalog > Events** (with `event_type:read`, covered by every viewer's `*:read` floor) is the
+**Catalog, under Telemetry: Events** (with `event_type:read`, covered by every viewer's `*:read` floor) is the
 estate's **occurrence catalog**: the directory of the discrete happenings the estate can assert.
 An **event** is an **occurrence**, something that *happened* at a moment (a call started, a cable
 came unplugged), not a value something holds; a **value** is a
@@ -28,8 +28,8 @@ The catalog is estate-wide reference data, not a scoped resource, so every event
 to every reader; the write gates decide who may change it.
 
 - The directory lists every event type sorted by name, each showing its **name** (the canonical
-  identifier, with its display name on the line above it) and **origin** (**official**,
-  seed-owned, or **custom**). **name** filters by the name or its display name; **official**
+  identifier, with its display name on the line above it) and **origin** (**official** or
+  **custom**). **name** filters by the name or its display name; **official**
   narrows the list.
 - **New event type** (with `event_type:create`, granted to operators) opens a create **drawer**:
   give it a **name** (a single lowercase kebab segment, for example `call-started` or
@@ -39,15 +39,18 @@ to every reader; the write gates decide who may change it.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `event_type:update`)
   edits the display name and description; the name is fixed at creation, since it is what every
   occurrence and every push is typed by. **Delete** (with `event_type:delete`) removes a custom
-  event type, behind a confirm.
+  event type, behind a confirm. A verb you lack greys just that button, its hover reason naming
+  the permission (`Requires event_type:update`, `Requires event_type:delete`); the pair never
+  disappears.
 - An event type can carry a **payload schema** (a JSON Schema for the occurrence payload, for
   example a `required` call id on `call-started`), shown read-only on the blade. Editing the
   schema in the console is a follow-up; set it through the API for now. A schema whose
   `required` list names a property its `properties` block does not declare is refused with the
   name: the validator would never enforce it, and the catalog does not store a schema that means
   less than it says.
-- An **official** (seed-owned) event type is always read-only: no Edit, no Delete, and the blade
-  marks it "Seed-owned, read-only." The shared vocabulary is the same from install to install,
+- An **official** event type is always read-only: the blade keeps the Edit and Delete pair in
+  place, greyed, with the reason on hover: "Official: ships with Omniglass and updates with it."
+  The shared vocabulary is the same from install to install,
   the same deliberate exception to the operator-owned rule the
   [Properties catalog](/guides/admin/properties/) makes, and for the same reason: an event type
   name is the vocabulary a driver and a rule map onto, so a release has to be able to correct it

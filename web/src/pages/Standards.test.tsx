@@ -6,13 +6,15 @@ import Standards from "./Standards";
 import { STANDARDS_KEY, type Standard } from "../lib/standards";
 import { classifierPropertiesKey, type ClassifierProperty } from "../lib/classifier_properties";
 import { classifierMetricsKey } from "../lib/classifier_metrics";
+import { standardRolesKey, type DeclaredRole } from "../lib/system_roles";
 import { PROPERTIES_KEY, type PropertyRow } from "../lib/properties";
 import { METRICS_KEY } from "../lib/metric_types";
+import { CAPABILITIES_KEY, type Capability } from "../lib/capabilities";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
 // Standards is the catalog of blueprints a system conforms to, on the flat
-// FlatList surface beside Products. An official (seed-owned) row is read-only (no
+// FlatList surface beside Products. An official row is read-only (no
 // pencil, no Delete, and a read-only contract); a custom row carries Edit, Delete,
 // and a writable declared-property contract on its detail blade. Data is seeded
 // into the query cache so no server is needed.
@@ -26,6 +28,12 @@ const catalog: PropertyRow[] = [
   { name: "seat_count", data_type: "int", display_name: "Seat count", official: true },
   { name: "has_camera", data_type: "bool", display_name: "Has camera", official: true },
 ];
+
+// The roles the custom standard declares (RoleEditor keys the query on the
+// standard's uuid, which is what the page passes it), plus the capability
+// registry its picker reads.
+const roles: DeclaredRole[] = [{ name: "table-mic", display_name: "Table microphone", quorum: 2, capabilities: ["microphone"], impact: "degraded" }];
+const capabilities: Capability[] = [{ id: uuidFor("cap-microphone"), name: "microphone", display_name: "Microphone", official: true }];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], grants: [] };
@@ -43,6 +51,10 @@ function mount(me: Me = admin) {
   qc.setQueryData([...METRICS_KEY], []);
   qc.setQueryData([...classifierMetricsKey("standard", "huddle-space")], []);
   qc.setQueryData([...classifierMetricsKey("standard", "meeting-room")], []);
+  // The role panel mounts beside the contract lanes, keyed on the uuid.
+  qc.setQueryData([...CAPABILITIES_KEY], capabilities);
+  qc.setQueryData([...standardRolesKey(uuidFor("std-huddle-space"))], roles);
+  qc.setQueryData([...standardRolesKey(uuidFor("std-meeting-room"))], []);
   qc.setQueryData([...ME_KEY], me);
   return render(() => (
     <QueryClientProvider client={qc}>
@@ -70,13 +82,16 @@ describe("Standards page", () => {
     expect(screen.getByText("Variant of")).toBeInTheDocument();
   });
 
-  it("an official row is read-only: no pencil, no delete, and a read-only contract", async () => {
+  it("an official row is read-only: greyed pencil and delete, and a read-only contract", async () => {
     mount();
     const blade = await openBlade("Meeting room");
-    expect(within(blade).queryByLabelText("Edit")).not.toBeInTheDocument();
-    expect(within(blade).queryByRole("button", { name: /delete/i })).not.toBeInTheDocument();
+    const editBtn = within(blade).getByLabelText("Edit") as HTMLButtonElement;
+    const deleteBtn = within(blade).getByRole("button", { name: /delete/i }) as HTMLButtonElement;
+    expect(editBtn.disabled).toBe(true);
+    expect(deleteBtn.disabled).toBe(true);
+    expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Official: ships with Omniglass and updates with it.");
     // Both contract lanes render read-only: neither panel offers a declare picker.
-    expect(within(blade).getAllByText("seed-owned, read-only")).toHaveLength(2);
+    expect(within(blade).getAllByText("official, read-only")).toHaveLength(2);
     expect(within(blade).queryByLabelText("Property to declare")).not.toBeInTheDocument();
     expect(within(blade).queryByLabelText("Metric to declare")).not.toBeInTheDocument();
   });
@@ -102,9 +117,53 @@ describe("Standards page", () => {
     expect(within(blade).getByText("seat_count")).toBeInTheDocument();
     expect(within(blade).getByText("8")).toBeInTheDocument(); // the declared default
     expect(within(blade).getByText("required")).toBeInTheDocument();
-    // Writable: the picker offers what the standard does not already declare.
+    // Writable once the pencil flips edit mode (#621): the picker offers what
+    // the standard does not already declare.
+    fireEvent.click(within(blade).getByLabelText("Edit"));
     const picker = within(blade).getByLabelText("Property to declare") as HTMLSelectElement;
     expect(Array.from(picker.options).map((o) => o.value)).toEqual(["", "has_camera"]);
+  });
+
+  // The blade model (#621): a blade opens read-only, and EVERY mutating control,
+  // the contract panels' declare/edit/withdraw and the role panel's declare row
+  // included, appears only after the pencil flips the blade into edit mode.
+  it("keeps the contract and role controls out of read mode until the pencil flips edit", async () => {
+    mount();
+    const blade = await openBlade("Huddle space");
+    // Read mode: the declared line and role render as fact rows...
+    expect(within(blade).getByText("seat_count")).toBeInTheDocument();
+    expect(within(blade).getByText("8")).toBeInTheDocument();
+    expect(within(blade).getByText("table-mic")).toBeInTheDocument();
+    expect(within(blade).getByText("2 wanted")).toBeInTheDocument();
+    // ...and nothing shaped like a mutating control renders, even for an admin.
+    expect(within(blade).queryByLabelText("Property to declare")).not.toBeInTheDocument();
+    expect(within(blade).queryByLabelText("Metric to declare")).not.toBeInTheDocument();
+    expect(within(blade).queryByLabelText("Edit seat_count")).not.toBeInTheDocument();
+    expect(within(blade).queryByLabelText("Withdraw seat_count")).not.toBeInTheDocument();
+    expect(within(blade).queryByLabelText("Role name")).not.toBeInTheDocument();
+    expect(within(blade).queryByLabelText("Edit table-mic")).not.toBeInTheDocument();
+    expect(within(blade).queryByLabelText("Withdraw table-mic")).not.toBeInTheDocument();
+    // The pencil enters edit mode; the existing controls return as they were.
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    expect(within(blade).getByLabelText("Property to declare")).toBeInTheDocument();
+    expect(within(blade).getByLabelText("Withdraw seat_count")).toBeInTheDocument();
+    expect(within(blade).getByLabelText("Role name")).toBeInTheDocument();
+    expect(within(blade).getByLabelText("Withdraw table-mic")).toBeInTheDocument();
+  });
+
+  // The permissionless arm of the same rule: a viewer's blade is locked, so
+  // the pencil renders greyed (naming the missing permission) and there is
+  // still no route into the controls.
+  it("gives a viewer a greyed pencil and no contract or role controls on a custom row", async () => {
+    mount(viewer);
+    const blade = await openBlade("Huddle space");
+    expect(within(blade).getByText("seat_count")).toBeInTheDocument();
+    const editBtn = within(blade).getByLabelText("Edit") as HTMLButtonElement;
+    expect(editBtn.disabled).toBe(true);
+    expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Requires standard:update");
+    expect(within(blade).queryByLabelText("Property to declare")).not.toBeInTheDocument();
+    expect(within(blade).queryByLabelText("Role name")).not.toBeInTheDocument();
+    expect(within(blade).queryByLabelText("Withdraw seat_count")).not.toBeInTheDocument();
   });
 
   it("patches display name and variant parent on save", async () => {

@@ -125,7 +125,8 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
 
 // Soon: the marker on a nav item whose backend has not landed. The item stays
 // navigable (its stub page explains what is coming); it just reads as pending.
-function Soon() {
+// Exported so subrails (the Catalog shell's) wear the same treatment.
+export function Soon() {
   return <span class="ml-auto flex-none rounded bg-base-content/5 px-1 py-px text-[9px] font-semibold uppercase tracking-wider text-base-content/40">soon</span>;
 }
 
@@ -176,13 +177,22 @@ function Group(props: { item: NavItem; rel: string; collapsed: boolean }) {
               and pad so child labels land on the parent-label rail at 49px. */}
           <ul class="ms-5 ps-2.25">
             <For each={children()}>
-              {(c) => (
-                <li>
-                  <A href={c.path} activeClass="menu-active" classList={{ "opacity-45": !c.live }}>
-                    <span class="flex-1 truncate">{c.label}</span>
-                    <Show when={!c.live}><Soon /></Show>
-                  </A>
-                </li>
+              {(c, i) => (
+                <>
+                  {/* A non-folding section header (daisyUI menu-title) opens each
+                      run of children sharing a section. Children arrive already
+                      permission-filtered, so a section whose entries are all
+                      hidden renders no header either. */}
+                  <Show when={c.section && c.section !== children()[i() - 1]?.section}>
+                    <li class="menu-title px-2 pb-0.5 pt-2 text-[10.5px] uppercase tracking-wider">{c.section}</li>
+                  </Show>
+                  <li>
+                    <A href={c.path} activeClass="menu-active" classList={{ "opacity-45": !c.live }}>
+                      <span class="flex-1 truncate">{c.label}</span>
+                      <Show when={!c.live}><Soon /></Show>
+                    </A>
+                  </li>
+                </>
               )}
             </For>
           </ul>

@@ -19,6 +19,7 @@ import {
 import { PROPERTIES_KEY, listProperties, type PropertyRow } from "../lib/properties";
 import { METRICS_KEY, listMetricTypes, type MetricRow } from "../lib/metric_types";
 import { useMe, can } from "../lib/auth";
+import { registryLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
@@ -26,7 +27,7 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // Properties and Event Types catalogs. A command type names what a component can be
 // told (set-input, reboot); a settleable one targets a property or a metric (the
 // two-armed exclusive arc) and carries a settle window, a fire-and-forget one
-// neither. Official (seed-owned) types are read-only.
+// neither. Official types are read-only.
 
 function originBadge(official: boolean): JSX.Element {
   return official
@@ -218,6 +219,7 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
       row() && !row()!.official && can(me.data, "command_type", "delete")
         ? { label: "Delete", tone: "danger", onClick: removeCommandType }
         : undefined,
+    locked: () => registryLock(row(), me.data, "command_type"),
   });
 
   return (
@@ -253,9 +255,6 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
             <FieldRow label="Settle window (seconds)" eyebrow>
               <input class="input input-bordered w-full font-data" type="number" min="0" value={settle()} onInput={(e) => setSettle(e.currentTarget.value)} />
             </FieldRow>
-          </Show>
-          <Show when={r().official}>
-            <div role="alert" class="alert alert-soft text-sm"><span>Seed-owned, read-only.</span></div>
           </Show>
         </div>
       )}
