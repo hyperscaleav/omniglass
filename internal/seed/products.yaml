@@ -1,16 +1,24 @@
 # The official products, seeded idempotently at boot. A product is a concrete
 # SKU that ties the classification catalogs together: a vendor (who makes it), a
-# driver (what talks to it), a kind (device/app/service/vm), and the capabilities
-# it provides. vendor_id, driver_id, and every capability id must resolve against
-# the vendor/driver/capability catalogs (seeded first). The registry lists
+# driver (what talks to it), a kind (device/app/service), the component_type it
+# is classified under (the taxonomy above product; component_types.yaml, seeded
+# first), and the capabilities it provides. vendor_id, driver_id, component_type,
+# and every capability id must resolve against their catalogs. The registry lists
 # alphabetically by display_name. Starter set, operator-extensible later; tune
 # freely.
+#
+# The three generics (generic-device/generic-app/generic-service) are the
+# fallback every unclassified component and product resolves to (the product
+# and component floor): a component with no real product, or a product created
+# without an explicit component_type, lands on the generic matching its own
+# kind rather than being refused outright by a direct-gateway caller.
 products:
   - id: cisco-room-bar
     display_name: Cisco Room Bar
     vendor_id: cisco
     driver_id: cisco-xapi
     kind: device
+    component_type: video-bar
     capabilities: [microphone, speaker, camera, codec]
     # The declared-property contract: which properties this product declares and
     # their defaults. An operator overrides one on a component; an unset property
@@ -24,6 +32,7 @@ products:
     display_name: Samsung QM55
     vendor_id: samsung
     kind: device
+    component_type: display
     capabilities: [flat-panel-display]
     properties:
       - name: serial-number
@@ -35,10 +44,24 @@ products:
     vendor_id: shure
     driver_id: snmp-generic
     kind: device
+    component_type: ceiling-mic
     capabilities: [microphone]
   - id: crestron-tss-1070
     display_name: Crestron TSS-1070
     vendor_id: crestron
     driver_id: crestron-cip
     kind: device
+    component_type: touch-panel
     capabilities: [touch-panel]
+  - id: generic-device
+    display_name: Generic Device
+    kind: device
+    component_type: generic-device
+  - id: generic-app
+    display_name: Generic App
+    kind: app
+    component_type: generic-app
+  - id: generic-service
+    display_name: Generic Service
+    kind: service
+    component_type: generic-service

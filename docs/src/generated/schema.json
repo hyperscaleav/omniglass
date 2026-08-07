@@ -70,6 +70,80 @@
    }
   },
   "catalog": {
+   "component_type": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "gen_random_uuid()",
+      "pk": true
+     },
+     {
+      "name": "name",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "display_name",
+      "type": "text",
+      "nullable": false,
+      "default": "''::text"
+     },
+     {
+      "name": "stem",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "icon",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "abbrev",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "default_tags",
+      "type": "ARRAY",
+      "nullable": false,
+      "default": "'{}'::text[]"
+     },
+     {
+      "name": "official",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+     },
+     {
+      "name": "parent_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "component_type.id"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "component_type_name_key",
+      "definition": "CREATE UNIQUE INDEX component_type_name_key ON public.component_type USING btree (name)"
+     }
+    ]
+   },
    "driver": {
     "columns": [
      {
@@ -136,8 +210,7 @@
      {
       "name": "kind",
       "type": "text",
-      "nullable": false,
-      "default": "'device'::text"
+      "nullable": false
      },
      {
       "name": "official",
@@ -184,12 +257,24 @@
       "nullable": true,
       "fk": true,
       "fk_target": "driver.id"
+     },
+     {
+      "name": "component_type_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "component_type.id"
+     },
+     {
+      "name": "icon",
+      "type": "text",
+      "nullable": true
      }
     ],
     "checks": [
      {
       "name": "product_kind_check",
-      "expr": "CHECK ((kind = ANY (ARRAY['device'::text, 'app'::text, 'service'::text, 'vm'::text])))"
+      "expr": "CHECK ((kind = ANY (ARRAY['device'::text, 'app'::text, 'service'::text])))"
      }
     ],
     "uniques": [
@@ -1450,7 +1535,7 @@
      {
       "name": "product_id",
       "type": "uuid",
-      "nullable": true,
+      "nullable": false,
       "fk": true,
       "fk_target": "product.id"
      }
@@ -3464,82 +3549,6 @@
      {
       "name": "property_type_handle_key",
       "definition": "CREATE UNIQUE INDEX property_type_handle_key ON public.property_type USING btree (name)"
-     }
-    ]
-   }
-  },
-  "unclustered": {
-   "component_type": {
-    "columns": [
-     {
-      "name": "id",
-      "type": "uuid",
-      "nullable": false,
-      "default": "gen_random_uuid()",
-      "pk": true
-     },
-     {
-      "name": "name",
-      "type": "text",
-      "nullable": false
-     },
-     {
-      "name": "display_name",
-      "type": "text",
-      "nullable": false,
-      "default": "''::text"
-     },
-     {
-      "name": "stem",
-      "type": "text",
-      "nullable": true
-     },
-     {
-      "name": "icon",
-      "type": "text",
-      "nullable": true
-     },
-     {
-      "name": "abbrev",
-      "type": "text",
-      "nullable": true
-     },
-     {
-      "name": "default_tags",
-      "type": "ARRAY",
-      "nullable": false,
-      "default": "'{}'::text[]"
-     },
-     {
-      "name": "official",
-      "type": "boolean",
-      "nullable": false,
-      "default": "false"
-     },
-     {
-      "name": "parent_id",
-      "type": "uuid",
-      "nullable": true,
-      "fk": true,
-      "fk_target": "component_type.id"
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "updated_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     }
-    ],
-    "uniques": [
-     {
-      "name": "component_type_name_key",
-      "definition": "CREATE UNIQUE INDEX component_type_name_key ON public.component_type USING btree (name)"
      }
     ]
    }

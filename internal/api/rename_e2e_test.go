@@ -37,7 +37,7 @@ func renameables() []renameable {
 		{
 			resource: "component", base: "/components",
 			create: func(c *apiClient, tok, name string) string {
-				c.do(tok, http.MethodPost, "/components", map[string]any{"name": name}, http.StatusCreated)
+				c.do(tok, http.MethodPost, "/components", map[string]any{"name": name, "product": "generic-device"}, http.StatusCreated)
 				return name
 			},
 		},

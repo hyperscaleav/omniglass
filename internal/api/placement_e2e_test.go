@@ -50,8 +50,8 @@ func TestComponentPlacementAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "rack"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "dev"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "rack", "product": "generic-device"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "dev", "product": "generic-device"}, http.StatusCreated)
 
 	type placement struct {
 		Parent   string `json:"parent"`
@@ -80,7 +80,7 @@ func TestComponentPlacementAPI(t *testing.T) {
 	}
 
 	// Reparent onto a descendant is refused (422): sub under dev, then dev under sub.
-	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "sub", "parent": "dev"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "sub", "parent": "dev", "product": "generic-device"}, http.StatusCreated)
 	patch(map[string]any{"parent": "sub"}, http.StatusUnprocessableEntity)
 
 	// An unknown product is a 422 (by name).

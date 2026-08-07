@@ -207,9 +207,15 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 		productID = &pid
 	}
 
+	// product is required (the floor: every component is an instance of a
+	// product), so an unclassified write here defaults to the generic device
+	// the product_type_backfill migration guarantees exists. The API layer
+	// requires an explicit product on create (a stricter operator-facing
+	// gate naming the generics); this default only ever fires below it, for a
+	// caller that writes the gateway directly (seed, devseed, tests).
 	c, err := scanComponent(tx.QueryRow(ctx, `
 		insert into component (name, display_name, parent_id, location_id, product_id)
-		values ($1, $2, $3, $4, $5)
+		values ($1, $2, $3, $4, coalesce($5::uuid, (select id from product where name = 'generic-device')))
 		returning `+componentCols,
 		spec.Name, nullize(spec.DisplayName), parentID, locationID, productID))
 	if err != nil {

@@ -169,6 +169,11 @@ estate: {
 }
 
 catalog: {
+  component_type: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+    parent_id: uuid {constraint: foreign_key}
+  }
   driver: {
     shape: sql_table
     id: uuid {constraint: primary_key}
@@ -176,6 +181,7 @@ catalog: {
   product: {
     shape: sql_table
     id: uuid {constraint: primary_key}
+    component_type_id: uuid {constraint: foreign_key}
     driver_id: uuid {constraint: foreign_key}
     parent_product_id: uuid {constraint: foreign_key}
     vendor_id: uuid {constraint: foreign_key}
@@ -384,16 +390,10 @@ audit: {
   }
 }
 
-unclustered: {
-  component_type: {
-    shape: sql_table
-    id: uuid {constraint: primary_key}
-    parent_id: uuid {constraint: foreign_key}
-  }
-}
-
 audit.audit_log.actor_principal_id -> identity.principal.id
 audit.audit_log.real_actor_principal_id -> identity.principal.id
+catalog.component_type.parent_id -> catalog.component_type.id
+catalog.product.component_type_id -> catalog.component_type.id
 catalog.product.driver_id -> catalog.driver.id
 catalog.product.parent_product_id -> catalog.product.id
 catalog.product.vendor_id -> catalog.vendor.id
@@ -494,7 +494,6 @@ telemetry.property.location_id -> estate.location.id
 telemetry.property.node_id -> collection.node.principal_id
 telemetry.property.property_type_id -> telemetry.property_type.id
 telemetry.property.system_id -> estate.system.id
-unclustered.component_type.parent_id -> unclustered.component_type.id
 ```
 
 <!-- erd:end -->

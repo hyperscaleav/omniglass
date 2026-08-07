@@ -248,7 +248,7 @@ func TestHealthAPIScope(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{
 		"name": "south-sys", "location": "south",
 	}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "north-bar"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "north-bar", "product": "generic-device"}, http.StatusCreated)
 
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {

@@ -825,7 +825,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a component",
-					Long:    "Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location. Gated by component:create.",
+					Long:    "Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create.",
 					Example: "  omniglass component create --name name",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -857,7 +857,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address; lowercase letters, digits, hyphens)")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParent, "parent", "", "Parent component name; omit for a root component")
-				cmd.Flags().StringVar(&fProduct, "product", "", "Product id (catalog SKU) this component is an instance of")
+				cmd.Flags().StringVar(&fProduct, "product", "", "Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled.")
 				cmd.Flags().StringVar(&fSystem, "system", "", "Primary system name this component belongs to")
 				return cmd
 			}()
@@ -1308,7 +1308,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a component",
-					Long:    "Patches a component's display_name, product, location, or parent. The name is not patchable: renaming is the :rename custom method. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
+					Long:    "Patches a component's display_name, product, location, or parent. The name is not patchable: renaming is the :rename custom method. Parent and location follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets); product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
 					Example: "  omniglass component update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1332,7 +1332,146 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
 				cmd.Flags().StringVar(&fLocation, "location", "", "Relocates the component to this location name. An empty string clears its placement.")
 				cmd.Flags().StringVar(&fParent, "parent", "", "Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component.")
-				cmd.Flags().StringVar(&fProduct, "product", "", "Re-classifies the component to this product (catalog SKU). An empty string clears it. Explicitly-set property values persist; the new product's contract defaults follow.")
+				cmd.Flags().StringVar(&fProduct, "product", "", "Re-classifies the component to this product (catalog SKU), by name or uuid. Required once set: an empty string is refused (422), not a clear. Explicitly-set property values persist; the new product's contract defaults follow.")
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
+			Use:   "component-type",
+			Short: "Commands for the component-type resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fAbbrev string
+				var fDefaultTags string
+				var fDisplayName string
+				var fIcon string
+				var fName string
+				var fParentId string
+				var fStem string
+				cmd := &cobra.Command{
+					Use:     "create",
+					Short:   "Create a component type",
+					Long:    "Creates a custom (non-official) component_type, optionally under a parent. Gated by component_type:create.",
+					Example: "  omniglass component-type create --display-name display_name --name name",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/component-types")
+						body := map[string]any{}
+						if cmd.Flags().Changed("abbrev") {
+							body["abbrev"] = fAbbrev
+						}
+						if cmd.Flags().Changed("default-tags") {
+							body["default_tags"] = jsonOrString(fDefaultTags)
+						}
+						if cmd.Flags().Changed("display-name") {
+							body["display_name"] = fDisplayName
+						}
+						if cmd.Flags().Changed("icon") {
+							body["icon"] = fIcon
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						if cmd.Flags().Changed("parent-id") {
+							body["parent_id"] = fParentId
+						}
+						if cmd.Flags().Changed("stem") {
+							body["stem"] = fStem
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fAbbrev, "abbrev", "", "A compact form of display_name; omit to inherit the parent's")
+				cmd.Flags().StringVar(&fDefaultTags, "default-tags", "", "Tags every instance of this type starts with")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads in pickers and lists")
+				_ = cmd.MarkFlagRequired("display-name")
+				cmd.Flags().StringVar(&fIcon, "icon", "", "A glyph key; omit to inherit the parent's")
+				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name")
+				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fParentId, "parent-id", "", "The parent component_type, by name or uuid; omit for a root type")
+				cmd.Flags().StringVar(&fStem, "stem", "", "The auto-generated component name's prefix; omit to inherit the parent's")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "delete <id>",
+					Short:   "Delete a component type",
+					Long:    "Deletes a custom component_type, refused if official (422) or still a parent of another component_type (409). Gated by component_type:delete.",
+					Example: "  omniglass component-type delete <id>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/component-types/%s", url.PathEscape(args[0]))
+						return runAPICommand(cmd, "DELETE", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "List component types",
+					Long:    "Lists the component_type registry (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by display name. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.",
+					Example: "  omniglass component-type list",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/component-types")
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fAbbrev string
+				var fDefaultTags string
+				var fDisplayName string
+				var fIcon string
+				var fStem string
+				cmd := &cobra.Command{
+					Use:     "update <id>",
+					Short:   "Update a component type",
+					Long:    "Patches a custom component_type's display_name, stem, icon, abbrev, or default_tags. Official types are read-only (422). Gated by component_type:update.",
+					Example: "  omniglass component-type update <id>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/component-types/%s", url.PathEscape(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("abbrev") {
+							body["abbrev"] = fAbbrev
+						}
+						if cmd.Flags().Changed("default-tags") {
+							body["default_tags"] = jsonOrString(fDefaultTags)
+						}
+						if cmd.Flags().Changed("display-name") {
+							body["display_name"] = fDisplayName
+						}
+						if cmd.Flags().Changed("icon") {
+							body["icon"] = fIcon
+						}
+						if cmd.Flags().Changed("stem") {
+							body["stem"] = fStem
+						}
+						return runAPICommand(cmd, "PATCH", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fAbbrev, "abbrev", "", "A new compact form")
+				cmd.Flags().StringVar(&fDefaultTags, "default-tags", "", "Replaces the default-tag set; omit to leave unchanged")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
+				cmd.Flags().StringVar(&fIcon, "icon", "", "A new glyph key")
+				cmd.Flags().StringVar(&fStem, "stem", "", "A new name prefix")
 				return cmd
 			}()
 			return cmd
@@ -3638,8 +3777,10 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fCapabilities string
+				var fComponentType string
 				var fDisplayName string
 				var fDriverId string
+				var fIcon string
 				var fKind string
 				var fName string
 				var fParentProductId string
@@ -3647,8 +3788,8 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a product",
-					Long:    "Creates a custom (non-official) product and sets its capabilities. Gated by product:create.",
-					Example: "  omniglass product create --display-name display_name --name name",
+					Long:    "Creates a custom (non-official) product, classified under a component_type, and sets its capabilities. kind and component_type are both required; kind refuses vm (retired, folded into app). Gated by product:create.",
+					Example: "  omniglass product create --component-type component_type --display-name display_name --kind kind --name name",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/products")
@@ -3656,11 +3797,17 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("capabilities") {
 							body["capabilities"] = jsonOrString(fCapabilities)
 						}
+						if cmd.Flags().Changed("component-type") {
+							body["component_type"] = fComponentType
+						}
 						if cmd.Flags().Changed("display-name") {
 							body["display_name"] = fDisplayName
 						}
 						if cmd.Flags().Changed("driver-id") {
 							body["driver_id"] = fDriverId
+						}
+						if cmd.Flags().Changed("icon") {
+							body["icon"] = fIcon
 						}
 						if cmd.Flags().Changed("kind") {
 							body["kind"] = fKind
@@ -3678,10 +3825,14 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fCapabilities, "capabilities", "", "Capability names the product provides (the default set its components inherit)")
+				cmd.Flags().StringVar(&fComponentType, "component-type", "", "The component_type this product is classified under (mic, camera, ...), by name or uuid; every product must belong to one of the tree's nodes. The generics (generic-device, generic-app, generic-service) fit anything not yet modeled more specifically.")
+				_ = cmd.MarkFlagRequired("component-type")
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads in pickers and lists")
 				_ = cmd.MarkFlagRequired("display-name")
 				cmd.Flags().StringVar(&fDriverId, "driver-id", "", "The driver that talks to it, by handle or uuid")
-				cmd.Flags().StringVar(&fKind, "kind", "", "What class of thing the product is")
+				cmd.Flags().StringVar(&fIcon, "icon", "", "A product-level icon override; unset inherits the component_type's icon")
+				cmd.Flags().StringVar(&fKind, "kind", "", "What class of thing the product is. vm is retired (folded into app); required, no default, so every product states its class explicitly.")
+				_ = cmd.MarkFlagRequired("kind")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name; renameable")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParentProductId, "parent-product-id", "", "The parent product, by handle or uuid")
@@ -3729,7 +3880,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List products",
-					Long:    "Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, and capabilities. Gated by product:read.",
+					Long:    "Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, component_type, and capabilities. Gated by product:read.",
 					Example: "  omniglass product list",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3882,15 +4033,17 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fCapabilities string
+				var fComponentType string
 				var fDisplayName string
 				var fDriverId string
+				var fIcon string
 				var fKind string
 				var fParentProductId string
 				var fVendorId string
 				cmd := &cobra.Command{
 					Use:     "update <id>",
 					Short:   "Update a product",
-					Long:    "Patches a custom product's display_name, vendor, driver, kind, or parent, and replaces its capabilities when provided. Official products are read-only (422). Gated by product:update.",
+					Long:    "Patches a custom product's display_name, vendor, driver, kind, component_type, icon, or parent, and replaces its capabilities when provided. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.",
 					Example: "  omniglass product update <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3899,11 +4052,17 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("capabilities") {
 							body["capabilities"] = jsonOrString(fCapabilities)
 						}
+						if cmd.Flags().Changed("component-type") {
+							body["component_type"] = fComponentType
+						}
 						if cmd.Flags().Changed("display-name") {
 							body["display_name"] = fDisplayName
 						}
 						if cmd.Flags().Changed("driver-id") {
 							body["driver_id"] = fDriverId
+						}
+						if cmd.Flags().Changed("icon") {
+							body["icon"] = fIcon
 						}
 						if cmd.Flags().Changed("kind") {
 							body["kind"] = fKind
@@ -3918,8 +4077,10 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fCapabilities, "capabilities", "", "Replaces the capability-name set; omit to leave unchanged")
+				cmd.Flags().StringVar(&fComponentType, "component-type", "", "Reclassifies the product to this component_type, by name or uuid; component_type is required, so this only reclassifies, it never clears")
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
 				cmd.Flags().StringVar(&fDriverId, "driver-id", "", "A new driver, by handle or uuid")
+				cmd.Flags().StringVar(&fIcon, "icon", "", "A new icon override")
 				cmd.Flags().StringVar(&fKind, "kind", "", "A new product class")
 				cmd.Flags().StringVar(&fParentProductId, "parent-product-id", "", "A new parent product, by handle or uuid")
 				cmd.Flags().StringVar(&fVendorId, "vendor-id", "", "A new vendor, by handle or uuid")

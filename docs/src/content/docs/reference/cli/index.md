@@ -642,7 +642,7 @@ Create a component
 omniglass component create [flags]
 ```
 
-Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location. Gated by component:create.
+Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -650,7 +650,7 @@ Creates a component, optionally under a parent (a root needs an all-scoped grant
 | `--location` | string | (none) | Location name this component is placed at |
 | `--name` | string | (none) | Globally unique name (the address; lowercase letters, digits, hyphens) |
 | `--parent` | string | (none) | Parent component name; omit for a root component |
-| `--product` | string | (none) | Product id (catalog SKU) this component is an instance of |
+| `--product` | string | (none) | Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled. |
 | `--system` | string | (none) | Primary system name this component belongs to |
 
 Example:
@@ -1032,19 +1032,105 @@ Update a component
 omniglass component update <name> [flags]
 ```
 
-Patches a component's display_name, product, location, or parent. The name is not patchable: renaming is the :rename custom method. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+Patches a component's display_name, product, location, or parent. The name is not patchable: renaming is the :rename custom method. Parent and location follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets); product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) | A new operator-facing label |
 | `--location` | string | (none) | Relocates the component to this location name. An empty string clears its placement. |
 | `--parent` | string | (none) | Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component. |
-| `--product` | string | (none) | Re-classifies the component to this product (catalog SKU). An empty string clears it. Explicitly-set property values persist; the new product's contract defaults follow. |
+| `--product` | string | (none) | Re-classifies the component to this product (catalog SKU), by name or uuid. Required once set: an empty string is refused (422), not a clear. Explicitly-set property values persist; the new product's contract defaults follow. |
 
 Example:
 
 ```sh
 omniglass component update <name>
+```
+
+## `omniglass component-type`
+
+Commands for the component-type resource
+
+### `omniglass component-type create`
+
+Create a component type
+
+```
+omniglass component-type create [flags]
+```
+
+Creates a custom (non-official) component_type, optionally under a parent. Gated by component_type:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--abbrev` | string | (none) | A compact form of display_name; omit to inherit the parent's |
+| `--default-tags` | string | (none) | Tags every instance of this type starts with |
+| `--display-name` | string | (none) | What an operator reads in pickers and lists |
+| `--icon` | string | (none) | A glyph key; omit to inherit the parent's |
+| `--name` | string | (none) | The globally unique name |
+| `--parent-id` | string | (none) | The parent component_type, by name or uuid; omit for a root type |
+| `--stem` | string | (none) | The auto-generated component name's prefix; omit to inherit the parent's |
+
+Example:
+
+```sh
+omniglass component-type create --display-name display_name --name name
+```
+
+### `omniglass component-type delete`
+
+Delete a component type
+
+```
+omniglass component-type delete <id>
+```
+
+Deletes a custom component_type, refused if official (422) or still a parent of another component_type (409). Gated by component_type:delete.
+
+Example:
+
+```sh
+omniglass component-type delete <id>
+```
+
+### `omniglass component-type list`
+
+List component types
+
+```
+omniglass component-type list
+```
+
+Lists the component_type registry (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by display name. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.
+
+Example:
+
+```sh
+omniglass component-type list
+```
+
+### `omniglass component-type update`
+
+Update a component type
+
+```
+omniglass component-type update <id> [flags]
+```
+
+Patches a custom component_type's display_name, stem, icon, abbrev, or default_tags. Official types are read-only (422). Gated by component_type:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--abbrev` | string | (none) | A new compact form |
+| `--default-tags` | string | (none) | Replaces the default-tag set; omit to leave unchanged |
+| `--display-name` | string | (none) | A new operator-facing label |
+| `--icon` | string | (none) | A new glyph key |
+| `--stem` | string | (none) | A new name prefix |
+
+Example:
+
+```sh
+omniglass component-type update <id>
 ```
 
 ## `omniglass driver`
@@ -2866,14 +2952,16 @@ Create a product
 omniglass product create [flags]
 ```
 
-Creates a custom (non-official) product and sets its capabilities. Gated by product:create.
+Creates a custom (non-official) product, classified under a component_type, and sets its capabilities. kind and component_type are both required; kind refuses vm (retired, folded into app). Gated by product:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--capabilities` | string | (none) | Capability names the product provides (the default set its components inherit) |
+| `--component-type` | string | (none) | The component_type this product is classified under (mic, camera, ...), by name or uuid; every product must belong to one of the tree's nodes. The generics (generic-device, generic-app, generic-service) fit anything not yet modeled more specifically. |
 | `--display-name` | string | (none) | What an operator reads in pickers and lists |
 | `--driver-id` | string | (none) | The driver that talks to it, by handle or uuid |
-| `--kind` | string | (none) | What class of thing the product is |
+| `--icon` | string | (none) | A product-level icon override; unset inherits the component_type's icon |
+| `--kind` | string | (none) | What class of thing the product is. vm is retired (folded into app); required, no default, so every product states its class explicitly. |
 | `--name` | string | (none) | The globally unique name; renameable |
 | `--parent-product-id` | string | (none) | The parent product, by handle or uuid |
 | `--vendor-id` | string | (none) | The vendor, by handle or uuid |
@@ -2881,7 +2969,7 @@ Creates a custom (non-official) product and sets its capabilities. Gated by prod
 Example:
 
 ```sh
-omniglass product create --display-name display_name --name name
+omniglass product create --component-type component_type --display-name display_name --kind kind --name name
 ```
 
 ### `omniglass product delete`
@@ -2924,7 +3012,7 @@ List products
 omniglass product list
 ```
 
-Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, and capabilities. Gated by product:read.
+Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, component_type, and capabilities. Gated by product:read.
 
 Example:
 
@@ -3054,13 +3142,15 @@ Update a product
 omniglass product update <id> [flags]
 ```
 
-Patches a custom product's display_name, vendor, driver, kind, or parent, and replaces its capabilities when provided. Official products are read-only (422). Gated by product:update.
+Patches a custom product's display_name, vendor, driver, kind, component_type, icon, or parent, and replaces its capabilities when provided. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--capabilities` | string | (none) | Replaces the capability-name set; omit to leave unchanged |
+| `--component-type` | string | (none) | Reclassifies the product to this component_type, by name or uuid; component_type is required, so this only reclassifies, it never clears |
 | `--display-name` | string | (none) | A new operator-facing label |
 | `--driver-id` | string | (none) | A new driver, by handle or uuid |
+| `--icon` | string | (none) | A new icon override |
 | `--kind` | string | (none) | A new product class |
 | `--parent-product-id` | string | (none) | A new parent product, by handle or uuid |
 | `--vendor-id` | string | (none) | A new vendor, by handle or uuid |

@@ -392,6 +392,54 @@ export interface paths {
         patch: operations["update-command-type"];
         trace?: never;
     };
+    "/component-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List component types
+         * @description Lists the component_type registry (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by display name. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.
+         */
+        get: operations["list-component-types"];
+        put?: never;
+        /**
+         * Create a component type
+         * @description Creates a custom (non-official) component_type, optionally under a parent. Gated by component_type:create.
+         */
+        post: operations["create-component-type"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/component-types/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a component type
+         * @description Deletes a custom component_type, refused if official (422) or still a parent of another component_type (409). Gated by component_type:delete.
+         */
+        delete: operations["delete-component-type"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a component type
+         * @description Patches a custom component_type's display_name, stem, icon, abbrev, or default_tags. Official types are read-only (422). Gated by component_type:update.
+         */
+        patch: operations["update-component-type"];
+        trace?: never;
+    };
     "/components": {
         parameters: {
             query?: never;
@@ -407,7 +455,7 @@ export interface paths {
         put?: never;
         /**
          * Create a component
-         * @description Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location. Gated by component:create.
+         * @description Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create.
          */
         post: operations["create-component"];
         delete?: never;
@@ -439,7 +487,7 @@ export interface paths {
         head?: never;
         /**
          * Update a component
-         * @description Patches a component's display_name, product, location, or parent. The name is not patchable: renaming is the :rename custom method. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+         * @description Patches a component's display_name, product, location, or parent. The name is not patchable: renaming is the :rename custom method. Parent and location follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets); product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-component"];
         trace?: never;
@@ -2233,13 +2281,13 @@ export interface paths {
         };
         /**
          * List products
-         * @description Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, and capabilities. Gated by product:read.
+         * @description Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, component_type, and capabilities. Gated by product:read.
          */
         get: operations["list-products"];
         put?: never;
         /**
          * Create a product
-         * @description Creates a custom (non-official) product and sets its capabilities. Gated by product:create.
+         * @description Creates a custom (non-official) product, classified under a component_type, and sets its capabilities. kind and component_type are both required; kind refuses vm (retired, folded into app). Gated by product:create.
          */
         post: operations["create-product"];
         delete?: never;
@@ -2271,7 +2319,7 @@ export interface paths {
         head?: never;
         /**
          * Update a product
-         * @description Patches a custom product's display_name, vendor, driver, kind, or parent, and replaces its capabilities when provided. Official products are read-only (422). Gated by product:update.
+         * @description Patches a custom product's display_name, vendor, driver, kind, component_type, icon, or parent, and replaces its capabilities when provided. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.
          */
         patch: operations["update-product"];
         trace?: never;
@@ -3747,6 +3795,32 @@ export interface components {
             /** @description The stored value's id */
             value_id: string;
         };
+        ComponentTypeBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ComponentTypeBody.json
+             */
+            readonly $schema?: string;
+            /** @description A compact form of display_name; empty inherits the nearest ancestor's */
+            abbrev?: string;
+            /** @description Tags every instance of this type (or a descendant that does not override) starts with */
+            default_tags: string[] | null;
+            display_name: string;
+            /** @description A glyph key; empty inherits the nearest ancestor's */
+            icon?: string;
+            /** @description The component_type's uuid, the stable handle that survives a rename */
+            id: string;
+            /** @description The name an operator reads and types; renameable */
+            name: string;
+            official: boolean;
+            /** @description The parent component_type's name, for display; absent for a root type */
+            parent?: string;
+            /** @description The parent component_type's id, the canonical handle; absent for a root type */
+            parent_id?: string;
+            /** @description The auto-generated component name's prefix; empty inherits the nearest ancestor's */
+            stem?: string;
+        };
         CreateCapabilityInputBody: {
             /**
              * Format: uri
@@ -3799,10 +3873,32 @@ export interface components {
             name: string;
             /** @description Parent component name; omit for a root component */
             parent?: string;
-            /** @description Product id (catalog SKU) this component is an instance of */
+            /** @description Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled. */
             product?: string;
             /** @description Primary system name this component belongs to */
             system?: string;
+        };
+        CreateComponentTypeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateComponentTypeInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description A compact form of display_name; omit to inherit the parent's */
+            abbrev?: string;
+            /** @description Tags every instance of this type starts with */
+            default_tags?: string[] | null;
+            /** @description What an operator reads in pickers and lists */
+            display_name: string;
+            /** @description A glyph key; omit to inherit the parent's */
+            icon?: string;
+            /** @description The globally unique name */
+            name: string;
+            /** @description The parent component_type, by name or uuid; omit for a root type */
+            parent_id?: string;
+            /** @description The auto-generated component name's prefix; omit to inherit the parent's */
+            stem?: string;
         };
         CreateDriverInputBody: {
             /**
@@ -4057,16 +4153,19 @@ export interface components {
             readonly $schema?: string;
             /** @description Capability names the product provides (the default set its components inherit) */
             capabilities?: string[] | null;
+            /** @description The component_type this product is classified under (mic, camera, ...), by name or uuid; every product must belong to one of the tree's nodes. The generics (generic-device, generic-app, generic-service) fit anything not yet modeled more specifically. */
+            component_type: string;
             /** @description What an operator reads in pickers and lists */
             display_name: string;
             /** @description The driver that talks to it, by handle or uuid */
             driver_id?: string;
+            /** @description A product-level icon override; unset inherits the component_type's icon */
+            icon?: string;
             /**
-             * @description What class of thing the product is
-             * @default device
+             * @description What class of thing the product is. vm is retired (folded into app); required, no default, so every product states its class explicitly.
              * @enum {string}
              */
-            kind: "device" | "app" | "service" | "vm";
+            kind: "device" | "app" | "service";
             /** @description The globally unique name; renameable */
             name: string;
             /** @description The parent product, by handle or uuid */
@@ -4757,6 +4856,15 @@ export interface components {
             component: string;
             memberships: components["schemas"]["SystemMemberBody"][] | null;
         };
+        ListComponentTypesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListComponentTypesOutputBody.json
+             */
+            readonly $schema?: string;
+            component_types: components["schemas"]["ComponentTypeBody"][] | null;
+        };
         ListComponentsOutputBody: {
             /**
              * Format: uri
@@ -5349,15 +5457,21 @@ export interface components {
              */
             readonly $schema?: string;
             capabilities: string[] | null;
+            /** @description The component_type this product is classified under (mic, camera, ...); the taxonomy above product */
+            component_type: string;
+            /** @description The component_type's uuid; the stable form of component_type */
+            component_type_id: string;
             display_name: string;
             /** @description The driver's handle */
             driver?: string;
             /** @description The driver's uuid; the stable form of driver */
             driver_id?: string;
+            /** @description A product-level icon override; unset inherits the component_type's icon */
+            icon?: string;
             /** @description The product's uuid, the stable handle that survives a rename */
             id: string;
             /** @enum {string} */
-            kind: "device" | "app" | "service" | "vm";
+            kind: "device" | "app" | "service";
             /** @description The name an operator reads and types; renameable */
             name: string;
             official: boolean;
@@ -6350,8 +6464,26 @@ export interface components {
             location?: string;
             /** @description Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component. */
             parent?: string;
-            /** @description Re-classifies the component to this product (catalog SKU). An empty string clears it. Explicitly-set property values persist; the new product's contract defaults follow. */
+            /** @description Re-classifies the component to this product (catalog SKU), by name or uuid. Required once set: an empty string is refused (422), not a clear. Explicitly-set property values persist; the new product's contract defaults follow. */
             product?: string;
+        };
+        UpdateComponentTypeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateComponentTypeInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description A new compact form */
+            abbrev?: string;
+            /** @description Replaces the default-tag set; omit to leave unchanged */
+            default_tags?: string[];
+            /** @description A new operator-facing label */
+            display_name?: string;
+            /** @description A new glyph key */
+            icon?: string;
+            /** @description A new name prefix */
+            stem?: string;
         };
         UpdateDriverInputBody: {
             /**
@@ -6497,15 +6629,19 @@ export interface components {
             readonly $schema?: string;
             /** @description Replaces the capability-name set; omit to leave unchanged */
             capabilities?: string[];
+            /** @description Reclassifies the product to this component_type, by name or uuid; component_type is required, so this only reclassifies, it never clears */
+            component_type?: string;
             /** @description A new operator-facing label */
             display_name?: string;
             /** @description A new driver, by handle or uuid */
             driver_id?: string;
+            /** @description A new icon override */
+            icon?: string;
             /**
              * @description A new product class
              * @enum {string}
              */
-            kind?: "device" | "app" | "service" | "vm";
+            kind?: "device" | "app" | "service";
             /** @description A new parent product, by handle or uuid */
             parent_product_id?: string;
             /** @description A new vendor, by handle or uuid */
@@ -7476,6 +7612,133 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CommandTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-component-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListComponentTypesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-component-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateComponentTypeInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-component-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component_type id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-component-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateComponentTypeInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentTypeBody"];
                 };
             };
             /** @description Error */

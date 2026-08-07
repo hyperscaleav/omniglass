@@ -728,15 +728,17 @@ func TestHealthMovesOnProductChange(t *testing.T) {
 		t.Errorf("recorded %d rows for a product patch that changed nothing, want %d", got, n+1)
 	}
 
-	// Clearing the product outright leaves the component with only its own
-	// capability facts, which here is nothing at all: the same trigger, the same
-	// impairment.
-	none := ""
-	if _, err := f.gw.UpdateComponent(ctx, "", "bar-1", storage.ComponentPatch{ProductName: &none}, f.all, f.all); err != nil {
-		t.Fatalf("clear product: %v", err)
+	// #614's product floor retired the productless component: every component
+	// is an instance of a product, so there is no longer a "clear" state to
+	// reach. Reclassifying to the generic device is its replacement: it leaves
+	// the component with only its own capability facts, which here is nothing
+	// at all, so the same trigger and the same impairment still exercise.
+	generic := "generic-device"
+	if _, err := f.gw.UpdateComponent(ctx, "", "bar-1", storage.ComponentPatch{ProductName: &generic}, f.all, f.all); err != nil {
+		t.Fatalf("reclassify to generic-device: %v", err)
 	}
 	if got, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "degraded" || got != n+2 {
-		t.Errorf("system after clearing the product = %d rows / %q, want %d / degraded", got, v, n+2)
+		t.Errorf("system after reclassifying to generic-device = %d rows / %q, want %d / degraded", got, v, n+2)
 	}
 	// An unknown product is a named refusal, not a constraint violation.
 	ghost := "no-such-product"

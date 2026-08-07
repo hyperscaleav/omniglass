@@ -124,6 +124,7 @@
     "command_type:*",
     "command:*",
     "location_type:create,update,delete",
+    "component_type:create,update,delete",
     "vendor:create,update,delete",
     "driver:create,update,delete",
     "capability:create,update,delete",
@@ -166,6 +167,9 @@
     "location_type:create",
     "location_type:update",
     "location_type:delete",
+    "component_type:create",
+    "component_type:update",
+    "component_type:delete",
     "vendor:create",
     "vendor:update",
     "vendor:delete",
@@ -640,6 +644,21 @@
    "capabilities": [
     "touch-panel"
    ]
+  },
+  {
+   "id": "generic-device",
+   "display_name": "Generic Device",
+   "kind": "device"
+  },
+  {
+   "id": "generic-app",
+   "display_name": "Generic App",
+   "kind": "app"
+  },
+  {
+   "id": "generic-service",
+   "display_name": "Generic Service",
+   "kind": "service"
   }
  ]
 }

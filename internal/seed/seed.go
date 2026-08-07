@@ -167,6 +167,8 @@ type productsDoc struct {
 		VendorID        string   `yaml:"vendor_id"`
 		DriverID        string   `yaml:"driver_id"`
 		Kind            string   `yaml:"kind"`
+		ComponentType   string   `yaml:"component_type"`
+		Icon            string   `yaml:"icon"`
 		ParentProductID string   `yaml:"parent_product_id"`
 		Capabilities    []string `yaml:"capabilities"`
 		// The declared-property contract this product ships. `default` is raw JSON
@@ -497,7 +499,9 @@ func seedProducts(ctx context.Context, gw storage.Gateway) error {
 		if err := gw.UpsertProduct(ctx, storage.Product{
 			Name: p.ID, Official: true, DisplayName: p.DisplayName,
 			VendorID: nz(p.VendorID), DriverID: nz(p.DriverID),
-			ParentProductID: nz(p.ParentProductID), Kind: kind, Capabilities: p.Capabilities,
+			ParentProductID: nz(p.ParentProductID), Kind: kind,
+			ComponentType: p.ComponentType, Icon: nz(p.Icon),
+			Capabilities: p.Capabilities,
 		}); err != nil {
 			return err
 		}

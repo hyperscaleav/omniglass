@@ -20,7 +20,7 @@ var Subsystems = []Cluster{
 	}},
 	{Name: "catalog", Tables: []string{
 		"vendor", "product", "product_capability", "product_property", "product_metric",
-		"driver", "standard", "standard_property", "standard_metric",
+		"component_type", "driver", "standard", "standard_property", "standard_metric",
 	}},
 	{Name: "telemetry", Tables: []string{
 		"property_type", "metric_type", "metric", "property",

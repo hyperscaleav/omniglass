@@ -54,7 +54,12 @@ type createComponentInput struct {
 		Parent      *string `json:"parent,omitempty" doc:"Parent component name; omit for a root component"`
 		System      *string `json:"system,omitempty" doc:"Primary system name this component belongs to"`
 		Location    *string `json:"location,omitempty" doc:"Location name this component is placed at"`
-		Product     *string `json:"product,omitempty" doc:"Product id (catalog SKU) this component is an instance of"`
+		// Product is required: every component is an instance of a product (the
+		// classification floor). It stays a pointer rather than a plain
+		// required string so the handler can report a specific, actionable
+		// message (naming the generics) instead of Huma's generic
+		// missing-required-field text.
+		Product *string `json:"product,omitempty" doc:"Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled."`
 	}
 }
 
@@ -64,13 +69,18 @@ type updateComponentInput struct {
 	Name string `path:"name"`
 	Body struct {
 		DisplayName *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
-		// The placement and classification fields take the house three-state
-		// convention: an omitted field is unchanged, an explicit empty string
-		// clears, and a name sets. So they are pointers passed straight through
-		// (never emptyPtrToNil, which would collapse an intended clear).
+		// Parent and Location take the house three-state convention: an omitted
+		// field is unchanged, an explicit empty string clears, and a name sets.
+		// So they are pointers passed straight through (never emptyPtrToNil,
+		// which would collapse an intended clear).
+		//
+		// Product does NOT: it is required (the classification floor, every
+		// component is an instance of a product), so it has no clear state.
+		// An omitted field is unchanged and a name reclassifies, same as the
+		// others, but an explicit empty string is a 422, not a clear.
 		Parent   *string `json:"parent,omitempty" doc:"Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component."`
 		Location *string `json:"location,omitempty" doc:"Relocates the component to this location name. An empty string clears its placement."`
-		Product  *string `json:"product,omitempty" doc:"Re-classifies the component to this product (catalog SKU). An empty string clears it. Explicitly-set property values persist; the new product's contract defaults follow."`
+		Product  *string `json:"product,omitempty" doc:"Re-classifies the component to this product (catalog SKU), by name or uuid. Required once set: an empty string is refused (422), not a clear. Explicitly-set property values persist; the new product's contract defaults follow."`
 	}
 }
 
@@ -83,6 +93,14 @@ type renameComponentInput struct {
 		Name string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The new globally unique name (lowercase letters, digits, hyphens)"`
 	}
 }
+
+// errProductRequired is the 422 a component create returns when no product is
+// named: the classification floor (every component is an instance of a
+// product) is a hard requirement at the API, even though the storage layer
+// falls back to generic-device for a direct-gateway caller (seed, devseed,
+// tests) that skips it. Names the three generics so the message is
+// immediately actionable.
+const errProductRequired = "a component must be an instance of a product; name one, or use a generic (generic-device, generic-app, generic-service) until a real product is modeled"
 
 // registerComponentRoutes wires the component CRUD surface, on the same pattern
 // as locations and systems.
@@ -141,8 +159,11 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Path:          "/components",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a component",
-		Description:   "Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location. Gated by component:create.",
+		Description:   "Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create.",
 	}, "component", "create"), func(ctx context.Context, in *createComponentInput) (*componentOutput, error) {
+		if in.Body.Product == nil || *in.Body.Product == "" {
+			return nil, huma.Error422UnprocessableEntity(errProductRequired)
+		}
 		c, err := gw.CreateComponent(ctx, actorID(ctx), storage.ComponentSpec{
 			Name:         in.Body.Name,
 			DisplayName:  in.Body.DisplayName,
@@ -162,8 +183,11 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Method:      http.MethodPatch,
 		Path:        "/components/{name}",
 		Summary:     "Update a component",
-		Description: "Patches a component's display_name, product, location, or parent. The name is not patchable: renaming is the :rename custom method. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
+		Description: "Patches a component's display_name, product, location, or parent. The name is not patchable: renaming is the :rename custom method. Parent and location follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets); product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
 	}, "component", "update"), func(ctx context.Context, in *updateComponentInput) (*componentOutput, error) {
+		if in.Body.Product != nil && *in.Body.Product == "" {
+			return nil, huma.Error422UnprocessableEntity("product cannot be cleared; a component must always be an instance of a product")
+		}
 		c, err := gw.UpdateComponent(ctx, actorID(ctx), in.Name, storage.ComponentPatch{
 			DisplayName: in.Body.DisplayName,
 			// Passed straight through, never emptyPtrToNil: the storage layer reads

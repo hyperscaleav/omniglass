@@ -163,7 +163,7 @@ func newCascadeFixture(t *testing.T) (*apiClient, string, string, string) {
 
 	c.do(tok, http.MethodPost, "/locations", map[string]any{"name": "bldg", "location_type": "building"}, http.StatusCreated)
 	c.do(tok, http.MethodPost, "/locations", map[string]any{"name": "room", "location_type": "room", "parent": "bldg"}, http.StatusCreated)
-	compRaw := c.do(tok, http.MethodPost, "/components", map[string]any{"name": "codec-1", "location": "room"}, http.StatusCreated)
+	compRaw := c.do(tok, http.MethodPost, "/components", map[string]any{"name": "codec-1", "location": "room", "product": "generic-device"}, http.StatusCreated)
 	var comp struct {
 		ID string `json:"id"`
 	}

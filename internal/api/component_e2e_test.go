@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
@@ -44,7 +45,7 @@ func TestComponentRenameAndCheckName(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	// Seed a component.
-	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "cmp-one"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "cmp-one", "product": "generic-device"}, http.StatusCreated)
 
 	type nameCheck struct {
 		Valid     bool   `json:"valid"`
@@ -97,7 +98,7 @@ func TestComponentRenameAndCheckName(t *testing.T) {
 	c.do(ownerTok, http.MethodPatch, "/components/cmp-renamed", map[string]any{"name": "cmp-sneaky"}, http.StatusUnprocessableEntity)
 
 	// Dup rename -> 409.
-	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "cmp-two"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "cmp-two", "product": "generic-device"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/components/cmp-two:rename", map[string]any{"name": "cmp-renamed"}, http.StatusConflict)
 
 	// Bad format -> 422 (Huma pattern rejects at the edge).
@@ -109,7 +110,7 @@ func TestComponentRenameAndCheckName(t *testing.T) {
 		map[string]any{"name": "019f8754-461f-7b82-b5f2-fc4bbe1c3765"}, http.StatusUnprocessableEntity)
 
 	// Create-tightening: a bad name is rejected at create too, not just rename.
-	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "Bad Name"}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "Bad Name", "product": "generic-device"}, http.StatusUnprocessableEntity)
 }
 
 // TestComponentCheckNameScopeBlind is scope-blind: a caller with component:update
@@ -144,10 +145,10 @@ func TestComponentCheckNameScopeBlind(t *testing.T) {
 	var disp struct {
 		ID string `json:"id"`
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "scope-disp"}, http.StatusCreated), &disp); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "scope-disp", "product": "generic-device"}, http.StatusCreated), &disp); err != nil {
 		t.Fatalf("decode create: %v", err)
 	}
-	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "scope-cam"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "scope-cam", "product": "generic-device"}, http.StatusCreated)
 
 	// A deploy principal (component:update) scoped ONLY to scope-disp.
 	deployTok := setupScopedViewer(t, ctx, dsn, "deploy-disp", "deploy", "component", disp.ID)
@@ -165,5 +166,76 @@ func TestComponentCheckNameScopeBlind(t *testing.T) {
 	}
 	if !nc.Valid || nc.Available {
 		t.Fatalf("scope-blind checkName(scope-cam) = %+v, want valid=true available=false (name exists out-of-scope)", nc)
+	}
+}
+
+// TestComponentRequiresProduct drives the #614 component floor over HTTP: a
+// create with no product is a 422 whose message names generic-device (the
+// escape hatch, an operator can act on the message immediately), a create
+// with a product succeeds, patch still reclassifies, and patch no longer
+// treats an explicit empty string as a clear (also a 422). Skipped under
+// -short.
+func TestComponentRequiresProduct(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatalf("mint owner: %v", err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	// No product at all: 422, naming generic-device.
+	status, body := c.send(ownerTok, http.MethodPost, "/components", map[string]any{"name": "no-product"})
+	if status != http.StatusUnprocessableEntity {
+		t.Fatalf("create with no product status = %d, want 422\nbody: %s", status, body)
+	}
+	if !strings.Contains(string(body), "generic-device") {
+		t.Fatalf("create with no product body = %s, want it to name generic-device", body)
+	}
+
+	// An explicit empty-string product is the same 422, not a silent no-op.
+	status, body = c.send(ownerTok, http.MethodPost, "/components", map[string]any{"name": "empty-product", "product": ""})
+	if status != http.StatusUnprocessableEntity {
+		t.Fatalf("create with empty product status = %d, want 422\nbody: %s", status, body)
+	}
+
+	// A named product succeeds.
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "has-product", "product": "generic-device"}, http.StatusCreated)
+
+	// PATCH still reclassifies to a real product.
+	c.do(ownerTok, http.MethodPatch, "/components/has-product", map[string]any{"product": "cisco-room-bar"}, http.StatusOK)
+	reread := struct {
+		Product string `json:"product"`
+	}{}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/has-product", nil, http.StatusOK), &reread); err != nil {
+		t.Fatalf("decode get: %v", err)
+	}
+	if reread.Product != "cisco-room-bar" {
+		t.Fatalf("product after reclassify = %q, want cisco-room-bar", reread.Product)
+	}
+
+	// PATCH no longer clears with an explicit empty string: 422, and the
+	// product is left exactly as the reclassify left it.
+	c.do(ownerTok, http.MethodPatch, "/components/has-product", map[string]any{"product": ""}, http.StatusUnprocessableEntity)
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/has-product", nil, http.StatusOK), &reread); err != nil {
+		t.Fatalf("decode get after refused clear: %v", err)
+	}
+	if reread.Product != "cisco-room-bar" {
+		t.Fatalf("product after refused clear = %q, want unchanged cisco-room-bar", reread.Product)
 	}
 }

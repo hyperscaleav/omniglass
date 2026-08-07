@@ -104,6 +104,7 @@ roles:
       - "command_type:*"
       - "command:*"
       - "location_type:create,update,delete"
+      - "component_type:create,update,delete"
       - "vendor:create,update,delete"
       - "driver:create,update,delete"
       - "capability:create,update,delete"

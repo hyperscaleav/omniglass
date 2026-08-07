@@ -530,6 +530,55 @@ components:
         - value
         - value_id
       type: object
+    ComponentTypeBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ComponentTypeBody.json
+          format: uri
+          readOnly: true
+          type: string
+        abbrev:
+          description: A compact form of display_name; empty inherits the nearest ancestor's
+          type: string
+        default_tags:
+          description: Tags every instance of this type (or a descendant that does not override) starts with
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        display_name:
+          type: string
+        icon:
+          description: A glyph key; empty inherits the nearest ancestor's
+          type: string
+        id:
+          description: The component_type's uuid, the stable handle that survives a rename
+          type: string
+        name:
+          description: The name an operator reads and types; renameable
+          type: string
+        official:
+          type: boolean
+        parent:
+          description: The parent component_type's name, for display; absent for a root type
+          type: string
+        parent_id:
+          description: The parent component_type's id, the canonical handle; absent for a root type
+          type: string
+        stem:
+          description: The auto-generated component name's prefix; empty inherits the nearest ancestor's
+          type: string
+      required:
+        - id
+        - name
+        - display_name
+        - default_tags
+        - official
+      type: object
     CreateCapabilityInputBody:
       additionalProperties: false
       properties:
@@ -615,13 +664,56 @@ components:
           description: Parent component name; omit for a root component
           type: string
         product:
-          description: Product id (catalog SKU) this component is an instance of
+          description: "Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled."
           type: string
         system:
           description: Primary system name this component belongs to
           type: string
       required:
         - name
+      type: object
+    CreateComponentTypeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateComponentTypeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        abbrev:
+          description: A compact form of display_name; omit to inherit the parent's
+          type: string
+        default_tags:
+          description: Tags every instance of this type starts with
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        display_name:
+          description: What an operator reads in pickers and lists
+          minLength: 1
+          type: string
+        icon:
+          description: A glyph key; omit to inherit the parent's
+          type: string
+        name:
+          description: The globally unique name
+          maxLength: 100
+          minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
+        parent_id:
+          description: The parent component_type, by name or uuid; omit for a root type
+          type: string
+        stem:
+          description: The auto-generated component name's prefix; omit to inherit the parent's
+          type: string
+      required:
+        - name
+        - display_name
       type: object
     CreateDriverInputBody:
       additionalProperties: false
@@ -1059,6 +1151,10 @@ components:
           type:
             - array
             - "null"
+        component_type:
+          description: The component_type this product is classified under (mic, camera, ...), by name or uuid; every product must belong to one of the tree's nodes. The generics (generic-device, generic-app, generic-service) fit anything not yet modeled more specifically.
+          minLength: 1
+          type: string
         display_name:
           description: What an operator reads in pickers and lists
           minLength: 1
@@ -1066,14 +1162,15 @@ components:
         driver_id:
           description: The driver that talks to it, by handle or uuid
           type: string
+        icon:
+          description: A product-level icon override; unset inherits the component_type's icon
+          type: string
         kind:
-          default: device
-          description: What class of thing the product is
+          description: What class of thing the product is. vm is retired (folded into app); required, no default, so every product states its class explicitly.
           enum:
             - device
             - app
             - service
-            - vm
           type: string
         name:
           description: The globally unique name; renameable
@@ -1090,6 +1187,8 @@ components:
       required:
         - name
         - display_name
+        - kind
+        - component_type
       type: object
     CreatePropertyInputBody:
       additionalProperties: false
@@ -2333,6 +2432,25 @@ components:
         - component
         - memberships
       type: object
+    ListComponentTypesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListComponentTypesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component_types:
+          items:
+            $ref: "#/components/schemas/ComponentTypeBody"
+          type:
+            - array
+            - "null"
+      required:
+        - component_types
+      type: object
     ListComponentsOutputBody:
       additionalProperties: false
       properties:
@@ -3526,6 +3644,12 @@ components:
           type:
             - array
             - "null"
+        component_type:
+          description: The component_type this product is classified under (mic, camera, ...); the taxonomy above product
+          type: string
+        component_type_id:
+          description: The component_type's uuid; the stable form of component_type
+          type: string
         display_name:
           type: string
         driver:
@@ -3533,6 +3657,9 @@ components:
           type: string
         driver_id:
           description: The driver's uuid; the stable form of driver
+          type: string
+        icon:
+          description: A product-level icon override; unset inherits the component_type's icon
           type: string
         id:
           description: The product's uuid, the stable handle that survives a rename
@@ -3542,7 +3669,6 @@ components:
             - device
             - app
             - service
-            - vm
           type: string
         name:
           description: The name an operator reads and types; renameable
@@ -3566,6 +3692,8 @@ components:
         - name
         - display_name
         - kind
+        - component_type
+        - component_type_id
         - capabilities
         - official
       type: object
@@ -5296,7 +5424,35 @@ components:
           description: Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component.
           type: string
         product:
-          description: Re-classifies the component to this product (catalog SKU). An empty string clears it. Explicitly-set property values persist; the new product's contract defaults follow.
+          description: "Re-classifies the component to this product (catalog SKU), by name or uuid. Required once set: an empty string is refused (422), not a clear. Explicitly-set property values persist; the new product's contract defaults follow."
+          type: string
+      type: object
+    UpdateComponentTypeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateComponentTypeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        abbrev:
+          description: A new compact form
+          type: string
+        default_tags:
+          description: Replaces the default-tag set; omit to leave unchanged
+          items:
+            type: string
+          type: array
+        display_name:
+          description: A new operator-facing label
+          type: string
+        icon:
+          description: A new glyph key
+          type: string
+        stem:
+          description: A new name prefix
           type: string
       type: object
     UpdateDriverInputBody:
@@ -5511,11 +5667,17 @@ components:
           items:
             type: string
           type: array
+        component_type:
+          description: Reclassifies the product to this component_type, by name or uuid; component_type is required, so this only reclassifies, it never clears
+          type: string
         display_name:
           description: A new operator-facing label
           type: string
         driver_id:
           description: A new driver, by handle or uuid
+          type: string
+        icon:
+          description: A new icon override
           type: string
         kind:
           description: A new product class
@@ -5523,7 +5685,6 @@ components:
             - device
             - app
             - service
-            - vm
           type: string
         parent_product_id:
           description: A new parent product, by handle or uuid
@@ -6369,6 +6530,102 @@ paths:
           description: Error
       summary: Update a command type
       x-omniglass-permission: command_type:update
+  /component-types:
+    get:
+      description: "Lists the component_type registry (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by display name. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read."
+      operationId: list-component-types
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListComponentTypesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List component types
+      x-omniglass-permission: component_type:read
+    post:
+      description: Creates a custom (non-official) component_type, optionally under a parent. Gated by component_type:create.
+      operationId: create-component-type
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateComponentTypeInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentTypeBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a component type
+      x-omniglass-permission: component_type:create
+  /component-types/{id}:
+    delete:
+      description: Deletes a custom component_type, refused if official (422) or still a parent of another component_type (409). Gated by component_type:delete.
+      operationId: delete-component-type
+      parameters:
+        - description: The component_type id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The component_type id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a component type
+      x-omniglass-permission: component_type:delete
+    patch:
+      description: Patches a custom component_type's display_name, stem, icon, abbrev, or default_tags. Official types are read-only (422). Gated by component_type:update.
+      operationId: update-component-type
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateComponentTypeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentTypeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a component type
+      x-omniglass-permission: component_type:update
   /components:
     get:
       description: Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.
@@ -6389,7 +6646,7 @@ paths:
       summary: List components in scope
       x-omniglass-permission: component:read
     post:
-      description: Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location. Gated by component:create.
+      description: Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create.
       operationId: create-component
       requestBody:
         content:
@@ -6462,7 +6719,7 @@ paths:
       summary: Get a component
       x-omniglass-permission: component:read
     patch:
-      description: "Patches a component's display_name, product, location, or parent. The name is not patchable: renaming is the :rename custom method. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split."
+      description: "Patches a component's display_name, product, location, or parent. The name is not patchable: renaming is the :rename custom method. Parent and location follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets); product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split."
       operationId: update-component
       parameters:
         - in: path
@@ -9776,7 +10033,7 @@ paths:
       x-omniglass-permission: principal:set-avatar
   /products:
     get:
-      description: Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, and capabilities. Gated by product:read.
+      description: Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, component_type, and capabilities. Gated by product:read.
       operationId: list-products
       responses:
         "200":
@@ -9794,7 +10051,7 @@ paths:
       summary: List products
       x-omniglass-permission: product:read
     post:
-      description: Creates a custom (non-official) product and sets its capabilities. Gated by product:create.
+      description: Creates a custom (non-official) product, classified under a component_type, and sets its capabilities. kind and component_type are both required; kind refuses vm (retired, folded into app). Gated by product:create.
       operationId: create-product
       requestBody:
         content:
@@ -9867,7 +10124,7 @@ paths:
       summary: Get a product
       x-omniglass-permission: product:read
     patch:
-      description: Patches a custom product's display_name, vendor, driver, kind, or parent, and replaces its capabilities when provided. Official products are read-only (422). Gated by product:update.
+      description: Patches a custom product's display_name, vendor, driver, kind, component_type, icon, or parent, and replaces its capabilities when provided. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.
       operationId: update-product
       parameters:
         - in: path

@@ -49,9 +49,10 @@ func (w systemRolesWire) find(t *testing.T, name string) effectiveRoleWire {
 // declares its own alongside it, a component that provides what the role needs
 // fills it, and one that does not is refused with a 422 that NAMES the missing
 // capabilities (the whole point of the capability model: a refusal an operator
-// can act on). A productless component that declares its own capabilities can
-// still be staffed. An out-of-scope system is a non-disclosing 404. Skipped
-// under -short.
+// can act on). A component classified only as the generic device (no
+// product-declared capabilities) that declares its own capabilities can still
+// be staffed. An out-of-scope system is a non-disclosing 404. Skipped under
+// -short.
 func TestSystemRolesAPI(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -159,10 +160,11 @@ func TestSystemRolesAPI(t *testing.T) {
 		t.Fatalf("refusal detail = %q, want it to name the missing capabilities: %q", problem.Detail, wantDetail)
 	}
 
-	// The decision the capability model exists for: a PRODUCTLESS component that
+	// The decision the capability model exists for: a component classified only
+	// as the generic device (no product-declared capabilities of its own) that
 	// declares its own capabilities can be staffed, so strict refusal does not
-	// lock out a component just because it has no product.
-	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "loose-mic"}, http.StatusCreated)
+	// lock out a component just because its product contributes nothing.
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "loose-mic", "product": "generic-device"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPut, "/components/loose-mic/capabilities/microphone",
 		map[string]any{"present": true}, http.StatusNoContent)
 	c.do(ownerTok, http.MethodPut, "/components/loose-mic/capabilities/speaker",

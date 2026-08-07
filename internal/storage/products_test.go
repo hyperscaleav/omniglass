@@ -163,3 +163,79 @@ func TestProductCRUD(t *testing.T) {
 		t.Fatalf("get after delete err = %v, want ErrTypeNotFound", err)
 	}
 }
+
+// TestProductComponentTypeAndIcon covers the #614 floor: every product carries
+// a component_type (explicit or defaulted from kind) and an optional icon
+// override. An explicit component_type round-trips, an omitted one defaults to
+// the generic instance of the resolved kind (the same fallback the
+// product_type_backfill migration applies retroactively), an unknown
+// component_type is ErrProductRefNotFound, and update both reclassifies and
+// refuses to resolve an empty string (component_type has no clear state).
+func TestProductComponentTypeAndIcon(t *testing.T) {
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	icon := "camera"
+	m, err := gw.CreateProduct(ctx, "", storage.Product{
+		Name: "acme-cam", DisplayName: "Acme Cam", Kind: "device",
+		ComponentType: "camera", Icon: &icon,
+	})
+	if err != nil {
+		t.Fatalf("create with explicit component_type: %v", err)
+	}
+	if m.ComponentType != "camera" || m.ComponentTypeID == "" {
+		t.Fatalf("create component_type = %+v, want camera with a resolved id", m)
+	}
+	if m.Icon == nil || *m.Icon != "camera" {
+		t.Fatalf("create icon = %v, want camera", m.Icon)
+	}
+
+	// No component_type named: defaults to the generic instance of the kind.
+	svc, err := gw.CreateProduct(ctx, "", storage.Product{Name: "acme-svc", DisplayName: "Acme Svc", Kind: "service"})
+	if err != nil {
+		t.Fatalf("create with no component_type: %v", err)
+	}
+	if svc.ComponentType != "generic-service" {
+		t.Fatalf("defaulted component_type = %q, want generic-service", svc.ComponentType)
+	}
+
+	// An unknown component_type is ErrProductRefNotFound (422-worthy), the same
+	// sentinel an unknown vendor or driver raises.
+	if _, err := gw.CreateProduct(ctx, "", storage.Product{
+		Name: "acme-bad-type", DisplayName: "Bad", Kind: "device", ComponentType: "no-such-type",
+	}); !errors.Is(err, storage.ErrProductRefNotFound) {
+		t.Fatalf("bad component_type err = %v, want ErrProductRefNotFound", err)
+	}
+
+	// Update reclassifies.
+	upd, err := gw.UpdateProduct(ctx, "", "acme-cam", storage.ProductPatch{ComponentType: strPtr("mic")})
+	if err != nil {
+		t.Fatalf("update reclassify: %v", err)
+	}
+	if upd.ComponentType != "mic" {
+		t.Fatalf("update component_type = %q, want mic", upd.ComponentType)
+	}
+
+	// component_type is required, so an empty-string patch does not clear it:
+	// it fails to resolve, same as any other unknown reference.
+	if _, err := gw.UpdateProduct(ctx, "", "acme-cam", storage.ProductPatch{ComponentType: strPtr("")}); !errors.Is(err, storage.ErrProductRefNotFound) {
+		t.Fatalf("empty component_type patch err = %v, want ErrProductRefNotFound (no clear state)", err)
+	}
+	// And the row was left exactly as the reclassify left it.
+	reread, err := gw.GetProduct(ctx, "acme-cam")
+	if err != nil {
+		t.Fatalf("get after refused clear: %v", err)
+	}
+	if reread.ComponentType != "mic" {
+		t.Fatalf("component_type after refused clear = %q, want unchanged mic", reread.ComponentType)
+	}
+}
+
+func strPtr(s string) *string { return &s }
