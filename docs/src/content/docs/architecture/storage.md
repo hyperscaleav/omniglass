@@ -56,6 +56,53 @@ Column schemas live with each owning feature: [samples](/architecture/properties
 - **A write struct takes the `Write` suffix; the bare noun is the row**: `MetricSampleWrite` in, `MetricSample` back, likewise `PropertySampleWrite`, `EventWrite`, `LogLineWrite`. A carrier is named for what it carries: hence the wire message is a `TelemetryBatch` ([ADR-0072](/architecture/decisions/#adr-0072-an-envelope-is-not-named-after-its-passengers-and-an-insert-struct-takes-the-write-suffix)).
 - **Keys**: samples and events use a surrogate id plus `ts`; each catalog (`metric_type`, `property_type`, `event_type`, `command_type`) is name-unique with the **`official` boolean** deciding authority, and the three ingest catalogs refuse a name a sibling holds; structural entities carry a unique, renameable `name` over a uuid primary key; a `task` is **content-addressed** (`sha256` over `(interface_id, mode, spec)`); a `node` by its `principal_id`. Every foreign key stores the target's primary key, so a rename is free ([ADR-0056](/architecture/decisions/#adr-0056-every-foreign-key-stores-a-primary-key)).
 
+## Migrations: three buckets, kept separate
+
+A schema change is authored with **dbmate**: pure-DDL migrations under `db/migrations/`, embedded into
+the binary and applied by the `migrate` run mode. Two rules hold everywhere: a migration **runs exactly
+once** (dbmate keys on the timestamp version, not the contents, so it is never edited after it ships,
+only followed by a new one), and DDL is **idempotent** (`IF NOT EXISTS`, a guarded `DO` block for a
+Postgres statement with no `IF NOT EXISTS` form of its own, e.g. a column rename).
+
+A change that both reshapes the schema and needs default rows for the shape to be usable never mixes
+the two in one migration. Three buckets, never conflated:
+
+- **Schema migrations** (`db/migrations/*.sql`, dbmate): pure DDL. No seed rows: a schema dump or a
+  future squash silently drops any row a migration inserted, so a migration that seeds data is a landmine
+  for whoever collapses the chain later.
+- **Boot seed phase** (idempotent upsert on every server start, `internal/seed/*.yaml`): ship-with
+  reference data, authoritative via `ON CONFLICT DO UPDATE` for a canonical catalog (a release can
+  correct it); operator rows are never touched.
+- **One-time data backfills** (dbmate, data-only): transforming existing operator rows to match a new
+  constraint, run once, and idempotent on a second run (a repeat changes nothing, proven by a test that
+  executes the migration's up-SQL twice).
+
+**Worked example: the product classification floor** (#614). Making `product.component_type_id` and
+`component.product_id` both `NOT NULL` needed all three buckets, landed as three migrations in this
+order, because reversing the order would either fail (a `NOT NULL` added before any row satisfies it)
+or silently orphan existing operator components (a backfill run against a still-optional column has
+nothing forcing it to run at all):
+
+1. **Schema (nullable):** `20260807110000_product_component_type_and_icon.sql` adds
+   `product.component_type_id` (nullable, FK to `component_type`, `on delete restrict`) and
+   `product.icon` (nullable). Pure DDL, safe against any existing row.
+2. **Boot seed, then backfill:** the boot seed ships the `component_type` tree
+   (`internal/seed/component_types.yaml`) and three generic products
+   (`internal/seed/products.yaml`) pointing at the matching generic types, so the chain a backfill
+   needs already exists by the time it runs. `20260807113000_product_type_backfill.sql` is data-only
+   and idempotent (`ON CONFLICT (name) DO NOTHING` for the generics it also inserts defensively, `WHERE
+   component_type_id IS NULL` / `WHERE product_id IS NULL` guards on the updates): it folds
+   `kind='vm'` to `'app'`, points every null `product.component_type_id` at the type matching the
+   product's kind, and points every null `component.product_id` at `generic-device`.
+3. **Schema (floor):** `20260807116000_product_type_floor.sql` sets both columns `NOT NULL` and
+   narrows the `kind` check constraint to `device | app | service`. Pure DDL again, now safe because
+   step 2 already closed every gap it depends on.
+
+Running the chain against a fresh database is the same three steps in the same order: nullable column,
+then the seed and backfill that make every row satisfy the coming constraint, then the constraint
+itself. A fresh database and an upgraded one converge on the identical end state, which is the point of
+keeping the buckets separate rather than reaching for a single migration with an inline `UPDATE`.
+
 ## How the records relate
 
 The relationships, not the columns (those live on each owning leaf, linked above).

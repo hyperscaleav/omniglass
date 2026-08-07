@@ -16,15 +16,28 @@ product also carries an `id`, a uuid minted by the database, the internal addres
 to ([ADR-0062](/architecture/decisions/)); the handle is what you type and read.
 
 A product is also what a **component** points at: `component.product_id` names the product a component
-**is**, and the product supplies that component's shape (its vendor, driver, and capability set). This
-replaces the old `component_type`-as-shape notion: a component's shape comes from its product now, not
-a separate genus. The system side has the same arrangement one level up: a system conforms to a
-[standard](/guides/admin/standards/), which is the blueprint's counterpart of a product. See
-[core entities](/architecture/core-entities/) for where the product registry sits in the estate model.
+**is**, required, so every component always resolves a shape (its vendor, driver, and capability set)
+and, through its product, a device-class **[component type](/architecture/core-entities/#catalog-reference-data-component_type)**. The
+component-level `component_type` retired in the fields fold; the registry returned differently shaped,
+above the product rather than beside the component, so a component's genus is read through the product
+it is, never stored on the component itself. The system side has the same arrangement one level up: a
+system conforms to a [standard](/guides/admin/standards/), which is the blueprint's counterpart of a
+product. See [core entities](/architecture/core-entities/) for where both registries sit in the estate
+model.
 
-- **Kind** classifies what the product is: a **device** (a physical unit), an **app** (software), a
-  **service** (something hosted), or a **vm** (a virtual machine). It defaults to **device** and is a
-  closed set; a value outside it is refused (422).
+- **Kind** classifies what the product is: a **device** (a physical unit), an **app** (software), or a
+  **service** (something hosted). There is no default: kind is required at create, so a mislabeled
+  cloud service never reads as correct through a silent fallback. It is a closed set; a value outside
+  it is refused (422), and the retired **vm** value folds into **app** (nothing forked on a virtual
+  machine that did not fork the same way on any other app).
+- **Type** classifies the product under a [component type](/architecture/core-entities/#catalog-reference-data-component_type) (required):
+  the device-class genus (`display`, `dsp`, `mic`, ...) that carries the naming stem a generated
+  component name uses, the console glyph, and the hostname abbreviation. Three generic types
+  (`generic-device`, `generic-app`, `generic-service`) exist for anything not yet modeled more
+  specifically.
+- **Icon** is an optional override on the type's icon: unset, a product's glyph is whatever its type
+  resolves to (walking up the type's own tree if the type itself leaves its icon blank); set, the
+  override wins. A per-SKU glyph is the exception, not the rule.
 - **Vendor**, **driver**, and **parent** are each optional pointers: the vendor that makes the product,
   the driver that talks to it, and a **parent product** it is a variant of (see below). Each must
   resolve against the vendor / driver / product catalogs; an unknown reference is refused (422). These

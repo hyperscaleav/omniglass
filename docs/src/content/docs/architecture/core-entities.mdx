@@ -24,11 +24,17 @@ with no `name` in the `PATCH` body and a scope-blind `:checkName` precheck besid
 **Placement and classification are mutable, not fixed at create**
 ([ADR-0064](/architecture/decisions/#adr-0064-placement-and-classification-are-mutable-after-create)):
 re-parent (cycle-guarded), relocate, re-classify, or clear each field; a product swap keeps hand-set
-property values while the new contract's defaults take over. Each entity carries an **optional
-classifier** (`product` / `standard` / `location_type`; the `component_type` registry retired,
-[ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value);
-`system_type` was promoted to `standard`,
-[ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)).
+property values while the new contract's defaults take over. Every component is required to name a
+**`product`** (`component.product_id` is `NOT NULL`; the three seeded generics,
+`generic-device` / `generic-app` / `generic-service`, cover anything not yet modeled more
+specifically), a **`standard`** stays optional on a system, and a **`location_type`** stays optional
+on a location. The **`component_type`** registry, retired in the fields fold
+([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)),
+**returns as the product's genus**
+([ADR-0085](/architecture/decisions/#adr-0085-the-component_type-registry-returns-as-the-device-class-genus)):
+a nested taxonomy above the product (`product.component_type_id`, required), not a second classifier
+on the component. `system_type` was promoted to `standard`,
+[ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model).
 The **exclusive-arc** owner columns are real, carrying the sample lanes (**`metric`**,
 **`property`**), **`event`**, and **`command`**,
 and a recorded **[health](/architecture/health/)** series per component, system, and location. A
@@ -40,7 +46,8 @@ carrying an **impact**. See [implementation status](/architecture/status/).
 
 - A **component** is a deployed device, app, or service (a display, a DSP, a cloud UCC service). It
   owns samples and points at the **`product`** it is, the source of its shape; the pointer is
-  optional, so a productless component carries no contract.
+  **required** (a generic product covers anything not yet modeled more specifically), so a component
+  always resolves a contract and, through its product, a **`component_type`** genus.
 - A **system** is a set of components doing one job: a meeting room, a classroom, a video wall. It is
   located at a location and **conforms to a `standard`**, the blueprint it is built against; the
   pointer is optional, mirroring `component.product_id`.
@@ -81,7 +88,7 @@ least-specific tier, **`platform`**
 
 | Entity | What it is |
 |---|---|
-| `component` | a deployed instance (`dsp-boardroom-3`); points at its `product`, the source of its shape |
+| `component` | a deployed instance (`dsp-boardroom-3`); points at its `product`, the source of its shape, required |
 | `system` | a composition of components / subsystems (the service tree); conforms to its `standard` |
 | `location` | a place tree; no template (the `location_type` is the only shape-definer) |
 | `node` | the edge process; addressed by its `name`, identified by the `principal_id` it is bound to ([identity and access](/architecture/identity-access/)) |
@@ -93,7 +100,7 @@ The column mechanics render from the generated schema facts:
   notes={{
     name: 'The unique operator-facing address (ADR-0062)',
     parent_id: 'The self-referencing tree',
-    product_id: 'Optional pointer at the shape source; on delete restrict',
+    product_id: 'The shape source, required; on delete restrict',
   }}
 />
 
@@ -139,18 +146,49 @@ official/custom pattern as the `*_type` registries ([Location Types guide](/guid
 
 See the [Vendors guide](/guides/admin/vendors/) for the operator surface.
 
+### Catalog reference data: `component_type`
+
+A **`component_type`** (`display`, `projector`, `video-bar`, `dsp`, `mic`, ...) is the **device-class
+genus**: a seeded-plus-custom taxonomy that **nests by `parent_id`** (`mic` over `wireless-mic`,
+`ceiling-mic`, `boundary-mic`), on the same official/custom pattern as the other classification
+catalogs, operator-graftable at any node
+([ADR-0085](/architecture/decisions/#adr-0085-the-component_type-registry-returns-as-the-device-class-genus)).
+It classifies the **product** (`product.component_type_id`, required), not the component directly, so
+a component inherits its type through the product it is. The row carries the identity facts that
+genuinely span products, **inheriting down the tree with override at any node**: the naming **`stem`**
+(the auto-generated component name's prefix, e.g. `display-1`), **`display_name`**, **`icon`** (the
+console glyph), **`abbrev`** (the two-to-three character hostname stem: `fp`, `cam`, `dsp`, `cp`), and
+**`default_tags`**. A blank fact on a child means "inherit the nearest ancestor's". It is **not** a
+shape-definer: contracts, declared properties, and drivers stay on the product. The seed discipline: a
+subtype exists only where a standard's slot would name it (`wireless-mic` versus `ceiling-mic`, real
+subtypes; panel technology like `lcd` versus `led` stays a product fact, never a type).
+
+This **partially reverses [ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)**,
+which retired the component-level `component_type` in the fields fold: the reintroduced shape is
+deliberately different, **above the product** rather than beside the component.
+
 ### Catalog reference data: `product`
 
 A **`product`** (Cisco Room Bar, Samsung QM55, ...) is the concrete **SKU**: a stable `id` and
-`display_name`, a **`kind`** (`device` / `app` / `service` / `vm`, default `device`, a fixed enum
-checked in the DB and at the API edge), optional **`vendor_id`** and **`driver_id`**, an optional
-**`parent_product_id`** (a variant points at its base), and the `official` boolean. Its capabilities
-live in the **`product_capability`** join (`product_id`, `capability_id`). The vendor, driver, and
-parent FKs are **`on delete set null`**.
+`display_name`, a **`kind`** (`device` / `app` / `service`, no default, required at create so a
+mislabeled cloud service can never read as correct through a silent fallback;
+[ADR-0086](/architecture/decisions/#adr-0086-the-product-classification-floor-and-the-kind-split)
+retired `vm`, folded into `app`, since nothing forked on it that did not fork the same way on `app`), a
+required **`component_type_id`** (the genus above it), an optional **`icon`** override (unset inherits
+the `component_type`'s icon; a per-SKU glyph is the exception, not the rule), optional **`vendor_id`**
+and **`driver_id`**, an optional **`parent_product_id`** (a variant points at its base), and the
+`official` boolean. Its capabilities live in the **`product_capability`** join (`product_id`,
+`capability_id`). The vendor, driver, and parent FKs are **`on delete set null`**; the `component_type`
+FK is **`on delete restrict`** (a type still classifying a product cannot be deleted). Three generic
+products (`generic-device`, `generic-app`, `generic-service`) ship official, each pointed at the
+matching generic `component_type`, so an unmodeled component always has somewhere to point.
 
-A **`component`** points at the product it **is** through **`component.product_id`**
+A **`component`** points at the product it **is** through **`component.product_id`**, **required**
 (**`on delete restrict`**): the referential guard the leaf catalogs deferred, so a product still
-referenced by a component cannot be deleted (409). See the [Products guide](/guides/admin/products/).
+referenced by a component cannot be deleted (409), and a component can no longer exist unclassified.
+A component's `component_type` is never stored on the component itself; it is read through the
+product (`component.product_id -> product.component_type_id`). See the
+[Products guide](/guides/admin/products/).
 
 ### Catalog reference data: `standard`
 

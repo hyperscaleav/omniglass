@@ -81,7 +81,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0044](#adr-0044-the-component-classification-catalogs) | 2026-07-20 | Accepted | The `component_make` catalog is generalized into **`vendor`** (a `kind` of manufacturer / integrator / developer), and two new leaf catalogs join it, **`driver`** (id, display_name, version) and **`capability`** (id, display_name), as the component-classification reference data: each a gated CRUD Catalog console page with read-only official seeded rows. `product` + `product_capability` + `component.product` are the next slice. This is PR2 of the estate-model shift toward property / event / command + vendor / product / driver / capability / standard / role / health |
 | [ADR-0045](#adr-0045-the-product-catalog) | 2026-07-20 | Accepted | **`product`** lands as a first-class catalog entity, the concrete SKU that binds a **`vendor`**, a **`driver`**, a **`kind`** (`device` / `app` / `service` / `vm`), and a capability set via the **`product_capability`** join; **`parent_product_id`** models variants, and **`component.product_id`** (`on delete restrict`) points a component at the SKU it is, making the product the source of a component's shape and retiring the `component_type`-as-shape notion. PR3 of the estate-model shift; consumes the vendor / driver / capability catalogs from ADR-0044 |
 | [ADR-0046](#adr-0046-the-event-log-kind-sink) | 2026-07-20 | Accepted; superseded in part by [ADR-0066](#adr-0066-logs-are-a-raw-ingest-lane-not-events) | A **log**-kind observation is no longer dropped at ingest: it lands in a new **`event`** table, the log-kind sink (a past occurrence) beside `metric_datapoint` / `state_datapoint` (a sampled present value). `event` carries the same datapoint owner exclusive-arc and provenance, plus `message` + `attributes`, and the reserved `event_id` FK stubs on the two datapoint tables are closed (`on delete set null`). Scope excludes the `datapoint`->`sample` rename (a later cleanup) and `property_value` / the current-value store (the fold-fields slice). P1 follow-up of the estate-model roadmap |
-| [ADR-0047](#adr-0047-the-fields-fold-product_property-and-property_value) | 2026-07-21 | Accepted | The standalone **fields** feature retires and folds into the estate model: a field was only ever a **property with `declared` provenance**, never a primitive of its own. **`product_property`** is the product's declared-property **contract** (`product_id`, `property_name`, `default_value`, `required`), replacing `field_definition`; **`property_value`** is the value store, carrying the **same owner exclusive-arc** as `metric_datapoint` / `event` plus `instance` and `provenance`, replacing `field_value`. `EffectiveProperties` unions the contract arm (`coalesce(set value, contract default)`) with the off-contract arm, so a productless component still resolves. `field_definition`, `field_value`, `component.component_type`, and the whole `component_type` registry retire. PR5 of the estate-model shift |
+| [ADR-0047](#adr-0047-the-fields-fold-product_property-and-property_value) | 2026-07-21 | Accepted; superseded in part by [ADR-0085](#adr-0085-the-component_type-registry-returns-as-the-device-class-genus) (the `component_type` registry returns, above the product) | The standalone **fields** feature retires and folds into the estate model: a field was only ever a **property with `declared` provenance**, never a primitive of its own. **`product_property`** is the product's declared-property **contract** (`product_id`, `property_name`, `default_value`, `required`), replacing `field_definition`; **`property_value`** is the value store, carrying the **same owner exclusive-arc** as `metric_datapoint` / `event` plus `instance` and `provenance`, replacing `field_value`. `EffectiveProperties` unions the contract arm (`coalesce(set value, contract default)`) with the off-contract arm, so a productless component still resolves. `field_definition`, `field_value`, `component.component_type`, and the whole `component_type` registry retire. PR5 of the estate-model shift |
 | [ADR-0048](#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model) | 2026-07-21 | Accepted | `system_type` is promoted to **`standard`**, the blueprint a system conforms to and the system-side counterpart of `product`: it gains `parent_standard_id` (variants), a declared-property contract, and its own `standard:*` Catalog resource, and `system.standard_id` becomes **optional**. `standard_property` and `location_type_property` join `product_property`, and one **owner-generic** `EffectiveProperties(ownerKind, ownerID)` resolves component, system, location, and node off a single parameterized template. A standard and a location type are created by **forking an in-code template** (one-time, no inheritance), so a shipped row is **operator-owned** (`official: false`, seeded **if absent**), while a system **conforms** to its standard with **live** inheritance; only the canonical catalogs keep the authoritative upsert. PR6 of the estate-model shift |
 | [ADR-0049](#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set) | 2026-07-21 | Accepted | A **`system_role`** is a slot a system needs filled (a table microphone, a main display), declared on a **standard** (inherited live by every conforming system) or on one **system** (ad-hoc) over the same exclusive arc `property_value` uses, requiring a **conjunctive** `role_capability` set and carrying a **`quorum`**. A component's capabilities become a **resolved set** (`EffectiveCapabilities` = its product's, plus its own `component_capability` `present=true` rows, minus its `present=false` ones), because `product` is optional and a strict guard over a product-only fact would lock a productless component out of every role. `AssignRole` **refuses (422) and names the missing capabilities**, joining the location placement constraint as a refusal on modeled grounds that names the parties. **Quorum** ships here (staffing is visible without health); **impact** and the SLI rollup land in PR8. Supersedes the `system_template_member` role-requirement design. PR7 of the estate-model shift |
 | [ADR-0050](#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain) | 2026-07-21 | Accepted | Health is **recorded as a transition** and **recomputed at the write**, never on read. An **`alarm`** is component-local and names the **capabilities** it degrades; a component satisfies a role only when it provides every required capability and none of them is degraded; a role below its **quorum** is impaired and contributes its **`impact`** (`outage` / `degraded` / `none`); a system takes the worst of its roles, a location the worst of its systems. The verdict domain is **`healthy` / `degraded` / `outage`** and the judgement is a **pure package** (`internal/health`), unit-tested with no database. The recorded carrier is **`state_datapoint`**, already transition-only, so the history is edges and only edges; **compute-on-read** (no history) and **write-through-on-read** (the edge timestamped when somebody looked) are both rejected. A **read never writes**, and it computes the verdict it serves from the same rows it shows, so a report cannot contradict its own evidence. PR8 of the estate-model shift, closing epic [#266](https://github.com/hyperscaleav/omniglass/issues/266) |
@@ -119,6 +119,8 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0082](#adr-0082-the-type-resource-renames-to-location_type) | 2026-08-06 | Accepted | the permission resource type renames to location_type on every surface (route stamps, roles seed, console gates, guard fixtures); the generic word retires from the permission vocabulary |
 | [ADR-0083](#adr-0083-the-catalog-rail-is-sectioned-by-the-estate-noun-each-registry-serves) | 2026-08-06 | Superseded by [ADR-0084](#adr-0084-the-catalog-shell-and-five-signal-lanes) | the Catalog rail is sectioned by the estate noun each registry serves, entries keep the registry's own word (Types where that is all there is), Telemetry holds what gets recorded and Action what the platform does, and the /catalog hub teaches the map with live counts |
 | [ADR-0084](#adr-0084-the-catalog-shell-and-five-signal-lanes) | 2026-08-07 | Accepted | Catalog is one rail entry opening a shell: a grouped subrail (Telemetry, Actions, Components, Systems, Locations, Metadata) navigating to the per-registry pages at canonical URLs, with an Overview landing; the organizing axis is direction (Telemetry is what you receive, Actions what you send or run), the lane collective noun becomes five signal lanes, and secret types loses its nav slot |
+| [ADR-0085](#adr-0085-the-component_type-registry-returns-as-the-device-class-genus) | 2026-08-07 | Accepted; partially reverses [ADR-0047](#adr-0047-the-fields-fold-product_property-and-property_value) | The `component_type` registry returns as a nested taxonomy classifying the product, not the component: it carries the identity facts that span products (naming stem, display name, icon, abbrev, default tags), inheriting down the tree with override at any node |
+| [ADR-0086](#adr-0086-the-product-classification-floor-and-the-kind-split) | 2026-08-07 | Accepted | Every component is required to name a product (the three seeded generics cover anything unmodeled); product.kind narrows to device / app / service, no default, required at create; vm retires, folded into app |
 
 ## Entries
 
@@ -1364,7 +1366,9 @@ below from the project's history. From here it grows one slice at a time.
 
 ### ADR-0047: The fields fold: `product_property` and `property_value`
 
-- **Date:** 2026-07-21 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
+- **Date:** 2026-07-21 | **Status:** Accepted; superseded in part by
+  [ADR-0085](#adr-0085-the-component_type-registry-returns-as-the-device-class-genus) (the
+  `component_type` registry returns, reshaped above the product) | **Pages:** [core entities](/architecture/core-entities/),
   [config, secrets, and variables](/architecture/variables/), [API](/architecture/api/),
   [Properties guide](/guides/admin/properties/), [Products guide](/guides/admin/products/)
 - **Decision:** The standalone **fields** feature is **retired** and folded into the estate model, because a
@@ -1433,6 +1437,13 @@ below from the project's history. From here it grows one slice at a time.
   default)` is the fall-through to a **declaration**, not the bottom rung of a cascade, so
   `product_property.default_value` (and its two siblings) is the shipped instance of the off-axis default
   rather than a tier under `platform`.
+- **Partially reversed by [ADR-0085](#adr-0085-the-component_type-registry-returns-as-the-device-class-genus):**
+  this ADR's retirement of `component.component_type` and the `component_type` registry stands; naming
+  and rendering (a generated component name needs a device-class stem the product's SKU cannot supply)
+  forced the registry's return, deliberately reshaped: **above the product**
+  (`product.component_type_id`), not beside the component and not a second classifier the component
+  itself carries. What this ADR actually decided about **`product_property`** and **`property_value`**
+  is untouched; only the "and the whole `component_type` registry retire" clause is reversed.
 
 ### ADR-0048: The `standard` blueprint and the template-fork seed model
 
@@ -2850,3 +2861,62 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   produced the direction axis also queued the schema phase (system_blueprint, location contract
   removal, secret_type retirement, the four-class taxonomy), deliberately sequenced ahead of the
   #379 migration collapse and deferred from this decision.
+
+### ADR-0085: The `component_type` registry returns as the device-class genus
+
+- **Date:** 2026-08-07 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
+  [storage](/architecture/storage/), [Products guide](/guides/admin/products/)
+- **Decision:** The **`component_type`** registry returns: a seeded-plus-custom device-class taxonomy
+  (`display`, `projector`, `screen`, `presentation-switcher`, `video-bar`, `dsp`, `amplifier`, `mic`,
+  `camera`, `codec`, `control-processor`, `touch-panel`, ...) that **nests by `parent_id`** (`mic` over
+  `wireless-mic`, `ceiling-mic`, `boundary-mic`), on the same official-and-custom pattern as the other
+  classification catalogs, operator-graftable at any node. It classifies the **product**
+  (`product.component_type_id`, required), so a component inherits its type through the product it is;
+  it is not a second classifier on the component. The row carries exactly the identity facts that
+  genuinely span products, **inheriting down the tree with override at any node**: `name`, the naming
+  **stem** (a subtype names components by its inherited stem unless it overrides), `display_name`,
+  `icon` (the console glyph, replacing the too-coarse derivation from `product.kind`), `abbrev` (the
+  two-to-three character hostname stem), and default tags. The seed discipline: a subtype exists only
+  where a standard's slot would name it; a fact like panel technology stays on the product. It is
+  **not** a shape-definer: contracts, declared properties, and drivers stay on the product. The
+  division of labour: the type says what a component **is** (one, via its product); the role says what
+  a system **needs** (a typed slot, a separate decision the roles epic owns); the capability axis is
+  untouched by this decision.
+- **Context:** ADR-0047 retired the component-level `component_type` when the fields folded into the
+  product contract, and this partially reverses it, deliberately differently shaped: above the product
+  rather than beside the component. What forced the return was naming and rendering. A generated
+  component name needs a stem in the device-class vocabulary (`display-1`, the `fp1` hostname
+  convention), and the platform had no table that speaks it: the role is positional
+  (`display-front` says where it sits), the product is a SKU (`qm55`), `product.kind` is three values
+  wide, and capabilities are many-valued. Every identity fact the console kept reaching for (icon,
+  abbreviation, base tags, name stem) turned out to live at the same missing level, which is the tell
+  that the level is real. The economics confirm it: a thousand components, a few dozen products, a
+  couple dozen types; each identity fact is authored once at the level it spans.
+- **Tracked under** epic [#614](https://github.com/hyperscaleav/omniglass/issues/614).
+
+### ADR-0086: The product classification floor, and the kind split
+
+- **Date:** 2026-08-07 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
+  [storage](/architecture/storage/), [Products guide](/guides/admin/products/)
+- **Decision:** Every **component** is required to name a **product**: `component.product_id` is
+  `NOT NULL`. Three seeded generics (`generic-device`, `generic-app`, `generic-service`, each pointed
+  at the matching generic `component_type`) cover anything not yet modeled as a real SKU, so the floor
+  is total from the first migrated database onward: no component ever exists with no kind, no declared
+  contract, and no driver path. **`product.kind`** narrows to `device | app | service`, drops its
+  column default, and is required at create: an operator states a product's class explicitly rather
+  than reading a silent fallback to `device` that let a mislabeled cloud service pass as correct
+  forever. **`vm` retires**, folded into `app`, because nothing forks on a virtual machine that does
+  not fork the same way on any other app: a virtual appliance is a different SKU, not a different kind.
+  The three that remain are the who-owns-what split: `device` (the box is yours), `app` (the runtime is
+  yours), `service` (only the account is yours).
+- **Context:** ADR-0049's own Context named the optional product as the forcing function behind
+  capability-gated staffing's resolved-capability layering: a role could not check a product's
+  capabilities directly because a component might not have one. Making product required closes that
+  gap at the root rather than compensating for it one layer up, and does the same for the naming
+  epic ([ADR-0085](#adr-0085-the-component_type-registry-returns-as-the-device-class-genus)): a
+  generated component name needs a `component_type`, which needs a product, so "product required" is
+  what makes the naming generator total rather than a fallback-to-hand-authoring special case. The
+  `vm` retirement follows the same audit that found the kind default silently absorbing a mistake: a
+  fixed four-value enum with a default reads as validated when it is merely unset, and the fourth value
+  had no code path that branched on it the other three did not already cover.
+- **Tracked under** epic [#614](https://github.com/hyperscaleav/omniglass/issues/614).

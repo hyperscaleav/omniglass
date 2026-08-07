@@ -103,11 +103,15 @@ var Banned = []BannedTerm{
 	// The estate-model wave. Each of these was retired by an ADR that shipped
 	// without its denylist entry, which is why the terms survived in the docs
 	// long enough for the 2026-07-30 audit to find them.
-	{
-		Pattern:     regexp.MustCompile(`\bcomponent_type\b`),
-		Replacement: "product (the shape a component points at)",
-		Origin:      "ADR-0047",
-	},
+	//
+	// component_type is NOT here. ADR-0047 retired it (a flat classifier beside
+	// component); ADR-0085 partially reverses that, returning it as a nested
+	// registry above product, so the identifier is current vocabulary again,
+	// deliberately in a different shape. A denylist entry cannot express
+	// "banned, except in its own reintroduced meaning", so the fix is removal,
+	// not an exemption; the term's dead sense (component.component_type, the
+	// flat table) survives only in the historical ADR-0047 prose, which the
+	// retirement-marker exemption below already protects.
 	{
 		Pattern:     regexp.MustCompile(`\bsystem_type\b`),
 		Replacement: "standard",
@@ -366,10 +370,10 @@ var retiringProse = regexp.MustCompile(`(?i)\b(retire[ds]?|retirement|was|were|o
 // purpose: a long line can easily mention some unrelated thing that "was
 // replaced" while still making a current-tense claim about the retired term,
 // and a whole-line escape would wave that through. Wide enough for the real
-// phrasings ("the `component_type` registry retired with the product catalog"),
+// phrasings ("the `system_type` registry was promoted to standard"),
 // narrow enough that a clause about something else does not license it. Every
 // real phrasing in the corpus puts the marker within ~25 characters ("the
-// `component_type` registry retired with...", "replaces the old `component_type`",
+// `system_type` registry was promoted...", "replaces the old `field_definition`",
 // "was `property_value`, built"), so 30 fits them all while a mention two
 // clauses away does not reach.
 const retirementWindow = 30

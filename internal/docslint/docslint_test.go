@@ -115,14 +115,16 @@ func TestScanLineSkipsLinkTargets(t *testing.T) {
 }
 
 // TestScanLineAllowsRetirementProse pins scanner fix 2. Every remaining hit for
-// component_type, system_type, field_definition, and field_value is prose that
-// names the term precisely in order to retire it. Without this escape, adding
-// those entries turns `make test` red on the sentences that do the teaching,
-// which would push authors toward deleting the explanation instead of keeping it.
+// system_type, field_definition, and field_value is prose that names the term
+// precisely in order to retire it. Without this escape, adding those entries
+// turns `make test` red on the sentences that do the teaching, which would
+// push authors toward deleting the explanation instead of keeping it.
+// (component_type isn't in this list: it left the denylist entirely when
+// ADR-0085 partially reversed ADR-0047, so it no longer needs the escape.)
 func TestScanLineAllowsRetirementProse(t *testing.T) {
 	retiring := []string{
-		"(the `component_type` registry retired with the product catalog)",
-		"replaces the old `component_type`-as-shape notion",
+		"(the `field_value` store retired with the product catalog)",
+		"replaces the old `field_definition`-as-shape notion",
 		"was `property_value`, built",
 		"Replaces the retired `field_definition`",
 		"`system_type` is superseded by the standard",
