@@ -121,8 +121,10 @@ export function filterNav(items: NavItem[], allow: (tokens: string[]) => boolean
 // permission gate in the route guard, all declared here.
 // /templates set the precedent when it left the rail (#608). Each entry's
 // resource/perm feeds navPerms exactly as a rail entry's would, so collapsing
-// the rail loosened no gate: /secret-types still demands secret:read.
-export const OFF_RAIL: { path: string; label: string; hint: string; resource?: string; perm?: string }[] = [
+// the rail loosened no gate: /secret-types still demands secret:read. A
+// not-yet-built page's tracking issue rides here too, shown on its stub
+// through navByPath exactly as a rail entry's would be.
+export const OFF_RAIL: { path: string; label: string; hint: string; resource?: string; perm?: string; issue?: number }[] = [
   { path: "/products", label: "Products", resource: "product", hint: "A concrete SKU: a vendor's product, its driver, kind, and the capabilities it provides." },
   { path: "/vendors", label: "Vendors", resource: "vendor", hint: "The organizations behind products: manufacturers, integrators, developers." },
   { path: "/drivers", label: "Drivers", resource: "driver", hint: "The implementations that get, emit, and set a product's signals." },
@@ -137,7 +139,7 @@ export const OFF_RAIL: { path: string; label: string; hint: string; resource?: s
   { path: "/tags", label: "Tags", resource: "tag", hint: "The governed tag key vocabulary applied across the inventory." },
   { path: "/rules", label: "Rules", hint: "Transform, calc, and event rules, with CEL and blast-radius preview." },
   { path: "/log-types", label: "Logs", hint: "The log shape catalog. The log lane arrives untyped today; typing what a line can be is still to come." },
-  { path: "/notifications", label: "Notifications", hint: "The outbound notification shapes: how a firing event reaches an operator, still to come." },
+  { path: "/notifications", label: "Notifications", hint: "The outbound notification shapes: how a firing event reaches an operator, still to come.", issue: 618 },
   { path: "/templates", label: "Templates", hint: "Example configurations you clone: start a location type, a standard, or a whole system from one, then own what you get." },
 ];
 
@@ -155,7 +157,7 @@ export const navByPath: Record<string, NavMeta> = (() => {
     for (const child of item.children ?? [])
       m[child.path] = { label: child.label, hint: child.hint, issue: child.issue, icon: item.icon, group: item.label, section: child.section };
   }
-  for (const o of OFF_RAIL) m[o.path] = { label: o.label, hint: o.hint, icon: Icons.Layers };
+  for (const o of OFF_RAIL) m[o.path] = { label: o.label, hint: o.hint, issue: o.issue, icon: Icons.Layers };
   return m;
 })();
 
@@ -184,9 +186,9 @@ export function lookupNav(pathname: string): NavMeta {
 
 // sectionLabel resolves a pathname to its top-bar section by longest prefix, so
 // a detail route (/locations/hq) still resolves to "Locations". A sectioned entry
-// spells out its full address, group · section · entry ("Catalog · Locations ·
-// Types"), since its bare label (Types) does not identify it alone; an
-// unsectioned entry keeps its single label.
+// spells out its full address (group · section · entry) because a bare label
+// would not identify it alone; instanceless today, since no nav child carries a
+// section after the shell landed. An unsectioned entry keeps its single label.
 export function sectionLabel(pathname: string): string {
   const path = relative(pathname);
   // Profile is reached from the sidebar footer, not a nav item, so it has no

@@ -10,9 +10,10 @@ import { Search, ArrowRight } from "./icons";
 // move the active row, Enter navigates.
 export type Command = { label: string; path: string; group?: string; section?: string };
 
-// A sectioned child folds its section into the group tag ("Catalog · Locations"),
-// so the two Types registries stay tellable apart in the list; an unsectioned
-// child keeps the bare group label. Exported for the source-of-commands test.
+// A sectioned child folds its section into the group tag; no nav child carries
+// a section today (the catalog registries left the rail for the shell's subrail,
+// pinned by this component's test), so the machinery is currently instanceless
+// and every entry wears its bare group label. Exported for the source test.
 export const commands: Command[] = navItems.flatMap((item) =>
   item.path
     ? [{ label: item.label, path: item.path }]
@@ -24,8 +25,8 @@ export const commands: Command[] = navItems.flatMap((item) =>
       })),
 );
 
-// matches is the palette filter: label, group, or section ("location" finds
-// Catalog · Locations > Types through its section word).
+// matches is the palette filter: label, group, or section (the section clause
+// is instanceless today; it holds for any future sectioned child).
 export const matches = (c: Command, q: string): boolean =>
   c.label.toLowerCase().includes(q) || (c.group ?? "").toLowerCase().includes(q) || (c.section ?? "").toLowerCase().includes(q);
 

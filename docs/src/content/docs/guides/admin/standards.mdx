@@ -5,7 +5,7 @@ description: "The Standards catalog: the blueprint a system conforms to, its var
 
 import SeededSet from '../../../../components/SeededSet.astro';
 
-**Catalog > Systems > Standards** (`/standards`, with `standard:read`, covered by every viewer's `*:read` floor)
+**Catalog, under Systems: Standards** (`/standards`, with `standard:read`, covered by every viewer's `*:read` floor)
 is the directory of **standards**: the blueprints your systems are built against. A **Huddle Room**, a
 **Classroom**, an **Auditorium** are standards; the meeting room on the third floor is a
 [system](/guides/operator/inventory/) that **conforms** to one. Each row shows the **name** (the
@@ -69,7 +69,7 @@ defaults to. It is the same editor as a product's contract, on the system side.
 - **Declare a property** (with `standard:update`) picks a name from the property catalog, optionally
   types a **default**, and optionally marks it **required**. The property must already exist in the
   catalog, since the contract only names it: mint it under
-  [Catalog > Telemetry > Properties](/guides/admin/properties/) first. Declaring is **idempotent**, so declaring a
+  [Catalog, under Telemetry: Properties](/guides/admin/properties/) first. Declaring is **idempotent**, so declaring a
   property already on the contract revises that line in place.
 - **The default is typed by the catalog, not here.** Type and validation live on the property, so a
   standard cannot redefine what `room-capacity` means, only what a system conforming to it starts with.

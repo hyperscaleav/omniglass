@@ -3,7 +3,7 @@ title: Drivers
 description: "The Drivers catalog: the implementations that get, emit, and set a product's signals (name, display name, version), seed-owned official rows read-only, admin-gated custom ones."
 ---
 
-**Catalog > Components > Drivers** (`/drivers`, with `driver:read`, covered by every viewer's `*:read` floor)
+**Catalog, under Components: Drivers** (`/drivers`, with `driver:read`, covered by every viewer's `*:read` floor)
 is the directory of **drivers**: the implementation that gets, emits, and sets a product's signals,
 on the same flat-registry pattern as [Location Types](/guides/admin/location-types/) and [Tags](/guides/admin/tags/).
 Where a [vendor](/guides/admin/vendors/) names who a device comes from, a driver names how it is

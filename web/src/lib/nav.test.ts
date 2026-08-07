@@ -247,6 +247,41 @@ describe("Catalog single entry", () => {
     expect(lookupNav("/web/rules").label).toBe("Rules");
     expect(lookupNav("/web/log-types").label).toBe("Logs");
   });
+
+  it("surfaces a pending off-rail page's tracking issue on its stub, exactly Rules' current state (none)", () => {
+    expect(lookupNav("/web/notifications").issue).toBe(618);
+    expect(lookupNav("/web/rules").issue).toBeUndefined();
+  });
+
+  // The shell is presentation over existing routes: every pre-shell URL keeps
+  // its path and its exact gate. The whole catalog-area route set, pinned
+  // literally so a route or gate change cannot ride in silently.
+  it("pins the full catalog-area route set with its gates (no URL and no gate changed with the shell)", () => {
+    const expected: Record<string, string[] | null> = {
+      "/catalog": null,
+      "/metrics": ["metric_type", "read"],
+      "/properties": ["property_type", "read"],
+      "/event-types": ["event_type", "read"],
+      "/command-types": ["command_type", "read"],
+      "/vendors": ["vendor", "read"],
+      "/products": ["product", "read"],
+      "/drivers": ["driver", "read"],
+      "/capabilities": ["capability", "read"],
+      "/standards": ["standard", "read"],
+      "/location-types": ["location_type", "read"],
+      "/secret-types": ["secret", "read"],
+      "/tags": ["tag", "read"],
+      "/rules": null,
+      "/notifications": null,
+      "/templates": null,
+      "/log-types": null,
+    };
+    for (const [path, need] of Object.entries(expected)) {
+      expect(routeTokens(`/web${path}`), path).toEqual(need);
+    }
+    // The set is complete: every off-rail page is accounted for above.
+    for (const o of OFF_RAIL) expect(Object.keys(expected), o.path).toContain(o.path);
+  });
 });
 
 describe("nav paths bind to routes (#608)", () => {

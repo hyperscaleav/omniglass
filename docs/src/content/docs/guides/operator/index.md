@@ -30,13 +30,15 @@ There are two ways to operate, and they are the same API with the same checks be
 ## Getting around
 
 - The **sidebar** is the information architecture: sections grouped into Inventory, Values,
-  Catalog, and Admin. Inside Catalog, non-folding labels split the registries by the estate noun
-  they serve (Components, Systems, Locations, Secrets, Telemetry, Action, General), and a guide
-  path reads all three levels: **Catalog > Locations > Types**. A live section is full strength; a
-  section whose backend has not landed yet is dimmed with a **soon** tag (still clickable, with a
-  short note on what it will do). The Catalog's first entry, **Overview** (`/catalog`), is the
-  hub: one card per section, teaching what it holds, with live registry counts linking to each
-  page; you see only the cards for sections you can enter.
+  Catalog, and Admin. **Catalog is a single entry** opening the catalog area: a subrail on the
+  left groups the registries by the estate noun they serve (Telemetry, Actions, Components,
+  Systems, Locations, Metadata), and clicking an entry opens that registry's own page beside it,
+  at its own URL. A guide path names the group and the entry: **Catalog, under Locations: Types**.
+  A live entry is full strength with its live row count; one whose backend has not landed yet is
+  dimmed with a **soon** tag (clickable when its stub page exists, with a short note on what it
+  will do and, where one exists, the issue tracking it). The subrail's first entry, **Overview** (`/catalog`), is the
+  landing: one card per group, teaching what it holds, with live registry counts linking to each
+  page; you see only the groups and entries you can enter.
 - The **top bar** shows the current section and a **Search (⌘K)** button. The console is
   dark-only today; the theme is an [Admin > Settings](/guides/admin/) value resolved by the
   settings engine, not a per-session toggle.

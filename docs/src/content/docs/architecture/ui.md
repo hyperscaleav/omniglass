@@ -91,8 +91,8 @@ Which high-frequency surfaces move from polling to the SSE relay, and what laten
 
 CRUD forms over the typed resource API, one per primitive (components, templates, types, tags,
 rules, config, groups, schedules, severity levels, the IAM resources). The type registries each
-hold their own page: location types (CRUD, Catalog > Locations > Types) and secret types
-(read-only, Catalog > Secrets > Types), the former tabbed Types page having split with the
+hold their own page: location types (CRUD; Catalog, under Locations: Types) and secret types
+(read-only, at `/secret-types` by URL with no subrail entry), the former tabbed Types page having split with the
 system and component kinds already moved to Standards and Products ([build log](/architecture/build-log/)).
 Editing a setting is editing **[config](/architecture/variables/)**, an audited mutation, not a
 separate prop store ([audit](/architecture/audit/)).
@@ -136,26 +136,27 @@ Two layers, deliberately decoupled:
    redirects to maintain.
 2. **The sidebar groups those flat routes into clusters for browsing**: Home, Dashboards, Alarms,
    Inventory (locations, systems, components, nodes), Values (variables, secrets, config, files),
-   Catalog (an Overview hub at `/catalog`, then sectioned by the estate noun each registry serves:
-   Components with products, vendors, drivers, and capabilities; Systems with standards; Locations
-   and Secrets each with their types; Telemetry with metrics, properties, events, and the future
-   log catalog; Action with rules, commands, and future notifications; General with tags), Explore,
-   Learn, Admin (users, roles, groups, audit, and the Settings leaf). A cluster is pure
-   presentation, not a destination: rearrangeable and user-customizable without touching a route.
+   Catalog (a single entry opening the catalog shell, next), Explore, Learn, Admin (users, roles,
+   groups, audit, and the Settings leaf). A cluster is pure presentation, not a destination:
+   rearrangeable and user-customizable without touching a route.
 
-The Catalog cluster carries **one naming rule**
-([ADR-0083](/architecture/decisions/#adr-0083-the-catalog-rail-is-sectioned-by-the-estate-noun-each-registry-serves)):
-a section is named for the estate noun it serves, an entry keeps the registry's own word, and where
-the registry's only word is "type" the entry is Types with the section completing the sentence
-(Locations > Types). The organizing line the sections teach: **Telemetry is what gets recorded,
-Action is what the platform does**; an event is a record of a happening (caught from the estate or
-caused by the platform), never an outbound message, which is why Events sits in Telemetry while
-Rules, Commands, and the future Notifications sit in Action. Section headers are labels, not folds:
-they render from the permission-filtered entry list, so a section whose entries are all gated away
-disappears with them, and the palette tags a sectioned entry `Catalog · <section>` so the two Types
-rows stay unambiguous in search. The Overview hub at `/catalog` renders one card per visible
-section with live registry counts through the same permission filter, the
-[learning-tool](/contributing/learning-tool/) answer to "what is all this".
+**Catalog is one rail entry opening a shell.** Clicking Catalog opens a two-column catalog area: a
+grouped subrail (Telemetry, Actions, Components, Systems, Locations, Metadata) whose entries
+navigate to the registries' own canonical flat routes (`/products`, `/metrics`, ...), each real
+page rendering in the pane beside it, and an **Overview landing** at `/catalog` with one card per
+group and live registry counts, the [learning-tool](/contributing/learning-tool/) answer to "what
+is all this". Subrail and cards derive from one group table judged through the same permission
+filter the rail uses, so a gated entry drops from both surfaces at once and a group whose entries
+are all gated away disappears with its header; secret types holds no subrail entry at all
+(`/secret-types` stays routed and gated, rendering in the pane). The naming rule
+([ADR-0083](/architecture/decisions/#adr-0083-the-catalog-rail-is-sectioned-by-the-estate-noun-each-registry-serves))
+carries into the subrail: a group is named for the estate noun it serves, an entry keeps the
+registry's own word, and where the registry's only word is "type" the entry is Types with the
+group completing the sentence (Catalog, under Locations: Types). The organizing line the groups
+teach: **Telemetry is what you receive, Actions is what you send or run**; an event is a record of
+a happening (caught from the estate or caused by the platform), never an outbound message, which
+is why Events sits in Telemetry while Rules, Commands, and the future Notifications sit in
+Actions.
 
 **Values is its own top-level group**, beside Inventory: values set on estate entities and resolved
 down the cascade, a distinct genus from the entities themselves. **Config is the CI store** (desired

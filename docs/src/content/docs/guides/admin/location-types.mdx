@@ -5,7 +5,7 @@ description: "The Location Types catalog: the place classifier registry (campus,
 
 import SeededSet from '../../../../components/SeededSet.astro';
 
-**Catalog > Locations > Types** (`/location-types`, with `location_type:read`, covered by every
+**Catalog, under Locations: Types** (`/location-types`, with `location_type:read`, covered by every
 viewer's `*:read` floor) is the registry of **place classifiers**: the `location_type` a
 [location](/guides/operator/entities/) is classified by. It is one registry with one page on
 purpose; its former home, a tabbed Types page, shared a fetch with the secret type registry, and
@@ -72,7 +72,7 @@ needs `location_type:delete`.
 
 - **Declare a property** picks a name from the property catalog, optionally types a **default**,
   and optionally marks it **required**. The property must already exist in the catalog; mint it
-  under [Catalog > Telemetry > Properties](/guides/admin/properties/) first. Declaring is **idempotent**.
+  under [Catalog, under Telemetry: Properties](/guides/admin/properties/) first. Declaring is **idempotent**.
 - **Type and validation are the catalog's**, not the contract's, so a location type cannot
   redefine what a property means, only what a fresh location of that type starts with.
 - **Locations inherit live.** Change a default and every location of the type that has not

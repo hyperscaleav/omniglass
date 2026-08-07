@@ -5,7 +5,7 @@ description: "The Properties catalog and the values behind it: the canonical typ
 
 import SeededSet from '../../../../components/SeededSet.astro';
 
-**Catalog > Telemetry > Properties** (with `property_type:read`, covered by every viewer's `*:read` floor) is
+**Catalog, under Telemetry: Properties** (with `property_type:read`, covered by every viewer's `*:read` floor) is
 one of the estate's **two signal catalogs**: the **value lane**. A **property** is a **value**,
 what something *is*, including a number used as a name (a serial number identifies a unit, it
 measures nothing); a numeric **quantity** you would average or graph is a
@@ -32,7 +32,7 @@ every reader; the write gates decide who may change it.
   the name or its display name; **type** and **official** narrow the list.
 - A property is a **value** (what something *is*: an input, a firmware version, a reachability
   verdict); a numeric **quantity** is a **metric**, its own catalog beside this one
-  ([**Catalog > Telemetry > Metrics**](/guides/admin/metrics/)), carrying the numeric facts (unit, precision).
+  ([**Catalog, under Telemetry: Metrics**](/guides/admin/metrics/)), carrying the numeric facts (unit, precision).
   The two catalogs share one name rule and refuse a name the other holds. A property nothing
   observes is simply declared-only, something an operator sets, like `serial-number`.
 - **New property** (with `property_type:create`, granted to operators) opens a create **drawer**: give
@@ -78,9 +78,9 @@ and optionally marks it **required**.
 
 | Declare it on | For | Where | Gated by |
 |---|---|---|---|
-| a **product** | its components | **Catalog > Components > [Products](/guides/admin/products/)** | `product:update` / `:delete` |
-| a **standard** | the systems that conform to it | **Catalog > Systems > [Standards](/guides/admin/standards/)** | `standard:update` / `:delete` |
-| a **location type** | the locations of that type | **Catalog > Locations > [Types](/guides/admin/location-types/)** | `location_type:update` / `:delete` |
+| a **product** | its components | **Catalog, under Components: [Products](/guides/admin/products/)** | `product:update` / `:delete` |
+| a **standard** | the systems that conform to it | **Catalog, under Systems: [Standards](/guides/admin/standards/)** | `standard:update` / `:delete` |
+| a **location type** | the locations of that type | **Catalog, under Locations: [Types](/guides/admin/location-types/)** | `location_type:update` / `:delete` |
 
 Declaring `serial-number`, `firmware-version`, and `model-number` on a Samsung QM55 is what makes
 every QM55 in the estate carry those three, with the same names and the same types, without touching

@@ -3,7 +3,7 @@ title: Capabilities
 description: "The Capabilities catalog: the vocabulary of what a component can do, the product default and the component's own additions and suppressions over it, and how a system role requires them."
 ---
 
-**Catalog > Components > Capabilities** (`/capabilities`, with `capability:read`, covered by every viewer's
+**Catalog, under Components: Capabilities** (`/capabilities`, with `capability:read`, covered by every viewer's
 `*:read` floor) is the directory of **capabilities**: the flat vocabulary of what a component can
 do, on the same flat-registry pattern as [Location Types](/guides/admin/location-types/) and [Tags](/guides/admin/tags/).
 A capability is a plain name of a function (a microphone, a display, a camera), not a device and

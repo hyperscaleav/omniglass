@@ -31,6 +31,10 @@ export type CatalogEntry = {
   path?: string;
   // Pending: the registry does not exist yet. Wears the rail's SOON treatment.
   soon?: boolean;
+  // The pending registry's tracking issue, nav.ts's `issue` pattern: a routed
+  // slot mirrors its nav.ts off-rail entry, whose stub page (SectionStub via
+  // navByPath) shows the same number; a pathless slot carries it here only.
+  issue?: number;
   // The permission tokens reading this registry requires (the route guard's
   // vocabulary); absent means ungated. A caller failing the gate loses the
   // entry, and with it the entry's count query (never created).
@@ -48,9 +52,11 @@ export type CatalogGroup = {
   entries: CatalogEntry[];
 };
 
-// The soon slots carry no issue numbers yet; tracking issues land before this
-// ships. Group copy follows the direction axis: Telemetry is what you receive,
-// Actions is what you send or run.
+// Each soon slot names its tracking issue (the no-bare-TODO rule): the
+// template registries are #615 (component), #616 (system), #617 (location);
+// notifications is #618. Rules mirrors its nav.ts off-rail entry, which
+// carries no issue today. Group copy follows the direction axis: Telemetry is
+// what you receive, Actions is what you send or run.
 export const CATALOG_GROUPS: CatalogGroup[] = [
   {
     header: "Telemetry",
@@ -67,7 +73,7 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
     entries: [
       { label: "Commands", path: "/command-types", gate: ["command_type", "read"], key: COMMAND_TYPES_KEY, list: listCommandTypes },
       { label: "Rules", path: "/rules", soon: true },
-      { label: "Notifications", path: "/notifications", soon: true },
+      { label: "Notifications", path: "/notifications", soon: true, issue: 618 },
     ],
   },
   {
@@ -78,7 +84,7 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
       { label: "Products", path: "/products", gate: ["product", "read"], key: PRODUCTS_KEY, list: listProducts },
       { label: "Drivers", path: "/drivers", gate: ["driver", "read"], key: DRIVERS_KEY, list: listDrivers },
       { label: "Capabilities", path: "/capabilities", gate: ["capability", "read"], key: CAPABILITIES_KEY, list: listCapabilities },
-      { label: "Templates", soon: true },
+      { label: "Templates", soon: true, issue: 615 },
     ],
   },
   {
@@ -86,7 +92,7 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
     copy: "A standard is the blueprint a system conforms to: the properties every conforming system exposes.",
     entries: [
       { label: "Standards", path: "/standards", gate: ["standard", "read"], key: STANDARDS_KEY, list: listStandards },
-      { label: "Templates", soon: true },
+      { label: "Templates", soon: true, issue: 616 },
     ],
   },
   {
@@ -95,7 +101,7 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
     entries: [
       // "Types": the Locations header already says where it lives.
       { label: "Types", path: "/location-types", gate: ["location_type", "read"], key: LOCATION_TYPES_KEY, list: listLocationTypes },
-      { label: "Templates", soon: true },
+      { label: "Templates", soon: true, issue: 617 },
     ],
   },
   {
