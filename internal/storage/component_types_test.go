@@ -112,6 +112,92 @@ func TestComponentTypeRoundTrip(t *testing.T) {
 	}
 }
 
+// TestComponentTypeUpdateTagsPatch covers both legs of ComponentTypePatch's
+// DefaultTags field, the one field on the update path shaped differently from
+// the rest (a *[]string against a text[] column, no precedent elsewhere in
+// the gateway): a patch that omits it leaves the existing tags untouched, and
+// a patch that sets it replaces the stored array, both confirmed by a
+// separate Get so the assertion is against what actually persisted, not just
+// the update call's return value.
+func TestComponentTypeUpdateTagsPatch(t *testing.T) {
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	root, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
+		Name: "tp-mic", DisplayName: "Mic", DefaultTags: []string{"audio", "av"},
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if len(root.DefaultTags) != 2 || root.DefaultTags[0] != "audio" || root.DefaultTags[1] != "av" {
+		t.Fatalf("create DefaultTags = %v, want [audio av]", root.DefaultTags)
+	}
+
+	// Leg 1: a patch that does not touch DefaultTags leaves it unchanged.
+	dn := "Microphone"
+	upd, err := gw.UpdateComponentType(ctx, "", "tp-mic", storage.ComponentTypePatch{DisplayName: &dn})
+	if err != nil {
+		t.Fatalf("update display_name only: %v", err)
+	}
+	if len(upd.DefaultTags) != 2 || upd.DefaultTags[0] != "audio" || upd.DefaultTags[1] != "av" {
+		t.Fatalf("update (no tags patch) DefaultTags = %v, want unchanged [audio av]", upd.DefaultTags)
+	}
+	got, err := gw.GetComponentType(ctx, "tp-mic")
+	if err != nil {
+		t.Fatalf("get after display_name patch: %v", err)
+	}
+	if len(got.DefaultTags) != 2 || got.DefaultTags[0] != "audio" || got.DefaultTags[1] != "av" {
+		t.Fatalf("get after display_name patch DefaultTags = %v, want unchanged [audio av]", got.DefaultTags)
+	}
+
+	// Leg 2: a patch that sets DefaultTags replaces the stored array, and the
+	// replacement reads back on a fresh Get, not just the update's return.
+	newTags := []string{"wireless"}
+	upd2, err := gw.UpdateComponentType(ctx, "", "tp-mic", storage.ComponentTypePatch{DefaultTags: &newTags})
+	if err != nil {
+		t.Fatalf("update tags: %v", err)
+	}
+	if len(upd2.DefaultTags) != 1 || upd2.DefaultTags[0] != "wireless" {
+		t.Fatalf("update tags DefaultTags = %v, want [wireless]", upd2.DefaultTags)
+	}
+	got2, err := gw.GetComponentType(ctx, "tp-mic")
+	if err != nil {
+		t.Fatalf("get after tags patch: %v", err)
+	}
+	if len(got2.DefaultTags) != 1 || got2.DefaultTags[0] != "wireless" {
+		t.Fatalf("get after tags patch DefaultTags = %v, want [wireless]", got2.DefaultTags)
+	}
+	// display_name from the first patch survived the second, untouched patch.
+	if got2.DisplayName != dn {
+		t.Fatalf("get after tags patch DisplayName = %q, want %q (unaffected by the tags-only patch)", got2.DisplayName, dn)
+	}
+
+	// An explicit empty slice is a legal replacement (clears back to no tags),
+	// distinct from a nil patch field (leave unchanged, leg 1 above).
+	empty := []string{}
+	upd3, err := gw.UpdateComponentType(ctx, "", "tp-mic", storage.ComponentTypePatch{DefaultTags: &empty})
+	if err != nil {
+		t.Fatalf("update tags to empty: %v", err)
+	}
+	if len(upd3.DefaultTags) != 0 {
+		t.Fatalf("update tags to empty DefaultTags = %v, want empty", upd3.DefaultTags)
+	}
+	got3, err := gw.GetComponentType(ctx, "tp-mic")
+	if err != nil {
+		t.Fatalf("get after empty tags patch: %v", err)
+	}
+	if len(got3.DefaultTags) != 0 {
+		t.Fatalf("get after empty tags patch DefaultTags = %v, want empty", got3.DefaultTags)
+	}
+}
+
 // TestComponentTypeFactsInherit checks ResolveTypeFacts walks parent_id: a
 // child with a null stem resolves the parent's, while a child's own non-null
 // abbrev overrides the parent's.
