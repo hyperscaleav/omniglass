@@ -64,9 +64,9 @@ describe("Sidebar identity avatar", () => {
   });
 });
 
-// The Catalog cluster renders a non-folding menu-title header before each run of
-// children sharing a section (#608). Headers derive from the permission-filtered
-// children, so a section whose entries are all hidden renders no header either.
+// The Catalog rail collapsed to a single leaf (the browse prototype): no
+// section headers remain in the rail, and the entry is ungated, so the floor
+// viewer keeps it (the page itself permission-filters its rows).
 function mountPerms(permissions: string[]) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...ME_KEY], { ...meWith(false), permissions });
@@ -79,17 +79,18 @@ function mountPerms(permissions: string[]) {
   ));
 }
 
-describe("Sidebar catalog section headers", () => {
+describe("Sidebar catalog entry", () => {
   const titles = () => Array.from(document.querySelectorAll("li.menu-title")).map((el) => el.textContent);
 
-  it("renders one header per Catalog section, in order, for the owner", () => {
+  it("renders Catalog as a single leaf link, with no section headers left in the rail", () => {
     mountPerms([">"]);
-    expect(titles()).toEqual(["Components", "Systems", "Locations", "Secrets", "Telemetry", "Action", "General"]);
+    const link = document.querySelector('a[href="/catalog"]');
+    expect(link?.textContent).toContain("Catalog");
+    expect(titles()).toEqual([]);
   });
 
-  it("drops the header of a fully hidden section: the floor viewer loses Secrets, keeps Locations", () => {
+  it("keeps the Catalog leaf for a *:read floor viewer", () => {
     mountPerms(["*:read"]);
-    expect(titles()).toContain("Locations");
-    expect(titles()).not.toContain("Secrets");
+    expect(document.querySelector('a[href="/catalog"]')).toBeTruthy();
   });
 });

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { createSignal } from "solid-js";
-import { render, fireEvent, screen, waitFor } from "@solidjs/testing-library";
+import { render, screen, fireEvent, waitFor } from "@solidjs/testing-library";
 import { createBladeController, useBladeEdit, type BladeDef } from "../lib/blades";
 import BladeStack from "./BladeStack";
 
@@ -11,21 +11,25 @@ const registry: Record<string, BladeDef> = {
   group: { Title: (p) => <>{`G:${p.id}`}</>, Body: (p) => <div>group body {p.id}</div> },
 };
 
-const asides = (c: HTMLElement) => c.querySelectorAll("aside[data-blade]");
+// Blades portal to document.body (a page-tree `fixed` would resolve against
+// any transformed ancestor, like the shell's filled fade-in), so queries go to
+// the document, not the render container. The container arg is kept so call
+// sites read unchanged where they pass one.
+const asides = (_c?: HTMLElement) => document.querySelectorAll("aside[data-blade]");
 
 describe("BladeStack", () => {
   it("renders nothing when the stack is empty, one blade per push, and offsets them", () => {
     const ctl = createBladeController();
-    const { container, getByText } = render(() => <BladeStack controller={ctl} registry={registry} />);
+    const { container } = render(() => <BladeStack controller={ctl} registry={registry} />);
     expect(asides(container).length).toBe(0);
 
     ctl.push({ kind: "user", id: "a" });
     expect(asides(container).length).toBe(1);
-    expect(getByText("U:a")).toBeTruthy();
+    expect(screen.getByText("U:a")).toBeTruthy();
 
     ctl.push({ kind: "group", id: "x" });
     expect(asides(container).length).toBe(2);
-    expect(getByText("G:x")).toBeTruthy();
+    expect(screen.getByText("G:x")).toBeTruthy();
     // The top blade (group) sits flush right; the covered one (user) is offset 40px.
     const [first, second] = [...asides(container)] as HTMLElement[];
     expect(second.style.right).toBe("0px");
@@ -34,7 +38,7 @@ describe("BladeStack", () => {
 
   it("Escape pops the top blade; the back button pops; close clears the stack", () => {
     const ctl = createBladeController();
-    const { container, getAllByLabelText } = render(() => <BladeStack controller={ctl} registry={registry} />);
+    const { container } = render(() => <BladeStack controller={ctl} registry={registry} />);
     ctl.push({ kind: "user", id: "a" });
     ctl.push({ kind: "group", id: "x" });
     expect(asides(container).length).toBe(2);
@@ -45,11 +49,11 @@ describe("BladeStack", () => {
     // Push again, then use the back button on the top blade.
     ctl.push({ kind: "group", id: "x" });
     expect(asides(container).length).toBe(2);
-    fireEvent.click(getAllByLabelText("Back")[0]);
+    fireEvent.click(screen.getAllByLabelText("Back")[0]);
     expect(asides(container).length).toBe(1);
 
     // Close clears everything.
-    fireEvent.click(getAllByLabelText("Close")[0]);
+    fireEvent.click(screen.getAllByLabelText("Close")[0]);
     expect(asides(container).length).toBe(0);
   });
 

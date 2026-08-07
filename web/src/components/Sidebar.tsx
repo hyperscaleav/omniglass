@@ -125,7 +125,8 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
 
 // Soon: the marker on a nav item whose backend has not landed. The item stays
 // navigable (its stub page explains what is coming); it just reads as pending.
-function Soon() {
+// Exported so subrails (the Catalog shell's) wear the same treatment.
+export function Soon() {
   return <span class="ml-auto flex-none rounded bg-base-content/5 px-1 py-px text-[9px] font-semibold uppercase tracking-wider text-base-content/40">soon</span>;
 }
 

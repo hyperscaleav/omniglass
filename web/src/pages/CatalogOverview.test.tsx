@@ -1,39 +1,42 @@
+import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
-import CatalogOverview, { REGISTRIES, SECTION_COPY } from "./CatalogOverview";
+import CatalogOverview from "./CatalogOverview";
+import { CATALOG_GROUPS } from "../lib/catalog";
 import { ME_KEY, type Me } from "../lib/auth";
-import { navItems } from "../lib/nav";
 import { PRODUCTS_KEY } from "../lib/products";
 import { VENDORS_KEY } from "../lib/vendors";
 import { DRIVERS_KEY } from "../lib/drivers";
 import { CAPABILITIES_KEY } from "../lib/capabilities";
 import { STANDARDS_KEY } from "../lib/standards";
 import { LOCATION_TYPES_KEY } from "../lib/location_types";
-import { SECRET_TYPES_KEY } from "../lib/secret_types";
 import { METRICS_KEY } from "../lib/metric_types";
 import { PROPERTIES_KEY } from "../lib/properties";
 import { EVENT_TYPES_KEY } from "../lib/event_types";
 import { COMMAND_TYPES_KEY } from "../lib/command_types";
 import { TAGS_KEY } from "../lib/tags";
 
-// The Catalog overview (/catalog, #609): one card per Catalog section, derived
-// from the same navItems the sidebar renders, each card teaching its section and
-// showing LIVE registry counts (learning-tool doctrine: real data, not
-// decoration). Visibility reuses filterNav over the same can() the sidebar uses,
-// so a section fully gated away renders no card; each registry is its own query,
-// so one failing fetch cannot take the other cards down (#598).
+// The Catalog overview (/catalog): the landing the shell's Overview entry
+// opens. One card per catalog group, DERIVED from the SAME CATALOG_GROUPS table
+// the CatalogShell subrail renders (one source of truth), so membership, order,
+// copy, and gating can never drift between the two surfaces: a group whose
+// entries are all gated away renders no card. Counts ride the list pages' own
+// query keys (learning-tool doctrine: real rows, not decoration); each registry
+// is its own query, so one failing fetch marks its own row and nothing else
+// (#598). A soon entry reads soon without a count; a routed soon entry (Rules,
+// Notifications) links to its stub, a pageless one (Templates) does not link.
 
 const owner: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "view" }, permissions: ["*:read"], grants: [] };
+const meWith = (permissions: string[]): Me => ({ principal: { id: "u-x", kind: "human" }, permissions, grants: [] });
 
 // Rows only need a length: the page renders counts, never row fields.
 const rows = (n: number) => Array.from({ length: n }, (_, i) => ({ name: `row-${i}` }));
 
-// Every live registry's shared cache key, primed with a distinct count so a
-// card's numbers are tellable apart, keyed exactly as the list pages key them
-// (a shared cache, not a parallel one).
+// Every registry's shared cache key, primed with a distinct count so a card's
+// numbers are tellable apart, keyed exactly as the list pages key them.
 const PRIMED: [readonly string[], number][] = [
   [PRODUCTS_KEY, 2],
   [VENDORS_KEY, 1],
@@ -41,7 +44,6 @@ const PRIMED: [readonly string[], number][] = [
   [CAPABILITIES_KEY, 3],
   [STANDARDS_KEY, 4],
   [LOCATION_TYPES_KEY, 5],
-  [SECRET_TYPES_KEY, 2],
   [METRICS_KEY, 12],
   [PROPERTIES_KEY, 7],
   [EVENT_TYPES_KEY, 15],
@@ -67,72 +69,84 @@ function mount(me: Me = owner, opts: { skip?: (readonly string[])[] } = {}) {
 }
 
 const card = (label: string) => document.querySelector(`[data-card="${label}"]`) as HTMLElement | null;
-const entryRow = (cardEl: HTMLElement, label: string) => within(cardEl).getByText(label).closest("a") as HTMLElement;
+const entry = (cardEl: HTMLElement, label: string) => within(cardEl).getByText(label).closest("[data-entry]") as HTMLElement;
 
 describe("CatalogOverview page", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("renders one card per Catalog section, in nav order, with live counts", () => {
+  it("renders one card per group, derived from the shared table, in its order, with live counts", () => {
     mount();
-    expect([...document.querySelectorAll("[data-card]")].map((el) => el.getAttribute("data-card"))).toEqual([
-      "Components", "Systems", "Locations", "Secrets", "Telemetry", "Action", "General",
-    ]);
+    expect([...document.querySelectorAll("[data-card]")].map((el) => el.getAttribute("data-card"))).toEqual(
+      CATALOG_GROUPS.map((g) => g.header),
+    );
     const comp = card("Components")!;
-    expect(entryRow(comp, "Products").textContent).toContain("2");
-    expect(entryRow(comp, "Vendors").textContent).toContain("1");
-    expect(entryRow(comp, "Drivers").textContent).toContain("8");
-    expect(entryRow(comp, "Capabilities").textContent).toContain("3");
-    expect(entryRow(card("Systems")!, "Standards").textContent).toContain("4");
-    expect(entryRow(card("Locations")!, "Types").textContent).toContain("5");
-    expect(entryRow(card("Secrets")!, "Types").textContent).toContain("2");
-    expect(entryRow(card("General")!, "Tags").textContent).toContain("9");
+    expect(entry(comp, "Vendors").textContent).toContain("1");
+    expect(entry(comp, "Products").textContent).toContain("2");
+    expect(entry(comp, "Drivers").textContent).toContain("8");
+    expect(entry(comp, "Capabilities").textContent).toContain("3");
+    expect(entry(card("Telemetry")!, "Metrics").textContent).toContain("12");
+    expect(entry(card("Systems")!, "Standards").textContent).toContain("4");
+    expect(entry(card("Locations")!, "Types").textContent).toContain("5");
+    expect(entry(card("Metadata")!, "Tags").textContent).toContain("9");
   });
 
-  it("links each entry to its page and teaches the section", () => {
+  it("teaches each group with the table's own sentence", () => {
     mount();
-    const comp = card("Components")!;
-    expect(entryRow(comp, "Products").getAttribute("href")).toBe("/products");
-    expect(entryRow(card("General")!, "Tags").getAttribute("href")).toBe("/tags");
-    // The teaching copy, present tense, on the card body.
-    expect(within(comp).getByText(/points at a product/)).toBeTruthy();
-    expect(within(card("Systems")!).getByText(/blueprint a system conforms to/)).toBeTruthy();
+    for (const g of CATALOG_GROUPS) {
+      expect(within(card(g.header)!).getByText(g.copy)).toBeTruthy();
+    }
   });
 
-  // The same permission logic as the sidebar (filterNav over can()): secret is a
-  // sensitive resource off the *:read floor, so the floor viewer loses the whole
-  // Secrets section, card and fetch alike, and keeps every other card (#598).
-  // The leak pin asserts on the query cache, not fetch timing: the client's
-  // async onRequest middleware makes any fetch a microtask away, so a
-  // synchronous not-called spy could never fail (the vacuous-async-spy trap).
-  // "The query was never created" is the structural fact, and it is synchronous.
-  it("shows a *:read floor viewer no Secrets card and never creates the gated query", () => {
-    const { qc } = mount(viewer, { skip: [SECRET_TYPES_KEY] });
-    expect(card("Secrets")).toBeNull();
-    expect(card("Components")).toBeTruthy();
-    expect(card("Locations")).toBeTruthy();
-    expect(entryRow(card("Locations")!, "Types").textContent).toContain("5");
-    expect(qc.getQueryCache().find({ queryKey: [...SECRET_TYPES_KEY] })).toBeUndefined();
-  });
-
-  it("renders soon entries as chips without counts, beside live counts", () => {
+  it("links each live entry to its canonical route", () => {
     mount();
-    const tel = card("Telemetry")!;
-    expect(entryRow(tel, "Metrics").textContent).toContain("12");
-    const logs = entryRow(tel, "Logs");
-    expect(logs.textContent).toContain("soon");
-    expect(logs.textContent).not.toMatch(/\d/);
-    const act = card("Action")!;
-    expect(entryRow(act, "Rules").textContent).toContain("soon");
-    expect(entryRow(act, "Notifications").textContent).toContain("soon");
-    expect(entryRow(act, "Commands").textContent).toContain("6");
+    expect(entry(card("Components")!, "Products").getAttribute("href")).toBe("/products");
+    expect(entry(card("Telemetry")!, "Metrics").getAttribute("href")).toBe("/metrics");
+    expect(entry(card("Locations")!, "Types").getAttribute("href")).toBe("/location-types");
+    expect(entry(card("Metadata")!, "Tags").getAttribute("href")).toBe("/tags");
+  });
+
+  it("offers no secret-types row anywhere, per the standing ruling", () => {
+    mount();
+    expect(document.querySelector('[data-entry] [href="/secret-types"]')).toBeNull();
+    expect(document.querySelector('a[href="/secret-types"]')).toBeNull();
+  });
+
+  it("renders soon entries without counts: the routed ones link to their stubs, the pageless ones do not link", () => {
+    mount();
+    const act = card("Actions")!;
+    expect(entry(act, "Commands").textContent).toContain("6");
+    const rules = entry(act, "Rules");
+    expect(rules.textContent).toContain("soon");
+    expect(rules.textContent).not.toMatch(/\d/);
+    expect(rules.getAttribute("href")).toBe("/rules");
+    expect(entry(act, "Notifications").getAttribute("href")).toBe("/notifications");
+    // A pageless soon slot (Templates) reads soon and is not an anchor.
+    const templates = entry(card("Components")!, "Templates");
+    expect(templates.textContent).toContain("soon");
+    expect(templates.tagName).not.toBe("A");
+  });
+
+  it("keeps every card for a *:read floor viewer", () => {
+    mount(viewer);
+    expect(document.querySelectorAll("[data-card]")).toHaveLength(CATALOG_GROUPS.length);
+  });
+
+  it("hides a fully gated group's card and never creates the gated query", () => {
+    const { qc } = mount(meWith(["tag:read"]), { skip: [METRICS_KEY, PROPERTIES_KEY, EVENT_TYPES_KEY] });
+    // Telemetry's entries are all gated away: no card, and no query was ever
+    // created for its registries (the structural #598 fact, synchronous).
+    expect(card("Telemetry")).toBeNull();
+    expect(card("Metadata")).toBeTruthy();
+    expect(entry(card("Metadata")!, "Tags").textContent).toContain("9");
+    expect(qc.getQueryCache().find({ queryKey: [...METRICS_KEY] })).toBeUndefined();
   });
 
   it("shows a loading skeleton for a count still in flight without blocking the others", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise(() => {}));
     mount(owner, { skip: [DRIVERS_KEY] });
     const comp = card("Components")!;
-    expect(entryRow(comp, "Drivers").querySelector(".skeleton")).toBeTruthy();
-    expect(entryRow(comp, "Products").textContent).toContain("2");
+    expect(entry(comp, "Drivers").querySelector(".skeleton")).toBeTruthy();
+    expect(entry(comp, "Products").textContent).toContain("2");
   });
 
   // One query per registry: a failing fetch marks its own row and leaves every
@@ -147,25 +161,8 @@ describe("CatalogOverview page", () => {
     });
     mount(owner, { skip: [VENDORS_KEY] });
     const comp = card("Components")!;
-    await waitFor(() => expect(entryRow(comp, "Vendors").textContent).toContain("unavailable"));
-    expect(entryRow(comp, "Products").textContent).toContain("2");
-    expect(entryRow(card("General")!, "Tags").textContent).toContain("9");
-  });
-});
-
-// The two hand-authored maps are the page's only couplings to the nav; this
-// invariant keeps them self-policing. Without it, a future live entry with no
-// REGISTRIES mapping renders "soon" on the hub while the rail shows it live,
-// and a new section without copy renders an empty teaching paragraph, both
-// silently.
-describe("hub maps track the nav (#609)", () => {
-  const catalogChildren = navItems.find((i) => i.label === "Catalog")!.children!;
-  it("maps every live sectioned Catalog entry to a registry", () => {
-    for (const c of catalogChildren.filter((c) => c.section && c.live))
-      expect(REGISTRIES[c.path], `${c.section} > ${c.label} (${c.path}) has no REGISTRIES entry`).toBeTruthy();
-  });
-  it("gives every Catalog section its teaching copy", () => {
-    for (const s of new Set(catalogChildren.map((c) => c.section).filter(Boolean)))
-      expect(SECTION_COPY[s!], `section ${s} has no SECTION_COPY entry`).toBeTruthy();
+    await waitFor(() => expect(entry(comp, "Vendors").textContent).toContain("unavailable"));
+    expect(entry(comp, "Products").textContent).toContain("2");
+    expect(entry(card("Metadata")!, "Tags").textContent).toContain("9");
   });
 });

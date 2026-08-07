@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { filterNav, lookupNav, navItems, routeTokens, sectionLabel, STUBS, type NavItem } from "./nav";
+import { filterNav, lookupNav, navItems, OFF_RAIL, routeTokens, sectionLabel, STUBS, type NavItem } from "./nav";
 import { can, type Me } from "./auth";
 
 const Dummy = () => null;
@@ -9,10 +9,10 @@ const Dummy = () => null;
 const meWith = (permissions: string[]): Me => ({ principal: { id: "p", kind: "human" }, permissions, grants: [] });
 const section = (label: string, permissions: string[]): string[] =>
   filterNav(navItems, (tokens) => can(meWith(permissions), ...tokens)).find((i) => i.label === label)?.children?.map((c) => c.label) ?? [];
-// The Catalog children as objects: its entries are addressed by (section, label)
-// since the naming rule reuses Types under both Locations and Secrets.
-const catalog = (permissions: string[]) =>
-  filterNav(navItems, (tokens) => can(meWith(permissions), ...tokens)).find((i) => i.label === "Catalog")?.children ?? [];
+// The rail entries a principal keeps, by top-level label (the Catalog entry is a
+// single leaf now, so it is addressed here rather than through children).
+const rail = (permissions: string[]) =>
+  filterNav(navItems, (tokens) => can(meWith(permissions), ...tokens)).map((i) => i.label);
 
 describe("filterNav", () => {
   it("keeps every tab for a principal that can read everything", () => {
@@ -101,23 +101,15 @@ describe("filterNav", () => {
     expect(section("Values", [">"])).toContain("Secrets");
   });
 
-  // #598 both ways: the split gives each registry its own tab with its own gate.
-  // Catalog > Locations > Types rides the viewer floor (location_type is not
-  // sensitive); Catalog > Secrets > Types gates on the secret resource, the same
-  // word the /secret-types route stamps, so the floor viewer loses exactly the tab
-  // whose route would 403 it, and nothing else. Both entries are labeled Types, so
-  // they are addressed by their (section, label) pair.
-  it("keeps Catalog > Locations > Types for a *:read floor viewer and hides the whole Secrets section (#598)", () => {
-    const floor = catalog(["*:read"]);
-    expect(floor.some((c) => c.section === "Locations" && c.label === "Types")).toBe(true);
-    // The Secrets section vanishes wholesale: its only entry is gated on secret,
-    // so the floor viewer loses the entry and (in the sidebar) the header with it.
-    expect(floor.some((c) => c.section === "Secrets")).toBe(false);
-  });
-
-  it("shows Catalog > Secrets > Types to a secret:read holder and the owner", () => {
-    expect(catalog(["*:read", "secret:read"]).some((c) => c.section === "Secrets" && c.label === "Types")).toBe(true);
-    expect(catalog([">"]).some((c) => c.section === "Secrets" && c.label === "Types")).toBe(true);
+  // The Catalog rail entry is ungated (the browse page permission-filters its
+  // own rows), so every principal keeps it, floor viewer included. The #598
+  // guarantee moved with the gates: what a floor viewer must not reach is the
+  // /secret-types ROUTE, and that gate now lives in the off-rail map (asserted
+  // under routeTokens below), not a rail child.
+  it("keeps the single Catalog entry for every principal, floor viewer included", () => {
+    expect(rail(["*:read"])).toContain("Catalog");
+    expect(rail([])).toContain("Catalog");
+    expect(rail([">"])).toContain("Catalog");
   });
 });
 
@@ -210,91 +202,50 @@ describe("nav IA rework", () => {
   });
 });
 
-// The Catalog rail gains non-folding section headers (#608): a section is named
-// for the estate noun it serves, an entry keeps the registry's own word, and
-// where the registry's only word is "type" the entry is Types.
-describe("Catalog sections (#608)", () => {
-  it("orders the Catalog children by section, one run per estate noun", () => {
-    const cat = navItems.find((i) => i.label === "Catalog")!;
-    expect(cat.children!.map((c) => [c.section, c.label])).toEqual([
-      [undefined, "Overview"], // the unsectioned hub, before the first section (#609)
-      ["Components", "Products"],
-      ["Components", "Vendors"],
-      ["Components", "Drivers"],
-      ["Components", "Capabilities"],
-      ["Systems", "Standards"],
-      ["Locations", "Types"],
-      ["Secrets", "Types"],
-      ["Telemetry", "Metrics"],
-      ["Telemetry", "Properties"],
-      ["Telemetry", "Events"],
-      ["Telemetry", "Logs"],
-      ["Action", "Rules"],
-      ["Action", "Commands"],
-      ["Action", "Notifications"],
-      ["General", "Tags"],
-    ]);
-  });
+// The Catalog rail collapsed to a single browse entry (the single-surface
+// prototype): one live, ungated, resource-less leaf at /catalog, declared the
+// same way Home and Explore are. The registries left the rail but not the app:
+// each keeps its route, its top-bar identity, and its gate through OFF_RAIL.
+describe("Catalog single entry", () => {
+  const cat = navItems.find((i) => i.label === "Catalog")!;
 
-  it("keeps every existing entry's path, adds the two new stubs, and drops only Templates from the rail", () => {
-    const cat = navItems.find((i) => i.label === "Catalog")!;
-    expect(cat.children!.map((c) => c.path).sort()).toEqual([
-      "/capabilities", "/catalog", "/command-types", "/drivers", "/event-types",
-      "/location-types", "/log-types", "/metrics", "/notifications", "/products",
-      "/properties", "/rules", "/secret-types", "/standards", "/tags", "/vendors",
-    ]);
-  });
-
-  it("leaves the three soon-stubs unlive and ungated so every viewer sees them", () => {
-    const cat = navItems.find((i) => i.label === "Catalog")!;
-    for (const path of ["/log-types", "/notifications", "/rules"]) {
-      const c = cat.children!.find((x) => x.path === path)!;
-      expect(c.live).toBeFalsy();
-      expect(c.resource).toBeUndefined();
-      expect(c.perm).toBeUndefined();
-    }
-  });
-
-  it("labels a sectioned entry group · section · entry in the top bar, unsectioned entries unchanged", () => {
-    expect(sectionLabel("/web/location-types")).toBe("Catalog · Locations · Types");
-    expect(sectionLabel("/web/secret-types")).toBe("Catalog · Secrets · Types");
-    expect(sectionLabel("/web/metrics")).toBe("Catalog · Telemetry · Metrics");
-    // A detail route resolves to its section by longest prefix, as before.
-    expect(sectionLabel("/web/metrics/temperature-c")).toBe("Catalog · Telemetry · Metrics");
-    // An unsectioned entry keeps its single label.
-    expect(sectionLabel("/web/components")).toBe("Components");
-    expect(sectionLabel("/web/users")).toBe("Users");
-  });
-});
-
-// The Catalog overview entry (#609): a visible Overview opens /catalog, the hub
-// page. It sits FIRST among the Catalog children, before the Components section,
-// unsectioned (no header above it), live, and ungated like Home: every viewer may
-// open the page, which then shows only the cards whose entries filterNav keeps.
-describe("Catalog overview entry (#609)", () => {
-  it("puts Overview first among the Catalog children: live, at /catalog, unsectioned", () => {
-    const cat = navItems.find((i) => i.label === "Catalog")!;
-    const first = cat.children![0];
-    expect(first.label).toBe("Overview");
-    expect(first.path).toBe("/catalog");
-    expect(first.live).toBe(true);
-    expect(first.section).toBeUndefined();
-  });
-
-  it("leaves /catalog ungated, like Home", () => {
-    const cat = navItems.find((i) => i.label === "Catalog")!;
-    const first = cat.children![0];
-    expect(first.resource).toBeUndefined();
-    expect(first.perm).toBeUndefined();
+  it("is a live top-level leaf at /catalog with no children and no gate", () => {
+    expect(cat.path).toBe("/catalog");
+    expect(cat.live).toBe(true);
+    expect(cat.children).toBeUndefined();
+    expect(cat.resource).toBeUndefined();
+    expect(cat.perm).toBeUndefined();
     expect(routeTokens("/web/catalog")).toBeNull();
   });
 
-  it("keeps Overview for a principal who can read nothing gated", () => {
-    expect(catalog([]).some((c) => c.label === "Overview")).toBe(true);
+  it("keeps every former registry page reachable off-rail with its gate intact", () => {
+    const paths = OFF_RAIL.map((o) => o.path);
+    for (const p of ["/products", "/vendors", "/drivers", "/capabilities", "/standards", "/location-types", "/secret-types", "/metrics", "/properties", "/event-types", "/command-types", "/tags"]) {
+      expect(paths).toContain(p);
+    }
+    // The gates did not loosen when the rail entries vanished: the sensitive
+    // registry still demands secret:read (#598), the plain one its own read.
+    expect(routeTokens("/web/secret-types")).toEqual(["secret", "read"]);
+    expect(routeTokens("/web/products")).toEqual(["product", "read"]);
+    expect(routeTokens("/web/tags")).toEqual(["tag", "read"]);
   });
 
-  it("labels the unsectioned Overview with its single label in the top bar", () => {
-    expect(sectionLabel("/web/catalog")).toBe("Overview");
+  it("labels the off-rail pages by their own registry word in the top bar", () => {
+    expect(sectionLabel("/web/catalog")).toBe("Catalog");
+    expect(sectionLabel("/web/location-types")).toBe("Location types");
+    expect(sectionLabel("/web/secret-types")).toBe("Secret types");
+    expect(sectionLabel("/web/metrics")).toBe("Metrics");
+    // A detail route resolves by longest prefix, as before.
+    expect(sectionLabel("/web/metrics/temperature-c")).toBe("Metrics");
+    // Rail entries are unchanged.
+    expect(sectionLabel("/web/components")).toBe("Components");
+    expect(sectionLabel("/web/users")).toBe("Users");
+  });
+
+  it("keeps every off-rail page's identity for bookmarks and stubs", () => {
+    expect(lookupNav("/web/products").label).toBe("Products");
+    expect(lookupNav("/web/rules").label).toBe("Rules");
+    expect(lookupNav("/web/log-types").label).toBe("Logs");
   });
 });
 

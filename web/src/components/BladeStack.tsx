@@ -1,5 +1,5 @@
 import { type JSX, For, Show, createEffect, onCleanup } from "solid-js";
-import { Dynamic } from "solid-js/web";
+import { Dynamic, Portal } from "solid-js/web";
 import { Ban, ChevronLeft, MoreHorizontal, Pencil, RotateCcw, Save, Trash, X } from "./icons";
 import Button from "./Button";
 import PanelFooter from "./PanelFooter";
@@ -68,8 +68,13 @@ export default function BladeStack(props: {
     }
   });
 
+  // Portaled to body: `fixed` inside the page tree resolves against any
+  // transformed ancestor, and the page shell's fade-in animation leaves a
+  // filled transform behind, so a scrolled page would carry the stack
+  // off-screen with it (the portal-to-escape rule every overlay follows).
   return (
     <Show when={stack().length}>
+      <Portal>
       <div class="fixed inset-0 z-60 bg-black/45" onClick={() => props.controller.close()} />
       <For each={stack()}>
         {(ref, i) => {
@@ -176,6 +181,7 @@ export default function BladeStack(props: {
           );
         }}
       </For>
+      </Portal>
     </Show>
   );
 }

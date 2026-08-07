@@ -70,41 +70,15 @@ export const navItems: NavItem[] = [
       { label: "Files", path: "/files", live: true, resource: "file", hint: "Firmware images, config dumps, runbooks, and captures kept with the estate, deduplicated and searchable." },
     ],
   },
-  {
-    label: "Catalog", icon: Icons.Layers, hint: "The authored model: types, tags, and rules.",
-    // The Catalog rail is sectioned (#608): a section is named for the estate noun
-    // it serves, an entry keeps the registry's own word, and where the registry's
-    // only word is "type" the entry is Types. Section headers render as
-    // non-folding labels in the sidebar, never as folds; filterNav still judges
-    // each entry on its own gate.
-    children: [
-      // The Overview hub (#609): one card per section below, teaching copy plus
-      // live registry counts, each card linking its pages. Unsectioned so no
-      // header precedes it, and ungated like Home: the page itself filters its
-      // cards through the same filterNav gate that shapes this rail, so a
-      // viewer opens it and sees exactly the sections whose entries survive.
-      { label: "Overview", path: "/catalog", live: true, hint: "The authored model at a glance: every Catalog section as a card, teaching what it holds, with live registry counts." },
-      { section: "Components", label: "Products", path: "/products", live: true, resource: "product", hint: "A concrete SKU: a vendor's product, its driver, kind, and the capabilities it provides." },
-      { section: "Components", label: "Vendors", path: "/vendors", live: true, resource: "vendor", hint: "The organizations behind products: manufacturers, integrators, developers." },
-      { section: "Components", label: "Drivers", path: "/drivers", live: true, resource: "driver", hint: "The implementations that get, emit, and set a product's signals." },
-      { section: "Components", label: "Capabilities", path: "/capabilities", live: true, resource: "capability", hint: "What a component can do: microphone, display, and the rest." },
-      { section: "Systems", label: "Standards", path: "/standards", live: true, resource: "standard", hint: "The blueprints a system conforms to, each declaring the properties every conforming system exposes." },
-      { section: "Locations", label: "Types", path: "/location-types", live: true, resource: "location_type", hint: "The place classifier registry: campus, building, floor, room, and your own, each with its icon, allowed parents, and property contract." },
-      // Gated on secret (a sensitive resource off the *:read floor), the same
-      // permission as the /secret-types route it lists: a plain viewer sees
-      // neither this entry nor the Secrets section header, and never loses the
-      // location registry over it (#598).
-      { section: "Secrets", label: "Types", path: "/secret-types", live: true, resource: "secret", hint: "The shapes a secret can take, read-only reference data seeded with the release." },
-      { section: "Telemetry", label: "Metrics", path: "/metrics", live: true, resource: "metric_type", hint: "The numeric signal catalog: the canonical series a sample measures, each carrying its unit and precision." },
-      { section: "Telemetry", label: "Properties", path: "/properties", live: true, resource: "property_type", hint: "The categorical signal catalog: the canonical properties a sample observes and a product contract declares." },
-      { section: "Telemetry", label: "Events", path: "/event-types", live: true, resource: "event_type", hint: "The occurrence catalog: the discrete happenings an event is typed by, the twin of the metric and property catalogs. The address keeps event-types; the events instance surface takes /events when it lands." },
-      { section: "Telemetry", label: "Logs", path: "/log-types", hint: "The log shape catalog. The log lane arrives untyped today; typing what a line can be is still to come." },
-      { section: "Action", label: "Rules", path: "/rules", hint: "Transform, calc, and event rules, with CEL and blast-radius preview." },
-      { section: "Action", label: "Commands", path: "/command-types", live: true, resource: "command_type", hint: "The do catalog: what a component can be told, with a target and a settle window, the driver-owned twin of the other lane catalogs. The address keeps command-types; the command history surface takes /commands when it lands." },
-      { section: "Action", label: "Notifications", path: "/notifications", hint: "The outbound notification shapes: how a firing event reaches an operator, still to come." },
-      { section: "General", label: "Tags", path: "/tags", live: true, resource: "tag", hint: "The governed tag key vocabulary applied across the inventory." },
-    ],
-  },
+  // Catalog is a single live entry opening the catalog area: a layout shell
+  // (CatalogShell) whose subrail navigates between the registries' own routed
+  // pages, with the /catalog Overview as its landing. Ungated like Home: the
+  // subrail and the Overview permission-filter their entries (and count queries)
+  // with the same can() this rail uses, so a floor viewer opens it and sees
+  // exactly the registries it may read, while each registry page keeps its own
+  // route-guard gate. The per-registry pages stay declared off-rail (OFF_RAIL
+  // below): that carries their top-bar identity and their route-guard gates.
+  { label: "Catalog", path: "/catalog", icon: Icons.Layers, live: true, hint: "Everything the estate is typed by: every registry, browsable in one place." },
   { label: "Explore", path: "/explore", icon: Icons.Compass, hint: "Sample history, the event log, and the cascade resolve view." },
   { label: "Learn", path: "/learn", icon: Icons.GraduationCap, hint: "How collection turns a device into owned samples." },
   {
@@ -140,11 +114,39 @@ export function filterNav(items: NavItem[], allow: (tokens: string[]) => boolean
   return out;
 }
 
+// Off-rail pages: routed surfaces with no rail entry of their own. The Catalog
+// rail collapsed to the single /catalog entry (the shell's subrail navigates
+// the registries now), but every registry keeps its own routed page (where the
+// create and edit surfaces live), its identity in the top bar, and its
+// permission gate in the route guard, all declared here.
+// /templates set the precedent when it left the rail (#608). Each entry's
+// resource/perm feeds navPerms exactly as a rail entry's would, so collapsing
+// the rail loosened no gate: /secret-types still demands secret:read.
+export const OFF_RAIL: { path: string; label: string; hint: string; resource?: string; perm?: string }[] = [
+  { path: "/products", label: "Products", resource: "product", hint: "A concrete SKU: a vendor's product, its driver, kind, and the capabilities it provides." },
+  { path: "/vendors", label: "Vendors", resource: "vendor", hint: "The organizations behind products: manufacturers, integrators, developers." },
+  { path: "/drivers", label: "Drivers", resource: "driver", hint: "The implementations that get, emit, and set a product's signals." },
+  { path: "/capabilities", label: "Capabilities", resource: "capability", hint: "What a component can do: microphone, display, and the rest." },
+  { path: "/standards", label: "Standards", resource: "standard", hint: "The blueprints a system conforms to, each declaring the properties every conforming system exposes." },
+  { path: "/location-types", label: "Location types", resource: "location_type", hint: "The place classifier registry: campus, building, floor, room, and your own." },
+  { path: "/secret-types", label: "Secret types", resource: "secret", hint: "The shapes a secret can take, read-only reference data seeded with the release." },
+  { path: "/metrics", label: "Metrics", resource: "metric_type", hint: "The numeric signal catalog: the canonical series a sample measures, each carrying its unit and precision." },
+  { path: "/properties", label: "Properties", resource: "property_type", hint: "The categorical signal catalog: the canonical properties a sample observes and a product contract declares." },
+  { path: "/event-types", label: "Events", resource: "event_type", hint: "The occurrence catalog: the discrete happenings an event is typed by." },
+  { path: "/command-types", label: "Commands", resource: "command_type", hint: "The do catalog: what a component can be told, with a target and a settle window." },
+  { path: "/tags", label: "Tags", resource: "tag", hint: "The governed tag key vocabulary applied across the inventory." },
+  { path: "/rules", label: "Rules", hint: "Transform, calc, and event rules, with CEL and blast-radius preview." },
+  { path: "/log-types", label: "Logs", hint: "The log shape catalog. The log lane arrives untyped today; typing what a line can be is still to come." },
+  { path: "/notifications", label: "Notifications", hint: "The outbound notification shapes: how a firing event reaches an operator, still to come." },
+  { path: "/templates", label: "Templates", hint: "Example configurations you clone: start a location type, a standard, or a whole system from one, then own what you get." },
+];
+
 // Flattened title + hint (+ icon + tracking issue) lookup by base-relative path,
 // for the generic stub. A child inherits its parent group's icon (that is the icon
 // the sidebar shows it under), so the placeholder matches the sidebar. A sectioned
 // child also carries its group and section labels so the top bar can spell out the
-// full address (Catalog · Locations · Types).
+// full address. Off-rail pages keep their identity here too: a bookmark to
+// /products must still read "Products", not the anonymous fallback.
 export type NavMeta = { label: string; hint: string; issue?: number; icon: Component<{ size?: number }>; group?: string; section?: string };
 export const navByPath: Record<string, NavMeta> = (() => {
   const m: Record<string, NavMeta> = {};
@@ -153,15 +155,14 @@ export const navByPath: Record<string, NavMeta> = (() => {
     for (const child of item.children ?? [])
       m[child.path] = { label: child.label, hint: child.hint, issue: child.issue, icon: item.icon, group: item.label, section: child.section };
   }
-  // Off-rail pages keep their identity: /templates left the Catalog rail until
-  // the registry is real, but its stub route survives and a bookmark must still
-  // read "Templates", not the anonymous fallback.
-  m["/templates"] = { label: "Templates", hint: "Example configurations you clone: start a location type, a standard, or a whole system from one, then own what you get.", icon: Icons.Layers };
+  for (const o of OFF_RAIL) m[o.path] = { label: o.label, hint: o.hint, icon: Icons.Layers };
   return m;
 })();
 
 // Stubbed sections: backends not built yet, each rendering SectionStub in the
 // router. /templates keeps its stub page though its rail entry is gone (#608).
+// /rules and /notifications mount INSIDE the CatalogShell (their stubs render
+// in the catalog pane; index.tsx filters them out of the top-level loop).
 // Lives here beside the entries it backs so the nav tests can assert every
 // unlive rail entry resolves to a registered stub rather than NotFound.
 export const STUBS = [
@@ -205,8 +206,9 @@ export function sectionLabel(pathname: string): string {
 
 // navPerms maps a gated route path to the permission tokens it requires, from the
 // SAME nav config that hides the sidebar button (an explicit `perm`, else
-// `<resource>:read`). An ungated path (Home, Profile, the stubs) is absent. This is
-// the single source both the sidebar (hide the button) and the route guard (block
+// `<resource>:read`), plus the off-rail pages, whose gates outlive their rail
+// entries. An ungated path (Home, Profile, the stubs) is absent. This is the
+// single source both the sidebar (hide the button) and the route guard (block
 // the URL) read, so the two can never diverge.
 const navPerms: Record<string, string[]> = (() => {
   const m: Record<string, string[]> = {};
@@ -219,6 +221,7 @@ const navPerms: Record<string, string[]> = (() => {
     add(item);
     for (const child of item.children ?? []) add(child);
   }
+  for (const o of OFF_RAIL) add(o);
   return m;
 })();
 
