@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, it, expect } from "vitest";
 
 // Guard: every button uses the semantic intent vocabulary (btn-action / btn-quiet
@@ -6,6 +7,11 @@ import { describe, it, expect } from "vitest";
 // restyles them from one place. See #92. Structural classes (btn, btn-sm, btn-xs,
 // btn-square) are fine; only the raw intent classes are banned.
 const files = import.meta.glob("./**/*.tsx", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+// Read the stylesheet off disk: vitest's CSS pipeline swallows a `?raw` glob of a
+// .css file (it resolves to an empty string), so the guard would pass vacuously.
+// import.meta.url is a served URL under vitest, not file:, so resolve from the
+// test runner's root (web/).
+const appCss = readFileSync("src/app.css", "utf8");
 
 // Every raw daisyUI color/emphasis button class is banned: a button carries an
 // intent class (btn-action / btn-quiet / btn-danger / btn-warn / btn-ok) so the
@@ -53,5 +59,27 @@ describe("button vocabulary", () => {
       });
     }
     expect(offenders, `\nHand-rolled btn buttons (use <Button>):\n${offenders.join("\n")}\n`).toEqual([]);
+  });
+
+  // Guard: an unlayered intent color must not survive the disabled state. The
+  // intent colors are defined unlayered so they beat daisyUI's `daisyui` layer,
+  // which means they also beat daisyUI's `.btn:disabled` muted foreground unless
+  // the selector itself excludes disabled. The shipped failure: a locked blade's
+  // greyed Delete kept its full error red and read as live beside the properly
+  // muted Edit. Every rule that colors an intent class must scope the color to
+  // :not(:disabled).
+  it("scopes every intent color rule to :not(:disabled)", () => {
+    // Self-check: the glob resolved the stylesheet (a silent miss would pass vacuously).
+    expect(appCss).toBeTypeOf("string");
+    expect(appCss).toContain(".btn-danger");
+    const offenders: string[] = [];
+    for (const m of appCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const sel = m[1].trim().split("\n").pop()!.trim();
+      const body = m[2];
+      if (!/\.btn-(action|danger|warn|ok)\b/.test(sel)) continue;
+      if (!/text-(error|warning|success)|(?:^|[\s;])color\s*:/.test(body)) continue;
+      if (!sel.includes(":not(:disabled)")) offenders.push(`"${sel}" colors an intent without :not(:disabled)`);
+    }
+    expect(offenders, `\n${offenders.join("\n")}\n`).toEqual([]);
   });
 });
