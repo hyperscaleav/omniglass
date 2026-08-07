@@ -559,7 +559,7 @@ List a component's effective capabilities
 omniglass component capability list <name>
 ```
 
-What this component actually provides: the capabilities its product declares, plus the ones the component adds, minus the ones it suppresses. This is the set the role-assignment guard checks, so a productless component that declares its own can still be staffed. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+What this component actually provides: the capabilities its product declares, plus the ones the component adds, minus the ones it suppresses. No longer what role assignment gates (the typed-slot guard checks the component's product's component_type instead, #626); this resolved set still feeds the health rollup's alarm-impact model. Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 Example:
 
@@ -3804,7 +3804,7 @@ List a standard's declared roles
 omniglass standard role list <id>
 ```
 
-Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the capabilities a component must provide to fill it. Gated by standard:read.
+Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. Gated by standard:read.
 
 Example:
 
@@ -3820,13 +3820,15 @@ Declare a role on a standard
 omniglass standard role update <id> <role> [flags]
 ```
 
-Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent). The capability list replaces the required set wholesale. An unknown standard or capability is a 422. Gated by standard:update.
+Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent). accepted_types and pinned_products each replace their set wholesale. An unknown standard, type, or product is a 422. Gated by standard:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--capabilities` | string | (none) | The capabilities a component must ALL provide; replaces the required set wholesale |
+| `--accepted-types` | string | (none) | The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type |
+| `--capabilities` | string | (none) | Deprecated, no longer enforced: the typed-slot guard (accepted_types, pinned_products) replaces it |
 | `--display-name` | string | (none) | The role's human label; defaults to the role name |
 | `--impact` | string | (none) | What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display |
+| `--pinned-products` | string | (none) | If set, a filling component's product must be one of these; replaces the pinned set wholesale. Omit or empty accepts any product of an accepted type |
 | `--quorum` | string | (none) | How many components must fill the role; omit for one |
 
 Example:
@@ -4204,7 +4206,7 @@ Assign a component to a role
 omniglass system role assignment update <name> <role> <component>
 ```
 
-Puts this component in the role for this system. Refused with a 422 naming the missing capabilities when the component does not provide everything the role requires (its product's capabilities, plus what it adds, minus what it suppresses). Idempotent. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+Puts this component in the role for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the role accepts, or (if the role pins products) its product not one of them. A role with no accepted types takes any type. Idempotent. Gated by system:update; an out-of-scope system is a non-disclosing 404.
 
 Example:
 
@@ -4236,7 +4238,7 @@ List a system's effective roles
 omniglass system role list <name>
 ```
 
-Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the capabilities it requires, the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the types it accepts (and products it pins, if any), the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 Example:
 
@@ -4252,13 +4254,15 @@ Declare a role on a system
 omniglass system role update <name> <role> [flags]
 ```
 
-Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. The capability list replaces the required set wholesale. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. accepted_types and pinned_products each replace their set wholesale. Gated by system:update; an out-of-scope system is a non-disclosing 404.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--capabilities` | string | (none) | The capabilities a component must ALL provide; replaces the required set wholesale |
+| `--accepted-types` | string | (none) | The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type |
+| `--capabilities` | string | (none) | Deprecated, no longer enforced: the typed-slot guard (accepted_types, pinned_products) replaces it |
 | `--display-name` | string | (none) | The role's human label; defaults to the role name |
 | `--impact` | string | (none) | What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display |
+| `--pinned-products` | string | (none) | If set, a filling component's product must be one of these; replaces the pinned set wholesale. Omit or empty accepts any product of an accepted type |
 | `--quorum` | string | (none) | How many components must fill the role; omit for one |
 
 Example:

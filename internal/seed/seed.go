@@ -84,12 +84,16 @@ type standardsDoc struct {
 		DisplayName      string `yaml:"display_name"`
 		ParentStandardID string `yaml:"parent_standard_id"`
 		// The roles a conforming system needs filled, inherited live by every
-		// system on this standard.
+		// system on this standard. Capabilities is tolerated but no longer
+		// enforced (#626): the typed-slot guard checks AcceptedTypes and
+		// PinnedProducts instead.
 		Roles []struct {
-			Name         string   `yaml:"name"`
-			DisplayName  string   `yaml:"display_name"`
-			Quorum       int      `yaml:"quorum"`
-			Capabilities []string `yaml:"capabilities"`
+			Name           string   `yaml:"name"`
+			DisplayName    string   `yaml:"display_name"`
+			Quorum         int      `yaml:"quorum"`
+			Capabilities   []string `yaml:"capabilities"`
+			AcceptedTypes  []string `yaml:"accepted_types"`
+			PinnedProducts []string `yaml:"pinned_products"`
 		} `yaml:"roles"`
 	} `yaml:"standards"`
 }
@@ -235,7 +239,8 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedComponentTypes(ctx, gw); err != nil {
 		return err
 	}
-	// After the capability registry: a declared role's requirements point into it.
+	// After the capability registry and the component_type taxonomy: a
+	// declared role's requirements point into both.
 	if err := seedStandardRoles(ctx, gw); err != nil {
 		return err
 	}
@@ -549,8 +554,9 @@ func seedStandards(ctx context.Context, gw storage.Gateway) error {
 // seedStandardRoles installs the roles the shipped standards declare, on the
 // same seed-if-absent lane as the standards themselves: example content the
 // operator owns once it lands, never reasserted over an edit. Its own step
-// rather than part of seedStandards because a role's required capabilities are
-// foreign keys into the capability registry, which seeds later.
+// rather than part of seedStandards because a role's accepted types (and any
+// capability, still tolerated) are foreign keys into registries that seed
+// later: the capability registry and the component_type taxonomy.
 func seedStandardRoles(ctx context.Context, gw storage.Gateway) error {
 	var doc standardsDoc
 	if err := yaml.Unmarshal(standardsYAML, &doc); err != nil {
@@ -559,10 +565,12 @@ func seedStandardRoles(ctx context.Context, gw storage.Gateway) error {
 	for _, st := range doc.Standards {
 		for _, r := range st.Roles {
 			if err := gw.SeedSystemRole(ctx, "standard", st.ID, storage.SystemRoleSpec{
-				Name:         r.Name,
-				DisplayName:  r.DisplayName,
-				Quorum:       r.Quorum,
-				Capabilities: r.Capabilities,
+				Name:           r.Name,
+				DisplayName:    r.DisplayName,
+				Quorum:         r.Quorum,
+				Capabilities:   r.Capabilities,
+				AcceptedTypes:  r.AcceptedTypes,
+				PinnedProducts: r.PinnedProducts,
 			}); err != nil {
 				return fmt.Errorf("seed: standard %s role %s: %w", st.ID, r.Name, err)
 			}

@@ -63,10 +63,12 @@ type factsLocationType struct {
 }
 
 type factsStandardRole struct {
-	Name         string   `json:"name"`
-	DisplayName  string   `json:"display_name,omitempty"`
-	Quorum       int      `json:"quorum"`
-	Capabilities []string `json:"capabilities,omitempty"`
+	Name           string   `json:"name"`
+	DisplayName    string   `json:"display_name,omitempty"`
+	Quorum         int      `json:"quorum"`
+	Capabilities   []string `json:"capabilities,omitempty"`
+	AcceptedTypes  []string `json:"accepted_types,omitempty"`
+	PinnedProducts []string `json:"pinned_products,omitempty"`
 }
 
 type factsStandard struct {
@@ -256,7 +258,10 @@ func FactsJSON() ([]byte, error) {
 	for _, s := range stds.Standards {
 		fs := factsStandard{ID: s.ID, DisplayName: s.DisplayName, ParentStandardID: s.ParentStandardID}
 		for _, r := range s.Roles {
-			fs.Roles = append(fs.Roles, factsStandardRole{Name: r.Name, DisplayName: r.DisplayName, Quorum: r.Quorum, Capabilities: r.Capabilities})
+			fs.Roles = append(fs.Roles, factsStandardRole{
+				Name: r.Name, DisplayName: r.DisplayName, Quorum: r.Quorum,
+				Capabilities: r.Capabilities, AcceptedTypes: r.AcceptedTypes, PinnedProducts: r.PinnedProducts,
+			})
 		}
 		doc.Standards = append(doc.Standards, fs)
 	}

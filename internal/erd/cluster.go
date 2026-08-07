@@ -10,6 +10,7 @@ var Subsystems = []Cluster{
 		"principal", "human", "service", "principal_grant", "principal_group",
 		"principal_group_member", "impersonation_session",
 		"role", "system_role", "system_role_assignment", "system_role_capability",
+		"system_role_type", "system_role_product",
 		"capability",
 	}},
 	{Name: "estate", Tables: []string{

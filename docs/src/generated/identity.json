@@ -217,6 +217,14 @@
       "shape": "id only"
     },
     {
+      "table": "system_role_product",
+      "shape": "id only"
+    },
+    {
+      "table": "system_role_type",
+      "shape": "id only"
+    },
+    {
       "table": "tag",
       "shape": "key-bearing"
     },

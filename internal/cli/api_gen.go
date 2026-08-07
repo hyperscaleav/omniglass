@@ -706,7 +706,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a component's effective capabilities",
-						Long:    "What this component actually provides: the capabilities its product declares, plus the ones the component adds, minus the ones it suppresses. This is the set the role-assignment guard checks, so a productless component that declares its own can still be staffed. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+						Long:    "What this component actually provides: the capabilities its product declares, plus the ones the component adds, minus the ones it suppresses. No longer what role assignment gates (the typed-slot guard checks the component's product's component_type instead, #626); this resolved set still feeds the health rollup's alarm-impact model. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
 						Example: "  omniglass component capability list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -4845,7 +4845,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <id>",
 						Short:   "List a standard's declared roles",
-						Long:    "Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the capabilities a component must provide to fill it. Gated by standard:read.",
+						Long:    "Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. Gated by standard:read.",
 						Example: "  omniglass standard role list <id>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -4859,19 +4859,24 @@ func generatedCommands() []*cobra.Command {
 			}())
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
+					var fAcceptedTypes string
 					var fCapabilities string
 					var fDisplayName string
 					var fImpact string
+					var fPinnedProducts string
 					var fQuorum string
 					cmd := &cobra.Command{
 						Use:     "update <id> <role>",
 						Short:   "Declare a role on a standard",
-						Long:    "Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent). The capability list replaces the required set wholesale. An unknown standard or capability is a 422. Gated by standard:update.",
+						Long:    "Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent). accepted_types and pinned_products each replace their set wholesale. An unknown standard, type, or product is a 422. Gated by standard:update.",
 						Example: "  omniglass standard role update <id> <role>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/standards/%s/roles/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
 							body := map[string]any{}
+							if cmd.Flags().Changed("accepted-types") {
+								body["accepted_types"] = jsonOrString(fAcceptedTypes)
+							}
 							if cmd.Flags().Changed("capabilities") {
 								body["capabilities"] = jsonOrString(fCapabilities)
 							}
@@ -4881,15 +4886,20 @@ func generatedCommands() []*cobra.Command {
 							if cmd.Flags().Changed("impact") {
 								body["impact"] = fImpact
 							}
+							if cmd.Flags().Changed("pinned-products") {
+								body["pinned_products"] = jsonOrString(fPinnedProducts)
+							}
 							if cmd.Flags().Changed("quorum") {
 								body["quorum"] = jsonOrString(fQuorum)
 							}
 							return runAPICommand(cmd, "PUT", path, body)
 						},
 					}
-					cmd.Flags().StringVar(&fCapabilities, "capabilities", "", "The capabilities a component must ALL provide; replaces the required set wholesale")
+					cmd.Flags().StringVar(&fAcceptedTypes, "accepted-types", "", "The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type")
+					cmd.Flags().StringVar(&fCapabilities, "capabilities", "", "Deprecated, no longer enforced: the typed-slot guard (accepted_types, pinned_products) replaces it")
 					cmd.Flags().StringVar(&fDisplayName, "display-name", "", "The role's human label; defaults to the role name")
 					cmd.Flags().StringVar(&fImpact, "impact", "", "What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display")
+					cmd.Flags().StringVar(&fPinnedProducts, "pinned-products", "", "If set, a filling component's product must be one of these; replaces the pinned set wholesale. Omit or empty accepts any product of an accepted type")
 					cmd.Flags().StringVar(&fQuorum, "quorum", "", "How many components must fill the role; omit for one")
 					return cmd
 				}()
@@ -5336,7 +5346,7 @@ func generatedCommands() []*cobra.Command {
 						cmd := &cobra.Command{
 							Use:     "update <name> <role> <component>",
 							Short:   "Assign a component to a role",
-							Long:    "Puts this component in the role for this system. Refused with a 422 naming the missing capabilities when the component does not provide everything the role requires (its product's capabilities, plus what it adds, minus what it suppresses). Idempotent. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
+							Long:    "Puts this component in the role for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the role accepts, or (if the role pins products) its product not one of them. A role with no accepted types takes any type. Idempotent. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
 							Example: "  omniglass system role assignment update <name> <role> <component>",
 							Args:    cobra.ExactArgs(3),
 							RunE: func(cmd *cobra.Command, args []string) error {
@@ -5372,7 +5382,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a system's effective roles",
-						Long:    "Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the capabilities it requires, the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+						Long:    "Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the types it accepts (and products it pins, if any), the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
 						Example: "  omniglass system role list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -5386,19 +5396,24 @@ func generatedCommands() []*cobra.Command {
 			}())
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
+					var fAcceptedTypes string
 					var fCapabilities string
 					var fDisplayName string
 					var fImpact string
+					var fPinnedProducts string
 					var fQuorum string
 					cmd := &cobra.Command{
 						Use:     "update <name> <role>",
 						Short:   "Declare a role on a system",
-						Long:    "Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. The capability list replaces the required set wholesale. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
+						Long:    "Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. accepted_types and pinned_products each replace their set wholesale. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
 						Example: "  omniglass system role update <name> <role>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/systems/%s/roles/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
 							body := map[string]any{}
+							if cmd.Flags().Changed("accepted-types") {
+								body["accepted_types"] = jsonOrString(fAcceptedTypes)
+							}
 							if cmd.Flags().Changed("capabilities") {
 								body["capabilities"] = jsonOrString(fCapabilities)
 							}
@@ -5408,15 +5423,20 @@ func generatedCommands() []*cobra.Command {
 							if cmd.Flags().Changed("impact") {
 								body["impact"] = fImpact
 							}
+							if cmd.Flags().Changed("pinned-products") {
+								body["pinned_products"] = jsonOrString(fPinnedProducts)
+							}
 							if cmd.Flags().Changed("quorum") {
 								body["quorum"] = jsonOrString(fQuorum)
 							}
 							return runAPICommand(cmd, "PUT", path, body)
 						},
 					}
-					cmd.Flags().StringVar(&fCapabilities, "capabilities", "", "The capabilities a component must ALL provide; replaces the required set wholesale")
+					cmd.Flags().StringVar(&fAcceptedTypes, "accepted-types", "", "The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type")
+					cmd.Flags().StringVar(&fCapabilities, "capabilities", "", "Deprecated, no longer enforced: the typed-slot guard (accepted_types, pinned_products) replaces it")
 					cmd.Flags().StringVar(&fDisplayName, "display-name", "", "The role's human label; defaults to the role name")
 					cmd.Flags().StringVar(&fImpact, "impact", "", "What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display")
+					cmd.Flags().StringVar(&fPinnedProducts, "pinned-products", "", "If set, a filling component's product must be one of these; replaces the pinned set wholesale. Omit or empty accepts any product of an accepted type")
 					cmd.Flags().StringVar(&fQuorum, "quorum", "", "How many components must fill the role; omit for one")
 					return cmd
 				}()

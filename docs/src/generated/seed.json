@@ -445,6 +445,9 @@
      "capabilities": [
       "microphone",
       "speaker"
+     ],
+     "accepted_types": [
+      "video-bar"
      ]
     },
     {
@@ -453,6 +456,9 @@
      "quorum": 0,
      "capabilities": [
       "flat-panel-display"
+     ],
+     "accepted_types": [
+      "display"
      ]
     }
    ]

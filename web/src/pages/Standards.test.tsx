@@ -32,7 +32,7 @@ const catalog: PropertyRow[] = [
 // The roles the custom standard declares (RoleEditor keys the query on the
 // standard's uuid, which is what the page passes it), plus the capability
 // registry its picker reads.
-const roles: DeclaredRole[] = [{ name: "table-mic", display_name: "Table microphone", quorum: 2, capabilities: ["microphone"], impact: "degraded" }];
+const roles: DeclaredRole[] = [{ name: "table-mic", display_name: "Table microphone", quorum: 2, capabilities: ["microphone"], accepted_types: [], pinned_products: [], impact: "degraded" }];
 const capabilities: Capability[] = [{ id: uuidFor("cap-microphone"), name: "microphone", display_name: "Microphone", official: true }];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };

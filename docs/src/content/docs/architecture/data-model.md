@@ -104,6 +104,16 @@ identity: {
     capability_id: uuid {constraint: foreign_key}
     role_id: uuid {constraint: foreign_key}
   }
+  system_role_product: {
+    shape: sql_table
+    product_id: uuid {constraint: primary_key}
+    role_id: uuid {constraint: primary_key}
+  }
+  system_role_type: {
+    shape: sql_table
+    component_type_id: uuid {constraint: primary_key}
+    role_id: uuid {constraint: primary_key}
+  }
 }
 
 estate: {
@@ -461,6 +471,10 @@ identity.system_role_assignment.role_id -> identity.system_role.id
 identity.system_role_assignment.system_id -> estate.system.id
 identity.system_role_capability.capability_id -> identity.capability.id
 identity.system_role_capability.role_id -> identity.system_role.id
+identity.system_role_product.product_id -> catalog.product.id
+identity.system_role_product.role_id -> identity.system_role.id
+identity.system_role_type.component_type_id -> catalog.component_type.id
+identity.system_role_type.role_id -> identity.system_role.id
 telemetry.alarm.component_id -> estate.component.id
 telemetry.alarm_capability.alarm_id -> telemetry.alarm.id
 telemetry.alarm_capability.capability_id -> identity.capability.id

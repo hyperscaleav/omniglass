@@ -97,6 +97,7 @@ var IdentityShapes = map[string]TableIdentity{
 	"setting_override": {Shape: ShapeIDOnly}, "standard_metric": {Shape: ShapeIDOnly},
 	"standard_property": {Shape: ShapeIDOnly}, "system_member": {Shape: ShapeIDOnly},
 	"system_role_assignment": {Shape: ShapeIDOnly}, "system_role_capability": {Shape: ShapeIDOnly},
+	"system_role_product": {Shape: ShapeIDOnly}, "system_role_type": {Shape: ShapeIDOnly},
 	"tag_binding": {Shape: ShapeIDOnly},
 }
 

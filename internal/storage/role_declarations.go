@@ -77,11 +77,16 @@ func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]
 	// needs them qualified by the role alias.
 	q := fmt.Sprintf(`
 		select r.id, r.owner_kind, r.name, r.display_name, r.quorum, r.impact, r.created_at, r.updated_at,
-		       coalesce(array_agg(cap.name order by cap.name)
-		                filter (where cap.name is not null), '{}') as caps
+		       coalesce(array_agg(distinct cap.name order by cap.name) filter (where cap.name is not null), '{}') as caps,
+		       coalesce(array_agg(distinct ct.name order by ct.name) filter (where ct.name is not null), '{}') as types,
+		       coalesce(array_agg(distinct pr.name order by pr.name) filter (where pr.name is not null), '{}') as products
 		from system_role r
 		left join system_role_capability rc on rc.role_id = r.id
 		left join capability cap on cap.id = rc.capability_id
+		left join system_role_type rt on rt.role_id = r.id
+		left join component_type ct on ct.id = rt.component_type_id
+		left join system_role_product rp on rp.role_id = r.id
+		left join product pr on pr.id = rp.product_id
 		where r.owner_kind = $1 and r.%s = %s
 		group by r.id
 		order by r.name`, col, roleOwnerExpr(ownerKind))
@@ -96,7 +101,7 @@ func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]
 	for rows.Next() {
 		var r SystemRole
 		if err := rows.Scan(&r.ID, &r.OwnerKind, &r.Name, &r.DisplayName, &r.Quorum, &r.Impact,
-			&r.CreatedAt, &r.UpdatedAt, &r.Capabilities); err != nil {
+			&r.CreatedAt, &r.UpdatedAt, &r.Capabilities, &r.AcceptedTypes, &r.PinnedProducts); err != nil {
 			return nil, fmt.Errorf("storage: scan role: %w", err)
 		}
 		r.OwnerID = ownerID
@@ -184,6 +189,37 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 		}
 	}
 	r.Capabilities = append([]string(nil), spec.Capabilities...)
+
+	// The typed-slot guard's requirement, replaced the same wholesale way: what
+	// the caller sends is what the role accepts (types) and pins (products)
+	// afterwards.
+	if _, err := tx.Exec(ctx, `delete from system_role_type where role_id = $1`, r.ID); err != nil {
+		return nil, fmt.Errorf("storage: clear role types %s: %w", r.ID, err)
+	}
+	if len(spec.AcceptedTypes) > 0 {
+		if _, err := tx.Exec(ctx, `
+			insert into system_role_type (role_id, component_type_id)
+			select $1, (select id from component_type where name = c or id::text = c)
+			from unnest($2::text[]) c
+			on conflict (role_id, component_type_id) do nothing`, r.ID, spec.AcceptedTypes); err != nil {
+			return nil, mapRoleWriteErr(err)
+		}
+	}
+	r.AcceptedTypes = append([]string(nil), spec.AcceptedTypes...)
+
+	if _, err := tx.Exec(ctx, `delete from system_role_product where role_id = $1`, r.ID); err != nil {
+		return nil, fmt.Errorf("storage: clear role products %s: %w", r.ID, err)
+	}
+	if len(spec.PinnedProducts) > 0 {
+		if _, err := tx.Exec(ctx, `
+			insert into system_role_product (role_id, product_id)
+			select $1, (select id from product where name = c or id::text = c)
+			from unnest($2::text[]) c
+			on conflict (role_id, product_id) do nothing`, r.ID, spec.PinnedProducts); err != nil {
+			return nil, mapRoleWriteErr(err)
+		}
+	}
+	r.PinnedProducts = append([]string(nil), spec.PinnedProducts...)
 
 	verb := "create"
 	if before != nil {
@@ -358,15 +394,32 @@ func (p *PG) SeedSystemRole(ctx context.Context, ownerKind, ownerID string, spec
 	if err != nil {
 		return mapRoleWriteErr(err)
 	}
-	if len(spec.Capabilities) == 0 {
-		return nil
+	if len(spec.Capabilities) > 0 {
+		if _, err := p.pool.Exec(ctx, `
+			insert into system_role_capability (role_id, capability_id)
+			select $1, (select id from capability where name = c or id::text = c)
+			from unnest($2::text[]) c
+			on conflict (role_id, capability_id) do nothing`, id, spec.Capabilities); err != nil {
+			return mapRoleWriteErr(err)
+		}
 	}
-	if _, err := p.pool.Exec(ctx, `
-		insert into system_role_capability (role_id, capability_id)
-		select $1, (select id from capability where name = c or id::text = c)
-		from unnest($2::text[]) c
-		on conflict (role_id, capability_id) do nothing`, id, spec.Capabilities); err != nil {
-		return mapRoleWriteErr(err)
+	if len(spec.AcceptedTypes) > 0 {
+		if _, err := p.pool.Exec(ctx, `
+			insert into system_role_type (role_id, component_type_id)
+			select $1, (select id from component_type where name = c or id::text = c)
+			from unnest($2::text[]) c
+			on conflict (role_id, component_type_id) do nothing`, id, spec.AcceptedTypes); err != nil {
+			return mapRoleWriteErr(err)
+		}
+	}
+	if len(spec.PinnedProducts) > 0 {
+		if _, err := p.pool.Exec(ctx, `
+			insert into system_role_product (role_id, product_id)
+			select $1, (select id from product where name = c or id::text = c)
+			from unnest($2::text[]) c
+			on conflict (role_id, product_id) do nothing`, id, spec.PinnedProducts); err != nil {
+			return mapRoleWriteErr(err)
+		}
 	}
 	return nil
 }

@@ -2622,6 +2622,46 @@
       "definition": "CREATE UNIQUE INDEX system_role_capability_role_id_capability_id_key ON public.system_role_capability USING btree (role_id, capability_id)"
      }
     ]
+   },
+   "system_role_product": {
+    "columns": [
+     {
+      "name": "role_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "system_role.id"
+     },
+     {
+      "name": "product_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "product.id"
+     }
+    ]
+   },
+   "system_role_type": {
+    "columns": [
+     {
+      "name": "role_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "system_role.id"
+     },
+     {
+      "name": "component_type_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "component_type.id"
+     }
+    ]
    }
   },
   "telemetry": {

@@ -18,14 +18,16 @@ import (
 // effectiveRoleWire is one decoded resolved role: the declaration, which arc it
 // came from, and its staffing.
 type effectiveRoleWire struct {
-	Name         string   `json:"name"`
-	DisplayName  string   `json:"display_name"`
-	Quorum       int      `json:"quorum"`
-	Capabilities []string `json:"capabilities"`
-	FromStandard bool     `json:"from_standard"`
-	AssignedTo   []string `json:"assigned_to"`
-	Assigned     int      `json:"assigned"`
-	Understaffed int      `json:"understaffed"`
+	Name           string   `json:"name"`
+	DisplayName    string   `json:"display_name"`
+	Quorum         int      `json:"quorum"`
+	Capabilities   []string `json:"capabilities"`
+	AcceptedTypes  []string `json:"accepted_types"`
+	PinnedProducts []string `json:"pinned_products"`
+	FromStandard   bool     `json:"from_standard"`
+	AssignedTo     []string `json:"assigned_to"`
+	Assigned       int      `json:"assigned"`
+	Understaffed   int      `json:"understaffed"`
 }
 
 type systemRolesWire struct {
@@ -46,13 +48,13 @@ func (w systemRolesWire) find(t *testing.T, name string) effectiveRoleWire {
 
 // TestSystemRolesAPI drives the role surface over HTTP: a role declared on a
 // standard resolves onto every conforming system with its staffing, a system
-// declares its own alongside it, a component that provides what the role needs
-// fills it, and one that does not is refused with a 422 that NAMES the missing
-// capabilities (the whole point of the capability model: a refusal an operator
-// can act on). A component classified only as the generic device (no
-// product-declared capabilities) that declares its own capabilities can still
-// be staffed. An out-of-scope system is a non-disclosing 404. Skipped under
-// -short.
+// declares its own alongside it, a component whose product's component_type
+// falls within an accepted type fills it, and one that does not is refused
+// with a 422 that names both parties in operator vocabulary (the whole point
+// of the typed-slot model: a refusal an operator can act on). Component
+// capability facts (a separate, still-live surface) round-trip independently
+// of the assignment guard. An out-of-scope system is a non-disclosing 404.
+// Skipped under -short.
 func TestSystemRolesAPI(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -73,14 +75,14 @@ func TestSystemRolesAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	// A standard that wants a table mic (microphone AND speaker, two of them),
-	// and a system that conforms to it.
+	// A standard that wants a table mic (a video-bar, two of them), and a
+	// system that conforms to it.
 	c.do(ownerTok, http.MethodPost, "/standards", map[string]any{
 		"name": "acme-room", "display_name": "Acme Room",
 	}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPut, "/standards/acme-room/roles/table-mic", map[string]any{
 		"display_name": "Table Microphone", "quorum": 2,
-		"capabilities": []string{"microphone", "speaker"},
+		"accepted_types": []string{"video-bar"},
 	}, http.StatusOK)
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{
 		"name": "acme-1", "standard_id": "acme-room",
@@ -89,18 +91,18 @@ func TestSystemRolesAPI(t *testing.T) {
 	// The declaration read on the standard is the standard's own roles.
 	var declared struct {
 		Roles []struct {
-			Name         string   `json:"name"`
-			DisplayName  string   `json:"display_name"`
-			Quorum       int      `json:"quorum"`
-			Capabilities []string `json:"capabilities"`
+			Name          string   `json:"name"`
+			DisplayName   string   `json:"display_name"`
+			Quorum        int      `json:"quorum"`
+			AcceptedTypes []string `json:"accepted_types"`
 		} `json:"roles"`
 	}
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/acme-room/roles", nil, http.StatusOK), &declared); err != nil {
 		t.Fatalf("decode standard roles: %v", err)
 	}
 	if len(declared.Roles) != 1 || declared.Roles[0].Name != "table-mic" ||
-		declared.Roles[0].Quorum != 2 || len(declared.Roles[0].Capabilities) != 2 {
-		t.Fatalf("standard roles = %+v, want one table-mic wanting two, requiring two capabilities", declared.Roles)
+		declared.Roles[0].Quorum != 2 || len(declared.Roles[0].AcceptedTypes) != 1 || declared.Roles[0].AcceptedTypes[0] != "video-bar" {
+		t.Fatalf("standard roles = %+v, want one table-mic wanting two, accepting video-bar", declared.Roles)
 	}
 
 	read := func(tok, name string) systemRolesWire {
@@ -125,7 +127,7 @@ func TestSystemRolesAPI(t *testing.T) {
 	// An ad-hoc role declared straight on the system sits beside the inherited
 	// one, marked as not coming from the standard.
 	c.do(ownerTok, http.MethodPut, "/systems/acme-1/roles/wall-display", map[string]any{
-		"display_name": "Wall Display", "capabilities": []string{"flat-panel-display"},
+		"display_name": "Wall Display", "accepted_types": []string{"display"},
 	}, http.StatusOK)
 	got = read(ownerTok, "acme-1")
 	if len(got.Roles) != 2 {
@@ -135,7 +137,7 @@ func TestSystemRolesAPI(t *testing.T) {
 		t.Fatalf("wall-display = %+v, want ad-hoc with the default quorum of one", disp)
 	}
 
-	// A room bar provides microphone and speaker, so it can fill the mic role.
+	// A room bar is classified video-bar, so it fills the mic role.
 	bar := "cisco-room-bar"
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "bar-1", "product": bar}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPut, "/systems/acme-1/roles/table-mic/assignments/bar-1", nil, http.StatusNoContent)
@@ -144,12 +146,13 @@ func TestSystemRolesAPI(t *testing.T) {
 		t.Fatalf("after one assignment: %+v, want bar-1 filling it and still one short", mic)
 	}
 
-	// A display provides neither: refused, and the refusal names the gap. A bare
-	// 422 would leave the operator nothing to act on, so the message is the
-	// contract, asserted here verbatim.
+	// A display is not a video-bar: refused, and the refusal names both
+	// parties. A bare 422 would leave the operator nothing to act on, so the
+	// message is the contract, asserted here verbatim (the task brief's own
+	// worked example, up to the specific names).
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "panel-1", "product": "samsung-qm55"}, http.StatusCreated)
 	body := c.do(ownerTok, http.MethodPut, "/systems/acme-1/roles/table-mic/assignments/panel-1", nil, http.StatusUnprocessableEntity)
-	const wantDetail = `component "panel-1" cannot fill role "table-mic": missing microphone, speaker`
+	const wantDetail = `component "panel-1" is a display; role "Table Microphone" wants a video-bar`
 	var problem struct {
 		Detail string `json:"detail"`
 	}
@@ -157,22 +160,12 @@ func TestSystemRolesAPI(t *testing.T) {
 		t.Fatalf("decode refusal: %v (%s)", err, body)
 	}
 	if !strings.Contains(problem.Detail, wantDetail) {
-		t.Fatalf("refusal detail = %q, want it to name the missing capabilities: %q", problem.Detail, wantDetail)
+		t.Fatalf("refusal detail = %q, want it to name both parties: %q", problem.Detail, wantDetail)
 	}
 
-	// The decision the capability model exists for: a component classified only
-	// as the generic device (no product-declared capabilities of its own) that
-	// declares its own capabilities can be staffed, so strict refusal does not
-	// lock out a component just because its product contributes nothing.
-	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "loose-mic", "product": "generic-device"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPut, "/components/loose-mic/capabilities/microphone",
-		map[string]any{"present": true}, http.StatusNoContent)
-	c.do(ownerTok, http.MethodPut, "/components/loose-mic/capabilities/speaker",
-		map[string]any{"present": true}, http.StatusNoContent)
-	if caps := readCapabilities(t, c, ownerTok, "loose-mic"); len(caps) != 2 || caps[0] != "microphone" || caps[1] != "speaker" {
-		t.Fatalf("productless capabilities = %v, want exactly [microphone speaker]", caps)
-	}
-	c.do(ownerTok, http.MethodPut, "/systems/acme-1/roles/table-mic/assignments/loose-mic", nil, http.StatusNoContent)
+	// A second video-bar reaches quorum.
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "bar-2", "product": bar}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPut, "/systems/acme-1/roles/table-mic/assignments/bar-2", nil, http.StatusNoContent)
 	mic = read(ownerTok, "acme-1").find(t, "table-mic")
 	if mic.Assigned != 2 || mic.Understaffed != 0 {
 		t.Fatalf("after staffing to quorum: %+v, want two assigned and no shortfall", mic)
@@ -195,11 +188,11 @@ func TestSystemRolesAPI(t *testing.T) {
 
 	// Unassigning leaves the role short again; unassigning twice is an explicit
 	// miss.
-	c.do(ownerTok, http.MethodDelete, "/systems/acme-1/roles/table-mic/assignments/loose-mic", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/systems/acme-1/roles/table-mic/assignments/bar-2", nil, http.StatusNoContent)
 	if mic = read(ownerTok, "acme-1").find(t, "table-mic"); mic.Assigned != 1 || mic.Understaffed != 1 {
 		t.Fatalf("after unassign: %+v, want one assigned and one short", mic)
 	}
-	c.do(ownerTok, http.MethodDelete, "/systems/acme-1/roles/table-mic/assignments/loose-mic", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodDelete, "/systems/acme-1/roles/table-mic/assignments/bar-2", nil, http.StatusNotFound)
 
 	// A role nobody declared, and a capability the registry does not know, are
 	// request faults rather than 500s.
@@ -253,10 +246,14 @@ func readCapabilities(t *testing.T, c *apiClient, tok, name string) []string {
 	return w.Capabilities
 }
 
-// TestSeededStandardRolesAPI proves the ship-with example lands through the
-// API: the meeting-room standard arrives with roles declared, so a system that
-// conforms to it shows staffing work to do the moment it is created.
-func TestSeededStandardRolesAPI(t *testing.T) {
+// TestSeededStandardTypedRoles proves the ship-with example lands through the
+// API on the typed-slot guard (#626, rework of the former
+// TestSeededStandardRolesAPI): the meeting-room standard arrives with roles
+// declaring accepted_types, not capabilities, so a system that conforms to it
+// shows staffing work to do the moment it is created, the shipped catalog can
+// actually satisfy what the shipped standard asks for, and a component of the
+// wrong type is refused.
+func TestSeededStandardTypedRoles(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -285,11 +282,35 @@ func TestSeededStandardRolesAPI(t *testing.T) {
 	if len(w.Roles) != 2 {
 		t.Fatalf("seeded meeting-room roles = %+v, want the two the standard ships", w.Roles)
 	}
-	if mic := w.find(t, "room-mic"); !mic.FromStandard || mic.Quorum != 2 || mic.Understaffed != 2 {
-		t.Fatalf("seeded room-mic = %+v, want inherited, quorum 2, two short", mic)
+	mic := w.find(t, "room-mic")
+	if !mic.FromStandard || mic.Quorum != 2 || mic.Understaffed != 2 || !hasAllString(mic.AcceptedTypes, "video-bar") {
+		t.Fatalf("seeded room-mic = %+v, want inherited, quorum 2, two short, accepting video-bar", mic)
 	}
+	if disp := w.find(t, "main-display"); !hasAllString(disp.AcceptedTypes, "display") {
+		t.Fatalf("seeded main-display = %+v, want accepting display", disp)
+	}
+
 	// The shipped catalog can actually satisfy what the shipped standard asks
 	// for: a Samsung QM55 fills the display role without any hand-declaration.
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "qm-1", "product": "samsung-qm55"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPut, "/systems/seeded-room/roles/main-display/assignments/qm-1", nil, http.StatusNoContent)
+
+	// A touch panel is not a display: refused.
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "panel-9", "product": "crestron-tss-1070"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPut, "/systems/seeded-room/roles/main-display/assignments/panel-9", nil, http.StatusUnprocessableEntity)
+}
+
+// hasAllString is hasAll's API-test-package twin (the storage package's
+// version lives in internal/storage, unexported).
+func hasAllString(got []string, want ...string) bool {
+	set := map[string]bool{}
+	for _, g := range got {
+		set[g] = true
+	}
+	for _, w := range want {
+		if !set[w] {
+			return false
+		}
+	}
+	return true
 }

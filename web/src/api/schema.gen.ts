@@ -545,7 +545,7 @@ export interface paths {
         };
         /**
          * List a component's effective capabilities
-         * @description What this component actually provides: the capabilities its product declares, plus the ones the component adds, minus the ones it suppresses. This is the set the role-assignment guard checks, so a productless component that declares its own can still be staffed. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+         * @description What this component actually provides: the capabilities its product declares, plus the ones the component adds, minus the ones it suppresses. No longer what role assignment gates (the typed-slot guard checks the component's product's component_type instead, #626); this resolved set still feeds the health rollup's alarm-impact model. Gated by component:read; an out-of-scope component is a non-disclosing 404.
          */
         get: operations["list-component-capabilities"];
         put?: never;
@@ -2825,7 +2825,7 @@ export interface paths {
         };
         /**
          * List a standard's declared roles
-         * @description Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the capabilities a component must provide to fill it. Gated by standard:read.
+         * @description Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. Gated by standard:read.
          */
         get: operations["list-standard-roles"];
         put?: never;
@@ -2846,7 +2846,7 @@ export interface paths {
         get?: never;
         /**
          * Declare a role on a standard
-         * @description Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent). The capability list replaces the required set wholesale. An unknown standard or capability is a 422. Gated by standard:update.
+         * @description Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent). accepted_types and pinned_products each replace their set wholesale. An unknown standard, type, or product is a 422. Gated by standard:update.
          */
         put: operations["set-standard-role"];
         post?: never;
@@ -3069,7 +3069,7 @@ export interface paths {
         };
         /**
          * List a system's effective roles
-         * @description Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the capabilities it requires, the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+         * @description Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the types it accepts (and products it pins, if any), the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.
          */
         get: operations["list-system-roles"];
         put?: never;
@@ -3090,7 +3090,7 @@ export interface paths {
         get?: never;
         /**
          * Declare a role on a system
-         * @description Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. The capability list replaces the required set wholesale. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         * @description Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. accepted_types and pinned_products each replace their set wholesale. Gated by system:update; an out-of-scope system is a non-disclosing 404.
          */
         put: operations["set-system-role"];
         post?: never;
@@ -3114,7 +3114,7 @@ export interface paths {
         get?: never;
         /**
          * Assign a component to a role
-         * @description Puts this component in the role for this system. Refused with a 422 naming the missing capabilities when the component does not provide everything the role requires (its product's capabilities, plus what it adds, minus what it suppresses). Idempotent. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         * @description Puts this component in the role for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the role accepts, or (if the role pins products) its product not one of them. A role with no accepted types takes any type. Idempotent. Gated by system:update; an out-of-scope system is a non-disclosing 404.
          */
         put: operations["assign-system-role"];
         post?: never;
@@ -4389,6 +4389,8 @@ export interface components {
             value_id?: string;
         };
         EffectiveRoleBody: {
+            /** @description The component_types a filling component's product must be classified within (self or a descendant); empty accepts any type */
+            accepted_types: string[] | null;
             /**
              * Format: int64
              * @description How many components fill the role
@@ -4396,7 +4398,7 @@ export interface components {
             assigned: number;
             /** @description The component names filling this role in this system */
             assigned_to: string[] | null;
-            /** @description The capabilities a component must ALL provide to fill it */
+            /** @description Deprecated, no longer enforced: the typed-slot guard (accepted_types, pinned_products) replaces it */
             capabilities: string[] | null;
             display_name: string;
             /** @description True when the role is inherited from the system's standard; false when declared on the system */
@@ -4404,6 +4406,8 @@ export interface components {
             /** @description What an impaired role means for its system: outage, degraded, or none */
             impact: string;
             name: string;
+            /** @description If set, a filling component's product must be one of these; empty accepts any product of an accepted type */
+            pinned_products: string[] | null;
             /** Format: int64 */
             quorum: number;
             /**
@@ -5933,7 +5937,9 @@ export interface components {
              * @example /api/v1/schemas/RoleSpecBody.json
              */
             readonly $schema?: string;
-            /** @description The capabilities a component must ALL provide; replaces the required set wholesale */
+            /** @description The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type */
+            accepted_types?: string[] | null;
+            /** @description Deprecated, no longer enforced: the typed-slot guard (accepted_types, pinned_products) replaces it */
             capabilities?: string[] | null;
             /** @description The role's human label; defaults to the role name */
             display_name?: string;
@@ -5942,6 +5948,8 @@ export interface components {
              * @enum {string}
              */
             impact?: "outage" | "degraded" | "none";
+            /** @description If set, a filling component's product must be one of these; replaces the pinned set wholesale. Omit or empty accepts any product of an accepted type */
+            pinned_products?: string[] | null;
             /**
              * Format: int64
              * @description How many components must fill the role; omit for one
@@ -6332,7 +6340,9 @@ export interface components {
              * @example /api/v1/schemas/SystemRoleBody.json
              */
             readonly $schema?: string;
-            /** @description The capabilities a component must ALL provide to fill it */
+            /** @description The component_types a filling component's product must be classified within (self or a descendant); empty accepts any type */
+            accepted_types: string[] | null;
+            /** @description Deprecated, no longer enforced: the typed-slot guard (accepted_types, pinned_products) replaces it */
             capabilities: string[] | null;
             /** @description The role's human label */
             display_name: string;
@@ -6340,6 +6350,8 @@ export interface components {
             impact: string;
             /** @description The role's name within its owner (the address) */
             name: string;
+            /** @description If set, a filling component's product must be one of these; empty accepts any product of an accepted type */
+            pinned_products: string[] | null;
             /**
              * Format: int64
              * @description How many components must fill the role

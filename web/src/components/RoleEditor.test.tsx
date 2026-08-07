@@ -16,8 +16,8 @@ import { uuidFor } from "../lib/testids";
 // the controls are edit-state affordances (#621), so the default mount enters
 // edit mode; `editing: false` witnesses the read state.
 const declared: DeclaredRole[] = [
-  { name: "table-mic", display_name: "Table microphone", quorum: 2, capabilities: ["microphone"], impact: "degraded" },
-  { name: "main-display", display_name: "Main display", quorum: 1, capabilities: ["display", "hdmi-in"], impact: "outage" },
+  { name: "table-mic", display_name: "Table microphone", quorum: 2, capabilities: ["microphone"], accepted_types: [], pinned_products: [], impact: "degraded" },
+  { name: "main-display", display_name: "Main display", quorum: 1, capabilities: ["display", "hdmi-in"], accepted_types: [], pinned_products: [], impact: "outage" },
 ];
 
 const catalog: Capability[] = [

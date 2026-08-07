@@ -16,11 +16,14 @@ import (
 // conforming system needs filled, and what one system declares ad-hoc.
 // Resolution: the per-system read that merges both arcs with who fills each role
 // today. Staffing: assign and unassign a component, refused when the component
-// does not provide every capability the role requires.
+// is not a typed match, its product's component_type outside every type the role
+// accepts, or (if the role pins products) its product not one of them (#626).
 //
 // The refusal is the point of the model, so it is never bare: a shortfall is a
-// 422 that NAMES the missing capabilities, because "no" that does not say what
-// is missing leaves the operator nothing to do.
+// 422 that NAMES both parties, what the component actually is (or which product
+// it is) and what the role wants, because "no" that does not say why leaves the
+// operator nothing to do. Capabilities remains on the wire (still what the
+// health rollup's alarm-impact model reads) but no longer gates assignment.
 //
 // Gating follows the owner: the standard arc rides standard:read/update/delete,
 // the system arc rides system:read/update, and the component capability facts
@@ -29,24 +32,34 @@ import (
 // non-disclosing 404 rather than a forbidden or a silent write.
 
 type systemRoleBody struct {
-	Name         string   `json:"name" doc:"The role's name within its owner (the address)"`
-	DisplayName  string   `json:"display_name" doc:"The role's human label"`
-	Quorum       int      `json:"quorum" doc:"How many components must fill the role"`
-	Capabilities []string `json:"capabilities" doc:"The capabilities a component must ALL provide to fill it"`
-	Impact       string   `json:"impact" doc:"What an impaired role means for its system: outage, degraded, or none"`
+	Name           string   `json:"name" doc:"The role's name within its owner (the address)"`
+	DisplayName    string   `json:"display_name" doc:"The role's human label"`
+	Quorum         int      `json:"quorum" doc:"How many components must fill the role"`
+	Capabilities   []string `json:"capabilities" doc:"Deprecated, no longer enforced: the typed-slot guard (accepted_types, pinned_products) replaces it"`
+	AcceptedTypes  []string `json:"accepted_types" doc:"The component_types a filling component's product must be classified within (self or a descendant); empty accepts any type"`
+	PinnedProducts []string `json:"pinned_products" doc:"If set, a filling component's product must be one of these; empty accepts any product of an accepted type"`
+	Impact         string   `json:"impact" doc:"What an impaired role means for its system: outage, degraded, or none"`
 }
 
 func toSystemRoleBody(r *storage.SystemRole) systemRoleBody {
-	caps := r.Capabilities
+	caps, types, products := r.Capabilities, r.AcceptedTypes, r.PinnedProducts
 	if caps == nil {
 		caps = []string{}
 	}
+	if types == nil {
+		types = []string{}
+	}
+	if products == nil {
+		products = []string{}
+	}
 	return systemRoleBody{
-		Name:         r.Name,
-		DisplayName:  r.DisplayName,
-		Quorum:       r.Quorum,
-		Capabilities: caps,
-		Impact:       r.Impact,
+		Name:           r.Name,
+		DisplayName:    r.DisplayName,
+		Quorum:         r.Quorum,
+		Capabilities:   caps,
+		AcceptedTypes:  types,
+		PinnedProducts: products,
+		Impact:         r.Impact,
 	}
 }
 
@@ -54,35 +67,45 @@ func toSystemRoleBody(r *storage.SystemRole) systemRoleBody {
 // came from, and its staffing today. assigned and understaffed are served rather
 // than left to the client so every surface reads staffing the same way.
 type effectiveRoleBody struct {
-	Name         string   `json:"name"`
-	DisplayName  string   `json:"display_name"`
-	Quorum       int      `json:"quorum"`
-	Capabilities []string `json:"capabilities" doc:"The capabilities a component must ALL provide to fill it"`
-	Impact       string   `json:"impact" doc:"What an impaired role means for its system: outage, degraded, or none"`
-	FromStandard bool     `json:"from_standard" doc:"True when the role is inherited from the system's standard; false when declared on the system"`
-	AssignedTo   []string `json:"assigned_to" doc:"The component names filling this role in this system"`
-	Assigned     int      `json:"assigned" doc:"How many components fill the role"`
-	Understaffed int      `json:"understaffed" doc:"How many more the role wants before quorum; zero when staffed"`
+	Name           string   `json:"name"`
+	DisplayName    string   `json:"display_name"`
+	Quorum         int      `json:"quorum"`
+	Capabilities   []string `json:"capabilities" doc:"Deprecated, no longer enforced: the typed-slot guard (accepted_types, pinned_products) replaces it"`
+	AcceptedTypes  []string `json:"accepted_types" doc:"The component_types a filling component's product must be classified within (self or a descendant); empty accepts any type"`
+	PinnedProducts []string `json:"pinned_products" doc:"If set, a filling component's product must be one of these; empty accepts any product of an accepted type"`
+	Impact         string   `json:"impact" doc:"What an impaired role means for its system: outage, degraded, or none"`
+	FromStandard   bool     `json:"from_standard" doc:"True when the role is inherited from the system's standard; false when declared on the system"`
+	AssignedTo     []string `json:"assigned_to" doc:"The component names filling this role in this system"`
+	Assigned       int      `json:"assigned" doc:"How many components fill the role"`
+	Understaffed   int      `json:"understaffed" doc:"How many more the role wants before quorum; zero when staffed"`
 }
 
 func toEffectiveRoleBody(e *storage.EffectiveRole) effectiveRoleBody {
-	caps, to := e.Capabilities, e.AssignedTo
+	caps, types, products, to := e.Capabilities, e.AcceptedTypes, e.PinnedProducts, e.AssignedTo
 	if caps == nil {
 		caps = []string{}
+	}
+	if types == nil {
+		types = []string{}
+	}
+	if products == nil {
+		products = []string{}
 	}
 	if to == nil {
 		to = []string{}
 	}
 	return effectiveRoleBody{
-		Name:         e.Name,
-		DisplayName:  e.DisplayName,
-		Quorum:       e.Quorum,
-		Capabilities: caps,
-		Impact:       e.Impact,
-		FromStandard: e.FromStandard,
-		AssignedTo:   to,
-		Assigned:     e.Assigned(),
-		Understaffed: e.Understaffed(),
+		Name:           e.Name,
+		DisplayName:    e.DisplayName,
+		Quorum:         e.Quorum,
+		Capabilities:   caps,
+		AcceptedTypes:  types,
+		PinnedProducts: products,
+		Impact:         e.Impact,
+		FromStandard:   e.FromStandard,
+		AssignedTo:     to,
+		Assigned:       e.Assigned(),
+		Understaffed:   e.Understaffed(),
 	}
 }
 
@@ -107,10 +130,12 @@ type listSystemRolesOutput struct {
 // arcs: the role is addressed by the path, so the body carries only how it
 // presents and what it requires.
 type roleSpecBody struct {
-	DisplayName  string   `json:"display_name,omitempty" doc:"The role's human label; defaults to the role name"`
-	Quorum       int      `json:"quorum,omitempty" minimum:"0" doc:"How many components must fill the role; omit for one"`
-	Capabilities []string `json:"capabilities,omitempty" doc:"The capabilities a component must ALL provide; replaces the required set wholesale"`
-	Impact       string   `json:"impact,omitempty" enum:"outage,degraded,none" doc:"What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display"`
+	DisplayName    string   `json:"display_name,omitempty" doc:"The role's human label; defaults to the role name"`
+	Quorum         int      `json:"quorum,omitempty" minimum:"0" doc:"How many components must fill the role; omit for one"`
+	Capabilities   []string `json:"capabilities,omitempty" doc:"Deprecated, no longer enforced: the typed-slot guard (accepted_types, pinned_products) replaces it"`
+	AcceptedTypes  []string `json:"accepted_types,omitempty" doc:"The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type"`
+	PinnedProducts []string `json:"pinned_products,omitempty" doc:"If set, a filling component's product must be one of these; replaces the pinned set wholesale. Omit or empty accepts any product of an accepted type"`
+	Impact         string   `json:"impact,omitempty" enum:"outage,degraded,none" doc:"What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display"`
 }
 
 type standardRolePathInput struct {
@@ -177,7 +202,7 @@ func registerStandardRoleRoutes(api huma.API, a *authenticator, gw storage.Gatew
 		Method:      http.MethodGet,
 		Path:        "/standards/{id}/roles",
 		Summary:     "List a standard's declared roles",
-		Description: "Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the capabilities a component must provide to fill it. Gated by standard:read.",
+		Description: "Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. Gated by standard:read.",
 	}, "standard", "read"), func(ctx context.Context, in *standardPathInput) (*listStandardRolesOutput, error) {
 		roles, err := gw.ListSystemRoles(ctx, "standard", in.ID)
 		if err != nil {
@@ -196,7 +221,7 @@ func registerStandardRoleRoutes(api huma.API, a *authenticator, gw storage.Gatew
 		Method:      http.MethodPut,
 		Path:        "/standards/{id}/roles/{role}",
 		Summary:     "Declare a role on a standard",
-		Description: "Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent). The capability list replaces the required set wholesale. An unknown standard or capability is a 422. Gated by standard:update.",
+		Description: "Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent). accepted_types and pinned_products each replace their set wholesale. An unknown standard, type, or product is a 422. Gated by standard:update.",
 	}, "standard", "update"), func(ctx context.Context, in *setStandardRoleInput) (*systemRoleOutput, error) {
 		r, err := gw.SetSystemRole(ctx, actorID(ctx), "standard", in.ID, roleSpec(in.Role, in.Body))
 		if err != nil {
@@ -229,7 +254,7 @@ func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Method:      http.MethodGet,
 		Path:        "/systems/{name}/roles",
 		Summary:     "List a system's effective roles",
-		Description: "Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the capabilities it requires, the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+		Description: "Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the types it accepts (and products it pins, if any), the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
 	}, "system", "read"), func(ctx context.Context, in *systemPathInput) (*listSystemRolesOutput, error) {
 		roles, err := gw.EffectiveRoles(ctx, in.Name, a.scopeFor(ctx, "system", "read"))
 		if err != nil {
@@ -249,7 +274,7 @@ func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Method:      http.MethodPut,
 		Path:        "/systems/{name}/roles/{role}",
 		Summary:     "Declare a role on a system",
-		Description: "Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. The capability list replaces the required set wholesale. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
+		Description: "Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. accepted_types and pinned_products each replace their set wholesale. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
 	}, "system", "update"), func(ctx context.Context, in *setSystemRoleInput) (*systemRoleOutput, error) {
 		if err := requireSystemInScope(ctx, a, gw, in.Name); err != nil {
 			return nil, err
@@ -284,7 +309,7 @@ func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Path:          "/systems/{name}/roles/{role}/assignments/{component}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Assign a component to a role",
-		Description:   "Puts this component in the role for this system. Refused with a 422 naming the missing capabilities when the component does not provide everything the role requires (its product's capabilities, plus what it adds, minus what it suppresses). Idempotent. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
+		Description:   "Puts this component in the role for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the role accepts, or (if the role pins products) its product not one of them. A role with no accepted types takes any type. Idempotent. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
 	}, "system", "update"), func(ctx context.Context, in *roleAssignmentPathInput) (*struct{}, error) {
 		if err := gw.AssignRole(ctx, actorID(ctx), in.Name, in.Role, in.Component,
 			a.scopeFor(ctx, "system", "update")); err != nil {
@@ -309,16 +334,17 @@ func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 	})
 }
 
-// registerComponentCapabilityRoutes wires what a component can do: the resolved
-// read the assignment guard checks against, and the two writes that add or
-// suppress one capability over the product's set.
+// registerComponentCapabilityRoutes wires what a component can do: the
+// resolved read (feeding the health rollup's alarm-impact model, not the
+// assignment guard, #626), and the two writes that add or suppress one
+// capability over the product's set.
 func registerComponentCapabilityRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-component-capabilities",
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/capabilities",
 		Summary:     "List a component's effective capabilities",
-		Description: "What this component actually provides: the capabilities its product declares, plus the ones the component adds, minus the ones it suppresses. This is the set the role-assignment guard checks, so a productless component that declares its own can still be staffed. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+		Description: "What this component actually provides: the capabilities its product declares, plus the ones the component adds, minus the ones it suppresses. No longer what role assignment gates (the typed-slot guard checks the component's product's component_type instead, #626); this resolved set still feeds the health rollup's alarm-impact model. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
 	}, "component", "read"), func(ctx context.Context, in *componentPathInput) (*componentCapabilitiesOutput, error) {
 		if err := requireComponentInScope(ctx, a, gw, in.Name, "read"); err != nil {
 			return nil, err
@@ -379,11 +405,13 @@ func roleSpec(name string, body roleSpecBody) storage.SystemRoleSpec {
 		display = name
 	}
 	return storage.SystemRoleSpec{
-		Name:         name,
-		DisplayName:  display,
-		Quorum:       body.Quorum,
-		Capabilities: body.Capabilities,
-		Impact:       body.Impact,
+		Name:           name,
+		DisplayName:    display,
+		Quorum:         body.Quorum,
+		Capabilities:   body.Capabilities,
+		AcceptedTypes:  body.AcceptedTypes,
+		PinnedProducts: body.PinnedProducts,
+		Impact:         body.Impact,
 	}
 }
 
@@ -408,19 +436,25 @@ func requireComponentInScope(ctx context.Context, a *authenticator, gw storage.G
 
 // mapRoleErr translates the role sentinels into HTTP status. The one that
 // matters is the shortfall: a component that cannot fill a role is a 422 that
-// names every missing capability, so the operator can either fix the component's
-// declarations or pick a different one. A bare refusal would say nothing.
+// names both parties in operator vocabulary, what the component actually is
+// (or which product it is) and what the role wants, so the operator can act
+// on the refusal rather than guess. A bare refusal would say nothing.
 func mapRoleErr(err error) error {
-	var short *storage.CapabilityShortfall
-	if errors.As(err, &short) {
-		// Sorted so the same gap always reads the same way: the required set has
-		// no inherent order, and an operator comparing two refusals should not
-		// have to notice that only the wording moved.
-		missing := append([]string(nil), short.Missing...)
-		sort.Strings(missing)
+	var typeShort *storage.TypeShortfall
+	if errors.As(err, &typeShort) {
+		want := append([]string(nil), typeShort.WantTypes...)
+		sort.Strings(want)
 		return huma.Error422UnprocessableEntity(fmt.Sprintf(
-			"component %q cannot fill role %q: missing %s",
-			short.Component, short.Role, strings.Join(missing, ", ")))
+			"component %q is a %s; role %q wants a %s",
+			typeShort.Component, typeShort.ComponentType, typeShort.Role, strings.Join(want, " or a ")))
+	}
+	var pinShort *storage.ProductPinShortfall
+	if errors.As(err, &pinShort) {
+		want := append([]string(nil), pinShort.WantProducts...)
+		sort.Strings(want)
+		return huma.Error422UnprocessableEntity(fmt.Sprintf(
+			"component %q is product %q; role %q wants product %s",
+			pinShort.Component, pinShort.ComponentProduct, pinShort.Role, strings.Join(want, " or ")))
 	}
 	switch {
 	case errors.Is(err, storage.ErrEntityNameIsUUID):
@@ -436,7 +470,7 @@ func mapRoleErr(err error) error {
 	case errors.Is(err, storage.ErrRoleExists):
 		return huma.Error409Conflict("a role with this name is already declared here")
 	case errors.Is(err, storage.ErrRoleRefNotFound):
-		return huma.Error422UnprocessableEntity("unknown owner or capability")
+		return huma.Error422UnprocessableEntity("unknown owner, capability, type, or product")
 	case errors.Is(err, storage.ErrRoleImpact):
 		return huma.Error422UnprocessableEntity("impact must be outage, degraded, or none")
 	case errors.Is(err, storage.ErrSystemNotFound):
