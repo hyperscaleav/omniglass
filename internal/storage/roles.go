@@ -122,13 +122,18 @@ func (e *ProductPinShortfall) Error() string {
 
 // EffectiveCapabilities resolves what a component actually provides: the
 // capabilities its product declares, plus the ones the component adds, minus the
-// ones the component suppresses. A productless component resolves to just its own
-// additions, which is what lets it be staffed at all.
+// ones the component suppresses.
 //
-// This is the set the assignment guard checks, so it is the single definition of
-// "what this component can do" for the whole platform.
+// No longer what AssignRole checks (the typed-slot guard compares the
+// component's product's component_type instead, #626); this resolved set is
+// now read only by the health rollup's alarm-impact model (an alarm names a
+// capability it degrades, and a role's still-live Capabilities decide which
+// roles that affects), pending its own retirement alongside the capability
+// tables (Task 5). "Productless" is also no longer a real case: every
+// component carries a product (the #614 floor), a bare create resolving to
+// generic-device, so this always has a product's declared set to start from.
 // It aggregates to a single row so it runs on the narrow querier (which carries
-// only QueryRow) and therefore works standalone or inside the assignment's
+// only QueryRow) and therefore works standalone or inside a recompute's
 // transaction.
 func (p *PG) EffectiveCapabilities(ctx context.Context, q querier, componentName string) ([]string, error) {
 	var caps []string

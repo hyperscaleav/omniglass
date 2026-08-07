@@ -293,8 +293,11 @@ func (p *PG) DeleteSystemRole(ctx context.Context, actorID, ownerKind, ownerID, 
 
 // SetComponentCapability records one capability fact on a component, layered
 // over what its product declares: present adds a capability the product does not
-// claim, absent suppresses one it does. This is what lets a productless
-// component be staffed while the assignment guard stays strict.
+// claim, absent suppresses one it does. No longer read by role assignment (the
+// typed-slot guard checks the component's product's component_type instead,
+// #626); this fact still feeds the health rollup's alarm-impact model through
+// EffectiveCapabilities, pending its own retirement alongside the capability
+// tables (Task 5).
 //
 // Idempotent (the fact is keyed by component and capability). An unknown
 // component or capability is ErrRoleRefNotFound, a request fault.
