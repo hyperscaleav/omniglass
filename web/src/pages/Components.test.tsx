@@ -270,6 +270,40 @@ describe("Components create-as-route", () => {
     expect(screen.queryByText("Generated")).toBeNull();
   });
 
+  // Review minor (task-15-review.md, Minors): :resetName is gated by
+  // component:rename at the API, strictly narrower than the component:update
+  // that opens edit mode at all, so the button must not render for an
+  // operator who holds one but not the other.
+  it("hides the reset affordance from an operator who can edit but not rename", async () => {
+    const limitedMe: Me = {
+      principal: { id: "u-limited", kind: "human" },
+      human: { username: "limited" },
+      permissions: ["component:update", "component:read"],
+      grants: [],
+    };
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...COMPONENTS_KEY], [comp]);
+    qc.setQueryData([...SYSTEMS_KEY], []);
+    qc.setQueryData([...LOCATIONS_KEY], []);
+    qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...ME_KEY], limitedMe);
+    qc.setQueryData([...TAGS_KEY], []);
+    qc.setQueryData([...entityTagsKey("component", "mic-2")], []);
+    window.history.pushState({}, "", "/components/mic-2");
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="/components" component={Components} />
+          <Route path="/components/:id" component={Components} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    await screen.findByDisplayValue("mic-2");
+    expect(screen.getByLabelText("Check name")).toBeTruthy();
+    expect(screen.queryByLabelText("Reset to generated name")).toBeNull();
+  });
 
   it("the reset affordance calls :resetName and updates the name field from the response", async () => {
     mount("/components/mic-2");

@@ -190,6 +190,13 @@ export default function Components() {
     const path = () => ctx.pathOf(n());
     const sysName = () => n().raw.system;
     const canUpdate = () => can(me.data, "component", "update");
+    // :resetName is gated by component:rename at the API (the same token
+    // :rename uses, since both change the name), a strictly narrower grant
+    // than the component:update that opens edit mode (review minor,
+    // task-15-review.md). Without this the button rendered for anyone who
+    // could open edit mode at all, not just an operator who could actually
+    // use it.
+    const canRename = () => can(me.data, "component", "rename");
 
     const [display, setDisplay] = createSignal(n().raw.display_name ?? "");
     const [name, setName] = createSignal(n().raw.name);
@@ -350,17 +357,22 @@ export default function Components() {
                         platform, regenerating from the component's current
                         type and placement, whether or not the name is
                         already platform-owned (the API's own contract). Its
-                        own immediate act, not folded into Save. */}
-                    <Button
-                      square
-                      size="md"
-                      icon={RotateCcw}
-                      label="Reset to generated name"
-                      title="Regenerate this name from the component's type"
-                      class="join-item"
-                      disabled={resetting()}
-                      onClick={() => void resetName()}
-                    />
+                        own immediate act, not folded into Save. Gated on
+                        component:rename (review minor, task-15-review.md):
+                        the API's own gate, narrower than the component:update
+                        that opens edit mode at all. */}
+                    <Show when={canRename()}>
+                      <Button
+                        square
+                        size="md"
+                        icon={RotateCcw}
+                        label="Reset to generated name"
+                        title="Regenerate this name from the component's type"
+                        class="join-item"
+                        disabled={resetting()}
+                        onClick={() => void resetName()}
+                      />
+                    </Show>
                   </div>
                   <Show when={n().raw.name_generated}>
                     <span class="text-[11px] text-base-content/50">The platform generated this name; renaming it hands you the pen for good.</span>
