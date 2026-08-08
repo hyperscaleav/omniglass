@@ -323,11 +323,13 @@ var systemConfig = scopedConfig[System]{
 		if before.LocationID == nil {
 			return nil // placed nowhere: its removal rolls up to nothing
 		}
+		// The id is already in hand (before.LocationID); only the name still
+		// needs a lookup, for recordHealth's write (see ownerRef).
 		name, err := locationNameByID(ctx, q, *before.LocationID)
 		if err != nil {
 			return err
 		}
-		return p.recomputeChain(ctx, q, nil, nil, []string{name})
+		return p.recomputeChain(ctx, q, nil, nil, []ownerRef{{ID: *before.LocationID, Name: name}})
 	},
 }
 

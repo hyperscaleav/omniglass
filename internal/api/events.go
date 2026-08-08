@@ -56,7 +56,7 @@ func registerEventRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			return nil, mapComponentErr(err)
 		}
 		since := time.Now().UTC().Add(-eventHistoryWindow)
-		rows, err := gw.ListComponentEvents(ctx, comp.Name, since, eventReadLimit)
+		rows, err := gw.ListComponentEvents(ctx, comp.ID, since, eventReadLimit)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("read events")
 		}

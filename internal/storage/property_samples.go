@@ -83,20 +83,34 @@ func (p *PG) InsertPropertySamples(ctx context.Context, evs []PropertySampleWrit
 // stamping several rows in the same instant would otherwise resolve to an
 // arbitrary one, and the transition guard would compare against a row that is not
 // the current value.
-func (p *PG) LatestProperty(ctx context.Context, componentName, key, instance string) (*PropertySample, error) {
+// componentRef is resolved once (name or uuid, ADR-0062). An unknown
+// component folds into the same nil-no-error "nothing yet" result the old
+// inline subquery gave, because this read backs the ingest-side transition
+// guard (bus.dedupeProperties): any error there leaves a telemetry message
+// unacked for redelivery, so an unrecognized owner must stay silent rather
+// than start rejecting live traffic the old code silently accepted.
+// ErrAmbiguousName, which could not have occurred before scoped uniqueness
+// exists (#627), is not folded in.
+func (p *PG) LatestProperty(ctx context.Context, componentRef, key, instance string) (*PropertySample, error) {
+	c, err := scopedByName(ctx, p.pool, componentConfig, componentRef)
+	if errors.Is(err, ErrComponentNotFound) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
 	var dp PropertySample
-	err := p.pool.QueryRow(ctx, `
+	err = p.pool.QueryRow(ctx, `
 		select ts, owner_kind,
 			(select p.name from property_type p where p.id = property.property_type_id), instance, value #>> '{}', provenance, source
 		from property
-		where component_id = (select id from component where name = $1)
+		where component_id = $1::uuid
 		  and property_type_id = (select id from property_type where name = $2) and instance = $3
 		order by ts desc, id desc
-		limit 1`, componentName, key, instance).Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source)
+		limit 1`, c.ID, key, instance).Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	} else if err != nil {
-		return nil, fmt.Errorf("storage: latest property %s/%s[%s]: %w", componentName, key, instance, err)
+		return nil, fmt.Errorf("storage: latest property %s/%s[%s]: %w", componentRef, key, instance, err)
 	}
 	return &dp, nil
 }
@@ -105,28 +119,38 @@ func (p *PG) LatestProperty(ctx context.Context, componentName, key, instance st
 // since, ordered oldest-first: the ordered flip sequence the availability strip
 // reads (each row is one transition, since the write path is transition-only).
 // A zero since returns the whole series.
-func (p *PG) PropertyTransitions(ctx context.Context, componentName, key, instance string, since time.Time) ([]PropertySample, error) {
+// componentRef is resolved once, and an unknown component folds into a
+// nil-no-error empty result (see LatestProperty's comment: this backs the
+// same ingest path in spirit, and the old inline subquery's silent no-match
+// is worth preserving exactly here too).
+func (p *PG) PropertyTransitions(ctx context.Context, componentRef, key, instance string, since time.Time) ([]PropertySample, error) {
+	c, err := scopedByName(ctx, p.pool, componentConfig, componentRef)
+	if errors.Is(err, ErrComponentNotFound) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
 	rows, err := p.pool.Query(ctx, `
 		select ts, owner_kind,
 			(select p.name from property_type p where p.id = property.property_type_id), instance, value #>> '{}', provenance, source
 		from property
-		where component_id = (select id from component where name = $1)
+		where component_id = $1::uuid
 		  and property_type_id = (select id from property_type where name = $2) and instance = $3 and ts >= $4
-		order by ts asc`, componentName, key, instance, since)
+		order by ts asc`, c.ID, key, instance, since)
 	if err != nil {
-		return nil, fmt.Errorf("storage: property transitions %s/%s[%s]: %w", componentName, key, instance, err)
+		return nil, fmt.Errorf("storage: property transitions %s/%s[%s]: %w", componentRef, key, instance, err)
 	}
 	defer rows.Close()
 	var out []PropertySample
 	for rows.Next() {
 		var dp PropertySample
 		if err := rows.Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source); err != nil {
-			return nil, fmt.Errorf("storage: scan property transition %s/%s[%s]: %w", componentName, key, instance, err)
+			return nil, fmt.Errorf("storage: scan property transition %s/%s[%s]: %w", componentRef, key, instance, err)
 		}
 		out = append(out, dp)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("storage: iterate property transitions %s/%s[%s]: %w", componentName, key, instance, err)
+		return nil, fmt.Errorf("storage: iterate property transitions %s/%s[%s]: %w", componentRef, key, instance, err)
 	}
 	return out, nil
 }

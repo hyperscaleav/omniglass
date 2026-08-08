@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -157,17 +158,25 @@ func nullableLogFields(severity, facility, correlationID string, attributes, lab
 }
 
 // ListComponentLogs returns a component's raw log lines newest-first, from since,
-// capped at limit. Mirrors ListComponentEvents.
-func (p *PG) ListComponentLogs(ctx context.Context, componentName string, since time.Time, limit int) ([]LogLine, error) {
+// capped at limit. Mirrors ListComponentEvents. componentRef is resolved once
+// (name or uuid, ADR-0062); an unknown component folds into the same
+// nil-no-error empty result the old inline subquery's silent no-match gave.
+func (p *PG) ListComponentLogs(ctx context.Context, componentRef string, since time.Time, limit int) ([]LogLine, error) {
+	c, err := scopedByName(ctx, p.pool, componentConfig, componentRef)
+	if errors.Is(err, ErrComponentNotFound) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
 	rows, err := p.pool.Query(ctx, `
 		select id, ts, instance, source,
 			coalesce(severity, ''), coalesce(facility, ''), message, attributes, labels, coalesce(correlation_id, '')
 		from log_line
-		where component_id = (select id from component where name = $1) and ts >= $2
+		where component_id = $1::uuid and ts >= $2
 		order by ts desc
-		limit $3`, componentName, since, limit)
+		limit $3`, c.ID, since, limit)
 	if err != nil {
-		return nil, fmt.Errorf("storage: list logs %s: %w", componentName, err)
+		return nil, fmt.Errorf("storage: list logs %s: %w", componentRef, err)
 	}
 	defer rows.Close()
 
@@ -175,12 +184,12 @@ func (p *PG) ListComponentLogs(ctx context.Context, componentName string, since 
 	for rows.Next() {
 		var l LogLine
 		if err := rows.Scan(&l.ID, &l.TS, &l.Instance, &l.Source, &l.Severity, &l.Facility, &l.Message, &l.Attributes, &l.Labels, &l.CorrelationID); err != nil {
-			return nil, fmt.Errorf("storage: scan log %s: %w", componentName, err)
+			return nil, fmt.Errorf("storage: scan log %s: %w", componentRef, err)
 		}
 		out = append(out, l)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("storage: iterate logs %s: %w", componentName, err)
+		return nil, fmt.Errorf("storage: iterate logs %s: %w", componentRef, err)
 	}
 	return out, nil
 }

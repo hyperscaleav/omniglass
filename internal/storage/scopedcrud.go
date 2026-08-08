@@ -2,12 +2,28 @@ package storage
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/jackc/pgx/v5"
 )
+
+// ErrAmbiguousName is what a bare-name reference resolves to once more than one
+// row shares that name (#627 relaxes name uniqueness from global to scoped): the
+// reference is refused rather than one row being picked and the other hidden.
+// Kind is the entity table ("component", "system", "location"); Ref is the
+// reference as the caller sent it; Candidates is every matching row's id, in the
+// same order scopedByName's ORDER BY resolved them, capped by its LIMIT.
+type ErrAmbiguousName struct {
+	Kind       string
+	Ref        string
+	Candidates []string
+}
+
+func (e *ErrAmbiguousName) Error() string {
+	return fmt.Sprintf("storage: %q is ambiguous for %s (matches %s)", e.Ref, e.Kind, strings.Join(e.Candidates, ", "))
+}
 
 // The generic scoped-CRUD helpers: the read, resolve, and delete paths that are
 // identical for every scoped tree entity (location, system, component), given
@@ -97,18 +113,49 @@ func scopedList[T any](ctx context.Context, p *PG, cfg scopedConfig[T], read sco
 // A well-formed uuid that matches nothing is an ordinary not-found rather than a
 // fallback to a name lookup that would also miss: falling through would turn one
 // clear miss into two and report the second.
+//
+// A bare name is no longer assumed unique (#627 scopes name uniqueness to
+// placement rather than holding it global): the read asks for two rows, not
+// one, via ORDER BY id LIMIT 2 rather than QueryRow. Zero is the existing
+// notFound sentinel; exactly one is the ordinary resolved row; two is
+// ErrAmbiguousName, refusing the reference rather than silently taking
+// whichever row sorted first and hiding the rest, the way QueryRow used to. A
+// uuid reference is never ambiguous (it is a primary key), so this only ever
+// bites a bare-name lookup.
 func scopedByName[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref string) (*T, error) {
 	col := "name"
 	if isUUID(ref) {
 		col = "id"
 	}
-	v, err := cfg.scan(q.QueryRow(ctx, `select `+cfg.cols+` from `+string(cfg.table)+` where `+col+` = $1`, ref))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, cfg.notFound
-	} else if err != nil {
+	rows, err := q.Query(ctx, `select `+cfg.cols+` from `+string(cfg.table)+` where `+col+` = $1 order by id limit 2`, ref)
+	if err != nil {
 		return nil, fmt.Errorf("storage: load %s %q: %w", cfg.table, ref, err)
 	}
-	return v, nil
+	defer rows.Close()
+
+	var matches []*T
+	for rows.Next() {
+		v, err := cfg.scan(rows)
+		if err != nil {
+			return nil, fmt.Errorf("storage: scan %s %q: %w", cfg.table, ref, err)
+		}
+		matches = append(matches, v)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("storage: load %s %q: %w", cfg.table, ref, err)
+	}
+	switch len(matches) {
+	case 0:
+		return nil, cfg.notFound
+	case 1:
+		return matches[0], nil
+	default:
+		candidates := make([]string, len(matches))
+		for i, v := range matches {
+			candidates[i] = cfg.idOf(v)
+		}
+		return nil, &ErrAmbiguousName{Kind: string(cfg.table), Ref: ref, Candidates: candidates}
+	}
 }
 
 // scopedGet resolves an entity by name within the caller's read scope; absent or

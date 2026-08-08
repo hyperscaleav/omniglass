@@ -82,7 +82,7 @@ func registerLogRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			return nil, mapComponentErr(err)
 		}
 		since := time.Now().UTC().Add(-logHistoryWindow)
-		rows, err := gw.ListComponentLogs(ctx, comp.Name, since, logReadLimit)
+		rows, err := gw.ListComponentLogs(ctx, comp.ID, since, logReadLimit)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("read logs")
 		}

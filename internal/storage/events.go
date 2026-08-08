@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -94,16 +95,25 @@ func (p *PG) InsertEvents(ctx context.Context, evs []EventWrite) error {
 
 // ListComponentEvents returns a component's recent occurrences, newest first,
 // bounded by since and limit. Read helper for the component event log panel.
-func (p *PG) ListComponentEvents(ctx context.Context, componentName string, since time.Time, limit int) ([]Event, error) {
+// componentRef is resolved once (name or uuid, ADR-0062); an unknown
+// component folds into the same nil-no-error empty result the old inline
+// subquery's silent no-match gave (see ListComponentLogs).
+func (p *PG) ListComponentEvents(ctx context.Context, componentRef string, since time.Time, limit int) ([]Event, error) {
+	c, err := scopedByName(ctx, p.pool, componentConfig, componentRef)
+	if errors.Is(err, ErrComponentNotFound) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
 	rows, err := p.pool.Query(ctx, `
 		select id, ts, owner_kind,
 			(select et.name from event_type et where et.id = event.event_type_id), event.event_type_id, instance, origin, message, attributes, provenance, source
 		from event
-		where component_id = (select id from component where name = $1) and ts >= $2
+		where component_id = $1::uuid and ts >= $2
 		order by ts desc
-		limit $3`, componentName, since, limit)
+		limit $3`, c.ID, since, limit)
 	if err != nil {
-		return nil, fmt.Errorf("storage: list events %s: %w", componentName, err)
+		return nil, fmt.Errorf("storage: list events %s: %w", componentRef, err)
 	}
 	defer rows.Close()
 
@@ -111,12 +121,12 @@ func (p *PG) ListComponentEvents(ctx context.Context, componentName string, sinc
 	for rows.Next() {
 		var e Event
 		if err := rows.Scan(&e.ID, &e.TS, &e.OwnerKind, &e.Key, &e.EventTypeID, &e.Instance, &e.Origin, &e.Message, &e.Attributes, &e.Provenance, &e.Source); err != nil {
-			return nil, fmt.Errorf("storage: scan event %s: %w", componentName, err)
+			return nil, fmt.Errorf("storage: scan event %s: %w", componentRef, err)
 		}
 		out = append(out, e)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("storage: iterate events %s: %w", componentName, err)
+		return nil, fmt.Errorf("storage: iterate events %s: %w", componentRef, err)
 	}
 	return out, nil
 }

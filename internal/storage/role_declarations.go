@@ -31,17 +31,46 @@ const systemRoleCols = `id, owner_kind, name, display_name, quorum, capacity, po
 // roleOwnerColumn maps a role owner kind to its exclusive-arc column. Every
 // identifier it returns is a compile-time constant, never caller input, so
 // interpolating one into a statement is safe.
-// roleOwnerExpr is the SQL for the value system_role's arc stores. A standard is
-// slug-keyed, so its id IS the reference; a system is uuid-keyed, so the name
-// resolves. Keeping this as an expression means the surrounding statements do not
+// roleOwnerExpr is the SQL for the value system_role's arc stores, given
+// whatever roleOwnerArg resolved $2 to. Both arcs accept either form (name or
+// uuid, ADR-0062): a standard's row is a registry entry addressed by handle or
+// uuid directly; a system's is resolved once by roleOwnerArg before this
+// expression ever runs; the `or id::text = $2` arm here is what makes an
+// already-resolved id (or an ownerID that happened to be uuid-shaped) match.
+// Keeping this as an expression means the surrounding statements do not
 // branch on owner kind.
 func roleOwnerExpr(ownerKind string) string {
 	if ownerKind == "system" {
-		return `(select id from system where name = $2)`
+		return `(select id from system where name = $2 or id::text = $2)`
 	}
-	// A standard is addressed by its handle or its uuid, and the column stores
-	// the uuid (ADR-0062).
 	return `(select id from standard where name = $2 or id::text = $2)`
+}
+
+// roleOwnerArg resolves ownerID once for the role-owner arc, ambiguity-safe
+// (#627). For a system owner: a name or uuid that identifies exactly one row
+// resolves to its id, which roleOwnerExpr's `id::text = $2` arm then matches
+// directly, never re-deriving it from a name a second query could land on a
+// different row for. A name that identifies NONE is passed through
+// unresolved, so the write falls through to the existing
+// system_role_owner_arc_check -> ErrRoleRefNotFound path exactly as before
+// (that CHECK, not this function, is what turns an unknown owner into a
+// clean sentinel; forcing an early not-found here would trade a stable
+// sentinel for a different one). A name that identifies two or more is
+// refused outright as ErrAmbiguousName, rather than ever reaching a query
+// that could raise SQLSTATE 21000. A standard owner is untouched: standard
+// names stay globally unique, and roleOwnerExpr already resolves either form
+// for it.
+func (p *PG) roleOwnerArg(ctx context.Context, q querier, ownerKind, ownerID string) (string, error) {
+	if ownerKind != "system" {
+		return ownerID, nil
+	}
+	sys, err := scopedByName(ctx, q, systemConfig, ownerID)
+	if errors.Is(err, ErrSystemNotFound) {
+		return ownerID, nil
+	} else if err != nil {
+		return "", err
+	}
+	return sys.ID, nil
 }
 
 func roleOwnerColumn(ownerKind string) (string, error) {
@@ -86,6 +115,10 @@ func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]
 	if err != nil {
 		return nil, err
 	}
+	ownerArg, err := p.roleOwnerArg(ctx, p.pool, ownerKind, ownerID)
+	if err != nil {
+		return nil, err
+	}
 	// The columns are spelled out rather than reusing systemRoleCols: the join
 	// needs them qualified by the role alias.
 	q := fmt.Sprintf(`
@@ -102,7 +135,7 @@ func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]
 		group by r.id
 		order by r.name`, col, roleOwnerExpr(ownerKind))
 
-	rows, err := p.pool.Query(ctx, q, ownerKind, ownerID)
+	rows, err := p.pool.Query(ctx, q, ownerKind, ownerArg)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list roles %s/%s: %w", ownerKind, ownerID, err)
 	}
@@ -158,11 +191,18 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// Resolved once, inside this transaction, and reused for both queries
+	// below: see roleOwnerArg.
+	ownerArg, err := p.roleOwnerArg(ctx, tx, ownerKind, ownerID)
+	if err != nil {
+		return nil, err
+	}
+
 	// The before-image decides create vs update and gives the audit its old side.
 	var before any
 	prior, err := scanSystemRole(tx.QueryRow(ctx, fmt.Sprintf(
 		`select `+systemRoleCols+` from system_role where owner_kind = $1 and %s = %s and name = $3`, col, roleOwnerExpr(ownerKind)),
-		ownerKind, ownerID, spec.Name))
+		ownerKind, ownerArg, spec.Name))
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 	case err != nil:
@@ -218,7 +258,7 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 			    alternate_id    = case when $9 is null then system_role.alternate_id else nullif($9, '')::uuid end,
 			    updated_at      = now()
 		returning `+systemRoleCols, col, roleOwnerExpr(ownerKind)),
-		ownerKind, ownerID, spec.Name, spec.DisplayName, quorum, spec.Capacity, positionLabels, impact, spec.AlternateID))
+		ownerKind, ownerArg, spec.Name, spec.DisplayName, quorum, spec.Capacity, positionLabels, impact, spec.AlternateID))
 	if err != nil {
 		return nil, mapRoleWriteErr(err)
 	}
@@ -292,12 +332,18 @@ func (p *PG) DeleteSystemRole(ctx context.Context, actorID, ownerKind, ownerID, 
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// Resolved once (see SetSystemRole / roleOwnerArg).
+	ownerArg, err := p.roleOwnerArg(ctx, tx, ownerKind, ownerID)
+	if err != nil {
+		return err
+	}
+
 	// Delete and capture the before-image in one statement, so the audit records
 	// the withdrawn declaration and a missing row is caught without a second read.
 	before, err := scanSystemRole(tx.QueryRow(ctx, fmt.Sprintf(`
 		delete from system_role
 		where owner_kind = $1 and %s = %s and name = $3
-		returning `+systemRoleCols, col, roleOwnerExpr(ownerKind)), ownerKind, ownerID, name))
+		returning `+systemRoleCols, col, roleOwnerExpr(ownerKind)), ownerKind, ownerArg, name))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrRoleNotFound
 	}
@@ -340,13 +386,17 @@ func (p *PG) SeedSystemRole(ctx context.Context, ownerKind, ownerID string, spec
 		return ErrRoleImpact
 	}
 	positionLabels := normalizePositionLabels(spec.PositionLabels)
+	ownerArg, err := p.roleOwnerArg(ctx, p.pool, ownerKind, ownerID)
+	if err != nil {
+		return err
+	}
 	var id string
 	err = p.pool.QueryRow(ctx, fmt.Sprintf(`
 		insert into system_role (owner_kind, %s, name, display_name, quorum, capacity, position_labels, impact, alternate_id)
 		values ($1, %s, $3, $4, $5, $6, $7, $8, nullif($9, '')::uuid)
 		on conflict (owner_kind, standard_id, system_id, name) do nothing
 		returning id`, col, roleOwnerExpr(ownerKind)),
-		ownerKind, ownerID, spec.Name, spec.DisplayName, max(spec.Quorum, 1), spec.Capacity, positionLabels, impact, spec.AlternateID).Scan(&id)
+		ownerKind, ownerArg, spec.Name, spec.DisplayName, max(spec.Quorum, 1), spec.Capacity, positionLabels, impact, spec.AlternateID).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil // already there, and the operator owns it now
 	}

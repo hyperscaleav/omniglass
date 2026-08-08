@@ -84,9 +84,15 @@ func (p *PG) RaiseAlarm(ctx context.Context, actorID, componentName string, spec
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// The component is resolved before the insert so a typo reads as a missing
-	// component rather than an opaque foreign-key fault.
-	if _, err := scopedByName(ctx, tx, componentConfig, componentName); err != nil {
+	// The component is resolved once, before the insert, so a typo reads as a
+	// missing component rather than an opaque foreign-key fault, and its id is
+	// bound directly everywhere below rather than re-resolved by name: under
+	// scoped name uniqueness (#627) a second name-lookup could land on a
+	// different row sharing the same name, or fail outright with SQLSTATE
+	// 21000 ("more than one row returned by a subquery used as an
+	// expression").
+	component, err := scopedByName(ctx, tx, componentConfig, componentName)
+	if err != nil {
 		return nil, err
 	}
 
@@ -102,19 +108,26 @@ func (p *PG) RaiseAlarm(ctx context.Context, actorID, componentName string, spec
 	// carries the one-open-per-condition invariant, and a losing raise reads
 	// the existing open incident back instead of minting a duplicate. The
 	// no-op path writes no audit row and recomputes nothing: nothing changed.
+	//
+	// ComponentID is seeded from componentName (the caller's ref), not
+	// component.ID, on purpose: that already mismatched the DB-scanned shape
+	// alarmCols reads on the on-conflict re-read path below (a real uuid)
+	// before this refactor ever touched the file, and fixing the mismatch is
+	// a separate concern from this task's no-op mandate (TestRaiseAlarmWithoutCapabilities
+	// pins the existing, mismatched contract).
 	a := Alarm{ComponentID: componentName, Severity: spec.Severity, Message: spec.Message, DedupKey: spec.DedupKey}
 	err = tx.QueryRow(ctx, `
 		insert into alarm (component_id, severity, message, dedup_key)
-		values ((select id from component where name = $1), $2, $3, coalesce(nullif($4, ''), gen_random_uuid()::text))
+		values ($1::uuid, $2, $3, coalesce(nullif($4, ''), gen_random_uuid()::text))
 		on conflict (component_id, dedup_key) where cleared_at is null do nothing
 		returning id, raised_at, dedup_key`,
-		componentName, spec.Severity, spec.Message, spec.DedupKey).Scan(&a.ID, &a.RaisedAt, &a.DedupKey)
+		component.ID, spec.Severity, spec.Message, spec.DedupKey).Scan(&a.ID, &a.RaisedAt, &a.DedupKey)
 	if errors.Is(err, pgx.ErrNoRows) {
 		existing, gerr := scanAlarm(tx.QueryRow(ctx, `
 			select `+alarmCols+`
 			from alarm a
-			where a.component_id = (select id from component where name = $1)
-			  and a.dedup_key = $2 and a.cleared_at is null`, componentName, spec.DedupKey))
+			where a.component_id = $1::uuid
+			  and a.dedup_key = $2 and a.cleared_at is null`, component.ID, spec.DedupKey))
 		if gerr != nil {
 			return nil, fmt.Errorf("storage: read existing open alarm on %q: %w", componentName, gerr)
 		}
@@ -127,7 +140,7 @@ func (p *PG) RaiseAlarm(ctx context.Context, actorID, componentName string, spec
 	if err := writeAuditRes(ctx, tx, actorID, "create", "alarm", a.ID, nil, a); err != nil {
 		return nil, err
 	}
-	if err := p.RecomputeHealth(ctx, tx, componentName); err != nil {
+	if err := p.RecomputeHealth(ctx, tx, component.ID); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -152,11 +165,25 @@ func (p *PG) ClearAlarm(ctx context.Context, actorID, componentName, alarmID str
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// Resolved once, id bound below instead of re-derived by name (see
+	// RaiseAlarm). Unlike RaiseAlarm this function never checked component
+	// existence explicitly before: an unknown name's subquery used to resolve
+	// to no id, which then matched no alarm row, reading as ErrAlarmNotFound.
+	// ErrComponentNotFound folds into that same sentinel here to preserve
+	// that exact prior behavior; ErrAmbiguousName, which could not have
+	// occurred before scoped uniqueness exists, is left to propagate.
+	component, err := scopedByName(ctx, tx, componentConfig, componentName)
+	if errors.Is(err, ErrComponentNotFound) {
+		return ErrAlarmNotFound
+	} else if err != nil {
+		return err
+	}
+
 	var cleared time.Time
 	if err := tx.QueryRow(ctx, `
 		update alarm set cleared_at = now(), updated_at = now()
-		where id = $1 and component_id = (select id from component where name = $2) and cleared_at is null
-		returning cleared_at`, alarmID, componentName).Scan(&cleared); err != nil {
+		where id = $1 and component_id = $2::uuid and cleared_at is null
+		returning cleared_at`, alarmID, component.ID).Scan(&cleared); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrAlarmNotFound
 		}
@@ -166,7 +193,7 @@ func (p *PG) ClearAlarm(ctx context.Context, actorID, componentName, alarmID str
 		map[string]any{"component": componentName, "cleared_at": cleared}); err != nil {
 		return err
 	}
-	if err := p.RecomputeHealth(ctx, tx, componentName); err != nil {
+	if err := p.RecomputeHealth(ctx, tx, component.ID); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -179,14 +206,15 @@ func (p *PG) ClearAlarm(ctx context.Context, actorID, componentName, alarmID str
 // default, the whole history when includeCleared. An unknown component is
 // ErrComponentNotFound rather than an empty list, so a typo is visible.
 func (p *PG) ListAlarms(ctx context.Context, componentName string, includeCleared bool) ([]Alarm, error) {
-	if _, err := scopedByName(ctx, p.pool, componentConfig, componentName); err != nil {
+	component, err := scopedByName(ctx, p.pool, componentConfig, componentName)
+	if err != nil {
 		return nil, err
 	}
 	rows, err := p.pool.Query(ctx, `
 		select `+alarmCols+`
 		from alarm a
-		where a.component_id = (select id from component where name = $1) and ($2 or a.cleared_at is null)
-		order by a.raised_at desc, a.id desc`, componentName, includeCleared)
+		where a.component_id = $1::uuid and ($2 or a.cleared_at is null)
+		order by a.raised_at desc, a.id desc`, component.ID, includeCleared)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list alarms %q: %w", componentName, err)
 	}
@@ -204,15 +232,18 @@ func (p *PG) ListAlarms(ctx context.Context, componentName string, includeCleare
 }
 
 // activeAlarms is the health report's read: what is currently wrong with a
-// component, so the report can name the alarm behind a down occupant.
-func (p *PG) activeAlarms(ctx context.Context, q txQuerier, componentName string) ([]Alarm, error) {
+// component, so the report can name the alarm behind a down occupant. Takes the
+// component's id directly (resolveHealthRoles' assignee join already has it;
+// see resolvedRole.AssignedIDs), not its name: two components can share a name
+// once #627 lands, but system_role_assignment.component_id never does.
+func (p *PG) activeAlarms(ctx context.Context, q txQuerier, componentID string) ([]Alarm, error) {
 	rows, err := q.Query(ctx, `
 		select `+alarmCols+`
 		from alarm a
-		where a.component_id = (select id from component where name = $1) and a.cleared_at is null
-		order by a.raised_at desc, a.id desc`, componentName)
+		where a.component_id = $1::uuid and a.cleared_at is null
+		order by a.raised_at desc, a.id desc`, componentID)
 	if err != nil {
-		return nil, fmt.Errorf("storage: active alarms %q: %w", componentName, err)
+		return nil, fmt.Errorf("storage: active alarms %q: %w", componentID, err)
 	}
 	defer rows.Close()
 

@@ -63,11 +63,11 @@ func (p *PG) AddMember(ctx context.Context, actorID, systemName, componentName s
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	systemID, err := p.resolveMembershipEnds(ctx, tx, systemName, componentName, write)
+	systemID, componentID, err := p.resolveMembershipEnds(ctx, tx, systemName, componentName, write)
 	if err != nil {
 		return err
 	}
-	if err := addMemberTx(ctx, tx, systemName, componentName); err != nil {
+	if err := addMemberTx(ctx, tx, systemID, componentID); err != nil {
 		return err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "system_member", systemID, nil,
@@ -82,8 +82,10 @@ func (p *PG) AddMember(ctx context.Context, actorID, systemName, componentName s
 
 // addMemberTx is the insert on its own, so the assignment path can bind a
 // component into the system it is being staffed into within the same transaction
-// rather than making the operator say it twice.
-func addMemberTx(ctx context.Context, q txQuerier, systemName, componentName string) error {
+// rather than making the operator say it twice. Takes both ids directly: every
+// caller (AddMember, AssignRole) has already resolved them, so there is no
+// name left to re-derive an id from, ambiguously or otherwise (#627).
+func addMemberTx(ctx context.Context, q txQuerier, systemID, componentID string) error {
 	// Whether this membership becomes the default is decided by reading the
 	// component's other memberships, which is compare-then-act and therefore wrong
 	// under READ COMMITTED without serializing it: two rooms claiming a component
@@ -91,19 +93,16 @@ func addMemberTx(ctx context.Context, q txQuerier, systemName, componentName str
 	// partial unique index would then fail the loser's write outright rather than
 	// letting it become an ordinary member. Two rooms wired at once is an ordinary
 	// afternoon, so this is not a corner.
-	if err := lockMemberComponent(ctx, q, componentName); err != nil {
+	if err := lockMemberComponent(ctx, q, componentID); err != nil {
 		return err
 	}
 	// The primary is the row's own absence of competition: it is the default only
 	// when this component has no membership yet.
 	if _, err := q.Exec(ctx, `
 		insert into system_member (system_id, component_id, is_primary)
-		select s.id, c.id,
-		       not exists (select 1 from system_member where component_id = c.id)
-		from system s, component c
-		where s.name = $1 and c.name = $2
+		values ($1::uuid, $2::uuid, not exists (select 1 from system_member where component_id = $2::uuid))
 		on conflict (system_id, component_id) do nothing`,
-		systemName, componentName); err != nil {
+		systemID, componentID); err != nil {
 		return fmt.Errorf("storage: add member: %w", err)
 	}
 	return nil
@@ -119,28 +118,28 @@ func (p *PG) RemoveMember(ctx context.Context, actorID, systemName, componentNam
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	systemID, err := p.resolveMembershipEnds(ctx, tx, systemName, componentName, write)
+	systemID, componentID, err := p.resolveMembershipEnds(ctx, tx, systemName, componentName, write)
 	if err != nil {
 		return err
 	}
-	if err := lockMemberComponent(ctx, tx, componentName); err != nil {
+	if err := lockMemberComponent(ctx, tx, componentID); err != nil {
 		return err
 	}
 	var staffing int
 	if err := tx.QueryRow(ctx, `
 		select count(*) from system_role_assignment
-		where system_id = (select id from system where name = $1)
-		  and component_id = (select id from component where name = $2)`,
-		systemName, componentName).Scan(&staffing); err != nil {
+		where system_id = $1::uuid
+		  and component_id = $2::uuid`,
+		systemID, componentID).Scan(&staffing); err != nil {
 		return fmt.Errorf("storage: count member roles: %w", err)
 	}
 	if staffing > 0 {
 		return ErrMemberOccupied
 	}
 	tag, err := tx.Exec(ctx, `delete from system_member
-		where system_id = (select id from system where name = $1)
-		  and component_id = (select id from component where name = $2)`,
-		systemName, componentName)
+		where system_id = $1::uuid
+		  and component_id = $2::uuid`,
+		systemID, componentID)
 	if err != nil {
 		return fmt.Errorf("storage: remove member: %w", err)
 	}
@@ -151,7 +150,7 @@ func (p *PG) RemoveMember(ctx context.Context, actorID, systemName, componentNam
 	// exactly one remains it becomes the default, which is the same rule that gave
 	// the first membership its default: a component with one system never carries
 	// an unanswered question.
-	if err := promoteSolePrimary(ctx, tx, componentName); err != nil {
+	if err := promoteSolePrimary(ctx, tx, componentID); err != nil {
 		return err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "system_member", systemID,
@@ -167,21 +166,27 @@ func (p *PG) RemoveMember(ctx context.Context, actorID, systemName, componentNam
 // lockMemberComponent serializes every write that can move a component's default.
 // The component is the unit because the default is a property of the component,
 // not of one binding, and it is the same key from either side of the relation.
-func lockMemberComponent(ctx context.Context, q txQuerier, componentName string) error {
-	return lockAdvisory(ctx, q, "system_member/"+componentName)
+// Keyed on the id, not the name: two components could share a name once #627
+// lands, and a name-keyed lock would serialize two unrelated components'
+// writes against each other for no reason (or, worse, none at all, if it
+// still let both interleave because the string happened to differ from the
+// row it should have matched).
+func lockMemberComponent(ctx context.Context, q txQuerier, componentID string) error {
+	return lockAdvisory(ctx, q, "system_member/"+componentID)
 }
 
 // promoteSolePrimary makes a component's only remaining membership its default,
 // when losing one left it without a default and with nothing to choose between.
-func promoteSolePrimary(ctx context.Context, q txQuerier, componentName string) error {
+// Takes the component's id directly (see addMemberTx).
+func promoteSolePrimary(ctx context.Context, q txQuerier, componentID string) error {
 	if _, err := q.Exec(ctx, `
 		update system_member set is_primary = true, updated_at = now()
-		where component_id = (select id from component where name = $1)
+		where component_id = $1::uuid
 		  and not exists (select 1 from system_member p
-		                  where p.component_id = (select id from component where name = $1) and p.is_primary)
+		                  where p.component_id = $1::uuid and p.is_primary)
 		  and (select count(*) from system_member c
-		       where c.component_id = (select id from component where name = $1)) = 1`,
-		componentName); err != nil {
+		       where c.component_id = $1::uuid) = 1`,
+		componentID); err != nil {
 		return fmt.Errorf("storage: promote sole primary: %w", err)
 	}
 	return nil
@@ -197,27 +202,27 @@ func (p *PG) SetPrimaryMember(ctx context.Context, actorID, systemName, componen
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	systemID, err := p.resolveMembershipEnds(ctx, tx, systemName, componentName, write)
+	systemID, componentID, err := p.resolveMembershipEnds(ctx, tx, systemName, componentName, write)
 	if err != nil {
 		return err
 	}
-	if err := lockMemberComponent(ctx, tx, componentName); err != nil {
+	if err := lockMemberComponent(ctx, tx, componentID); err != nil {
 		return err
 	}
 	// Clear first: the index permits at most one primary per component, so the old
 	// one has to go before the new one lands.
 	if _, err := tx.Exec(ctx, `
 		update system_member set is_primary = false, updated_at = now()
-		where component_id = (select id from component where name = $1) and is_primary
-		  and system_id <> (select id from system where name = $2)`,
-		componentName, systemName); err != nil {
+		where component_id = $1::uuid and is_primary
+		  and system_id <> $2::uuid`,
+		componentID, systemID); err != nil {
 		return fmt.Errorf("storage: clear primary member: %w", err)
 	}
 	tag, err := tx.Exec(ctx, `
 		update system_member set is_primary = true, updated_at = now()
-		where component_id = (select id from component where name = $1)
-		  and system_id = (select id from system where name = $2)`,
-		componentName, systemName)
+		where component_id = $1::uuid
+		  and system_id = $2::uuid`,
+		componentID, systemID)
 	if err != nil {
 		return fmt.Errorf("storage: set primary member: %w", err)
 	}
@@ -236,20 +241,22 @@ func (p *PG) SetPrimaryMember(ctx context.Context, actorID, systemName, componen
 
 // ListMembers returns the components bound into a system, ordered by name.
 func (p *PG) ListMembers(ctx context.Context, systemName string, read scope.Set) ([]Member, error) {
-	if _, err := scopedGet(ctx, p, systemConfig, systemName, read); err != nil {
+	sys, err := scopedGet(ctx, p, systemConfig, systemName, read)
+	if err != nil {
 		return nil, err
 	}
-	return p.membersWhere(ctx, `m.system_id = (select id from system where name = $1) order by c.name`, systemName)
+	return p.membersWhere(ctx, `m.system_id = $1::uuid order by c.name`, sys.ID)
 }
 
 // ComponentMemberships returns the systems a component is bound into, ordered by
 // name. This is the many-valued direction, and the one the old single pointer
 // could not express: a shared device answers with every system it serves.
 func (p *PG) ComponentMemberships(ctx context.Context, componentName string, read scope.Set) ([]Member, error) {
-	if _, err := scopedGet(ctx, p, componentConfig, componentName, read); err != nil {
+	c, err := scopedGet(ctx, p, componentConfig, componentName, read)
+	if err != nil {
 		return nil, err
 	}
-	return p.membersWhere(ctx, `m.component_id = (select id from component where name = $1) order by s.name`, componentName)
+	return p.membersWhere(ctx, `m.component_id = $1::uuid order by s.name`, c.ID)
 }
 
 func (p *PG) membersWhere(ctx context.Context, where string, arg string) ([]Member, error) {
@@ -271,23 +278,25 @@ func (p *PG) membersWhere(ctx context.Context, where string, arg string) ([]Memb
 
 // resolveMembershipEnds checks both ends of the binding before it is written: the
 // system must be in the caller's write scope (a non-disclosing not-found when it
-// is not) and the component must exist. It returns the system's id, because a
-// membership is audited against the system it binds into and a name is renameable;
-// the scope check already loads the row, so the id costs nothing extra here.
-func (p *PG) resolveMembershipEnds(ctx context.Context, q txQuerier, systemName, componentName string, write scope.Set) (string, error) {
+// is not) and the component must exist. It returns both ids, resolved once here
+// rather than left for AddMember/RemoveMember/SetPrimaryMember to re-derive from
+// the caller's name (ambiguous the moment two rows share it, #627); the scope
+// check already loads the system row, so its id costs nothing extra.
+func (p *PG) resolveMembershipEnds(ctx context.Context, q txQuerier, systemName, componentName string, write scope.Set) (systemID, componentID string, err error) {
 	sys, err := scopedByName(ctx, q, systemConfig, systemName)
 	if err != nil {
-		return "", err // ErrSystemNotFound when absent
+		return "", "", err // ErrSystemNotFound when absent
 	}
 	inScope, err := inScopeTree(ctx, q, systemTable, sys.ID, write)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if !inScope {
-		return "", ErrSystemNotFound
+		return "", "", ErrSystemNotFound
 	}
-	if _, err := scopedByName(ctx, q, componentConfig, componentName); err != nil {
-		return "", err // ErrComponentNotFound when absent
+	c, err := scopedByName(ctx, q, componentConfig, componentName)
+	if err != nil {
+		return "", "", err // ErrComponentNotFound when absent
 	}
-	return sys.ID, nil
+	return sys.ID, c.ID, nil
 }

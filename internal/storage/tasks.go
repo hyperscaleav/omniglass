@@ -90,15 +90,19 @@ func deriveReachabilityTask(ctx context.Context, tx pgx.Tx, interfaceID string) 
 	return nil
 }
 
-// loadTask reads one task by id plus its interface's owning component (the scope
-// anchor) with no scope check; callers layer the cascade on top.
+// loadTask reads one task by id plus its interface's owning component id (the
+// scope anchor, componentInScope's own parameter) with no scope check; callers
+// layer the cascade on top. i.component is the raw FK column, not a name
+// derived from it: componentInScope binds it straight into inScopeTree, and a
+// name here would 22P02 (invalid uuid) the moment it reached that bind, since
+// #627 preparation switched componentInScope from a name lookup to an id.
 func loadTask(ctx context.Context, q querier, id string) (*Task, *string, error) {
 	var (
 		t         Task
 		component *string
 	)
 	err := q.QueryRow(ctx, `
-		select `+taskSelectJoin+`, (select c.name from component c where c.id = i.component)
+		select `+taskSelectJoin+`, i.component
 		from task t join interface i on i.id = t.interface_id
 		where t.id = $1`, id).Scan(
 		&t.ID, &t.DisplayName, &t.Mode, &t.InterfaceID, &t.Node, &t.NodeID, &t.Spec, &t.Enabled, &t.CreatedAt, &t.UpdatedAt, &component)

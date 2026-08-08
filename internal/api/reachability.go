@@ -88,7 +88,7 @@ func registerReachabilityRoutes(api huma.API, a *authenticator, gw storage.Gatew
 		if err != nil {
 			return nil, mapComponentErr(err)
 		}
-		ifaces, err := gw.ListComponentInterfaces(ctx, comp.Name)
+		ifaces, err := gw.ListComponentInterfaces(ctx, comp.ID)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("read reachability")
 		}
@@ -97,7 +97,7 @@ func registerReachabilityRoutes(api huma.API, a *authenticator, gw storage.Gatew
 		out.Body.Component = comp.Name
 		out.Body.Interfaces = make([]reachInterfaceBody, 0, len(ifaces))
 		for i := range ifaces {
-			row, err := composeInterface(ctx, gw, comp.Name, ifaces[i], since)
+			row, err := composeInterface(ctx, gw, comp.ID, ifaces[i], since)
 			if err != nil {
 				return nil, huma.Error500InternalServerError("read reachability")
 			}

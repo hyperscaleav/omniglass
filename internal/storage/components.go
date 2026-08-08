@@ -184,11 +184,19 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 
 	// A system named at create becomes a MEMBERSHIP rather than a column on the
 	// component: the relation lives in system_member, and this is simply the first
-	// one. Resolved here so an unknown name is a 422 before anything is written.
+	// one. Resolved here so an unknown name is a 422 before anything is written,
+	// and its id is what the membership insert below binds (#627): the
+	// component's own name is not yet even the row's final resolved handle at
+	// that point, and re-deriving the system's id from *spec.SystemName a
+	// second time would risk landing on a different row entirely once names
+	// scope to placement.
+	var sysID string
 	if spec.SystemName != nil {
-		if _, err := scopedByName(ctx, tx, systemConfig, *spec.SystemName); err != nil {
+		sys, err := scopedByName(ctx, tx, systemConfig, *spec.SystemName)
+		if err != nil {
 			return nil, err // ErrSystemNotFound -> 422
 		}
+		sysID = sys.ID
 	}
 	var locationID *string
 	if spec.LocationName != nil {
@@ -228,10 +236,11 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
 	}
-	// The membership after the row exists, since it references the component by
-	// name. Re-read so the returned component carries the primary it just gained.
+	// The membership after the row exists, both ids already in hand (sysID
+	// above, c.ID from the insert just returned). Re-read so the returned
+	// component carries the primary it just gained.
 	if spec.SystemName != nil {
-		if err := addMemberTx(ctx, tx, *spec.SystemName, spec.Name); err != nil {
+		if err := addMemberTx(ctx, tx, sysID, c.ID); err != nil {
 			return nil, err
 		}
 		if c, err = scanComponent(tx.QueryRow(ctx,
@@ -445,27 +454,38 @@ type ComponentInterface struct {
 // ListComponentInterfaces returns a component's interfaces ordered by name, the
 // rows the reachability read composes over. It is not scope-injected: the caller
 // gates on the component being in read scope (GetComponent) first, then reads its
-// interfaces by the verified name.
-func (p *PG) ListComponentInterfaces(ctx context.Context, componentName string) ([]ComponentInterface, error) {
+// interfaces by the verified reference (name or uuid, ADR-0062), resolved once
+// here rather than left as a name a second row could now share (#627). An
+// unknown component folds into the same nil-no-error empty result the old
+// inline subquery's silent no-match gave: devseed's seedReachability uses
+// this as its own sentinel read, calling it BEFORE the component it names is
+// known to exist yet, on the first run.
+func (p *PG) ListComponentInterfaces(ctx context.Context, componentRef string) ([]ComponentInterface, error) {
+	c, err := scopedByName(ctx, p.pool, componentConfig, componentRef)
+	if errors.Is(err, ErrComponentNotFound) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
 	rows, err := p.pool.Query(ctx, `
 		select i.name, (select it.name from interface_type it where it.id = i.type), coalesce((select n.name from node n where n.principal_id = i.node_name), ''), i.params
 		from interface i
-		where i.component = (select id from component where name = $1)
-		order by i.name asc`, componentName)
+		where i.component = $1::uuid
+		order by i.name asc`, c.ID)
 	if err != nil {
-		return nil, fmt.Errorf("storage: list interfaces for %s: %w", componentName, err)
+		return nil, fmt.Errorf("storage: list interfaces for %s: %w", componentRef, err)
 	}
 	defer rows.Close()
 	var out []ComponentInterface
 	for rows.Next() {
 		var it ComponentInterface
 		if err := rows.Scan(&it.Name, &it.Type, &it.NodeName, &it.Params); err != nil {
-			return nil, fmt.Errorf("storage: scan interface for %s: %w", componentName, err)
+			return nil, fmt.Errorf("storage: scan interface for %s: %w", componentRef, err)
 		}
 		out = append(out, it)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("storage: iterate interfaces for %s: %w", componentName, err)
+		return nil, fmt.Errorf("storage: iterate interfaces for %s: %w", componentRef, err)
 	}
 	return out, nil
 }

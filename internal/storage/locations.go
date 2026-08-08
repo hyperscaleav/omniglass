@@ -604,9 +604,13 @@ func (p *PG) inScope(ctx context.Context, q querier, targetID string, set scope.
 }
 
 // querier is the read surface shared by *pgxpool.Pool and pgx.Tx, so scope and
-// lookup helpers run either standalone or inside a transaction.
+// lookup helpers run either standalone or inside a transaction. Query sits
+// beside QueryRow because scopedByName needs it to detect a second matching row
+// (an ambiguous bare name, #627) rather than silently taking the first the way
+// QueryRow's single-row contract would.
 type querier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 }
 
 // writeAuditRes records one write in the audit_log, in the caller's

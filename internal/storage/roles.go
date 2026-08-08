@@ -244,7 +244,15 @@ func (e *CapacityFullShortfall) Error() string {
 // only the ad-hoc arm. The system must be within the read scope; out of scope
 // is the non-disclosing ErrSystemNotFound.
 func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.Set) ([]EffectiveRole, error) {
-	inScope, err := p.ownerInScope(ctx, p.pool, "system", systemName, read)
+	// Resolved once, here, rather than through ownerInScope (which does the
+	// same lookup but discards the id): the query below binds sys.ID instead
+	// of re-deriving it from systemName, which #627 no longer guarantees is
+	// unique.
+	sys, err := scopedByName(ctx, p.pool, systemConfig, systemName)
+	if err != nil {
+		return nil, err
+	}
+	inScope, err := inScopeTree(ctx, p.pool, systemTable, sys.ID, read)
 	if err != nil {
 		return nil, err
 	}
@@ -261,7 +269,7 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 	// scoped to this system, ordered by the occupant's position (#626).
 	rows, err := p.pool.Query(ctx, `
 		with sys as (
-			select id, name, standard_id from system where name = $1
+			select id, name, standard_id from system where id = $1::uuid
 		),
 		roles as (
 			-- inherited: declared on the standard this system conforms to
@@ -287,7 +295,7 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 		                   from system_role_assignment ra
 		                  where ra.role_id = roles.id and ra.system_id = sys.id), '{}') as positions
 		from roles, sys
-		order by roles.name`, systemName)
+		order by roles.name`, sys.ID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: effective roles %s: %w", systemName, err)
 	}
@@ -322,7 +330,17 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	inScope, err := p.ownerInScope(ctx, tx, "system", systemName, write)
+	// system and component are each resolved once here, inside this
+	// transaction, and their ids bound everywhere below: under scoped name
+	// uniqueness (#627) a second name-lookup for either could land on a
+	// different row sharing the same name, or fail outright with SQLSTATE
+	// 21000 ("more than one row returned by a subquery used as an
+	// expression").
+	sys, err := scopedByName(ctx, tx, systemConfig, systemName)
+	if err != nil {
+		return err // ErrSystemNotFound when absent
+	}
+	inScope, err := inScopeTree(ctx, tx, systemTable, sys.ID, write)
 	if err != nil {
 		return err
 	}
@@ -330,7 +348,7 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 		return ErrSystemNotFound
 	}
 
-	roleID, roleDisplay, acceptedTypes, pinnedProducts, err := p.resolveRole(ctx, tx, systemName, roleName)
+	roleID, roleDisplay, acceptedTypes, pinnedProducts, err := p.resolveRole(ctx, tx, sys.ID, roleName)
 	if err != nil {
 		return err
 	}
@@ -340,16 +358,17 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 	// not compute the same next-free position, and UnassignRole and
 	// SwapPositions take the same key, so allocation and reordering
 	// serialize against each other too.
-	if err := lockAdvisory(ctx, tx, rolePositionLockKey(systemName, roleID)); err != nil {
+	if err := lockAdvisory(ctx, tx, rolePositionLockKey(sys.ID, roleID)); err != nil {
 		return err
 	}
 	// Confirm the component exists before judging what it is. An absent
 	// component has no product to classify, which would otherwise surface as a
 	// confusing type refusal for what is really a typo.
-	if _, err := scopedByName(ctx, tx, componentConfig, componentName); err != nil {
+	component, err := scopedByName(ctx, tx, componentConfig, componentName)
+	if err != nil {
 		return err // ErrComponentNotFound when absent
 	}
-	cls, err := p.classifyComponent(ctx, tx, componentName)
+	cls, err := p.classifyComponent(ctx, tx, component.ID)
 	if err != nil {
 		return err
 	}
@@ -397,9 +416,9 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 	err = tx.QueryRow(ctx, `
 		select r.display_name from system_role_assignment ra
 		join system_role r on r.id = ra.role_id
-		where ra.system_id = (select id from system where name = $1)
-		  and ra.component_id = (select id from component where name = $2)
-		  and ra.role_id <> $3`, systemName, componentName, roleID).Scan(&heldRole)
+		where ra.system_id = $1::uuid
+		  and ra.component_id = $2::uuid
+		  and ra.role_id <> $3`, sys.ID, component.ID, roleID).Scan(&heldRole)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		// not staffed elsewhere in this system
@@ -420,9 +439,9 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 	var alreadyHere bool
 	if err := tx.QueryRow(ctx, `select exists (
 		select 1 from system_role_assignment
-		 where system_id = (select id from system where name = $1)
-		   and role_id = $2 and component_id = (select id from component where name = $3))`,
-		systemName, roleID, componentName).Scan(&alreadyHere); err != nil {
+		 where system_id = $1::uuid
+		   and role_id = $2 and component_id = $3::uuid)`,
+		sys.ID, roleID, component.ID).Scan(&alreadyHere); err != nil {
 		return fmt.Errorf("storage: check existing assignment %s/%s: %w", systemName, roleID, err)
 	}
 	if !alreadyHere {
@@ -431,8 +450,8 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 		if err := tx.QueryRow(ctx, `
 			select r.capacity, (
 				select count(*) from system_role_assignment ra
-				 where ra.system_id = (select id from system where name = $1) and ra.role_id = $2
-			) from system_role r where r.id = $2`, systemName, roleID).Scan(&capacity, &have); err != nil {
+				 where ra.system_id = $1::uuid and ra.role_id = $2
+			) from system_role r where r.id = $2`, sys.ID, roleID).Scan(&capacity, &have); err != nil {
 			return fmt.Errorf("storage: role capacity check %s/%s: %w", systemName, roleID, err)
 		}
 		if capacity != nil && have >= *capacity {
@@ -444,7 +463,7 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 	// asked of the operator as a separate step. A component filling a job in a
 	// system that the system does not count as a member is the contradiction
 	// system_member exists to make impossible.
-	if err := addMemberTx(ctx, tx, systemName, componentName); err != nil {
+	if err := addMemberTx(ctx, tx, sys.ID, component.ID); err != nil {
 		return err
 	}
 	// Next free position: the lowest unused positive integer within
@@ -469,23 +488,22 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 	if err := tx.QueryRow(ctx, `
 		with cnt as (
 			select count(*) as n from system_role_assignment
-			 where system_id = (select id from system where name = $1) and role_id = $2
+			 where system_id = $1::uuid and role_id = $2
 		)
 		select coalesce(min(g.n), 1)
 		  from cnt, generate_series(1, least(coalesce((select capacity from system_role where id = $2), cnt.n + 1), cnt.n + 1)) g(n)
 		 where not exists (
 		     select 1 from system_role_assignment ra
-		      where ra.system_id = (select id from system where name = $1)
+		      where ra.system_id = $1::uuid
 		        and ra.role_id = $2 and ra.position = g.n)`,
-		systemName, roleID).Scan(&position); err != nil {
+		sys.ID, roleID).Scan(&position); err != nil {
 		return fmt.Errorf("storage: next free position %s/%s: %w", systemName, roleID, err)
 	}
 	if _, err := tx.Exec(ctx, `
 		insert into system_role_assignment (system_id, role_id, component_id, position)
-		values ((select id from system where name = $1), $2,
-		        (select id from component where name = $3), $4)
+		values ($1::uuid, $2, $3::uuid, $4)
 		on conflict (system_id, role_id, component_id) do nothing`,
-		systemName, roleID, componentName, position); err != nil {
+		sys.ID, roleID, component.ID, position); err != nil {
 		return mapRoleWriteErr(err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "system_role_assignment", roleID, nil,
@@ -495,7 +513,7 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 	// Staffing changes health: the role may have just reached quorum. The system is
 	// named explicitly rather than left to the component's assignments, so assign
 	// and unassign take the same path.
-	if err := p.recomputeChain(ctx, tx, []string{componentName}, []string{systemName}, nil); err != nil {
+	if err := p.recomputeChain(ctx, tx, []ownerRef{{ID: component.ID, Name: component.Name}}, []ownerRef{{ID: sys.ID, Name: sys.Name}}, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -513,14 +531,24 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	inScope, err := p.ownerInScope(ctx, tx, "system", systemName, write)
+	// Resolved once (see AssignRole's comment): every statement below binds an
+	// id rather than re-deriving one from a name.
+	sys, err := scopedByName(ctx, tx, systemConfig, systemName)
+	if err != nil {
+		return err
+	}
+	inScope, err := inScopeTree(ctx, tx, systemTable, sys.ID, write)
 	if err != nil {
 		return err
 	}
 	if !inScope {
 		return ErrSystemNotFound
 	}
-	roleID, _, _, _, err := p.resolveRole(ctx, tx, systemName, roleName)
+	roleID, _, _, _, err := p.resolveRole(ctx, tx, sys.ID, roleName)
+	if err != nil {
+		return err
+	}
+	component, err := scopedByName(ctx, tx, componentConfig, componentName)
 	if err != nil {
 		return err
 	}
@@ -528,15 +556,15 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 	// position must serialize against a concurrent assign that could
 	// otherwise compute the same now-free slot as its "next free" before
 	// this transaction's delete commits.
-	if err := lockAdvisory(ctx, tx, rolePositionLockKey(systemName, roleID)); err != nil {
+	if err := lockAdvisory(ctx, tx, rolePositionLockKey(sys.ID, roleID)); err != nil {
 		return err
 	}
 	var assignmentID string
 	if err := tx.QueryRow(ctx, `
 		delete from system_role_assignment
-		where system_id = (select id from system where name = $1) and role_id = $2
-		  and component_id = (select id from component where name = $3)
-		returning id`, systemName, roleID, componentName).Scan(&assignmentID); err != nil {
+		where system_id = $1::uuid and role_id = $2
+		  and component_id = $3::uuid
+		returning id`, sys.ID, roleID, component.ID).Scan(&assignmentID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrAssignmentMissing
 		}
@@ -547,7 +575,7 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 	}
 	// The assignment row is already gone, so walking the component's assignments
 	// would no longer reach this system. Naming it is what makes the drop visible.
-	if err := p.recomputeChain(ctx, tx, []string{componentName}, []string{systemName}, nil); err != nil {
+	if err := p.recomputeChain(ctx, tx, []ownerRef{{ID: component.ID, Name: component.Name}}, []ownerRef{{ID: sys.ID, Name: sys.Name}}, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -558,11 +586,11 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 
 // rolePositionLockKey is the advisory-lock key AssignRole, UnassignRole and
 // SwapPositions all take on a (system, role) pair, so position allocation and
-// reordering serialize against each other (#626). role is the resolved role
-// id, not its name: two roles can share a name across different owners, but
-// never an id.
-func rolePositionLockKey(systemName, roleID string) string {
-	return "system_role_assignment/" + systemName + "/" + roleID
+// reordering serialize against each other (#626). Both halves are ids, not
+// names: two systems (like two roles across different owners) can share a
+// name, but never an id.
+func rolePositionLockKey(systemID, roleID string) string {
+	return "system_role_assignment/" + systemID + "/" + roleID
 }
 
 // SwapPositions exchanges the positions of whichever components currently
@@ -579,18 +607,23 @@ func (p *PG) SwapPositions(ctx context.Context, actorID, systemName, roleName st
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	inScope, err := p.ownerInScope(ctx, tx, "system", systemName, write)
+	// Resolved once (see AssignRole's comment).
+	sys, err := scopedByName(ctx, tx, systemConfig, systemName)
+	if err != nil {
+		return err
+	}
+	inScope, err := inScopeTree(ctx, tx, systemTable, sys.ID, write)
 	if err != nil {
 		return err
 	}
 	if !inScope {
 		return ErrSystemNotFound
 	}
-	roleID, _, _, _, err := p.resolveRole(ctx, tx, systemName, roleName)
+	roleID, _, _, _, err := p.resolveRole(ctx, tx, sys.ID, roleName)
 	if err != nil {
 		return err
 	}
-	if err := lockAdvisory(ctx, tx, rolePositionLockKey(systemName, roleID)); err != nil {
+	if err := lockAdvisory(ctx, tx, rolePositionLockKey(sys.ID, roleID)); err != nil {
 		return err
 	}
 	if a == b {
@@ -612,9 +645,9 @@ func (p *PG) SwapPositions(ctx context.Context, actorID, systemName, roleName st
 	tag, err := tx.Exec(ctx, `
 		update system_role_assignment
 		   set position = case position when $3 then $4 when $4 then $3 end
-		 where system_id = (select id from system where name = $1)
+		 where system_id = $1::uuid
 		   and role_id = $2
-		   and position in ($3, $4)`, systemName, roleID, a, b)
+		   and position in ($3, $4)`, sys.ID, roleID, a, b)
 	if err != nil {
 		return mapRoleWriteErr(err)
 	}
@@ -654,20 +687,24 @@ func roleRefNames(refs []roleRef) []string {
 // system's own roles and those its standard declares), and returns its id,
 // display name, and the typed-slot guard's requirements: the component_types
 // it accepts (empty means any) and the products it pins (empty means any
-// product of an accepted type).
-func (p *PG) resolveRole(ctx context.Context, q txQuerier, systemName, roleName string) (id, displayName string, acceptedTypes, pinnedProducts []roleRef, err error) {
+// product of an accepted type). Takes the system's id directly: every caller
+// has already resolved it (AssignRole, UnassignRole, SwapPositions), and the
+// role name it looks up within stays scoped to a single owner arc either way,
+// so binding the id here avoids one more name-subquery that would raise
+// SQLSTATE 21000 the moment two systems share a name (#627).
+func (p *PG) resolveRole(ctx context.Context, q txQuerier, systemID, roleName string) (id, displayName string, acceptedTypes, pinnedProducts []roleRef, err error) {
 	err = q.QueryRow(ctx, `
-		with sys as (select id, name, standard_id from system where name = $1)
+		with sys as (select id, name, standard_id from system where id = $1::uuid)
 		select r.id, r.display_name
 		from sys
 		join system_role r
 		     on (r.owner_kind = 'system' and r.system_id = sys.id)
 		     or (r.owner_kind = 'standard' and r.standard_id = sys.standard_id)
-		where r.name = $2`, systemName, roleName).Scan(&id, &displayName)
+		where r.name = $2`, systemID, roleName).Scan(&id, &displayName)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", "", nil, nil, ErrRoleNotFound
 	} else if err != nil {
-		return "", "", nil, nil, fmt.Errorf("storage: resolve role %s/%s: %w", systemName, roleName, err)
+		return "", "", nil, nil, fmt.Errorf("storage: resolve role %s/%s: %w", systemID, roleName, err)
 	}
 
 	typeRows, err := q.Query(ctx, `
@@ -721,17 +758,19 @@ type componentClassification struct {
 	TypeName    string
 }
 
-// classifyComponent resolves a component's typed-slot classification.
-func (p *PG) classifyComponent(ctx context.Context, q querier, componentName string) (*componentClassification, error) {
+// classifyComponent resolves a component's typed-slot classification. Takes
+// the component's id directly: AssignRole has already resolved it (see its
+// comment).
+func (p *PG) classifyComponent(ctx context.Context, q querier, componentID string) (*componentClassification, error) {
 	var c componentClassification
 	err := q.QueryRow(ctx, `
 		select pr.id, pr.name, ct.id, ct.name
 		from component c
 		join product pr on pr.id = c.product_id
 		join component_type ct on ct.id = pr.component_type_id
-		where c.name = $1`, componentName).Scan(&c.ProductID, &c.ProductName, &c.TypeID, &c.TypeName)
+		where c.id = $1::uuid`, componentID).Scan(&c.ProductID, &c.ProductName, &c.TypeID, &c.TypeName)
 	if err != nil {
-		return nil, fmt.Errorf("storage: classify component %s: %w", componentName, err)
+		return nil, fmt.Errorf("storage: classify component %s: %w", componentID, err)
 	}
 	return &c, nil
 }
