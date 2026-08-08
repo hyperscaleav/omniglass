@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -224,6 +225,58 @@ func scopedByNameInScope[T any](ctx context.Context, q querier, cfg scopedConfig
 		if ok {
 			inScope = append(inScope, v)
 		}
+	}
+	return resolveMatches(cfg, ref, inScope)
+}
+
+// withoutCandidates redacts an *ErrAmbiguousName's Candidates, for a
+// resolution path that has no caller scope to filter by at all (the three
+// *NameTaken advisories, which intentionally resolve scope-blind so
+// availability matches the placement bucket asked about rather than the
+// caller's own grant, ADR the checkName routes document). The reference is
+// still refused as ambiguous; the response just never names uuids the caller
+// might have no scope to read, since nothing here can tell which ones do.
+func withoutCandidates(err error) error {
+	var ambig *ErrAmbiguousName
+	if errors.As(err, &ambig) {
+		return &ErrAmbiguousName{Kind: ambig.Kind, Ref: ambig.Ref}
+	}
+	return err
+}
+
+// resolveScopedRef resolves a create- or action-time placement or owner
+// reference: ambiguity is judged within the given scope, same ordering as
+// scopedByNameInScope (ruling 2, #627), but this preserves the
+// notFound-versus-forbidden split a write already makes, which
+// scopedByNameInScope's single non-disclosing notFound would otherwise
+// collapse. A reference matching no row anywhere is cfg.notFound; one
+// matching a row only outside the given scope is cfg.forbidden, not
+// notFound, because the caller supplied this reference itself in the same
+// request (it is not a new disclosure the way a read's uuid would be, and
+// several routes' tested contracts already distinguish "no such row" from
+// "that row is not yours to use here"). A genuine collision within scope is
+// ErrAmbiguousName, whose Candidates never name a row outside the given
+// scope, same guarantee as scopedByNameInScope.
+func resolveScopedRef[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref string, set scope.Set) (*T, error) {
+	matches, err := loadByRef(ctx, q, cfg, ref)
+	if err != nil {
+		return nil, err
+	}
+	if len(matches) == 0 {
+		return nil, cfg.notFound
+	}
+	inScope := make([]*T, 0, len(matches))
+	for _, v := range matches {
+		ok, err := inScopeTree(ctx, q, cfg.table, cfg.idOf(v), set)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			inScope = append(inScope, v)
+		}
+	}
+	if len(inScope) == 0 {
+		return nil, cfg.forbidden
 	}
 	return resolveMatches(cfg, ref, inScope)
 }

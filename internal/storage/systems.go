@@ -371,26 +371,26 @@ func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, 
 			return nil, ErrSystemForbidden
 		}
 	} else {
-		parent, err := p.systemByName(ctx, tx, *spec.ParentName)
+		// resolveScopedRef, not systemByName-then-inScopeTree: ruling 2
+		// (#627) requires ambiguity judged inside create, not estate-wide.
+		// A parent that exists only outside create scope stays
+		// ErrSystemForbidden (preserved, not collapsed into not-found).
+		parent, err := resolveScopedRef(ctx, tx, systemConfig, *spec.ParentName, create)
 		if errors.Is(err, ErrSystemNotFound) {
 			return nil, ErrParentSystemNotFound
 		} else if err != nil {
 			return nil, err
 		}
-		in, err := inScopeTree(ctx, tx, systemTable, parent.ID, create)
-		if err != nil {
-			return nil, err
-		}
-		if !in {
-			return nil, ErrSystemForbidden
-		}
 		parentID = &parent.ID
 	}
 
-	// Resolve the optional located-at location by name to its id.
+	// Resolve the optional located-at location by name to its id, within
+	// create scope (scopedByNameInScope, ruling 2). No separate forbidden
+	// sentinel exists for this bind today, so out-of-scope folds into the
+	// same ErrLocationNotFound a truly absent one gets.
 	var locationID *string
 	if spec.LocationName != nil {
-		loc, err := p.locationByName(ctx, tx, *spec.LocationName)
+		loc, err := scopedByNameInScope(ctx, tx, locationConfig, *spec.LocationName, create)
 		if err != nil {
 			return nil, err // ErrLocationNotFound -> mapped to 422 by the API
 		}
@@ -485,7 +485,9 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	// (clear), and a named location becomes its id.
 	locationPatch := patch.LocationName
 	if patch.LocationName != nil && *patch.LocationName != "" {
-		loc, err := p.locationByName(ctx, tx, *patch.LocationName)
+		// scopedByNameInScope, not locationByName: ruling 2 (#627),
+		// ambiguity judged inside action rather than estate-wide.
+		loc, err := scopedByNameInScope(ctx, tx, locationConfig, *patch.LocationName, action)
 		if err != nil {
 			return nil, err // ErrLocationNotFound -> mapped to 422 by the API
 		}
@@ -499,24 +501,19 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 		}
 		standardPatchID = &sid
 	}
-	// The parent is a reparent within the system tree: resolve by name, require the
-	// new parent inside the caller's action scope, and cycle-guard against moving
-	// the system under itself or a descendant. "" clears to a root system; nil
-	// leaves the parent untouched.
+	// The parent is a reparent within the system tree: resolve within the
+	// caller's action scope (resolveScopedRef, ruling 2), which both
+	// requires the new parent inside that scope and judges ambiguity inside
+	// it too, and cycle-guard against moving the system under itself or a
+	// descendant. "" clears to a root system; nil leaves the parent
+	// untouched.
 	parentPatch := patch.ParentName
 	if patch.ParentName != nil && *patch.ParentName != "" {
-		parent, err := p.systemByName(ctx, tx, *patch.ParentName)
+		parent, err := resolveScopedRef(ctx, tx, systemConfig, *patch.ParentName, action)
 		if errors.Is(err, ErrSystemNotFound) {
 			return nil, ErrParentSystemNotFound
 		} else if err != nil {
 			return nil, err
-		}
-		in, err := inScopeTree(ctx, tx, systemTable, parent.ID, action)
-		if err != nil {
-			return nil, err
-		}
-		if !in {
-			return nil, ErrSystemForbidden
 		}
 		descendant, err := p.systemIsDescendant(ctx, tx, before.ID, parent.ID)
 		if err != nil {
@@ -642,10 +639,6 @@ func (p *PG) resolveSystemForAction(ctx context.Context, q querier, name string,
 	return resolveScoped(ctx, q, systemConfig, name, read, action)
 }
 
-func (p *PG) systemByName(ctx context.Context, q querier, name string) (*System, error) {
-	return scopedByName(ctx, q, systemConfig, name)
-}
-
 // SystemNameTaken reports whether name is already used within the placement a
 // create would actually land in (#627: the unique constraint is scoped to
 // placement, not global). parentRef wins over locationRef, mirroring
@@ -659,7 +652,11 @@ func (p *PG) SystemNameTaken(ctx context.Context, name string, parentRef, locati
 	case parentRef != nil && *parentRef != "":
 		parent, err := scopedByName(ctx, p.pool, systemConfig, *parentRef)
 		if err != nil {
-			return false, err
+			// withoutCandidates: this advisory has no caller scope to filter
+			// an ambiguous parentRef by (intentionally scope-blind, see
+			// ComponentNameTaken's comment), so a refusal here must never
+			// name a row the caller might not be able to read.
+			return false, withoutCandidates(err)
 		}
 		if err := p.pool.QueryRow(ctx, `select exists(select 1 from system where parent_id = $1 and name = $2)`, parent.ID, name).Scan(&exists); err != nil {
 			return false, fmt.Errorf("storage: system name taken: %w", err)
@@ -667,7 +664,7 @@ func (p *PG) SystemNameTaken(ctx context.Context, name string, parentRef, locati
 	case locationRef != nil && *locationRef != "":
 		loc, err := scopedByName(ctx, p.pool, locationConfig, *locationRef)
 		if err != nil {
-			return false, err
+			return false, withoutCandidates(err) // see the parentRef case above
 		}
 		if err := p.pool.QueryRow(ctx, `select exists(select 1 from system where parent_id is null and location_id = $1 and name = $2)`, loc.ID, name).Scan(&exists); err != nil {
 			return false, fmt.Errorf("storage: system name taken: %w", err)

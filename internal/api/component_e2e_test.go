@@ -306,3 +306,106 @@ func TestGetComponentByAmbiguousNameIs409(t *testing.T) {
 		t.Fatalf("409 body = %s, want it to name the ambiguous reference", body)
 	}
 }
+
+// TestComponentCreateResolvesParentWithinScopeAndNeverLeaksCandidates drives
+// ruling 2 (scope decides before ambiguity) over the CREATE path, not just
+// the read path TestGetComponentByAmbiguousNameIs409 already covers: a
+// deploy principal scoped to one component's subtree posts a bare parent
+// name that is ambiguous ESTATE-WIDE but unique within its own scope, and the
+// create must resolve to the in-scope row cleanly (not 409, not a coin-flip
+// onto the wrong "shared") rather than the pre-fix scope-blind resolve that
+// would either land on the wrong parent or refuse a create that should
+// succeed. It then drives the true 409: two in-scope matches for the same
+// bare name, and asserts the response body carries neither in-scope uuid it
+// cannot yet distinguish between NOR the out-of-scope uuid the caller was
+// never allowed to see, closing the disclosure C2 named (mapRefErr's
+// Candidates list, not just this one caller's principal grant).
+func TestComponentCreateResolvesParentWithinScopeAndNeverLeaksCandidates(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatalf("mint owner: %v", err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	// container is the scope root. wingA and wingB are two of its children,
+	// each holding a child of its own named "shared" (different parent
+	// buckets, so the DDL legalizes both). A THIRD "shared", entirely
+	// unrelated and outside container's subtree, is what the caller must
+	// never see the uuid of.
+	var container struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "container", "product": "generic-device"}, http.StatusCreated), &container); err != nil {
+		t.Fatalf("decode container: %v", err)
+	}
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "wing-a", "product": "generic-device", "parent": "container"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "wing-b", "product": "generic-device", "parent": "container"}, http.StatusCreated)
+	var wingAShared struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "shared", "product": "generic-device", "parent": "wing-a"}, http.StatusCreated), &wingAShared); err != nil {
+		t.Fatalf("decode wingA/shared: %v", err)
+	}
+	var outOfScopeShared struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "shared", "product": "generic-device"}, http.StatusCreated), &outOfScopeShared); err != nil {
+		t.Fatalf("decode unplaced shared: %v", err)
+	}
+
+	deployTok := setupScopedViewer(t, ctx, dsn, "deploy-container", "deploy", "component", container.ID)
+	// Confirmed out of reach for a direct read: the create below must not
+	// silently resolve onto it either.
+	c.do(deployTok, http.MethodGet, "/components/"+outOfScopeShared.ID, nil, http.StatusNotFound)
+
+	// One in-scope "shared" (wingA/shared): the bare name is ambiguous
+	// estate-wide (this one plus the out-of-scope root), but unique within
+	// the caller's own scope, so the create resolves cleanly onto it.
+	var leaf struct {
+		ID       string `json:"id"`
+		ParentID string `json:"parent_id"`
+	}
+	if err := json.Unmarshal(c.do(deployTok, http.MethodPost, "/components", map[string]any{"name": "leaf-1", "product": "generic-device", "parent": "shared"}, http.StatusCreated), &leaf); err != nil {
+		t.Fatalf("decode leaf-1: %v", err)
+	}
+	if leaf.ParentID != wingAShared.ID {
+		t.Fatalf("leaf-1 parent_id = %s, want the in-scope wingA/shared %s (not the out-of-scope shared or a guess)", leaf.ParentID, wingAShared.ID)
+	}
+
+	// A second "shared", under wingB this time, makes the bare name
+	// ambiguous WITHIN the caller's own scope too: now there is no single
+	// answer, and the create must 409, not guess wingA's.
+	var wingBShared struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "shared", "product": "generic-device", "parent": "wing-b"}, http.StatusCreated), &wingBShared); err != nil {
+		t.Fatalf("decode wingB/shared: %v", err)
+	}
+	status, body := c.send(deployTok, http.MethodPost, "/components", map[string]any{"name": "leaf-2", "product": "generic-device", "parent": "shared"})
+	if status != http.StatusConflict {
+		t.Fatalf("create with in-scope-ambiguous parent status = %d, want 409\nbody: %s", status, body)
+	}
+	// The out-of-scope uuid must never appear in the body (the disclosure
+	// C2 named); the two in-scope candidates MAY appear, per mapRefErr's
+	// contract of listing only what the caller's own scope proved exists.
+	if strings.Contains(string(body), outOfScopeShared.ID) {
+		t.Fatalf("409 body = %s, leaks the out-of-scope shared's uuid %s", body, outOfScopeShared.ID)
+	}
+}

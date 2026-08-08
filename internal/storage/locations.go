@@ -399,18 +399,15 @@ func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSp
 			return nil, ErrLocationForbidden
 		}
 	} else {
-		parent, err := p.locationByName(ctx, tx, *spec.ParentName)
+		// resolveScopedRef, not locationByName-then-inScope: ruling 2 (#627)
+		// requires ambiguity judged inside create, not estate-wide. A parent
+		// that exists only outside create scope stays ErrLocationForbidden
+		// (preserved, not collapsed into not-found).
+		parent, err := resolveScopedRef(ctx, tx, locationConfig, *spec.ParentName, create)
 		if errors.Is(err, ErrLocationNotFound) {
 			return nil, ErrParentNotFound
 		} else if err != nil {
 			return nil, err
-		}
-		in, err := p.inScope(ctx, tx, parent.ID, create)
-		if err != nil {
-			return nil, err
-		}
-		if !in {
-			return nil, ErrLocationForbidden
 		}
 		parentID = &parent.ID
 		parentType = &parent.LocationType
@@ -457,18 +454,13 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 
 	parentID := before.ParentID
 	if patch.ParentName != nil {
-		newParent, err := p.locationByName(ctx, tx, *patch.ParentName)
+		// resolveScopedRef, not locationByName-then-inScope: ruling 2
+		// (#627), ambiguity judged inside action rather than estate-wide.
+		newParent, err := resolveScopedRef(ctx, tx, locationConfig, *patch.ParentName, action)
 		if errors.Is(err, ErrLocationNotFound) {
 			return nil, ErrParentNotFound
 		} else if err != nil {
 			return nil, err
-		}
-		in, err := p.inScope(ctx, tx, newParent.ID, action)
-		if err != nil {
-			return nil, err
-		}
-		if !in {
-			return nil, ErrLocationForbidden
 		}
 		finalType := before.LocationType
 		if patch.LocationType != nil {
@@ -575,12 +567,6 @@ func (p *PG) resolveForAction(ctx context.Context, q querier, name string, read,
 	return resolveScoped(ctx, q, locationConfig, name, read, action)
 }
 
-// locationByName loads a single location by its unique name (no scope check),
-// reused by the system/component located-at resolution.
-func (p *PG) locationByName(ctx context.Context, q querier, name string) (*Location, error) {
-	return scopedByName(ctx, q, locationConfig, name)
-}
-
 // LocationNameTaken reports whether name is already used within the placement
 // a create would actually land in (#627: the unique constraint is scoped to
 // placement, not global). A parentRef makes it a child location
@@ -592,7 +578,11 @@ func (p *PG) LocationNameTaken(ctx context.Context, name string, parentRef *stri
 	if parentRef != nil && *parentRef != "" {
 		parent, err := scopedByName(ctx, p.pool, locationConfig, *parentRef)
 		if err != nil {
-			return false, err
+			// withoutCandidates: this advisory has no caller scope to filter
+			// an ambiguous parentRef by (intentionally scope-blind, see
+			// ComponentNameTaken's comment), so a refusal here must never
+			// name a row the caller might not be able to read.
+			return false, withoutCandidates(err)
 		}
 		if err := p.pool.QueryRow(ctx, `select exists(select 1 from location where parent_id = $1 and name = $2)`, parent.ID, name).Scan(&exists); err != nil {
 			return false, fmt.Errorf("storage: location name taken: %w", err)
@@ -603,12 +593,6 @@ func (p *PG) LocationNameTaken(ctx context.Context, name string, parentRef *stri
 		return false, fmt.Errorf("storage: location name taken: %w", err)
 	}
 	return exists, nil
-}
-
-// inScope reports whether a target location falls within a resolved scope,
-// delegating to the shared scoped-tree walk.
-func (p *PG) inScope(ctx context.Context, q querier, targetID string, set scope.Set) (bool, error) {
-	return inScopeTree(ctx, q, locationTable, targetID, set)
 }
 
 // querier is the read surface shared by *pgxpool.Pool and pgx.Tx, so scope and

@@ -167,7 +167,12 @@ func (p *PG) ComponentNameTaken(ctx context.Context, name string, parentRef, loc
 	case parentRef != nil && *parentRef != "":
 		parent, err := scopedByName(ctx, p.pool, componentConfig, *parentRef)
 		if err != nil {
-			return false, err
+			// withoutCandidates: this advisory has no caller scope to filter
+			// an ambiguous parentRef by (it is intentionally scope-blind, so
+			// availability matches the placement bucket asked about rather
+			// than the caller's own grant), so an ambiguity refusal here
+			// must never name a row the caller might not be able to read.
+			return false, withoutCandidates(err)
 		}
 		if err := p.pool.QueryRow(ctx, `select exists(select 1 from component where parent_id = $1 and name = $2)`, parent.ID, name).Scan(&exists); err != nil {
 			return false, fmt.Errorf("storage: component name taken: %w", err)
@@ -175,7 +180,7 @@ func (p *PG) ComponentNameTaken(ctx context.Context, name string, parentRef, loc
 	case locationRef != nil && *locationRef != "":
 		loc, err := scopedByName(ctx, p.pool, locationConfig, *locationRef)
 		if err != nil {
-			return false, err
+			return false, withoutCandidates(err) // see the parentRef case above
 		}
 		if err := p.pool.QueryRow(ctx, `select exists(select 1 from component where parent_id is null and location_id = $1 and name = $2)`, loc.ID, name).Scan(&exists); err != nil {
 			return false, fmt.Errorf("storage: component name taken: %w", err)
@@ -209,18 +214,17 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 			return nil, ErrComponentForbidden
 		}
 	} else {
-		parent, err := scopedByName(ctx, tx, componentConfig, *spec.ParentName)
+		// resolveScopedRef, not scopedByName-then-inScopeTree: ruling 2
+		// (#627) requires ambiguity judged inside create, not estate-wide,
+		// and Candidates on a collision must never name a component the
+		// caller cannot reach. A parent that exists only outside create
+		// scope stays ErrComponentForbidden (preserved, not collapsed into
+		// not-found: the caller supplied this reference itself).
+		parent, err := resolveScopedRef(ctx, tx, componentConfig, *spec.ParentName, create)
 		if errors.Is(err, ErrComponentNotFound) {
 			return nil, ErrParentComponentNotFound
 		} else if err != nil {
 			return nil, err
-		}
-		in, err := inScopeTree(ctx, tx, componentTable, parent.ID, create)
-		if err != nil {
-			return nil, err
-		}
-		if !in {
-			return nil, ErrComponentForbidden
 		}
 		parentID = &parent.ID
 	}
@@ -235,7 +239,13 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 	// scope to placement.
 	var sysID string
 	if spec.SystemName != nil {
-		sys, err := scopedByName(ctx, tx, systemConfig, *spec.SystemName)
+		// scopedByNameInScope, not scopedByName: ruling 2 (#627), ambiguity
+		// judged inside create rather than estate-wide. No separate
+		// forbidden sentinel exists for this binding today (only existence
+		// was ever checked), so a system that resolves to none within
+		// create scope folds into the same ErrSystemNotFound -> 422 a truly
+		// absent one gets, not a new status.
+		sys, err := scopedByNameInScope(ctx, tx, systemConfig, *spec.SystemName, create)
 		if err != nil {
 			return nil, err // ErrSystemNotFound -> 422
 		}
@@ -243,7 +253,9 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 	}
 	var locationID *string
 	if spec.LocationName != nil {
-		loc, err := scopedByName(ctx, tx, locationConfig, *spec.LocationName)
+		// scopedByNameInScope, not scopedByName: same reasoning as the
+		// system bind above.
+		loc, err := scopedByNameInScope(ctx, tx, locationConfig, *spec.LocationName, create)
 		if err != nil {
 			return nil, err // ErrLocationNotFound -> 422
 		}
@@ -356,30 +368,29 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 	// same three-state the system relocate uses.
 	locationPatch := patch.LocationName
 	if patch.LocationName != nil && *patch.LocationName != "" {
-		loc, err := scopedByName(ctx, tx, locationConfig, *patch.LocationName)
+		// scopedByNameInScope, not scopedByName: ruling 2 (#627), ambiguity
+		// judged inside action rather than estate-wide. No separate
+		// forbidden sentinel exists for this bind today, so out-of-scope
+		// folds into the same ErrLocationNotFound a truly absent one gets.
+		loc, err := scopedByNameInScope(ctx, tx, locationConfig, *patch.LocationName, action)
 		if err != nil {
 			return nil, err // ErrLocationNotFound -> mapped to 422 by the API
 		}
 		locationPatch = &loc.ID
 	}
-	// The parent is a reparent within the component tree: resolve by name, require
-	// the new parent inside the caller's action scope, and cycle-guard against
-	// moving the component under itself or a descendant. "" clears to a root
-	// component; nil leaves the parent untouched.
+	// The parent is a reparent within the component tree: resolve within the
+	// caller's action scope (resolveScopedRef, ruling 2), which both
+	// requires the new parent inside that scope and judges ambiguity inside
+	// it too, and cycle-guard against moving the component under itself or a
+	// descendant. "" clears to a root component; nil leaves the parent
+	// untouched.
 	parentPatch := patch.ParentName
 	if patch.ParentName != nil && *patch.ParentName != "" {
-		parent, err := scopedByName(ctx, tx, componentConfig, *patch.ParentName)
+		parent, err := resolveScopedRef(ctx, tx, componentConfig, *patch.ParentName, action)
 		if errors.Is(err, ErrComponentNotFound) {
 			return nil, ErrParentComponentNotFound
 		} else if err != nil {
 			return nil, err
-		}
-		in, err := inScopeTree(ctx, tx, componentTable, parent.ID, action)
-		if err != nil {
-			return nil, err
-		}
-		if !in {
-			return nil, ErrComponentForbidden
 		}
 		descendant, err := p.componentIsDescendant(ctx, tx, before.ID, parent.ID)
 		if err != nil {

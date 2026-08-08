@@ -115,17 +115,26 @@ func componentInScope(ctx context.Context, q querier, componentID *string, set s
 }
 
 // interfaceComponentID resolves an optional component reference (a name or a
-// uuid) to the component id the arc stores. A nil reference stays nil (a
-// server-hosted interface owns no component); an unknown one is the 422 sentinel
-// rather than a NULL that would silently detach the interface.
-func interfaceComponentID(ctx context.Context, q querier, ref *string) (*string, error) {
+// uuid) to the component id the arc stores, within the caller's create scope
+// (resolveScopedRef, ruling 2, #627: ambiguity is judged inside create, not
+// estate-wide, so its one caller no longer needs a separate inScopeTree check
+// afterward, and never learns an out-of-scope component's uuid from a
+// collision). A nil reference stays nil (a server-hosted interface owns no
+// component); an absent one is the 422 not-found sentinel, one that exists
+// only outside create scope is the 403 forbidden sentinel (preserved from the
+// pre-#627 two-step resolve, not collapsed into not-found: the caller supplied
+// this reference itself in the same request).
+func interfaceComponentID(ctx context.Context, q querier, ref *string, create scope.Set) (*string, error) {
 	if ref == nil {
 		return nil, nil
 	}
-	c, err := scopedByName(ctx, q, componentConfig, *ref)
-	if errors.Is(err, ErrComponentNotFound) {
+	c, err := resolveScopedRef(ctx, q, componentConfig, *ref, create)
+	switch {
+	case errors.Is(err, ErrComponentNotFound):
 		return nil, ErrInterfaceComponentNotFound
-	} else if err != nil {
+	case errors.Is(err, ErrComponentForbidden):
+		return nil, ErrInterfaceForbidden
+	case err != nil:
 		return nil, err
 	}
 	return &c.ID, nil
@@ -243,28 +252,22 @@ func (p *PG) CreateInterface(ctx context.Context, actorID string, spec Interface
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Resolved once, via interfaceComponentID (uuid-or-name, ADR-0062), and
-	// reused for both the create-scope check below and the insert's FK value:
-	// the old code resolved spec.Component a second time here, via its own
-	// inline `select id from component where name = $1`, which is exactly
-	// the shape that raises SQLSTATE 21000 the moment two components share a
-	// name (#627).
-	componentID, err := interfaceComponentID(ctx, tx, spec.Component)
+	// Resolved once, via interfaceComponentID (uuid-or-name, ADR-0062,
+	// resolved inside create scope per ruling 2, #627), and reused for the
+	// insert's FK value: the old code resolved spec.Component a second time
+	// here, via its own inline `select id from component where name = $1`,
+	// which is exactly the shape that raises SQLSTATE 21000 the moment two
+	// components share a name. No separate inScopeTree check follows:
+	// interfaceComponentID already refused a component outside create scope
+	// (as the component's own not-found sentinel, never surfacing an
+	// out-of-scope uuid), so a resolved non-nil componentID is always
+	// in-scope by construction.
+	componentID, err := interfaceComponentID(ctx, tx, spec.Component, create)
 	if err != nil {
 		return nil, err
 	}
-	if componentID == nil {
-		if !create.All {
-			return nil, ErrInterfaceForbidden
-		}
-	} else {
-		in, err := inScopeTree(ctx, tx, componentTable, *componentID, create)
-		if err != nil {
-			return nil, err
-		}
-		if !in {
-			return nil, ErrInterfaceForbidden
-		}
+	if componentID == nil && !create.All {
+		return nil, ErrInterfaceForbidden
 	}
 
 	params := spec.Params

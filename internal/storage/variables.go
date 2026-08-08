@@ -329,8 +329,15 @@ order by r.name, r.band desc, r.depth asc`
 
 // resolveVariableOwner turns an owner kind + optional name into the owning id,
 // enforcing the create scope: a platform variable needs an all create scope; a
-// scoped one resolves its owner in the matching tree and requires it within the
-// create scope. Returns a nil id for a platform owner.
+// scoped one resolves its owner in the matching tree, within the create scope
+// (resolveScopedRef, ruling 2, #627: ambiguity is judged inside create, not
+// estate-wide, so a name unique to the caller's own create scope resolves even
+// when an unrelated out-of-scope row shares it, and the resulting id is never
+// one the caller could not otherwise reach). An absent owner is
+// ErrVariableOwnerNotFound; one that exists only outside create scope is
+// ErrVariableForbidden, preserved from the pre-#627 two-step resolve rather
+// than collapsed into not-found (the caller supplied this reference itself in
+// the same request). Returns a nil id for a platform owner.
 func (p *PG) resolveVariableOwner(ctx context.Context, q querier, kind string, name *string, create scope.Set) (*string, error) {
 	if kind == "platform" {
 		if !create.All {
@@ -348,19 +355,19 @@ func (p *PG) resolveVariableOwner(ctx context.Context, q querier, kind string, n
 	switch kind {
 	case "component":
 		var c *Component
-		c, err = scopedByName(ctx, q, componentConfig, *name)
+		c, err = resolveScopedRef(ctx, q, componentConfig, *name, create)
 		if c != nil {
 			id = c.ID
 		}
 	case "system":
 		var s *System
-		s, err = scopedByName(ctx, q, systemConfig, *name)
+		s, err = resolveScopedRef(ctx, q, systemConfig, *name, create)
 		if s != nil {
 			id = s.ID
 		}
 	case "location":
 		var l *Location
-		l, err = scopedByName(ctx, q, locationConfig, *name)
+		l, err = resolveScopedRef(ctx, q, locationConfig, *name, create)
 		if l != nil {
 			id = l.ID
 		}
@@ -368,18 +375,13 @@ func (p *PG) resolveVariableOwner(ctx context.Context, q querier, kind string, n
 		return nil, ErrVariableOwnerNotFound
 	}
 	if err != nil {
+		if errors.Is(err, ErrComponentForbidden) || errors.Is(err, ErrSystemForbidden) || errors.Is(err, ErrLocationForbidden) {
+			return nil, ErrVariableForbidden
+		}
 		if errors.Is(err, ErrComponentNotFound) || errors.Is(err, ErrSystemNotFound) || errors.Is(err, ErrLocationNotFound) {
 			return nil, ErrVariableOwnerNotFound
 		}
 		return nil, err
-	}
-	tbl, _ := scopeKindTable(kind)
-	inScope, err := inScopeTree(ctx, q, tbl, id, create)
-	if err != nil {
-		return nil, err
-	}
-	if !inScope {
-		return nil, ErrVariableForbidden
 	}
 	return &id, nil
 }
