@@ -105,6 +105,12 @@ type EffectiveRole struct {
 	SystemRole
 	FromStandard bool
 	AssignedTo   []string // component names filling this role in this system
+	// Positions is AssignedTo's own 1-based position, index for index: a
+	// role's occupants persist gaps (an unassign never compacts, #626), so
+	// AssignedTo[i]'s real position is Positions[i], never i+1. A caller that
+	// needs to address a specific occupant's slot (SwapPositions) must read
+	// this rather than assume the array is dense.
+	Positions []int
 }
 
 // Assigned reports how many components fill the role.
@@ -276,7 +282,10 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 		                  where rp.role_id = roles.id), '{}') as products,
 		       coalesce((select array_agg(ac.name order by ra.position)
 		                   from system_role_assignment ra join component ac on ac.id = ra.component_id
-		                  where ra.role_id = roles.id and ra.system_id = sys.id), '{}') as assigned
+		                  where ra.role_id = roles.id and ra.system_id = sys.id), '{}') as assigned,
+		       coalesce((select array_agg(ra.position order by ra.position)
+		                   from system_role_assignment ra
+		                  where ra.role_id = roles.id and ra.system_id = sys.id), '{}') as positions
 		from roles, sys
 		order by roles.name`, systemName)
 	if err != nil {
@@ -289,7 +298,7 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 		var e EffectiveRole
 		if err := rows.Scan(&e.ID, &e.Name, &e.DisplayName, &e.Quorum, &e.Capacity, &e.PositionLabels,
 			&e.Impact, &e.FromStandard, &e.CreatedAt, &e.UpdatedAt,
-			&e.AcceptedTypes, &e.PinnedProducts, &e.AssignedTo); err != nil {
+			&e.AcceptedTypes, &e.PinnedProducts, &e.AssignedTo, &e.Positions); err != nil {
 			return nil, fmt.Errorf("storage: scan effective role: %w", err)
 		}
 		out = append(out, e)

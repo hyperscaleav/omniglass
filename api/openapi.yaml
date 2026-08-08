@@ -1536,6 +1536,14 @@ components:
           type:
             - array
             - "null"
+        positions:
+          description: AssignedTo's own 1-based position, index for index; not necessarily i+1, since an unassign leaves a gap rather than compacting
+          items:
+            format: int64
+            type: integer
+          type:
+            - array
+            - "null"
         quorum:
           format: int64
           type: integer
@@ -1553,6 +1561,7 @@ components:
         - impact
         - from_standard
         - assigned_to
+        - positions
         - assigned
         - understaffed
       type: object

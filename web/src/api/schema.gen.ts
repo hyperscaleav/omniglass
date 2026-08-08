@@ -4296,6 +4296,8 @@ export interface components {
             pinned_products: string[] | null;
             /** @description Human labels for each position within the role, by index; empty when unlabeled */
             position_labels: string[] | null;
+            /** @description AssignedTo's own 1-based position, index for index; not necessarily i+1, since an unassign leaves a gap rather than compacting */
+            positions: number[] | null;
             /** Format: int64 */
             quorum: number;
             /**

@@ -80,7 +80,13 @@ type effectiveRoleBody struct {
 	Impact         string   `json:"impact" doc:"What an impaired role means for its system: outage, degraded, or none"`
 	FromStandard   bool     `json:"from_standard" doc:"True when the role is inherited from the system's standard; false when declared on the system"`
 	AssignedTo     []string `json:"assigned_to" doc:"The component names filling this role in this system"`
-	Assigned       int      `json:"assigned" doc:"How many components fill the role"`
+	// Positions is index-for-index with AssignedTo: Positions[i] is
+	// AssignedTo[i]'s own 1-based position. A gap left by an unassign is
+	// never compacted (#626), so the array is not assumed dense; a caller
+	// reordering occupants (the console's drag-to-reorder) must read the
+	// real position here rather than assume AssignedTo[i] sits at i+1.
+	Positions []int `json:"positions" doc:"AssignedTo's own 1-based position, index for index; not necessarily i+1, since an unassign leaves a gap rather than compacting"`
+	Assigned  int   `json:"assigned" doc:"How many components fill the role"`
 	// Understaffed counts assignment rows against quorum regardless of
 	// health, so it can disagree with the health read's short for the same
 	// role at the same instant when an assigned component's own verdict is
@@ -104,6 +110,10 @@ func toEffectiveRoleBody(e *storage.EffectiveRole) effectiveRoleBody {
 	if labels == nil {
 		labels = []string{}
 	}
+	positions := e.Positions
+	if positions == nil {
+		positions = []int{}
+	}
 	return effectiveRoleBody{
 		Name:           e.Name,
 		DisplayName:    e.DisplayName,
@@ -114,6 +124,7 @@ func toEffectiveRoleBody(e *storage.EffectiveRole) effectiveRoleBody {
 		PinnedProducts: products,
 		Impact:         e.Impact,
 		FromStandard:   e.FromStandard,
+		Positions:      positions,
 		AssignedTo:     to,
 		Assigned:       e.Assigned(),
 		Understaffed:   e.Understaffed(),

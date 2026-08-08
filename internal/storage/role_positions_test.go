@@ -47,6 +47,17 @@ func assignedTo(t *testing.T, roles []storage.EffectiveRole, name string) []stri
 	return nil
 }
 
+func positionsOf(t *testing.T, roles []storage.EffectiveRole, name string) []int {
+	t.Helper()
+	for _, r := range roles {
+		if r.Name == name {
+			return r.Positions
+		}
+	}
+	t.Fatalf("role %q not found among %+v", name, roles)
+	return nil
+}
+
 // TestAssignedToIsPositionOrdered proves the #626 ordered read: assignment
 // order, not alphabetical order, decides how a role's occupants list. Both
 // resolved reads (EffectiveRoles, the declaration-plus-staffing read, and
@@ -261,6 +272,77 @@ func TestUnassignLeavesGapThenRefills(t *testing.T) {
 	if got := assignedTo(t, roles, "table-mic"); !sameSeq(got, []string{"one", "four", "three"}) {
 		t.Fatalf("after refill = %v, want [one four three] (four took the vacated position 2)", got)
 	}
+}
+
+// TestEffectiveRolesReportsRealPositionsAcrossAGap proves EffectiveRole.Positions
+// carries each AssignedTo entry's OWN position, not an assumed i+1: a console
+// that reorders occupants (drag-to-reorder) has to address a real, possibly
+// non-contiguous position, and index-plus-one silently guesses wrong the
+// moment a gap exists (task 9 review, finding C3). Reuses
+// TestUnassignLeavesGapThenRefills's exact gap shape: after unassigning the
+// occupant at position 2, AssignedTo is [one three] but their real positions
+// are [1 3], not [1 2].
+func TestEffectiveRolesReportsRealPositionsAcrossAGap(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	declareTableMic(t, ctx, gw, all, "gap-positions-sys", 1)
+	for _, name := range []string{"one", "two", "three"} {
+		newBarInto(t, ctx, gw, all, name)
+	}
+	for _, name := range []string{"one", "two", "three"} {
+		if err := gw.AssignRole(ctx, "", "gap-positions-sys", "table-mic", name, all); err != nil {
+			t.Fatalf("assign %s: %v", name, err)
+		}
+	}
+	roles, err := gw.EffectiveRoles(ctx, "gap-positions-sys", all)
+	if err != nil {
+		t.Fatalf("effective roles: %v", err)
+	}
+	if got := positionsOf(t, roles, "table-mic"); !intSeq(got, []int{1, 2, 3}) {
+		t.Fatalf("positions before unassign = %v, want [1 2 3]", got)
+	}
+
+	if err := gw.UnassignRole(ctx, "", "gap-positions-sys", "table-mic", "two", all); err != nil {
+		t.Fatalf("unassign two: %v", err)
+	}
+	roles, err = gw.EffectiveRoles(ctx, "gap-positions-sys", all)
+	if err != nil {
+		t.Fatalf("effective roles after unassign: %v", err)
+	}
+	gotAssigned := assignedTo(t, roles, "table-mic")
+	gotPositions := positionsOf(t, roles, "table-mic")
+	if !sameSeq(gotAssigned, []string{"one", "three"}) {
+		t.Fatalf("assigned_to after unassign = %v, want [one three]", gotAssigned)
+	}
+	if !intSeq(gotPositions, []int{1, 3}) {
+		t.Fatalf("positions after unassign = %v, want [1 3] (three keeps its own position 3, not a compacted 2)", gotPositions)
+	}
+	if len(gotAssigned) != len(gotPositions) {
+		t.Fatalf("assigned_to and positions have different lengths: %d vs %d", len(gotAssigned), len(gotPositions))
+	}
+}
+
+func intSeq(got, want []int) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // TestAssignRefusesAtCapacity proves AssignRole enforces capacity by an
