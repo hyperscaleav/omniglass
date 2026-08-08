@@ -89,6 +89,12 @@ type scopedConfig[T any] struct {
 	// GET still computes it in full; attachComponentPath is the only
 	// implementation that reads full today, the location/system ones ignore
 	// it (neither has a bare-render abbrev source at all).
+	//
+	// PathOf itself still runs once per row inside scopedList (two to three
+	// queries each, the walk itself, not the abbrev this flag guards), an
+	// N+1 the review flagged as real at estate scale but out of scope for
+	// this fix round; batching it across a whole LIST into one recursive
+	// CTE is tracked separately (#643).
 	attachPath func(ctx context.Context, q querier, v *T, full bool) error
 }
 
