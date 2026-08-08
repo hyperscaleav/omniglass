@@ -3016,6 +3016,15 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   proof); the health rollup runs system -> location, and a system's own location is a direct input to
   that rollup the way a component's placement no longer is post-#626, so "a placement move never
   recomputes health" holds for every reparent and every component relocate but not for this one field.
+  This is a correctness statement, not a coverage claim: a **second**, known-and-tracked gap sits
+  beside it. `locationVerdict` also rolls up recursively through the location tree (a system's
+  location resolves upward to every ancestor, and a location's own verdict folds every system in its
+  subtree downward), so a location with placed descendants that moves to a new parent leaves both the
+  old and new ancestors' recorded verdicts stale, exactly the shape a system relocate closes but
+  nothing closes for a location move. This is not new here: `UpdateLocation`'s old reparent branch
+  never recomputed health either, so `MoveLocation` carries the gap forward rather than introducing or
+  closing it, per the same "`:move` does not add new recompute calls" ruling. Tracked as
+  [#642](https://github.com/hyperscaleav/omniglass/issues/642), not fixed in this task.
 - **Decision (the gap this closes):** `UpdateComponent`'s and `UpdateSystem`'s old reparent branches
   guarded a rejected reparent only on the non-empty case (`if patch.ParentName != nil &&
   *patch.ParentName != ""`); an explicit empty string skipped the guard entirely and set `parent_id`
@@ -3055,9 +3064,10 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   it deserves its own grant and its own audit trail entry rather than riding along with whatever else
   a PATCH happened to touch.
 - **Context:** Task 13 of the identity-model epic ([#627](https://github.com/hyperscaleav/omniglass/issues/627)).
-  `location:checkName` and the two storage placement test files (`components_placement_test.go`,
-  `systems_placement_test.go`) and the placement end-to-end tests moved to the new verb rather than
-  being deleted; the compiler found every storage caller once the `Patch` struct fields were removed,
-  the HTTP end-to-end callers (`map[string]any` bodies, resolved only at request time) did not, and
-  were found by re-reading every `PATCH .../parent` and `PATCH .../location` call site by hand.
+  The two storage placement test files (`components_placement_test.go`, `systems_placement_test.go`)
+  and the placement end-to-end tests moved to the new verb rather than being deleted; the compiler
+  found every storage caller once the `Patch` struct fields were removed, the HTTP end-to-end callers
+  (`map[string]any` bodies, resolved only at request time) did not, and were found by re-reading every
+  `PATCH .../parent` and `PATCH .../location` call site by hand. `location:checkName` is unaffected:
+  it is the advisory placement-availability precheck, unrelated to `:move`, and was not touched.
 - **Tracked under** epic [#627](https://github.com/hyperscaleav/omniglass/issues/627).

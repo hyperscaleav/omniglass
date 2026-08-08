@@ -569,7 +569,7 @@ func (p *PG) MoveLocation(ctx context.Context, actorID, name string, move Locati
 	// downward), so a location with placed descendants moving to a new parent
 	// really does change what its old and new ancestors' rollups should read.
 	// That staleness is not new here; MoveLocation just carries the gap
-	// UpdateLocation already had.
+	// UpdateLocation already had. Tracked, not fixed here: #642.
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit move location: %w", err)
 	}
