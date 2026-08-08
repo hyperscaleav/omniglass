@@ -42,23 +42,69 @@ import { describeError } from "../lib/format";
 // and an official standard's roles are read-only: the list renders,
 // the controls do not.
 
-// The draft a row (or the add row) edits: everything a RoleSpec carries.
-type RoleDraft = { display: string; quorum: string; acceptedTypes: string[]; pinnedProducts: string[] };
+// A role's impact, as the draft edits it: what an impaired role means for its
+// system's verdict. Kept a plain string in the draft (a <select> value) and
+// narrowed only where RoleSpec needs the literal union.
+type Impact = "outage" | "degraded" | "none";
 
-const emptyDraft = (): RoleDraft => ({ display: "", quorum: "1", acceptedTypes: [], pinnedProducts: [] });
+// The draft a row (or the add row) edits: everything a RoleSpec carries. Every
+// field the write body accepts belongs here; a field added to RoleSpec but not
+// here is silently cleared on every unrelated edit, which is exactly the bug
+// this type used to carry (#626, predates the epic: impact, capacity, and
+// position_labels were all missing until this commit, see build-log.md).
+type RoleDraft = {
+  display: string;
+  quorum: string;
+  acceptedTypes: string[];
+  pinnedProducts: string[];
+  impact: Impact;
+  // Blank means "leave unchanged" (or unbounded on first declare), never zero;
+  // buildSpec omits the field entirely rather than sending a coerced number.
+  capacity: string;
+  positionLabels: string[];
+};
+
+const emptyDraft = (): RoleDraft => ({
+  display: "",
+  quorum: "1",
+  acceptedTypes: [],
+  pinnedProducts: [],
+  impact: "degraded",
+  capacity: "",
+  positionLabels: [],
+});
+
+// What an impaired role means for its system: the same three values the
+// health chain folds worst-wins.
+const IMPACT_OPTIONS: { value: Impact; label: string }[] = [
+  { value: "outage", label: "Outage" },
+  { value: "degraded", label: "Degraded" },
+  { value: "none", label: "None" },
+];
 
 // buildSpec coerces the draft into the write body. A blank quorum reads as one
-// (the server's own default), and a quorum that is not a positive whole number is
-// reported rather than sent malformed.
+// (the server's own default), and a quorum or capacity that is not a positive
+// whole number is reported rather than sent malformed. The PUT is a wholesale
+// replace, so every field the API accepts must round-trip here or an
+// unrelated edit silently clears it server-side.
 export function buildSpec(draft: RoleDraft): RoleSpec | string {
   const text = draft.quorum.trim();
   const quorum = text === "" ? 1 : Number(text);
   if (!Number.isInteger(quorum) || quorum < 1) return `"${text}" is not a whole number of components.`;
+  const capText = draft.capacity.trim();
+  let capacity: number | undefined;
+  if (capText !== "") {
+    capacity = Number(capText);
+    if (!Number.isInteger(capacity) || capacity < 1) return `"${capText}" is not a whole number of components.`;
+  }
   return {
     quorum,
     display_name: draft.display.trim() || undefined,
     accepted_types: draft.acceptedTypes,
     pinned_products: draft.pinnedProducts,
+    impact: draft.impact,
+    capacity,
+    position_labels: draft.positionLabels,
   };
 }
 
@@ -119,6 +165,9 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
       quorum: String(r.quorum),
       acceptedTypes: [...(r.accepted_types ?? [])],
       pinnedProducts: [...(r.pinned_products ?? [])],
+      impact: (r.impact as Impact) || "degraded",
+      capacity: r.capacity != null ? String(r.capacity) : "",
+      positionLabels: [...(r.position_labels ?? [])],
     });
     setErr(null);
   }
@@ -226,6 +275,53 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
     );
   }
 
+  // A freeform, position-ordered sibling of TokenSet: labels typed rather than
+  // picked from a catalog, one per position (index 0 is position 1). Replaces
+  // the set wholesale on save, same as the two catalog-backed sets above.
+  function LabelSet(p: { labels: string[]; placeholder: string; removeLabel: (v: string) => string; onChange: (next: string[]) => void }): JSX.Element {
+    const [text, setText] = createSignal("");
+    const add = () => {
+      const v = text().trim();
+      if (!v) return;
+      p.onChange([...p.labels, v]);
+      setText("");
+    };
+    return (
+      <div class="flex flex-col gap-1.5">
+        <div class="flex flex-wrap items-center gap-1.5">
+          <Show when={p.labels.length} fallback={<span class="text-[11px] italic text-base-content/40">unlabeled positions</span>}>
+            <For each={p.labels}>
+              {(v, i) => (
+                <span class="badge badge-outline badge-sm gap-1">
+                  {i() + 1}. {v}
+                  <button
+                    type="button"
+                    class="ml-0.5 inline-flex opacity-60 hover:opacity-100"
+                    aria-label={p.removeLabel(v)}
+                    onClick={() => p.onChange(p.labels.filter((_, j) => j !== i()))}
+                  >
+                    <X size={11} />
+                  </button>
+                </span>
+              )}
+            </For>
+          </Show>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <input
+            class="input input-bordered input-sm min-w-0 flex-1"
+            placeholder={p.placeholder}
+            aria-label={p.placeholder}
+            value={text()}
+            onInput={(e) => setText(e.currentTarget.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
+          />
+          <Button square size="xs" icon={Plus} label="Add position label" title="Add" onClick={add} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div class="flex flex-col gap-2">
       <div class="flex items-baseline justify-between gap-2">
@@ -264,6 +360,7 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
                     </Show>
                   </span>
                   <span class="badge badge-ghost badge-sm shrink-0 tnum">{r.quorum} wanted</span>
+                  <span class="badge badge-ghost badge-sm shrink-0 capitalize">{r.impact} impact</span>
                   <Show when={canDeclare() && editing() !== r.name}>
                     <Button square size="xs" icon={Pencil} label={`Edit ${r.name}`} title="Edit" onClick={() => openEdit(r)} />
                   </Show>
@@ -313,6 +410,23 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
                         value={draft().quorum}
                         onInput={(e) => setDraft({ ...draft(), quorum: e.currentTarget.value })}
                       />
+                      <input
+                        class="input input-bordered input-sm w-20 shrink-0 tnum"
+                        type="number"
+                        min="1"
+                        placeholder="cap"
+                        aria-label={`Capacity for ${r.name}`}
+                        value={draft().capacity}
+                        onInput={(e) => setDraft({ ...draft(), capacity: e.currentTarget.value })}
+                      />
+                      <select
+                        class="select select-bordered select-sm w-28 shrink-0"
+                        aria-label={`Impact for ${r.name}`}
+                        value={draft().impact}
+                        onChange={(e) => setDraft({ ...draft(), impact: e.currentTarget.value as Impact })}
+                      >
+                        <For each={IMPACT_OPTIONS}>{(o) => <option value={o.value}>{o.label}</option>}</For>
+                      </select>
                       <Button square size="xs" intent="action" icon={Check} label={`Save ${r.name}`} title="Save" disabled={busy()} onClick={() => saveEdit(r)} />
                       <Button square size="xs" icon={X} label="Cancel role edit" title="Cancel" onClick={() => setEditing(null)} />
                     </div>
@@ -331,6 +445,12 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
                       emptyLabel="any product of an accepted type"
                       removeLabel={(c) => `Stop pinning ${c}`}
                       onChange={(next) => setDraft({ ...draft(), pinnedProducts: next })}
+                    />
+                    <LabelSet
+                      labels={draft().positionLabels}
+                      placeholder="Label a position, e.g. Left channel…"
+                      removeLabel={(v) => `Remove position label ${v}`}
+                      onChange={(next) => setDraft({ ...draft(), positionLabels: next })}
                     />
                   </div>
                 </Show>
@@ -366,6 +486,23 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
                 value={addDraft().quorum}
                 onInput={(e) => setAddDraft({ ...addDraft(), quorum: e.currentTarget.value })}
               />
+              <input
+                class="input input-bordered input-sm w-20 shrink-0 tnum"
+                type="number"
+                min="1"
+                placeholder="cap"
+                aria-label="Capacity for the new role"
+                value={addDraft().capacity}
+                onInput={(e) => setAddDraft({ ...addDraft(), capacity: e.currentTarget.value })}
+              />
+              <select
+                class="select select-bordered select-sm w-28 shrink-0"
+                aria-label="Impact for the new role"
+                value={addDraft().impact}
+                onChange={(e) => setAddDraft({ ...addDraft(), impact: e.currentTarget.value as Impact })}
+              >
+                <For each={IMPACT_OPTIONS}>{(o) => <option value={o.value}>{o.label}</option>}</For>
+              </select>
               <Button square size="xs" intent="action" icon={Plus} label="Declare role" title="Declare" disabled={busy()} onClick={declare} />
               <Button square size="xs" icon={X} label="Cancel role declaration" title="Cancel" onClick={resetAdd} />
             </div>
@@ -384,6 +521,12 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
               emptyLabel="any product of an accepted type"
               removeLabel={(c) => `Stop pinning ${c}`}
               onChange={(next) => setAddDraft({ ...addDraft(), pinnedProducts: next })}
+            />
+            <LabelSet
+              labels={addDraft().positionLabels}
+              placeholder="Label a position, e.g. Left channel…"
+              removeLabel={(v) => `Remove position label ${v}`}
+              onChange={(next) => setAddDraft({ ...addDraft(), positionLabels: next })}
             />
           </Show>
         </div>

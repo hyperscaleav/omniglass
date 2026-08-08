@@ -96,7 +96,14 @@ describe("RoleEditor on a standard", () => {
 
     await waitFor(() => expect(put).toBeTruthy());
     expect(put!.url).toContain("/standards/meeting-room/roles/camera");
-    expect(await put!.json()).toEqual({ quorum: 3, display_name: "Room camera", accepted_types: ["video-bar"], pinned_products: [] });
+    expect(await put!.json()).toEqual({
+      quorum: 3,
+      display_name: "Room camera",
+      accepted_types: ["video-bar"],
+      pinned_products: [],
+      impact: "degraded",
+      position_labels: [],
+    });
   });
 
   it("edits a role in place, replacing the typed-slot sets wholesale", async () => {
@@ -121,7 +128,40 @@ describe("RoleEditor on a standard", () => {
 
     await waitFor(() => expect(put).toBeTruthy());
     expect(put!.url).toContain("/standards/meeting-room/roles/main-display");
-    expect(await put!.json()).toEqual({ quorum: 2, display_name: "Main display", accepted_types: ["display"], pinned_products: [] });
+    expect(await put!.json()).toEqual({
+      quorum: 2,
+      display_name: "Main display",
+      accepted_types: ["display"],
+      pinned_products: [],
+      impact: "outage", // main-display's declared impact, preserved
+      position_labels: [],
+    });
+  });
+
+  // Predates the epic (#626): buildSpec sent only quorum/display/typed-slot
+  // fields, so the wholesale-replace PUT defaulted an omitted impact to
+  // "degraded" server-side, silently downgrading an outage-impact role on any
+  // unrelated edit. See build-log.md.
+  it("preserves a role's impact when only its quorum changes", async () => {
+    let put: Request | undefined;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "PUT") {
+        put = req.clone();
+        return json({ name: "main-display", display_name: "Main display", quorum: 2, accepted_types: ["display"], impact: "outage" });
+      }
+      return json({ roles: declared });
+    });
+
+    const { getByLabelText } = mount();
+    fireEvent.click(getByLabelText("Edit main-display"));
+    const quorum = getByLabelText("Quorum for main-display") as HTMLInputElement;
+    fireEvent.input(quorum, { target: { value: "2" } });
+    fireEvent.click(getByLabelText("Save main-display"));
+
+    await waitFor(() => expect(put).toBeTruthy());
+    const body = await put!.json();
+    expect(body.impact).toBe("outage"); // main-display's declared impact, untouched
   });
 
   it("refuses a quorum that is not a whole number of components, before writing", async () => {
