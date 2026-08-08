@@ -2612,10 +2612,12 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   `Role.Contributes()` (`internal/health/verdict.go`) has exactly two branches, healthy when
   satisfied and `ImpactVerdict(r.Impact)` when impaired, and `SystemVerdict` folds it worst-wins
   into both the recorded outcome and the served one; the chain landed in `5a050e5` (#323), well
-  before this epic was written. The typed-slot rebuild (`feat: capability-gated staffing
-  retires`) changed only what makes a component *occupy* a slot: `Occupies()` now reads the
-  component's own verdict (`Verdict != Outage`) instead of resolving a per-capability
-  satisfaction set, touching neither `ImpactVerdict`, `Contributes`, nor the fold. The one real
+  before this epic was written. Task 5's rebuild changed only what makes a component *occupy*
+  a slot, across two commits: `feat: capability-gated staffing retires` (`ca78bd3`) first read
+  `Occupies()` as `Verdict == Healthy`, a stricter threshold that let even an info alarm remove
+  a component from every role it filled, then its own review-round fix, `fix: a degraded
+  occupant still satisfies its role` (`dbfa284`), loosened it to the intended `Verdict !=
+  Outage`. Neither commit touched `ImpactVerdict`, `Contributes`, or the fold. The one real
   gap in this area was vocabulary, not behavior: `understaffed` (the roles read,
   `Quorum - len(AssignedTo)`) is health-blind assignment arithmetic, while `short` and
   `satisfying` (the health read) are occupancy-aware, so a role whose sole assignee carries a
