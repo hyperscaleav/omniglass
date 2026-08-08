@@ -429,11 +429,14 @@ fills each role today), and **staffing** (assign and unassign). It is **not** th
 [IAM role](/architecture/identity-access/): `/roles` is the RBAC catalog, these routes are the estate model.
 
 A role is addressed **by name within its owner**, so every declaration is a `PUT` that declares or
-revises in place. The body is `{display_name?, quorum?, accepted_types?, pinned_products?, impact?}`;
-`accepted_types` and `pinned_products` each **replace** their set wholesale (the typed-slot guard,
-below), and `impact` is `outage` / `degraded` / `none` (omitted means `degraded`), what an impaired role
-does to its system's [health](#health-the-verdict-and-why); an unknown impact is a 422. Gating follows
-the owner:
+revises in place. The body is `{display_name?, quorum?, capacity?, position_labels?, accepted_types?,
+pinned_products?, impact?}`; `accepted_types` and `pinned_products` each **replace** their set
+wholesale (the typed-slot guard, below), as does `position_labels` (a human label for each position
+within the role, by index). `capacity` is the most components the role will accept (at least
+`quorum`); omitted leaves whatever is already declared unchanged, or unbounded on first declare,
+with no way back to unbounded once set. `impact` is `outage` / `degraded` / `none` (omitted means
+`degraded`), what an impaired role does to its system's [health](#health-the-verdict-and-why); an
+unknown impact is a 422. Gating follows the owner:
 
 - `GET /standards/{id}/roles` plus `PUT` / `DELETE /standards/{id}/roles/{role}`, gated `standard:read` /
   `:update` / `:delete`. Withdrawing a role takes every assignment conforming systems made to it (a
@@ -441,32 +444,50 @@ the owner:
 - `PUT` / `DELETE /systems/{name}/roles/{role}`, gated `system:update`, for a role declared **directly on
   one system**. A role the system does not declare **itself** is a 404 here: an inherited role is
   withdrawn on the standard.
-- `GET /systems/{name}/roles` is the **resolved read**, gated `system:read`: the declaration (including
-  `impact`) plus `from_standard`, `assigned_to` (the component names filling it here), `assigned`, and
-  **`understaffed`** (how many more before quorum), the counts **served, not computed by the client**.
-  A one-off system returns only its own roles.
+- `GET /systems/{name}/roles` is the **resolved read**, gated `system:read`: the declaration
+  (including `impact`, `capacity`, `position_labels`) plus `from_standard`, `assigned_to` (the
+  component names filling it here, in position order), `positions` (each entry's own 1-based
+  position, index for index with `assigned_to`; not assumed dense, since an unassign leaves a gap
+  rather than compacting), `assigned`, and **`understaffed`** (how many more before quorum), the
+  counts **served, not computed by the client**. A one-off system returns only its own roles.
 - `PUT /systems/{name}/roles/{role}/assignments/{component}` puts a component in the role (204,
   idempotent); `DELETE` takes it out (204; a component not filling the role is a 404). Both gate on
   `system:update`.
+- `POST /systems/{name}/roles/{role}:swapPositions` exchanges two occupants' positions, from
+  `{position, with}` (204, `system:update`): the only reorder primitive the API exposes, since a
+  position is an ordering attribute of an assignment, not a second address for one, and there is no
+  "move to index N" route.
 
 Every system route resolves its owner **within the caller's scope first**, so an
 out-of-scope system is a **non-disclosing 404** on read and write alike, and every write is
 audited in the same transaction.
 
-**The assignment refusal is a 422 that names both parties.** A component fills a slot only when its
-product's `component_type` falls within a type the role's `accepted_types` names (self or a descendant,
-any type if empty), and, if the role pins products, only when its product is one of them:
+**A refusal names both parties, and its status follows what it depends on.** A component fills a
+slot only when its product's `component_type` falls within a type the role's `accepted_types` names
+(self or a descendant, any type if empty), and, if the role pins products, only when its product is
+one of them:
 
 ```
 component "panel-1" is a display; role "table-mic" wants a video-bar
 ```
 
-A **semantic** refusal, the 422 case in the [status table](#errors-one-problemjson-envelope), not an
+That guard, and a bad declaration (an unknown type, product, or impact), are **422**: the request is
+invalid on its own, regardless of anything else in the estate. A component already staffing a
+**different** role in the same system, or an assignment a role's declared `capacity` cannot hold, are
+**409** instead:
+
+```
+component "bar-1" already fills "main-display" in "boardroom-a"; a component fills at most one role per system
+```
+
+the request is fine in isolation, it conflicts with other rows (a component fills at most one role
+per system; lowering a capacity below the count already assigned is refused the same way). Both are
+the **semantic**-refusal case in the [status table](#errors-one-problemjson-envelope), not an
 authorization one: the message tells the operator the next move. Around it: an unknown role is a
-**404**, an unknown standard or type or product on a declaration a **422**, and an unknown (or
-out-of-scope) system or component the same non-disclosing **404**. The guard runs once, at assignment;
-afterward an occupant keeps its slot unless its own [health](#health-the-verdict-and-why) verdict
-goes to outage (a lesser alarm degrades it but does not cost it the slot).
+**404**, and an unknown (or out-of-scope) system or component the same non-disclosing **404**. The
+guard runs once, at assignment; afterward an occupant keeps its slot unless its own
+[health](#health-the-verdict-and-why) verdict goes to outage (a lesser alarm degrades it but does not
+cost it the slot).
 
 ## Health: the verdict, and why
 

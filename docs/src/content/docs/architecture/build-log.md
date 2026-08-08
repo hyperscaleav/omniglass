@@ -2634,9 +2634,13 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   filed against this slice rather than at the time, a gap this entry closes.
 - **A role says how many it will take** ([#626](https://github.com/hyperscaleav/omniglass/issues/626),
   `4925a7d`). Roles gain `capacity` (an optional upper bound above quorum) and `position_labels`
-  (per-slot names); both are wholesale-declaration columns threaded through every write site so a
-  PUT that only touches `display_name` cannot silently reset a declared cap, the same defect
-  `impact` already carried (see the console-side fix below). A component may fill at most one
+  (per-slot names); both are wholesale-declaration columns, but only `capacity` preserves on an
+  edit that omits it: the storage upsert reads `coalesce(excluded.capacity, system_role.capacity)`,
+  so a nil `*int` (the API caller left the field out) keeps whatever cap is already declared, a
+  server-side guarantee rather than a rule every caller has to remember to uphold. `position_labels`
+  carries no such coalesce, replacing wholesale like `quorum`, `accepted_types`, and `impact` (its
+  own doc string: omit or empty clears labelling), the same defect `impact` already carried before
+  this task's console fix (see below). A component may fill at most one
   role per system: the migration raises and names the offending pairs before adding the
   enforcing index rather than aborting mid-upgrade on an unnamed constraint violation, and
   `AssignRole` pre-checks inside its transaction so the refusal names both the component and the
@@ -2755,3 +2759,26 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   which supersedes [ADR-0049](/architecture/decisions/#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)
   and amends [ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain),
   and backfills five build-log entries the epic had carried without one.
+- **The console reads a system two ways, review round.** A review pass on the slice above found
+  twelve confirmed defects, all fixed. `EffectiveRoleBody` gains `positions`: index-for-index with
+  `assigned_to`, each entry's own 1-based position, since drag-to-reorder cannot address a specific
+  occupant's slot by assuming index `i` sits at position `i + 1` once an unassign has left a gap
+  (#626, never compacted); `swapPath` (the drag decomposition) reads real positions instead. The
+  system-colour hue bands were HSL degrees guarding an OKLCH-rendered dot, leaving three of five
+  semantic tokens open (about 28% of systems wore a status-coloured dot); recomputed in OKLCH, with
+  the fixed-step escape (which clustered on `--color-primary`) replaced by a golden-angle step. Two
+  committed D2 diagrams were stale against schema this epic's own earlier tasks changed
+  (`data-model-0.svg` still drew the five dropped capability tables and omitted every table this
+  epic added) or hand-patched without their generated geometry (`index-1.svg`'s corrected label
+  text shipped without the mask and position a d2 SVG computes from it, so the edge line struck
+  through the relabelled word); both regenerated. `RolesPanel` reintroduced the exact
+  active-flag contradiction the slice above had just fixed on `HealthPanel` one panel over, and
+  went one step further, discarding cache invalidation on a failed write (leaving a partial
+  multi-swap reorder undetectable) and never invalidating the health read at all on any write
+  (freezing its own short/spare/impact badges, now its primary readout, at their pre-write values).
+  `api.md`'s roles section, silent on `capacity`, `position_labels`, `positions`, and
+  `:swapPositions`, and still calling every assignment refusal "a 422" when a component
+  double-staffing another role or a role at capacity are both 409, is corrected to state the same
+  409-versus-422 rule ADR-0087 does. `storage.md`'s three-buckets section is where ADR-0087's
+  boot-seed carve-out belongs and had never landed; added there (and mirrored in `CLAUDE.md` and
+  the `storage-schema-change` skill) rather than existing only in the ADR and this file.
