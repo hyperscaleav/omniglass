@@ -1,4 +1,4 @@
-import { createIdentity, entityLabel } from "../lib/entities";
+import { entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
@@ -13,7 +13,7 @@ import {
   COMPONENTS_KEY,
   listComponents,
   createComponent,
-  updateComponent, renameComponent,
+  updateComponent, renameComponent, resetComponentName,
   checkComponentName,
   deleteComponent,
 } from "../lib/components";
@@ -23,7 +23,7 @@ import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { openInEdit, consumePendingEdit } from "../lib/pendingedit";
-import { ChevronRight, Pencil, Plus, Save, Search, X } from "../components/icons";
+import { ChevronRight, Pencil, Plus, RotateCcw, Save, Search, X } from "../components/icons";
 import Button from "../components/Button";
 import TagPills from "../components/TagPills";
 import { tagFilterKeys } from "../lib/predicate";
@@ -194,11 +194,31 @@ export default function Components() {
     const [nameCheck, setNameCheck] = createSignal<NameCheck | null>(null);
     const [checking, setChecking] = createSignal(false);
     const [saveErr, setSaveErr] = createSignal<string | null>(null);
+    const [resetting, setResetting] = createSignal(false);
     async function runCheck() {
       setChecking(true);
       try { setNameCheck(await checkComponentName(name().trim(), n().raw.parent, n().raw.location)); }
       catch { setNameCheck(null); }
       finally { setChecking(false); }
+    }
+    // Hands the pen back to the platform (#627 Task 15d): its own immediate
+    // act, like Delete, not folded into the accordion's Save, because it is
+    // unrelated to whatever the operator is mid-editing in the name field.
+    // Re-seeds the local draft from the server's own regenerated name so the
+    // input reflects it without waiting for a background refetch to land.
+    async function resetName() {
+      setResetting(true);
+      setSaveErr(null);
+      try {
+        const updated = await resetComponentName(n().raw.name);
+        setName(updated.name);
+        setNameCheck(null);
+        await qc.invalidateQueries({ queryKey: COMPONENTS_KEY });
+      } catch (e) {
+        setSaveErr(describeError(e));
+      } finally {
+        setResetting(false);
+      }
     }
     // Seed the inputs from the node each time edit begins (this also reverts a Cancel,
     // since Cancel exits edit and the next begin re-seeds).
@@ -273,7 +293,22 @@ export default function Components() {
             when={editing()}
             fallback={
               <div class="grid grid-cols-2 gap-5">
-                <KVStacked bind="name" value={<span class="font-data text-sm">{n().raw.name}</span>} />
+                <KVStacked
+                  bind="name"
+                  value={
+                    <span class="flex items-center gap-1.5">
+                      <span class="font-data text-sm">{n().raw.name}</span>
+                      {/* The pen-ownership tracking chip (#627 Task 15d): a
+                          name the platform picked, not one an operator typed.
+                          :rename clears this forever; :resetName is the only
+                          way back, which is why the affordance to get here
+                          lives beside the name in edit mode, not here. */}
+                      <Show when={n().raw.name_generated}>
+                        <span class="badge badge-ghost badge-xs" title="The platform generated this name from the component's type. Renaming it hands the pen to you for good; :resetName is the only way back.">Generated</span>
+                      </Show>
+                    </span>
+                  }
+                />
                 <KVStacked label="ID" value={<span class="font-data text-xs text-base-content/50">{n().raw.id}</span>} />
               </div>
             }
@@ -303,7 +338,25 @@ export default function Components() {
                       disabled={checking() || !name().trim() || name().trim() === n().raw.name}
                       onClick={() => void runCheck()}
                     />
+                    {/* :resetName (#627 Task 15d): hands the pen back to the
+                        platform, regenerating from the component's current
+                        type and placement, whether or not the name is
+                        already platform-owned (the API's own contract). Its
+                        own immediate act, not folded into Save. */}
+                    <Button
+                      square
+                      size="md"
+                      icon={RotateCcw}
+                      label="Reset to generated name"
+                      title="Regenerate this name from the component's type"
+                      class="join-item"
+                      disabled={resetting()}
+                      onClick={() => void resetName()}
+                    />
                   </div>
+                  <Show when={n().raw.name_generated}>
+                    <span class="text-[11px] text-base-content/50">The platform generated this name; renaming it hands you the pen for good.</span>
+                  </Show>
                   <Show when={nameCheck()}>
                     {(c) => (
                       <span
@@ -424,9 +477,16 @@ export default function Components() {
   // component exists. Create commits the row and hands off to /components/<name> in
   // edit mode.
   function ComponentCreate(): JSX.Element {
-    // Display name leads and the key follows it, stopping the moment the
-    // operator edits the key by hand (lib/entities).
-    const { display, setDisplay, name, setName, nameDerived } = createIdentity();
+    // Independent fields, NOT createIdentity's derive-from-display coupling
+    // (#627 Task 15d): a blank name here means "the platform generates one
+    // from the product's component_type" (the same "<stem>-<n>" rule
+    // :resetName applies), so auto-filling it from whatever the operator
+    // types as a display name would silently claim the pen on their behalf
+    // the moment they typed a label. createIdentity's derive path stays in
+    // use on the FlatList catalog pages, whose names have no generator and
+    // stay globally unique.
+    const [display, setDisplay] = createSignal("");
+    const [name, setName] = createSignal("");
     const [system, setSystem] = createSignal("");
     const [location, setLocation] = createSignal("");
     const [parent, setParent] = createSignal("");
@@ -448,11 +508,14 @@ export default function Components() {
       const nm = name().trim();
       try {
         // Bind the create response (#627 Task 15c): under uuid addressing
-        // the locally typed name is not a reliable handle to navigate by
-        // (#627 Task 15d later lets it be blank entirely); the server's own
-        // id always is.
+        // the locally typed name is not a reliable handle to navigate by,
+        // and now (#627 Task 15d) it may be empty entirely; the server's
+        // own id always resolves. An empty name omits the field rather than
+        // posting "", which the API would refuse against the entity name
+        // pattern: omitted is "generate one," not "generate a name of
+        // nothing."
         const created = await createComponent({
-          name: nm,
+          name: nm || undefined,
           display_name: display().trim() || undefined,
           system: system() || undefined,
           location: location() || undefined,
@@ -489,9 +552,9 @@ export default function Components() {
             </FieldRow>
             <FieldRow
               bind="name"
-              hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."}
+              hint="Optional. Leave blank and the platform generates one from the product's type (e.g. display-1)."
             >
-              <input class="input input-bordered w-full font-data" value={name()} placeholder="mic-2" onInput={(e) => setName(e.currentTarget.value)} />
+              <input class="input input-bordered w-full font-data" value={name()} placeholder="mic-2 (optional)" onInput={(e) => setName(e.currentTarget.value)} />
             </FieldRow>
           </div>
         </div>
@@ -532,7 +595,10 @@ export default function Components() {
         <div class="flex items-center gap-2 border-t border-base-300 pt-4">
           <Button icon={X} onClick={() => navigate("/components")}>Cancel</Button>
           <span class="flex-1" />
-          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !name().trim() || !product()}>Create component</Button>
+          {/* No !name().trim() gate (#627 Task 15d): the name is optional now,
+              the whole point of the affordance. Product stays required (the
+              #614 classification floor, and the generator's own stem source). */}
+          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !product()}>Create component</Button>
         </div>
 
         <div class="flex flex-col gap-1 opacity-50">

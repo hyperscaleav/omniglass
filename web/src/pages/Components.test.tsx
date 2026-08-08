@@ -156,6 +156,52 @@ describe("Components create-as-route", () => {
     expect(screen.getByText(/Available once the component is created/)).toBeTruthy();
   });
 
+  // #627 Task 15d: the name field is optional now (the generator mints one
+  // from the product's component_type when it is left blank), and the create
+  // button must not require it the way it required a product.
+  it("does not require a name to submit the create form, only the product", async () => {
+    mount("/components/create");
+    await waitFor(() => expect(screen.getByText("Create component")).toBeTruthy());
+    const submit = screen.getByText("Create component").closest("button") as HTMLButtonElement;
+    expect(submit.disabled).toBe(true); // no product chosen yet
+    const productSelect = (await screen.findByLabelText("Product")) as HTMLSelectElement;
+    fireEvent.change(productSelect, { target: { value: "shure-mxa920" } });
+    expect(submit.disabled).toBe(false); // name still blank, and that is fine
+  });
+
+  it("omits name from the create POST body when the field is left blank", async () => {
+    mount("/components/create");
+    await waitFor(() => expect(screen.getByText("Create component")).toBeTruthy());
+    const productSelect = (await screen.findByLabelText("Product")) as HTMLSelectElement;
+    fireEvent.change(productSelect, { target: { value: "shure-mxa920" } });
+    // The display name is filled in (an operator label, independent of the
+    // address); the name field is left untouched. createIdentity's old
+    // derive-from-display coupling would have filled it anyway (#627 Task
+    // 15d retires that path for this form specifically).
+    const displayInput = screen.getByPlaceholderText("Ceiling Mic 2") as HTMLInputElement;
+    fireEvent.input(displayInput, { target: { value: "Ceiling Mic 9" } });
+    const nameInput = screen.getByPlaceholderText("mic-2 (optional)") as HTMLInputElement;
+    expect(nameInput.value).toBe("");
+    let captured: unknown;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const { method, url } = req;
+      if (method === "POST" && url.endsWith("/components")) {
+        captured = JSON.parse(await req.clone().text());
+        return new Response(JSON.stringify({ ...comp, id: uuidFor("c-generated"), name: "mic-1", name_generated: true }), { status: 201, headers: { "Content-Type": "application/json" } });
+      }
+      if (method === "GET") {
+        return new Response(JSON.stringify({ components: [comp] }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${method} ${url}`);
+    });
+    fireEvent.click(screen.getByText("Create component"));
+    await waitFor(() => expect(captured).toBeTruthy());
+    const body = captured as Record<string, unknown>;
+    expect("name" in body).toBe(false);
+    expect(body.display_name).toBe("Ceiling Mic 9");
+  });
+
   it("shows an existing component read-only in view: no tag add control, an Edit affordance", async () => {
     mount("/components/mic-2");
     // The detail resolves and renders the read-only facts.
@@ -182,6 +228,62 @@ describe("Components create-as-route", () => {
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     // No check button until edit begins: the name is a read-only fact.
     expect(screen.queryByLabelText("Check name")).toBeNull();
+  });
+
+  // #627 Task 15d: the tracking chip is the only place an operator learns a
+  // name is platform-owned (renaming clears the flag for good, with no
+  // other visible cue beforehand).
+  it("shows a Generated tracking chip on a platform-picked name, not on an operator-typed one", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    const generated: Component = { ...comp, name_generated: true };
+    qc.setQueryData([...COMPONENTS_KEY], [generated]);
+    qc.setQueryData([...SYSTEMS_KEY], []);
+    qc.setQueryData([...LOCATIONS_KEY], []);
+    qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...ME_KEY], me);
+    qc.setQueryData([...TAGS_KEY], []);
+    qc.setQueryData([...entityTagsKey("component", "mic-2")], []);
+    window.history.pushState({}, "", "/components/mic-2");
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="/components" component={Components} />
+          <Route path="/components/:id" component={Components} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    expect(await screen.findByText("Generated")).toBeTruthy();
+  });
+
+  it("shows no tracking chip on an operator-typed name", async () => {
+    mount("/components/mic-2"); // comp.name_generated is unset (falsy)
+    await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
+    expect(screen.queryByText("Generated")).toBeNull();
+  });
+
+  it("the reset affordance calls :resetName and updates the name field from the response", async () => {
+    mount("/components/mic-2");
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    await screen.findByDisplayValue("mic-2");
+    let capturedMethod: string | undefined;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const { method, url } = req;
+      if (method === "POST" && url.includes("/components/mic-2:resetName")) {
+        capturedMethod = method;
+        return new Response(JSON.stringify({ ...comp, name: "ceiling-mic-1", name_generated: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (method === "GET") {
+        return new Response(JSON.stringify({ components: [comp] }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${method} ${url}`);
+    });
+    fireEvent.click(screen.getByLabelText("Reset to generated name"));
+    await waitFor(() => expect(capturedMethod).toBe("POST"));
+    // The local draft reflects the server's own regenerated name immediately,
+    // not just after a background refetch lands.
+    expect(await screen.findByDisplayValue("ceiling-mic-1")).toBeTruthy();
   });
 
   // #627 Task 15c: routes take :id now. A name-shaped deep link (an old
