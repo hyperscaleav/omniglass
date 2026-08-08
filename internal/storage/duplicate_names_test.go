@@ -574,3 +574,66 @@ func TestResolveTagsSurvivesDuplicateSystemNames(t *testing.T) {
 	}
 }
 
+// TestStandardOwnedRoleDeclarationSurvivesDuplicateSystemNames is the
+// regression for the #627 review's finding 3: conformingSystems selected only
+// a conforming system's NAME, even though its id was right there in the same
+// row (keyed on standard_id, an unambiguous FK), and recomputeSystems then
+// re-resolved that name through scopedByName. A standard-owned role
+// declaration re-derived an id from a name on every recompute, so the moment
+// a conforming system shared its name with an unrelated system anywhere in
+// the estate (the two need not even conform to the same standard),
+// SetSystemRole and DeleteSystemRole failed with an unmapped
+// *storage.ErrAmbiguousName on a declaration that was never actually
+// ambiguous, and the whole write (including its audit row) rolled back.
+//
+// sysB deliberately never conforms to the standard, so it is the
+// cross-contamination check: if conformingSystems' fix silently widened
+// which systems the recompute reaches, sysB would show the role too.
+func TestStandardOwnedRoleDeclarationSurvivesDuplicateSystemNames(t *testing.T) {
+	gw, _ := newDuplicateNameFixture(t)
+	ctx := context.Background()
+	all := scope.Set{All: true}
+	sysA, sysB := twoSameNamedSystems(t, gw)
+
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "dup-std", DisplayName: "Dup Standard"}); err != nil {
+		t.Fatalf("create standard: %v", err)
+	}
+	if _, err := gw.UpdateSystem(ctx, "", sysA.ID, storage.SystemPatch{StandardID: strptr("dup-std")}, all, all); err != nil {
+		t.Fatalf("conform sysA to standard by id: %v", err)
+	}
+
+	if _, err := gw.SetSystemRole(ctx, "", "standard", "dup-std", storage.SystemRoleSpec{
+		Name: "seat", DisplayName: "Seat", Quorum: 1,
+	}); err != nil {
+		t.Fatalf("declare standard role: %v", err)
+	}
+
+	repA, err := gw.SystemHealth(ctx, sysA.ID, time.Time{}, all)
+	if err != nil {
+		t.Fatalf("system health sysA by id: %v", err)
+	}
+	if repA.Verdict == "" {
+		t.Fatalf("sysA health verdict came back empty")
+	}
+	if len(repA.Roles) != 1 || repA.Roles[0].Name != "seat" {
+		t.Fatalf("sysA roles = %+v, want one role named seat", repA.Roles)
+	}
+	repB, err := gw.SystemHealth(ctx, sysB.ID, time.Time{}, all)
+	if err != nil {
+		t.Fatalf("system health sysB by id: %v", err)
+	}
+	if len(repB.Roles) != 0 {
+		t.Fatalf("sysB roles = %+v, want none (cross-contaminated by the shared name)", repB.Roles)
+	}
+
+	if err := gw.DeleteSystemRole(ctx, "", "standard", "dup-std", "seat"); err != nil {
+		t.Fatalf("withdraw standard role: %v", err)
+	}
+	repA2, err := gw.SystemHealth(ctx, sysA.ID, time.Time{}, all)
+	if err != nil {
+		t.Fatalf("system health sysA after withdraw: %v", err)
+	}
+	if len(repA2.Roles) != 0 {
+		t.Fatalf("sysA roles after withdraw = %+v, want none", repA2.Roles)
+	}
+}

@@ -486,26 +486,35 @@ func (p *PG) systemsStaffedBy(ctx context.Context, q txQuerier, componentID stri
 	return scanOwnerRefs(rows, "systems staffed by")
 }
 
-// conformingSystems lists the systems a standard's declaration reaches. Declaring
-// a role on a standard moves every conforming system at once, which is the arc a
-// per-system recompute would miss.
-func (p *PG) conformingSystems(ctx context.Context, q txQuerier, standardID string) ([]string, error) {
-	rows, err := q.Query(ctx, `select name from system where standard_id = (select id from standard where name = $1 or id::text = $1) order by name`, standardID)
+// conformingSystems lists the systems a standard's declaration reaches, each as
+// an ownerRef. Declaring a role on a standard moves every conforming system at
+// once, which is the arc a per-system recompute would miss. id is selected
+// alongside name (both are right there in the same row, keyed on
+// standard_id, an unambiguous FK): the caller hands these straight to
+// recomputeChain, which needs the id to lock and record each system without
+// re-deriving one from a name #627 no longer guarantees is unique.
+func (p *PG) conformingSystems(ctx context.Context, q txQuerier, standardID string) ([]ownerRef, error) {
+	rows, err := q.Query(ctx, `select id, name from system where standard_id = (select id from standard where name = $1 or id::text = $1) order by name`, standardID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: conforming systems %q: %w", standardID, err)
 	}
 	defer rows.Close()
-	return scanNames(rows, "conforming systems")
+	return scanOwnerRefs(rows, "conforming systems")
 }
 
-// systemsForRoleOwner resolves the systems one role declaration reaches: the
-// single system for an ad-hoc declaration, every conforming system for a
-// standard's, since those inherit it live.
-func (p *PG) systemsForRoleOwner(ctx context.Context, q txQuerier, ownerKind, ownerID string) ([]string, error) {
+// systemsForRoleOwner resolves the systems one role declaration reaches, each
+// as an ownerRef: the single system for an ad-hoc declaration (resolved once,
+// ambiguity-safe), every conforming system for a standard's, since those
+// inherit it live.
+func (p *PG) systemsForRoleOwner(ctx context.Context, q txQuerier, ownerKind, ownerID string) ([]ownerRef, error) {
 	if ownerKind == "standard" {
 		return p.conformingSystems(ctx, q, ownerID)
 	}
-	return []string{ownerID}, nil
+	sys, err := scopedByName(ctx, q, systemConfig, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	return []ownerRef{{ID: sys.ID, Name: sys.Name}}, nil
 }
 
 // locationsOver returns the locations holding these systems, the locations named

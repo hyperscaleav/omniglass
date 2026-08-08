@@ -304,11 +304,18 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 	// A declaration change moves health without touching a component: a raised
 	// quorum or a changed impact can impair a role that was fine a moment ago.
 	// A standard's declaration moves every conforming system at once.
-	affected, err := p.systemsForRoleOwner(ctx, tx, ownerKind, ownerID)
+	//
+	// ownerArg, not ownerID: for a system owner it is already resolved (see
+	// roleOwnerArg above), so systemsForRoleOwner's own resolve is a
+	// same-row, id-keyed lookup rather than a second pass over the caller's
+	// original reference. Its result feeds recomputeChain directly (not
+	// recomputeSystems' name-based wrapper), since every ownerRef it returns
+	// already carries an id.
+	affected, err := p.systemsForRoleOwner(ctx, tx, ownerKind, ownerArg)
 	if err != nil {
 		return nil, err
 	}
-	if err := p.recomputeSystems(ctx, tx, affected...); err != nil {
+	if err := p.recomputeChain(ctx, tx, nil, affected, nil); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -356,11 +363,12 @@ func (p *PG) DeleteSystemRole(ctx context.Context, actorID, ownerKind, ownerID, 
 	}
 	// Withdrawing a role can only improve a system: the impaired slot it was
 	// contributing is gone. Recompute so the recovery is recorded as an edge.
-	affected, err := p.systemsForRoleOwner(ctx, tx, ownerKind, ownerID)
+	// ownerArg, not ownerID; see SetSystemRole's comment on the same shape.
+	affected, err := p.systemsForRoleOwner(ctx, tx, ownerKind, ownerArg)
 	if err != nil {
 		return err
 	}
-	if err := p.recomputeSystems(ctx, tx, affected...); err != nil {
+	if err := p.recomputeChain(ctx, tx, nil, affected, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
