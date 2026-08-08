@@ -200,6 +200,65 @@ describe("Components list survives duplicate names across placements (#627)", ()
     expect(indexOf("sub-a")).toBeLessThan(indexOf("rack-b"));
     expect(indexOf("sub-b")).toBeGreaterThan(indexOf("rack-b"));
   });
+
+  // A review caught that the earlier fix only moved the tree Map's
+  // construction key to uuid; TreeList's own second index (byId, built off
+  // node.id) and the row rendering both still keyed on the bare name, so the
+  // collapse this task set out to remove simply moved one layer down: opening
+  // either duplicate's row rendered whichever one the Map happened to keep,
+  // silent wrong data (the wrong uuid, the wrong placement), not just an
+  // ambiguous URL. This test is the one that discriminates: it clicks
+  // rack-a's port-1 row specifically and asserts the blade that opens shows
+  // rack-a as the Parent, never rack-b, which only holds once node.id is the
+  // true uuid end to end (the tree index, the blade lookup, and the detail
+  // body's own re-resolve all key on the same id).
+  it("opens the blade for the duplicate that was actually clicked, not whichever one a name-keyed index kept (#627)", async () => {
+    const rackA: Component = { id: uuidFor("c-rack-a"), name: "rack-a", system_count: 0, effective_tags: {} };
+    const rackB: Component = { id: uuidFor("c-rack-b"), name: "rack-b", system_count: 0, effective_tags: {} };
+    const portInA: Component = { id: uuidFor("c-port-a"), name: "port-1", parent: "rack-a", parent_id: rackA.id, system_count: 0, effective_tags: {} };
+    const portInB: Component = { id: uuidFor("c-port-b"), name: "port-1", parent: "rack-b", parent_id: rackB.id, system_count: 0, effective_tags: {} };
+
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...COMPONENTS_KEY], [rackA, rackB, portInA, portInB]);
+    qc.setQueryData([...SYSTEMS_KEY], []);
+    qc.setQueryData([...LOCATIONS_KEY], []);
+    qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...ME_KEY], me);
+    qc.setQueryData([...TAGS_KEY], []);
+    window.history.pushState({}, "", "/components");
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="/components" component={Components} />
+        </Router>
+      </QueryClientProvider>
+    ));
+
+    await waitFor(() => expect(screen.getAllByText("rack-a").length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByTitle("Expand all"));
+    await waitFor(() => expect(screen.getAllByText("port-1")).toHaveLength(2));
+
+    // rack-a's port-1 row is the one strictly between rack-a's own row and
+    // rack-b's, per the depth-first tree order the test above already pins.
+    const rows = Array.from(document.querySelectorAll("tbody tr"));
+    const rackARowIndex = rows.indexOf(screen.getByText("rack-a").closest("tr")!);
+    const rackBRowIndex = rows.indexOf(screen.getByText("rack-b").closest("tr")!);
+    const portRows = screen.getAllByText("port-1").map((el) => el.closest("tr")!);
+    const portInARow = portRows.find((r) => {
+      const idx = rows.indexOf(r);
+      return idx > rackARowIndex && idx < rackBRowIndex;
+    });
+    expect(portInARow).toBeTruthy();
+    fireEvent.click(portInARow!);
+
+    const blade = await waitFor(() => {
+      const el = document.querySelector("aside[data-blade]") as HTMLElement | null;
+      if (!el || !el.textContent?.includes("Parent")) throw new Error("blade not open yet");
+      return el;
+    });
+    await waitFor(() => expect(blade.textContent).toContain("rack-a"));
+    expect(blade.textContent).not.toContain("rack-b");
+  });
 });
 
 // #614: component.product_id is NOT NULL. A component cannot exist without a
