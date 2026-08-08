@@ -5801,7 +5801,7 @@ export interface components {
             name: string;
         };
         RenderBody: {
-            /** @description The dash render's segments concatenated with no separator, with the final stem-ordinal segment compacted to <abbrev><ordinal> when the owning type registers one (e.g. boi17c216bdsp1). Display only; not accepted by the resolver. */
+            /** @description The dash render's segments concatenated with no separator, with the final stem-ordinal segment compacted to <abbrev><ordinal> when the owning type registers one (e.g. boi17c216bdsp1). On a LIST row the substitution is skipped (segments concatenated as-is) to avoid a per-row abbrev resolution; a GET always compacts it. Display only either way; not accepted by the resolver. */
             bare: string;
             /** @description The path's non-accessor segments joined with '-' (e.g. boi-17c-216b-display-1). Display only; not accepted by the resolver. */
             dash: string;
