@@ -78,8 +78,12 @@ export default function Systems() {
   );
   const standardLabel = (handle?: string) =>
     handle ? (standards.data ?? []).find((s) => s.name === handle)?.display_name ?? handle : "";
-  const locationItems = createMemo(() => (locations.data ?? []).map((l) => ({ id: l.name, value: l.name, label: entityLabel(l), parentId: l.parent })));
-  const systemItems = createMemo(() => (systems.data ?? []).map((s) => ({ id: s.name, value: s.name, label: entityLabel(s), parentId: s.parent })));
+  // Keyed AND valued on uuid, not name (#627): two same-named locations or
+  // systems would otherwise render as visually identical, value-identical
+  // options, and posting either would name an ambiguous ref. The API
+  // dual-accepts uuid-or-name (ADR-0062), so posting the uuid is safe.
+  const locationItems = createMemo(() => (locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id })));
+  const systemItems = createMemo(() => (systems.data ?? []).map((s) => ({ id: s.id, value: s.id, label: entityLabel(s), parentId: s.parent_id })));
 
   // One filter facet per tag key present across the systems, derived from their
   // effective tags, so the bar can filter by any tag like any other field.
@@ -89,20 +93,23 @@ export default function Systems() {
     return tagFilterKeys<SysNode>([...keys].sort(), new Set(["name", "standard", "location"]));
   });
 
-  // The construction-time map is keyed on uuid, not the bare name (#627: name
-  // uniqueness is scoped to placement, so two systems can legally share a
-  // name under different parents or locations): a name-keyed map would
-  // silently drop one system's node and reparent its children onto the
-  // survivor. node.id itself stays the name for now (the URL/route swap to
-  // uuid addressing is a later slice); keying the MAP on uuid is what keeps
-  // both same-named rows in the rendered tree, correctly parented.
+  // Keyed AND identified by uuid, not the bare name (#627: name uniqueness
+  // is scoped to placement, so two systems can legally share a name under
+  // different parents or locations). A name-keyed map would silently drop
+  // one system's node and reparent its children onto the survivor; a
+  // name-keyed node.id has the identical collision one layer down, in
+  // TreeList's own index, which is what let a click on one duplicate's row
+  // open the other duplicate's blade. addr carries the name for the
+  // navigate sites that still build a name-shaped URL until the URL swap to
+  // uuid addressing lands; TreeList's focus resolution falls back to it.
   const nodes = createMemo<SysNode[]>(() => {
     const list = systems.data ?? [];
     const lm = locById();
     const byUuid = new Map<string, SysNode>();
     for (const s of list) {
       byUuid.set(s.id, {
-        id: s.name,
+        id: s.id,
+        addr: s.name,
         display: entityLabel(s),
         children: [],
         actions: s.actions,

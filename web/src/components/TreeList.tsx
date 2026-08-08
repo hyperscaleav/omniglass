@@ -39,6 +39,12 @@ import { type BladeDef, type BladeEdit, type BladeRef, BladesContext, createBlad
 
 export interface ListNode {
   id: string;
+  // addr is a second address for a page whose id is a uuid but whose route
+  // still carries the entity's bare name (#627, until the URL swap to uuid
+  // addressing lands): the focus-by-URL resolution falls back to it when id
+  // does not match. Not guaranteed unique the way id is; omit it entirely on
+  // a page where id already IS the addressable value.
+  addr?: string;
   display: string;
   // The scope-aware actions the server says the caller may perform on THIS row
   // (create a child, update, delete), from the read-side `actions` field. When
@@ -223,13 +229,18 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
 
   // Deep link: when the route carries a focus id, open that node full-page and
   // close any ephemeral blades (the full page is the addressable surface).
+  // byId first, byAddr second (#627): a page whose id is a uuid but whose
+  // route still carries a name (until the URL swap lands) resolves through
+  // the fallback; a page where id already IS the addressable value (every
+  // page but the three duplicate-name-legal ones) never needs the fallback,
+  // since byId already matches.
   createEffect(() => {
     const f = cfg.focus?.();
     if (!f) {
       showFull(null);
       return;
     }
-    const n = index().byId.get(f) ?? null;
+    const n = index().byId.get(f) ?? index().byAddr.get(f) ?? null;
     showFull(n);
     if (n) blades.close();
   });
@@ -446,25 +457,30 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
               <Show when={p.row.path && p.row.path.length}>
                 <span class="truncate text-[11px] text-base-content/40">{p.row.path!.map((x) => x.display).join(" › ")}</span>
               </Show>
-              {/* The label, then the key beneath it. A row's id IS its key (the
-                  kebab name the API and CLI address it by), so an operator can
-                  read what to type without opening the row. It is always shown
-                  rather than revealed on hover: hover does not exist on touch,
-                  is not discoverable, and cannot be selected to copy, and
-                  copying it into a CLI invocation is the point.
+              {/* The label, then the key beneath it. A row's key (n.addr when
+                  set, else n.id) is what the API and CLI address it by, so an
+                  operator can read what to type without opening the row. It
+                  is always shown rather than revealed on hover: hover does
+                  not exist on touch, is not discoverable, and cannot be
+                  selected to copy, and copying it into a CLI invocation is
+                  the point. n.addr, not n.id, because on a page where two
+                  rows can share a name (#627) n.id is the uuid identity, not
+                  the operator-typed address; a page where every id is
+                  already unique and addressable (addr unset) reads the same
+                  as before.
 
-                  When the entity has no display name the label IS the name, so
+                  When the entity has no display name the label IS the key, so
                   it is rendered once, in the data face, which marks it as an
                   identifier rather than a friendly string somebody chose. */}
               <span
                 class="truncate"
-                classList={{ "font-data text-[13px]": n.display === n.id }}
+                classList={{ "font-data text-[13px]": n.display === (n.addr ?? n.id) }}
                 style={{ "font-weight": cfg.nameWeight ? cfg.nameWeight(n) : 500 }}
               >
                 {n.display}
               </span>
-              <Show when={n.display !== n.id}>
-                <span class="truncate font-data text-[11px] text-base-content/40">{n.id}</span>
+              <Show when={n.display !== (n.addr ?? n.id)}>
+                <span class="truncate font-data text-[11px] text-base-content/40">{n.addr ?? n.id}</span>
               </Show>
             </span>
           </span>

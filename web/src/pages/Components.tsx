@@ -104,16 +104,17 @@ export default function Components() {
     return tagFilterKeys<CompNode>([...keys].sort(), new Set(["name", "product", "system", "location"]));
   });
 
-  // Build the forest from the flat component list by parent_id. The
-  // construction-time map is keyed on uuid, not the bare name (#627: name
-  // uniqueness is scoped to placement, so two components can legally share a
-  // name): a name-keyed map would silently drop one component's node and
-  // reparent its children onto the survivor the moment two rooms hold the
-  // same name. node.id itself stays the name for now (the URL/route swap to
-  // uuid addressing is a later slice); keying the MAP on uuid is what keeps
-  // both same-named rows in the rendered tree, correctly parented, even
-  // though opening either one still navigates to the same (ambiguous) name
-  // address until that later slice lands.
+  // Build the forest from the flat component list by parent_id, keyed AND
+  // identified by uuid, not the bare name (#627: name uniqueness is scoped
+  // to placement, so two components can legally share a name). A name-keyed
+  // map would silently drop one component's node and reparent its children
+  // onto the survivor the moment two rooms hold the same name; a name-keyed
+  // node.id has the identical collision one layer down, in TreeList's own
+  // index (buildIndex keys byId on node.id too), which is what let a click on
+  // one duplicate's row open the other duplicate's blade. addr carries the
+  // name for the three navigate sites that still build a name-shaped URL
+  // (rename/create hand-off, the edit pencil) until the URL swap to uuid
+  // addressing lands; TreeList's focus resolution falls back to it.
   const nodes = createMemo<CompNode[]>(() => {
     const list = components.data ?? [];
     const byUuid = new Map<string, CompNode>();
@@ -121,7 +122,8 @@ export default function Components() {
     const sm = sysById();
     for (const c of list) {
       byUuid.set(c.id, {
-        id: c.name,
+        id: c.id,
+        addr: c.name,
         display: entityLabel(c),
         children: [],
         actions: c.actions,
@@ -478,17 +480,23 @@ export default function Components() {
           <span class="eyebrow">Placement</span>
           <div class="grid grid-cols-2 gap-3">
             <FieldRow label="System">
-              <TreeSelect items={(systems.data ?? []).map((s) => ({ id: s.id, value: s.name, label: entityLabel(s), parentId: s.parent }))} value={system()} onChange={setSystem} rootLabel="None" />
+              {/* Keyed AND valued on uuid, not name (#627): a name-keyed
+                  parentId already mismatched id's uuid space before this
+                  (nothing ever matched, so the picker silently flattened to
+                  depth 0), and a name VALUE is now also potentially
+                  ambiguous. The API dual-accepts uuid-or-name (ADR-0062), so
+                  posting the uuid is safe. */}
+              <TreeSelect items={(systems.data ?? []).map((s) => ({ id: s.id, value: s.id, label: entityLabel(s), parentId: s.parent_id }))} value={system()} onChange={setSystem} rootLabel="None" />
             </FieldRow>
             <FieldRow label="Location">
-              <TreeSelect items={(locations.data ?? []).map((l) => ({ id: l.id, value: l.name, label: entityLabel(l), parentId: l.parent }))} value={location()} onChange={setLocation} rootLabel="None" />
+              <TreeSelect items={(locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id }))} value={location()} onChange={setLocation} rootLabel="None" />
             </FieldRow>
           </div>
           <FieldRow
             label="Parent component"
             hint="Omit for a root component."
           >
-            <TreeSelect items={(components.data ?? []).map((c) => ({ id: c.id, value: c.name, label: entityLabel(c), parentId: c.parent }))} value={parent()} onChange={setParent} rootLabel="Root (no parent)" />
+            <TreeSelect items={(components.data ?? []).map((c) => ({ id: c.id, value: c.id, label: entityLabel(c), parentId: c.parent_id }))} value={parent()} onChange={setParent} rootLabel="Root (no parent)" />
           </FieldRow>
           <FieldRow
             label="Product"

@@ -122,9 +122,11 @@ describe("Locations create-as-route", () => {
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     const select = (await screen.findByLabelText("Parent")) as HTMLSelectElement;
-    expect(select.value).toBe("hq");
-    fireEvent.change(select, { target: { value: "lab" } });
-    expect(select.value).toBe("lab");
+    // The picker is keyed and valued on uuid, not name (#627), so its value
+    // seeds from the current parent's id, not "hq".
+    expect(select.value).toBe(hq.id);
+    fireEvent.change(select, { target: { value: lab.id } });
+    expect(select.value).toBe(lab.id);
   });
 
   it("offers a real non-root parent for a currently-root location and sends the move on save", async () => {
@@ -142,8 +144,9 @@ describe("Locations create-as-route", () => {
     const optionLabels = Array.from(select.options).map((o) => o.textContent?.trim());
     expect(optionLabels).toContain("HQ");
     expect(optionLabels).toContain("Root (current)");
-    fireEvent.change(select, { target: { value: "hq" } });
-    expect(select.value).toBe("hq");
+    // The picker is keyed and valued on uuid, not name (#627).
+    fireEvent.change(select, { target: { value: hq.id } });
+    expect(select.value).toBe(hq.id);
     let captured: unknown;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
@@ -157,7 +160,9 @@ describe("Locations create-as-route", () => {
     });
     fireEvent.click(screen.getByText("Save changes"));
     await waitFor(() => expect(captured).toBeTruthy());
-    expect((captured as { parent?: string }).parent).toBe("hq");
+    // Posted as the uuid (the API dual-accepts uuid-or-name, ADR-0062), not
+    // the name the picker used to send.
+    expect((captured as { parent?: string }).parent).toBe(hq.id);
   });
 
   it("saving a rejected move surfaces the 422 through the existing inline alert and stays in edit mode", async () => {
@@ -181,11 +186,12 @@ describe("Locations create-as-route", () => {
     expect(screen.getByLabelText("Parent")).toBeTruthy();
   });
 
-  it("excludes the node's own subtree by the name the candidates are keyed on, not the uuid (#466)", async () => {
+  it("excludes the node's own subtree, keyed and excluded by uuid (#466, #627)", async () => {
     // area is unconstrained, so the candidate pool is every location; only
     // subtree exclusion can keep area1 and its child out. The candidates are
-    // keyed by name, so passing the location's uuid to the exclusion silently
-    // turns it off and offers the node itself (a cycle the server must refuse).
+    // now keyed by uuid, not name (#627: two locations can share a name), and
+    // excludeSubtreeOf passes the location's uuid to match, so the exclusion
+    // still keeps the node and its own subtree out.
     const area1: Location = { id: uuidFor("l-area1"), name: "area1", display_name: "Area 1", location_type: "area", effective_tags: {} };
     const area2: Location = { id: uuidFor("l-area2"), name: "area2", display_name: "Area 2", location_type: "area", parent: "area1", parent_id: area1.id, effective_tags: {} };
     mount("/locations/area1", [area1, area2]);
@@ -196,6 +202,27 @@ describe("Locations create-as-route", () => {
     expect(optionLabels).toContain("HQ");
     expect(optionLabels.some((l) => l?.includes("Area 1"))).toBe(false);
     expect(optionLabels.some((l) => l?.includes("Area 2"))).toBe(false);
+  });
+
+  it("offers two same-named parent candidates as distinct, independently selectable options (#627)", async () => {
+    // Two roots named "annex" (legal after #627): a name-keyed picker would
+    // have collapsed them into one value-identical option, so choosing
+    // "annex" could never say which one was meant, and posting it would name
+    // an ambiguous ref the API refuses. Keyed by uuid, both render and each
+    // is selectable on its own.
+    const annexA: Location = { id: uuidFor("l-annex-a"), name: "annex", display_name: "Annex", location_type: "campus", effective_tags: {} };
+    const annexB: Location = { id: uuidFor("l-annex-b"), name: "annex", display_name: "Annex", location_type: "campus", effective_tags: {} };
+    mount("/locations/hq-b1", [annexA, annexB]);
+    await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    const select = (await screen.findByLabelText("Parent")) as HTMLSelectElement;
+    const values = Array.from(select.options).map((o) => o.value);
+    expect(values).toContain(annexA.id);
+    expect(values).toContain(annexB.id);
+    fireEvent.change(select, { target: { value: annexB.id } });
+    expect(select.value).toBe(annexB.id);
+    fireEvent.change(select, { target: { value: annexA.id } });
+    expect(select.value).toBe(annexA.id);
   });
 
   it("posts the location_type handle, never the uuid, on create (#466)", async () => {

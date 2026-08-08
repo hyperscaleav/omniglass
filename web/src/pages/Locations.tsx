@@ -81,18 +81,20 @@ export default function Locations() {
     return m;
   });
 
-  // The construction-time map is keyed on uuid, not the bare name (#627: name
-  // uniqueness is scoped to placement, so two locations can legally share a
-  // name under different parents): a name-keyed map would silently drop one
-  // location's node and reparent its children onto the survivor. node.id
-  // itself stays the name for now (the URL/route swap to uuid addressing is
-  // a later slice); keying the MAP on uuid is what keeps both same-named
-  // rows in the rendered tree, correctly parented.
+  // Keyed AND identified by uuid, not the bare name (#627: name uniqueness is
+  // scoped to placement, so two locations can legally share a name under
+  // different parents). A name-keyed map would silently drop one location's
+  // node and reparent its children onto the survivor; a name-keyed node.id
+  // has the identical collision one layer down, in TreeList's own index,
+  // which is what let a click on one duplicate's row open the other
+  // duplicate's blade. addr carries the name for the navigate sites that
+  // still build a name-shaped URL until the URL swap to uuid addressing
+  // lands; TreeList's focus resolution falls back to it.
   const nodes = createMemo<LocNode[]>(() => {
     const list = locations.data ?? [];
     const byUuid = new Map<string, LocNode>();
     for (const l of list) {
-      byUuid.set(l.id, { id: l.name, display: entityLabel(l), children: [], type: l.location_type, actions: l.actions, tags: l.effective_tags ?? {}, raw: l });
+      byUuid.set(l.id, { id: l.id, addr: l.name, display: entityLabel(l), children: [], type: l.location_type, actions: l.actions, tags: l.effective_tags ?? {}, raw: l });
     }
     const roots: LocNode[] = [];
     for (const l of list) {
@@ -239,10 +241,15 @@ export default function Locations() {
     // final, possibly-also-patched type) and surfaces through saveErr below,
     // exactly like every other placement violation this slice.
     const allowedParentTypes = () => locationTypes.data?.find((t) => t.name === n().raw.location_type)?.allowed_parent_types ?? [];
+    // Keyed AND valued on uuid, not name (#627): two same-named locations
+    // would otherwise render as value-identical options (an operator could
+    // not tell, or choose between, them), and the self-exclusion guard below
+    // needs a key that is actually unique to work at all. The API
+    // dual-accepts uuid-or-name (ADR-0062), so posting the uuid is safe.
     const parentCandidates = createMemo(() => {
       const allowed = allowedParentTypes();
       const pool = allowed.length === 0 ? (locations.data ?? []) : (locations.data ?? []).filter((l) => allowed.includes(l.location_type));
-      return pool.map((l) => ({ id: l.name, value: l.name, label: entityLabel(l), parentId: l.parent, rank: TYPE_RANK[l.location_type] ?? 9 }));
+      return pool.map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id, rank: TYPE_RANK[l.location_type] ?? 9 }));
     });
     const parentTypeLabel = (nm: string) => (nm === ROOT_PLACEMENT ? "Root" : locationTypes.data?.find((t) => t.name === nm)?.display_name ?? nm);
     const parentHint = () =>
@@ -276,7 +283,7 @@ export default function Locations() {
         setType(n().raw.location_type ?? "");
         setName(n().raw.name);
         setNameCheck(null);
-        const seed = parent()?.raw.name ?? "";
+        const seed = parent()?.raw.id ?? "";
         setParentName(seed);
         setInitialParentName(seed);
       }
@@ -414,7 +421,7 @@ export default function Locations() {
                   items={parentCandidates()}
                   value={parentName()}
                   onChange={setParentName}
-                  excludeSubtreeOf={n().raw.name}
+                  excludeSubtreeOf={n().raw.id}
                   rootLabel={parent() ? undefined : "Root (current)"}
                 />
               </FieldRow>
@@ -559,8 +566,10 @@ export default function Locations() {
           <span class="eyebrow">Placement</span>
           <div class="grid grid-cols-2 gap-3">
             <FieldRow label="Parent">
+              {/* Keyed AND valued on uuid, not name (#627): see
+                  parentCandidates above for why. */}
               <TreeSelect
-                items={(locations.data ?? []).map((l) => ({ id: l.name, value: l.name, label: entityLabel(l), parentId: l.parent, rank: TYPE_RANK[l.location_type] ?? 9 }))}
+                items={(locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id, rank: TYPE_RANK[l.location_type] ?? 9 }))}
                 value={parent()}
                 onChange={setParent}
                 rootLabel="Root (no parent)"
