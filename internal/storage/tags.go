@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/tag"
 	"github.com/jackc/pgx/v5"
@@ -413,7 +414,30 @@ func (p *PG) ResolveTags(ctx context.Context, componentID, forSystem string, rea
 	if !in {
 		return nil, ErrComponentNotFound
 	}
-	rows, err := p.pool.Query(ctx, resolveTagsSQL, componentID, forSystem)
+	// forSystem is resolved once here (uuid-or-name, ADR-0062) rather than
+	// left for seed_sys to match by name: that CTE, unlike a scalar subquery,
+	// can hold more than one row once a name is no longer unique (#627), so
+	// an ambiguous name there never raised SQLSTATE 21000, it silently seeded
+	// the cascade from every same-named system and unioned both systems' tag
+	// bindings into one answer (a scope leak too: the second system is never
+	// checked against the caller's read scope). A system reference that
+	// resolves to none at all binds uuid.Nil, a well-formed id no real row
+	// can ever have: seed_sys then matches nothing, preserving the existing
+	// "named a system with no binding here" silent-empty-band behavior
+	// (the doc comment on ResolveTags) rather than a new hard error, and
+	// distinctly from "" (which selects the primary membership instead).
+	systemArg := forSystem
+	if forSystem != "" {
+		sys, err := scopedByName(ctx, p.pool, systemConfig, forSystem)
+		if errors.Is(err, ErrSystemNotFound) {
+			systemArg = uuid.Nil.String()
+		} else if err != nil {
+			return nil, err
+		} else {
+			systemArg = sys.ID
+		}
+	}
+	rows, err := p.pool.Query(ctx, resolveTagsSQL, componentID, systemArg)
 	if err != nil {
 		return nil, fmt.Errorf("storage: resolve tags: %w", err)
 	}
@@ -448,19 +472,23 @@ with recursive
 target as (
     select id, name, location_id from component where id = $1
 ),
--- The system band is seeded from MEMBERSHIP. Given a system ($2), it resolves
--- against that one, and only if the component is actually a member: naming a
--- system it has no binding to must not lend it configuration. Given none, it
--- falls back to the component's PRIMARY membership, which is what makes the
--- default a convenience for callers with no system in hand rather than the rule.
--- The chain stays single-valued because the rank below has no tiebreaker after
--- depth, so two seeds at the same band would resolve nondeterministically.
+-- The system band is seeded from MEMBERSHIP. Given a system ($2, already
+-- resolved to its id by ResolveTags: never matched by name here, since this
+-- is a CTE and not a scalar subquery, so an ambiguous name would not raise
+-- SQLSTATE 21000, it would silently seed from every same-named system), it
+-- resolves against that one, and only if the component is actually a member:
+-- naming a system it has no binding to must not lend it configuration. Given
+-- none (empty string), it falls back to the component's PRIMARY membership,
+-- which is what makes the default a convenience for callers with no system in
+-- hand rather than the rule. The chain stays single-valued because the rank
+-- below has no tiebreaker after depth, so two seeds at the same band would
+-- resolve nondeterministically.
 seed_sys as (
     select s.id
     from system s
     join system_member m on m.system_id = s.id
     join target t on t.id = m.component_id
-    where case when $2::text = '' then m.is_primary else s.name = $2::text end
+    where case when $2::text = '' then m.is_primary else s.id = $2::uuid end
 ),
 comp_chain(id, depth) as (
     select id, 0 from component where id = $1

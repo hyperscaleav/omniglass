@@ -493,3 +493,84 @@ func TestBareNameAmbiguousRefuses(t *testing.T) {
 		t.Errorf("candidates = %v, want %s and %s", ambig.Candidates, compA.ID, compB.ID)
 	}
 }
+
+// TestResolveTagsSurvivesDuplicateSystemNames is the regression for the #627
+// review's finding 4: resolveTagsSQL's seed_sys CTE matched a caller's
+// ?system= by bare name. Because seed_sys is a CTE and not a scalar
+// subquery, an ambiguous name never raised SQLSTATE 21000, it silently
+// seeded the cascade from every same-named system and unioned all of their
+// tag bindings into one effective-tags answer, the same silent-wrong-answer
+// shape TestDuplicateNamesDoNotBreakIngestPath's EffectiveProperties case
+// covers. Addressing the wanted system by uuid must give a deterministic
+// single-system answer; addressing it by the now-ambiguous bare name must
+// refuse cleanly rather than silently pick or union.
+func TestResolveTagsSurvivesDuplicateSystemNames(t *testing.T) {
+	gw, _ := newDuplicateNameFixture(t)
+	ctx := context.Background()
+	all := scope.Set{All: true}
+	sysA, sysB := twoSameNamedSystems(t, gw)
+
+	// A device that is a member of BOTH same-named systems: the shared-device
+	// case resolveTagsSQL's own comment documents as the reason ?system=
+	// exists at all.
+	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "shared-dsp"}, all)
+	if err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	if err := gw.AddMember(ctx, "", sysA.ID, comp.ID, all); err != nil {
+		t.Fatalf("add member sysA by id: %v", err)
+	}
+	if err := gw.AddMember(ctx, "", sysB.ID, comp.ID, all); err != nil {
+		t.Fatalf("add member sysB by id: %v", err)
+	}
+
+	// Propagates: true, since a system-band binding only reaches the component's
+	// effective-tags read (band 2) when the key cascades; a non-propagating key
+	// is admitted only from a binding on the component itself (band 3, depth 0).
+	if _, err := gw.CreateTag(ctx, "", storage.TagSpec{Name: "role", Propagates: true}, all); err != nil {
+		t.Fatalf("create tag: %v", err)
+	}
+	if _, err := gw.SetTagBinding(ctx, "", "role", "system", strptr(sysA.ID), "primary-video", all, all); err != nil {
+		t.Fatalf("bind role on sysA by id: %v", err)
+	}
+	if _, err := gw.SetTagBinding(ctx, "", "role", "system", strptr(sysB.ID), "backup-video", all, all); err != nil {
+		t.Fatalf("bind role on sysB by id: %v", err)
+	}
+
+	// Addressed by uuid: a deterministic single-system answer, never sysB's
+	// value leaking in as a shadowed candidate.
+	resolved, err := gw.ResolveTags(ctx, comp.ID, sysA.ID, all)
+	if err != nil {
+		t.Fatalf("resolve tags for sysA by id: %v", err)
+	}
+	var sawPrimary, sawBackup bool
+	for _, r := range resolved {
+		if r.Key != "role" {
+			continue
+		}
+		switch r.Value {
+		case "primary-video":
+			sawPrimary = true
+			if !r.Winner {
+				t.Errorf("role=primary-video should be the winner, got %+v", r)
+			}
+		case "backup-video":
+			sawBackup = true
+		}
+	}
+	if !sawPrimary {
+		t.Fatalf("resolved tags = %+v, want role=primary-video", resolved)
+	}
+	if sawBackup {
+		t.Fatalf("resolved tags = %+v, leaked sysB's binding (cross-contaminated by the shared name)", resolved)
+	}
+
+	// Addressed by the now-ambiguous bare name: a clean refusal, not a silent
+	// union and not a 500.
+	_, err = gw.ResolveTags(ctx, comp.ID, "huddle-1", all)
+	var ambig *storage.ErrAmbiguousName
+	if !errors.As(err, &ambig) {
+		t.Fatalf("resolve tags by ambiguous bare system name = %v, want *storage.ErrAmbiguousName", err)
+	}
+}
+
