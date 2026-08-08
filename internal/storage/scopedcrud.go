@@ -170,17 +170,43 @@ func loadByRef[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref s
 // address's terminal plane does not match the entity being resolved (a
 // location address handed to the component resolver, say). Both collapse to
 // this one sentinel rather than two, because which of them happened is not a
-// distinction worth leaking: mapRefErr turns it into the entity's own
-// non-disclosing 404, the same one an absent uuid or an out-of-scope row
-// already produces.
+// distinction worth leaking.
+//
+// Unwrap returns cfg.notFound (ErrComponentNotFound, ErrSystemNotFound, or
+// ErrLocationNotFound), the SAME sentinel the bare-name and uuid forms
+// produce for an absent or out-of-scope row. This is load-bearing, not
+// decoration: loadByRef calls ParseAddress on every non-uuid ref
+// unconditionally, so a dotted value reaching a request BODY field (a
+// create's parent/location/system, say, none of which carry a pattern tag)
+// gets path resolution whether the feature intended it there or not. A
+// caller resolving that reference (components.go's parent-resolve, for
+// example) already does `if errors.Is(err, ErrComponentNotFound) { return
+// ErrParentComponentNotFound }` to convert a generic miss into a
+// field-specific 422; without Unwrap that fold silently stopped firing for
+// every dotted body reference, producing a 404 that names the entity being
+// PATCHED rather than the reference that failed to resolve. With it, the
+// same thirteen existing folds (components.go, systems.go, locations.go,
+// secrets.go, variables.go, role_declarations.go, nodes.go) run unchanged
+// for all three reference forms: name, uuid, and address. mapRefErr's own
+// *ErrPathNotFound case (matched via errors.As on the concrete type, which
+// does not consult Unwrap) still fires first and wins for the path-PARAMETER
+// case, where nothing upstream substitutes a more specific sentinel, so the
+// direct non-disclosing 404 is unchanged there.
 type ErrPathNotFound struct {
 	Kind string
 	Ref  string
+	// notFound is cfg.notFound, carried through so a caller's existing
+	// errors.Is(err, cfg.notFound) still fires. Unexported: nothing
+	// constructs this sentinel outside resolvePath, and Unwrap is the
+	// contract, not the field.
+	notFound error
 }
 
 func (e *ErrPathNotFound) Error() string {
 	return fmt.Sprintf("storage: %q does not resolve for %s", e.Ref, e.Kind)
 }
+
+func (e *ErrPathNotFound) Unwrap() error { return e.notFound }
 
 // addressKindTable maps an Address's terminal plane to the tree table that
 // resolves it: the same three tables scopeTable already allow-lists, plus
@@ -279,7 +305,9 @@ func resolvePlaneRoot(ctx context.Context, q querier, tbl scopeTable, locID *str
 // scope decides before ambiguity does; an address has no ambiguity to
 // decide, but it gets the same non-disclosing treatment on a scope miss).
 func resolvePath[T any](ctx context.Context, q querier, cfg scopedConfig[T], addr *Address, ref string) (string, error) {
-	notFound := func() (string, error) { return "", &ErrPathNotFound{Kind: string(cfg.table), Ref: ref} }
+	notFound := func() (string, error) {
+		return "", &ErrPathNotFound{Kind: string(cfg.table), Ref: ref, notFound: cfg.notFound}
+	}
 
 	tbl, ok := addressKindTable(addr.Kind)
 	if !ok || tbl != cfg.table {
@@ -491,7 +519,8 @@ func scopedByNameInScope[T any](ctx context.Context, q querier, cfg scopedConfig
 	return resolveRef(ctx, q, cfg, ref, resource, read, refPolicyHide)
 }
 
-// withoutCandidates redacts an *ErrAmbiguousName's Candidates, for a
+// withoutCandidates redacts an *ErrAmbiguousName's Candidates and folds an
+// *ErrPathNotFound down to the bare cfg.notFound sentinel it wraps, for a
 // resolution path that has no caller scope to filter by at all (the three
 // *NameTaken advisories, which intentionally resolve scope-blind so
 // availability matches the placement bucket asked about rather than the
@@ -500,10 +529,30 @@ func scopedByNameInScope[T any](ctx context.Context, q querier, cfg scopedConfig
 // all). The reference is still refused as ambiguous; the response just
 // never names uuids the caller might have no scope to read, since nothing
 // here can tell which ones do.
+//
+// The ErrPathNotFound fold exists for a reason the name alone does not
+// suggest, worth stating because every one of these call sites is a
+// reference carried in a request BODY, not a path parameter: #627 Task 12's
+// resolvePath treats an address-shaped body reference (a create's
+// parent/location/system, none of which carry a pattern tag) exactly like
+// it treats a path parameter, and mapRefErr's *ErrPathNotFound case is
+// matched by errors.As on the concrete type, which fires unconditionally
+// and BEFORE the caller's own entity mapper ever runs its switch (the
+// switch that already knows a component-create's missing location is 422,
+// not the 404 a bare GET /locations/{name} would give). Folding here, at
+// the one place every cross-tier bind already routes through, replaces the
+// concrete *ErrPathNotFound with the bare sentinel BEFORE it leaves the
+// gateway, so mapRefErr's ErrPathNotFound case no longer matches it and the
+// caller's existing switch decides the status, same as it already does for
+// the bare-name and uuid forms of the same reference.
 func withoutCandidates(err error) error {
 	var ambig *ErrAmbiguousName
 	if errors.As(err, &ambig) {
 		return &ErrAmbiguousName{Kind: ambig.Kind, Ref: ambig.Ref}
+	}
+	var notFound *ErrPathNotFound
+	if errors.As(err, &notFound) {
+		return notFound.Unwrap()
 	}
 	return err
 }

@@ -169,3 +169,44 @@ func TestGetMetricTypeByDottedRefIs422(t *testing.T) {
 		t.Fatalf("422 body = %s, want it to say a metric_type name is a single token", body)
 	}
 }
+
+// Fix round 1 (task-12-review.md findings 1 and 2): a dotted reference
+// carried in a request BODY (a create's location or parent, none of which
+// carry a pattern tag) must produce the same status the bare-name form
+// already does, not the entity's own non-disclosing 404 that mapRefErr's
+// unconditional ErrPathNotFound case would otherwise give it.
+
+// TestCreateComponentWithDottedMissingLocationIs422 is the review's own
+// scenario, driven over real HTTP: POST /components with a dotted "location"
+// that structurally misses.
+func TestCreateComponentWithDottedMissingLocationIs422(t *testing.T) {
+	c, tok := pathTestServer(t)
+
+	c.do(tok, http.MethodPost, "/locations", map[string]any{"name": "boi", "location_type": "campus"}, http.StatusCreated)
+
+	status, body := c.send(tok, http.MethodPost, "/components",
+		map[string]any{"name": "x", "product": "generic-device", "location": "boi.nope"})
+	if status != http.StatusUnprocessableEntity {
+		t.Fatalf("POST /components with a dotted-missing location status = %d, want 422\nbody: %s", status, body)
+	}
+	if !strings.Contains(string(body), "location") {
+		t.Fatalf("422 body = %s, want it to name the location reference", body)
+	}
+}
+
+// TestCreateComponentWithDottedMissingParentIs422 is the "worse than merely
+// inconsistent" variant the review names: a dotted-but-missing parent must
+// still be reported as a parent problem (422), not a 404 naming the
+// component being CREATED, which cannot exist yet.
+func TestCreateComponentWithDottedMissingParentIs422(t *testing.T) {
+	c, tok := pathTestServer(t)
+
+	status, body := c.send(tok, http.MethodPost, "/components",
+		map[string]any{"name": "x", "product": "generic-device", "parent": "$comp.nope"})
+	if status != http.StatusUnprocessableEntity {
+		t.Fatalf("POST /components with a dotted-missing parent status = %d, want 422\nbody: %s", status, body)
+	}
+	if !strings.Contains(string(body), "parent") {
+		t.Fatalf("422 body = %s, want it to name the parent reference, not the component being created", body)
+	}
+}
