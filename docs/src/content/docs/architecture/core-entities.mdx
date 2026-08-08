@@ -29,8 +29,16 @@ stay estate-wide unique. A bare-name reference that now matches more than one ro
 (`409`, naming the candidates) rather than silently resolving to whichever row sorted first.
 **Placement and classification are mutable, not fixed at create**
 ([ADR-0064](/architecture/decisions/#adr-0064-placement-and-classification-are-mutable-after-create)):
-re-parent (cycle-guarded), relocate, re-classify, or clear each field; a product swap keeps hand-set
-property values while the new contract's defaults take over. Every component is required to name a
+re-parent (cycle-guarded), relocate, re-classify, or clear each field. **Placement is its own act, not
+a `PATCH` field**
+([ADR-0088](/architecture/decisions/#adr-0088-a-placement-change-is-an-authorization-act-so-a-move-is-its-own-verb)):
+`parent` and `location` move through a `POST /components/{name}:move` custom method (also `/systems`,
+`/locations`) gated `<resource>:move`, the same split `:rename` already draws, because clearing a parent used to lift a
+row out of every subtree scope with no check while creating the same root already required an
+all-scoped grant; clearing to root now requires that same all-scoped grant under `:move`. A location's
+`:move` gains no clear-to-root capability (it never had one). Classification (`product`, `standard`,
+`location_type`) stays on `PATCH`; a product swap keeps hand-set property values while the new
+contract's defaults take over. Every component is required to name a
 **`product`** (`component.product_id` is `NOT NULL`; the three seeded generics,
 `generic-device` / `generic-app` / `generic-service`, cover anything not yet modeled more
 specifically), a **`standard`** stays optional on a system, and a **`location_type`** stays optional

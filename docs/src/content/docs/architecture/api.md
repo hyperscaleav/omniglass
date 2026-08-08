@@ -49,6 +49,17 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   breaks every reference an operator stored outside the system (a bookmark, a runbook step, an
   integration's config), so it is an act a grant can withhold on its own instead of a side effect of
   editing a label.
+- **A move is a custom method too**
+  ([ADR-0088](/architecture/decisions/#adr-0088-a-placement-change-is-an-authorization-act-so-a-move-is-its-own-verb)).
+  `POST /components/{name}:move` and `/systems/{name}:move` take `{location?, parent?}` (at least one
+  required, 422 otherwise); `/locations/{name}:move` takes `{parent}` only, with no clear-to-root
+  branch (a `location` has never had one). Both follow the house three-state convention (omitted
+  unchanged, `""` clears, a name sets), gated by `<entity>:move` rather than `<entity>:update`, and the
+  `PATCH` body of all three carries neither `parent` nor `location` any more. Clearing `parent` to
+  root under `:move` requires an all-scoped grant, the same authorization creating a root row already
+  requires: a `PATCH` used to skip that check entirely on the clear branch. `:move` writes its own
+  audit verb, `move`, and never recomputes health except a system's own `location` field, which keeps
+  moving health at both ends exactly as its old combined `PATCH` did.
 - **Custom methods carry a colon**, `:verb` not `/verb`, for anything that is not CRUD:
   `/components/{name}/commands:issue`, `/auth/me/sessions/{id}:revoke`, `/nodes:claim`. The verb
   is also the **permission**: `:issue` is gated by `command:issue`, so the route and the
