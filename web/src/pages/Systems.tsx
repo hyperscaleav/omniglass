@@ -33,6 +33,7 @@ import MembersPanel from "../components/MembersPanel";
 import HealthBadge from "../components/HealthBadge";
 import SystemHealthPanel from "../components/HealthPanel";
 import { systemHealthKey, verdictOf, verdictRank, type EstateHealth } from "../lib/health";
+import { hueFor } from "../lib/system_color";
 
 // Systems: the system inventory on the generic TreeList, the same shell as
 // Locations and Components. Systems form a tree (parent_id) and are placed at a
@@ -481,6 +482,10 @@ export default function Systems() {
     error: () => systems.error,
     filterPlaceholder: "Filter by name, standard, location…",
     nameWeight: () => 500,
+    // Every system wears a colour of its own, derived from its uuid (never a
+    // display name, which is optional), so the same system reads consistently
+    // here, on a component's system column, and in the location health rollup.
+    leadIcon: (n) => <span class="og-system-dot" style={{ "--sys-h": String(hueFor(n.raw.id)) }} title={n.display} />,
     cellFor: (key, n) => {
       // There is no bulk health read, so the badge owns its own query per row and
       // shares the cache key with the detail panel: opening a row costs nothing

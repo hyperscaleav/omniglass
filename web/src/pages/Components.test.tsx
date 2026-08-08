@@ -10,6 +10,7 @@ import { PRODUCTS_KEY, type Product } from "../lib/products";
 import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 import { uuidFor } from "../lib/testids";
+import { hueFor } from "../lib/system_color";
 
 // The Components page on the shared TreeList in the create-as-route model: New routes
 // to /components/create (a draft accordion), Save hands off to /components/<name> in
@@ -52,6 +53,30 @@ function mount(path: string) {
 
 describe("Components create-as-route", () => {
   afterEach(() => window.history.pushState({}, "", "/"));
+
+  it("wears its system's colour dot on the list row's system column", async () => {
+    const withSystem: Component = { ...comp, system: "boardroom", system_count: 1 };
+    const sysId = uuidFor("sys-boardroom");
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...COMPONENTS_KEY], [withSystem]);
+    qc.setQueryData([...SYSTEMS_KEY], [{ id: sysId, name: "boardroom", member_count: 1 }]);
+    qc.setQueryData([...LOCATIONS_KEY], []);
+    qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...ME_KEY], me);
+    qc.setQueryData([...TAGS_KEY], []);
+    window.history.pushState({}, "", "/components");
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="/components" component={Components} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    await waitFor(() => expect(screen.getByText("Ceiling Mic 2")).toBeTruthy());
+    const dot = document.querySelector(".og-system-dot") as HTMLElement;
+    expect(dot).toBeTruthy();
+    expect(dot.style.getPropertyValue("--sys-h")).toBe(String(hueFor(sysId)));
+  });
 
   it("renders the draft-create accordion at /components/create", async () => {
     mount("/components/create");

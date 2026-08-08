@@ -21,6 +21,8 @@ import {
   type Cause,
   type HealthRole,
 } from "../lib/health";
+import { SYSTEMS_KEY, listSystems } from "../lib/systems";
+import { hueFor } from "../lib/system_color";
 
 // The reconciliation panel: the point of the health slice, and the one surface that
 // has to answer "why is this degraded" without sending the operator anywhere else.
@@ -279,6 +281,12 @@ export function LocationHealthPanel(props: { location: string; onOpenSystem?: (n
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   }));
+  // The health read serves a system by name only; its colour dot needs the
+  // uuid hueFor hashes, so this cross-references the systems list (already
+  // cached by every page that lists or opens a system, so this is rarely a
+  // fresh fetch in practice).
+  const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
+  const idOf = createMemo(() => new Map((systems.data ?? []).map((s) => [s.name, s.id] as const)));
   const verdict = () => q.data?.verdict ?? "";
   const beneath = createMemo(() => systemsOf(q.data));
   const worst = createMemo(() => beneath().find((s) => s.verdict === verdict()));
@@ -328,6 +336,9 @@ export function LocationHealthPanel(props: { location: string; onOpenSystem?: (n
                   when={props.onOpenSystem}
                   fallback={
                     <div class="flex items-center gap-2.5 px-3 py-2">
+                      <Show when={idOf().get(s.name)}>
+                        {(id) => <span class="og-system-dot shrink-0" style={{ "--sys-h": String(hueFor(id())) }} />}
+                      </Show>
                       <span class="min-w-0 flex-1 truncate font-data text-sm">{s.name}</span>
                       <HealthBadge verdict={s.verdict} />
                     </div>
@@ -338,6 +349,9 @@ export function LocationHealthPanel(props: { location: string; onOpenSystem?: (n
                     class="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-base-content/5"
                     onClick={() => props.onOpenSystem!(s.name)}
                   >
+                    <Show when={idOf().get(s.name)}>
+                      {(id) => <span class="og-system-dot shrink-0" style={{ "--sys-h": String(hueFor(id())) }} />}
+                    </Show>
                     <span class="min-w-0 flex-1 truncate font-data text-sm">{s.name}</span>
                     <HealthBadge verdict={s.verdict} />
                     <ChevronRight size={14} />

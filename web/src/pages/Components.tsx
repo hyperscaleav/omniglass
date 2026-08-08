@@ -36,6 +36,7 @@ import { interfaceBlade, interfaceCreateBlade } from "../components/interfaceBla
 import PropertiesPanel, { propertyResolutionBlade, propertyBladeId } from "../components/PropertiesPanel";
 import ResolutionPanel from "../components/ResolutionPanel";
 import AlarmsPanel from "../components/AlarmsPanel";
+import { hueFor } from "../lib/system_color";
 
 // Components: the device inventory, the first page built on the generic TreeList.
 // Components form a tree (parent_id) and each is bound to a primary system and a
@@ -52,6 +53,7 @@ type CompNode = ListNode & {
   product: string;
   systemName: string;
   systemAddr: string;
+  systemId: string;
   systemCount: number;
   locationName: string;
   tags: Record<string, string>;
@@ -114,6 +116,7 @@ export default function Components() {
         product: c.product ?? "",
         systemName: c.system ? entityLabel(sysByName().get(c.system) ?? { name: c.system }) : "",
         systemAddr: c.system ?? "",
+        systemId: c.system ? (sysByName().get(c.system)?.id ?? "") : "",
         systemCount: c.system_count ?? 0,
         locationName: c.location ? entityLabel(lm.get(c.location) ?? { name: c.location }) : "",
         tags: c.effective_tags ?? {},
@@ -515,7 +518,16 @@ export default function Components() {
     nameWeight: () => 500,
     cellFor: (key, n) => {
       if (key === "product") return n.product ? <span class="badge badge-ghost badge-sm font-data">{n.product}</span> : <span class="text-base-content/40">—</span>;
-      if (key === "system") return <span class="text-base-content/70">{n.systemName || "—"}{n.systemCount > 1 ? ` +${n.systemCount - 1}` : ""}</span>;
+      if (key === "system")
+        return (
+          <span class="inline-flex items-center gap-1.5 text-base-content/70">
+            <Show when={n.systemId}>
+              <span class="og-system-dot shrink-0" style={{ "--sys-h": String(hueFor(n.systemId)) }} />
+            </Show>
+            {n.systemName || "—"}
+            {n.systemCount > 1 ? ` +${n.systemCount - 1}` : ""}
+          </span>
+        );
       if (key === "location") return <span class="text-base-content/70">{n.locationName || "—"}</span>;
       if (key === "tags") return <TagPills tags={n.tags} />;
       return null;

@@ -3,6 +3,9 @@ import { render, within } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import SystemHealthPanel, { LocationHealthPanel } from "./HealthPanel";
 import { locationHealthKey, systemHealthKey, type EstateHealth } from "../lib/health";
+import { SYSTEMS_KEY, type System } from "../lib/systems";
+import { hueFor } from "../lib/system_color";
+import { uuidFor } from "../lib/testids";
 
 // The reconciliation panel is the claim this slice makes: it must answer "why is
 // this degraded" in one view by naming the whole chain, alarm on a component ->
@@ -244,9 +247,15 @@ const location: EstateHealth = {
   transitions: [{ ts: ago(2 * 3_600_000), verdict: "outage" }],
 };
 
+const locationSystems: System[] = [
+  { id: uuidFor("sys-boardroom"), name: "boardroom", member_count: 1 },
+  { id: uuidFor("sys-huddle"), name: "huddle", member_count: 1 },
+];
+
 function mountLocation(onOpenSystem?: (name: string) => void) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...locationHealthKey(location.owner)], location);
+  qc.setQueryData([...SYSTEMS_KEY], locationSystems);
   return render(() => (
     <QueryClientProvider client={qc}>
       <LocationHealthPanel location={location.owner} onOpenSystem={onOpenSystem} />
@@ -266,6 +275,13 @@ describe("LocationHealthPanel", () => {
     expect(within(row).getByText("outage")).toBeTruthy();
     const ok = getByText("huddle").parentElement as HTMLElement;
     expect(within(ok).getByText("healthy")).toBeTruthy();
+  });
+
+  it("wears each system's own colour dot beside its name", () => {
+    mountLocation();
+    const dots = document.querySelectorAll(".og-system-dot");
+    expect(dots.length).toBe(2);
+    expect((dots[0] as HTMLElement).style.getPropertyValue("--sys-h")).toBe(String(hueFor(locationSystems[0].id)));
   });
 
   it("drills into the system that can say why", () => {

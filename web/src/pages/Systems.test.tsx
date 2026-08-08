@@ -11,6 +11,7 @@ import { ownerPropertiesKey, type EffectiveProperty } from "../lib/owner_propert
 import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 import { uuidFor } from "../lib/testids";
+import { hueFor } from "../lib/system_color";
 
 // The Systems page on the shared TreeList in the create-as-route model: New routes
 // to /systems/create (a draft accordion), Save hands off to /systems/<id> in edit;
@@ -74,6 +75,14 @@ describe("Systems create-as-route", () => {
     const picker = (await waitFor(() => screen.getByLabelText("Standard"))) as HTMLSelectElement;
     // Conforming to no standard is first class, so it heads the list.
     expect(Array.from(picker.options).map((o) => o.value)).toEqual(["", "huddle-space", "meeting-room"]);
+  });
+
+  it("wears a colour dot derived from its uuid on the list row", async () => {
+    mount("/systems");
+    await waitFor(() => expect(screen.getByText("Boardroom")).toBeTruthy());
+    const dot = document.querySelector(".og-system-dot") as HTMLElement;
+    expect(dot).toBeTruthy();
+    expect(dot.style.getPropertyValue("--sys-h")).toBe(String(hueFor(sys.id)));
   });
 
   it("shows an existing system read-only in view: no tag add control, an Edit affordance", async () => {
