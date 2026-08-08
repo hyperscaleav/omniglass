@@ -91,3 +91,16 @@ export async function unassignRole(system: string, role: string, component: stri
 export function staffingLabel(role: { quorum: number; assigned: number }): string {
   return `${role.quorum} wanted, ${role.assigned} assigned`;
 }
+
+// roleByComponent pivots the roles read: which role (if any) each component
+// fills in this system, the by-device complement of the by-role lens
+// (RolesPanel). A component filling no role is simply absent from the map,
+// not an error: membership is its own relation precisely because a member can
+// hold no role at all (see MembersPanel, which consumes this to say so).
+// #626's one-role-per-component invariant makes this a safe 1:1 lookup: no
+// component can appear under two roles here.
+export function roleByComponent(roles: EffectiveRole[]): Map<string, EffectiveRole> {
+  const m = new Map<string, EffectiveRole>();
+  for (const r of roles) for (const c of r.assigned_to ?? []) m.set(c, r);
+  return m;
+}
