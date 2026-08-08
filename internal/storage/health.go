@@ -180,16 +180,18 @@ func (p *PG) RecomputeHealth(ctx context.Context, q txQuerier, componentRef stri
 	return p.recomputeChain(ctx, q, []ownerRef{{ID: c.ID, Name: c.Name}}, nil, nil)
 }
 
-// ownerRef pairs a health owner's id (what every internal query in this file
-// binds) with its name (what recordHealth and healthTransitions still key on,
-// via the shared ownerArcExprN owner-kind-generic primitive: property_samples.go,
-// current_values.go and settlement.go depend on that primitive staying
-// name-based, so it is deliberately not part of this task's conversion). Both
-// travel together through recomputeChain so nothing has to re-resolve a name
-// back to an id, or an id back to a name, once either is known: either
-// direction risks landing on the wrong row once #627 lands (name -> id is
-// ambiguous the moment two rows share a name; id -> name is always safe but is
-// an extra query this avoids).
+// ownerRef pairs a health owner's id with its name. Every internal query in
+// this file binds the id, including recordHealth and healthTransitions:
+// ownerArcExprN's component/system/location branch binds directly ($N::uuid,
+// fixed to do so in the round that closed the collection ingest path), so
+// nothing downstream re-derives an id from a name that #627 no longer
+// guarantees is unique. Name is not currently read anywhere; it survives on
+// the type because every construction site already has the row in hand
+// (resolving the id pulls the name along for free) except one that used to
+// pay for a lookup solely to populate it (systemConfig.afterDelete, since
+// fixed to leave it unset). Kept rather than dropped so a future health-report
+// read that wants a display name without a second lookup has it; if that
+// stays untrue, cut the field.
 type ownerRef struct {
 	ID   string
 	Name string
@@ -791,8 +793,8 @@ func splitHealthRoles(rs []resolvedRole) (unconditional []health.Role, choices [
 // apart rather than that being a disagreement.
 func (p *PG) SystemHealth(ctx context.Context, systemName string, since time.Time, read scope.Set) (*HealthReport, error) {
 	// Resolved once, here, rather than through ownerInScope (which does the
-	// same scopedByName lookup but discards the id): every read below binds
-	// sys.ID, and healthTransitions binds sys.Name, neither re-derived from
+	// same scopedByName lookup but discards the id): every read below,
+	// including healthTransitions, binds sys.ID, neither re-derived from
 	// systemName once it might no longer be unique (#627). rep.OwnerID keeps
 	// echoing the caller's own reference, unchanged.
 	sys, err := scopedByName(ctx, p.pool, systemConfig, systemName)
