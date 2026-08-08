@@ -175,7 +175,7 @@ func TestUnbuiltAlternateDoesNotImpair(t *testing.T) {
 	// All-in-one: one role, a video bar.
 	if _, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
 		Name: "conf-bar", DisplayName: "Conferencing Bar", Quorum: 1, Impact: "outage",
-		AcceptedTypes: []string{"video-bar"}, AlternateID: alts["all-in-one"],
+		AcceptedTypes: []string{"video-bar"}, AlternateID: strp(alts["all-in-one"]),
 	}); err != nil {
 		t.Fatalf("declare all-in-one role: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestUnbuiltAlternateDoesNotImpair(t *testing.T) {
 	for _, name := range []string{"conf-codec", "conf-camera", "conf-dsp", "conf-amp", "conf-mic"} {
 		if _, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
 			Name: name, DisplayName: name, Quorum: 1, Impact: "outage",
-			AlternateID: alts["component-system"],
+			AlternateID: strp(alts["component-system"]),
 		}); err != nil {
 			t.Fatalf("declare component-system role %s: %v", name, err)
 		}
@@ -215,6 +215,76 @@ func TestUnbuiltAlternateDoesNotImpair(t *testing.T) {
 	// chose the other way: this is the #626 defect the fold exists to close.
 	f.mustAgreeWithRecord(t, ctx, "choice-room", "healthy")
 	f.assertTransitionOnly(t, ctx)
+}
+
+// TestAlternateTieBreaksByPosition is the fix-round regression for the
+// fourth important finding: nothing at the storage tier pinned that
+// choice_alternate.position is what decides a tie, as opposed to whatever
+// order Go's map iteration inside splitHealthRoles happens to produce.
+// internal/health.Choice.Active's tie-break is deterministic (position 1
+// wins, checked with strict >), but splitHealthRoles builds its Alternates
+// slice from a map, so the ONLY thing making that determinism reach a live
+// read is the explicit sort.Slice by position; deleting it leaves the whole
+// suite green until a real tie is reached. Both alternates here are 0 of 1
+// (a genuine tie, the state every choice-bearing system starts in) and carry
+// DIFFERENT impact, and they are declared to SeedRoleChoice in the reverse
+// of their intended position order (b-alt second in the slice would be
+// position 2 if declared as written; it is deliberately named to sort
+// alphabetically ahead of a-alt, so a latent bug that ordered by name
+// instead of position would also be caught) so nothing about insertion or
+// naming order coincides with the position that must actually decide it.
+func TestAlternateTieBreaksByPosition(t *testing.T) {
+	f := newHealthFixture(t)
+	ctx := context.Background()
+
+	std := "tie-break-huddle"
+	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: std, DisplayName: "Tie Break"}); err != nil {
+		t.Fatalf("create standard: %v", err)
+	}
+	alts, err := f.gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
+		Name: "conferencing", DisplayName: "Conferencing",
+		Alternates: []storage.AlternateSpec{
+			{Name: "b-alt", DisplayName: "B Alt"}, // position 1: must win the tie
+			{Name: "a-alt", DisplayName: "A Alt"}, // position 2: sorts first alphabetically, must NOT win
+		},
+	})
+	if err != nil {
+		t.Fatalf("seed choice: %v", err)
+	}
+	if _, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
+		Name: "b-role", DisplayName: "B Role", Quorum: 1, Impact: "degraded", AlternateID: strp(alts["b-alt"]),
+	}); err != nil {
+		t.Fatalf("declare b-role: %v", err)
+	}
+	if _, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
+		Name: "a-role", DisplayName: "A Role", Quorum: 1, Impact: "outage", AlternateID: strp(alts["a-alt"]),
+	}); err != nil {
+		t.Fatalf("declare a-role: %v", err)
+	}
+
+	room := "hq-r1"
+	if _, err := f.gw.CreateSystem(ctx, "", storage.SystemSpec{
+		Name: "tie-room", StandardID: &std, LocationName: &room,
+	}, f.all); err != nil {
+		t.Fatalf("create system: %v", err)
+	}
+
+	// Neither role is ever staffed: both alternates sit at fraction 0,
+	// tied. Position 1 (b-alt, degraded) must win, not position 2 (a-alt,
+	// outage), and it must stay that way across repeated reads: a removed
+	// sort would make this flip depending on Go's map iteration, which
+	// varies from call to call, not just from process to process.
+	for i := 0; i < 8; i++ {
+		rep, err := f.gw.SystemHealth(ctx, "tie-room", time.Time{}, f.all)
+		if err != nil {
+			t.Fatalf("system health read %d: %v", i, err)
+		}
+		if rep.Verdict != "degraded" {
+			t.Fatalf("read %d: verdict = %q, want degraded (position-1 b-alt must win the tie over a-alt's outage)",
+				i, rep.Verdict)
+		}
+	}
+	f.mustAgreeWithRecord(t, ctx, "tie-room", "degraded")
 }
 
 // TestHealthRecordsEveryRealChange is the mirror of the duplicate: a verdict that

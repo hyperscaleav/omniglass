@@ -54,10 +54,10 @@ type SystemRole struct {
 	UpdatedAt time.Time
 }
 
-// SystemRoleSpec is the declaration input. AcceptedTypes, PinnedProducts,
-// PositionLabels and AlternateID each replace their value wholesale on an
-// update; Capacity does not (nil leaves the existing cap alone, see
-// SystemRole.Capacity).
+// SystemRoleSpec is the declaration input. AcceptedTypes, PinnedProducts, and
+// PositionLabels each replace their value wholesale on an update; Capacity
+// and AlternateID do not (nil leaves whatever is already declared alone, see
+// SystemRole.Capacity and the AlternateID comment below).
 type SystemRoleSpec struct {
 	Name           string
 	DisplayName    string
@@ -67,15 +67,27 @@ type SystemRoleSpec struct {
 	Capacity       *int
 	PositionLabels []string
 	Impact         string // outage | degraded | none; empty means degraded
-	// AlternateID joins this role to one alternate of a choice (#626): empty
-	// means unconditional, always folded directly by
-	// health.SystemVerdictWith. Set from a choice_alternate.id the caller
-	// already resolved (SeedRoleChoice returns the ids its choice created),
-	// never from a name the write itself would have to look up: the
-	// composite FK (system_role_alternate_fk) is what refuses an id that
-	// belongs to a different owner, mapped to ErrRoleRefNotFound the same
-	// way an unknown accepted type or pinned product is.
-	AlternateID string
+	// AlternateID joins this role to one alternate of a choice (#626): nil
+	// means "the caller did not mention this field", so an update leaves
+	// whatever is already declared alone, the same reading Capacity already
+	// gets one field up. A pointer to "" is the explicit detach path
+	// (unconditional, always folded directly by health.SystemVerdictWith); a
+	// pointer to a choice_alternate.id joins that alternate. This is nil, a
+	// pointer to empty, or a pointer to a value on purpose: a plain string
+	// (the pre-#626-fix-round shape) cannot tell "omitted" apart from
+	// "explicitly detach" once both would write NULL, and every write that
+	// wholesale-replaced this field silently promoted a role from
+	// conditional to mandatory on any edit that did not resend it, the exact
+	// failure amendment 7.1 blocked on the DELETE path re-entering through
+	// the UPDATE path. Set from a choice_alternate.id the caller already
+	// resolved (SeedRoleChoice returns the ids its choice created, the API
+	// layer resolves a "choice/alternate" wire reference through
+	// PG.ResolveAlternate before building this spec), never from a raw name
+	// the write itself would have to look up: the composite FK
+	// (system_role_alternate_fk) is what refuses an id that belongs to a
+	// different owner, mapped to ErrRoleRefNotFound the same way an unknown
+	// accepted type or pinned product is.
+	AlternateID *string
 }
 
 // EffectiveRole is one role resolved for a system: the declaration plus who fills

@@ -602,17 +602,24 @@ func seedStandardRoles(ctx context.Context, gw storage.Gateway, choiceAlts map[s
 	}
 	for _, st := range doc.Standards {
 		for _, r := range st.Roles {
-			var altID string
+			// SeedSystemRole is ON CONFLICT DO NOTHING (never reasserts over
+			// an operator's edit), so unlike the API layer this never needs
+			// to distinguish "omitted" from "explicitly unconditional": a
+			// fresh role either names its alternate or does not, and an
+			// already-seeded one is untouched either way. A nil pointer
+			// (unconditional) is still correct here, not just convenient.
+			var altID *string
 			if r.Choice != "" || r.Alternate != "" {
 				if r.Choice == "" || r.Alternate == "" {
 					return fmt.Errorf("seed: standard %s role %s names choice %q and alternate %q, want both or neither",
 						st.ID, r.Name, r.Choice, r.Alternate)
 				}
-				altID = choiceAlts[st.ID][r.Choice+"/"+r.Alternate]
-				if altID == "" {
+				id := choiceAlts[st.ID][r.Choice+"/"+r.Alternate]
+				if id == "" {
 					return fmt.Errorf("seed: standard %s role %s names unknown choice/alternate %s/%s",
 						st.ID, r.Name, r.Choice, r.Alternate)
 				}
+				altID = &id
 			}
 			if err := gw.SeedSystemRole(ctx, "standard", st.ID, storage.SystemRoleSpec{
 				Name:           r.Name,

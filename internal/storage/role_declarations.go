@@ -200,7 +200,17 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 			    capacity        = coalesce(excluded.capacity, system_role.capacity),
 			    position_labels = excluded.position_labels,
 			    impact          = excluded.impact,
-			    alternate_id    = excluded.alternate_id,
+			    -- $9 is bound as *string (roles.go): a nil pointer arrives as
+			    -- SQL NULL and means the caller did not mention this field,
+			    -- so the existing alternate survives (the coalesce below);
+			    -- a non-nil pointer means the caller sent a value, and an
+			    -- empty one is the explicit detach path (nullif turns it
+			    -- into NULL same as the insert branch above). Checking the
+			    -- RAW $9 rather than excluded.alternate_id is load-bearing:
+			    -- both "omitted" and "explicitly detach" produce a NULL
+			    -- excluded.alternate_id after nullif, and only $9 itself
+			    -- still tells them apart.
+			    alternate_id    = case when $9 is null then system_role.alternate_id else nullif($9, '')::uuid end,
 			    updated_at      = now()
 		returning `+systemRoleCols, col, roleOwnerExpr(ownerKind)),
 		ownerKind, ownerID, spec.Name, spec.DisplayName, quorum, spec.Capacity, positionLabels, impact, spec.AlternateID))

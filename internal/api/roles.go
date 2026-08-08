@@ -148,6 +148,13 @@ type roleSpecBody struct {
 	AcceptedTypes  []string `json:"accepted_types,omitempty" doc:"The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type"`
 	PinnedProducts []string `json:"pinned_products,omitempty" doc:"If set, a filling component's product must be one of these; replaces the pinned set wholesale. Omit or empty accepts any product of an accepted type"`
 	Impact         string   `json:"impact,omitempty" enum:"outage,degraded,none" doc:"What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display"`
+	// Alternate is *string, not string: omitting it must leave whatever
+	// alternate this role already joins alone, the same reading Capacity
+	// gets above, because every other field on this body wholesale-replaces
+	// and a role's alternate silently detaching on an unrelated edit (#626)
+	// took a shipped standard's systems from healthy to degraded with no
+	// audit trail and no way back except raw SQL.
+	Alternate *string `json:"alternate,omitempty" doc:"The choice/alternate this role joins, addressed as \"choice-name/alternate-name\" (#626). Omit (or send null) to leave whatever is already declared unchanged; an empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422"`
 }
 
 type standardRolePathInput struct {
@@ -232,7 +239,11 @@ func registerStandardRoleRoutes(api huma.API, a *authenticator, gw storage.Gatew
 		Summary:     "Declare a role on a standard",
 		Description: "Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent). accepted_types and pinned_products each replace their set wholesale. An unknown standard, type, or product is a 422. Gated by standard:update.",
 	}, "standard", "update"), func(ctx context.Context, in *setStandardRoleInput) (*systemRoleOutput, error) {
-		r, err := gw.SetSystemRole(ctx, actorID(ctx), "standard", in.ID, roleSpec(in.Role, in.Body))
+		altID, err := resolveAlternateBody(ctx, gw, "standard", in.ID, in.Body)
+		if err != nil {
+			return nil, mapRoleErr(err)
+		}
+		r, err := gw.SetSystemRole(ctx, actorID(ctx), "standard", in.ID, roleSpec(in.Role, in.Body, altID))
 		if err != nil {
 			return nil, mapRoleErr(err)
 		}
@@ -288,7 +299,11 @@ func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		if err := requireSystemInScope(ctx, a, gw, in.Name); err != nil {
 			return nil, err
 		}
-		r, err := gw.SetSystemRole(ctx, actorID(ctx), "system", in.Name, roleSpec(in.Role, in.Body))
+		altID, err := resolveAlternateBody(ctx, gw, "system", in.Name, in.Body)
+		if err != nil {
+			return nil, mapRoleErr(err)
+		}
+		r, err := gw.SetSystemRole(ctx, actorID(ctx), "system", in.Name, roleSpec(in.Role, in.Body, altID))
 		if err != nil {
 			return nil, mapRoleErr(err)
 		}
@@ -363,8 +378,12 @@ func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 }
 
 // roleSpec fills the declaration spec from the path and body, defaulting the
-// label to the role name so a minimal write still reads properly on a surface.
-func roleSpec(name string, body roleSpecBody) storage.SystemRoleSpec {
+// label to the role name so a minimal write still reads properly on a
+// surface. altID is the already-resolved AlternateID (resolveAlternateBody),
+// not read from body directly: resolution needs the gateway and the owner,
+// neither of which this function has, and keeping it a pure function here
+// keeps roleSpec testable without a database.
+func roleSpec(name string, body roleSpecBody, altID *string) storage.SystemRoleSpec {
 	display := body.DisplayName
 	if display == "" {
 		display = name
@@ -378,7 +397,27 @@ func roleSpec(name string, body roleSpecBody) storage.SystemRoleSpec {
 		AcceptedTypes:  body.AcceptedTypes,
 		PinnedProducts: body.PinnedProducts,
 		Impact:         body.Impact,
+		AlternateID:    altID,
 	}
+}
+
+// resolveAlternateBody turns a request body's optional "choice/alternate"
+// wire reference into the id storage.SystemRoleSpec.AlternateID expects,
+// nil when the caller omitted the field (SetSystemRole then leaves whatever
+// is already declared alone, the fix for #626's silent-detach-on-edit
+// defect: every route that declares a role used to construct AlternateID
+// from nothing, which always wrote NULL over it). An unknown or malformed
+// reference is storage.ErrRoleRefNotFound, mapped to 422 by mapRoleErr the
+// same way a bad accepted type or pinned product is.
+func resolveAlternateBody(ctx context.Context, gw storage.Gateway, ownerKind, ownerID string, body roleSpecBody) (*string, error) {
+	if body.Alternate == nil {
+		return nil, nil
+	}
+	id, err := gw.ResolveAlternate(ctx, ownerKind, ownerID, *body.Alternate)
+	if err != nil {
+		return nil, err
+	}
+	return &id, nil
 }
 
 // requireSystemInScope resolves the system within the caller's write scope

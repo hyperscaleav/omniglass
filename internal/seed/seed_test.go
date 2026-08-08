@@ -317,6 +317,25 @@ func TestSeedRoleChoicesIdempotent(t *testing.T) {
 		t.Errorf("conferencing alternates = %d, want 2 (all-in-one, component-system; seed not idempotent or incomplete)", altCount)
 	}
 
+	// Positions land 1..n from standards.yaml's list order, not whatever the
+	// planner happens to return: this is what internal/health.Choice.Active
+	// reads to break a tie, and TestAlternateTieBreaksByPosition pins that
+	// nothing else in the read path orders alternates.
+	wantPos := map[string]int{"all-in-one": 1, "component-system": 2}
+	for altName, want := range wantPos {
+		var pos int
+		if err := conn.QueryRow(ctx, `
+			select ca.position from choice_alternate ca
+			join role_choice rc on rc.id = ca.choice_id
+			where rc.owner_kind = 'standard' and rc.standard_id = (select id from standard where name = 'huddle-room')
+			  and rc.name = 'conferencing' and ca.name = $1`, altName).Scan(&pos); err != nil {
+			t.Fatalf("read %s position: %v", altName, err)
+		}
+		if pos != want {
+			t.Errorf("%s position = %d, want %d", altName, pos, want)
+		}
+	}
+
 	// Every conferencing role resolves a non-null alternate_id, and it
 	// points at the alternate under huddle-room's own choice, not some
 	// other owner's: the composite FK (system_role_alternate_fk) is what

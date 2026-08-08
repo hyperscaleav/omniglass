@@ -96,6 +96,16 @@ type HealthReport struct {
 // slot, and the alarms that took them down. A satisfied role carries
 // neither, and a role that is merely short-staffed (nobody down, just nobody
 // assigned) carries Down empty too.
+//
+// Choice, Alternate and Active are the #626 grouping, carried onto the
+// report so a consumer can group what the verdict already groups: Choice
+// and Alternate are empty for an unconditional role (it always counts), and
+// Active is true for every unconditional role but only for the roles of a
+// choice's currently-winning alternate (internal/health.Choice.Active).
+// Without this, the verdict and the role list can read as contradicting
+// each other: a satisfied all-in-one alternate reads healthy while the
+// same report lists its unbuilt component-system alternate's roles as
+// impaired, with nothing to say those roles are not the reason.
 type HealthRole struct {
 	Name        string
 	DisplayName string
@@ -108,6 +118,9 @@ type HealthRole struct {
 	AssignedTo  []string
 	Down        []string // assigned components whose own verdict is outage
 	Alarms      []Alarm  // the active alarms on those down components
+	Choice      string   // the choice this role belongs to; empty when unconditional
+	Alternate   string   // the alternate within Choice; empty when unconditional
+	Active      bool     // true for an unconditional role, or a role in its choice's active alternate
 }
 
 // HealthSystem is one system under a location, with its recorded verdict. It is
@@ -650,6 +663,11 @@ func splitHealthRoles(rs []resolvedRole) (unconditional []health.Role, choices [
 // value. The two agree whenever the trigger set is complete, and where they would
 // disagree the resolved roles are the honest answer: a system that conforms to a
 // standard whose roles nobody has staffed is broken from the moment it exists.
+// "The roles served beside it" is the flat list, not the fold's inputs
+// directly: a choice's non-active alternate still serves its roles here
+// (each with Active false, HealthRole), so the verdict can be healthy while
+// the list beside it shows impaired rows, and Active is what tells the two
+// apart rather than that being a disagreement.
 func (p *PG) SystemHealth(ctx context.Context, systemName string, since time.Time, read scope.Set) (*HealthReport, error) {
 	inScope, err := p.ownerInScope(ctx, p.pool, "system", systemName, read)
 	if err != nil {
@@ -665,8 +683,21 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, since time.Tim
 	}
 	unconditional, choices := splitHealthRoles(roles)
 	rep.Verdict = health.SystemVerdictWith(unconditional, choices).String()
+	// The same choices splitHealthRoles just grouped for the verdict name
+	// which alternate is active in each, so explainRole can mark every role
+	// with whether it is the reason the verdict reads what it does or a
+	// roads-not-taken alternate's role: the report would otherwise repeat
+	// the pre-#626 contradiction the fold itself was built to fix, just one
+	// level lower, listing an unbuilt alternate's roles as impaired beside a
+	// verdict that already knows to ignore them.
+	activeAlt := map[string]string{} // choice name -> its active alternate's name
+	for _, c := range choices {
+		if active, ok := c.Active(); ok {
+			activeAlt[c.Name] = active.Name
+		}
+	}
 	for i := range roles {
-		row, err := p.explainRole(ctx, p.pool, roles[i])
+		row, err := p.explainRole(ctx, p.pool, roles[i], activeAlt)
 		if err != nil {
 			return nil, err
 		}
@@ -719,9 +750,18 @@ func systemVerdicts(systems []HealthSystem) []health.Verdict {
 // explainRole turns a resolved role into the report row, adding the causing chain
 // when the role is impaired: which assigned components are not occupying their
 // slot (down), and which active alarms took them down. A satisfied role needs
-// no explanation, so it costs no alarm read.
-func (p *PG) explainRole(ctx context.Context, q txQuerier, r resolvedRole) (HealthRole, error) {
+// no explanation, so it costs no alarm read. activeAlt is the choice-name to
+// active-alternate-name lookup SystemHealth built from the same
+// splitHealthRoles grouping the verdict itself folds, so a role's Active flag
+// can never disagree with what actually decided the verdict.
+func (p *PG) explainRole(ctx context.Context, q txQuerier, r resolvedRole, activeAlt map[string]string) (HealthRole, error) {
 	role := health.Role{Name: r.Name, Quorum: r.Quorum, Impact: r.Impact, Assigned: r.Assigned}
+	var choiceName, altName string
+	active := true // unconditional: always counts
+	if r.ChoiceID != nil {
+		choiceName, altName = *r.ChoiceName, *r.AlternateName
+		active = activeAlt[choiceName] == altName
+	}
 	row := HealthRole{
 		Name:        r.Name,
 		DisplayName: r.DisplayName,
@@ -734,6 +774,9 @@ func (p *PG) explainRole(ctx context.Context, q txQuerier, r resolvedRole) (Heal
 		AssignedTo:  make([]string, 0, len(r.Assigned)),
 		Down:        []string{},
 		Alarms:      []Alarm{},
+		Choice:      choiceName,
+		Alternate:   altName,
+		Active:      active,
 	}
 	for _, c := range r.Assigned {
 		row.AssignedTo = append(row.AssignedTo, c.Name)

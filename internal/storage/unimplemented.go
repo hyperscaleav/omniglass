@@ -709,6 +709,9 @@ func (UnimplementedGateway) SeedSystemRole(context.Context, string, string, Syst
 func (UnimplementedGateway) SeedRoleChoice(context.Context, string, string, RoleChoiceSpec) (map[string]string, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) ResolveAlternate(context.Context, string, string, string) (string, error) {
+	return "", nil
+}
 func (UnimplementedGateway) DeleteChoice(context.Context, string, string, string, string) error {
 	return nil
 }

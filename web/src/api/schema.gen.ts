@@ -2825,7 +2825,7 @@ export interface paths {
         };
         /**
          * Read a system's health
-         * @description The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+         * @description The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. A role that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this role's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
          */
         get: operations["get-system-health"];
         put?: never;
@@ -4569,9 +4569,15 @@ export interface components {
             status: string;
         };
         HealthRoleBody: {
+            /** @description True for an unconditional role, or a role whose alternate is the one currently answering its choice. False means this role's own impaired/short/spare figures did not contribute to the system's verdict */
+            active: boolean;
             /** @description The active alarms on those down components */
             alarms: components["schemas"]["HealthAlarmBody"][] | null;
+            /** @description The alternate within choice this role belongs to; absent when the role is unconditional */
+            alternate?: string;
             assigned_to: string[] | null;
+            /** @description The choice this role belongs to; absent when the role is unconditional */
+            choice?: string;
             display_name: string;
             /** @description The assigned components whose own verdict is outage; empty when the role is merely short-staffed or only degraded */
             down: string[] | null;
@@ -5822,6 +5828,8 @@ export interface components {
             readonly $schema?: string;
             /** @description The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type */
             accepted_types?: string[] | null;
+            /** @description The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626). Omit (or send null) to leave whatever is already declared unchanged; an empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422 */
+            alternate?: string;
             /**
              * Format: int64
              * @description The most components the role will accept; must be at least quorum. Omit to leave whatever is already declared unchanged (or unbounded on first declare); there is no way to explicitly clear a capacity back to unbounded once set

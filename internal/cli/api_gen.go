@@ -4669,6 +4669,7 @@ func generatedCommands() []*cobra.Command {
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
 					var fAcceptedTypes string
+					var fAlternate string
 					var fCapacity string
 					var fDisplayName string
 					var fImpact string
@@ -4686,6 +4687,9 @@ func generatedCommands() []*cobra.Command {
 							body := map[string]any{}
 							if cmd.Flags().Changed("accepted-types") {
 								body["accepted_types"] = jsonOrString(fAcceptedTypes)
+							}
+							if cmd.Flags().Changed("alternate") {
+								body["alternate"] = fAlternate
 							}
 							if cmd.Flags().Changed("capacity") {
 								body["capacity"] = jsonOrString(fCapacity)
@@ -4709,6 +4713,7 @@ func generatedCommands() []*cobra.Command {
 						},
 					}
 					cmd.Flags().StringVar(&fAcceptedTypes, "accepted-types", "", "The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type")
+					cmd.Flags().StringVar(&fAlternate, "alternate", "", "The choice/alternate this role joins, addressed as \"choice-name/alternate-name\" (#626). Omit (or send null) to leave whatever is already declared unchanged; an empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422")
 					cmd.Flags().StringVar(&fCapacity, "capacity", "", "The most components the role will accept; must be at least quorum. Omit to leave whatever is already declared unchanged (or unbounded on first declare); there is no way to explicitly clear a capacity back to unbounded once set")
 					cmd.Flags().StringVar(&fDisplayName, "display-name", "", "The role's human label; defaults to the role name")
 					cmd.Flags().StringVar(&fImpact, "impact", "", "What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display")
@@ -4868,7 +4873,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Read a system's health",
-						Long:    "The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+						Long:    "The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. A role that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this role's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
 						Example: "  omniglass system health list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -5241,6 +5246,7 @@ func generatedCommands() []*cobra.Command {
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
 					var fAcceptedTypes string
+					var fAlternate string
 					var fCapacity string
 					var fDisplayName string
 					var fImpact string
@@ -5258,6 +5264,9 @@ func generatedCommands() []*cobra.Command {
 							body := map[string]any{}
 							if cmd.Flags().Changed("accepted-types") {
 								body["accepted_types"] = jsonOrString(fAcceptedTypes)
+							}
+							if cmd.Flags().Changed("alternate") {
+								body["alternate"] = fAlternate
 							}
 							if cmd.Flags().Changed("capacity") {
 								body["capacity"] = jsonOrString(fCapacity)
@@ -5281,6 +5290,7 @@ func generatedCommands() []*cobra.Command {
 						},
 					}
 					cmd.Flags().StringVar(&fAcceptedTypes, "accepted-types", "", "The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type")
+					cmd.Flags().StringVar(&fAlternate, "alternate", "", "The choice/alternate this role joins, addressed as \"choice-name/alternate-name\" (#626). Omit (or send null) to leave whatever is already declared unchanged; an empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422")
 					cmd.Flags().StringVar(&fCapacity, "capacity", "", "The most components the role will accept; must be at least quorum. Omit to leave whatever is already declared unchanged (or unbounded on first declare); there is no way to explicitly clear a capacity back to unbounded once set")
 					cmd.Flags().StringVar(&fDisplayName, "display-name", "", "The role's human label; defaults to the role name")
 					cmd.Flags().StringVar(&fImpact, "impact", "", "What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display")

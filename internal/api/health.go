@@ -16,10 +16,15 @@ import (
 // report names the systems beneath it with their verdicts, and the system read
 // explains the rest.
 //
-// The verdict served is computed from the very evidence served beside it, so the
-// headline and the reason can never disagree. Reading still WRITES nothing: the
-// writes that change health record the transitions, so a page view can never stamp
-// an edge at the time somebody looked. The transitions are that record.
+// The verdict served is computed from the very evidence served beside it, so
+// the two can never be produced by different code paths landing on different
+// answers; a role can still show impaired without moving the verdict, though,
+// when it belongs to a choice's alternate that lost (#626): that role's
+// active flag is false, which is what tells a reader the impairment is not
+// the reason for the headline, not a contradiction of it. Reading still
+// WRITES nothing: the writes that change health record the transitions, so a
+// page view can never stamp an edge at the time somebody looked. The
+// transitions are that record.
 
 // healthHistoryWindow bounds the transitions returned with a report, the same
 // shape the reachability strip uses.
@@ -51,6 +56,19 @@ type healthRoleBody struct {
 	AssignedTo []string          `json:"assigned_to"`
 	Down       []string          `json:"down" doc:"The assigned components whose own verdict is outage; empty when the role is merely short-staffed or only degraded"`
 	Alarms     []healthAlarmBody `json:"alarms" doc:"The active alarms on those down components"`
+	// Choice, Alternate and Active are the #626 grouping: a role can belong
+	// to an exclusive-or group instead of contributing unconditionally.
+	// Choice and Alternate are empty for an unconditional role (it always
+	// counts, active is always true). A role whose Active is false can
+	// still show Impaired true: it is impaired on its own terms, but it is
+	// not why the system's verdict reads what it does, because its choice
+	// was answered through a different alternate. Rendering impaired
+	// without checking active is exactly the contradiction this field
+	// exists to prevent: it reads as an impairment the verdict ignored,
+	// when it is really one the verdict was never going to count.
+	Choice    string `json:"choice,omitempty" doc:"The choice this role belongs to; absent when the role is unconditional"`
+	Alternate string `json:"alternate,omitempty" doc:"The alternate within choice this role belongs to; absent when the role is unconditional"`
+	Active    bool   `json:"active" doc:"True for an unconditional role, or a role whose alternate is the one currently answering its choice. False means this role's own impaired/short/spare figures did not contribute to the system's verdict"`
 }
 
 type healthSystemBody struct {
@@ -107,6 +125,9 @@ func toHealthRoleBody(r *storage.HealthRole) healthRoleBody {
 		AssignedTo:  nonNil(r.AssignedTo),
 		Down:        nonNil(r.Down),
 		Alarms:      make([]healthAlarmBody, 0, len(r.Alarms)),
+		Choice:      r.Choice,
+		Alternate:   r.Alternate,
+		Active:      r.Active,
 	}
 	for i := range r.Alarms {
 		a := &r.Alarms[i]
@@ -137,7 +158,7 @@ func registerHealthRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/systems/{name}/health",
 		Summary:     "Read a system's health",
-		Description: "The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+		Description: "The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. A role that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this role's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
 	}, "system", "read"), func(ctx context.Context, in *systemPathInput) (*estateHealthOutput, error) {
 		since := time.Now().UTC().Add(-healthHistoryWindow)
 		rep, err := gw.SystemHealth(ctx, in.Name, since, a.scopeFor(ctx, "system", "read"))

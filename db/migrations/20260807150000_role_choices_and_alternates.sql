@@ -64,6 +64,17 @@ create table if not exists role_choice (
 -- under and never caller-supplied: that is what lets
 -- system_role_alternate_fk below refuse a role that names an alternate
 -- outside its own owner arc.
+--
+-- choice_alternate_position_key is DEFERRABLE INITIALLY IMMEDIATE, the same
+-- reason system_role_assignment_position_key already is
+-- (20260807146000_assignment_position_floor.sql): SeedRoleChoice converges
+-- every alternate on its declared position on every boot, existing rows
+-- included, which is a genuine reassignment (not just an insert), so two
+-- alternates can pass through a duplicate position mid-transaction on the
+-- way to their final, non-colliding permutation. A plain UNIQUE index is
+-- checked per updated row and would raise on the first move; deferring to
+-- end-of-transaction lets the whole reconciliation land before anything is
+-- checked.
 create table if not exists choice_alternate (
     id uuid primary key default uuidv7(),
     choice_id uuid not null references role_choice(id) on delete cascade,
@@ -75,7 +86,7 @@ create table if not exists choice_alternate (
     display_name text not null default '',
     position integer not null,
     constraint choice_alternate_name_key unique (choice_id, name),
-    constraint choice_alternate_position_key unique (choice_id, position),
+    constraint choice_alternate_position_key unique (choice_id, position) deferrable initially immediate,
     constraint choice_alternate_owner_fk foreign key (choice_id, owner_kind, owner_ref)
         references role_choice(id, owner_kind, owner_ref),
     -- The FK target for system_role_alternate_fk below, the same reason

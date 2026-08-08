@@ -525,11 +525,17 @@ type Gateway interface {
 	SeedSystemRole(ctx context.Context, ownerKind, ownerID string, spec SystemRoleSpec) error
 	// The choice side of the same tier (#626): a role can join an
 	// exclusive-or group (SystemRoleSpec.AlternateID) instead of
-	// contributing unconditionally. Seed-only for now, same insert-if-absent
-	// lane as SeedSystemRole; DeleteChoice and DeleteAlternate refuse while
-	// any role still names them rather than let alternate_id's ON DELETE
-	// RESTRICT surface as a bare constraint violation.
+	// contributing unconditionally. Seed-only lane for the choices
+	// themselves (same insert-if-absent shape as SeedSystemRole);
+	// ResolveAlternate turns the operator-facing "choice/alternate" wire
+	// reference into the id SystemRoleSpec.AlternateID expects, so the API
+	// layer can populate it deliberately instead of leaving it permanently
+	// unreachable through every route that declares a role. DeleteChoice and
+	// DeleteAlternate refuse while any role still names them rather than let
+	// alternate_id's ON DELETE RESTRICT surface as a bare constraint
+	// violation.
 	SeedRoleChoice(ctx context.Context, ownerKind, ownerID string, spec RoleChoiceSpec) (map[string]string, error)
+	ResolveAlternate(ctx context.Context, ownerKind, ownerID, ref string) (string, error)
 	DeleteChoice(ctx context.Context, actorID, ownerKind, ownerID, name string) error
 	DeleteAlternate(ctx context.Context, actorID, ownerKind, ownerID, choiceName, altName string) error
 

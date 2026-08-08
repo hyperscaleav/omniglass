@@ -63,15 +63,76 @@ func (e *ChoiceInUseShortfall) Error() string {
 	return fmt.Sprintf("storage: %q still holds %s; detach or delete them first", who, strings.Join(e.Roles, ", "))
 }
 
+// ResolveAlternate turns a "choice/alternate" wire reference into the
+// choice_alternate id SystemRoleSpec.AlternateID expects, scoped to the
+// owner about to declare the role. The composite FK
+// (system_role_alternate_fk) also refuses an id from a foreign owner, but
+// resolving it explicitly here means an unknown or malformed reference is a
+// clean ErrRoleRefNotFound before any write, not a silent NULL that would
+// read as "detach" (alternate_id is nullable, so a bad name resolving to
+// NULL through a bare subquery would have exactly that ambiguity, unlike
+// accepted_types/pinned_products where a NOT NULL join column catches it).
+//
+// An empty ref resolves to a pointer to "", the explicit detach value; this
+// never returns a nil *string, since SystemRoleSpec reserves nil for "the
+// caller did not mention this field at all", a distinction only the caller
+// (which knows what the request omitted) can make.
+func (p *PG) ResolveAlternate(ctx context.Context, ownerKind, ownerID, ref string) (string, error) {
+	if ref == "" {
+		return "", nil
+	}
+	choiceName, altName, ok := strings.Cut(ref, "/")
+	if !ok {
+		return "", ErrRoleRefNotFound
+	}
+	col, err := roleOwnerColumn(ownerKind)
+	if err != nil {
+		return "", err
+	}
+	var id string
+	err = p.pool.QueryRow(ctx, fmt.Sprintf(`
+		select ca.id from choice_alternate ca
+		join role_choice rc on rc.id = ca.choice_id
+		where rc.owner_kind = $1 and rc.%s = %s and rc.name = $3 and ca.name = $4`,
+		col, roleOwnerExpr(ownerKind)), ownerKind, ownerID, choiceName, altName).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrRoleRefNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("storage: resolve alternate ref %s/%s/%s: %w", ownerKind, ownerID, ref, err)
+	}
+	return id, nil
+}
+
 // SeedRoleChoice installs one choice and its alternates for the boot-seed
-// phase, insert-if-absent on the same lane SeedSystemRole and SeedStandard
-// already use: an operator's edit to a shipped choice or alternate survives
-// the next boot, so a re-run neither duplicates nor reasserts over it. The
-// alternates' owner columns are stamped from the choice row itself, never
-// taken from the caller (the FK that keeps a role from joining a foreign
-// alternate depends on that). Returns the alternate ids by name, resolved
-// whether this call just created them or they already existed, so the roles
-// that join them can be seeded in the same pass without a second lookup.
+// phase, on the same seed-if-absent lane SeedSystemRole and SeedStandard
+// already use for NAME and DISPLAY_NAME: an operator's rename of a shipped
+// alternate survives the next boot, so a re-run neither duplicates nor
+// reasserts over either field. POSITION is the one field this lane does
+// reassert, every boot, existing alternates included: it is derived from
+// spec.Alternates' order, not something an operator sets independently of
+// standards.yaml, and a fixed 1-based-index-at-insert-time (the pre-fix-round
+// shape) crashed server boot the first time a release was anything but a
+// pure append, because the arbiter is (choice_id, name) but the collision is
+// on (choice_id, position): a new name landing at an already-taken position
+// raises 23505 on choice_alternate_position_key rather than being absorbed,
+// and a pure reorder among existing names hit the name arbiter's DO NOTHING
+// and silently kept the OLD position, which is worse than a crash because it
+// changes which alternate wins internal/health.Choice.Active's tie-break
+// silently and only on upgraded databases. The fix converges every
+// alternate on the declared order in one transaction with the position
+// uniqueness deferred (see the migration comment on
+// choice_alternate_position_key): every alternate's position is written
+// unconditionally to its 1-based index in spec.Alternates, which can pass
+// through a duplicate mid-transaction on the way to a valid permutation, and
+// only the state at commit has to be one.
+//
+// The alternates' owner columns are stamped from the choice row itself,
+// never taken from the caller (the FK that keeps a role from joining a
+// foreign alternate depends on that). Returns the alternate ids by name,
+// resolved whether this call just created them or they already existed, so
+// the roles that join them can be seeded in the same pass without a second
+// lookup.
 func (p *PG) SeedRoleChoice(ctx context.Context, ownerKind, ownerID string, spec RoleChoiceSpec) (map[string]string, error) {
 	if err := ValidateName("role_choice", spec.Name); err != nil {
 		return nil, err
@@ -81,20 +142,30 @@ func (p *PG) SeedRoleChoice(ctx context.Context, ownerKind, ownerID string, spec
 		return nil, err
 	}
 
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin seed role choice: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
 	var choiceID string
-	err = p.pool.QueryRow(ctx, fmt.Sprintf(`
+	err = tx.QueryRow(ctx, fmt.Sprintf(`
 		insert into role_choice (owner_kind, %s, name, display_name)
 		values ($1, %s, $3, $4)
 		on conflict (owner_kind, owner_ref, name) do nothing
 		returning id`, col, roleOwnerExpr(ownerKind)),
 		ownerKind, ownerID, spec.Name, spec.DisplayName).Scan(&choiceID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		err = p.pool.QueryRow(ctx, fmt.Sprintf(
+		err = tx.QueryRow(ctx, fmt.Sprintf(
 			`select id from role_choice where owner_kind = $1 and %s = %s and name = $3`,
 			col, roleOwnerExpr(ownerKind)), ownerKind, ownerID, spec.Name).Scan(&choiceID)
 	}
 	if err != nil {
 		return nil, mapRoleWriteErr(err)
+	}
+
+	if _, err := tx.Exec(ctx, `set constraints choice_alternate_position_key deferred`); err != nil {
+		return nil, fmt.Errorf("storage: defer alternate position uniqueness: %w", err)
 	}
 
 	out := make(map[string]string, len(spec.Alternates))
@@ -103,21 +174,20 @@ func (p *PG) SeedRoleChoice(ctx context.Context, ownerKind, ownerID string, spec
 			return nil, err
 		}
 		var altID string
-		err := p.pool.QueryRow(ctx, `
+		err := tx.QueryRow(ctx, `
 			insert into choice_alternate (choice_id, owner_kind, standard_id, system_id, name, display_name, position)
 			select rc.id, rc.owner_kind, rc.standard_id, rc.system_id, $2, $3, $4
 			from role_choice rc where rc.id = $1
-			on conflict (choice_id, name) do nothing
+			on conflict (choice_id, name) do update
+				set position = excluded.position
 			returning id`, choiceID, alt.Name, alt.DisplayName, i+1).Scan(&altID)
-		if errors.Is(err, pgx.ErrNoRows) {
-			err = p.pool.QueryRow(ctx,
-				`select id from choice_alternate where choice_id = $1 and name = $2`,
-				choiceID, alt.Name).Scan(&altID)
-		}
 		if err != nil {
-			return nil, fmt.Errorf("storage: seed alternate %s/%s: %w", spec.Name, alt.Name, err)
+			return nil, mapRoleWriteErr(err)
 		}
 		out[alt.Name] = altID
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit seed role choice: %w", err)
 	}
 	return out, nil
 }
