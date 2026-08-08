@@ -83,7 +83,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0046](#adr-0046-the-event-log-kind-sink) | 2026-07-20 | Accepted; superseded in part by [ADR-0066](#adr-0066-logs-are-a-raw-ingest-lane-not-events) | A **log**-kind observation is no longer dropped at ingest: it lands in a new **`event`** table, the log-kind sink (a past occurrence) beside `metric_datapoint` / `state_datapoint` (a sampled present value). `event` carries the same datapoint owner exclusive-arc and provenance, plus `message` + `attributes`, and the reserved `event_id` FK stubs on the two datapoint tables are closed (`on delete set null`). Scope excludes the `datapoint`->`sample` rename (a later cleanup) and `property_value` / the current-value store (the fold-fields slice). P1 follow-up of the estate-model roadmap |
 | [ADR-0047](#adr-0047-the-fields-fold-product_property-and-property_value) | 2026-07-21 | Accepted; superseded in part by [ADR-0085](#adr-0085-the-component_type-registry-returns-as-the-device-class-genus) (the `component_type` registry returns, above the product) | The standalone **fields** feature retires and folds into the estate model: a field was only ever a **property with `declared` provenance**, never a primitive of its own. **`product_property`** is the product's declared-property **contract** (`product_id`, `property_name`, `default_value`, `required`), replacing `field_definition`; **`property_value`** is the value store, carrying the **same owner exclusive-arc** as `metric_datapoint` / `event` plus `instance` and `provenance`, replacing `field_value`. `EffectiveProperties` unions the contract arm (`coalesce(set value, contract default)`) with the off-contract arm, so a productless component still resolves. `field_definition`, `field_value`, `component.component_type`, and the whole `component_type` registry retire. PR5 of the estate-model shift |
 | [ADR-0048](#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model) | 2026-07-21 | Accepted | `system_type` is promoted to **`standard`**, the blueprint a system conforms to and the system-side counterpart of `product`: it gains `parent_standard_id` (variants), a declared-property contract, and its own `standard:*` Catalog resource, and `system.standard_id` becomes **optional**. `standard_property` and `location_type_property` join `product_property`, and one **owner-generic** `EffectiveProperties(ownerKind, ownerID)` resolves component, system, location, and node off a single parameterized template. A standard and a location type are created by **forking an in-code template** (one-time, no inheritance), so a shipped row is **operator-owned** (`official: false`, seeded **if absent**), while a system **conforms** to its standard with **live** inheritance; only the canonical catalogs keep the authoritative upsert. PR6 of the estate-model shift |
-| [ADR-0049](#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set) | 2026-07-21 | Accepted | A **`system_role`** is a slot a system needs filled (a table microphone, a main display), declared on a **standard** (inherited live by every conforming system) or on one **system** (ad-hoc) over the same exclusive arc `property_value` uses, requiring a **conjunctive** `role_capability` set and carrying a **`quorum`**. A component's capabilities become a **resolved set** (`EffectiveCapabilities` = its product's, plus its own `component_capability` `present=true` rows, minus its `present=false` ones), because `product` is optional and a strict guard over a product-only fact would lock a productless component out of every role. `AssignRole` **refuses (422) and names the missing capabilities**, joining the location placement constraint as a refusal on modeled grounds that names the parties. **Quorum** ships here (staffing is visible without health); **impact** and the SLI rollup land in PR8. Supersedes the `system_template_member` role-requirement design. PR7 of the estate-model shift |
+| [ADR-0049](#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set) | 2026-07-21 | Superseded by [ADR-0087](#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability) | A **`system_role`** is a slot a system needs filled (a table microphone, a main display), declared on a **standard** (inherited live by every conforming system) or on one **system** (ad-hoc) over the same exclusive arc `property_value` uses, requiring a **conjunctive** `role_capability` set and carrying a **`quorum`**. A component's capabilities become a **resolved set** (`EffectiveCapabilities` = its product's, plus its own `component_capability` `present=true` rows, minus its `present=false` ones), because `product` is optional and a strict guard over a product-only fact would lock a productless component out of every role. `AssignRole` **refuses (422) and names the missing capabilities**, joining the location placement constraint as a refusal on modeled grounds that names the parties. **Quorum** ships here (staffing is visible without health); **impact** and the SLI rollup land in PR8. Supersedes the `system_template_member` role-requirement design. PR7 of the estate-model shift |
 | [ADR-0050](#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain) | 2026-07-21 | Accepted | Health is **recorded as a transition** and **recomputed at the write**, never on read. An **`alarm`** is component-local and names the **capabilities** it degrades; a component satisfies a role only when it provides every required capability and none of them is degraded; a role below its **quorum** is impaired and contributes its **`impact`** (`outage` / `degraded` / `none`); a system takes the worst of its roles, a location the worst of its systems. The verdict domain is **`healthy` / `degraded` / `outage`** and the judgement is a **pure package** (`internal/health`), unit-tested with no database. The recorded carrier is **`state_datapoint`**, already transition-only, so the history is edges and only edges; **compute-on-read** (no history) and **write-through-on-read** (the edge timestamped when somebody looked) are both rejected. A **read never writes**, and it computes the verdict it serves from the same rows it shows, so a report cannot contradict its own evidence. PR8 of the estate-model shift, closing epic [#266](https://github.com/hyperscaleav/omniglass/issues/266) |
 | [ADR-0051](#adr-0051-membership-is-the-attachment-and-a-role-is-what-it-does) | 2026-07-21 | Accepted | Membership is the attachment, and a role is what it does |
 | [ADR-0052](#adr-0052-the-cascade-resolves-through-membership-and-secrets-carry-no-system-band) | 2026-07-21 | Accepted | The cascade resolves through membership, and secrets carry no system band |
@@ -121,6 +121,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0084](#adr-0084-the-catalog-shell-and-five-signal-lanes) | 2026-08-07 | Accepted | Catalog is one rail entry opening a shell: a grouped subrail (Telemetry, Actions, Components, Systems, Locations, Metadata) navigating to the per-registry pages at canonical URLs, with an Overview landing; the organizing axis is direction (Telemetry is what you receive, Actions what you send or run), the lane collective noun becomes five signal lanes, and secret types loses its nav slot |
 | [ADR-0085](#adr-0085-the-component_type-registry-returns-as-the-device-class-genus) | 2026-08-07 | Accepted; partially reverses [ADR-0047](#adr-0047-the-fields-fold-product_property-and-property_value) | The `component_type` registry returns as a nested taxonomy classifying the product, not the component: it carries the identity facts that span products (naming stem, display name, icon, abbrev, default tags), inheriting down the tree with override at any node |
 | [ADR-0086](#adr-0086-the-product-classification-floor-and-the-kind-split) | 2026-08-07 | Accepted | Every component is required to name a product (the three seeded generics cover anything unmodeled); product.kind narrows to device / app / service, no default, required at create; vm retires, folded into app |
+| [ADR-0087](#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability) | 2026-08-07 | Accepted | The alarm-capability-role chain retires: an alarm impairs its component's own verdict wholesale, an occupant satisfies its role whenever its own verdict is not outage, and the typed-slot guard is the only assignment-time check; records the 409-vs-422 refusal line and the choice/alternate boot-seed reconciliation carve-out. Supersedes ADR-0049, amends ADR-0050 |
 
 ## Entries
 
@@ -1548,7 +1549,7 @@ below from the project's history. From here it grows one slice at a time.
 
 ### ADR-0049: The system role: capability-gated staffing and the resolved capability set
 
-- **Date:** 2026-07-21 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
+- **Date:** 2026-07-21 | **Status:** Superseded by [ADR-0087](#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability) | **Pages:** [core entities](/architecture/core-entities/),
   [API](/architecture/api/), [glossary](/architecture/glossary/), [templates](/architecture/templates/),
   [health](/architecture/health/), [Standards guide](/guides/admin/standards/),
   [Capabilities guide](/guides/admin/capabilities/), [Work with an entity](/guides/operator/entities/)
@@ -1742,6 +1743,13 @@ below from the project's history. From here it grows one slice at a time.
   estate-model shift toward property / event / command plus vendor / product / driver / capability / standard /
   role / health, and the slice that **closes the epic**: it is the one that consumes what the previous seven
   built.
+- **Amended by [ADR-0087](#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability):**
+  chain item 1 above (capability as the routing key: an alarm names the capabilities it degrades, a component
+  satisfies a role only when it provides every required one) retires with the whole capability registry
+  ([#626](https://github.com/hyperscaleav/omniglass/issues/626)). An alarm now impairs its component's own
+  verdict wholesale, and a role's occupant satisfies it whenever that verdict is not `outage`. Items 2 through
+  5 (the pure judgement package, the transition-only record on `state_datapoint`, recompute-at-the-write, and a
+  report computing what it serves) are unchanged.
 
 ### ADR-0051: Membership is the attachment, and a role is what it does
 
@@ -2920,3 +2928,64 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   fixed four-value enum with a default reads as validated when it is merely unset, and the fourth value
   had no code path that branched on it the other three did not already cover.
 - **Tracked under** epic [#614](https://github.com/hyperscaleav/omniglass/issues/614).
+
+### ADR-0087: Capability-gated staffing retires; an alarm impairs its component, not a named capability
+
+- **Date:** 2026-08-07 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
+  [health](/architecture/health/), [API](/architecture/api/)
+- **Decision:** The **alarm -> alarm_capability -> degraded-capabilities -> role** chain
+  [ADR-0049](#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set) and
+  [ADR-0050](#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)
+  built retires. The replacement is three calls shorter: an **alarm impairs its component's own
+  verdict wholesale**, no longer routed through a named capability; a role's occupant **satisfies**
+  it whenever the occupant's own verdict is not `outage` (`Occupies()` is `Verdict != Outage`, so a
+  merely degraded occupant still occupies its slot, since severity is how loudly to page somebody,
+  not a second staffing threshold); and the **typed-slot guard** (`system_role_type`,
+  `system_role_product`: a filling component's product must be classified within an accepted
+  `component_type`, and, if pinned, be one of the named products) is now the **only** assignment-time
+  check and plays no further part in health. `impact`, `quorum`, the worst-wins fold, and health as a
+  recorded transition recomputed at the write are all unchanged; only the routing key changed, from a
+  capability set to a component's own verdict.
+
+  Two refusal rulings that fell out of the same rebuild, generalized here because nothing else names
+  them: a role-write refusal is **409** when it depends on rows other than the one being written
+  (double-staffing a component across roles, a capacity below the currently assigned count: "the
+  declaration or assignment request is not invalid on its own, it conflicts with the estate's current
+  state"), and **422** when the declaration alone is invalid regardless of other rows (capacity below
+  quorum, an unresolvable typed-slot reference). And a boot-seed carve-out: `role_choice` and
+  `choice_alternate` reconcile to their declared YAML set on **every** boot, deleting a stored
+  alternate that dropped out of the set (refusing instead, with `ChoiceInUseShortfall`, if a role
+  still points at it) rather than leaving it in place. This is a **deliberate departure** from the
+  platform's usual boot-seed rule (insert-if-absent, `ON CONFLICT DO UPDATE`, an operator's row never
+  touched by a reseed): it is safe here only because `choice_alternate` has **no operator write
+  path** (nothing but the seed ever writes one) and its **`position` is a packed 1..n sequence**
+  within a choice, where a leftover orphan does not sit inert, it **collides** with the position a
+  renamed or reordered entry now wants. It is a narrow exception for a position-ordered seeded child
+  of a table nothing else writes, not a precedent: a seeded entity with an operator write path, or
+  without a packed ordering an orphan can collide on, keeps the ordinary insert-if-absent rule.
+- **Context:** Task 5 of the identity-model epic ([#626](https://github.com/hyperscaleav/omniglass/issues/626))
+  shipped the retirement (`ca78bd3`, `dbfa284`) without filing this entry at the time; it is recorded
+  now, against the gap, by Task 9 of the same epic. The forcing function was the typed-slot guard the
+  prior slice had just landed (`c006c62`): once a component fills a role because its **product**
+  classifies within an accepted **`component_type`**, gating the same assignment on a **second**,
+  independent capability set was two guards asking the same question in different vocabularies, and
+  the capability registry (`capability`, `alarm_capability`, `component_capability`,
+  `product_capability`, `system_role_capability`, five tables) added a maintenance surface, an
+  editing UI, and a resolved-set computation (`EffectiveCapabilities`) that nothing left standing
+  needed. Health's own reasoning for routing through capability
+  ([ADR-0050](#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain),
+  "capability is the only vocabulary shared by the thing that breaks and the thing that cares") no
+  longer holds once assignment routes through type instead: the component **itself**, not a named
+  fact about it, is what a role now cares whether is up. The 409/422 line and the boot-seed carve-out
+  are recorded here rather than left as implicit code comments because both are the kind of local call
+  a later slice reads out of context and either contradicts by accident or copies somewhere it does
+  not fit; the boot-seed carve-out in particular must not be read as license to delete a shipped row
+  for any other seeded entity, which is why its two preconditions are stated explicitly.
+- **Supersedes:** [ADR-0049](#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)
+  in full: `role_capability`, `component_capability`, and `EffectiveCapabilities` are gone, not
+  merely superseded in wording, and the typed-slot guard is what a role now requires. **Amends**
+  [ADR-0050](#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain):
+  its chain item 1 (capability as the routing key) retires; items 2 through 5 (the pure judgement
+  package, the transition-only record, recompute-at-the-write, and a report computing what it
+  serves) are undisturbed and this entry changes nothing about them.
+- **Tracked under** epic [#626](https://github.com/hyperscaleav/omniglass/issues/626).

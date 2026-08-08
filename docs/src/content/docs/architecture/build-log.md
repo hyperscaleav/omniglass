@@ -2605,6 +2605,104 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   and edit surface (a custom type's tree placement is fixed at create; there is no reparent leg yet).
   Reconciling the ADR-0047 denylist entry that banned `component_type` in docs prose (now current
   vocabulary again, in its reintroduced shape) closed out `internal/docslint`'s one carried red.
+- **A role is a typed slot** ([#626](https://github.com/hyperscaleav/omniglass/issues/626),
+  `c006c62`). The role assignment guard swaps its capability comparison for a typed-slot one: a
+  component fills a role only when its product's `component_type` falls within the subtree of a
+  type the role accepts (any type, if none are declared), and, if the role pins specific
+  products, only when its product is one of them. Two new join tables,
+  `system_role_type` and `system_role_product`, carry the accepted set and the pin; the refusal
+  names both parties in operator vocabulary rather than a bare capability gap. The capability
+  registry itself and the health rollup's alarm-impact reading are untouched here, staged for
+  retirement in the next slice.
+- **Capability-gated staffing retires** ([#626](https://github.com/hyperscaleav/omniglass/issues/626),
+  `ca78bd3`, `dbfa284`). The `alarm -> alarm_capability -> degradedCapabilities -> role` chain is
+  gone, replaced end to end: an active alarm impairs its component's own verdict wholesale, and a
+  role counts an occupant as satisfying it only from that verdict, not from a per-named
+  capability. Five tables drop (`capability`, `alarm_capability`, `component_capability`,
+  `product_capability`, `system_role_capability`) along with everything wired to them: the
+  `/capabilities` API and its console pages, `EffectiveCapabilities`, the component-capability
+  routes, and the seeded capability registry. The typed-slot guard from the prior slice becomes
+  the only assignment check; it plays no further part in health. A same-slice review round found
+  `Occupies()` had landed as `Verdict == Healthy`, a stricter threshold than intended that let
+  even an info alarm remove a component from every role it filled; `dbfa284` loosened it to the
+  spec, `Verdict != Outage` (a merely degraded occupant still occupies, since severity is how
+  loudly to page somebody, not a second staffing threshold), and raised every test and doc
+  example that had used a warning-severity alarm as its "take this occupant down" trigger to
+  critical, the true down case. Recorded as [ADR-0087](/architecture/decisions/#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability),
+  which supersedes [ADR-0049](/architecture/decisions/#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)
+  and amends [ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain),
+  filed against this slice rather than at the time, a gap this entry closes.
+- **A role says how many it will take** ([#626](https://github.com/hyperscaleav/omniglass/issues/626),
+  `4925a7d`). Roles gain `capacity` (an optional upper bound above quorum) and `position_labels`
+  (per-slot names); both are wholesale-declaration columns threaded through every write site so a
+  PUT that only touches `display_name` cannot silently reset a declared cap, the same defect
+  `impact` already carried (see the console-side fix below). A component may fill at most one
+  role per system: the migration raises and names the offending pairs before adding the
+  enforcing index rather than aborting mid-upgrade on an unnamed constraint violation, and
+  `AssignRole` pre-checks inside its transaction so the refusal names both the component and the
+  role it already holds (409: it depends on what else is currently assigned). Lowering a
+  standard-owned role's capacity below what any one conforming system has assigned is refused the
+  same way, since each conforming system stages independently. `mapRoleWriteErr` now
+  discriminates by constraint name instead of collapsing every `23505` into "a role with this
+  name is already declared here": a double-staffing race, a capacity-below-quorum CHECK, and a
+  genuine name collision now report distinctly, and the refusal status follows whether the
+  problem depends on other rows (409) or the declaration alone (422), recorded in
+  [ADR-0087](/architecture/decisions/#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability).
+- **A position is a slot you can address** ([#626](https://github.com/hyperscaleav/omniglass/issues/626),
+  `dfda3ab`, `4c6012e`). An assignment carries a 1-based position within its role, ordered by
+  creation and never renumbered on its own: unassigning leaves a gap, and the next assignment
+  refills the lowest free slot rather than growing past capacity. Both resolved reads
+  (`EffectiveRoles` and the health rollup) report a role's occupants in position order via a
+  correlated subquery rather than a `GROUP BY` plus `DISTINCT`, since the roles query already
+  joins types and products and a naive distinct ordering would have hidden that cartesian product
+  instead of just losing order. Position uniqueness is a deferrable constraint, not a unique
+  index, added after a one-time backfill: a plain index is checked per updated tuple, which would
+  raise the moment a single-statement swap lands the first row on the other's slot.
+  `SwapPositions` defers it for the rest of its transaction before exchanging two occupants in one
+  UPDATE (`POST /systems/{name}/roles/{role}/positions/{n}:swap`); it and `AssignRole` both take
+  an advisory lock on the `(system, role)` pair, so two concurrent assigns cannot compute the same
+  next-free position. The health rollup gains `short` and `spare`, the occupancy-aware
+  counterparts of the roles read's health-blind `understaffed` (a role can read fully staffed
+  there and still short here, if what it has is down). A same-slice follow-up (`4c6012e`) found
+  capacity enforcement had been emergent from the position collision, mislabeling the refusal
+  once positions were contiguous and silently overfilling past the declared cap once a gap
+  existed below it; added an explicit pre-check (`CapacityFullShortfall`, 409) beside the
+  existing double-staffing one, skipped when the component already holds the role so a full
+  role's existing occupants stay idempotent, and renamed the swap body fields from `{a, b}` to
+  `{position, with}` (the former generated unusable CLI flags).
+- **A standard states alternates** ([#626](https://github.com/hyperscaleav/omniglass/issues/626),
+  `1f1de87`, `9817058`, `29810a5`). A role can join an exclusive-or group instead of contributing
+  to its system unconditionally: `role_choice` is the group, `choice_alternate` one way to
+  satisfy it, `system_role.alternate_id` how a role joins one. The pure fold
+  (`internal/health.Alternate` / `Choice` / `SystemVerdictWith`) picks each choice's
+  best-satisfied alternate by declaration position and folds only its roles, so an all-in-one
+  room's satisfied video bar no longer takes the system down over its component-built
+  alternate's five unbuilt roles. `alternate_id` is `ON DELETE RESTRICT`, never `SET NULL`:
+  deleting an alternate would otherwise silently promote every attached role from conditional to
+  mandatory, the same trade already made when a plain `ON DELETE SET NULL` was rejected at schema
+  level; `DeleteChoice`/`DeleteAlternate` refuse instead, naming the roles still attached. A
+  composite ownership FK closes the cross-arc hole where a role could join a foreign owner's
+  alternate, and a same-slice repair closes `system_role`'s own missing owner-arc CHECK (an
+  unknown standard or system name used to resolve to NULL and succeed silently, creating an
+  ownerless role a second typo would then update; `role_choice` would have inherited the same
+  hole). Two review rounds followed. `9817058` found `SetSystemRole` wholesale-replacing
+  `alternate_id` on every write with no route ever populating it, so any PUT through the existing
+  role routes, including the console's own save, silently detached a role from its alternate; the
+  health report also carried the choice-aware verdict beside an ungrouped role list, so a
+  satisfied choice's unbuilt alternate read as ordinary impaired roles with nothing marking them
+  as not why, closed by `choice`, `alternate` and `active` on `HealthRole`. `29810a5` found the
+  boot-seed reconciliation incomplete: it converged declared alternates onto their positions but
+  never touched a stored row whose name had dropped out of the declared set, so a rename or a
+  drop against an already-seeded database still collided on `choice_alternate_position_key` and
+  aborted server boot. The seed now reconciles the stored alternate set to the declared one every
+  boot, existing rows included, **deleting** any alternate no longer declared unless a role still
+  points at it, in which case the whole call refuses with `ChoiceInUseShortfall` rather than let
+  the FK's RESTRICT surface as a bare constraint violation or silently detach a role: refusing to
+  boot beats silently detaching a role, the same trade the `ON DELETE RESTRICT` call above already
+  made. This is a narrow carve-out from the boot-seed doctrine's usual insert-if-absent rule,
+  safe here only because `choice_alternate` has no operator write path and its positions are a
+  packed sequence where an orphan actively collides; recorded in
+  [ADR-0087](/architecture/decisions/#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability).
 - **A role's impact already reached the verdict**
   ([#626](https://github.com/hyperscaleav/omniglass/issues/626)). The epic's claim that
   `system_role.impact` was declared but never consumed, so a short role contributed outage

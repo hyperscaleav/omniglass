@@ -38,8 +38,10 @@ on the component. `system_type` was promoted to `standard`,
 The **exclusive-arc** owner columns are real, carrying the sample lanes (**`metric`**,
 **`property`**), **`event`**, and **`command`**,
 and a recorded **[health](/architecture/health/)** series per component, system, and location. A
-system declares **roles** staffed by components whose **resolved capabilities** cover them, each role
-carrying an **impact**. See [implementation status](/architecture/status/).
+system declares **roles** staffed by components whose product is classified within a type the slot
+accepts (a **typed-slot** guard,
+[ADR-0087](/architecture/decisions/#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability)),
+each role carrying an **impact**. See [implementation status](/architecture/status/).
 :::
 
 ## The estate: four structural entities
@@ -443,21 +445,29 @@ The design below layered the role onto the `system_member` row and pinned it to 
 BOM; what shipped keeps the row to the binding alone and lets `system_role_assignment` carry the
 role.
 
-:::design[Template pinning, tracked in #317]
-A [system role](#system-roles-the-slots-a-system-needs-filled) declares, per slot, a **requirement**
-(the capabilities a member must provide) plus its `health_role`; any component whose template meets
-the requirement can fill the role, validated on assignment. Detailed on
-[templates](/architecture/templates/).
+:::design[Historical: the original template-pinning proposal (#317), superseded by ADR-0071]
+A [system role](#system-roles-the-slots-a-system-needs-filled) would declare, per slot, a
+**requirement** (a capability set a member had to provide, the retired #626 vocabulary,
+[ADR-0087](/architecture/decisions/#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability))
+plus its `health_role`; any component whose **frozen template** met the requirement could fill the
+role, validated on assignment. Neither half of this shipped: the versioned-shape template model it
+depends on retired
+([ADR-0071](/architecture/decisions/#adr-0071-a-template-is-a-clonable-example-not-a-versioned-shape-an-instance-pins)),
+and the capability requirement retired with it (ADR-0087). Kept here as the record of what was
+proposed before the note below states what actually shipped.
 :::
 
-:::note[What is built is the role model above]
+:::note[What is built is the role model above, and it is final for this point]
 The **built** slot is [`system_role`](#system-roles-the-slots-a-system-needs-filled): declared on a
 standard or a system, requiring a **typed-slot** match (#626), assigned through `system_role_assignment`. Its
 **`impact`** replaces the `health_role` tag above (`required` / `redundant` / `informational` are
 quorum plus impact, no fourth vocabulary,
-[ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain));
-the models reconcile when template pinning is built
-([ADR-0049](/architecture/decisions/#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)).
+[ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).
+The two models above never reconcile: template pinning itself retired
+([ADR-0071](/architecture/decisions/#adr-0071-a-template-is-a-clonable-example-not-a-versioned-shape-an-instance-pins)),
+and the capability requirement it would have matched against retired with it
+([ADR-0087](/architecture/decisions/#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability),
+superseding [ADR-0049](/architecture/decisions/#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)).
 :::
 
 :::design[Operational mode, tracked in #528]

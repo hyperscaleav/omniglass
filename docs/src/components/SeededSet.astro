@@ -55,7 +55,7 @@ if (!rows) {
             <td><code>{s.id}</code> ({s.display_name})</td>
             <td>
               {(s.roles ?? []).map((r) => (
-                <span><code>{r.name}</code> (quorum {r.quorum}{r.capabilities?.length ? `, needs ${r.capabilities.join(' + ')}` : ''}) </span>
+                <span><code>{r.name}</code> (quorum {r.quorum}{r.accepted_types?.length ? `, accepts ${r.accepted_types.join(' + ')}` : ''}) </span>
               ))}
             </td>
           </tr>
