@@ -589,6 +589,16 @@ func TestResolveTagsSurvivesDuplicateSystemNames(t *testing.T) {
 // sysB deliberately never conforms to the standard, so it is the
 // cross-contamination check: if conformingSystems' fix silently widened
 // which systems the recompute reaches, sysB would show the role too.
+//
+// The cross-contamination check asserts on rep.Transitions, the RECORDED
+// side (healthTransitions reads what recordHealth actually wrote, keyed on
+// the id the recompute was given), not rep.Roles or rep.Verdict: both of
+// those are computed LIVE from resolveHealthRoles against sysB's own id,
+// entirely independent of which id conformingSystems fed the recompute, so a
+// conformingSystems that returned the WRONG system's id would still leave
+// sysB's live-computed Roles/Verdict looking correct (empty) while silently
+// recording a health edge onto it. Only the recorded transitions would catch
+// that.
 func TestStandardOwnedRoleDeclarationSurvivesDuplicateSystemNames(t *testing.T) {
 	gw, _ := newDuplicateNameFixture(t)
 	ctx := context.Background()
@@ -600,6 +610,20 @@ func TestStandardOwnedRoleDeclarationSurvivesDuplicateSystemNames(t *testing.T) 
 	}
 	if _, err := gw.UpdateSystem(ctx, "", sysA.ID, storage.SystemPatch{StandardID: strptr("dup-std")}, all, all); err != nil {
 		t.Fatalf("conform sysA to standard by id: %v", err)
+	}
+
+	// sysB's recorded transitions before the standard-owned declaration: just
+	// its own opening verdict from CreateSystem (recordHealth always records
+	// the first value for an owner, even Healthy). Captured here so the
+	// post-declaration read below can assert it is BYTE-FOR-BYTE unchanged,
+	// not merely "still empty of the new role" (which live-computed Roles
+	// already covers and cannot fail on this bug).
+	repBBefore, err := gw.SystemHealth(ctx, sysB.ID, time.Time{}, all)
+	if err != nil {
+		t.Fatalf("system health sysB before declaration: %v", err)
+	}
+	if len(repBBefore.Transitions) == 0 {
+		t.Fatalf("sysB transitions before declaration = %+v, want its own opening verdict recorded at creation", repBBefore.Transitions)
 	}
 
 	if _, err := gw.SetSystemRole(ctx, "", "standard", "dup-std", storage.SystemRoleSpec{
@@ -618,12 +642,26 @@ func TestStandardOwnedRoleDeclarationSurvivesDuplicateSystemNames(t *testing.T) 
 	if len(repA.Roles) != 1 || repA.Roles[0].Name != "seat" {
 		t.Fatalf("sysA roles = %+v, want one role named seat", repA.Roles)
 	}
+	// The RECORDED side: sysA must show a NEW transition to degraded (an
+	// unstaffed quorum-1 role, default impact), proving recordHealth actually
+	// wrote for sysA's own id. rep.Roles above says nothing about which id
+	// the write landed on; this does.
+	if n := len(repA.Transitions); n == 0 {
+		t.Fatalf("sysA transitions = %+v, want at least one recorded edge", repA.Transitions)
+	} else if last := repA.Transitions[n-1]; last.Value != "degraded" {
+		t.Fatalf("sysA latest transition = %+v, want degraded (an unstaffed quorum-1 role)", last)
+	}
+
 	repB, err := gw.SystemHealth(ctx, sysB.ID, time.Time{}, all)
 	if err != nil {
 		t.Fatalf("system health sysB by id: %v", err)
 	}
 	if len(repB.Roles) != 0 {
 		t.Fatalf("sysB roles = %+v, want none (cross-contaminated by the shared name)", repB.Roles)
+	}
+	if len(repB.Transitions) != len(repBBefore.Transitions) {
+		t.Fatalf("sysB transitions = %+v, want unchanged from before the declaration %+v (cross-contaminated by the shared name: the recompute wrote to sysB's id)",
+			repB.Transitions, repBBefore.Transitions)
 	}
 
 	if err := gw.DeleteSystemRole(ctx, "", "standard", "dup-std", "seat"); err != nil {
@@ -635,5 +673,18 @@ func TestStandardOwnedRoleDeclarationSurvivesDuplicateSystemNames(t *testing.T) 
 	}
 	if len(repA2.Roles) != 0 {
 		t.Fatalf("sysA roles after withdraw = %+v, want none", repA2.Roles)
+	}
+	if n := len(repA2.Transitions); n == 0 {
+		t.Fatalf("sysA transitions after withdraw = %+v, want at least one recorded edge", repA2.Transitions)
+	} else if last := repA2.Transitions[n-1]; last.Value != "healthy" {
+		t.Fatalf("sysA latest transition after withdraw = %+v, want healthy (the recorded recovery)", last)
+	}
+	repB2, err := gw.SystemHealth(ctx, sysB.ID, time.Time{}, all)
+	if err != nil {
+		t.Fatalf("system health sysB after withdraw: %v", err)
+	}
+	if len(repB2.Transitions) != len(repBBefore.Transitions) {
+		t.Fatalf("sysB transitions after withdraw = %+v, want still unchanged from before the declaration %+v",
+			repB2.Transitions, repBBefore.Transitions)
 	}
 }
