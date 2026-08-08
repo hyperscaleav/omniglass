@@ -47,7 +47,7 @@ func toAlarmBody(a *storage.Alarm) alarmBody {
 }
 
 type listAlarmsInput struct {
-	Name           string `path:"name" doc:"The component's unique name"`
+	Name           string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
 	IncludeCleared bool   `query:"include_cleared" doc:"Include cleared alarms, so the list is the history rather than what is wrong now"`
 }
 
@@ -59,7 +59,7 @@ type listAlarmsOutput struct {
 }
 
 type raiseAlarmInput struct {
-	Name string `path:"name" doc:"The component's unique name"`
+	Name string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
 	Body struct {
 		Severity string `json:"severity" enum:"info,warning,critical" doc:"How bad it is; critical puts the component itself in outage"`
 		Message  string `json:"message,omitempty" doc:"What is wrong, for the operator reading it later"`
@@ -72,7 +72,7 @@ type alarmOutput struct {
 }
 
 type clearAlarmInput struct {
-	Name string `path:"name" doc:"The component's unique name"`
+	Name string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
 	ID   string `path:"id" doc:"The alarm id"`
 }
 

@@ -180,20 +180,20 @@ type setStandardRoleInput struct {
 }
 
 type systemRolePathInput struct {
-	Name string `path:"name" doc:"The system's unique name"`
+	Name string `path:"name" doc:"The system's name, or a dotted address (e.g. boi.17c.$sys.av)"`
 	Role string `path:"role" doc:"The role name"`
 }
 
 type setSystemRoleInput struct {
-	Name string `path:"name" doc:"The system's unique name"`
+	Name string `path:"name" doc:"The system's name, or a dotted address (e.g. boi.17c.$sys.av)"`
 	Role string `path:"role" doc:"The role name"`
 	Body roleSpecBody
 }
 
 type roleAssignmentPathInput struct {
-	Name      string `path:"name" doc:"The system's unique name"`
+	Name      string `path:"name" doc:"The system's name, or a dotted address (e.g. boi.17c.$sys.av)"`
 	Role      string `path:"role" doc:"The role name"`
-	Component string `path:"component" doc:"The component's unique name"`
+	Component string `path:"component" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
 }
 
 // swapRolePositionsInput is the :swapPositions verb's input: the role,
@@ -203,7 +203,7 @@ type roleAssignmentPathInput struct {
 // declaration that system_role_assignment is id-only stays true): the verb
 // is role-level, not a per-position resource.
 type swapRolePositionsInput struct {
-	Name string `path:"name" doc:"The system's unique name"`
+	Name string `path:"name" doc:"The system's name, or a dotted address (e.g. boi.17c.$sys.av)"`
 	Role string `path:"role" doc:"The role name"`
 	Body struct {
 		// Named position/with, not a/b: a and b generate CLI flags --a and

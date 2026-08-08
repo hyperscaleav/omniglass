@@ -46,7 +46,7 @@ type componentOutput struct {
 }
 
 type componentPathInput struct {
-	Name string `path:"name" doc:"The component's unique name"`
+	Name string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
 }
 
 type createComponentInput struct {
@@ -68,7 +68,7 @@ type createComponentInput struct {
 // updateComponentInput is the PATCH body. It deliberately carries no name: a
 // rename is the :rename custom method, gated by component:rename.
 type updateComponentInput struct {
-	Name string `path:"name"`
+	Name string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
 	Body struct {
 		DisplayName *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
 		// Parent and Location take the house three-state convention: an omitted
@@ -90,7 +90,7 @@ type updateComponentInput struct {
 // contract, not only in the prose below it: the pattern and the ceiling are what
 // the generated client, CLI, and JSONSchema enforce.
 type renameComponentInput struct {
-	Name string `path:"name" doc:"The component's current name, or its uuid"`
+	Name string `path:"name" doc:"The component's current name, a dotted address, or its uuid"`
 	Body struct {
 		Name string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The new name, unique within its placement (lowercase letters, digits, hyphens)"`
 	}

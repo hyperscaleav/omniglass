@@ -93,7 +93,7 @@ type standardOutput struct {
 }
 
 type systemPathInput struct {
-	Name string `path:"name" doc:"The system's unique name"`
+	Name string `path:"name" doc:"The system's name, or a dotted address (e.g. boi.17c.$sys.av)"`
 }
 
 type createSystemInput struct {
@@ -109,7 +109,7 @@ type createSystemInput struct {
 // updateSystemInput is the PATCH body. It deliberately carries no name: a rename
 // is the :rename custom method, gated by system:rename.
 type updateSystemInput struct {
-	Name string `path:"name"`
+	Name string `path:"name" doc:"The system's name, or a dotted address (e.g. boi.17c.$sys.av)"`
 	Body struct {
 		DisplayName *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
 		StandardID  *string `json:"standard_id,omitempty" doc:"A new standard, by handle or uuid; \"\" clears it (a one-off system)"`
@@ -124,7 +124,7 @@ type updateSystemInput struct {
 // renameSystemInput is the :rename body. The name rule lives here, in the
 // contract, not only in the prose below it.
 type renameSystemInput struct {
-	Name string `path:"name" doc:"The system's current name, or its uuid"`
+	Name string `path:"name" doc:"The system's current name, a dotted address, or its uuid"`
 	Body struct {
 		Name string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The new name, unique within its placement (lowercase letters, digits, hyphens)"`
 	}

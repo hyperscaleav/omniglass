@@ -46,12 +46,12 @@ type locationPropertyBody struct {
 
 // locationPropertyPathInput addresses one property on one location.
 type locationPropertyPathInput struct {
-	Name     string `path:"name" doc:"The location's unique name"`
+	Name     string `path:"name" doc:"The location's name, or a dotted address (e.g. boi.17c.415a)"`
 	Property string `path:"property" doc:"The property name"`
 }
 
 type setLocationPropertyInput struct {
-	Name     string `path:"name" doc:"The location's unique name"`
+	Name     string `path:"name" doc:"The location's name, or a dotted address (e.g. boi.17c.415a)"`
 	Property string `path:"property" doc:"The property name"`
 	Body     struct {
 		Value any `json:"value" doc:"The value to declare, shape given by the property's data_type"`

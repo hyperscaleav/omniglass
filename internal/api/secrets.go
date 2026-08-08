@@ -141,7 +141,7 @@ type resolvedSecretBody struct {
 }
 
 type effectiveSecretsInput struct {
-	Name string `path:"name" doc:"The component's name"`
+	Name string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
 }
 
 type effectiveSecretsOutput struct {

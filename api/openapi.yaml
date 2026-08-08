@@ -5049,13 +5049,13 @@ components:
       additionalProperties: false
       properties:
         component:
-          description: Name of the component
+          description: Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           type: string
         primary:
           description: Whether this membership is the component's default when no system is given
           type: boolean
         system:
-          description: Name of the system
+          description: Name of the system, or a dotted address (e.g. boi.17c.$sys.av)
           type: string
         system_count:
           description: How many systems this component belongs to in total; more than one means it is shared
@@ -6506,12 +6506,12 @@ paths:
       description: Deletes a component, refused (409) while it still has child components or is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
       operationId: delete-component
       parameters:
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "204":
@@ -6528,12 +6528,12 @@ paths:
       description: Fetches a component by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by component:read.
       operationId: get-component
       parameters:
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "200":
@@ -6554,10 +6554,12 @@ paths:
       description: "Patches a component's display_name, product, location, or parent. The name is not patchable: renaming is the :rename custom method. Parent and location follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets); product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split."
       operationId: update-component
       parameters:
-        - in: path
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
+          in: path
           name: name
           required: true
           schema:
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       requestBody:
         content:
@@ -6585,12 +6587,12 @@ paths:
       description: What is currently wrong with this component, newest first. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
       operationId: list-component-alarms
       parameters:
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
         - description: Include cleared alarms, so the list is the history rather than what is wrong now
           explode: false
@@ -6618,12 +6620,12 @@ paths:
       description: "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (a critical alarm), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser (info or warning) alarm degrades the component but leaves it occupying its roles. Gated by component:update; an out-of-scope component is a non-disclosing 404."
       operationId: raise-component-alarm
       parameters:
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       requestBody:
         content:
@@ -6651,12 +6653,12 @@ paths:
       description: "Marks the alarm cleared and recomputes health in the same transaction, so the recovery is recorded as a transition at the moment it happened. The row is kept: what was wrong and when outlives the fix. Clearing an alarm that is already cleared or does not exist is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404."
       operationId: clear-component-alarm
       parameters:
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
         - description: The alarm id
           in: path
@@ -6681,12 +6683,12 @@ paths:
       description: Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Returns the computed settlement verdict. Gated by command:issue; an out-of-scope component is a non-disclosing 404.
       operationId: issue-component-command
       parameters:
-        - description: The component name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       requestBody:
         content:
@@ -6714,12 +6716,12 @@ paths:
       description: "Resolves the secrets that cascade onto a component (platform -> location -> component), with the winner and the shadowed candidates it overrode. There is NO system band: a secret is device-facing, and the room a component happens to serve is the wrong owner for a credential the device itself answers with. Fields are masked, as in the directory; plaintext is only ever the audited reveal. Gated by secret:read, which the viewer floor does not carry, and admin-sensitive secrets appear only to the admin tier."
       operationId: effective-secrets
       parameters:
-        - description: The component's name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "200":
@@ -6741,12 +6743,12 @@ paths:
       description: "Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope."
       operationId: effective-tags
       parameters:
-        - description: The component's name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
         - description: Resolve against this system, name or uuid (ADR-0062), which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand.
           explode: false
@@ -6775,12 +6777,12 @@ paths:
       description: "Resolves the variables that cascade onto a component (platform -> location -> system -> component): names union, values override most-specific-wins, with the winner and the shadowed candidates it overrode. The system band comes from the component's PRIMARY membership; resolving against a named system is not offered here yet, unlike effective-tags. Gated by variable:read; the component must be in the caller's component read scope."
       operationId: effective-variables
       parameters:
-        - description: The component's name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "200":
@@ -6802,12 +6804,12 @@ paths:
       description: Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
       operationId: list-component-events
       parameters:
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "200":
@@ -6829,12 +6831,12 @@ paths:
       description: Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
       operationId: list-component-logs
       parameters:
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "200":
@@ -6856,12 +6858,12 @@ paths:
       description: "The systems this component is bound into, ordered by name. A component may belong to several: a rack DSP serving three rooms is a member of all three, and each of them depends on it. Exactly one membership may be marked primary, the default for a question asked without a system in hand. Gated by component:read; an out-of-scope component is a non-disclosing 404."
       operationId: list-component-memberships
       parameters:
-        - description: Name of the component
+        - description: Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: Name of the component
+            description: Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "200":
@@ -6883,12 +6885,12 @@ paths:
       description: Every metric the component's product declares, resolved to the series' latest observed or calculated sample or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.
       operationId: list-component-metrics
       parameters:
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "200":
@@ -6910,12 +6912,12 @@ paths:
       description: Every property the component's product declares, resolved to the component's own value or the contract default (is_set marks the override), plus any property set directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.
       operationId: list-component-properties
       parameters:
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "200":
@@ -6937,12 +6939,12 @@ paths:
       description: Removes the component's declared value, so the property falls back to the product contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the component never set is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
       operationId: clear-component-property
       parameters:
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
         - description: The property name
           in: path
@@ -6966,12 +6968,12 @@ paths:
       description: "Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by component:update; an out-of-scope component is a non-disclosing 404."
       operationId: set-component-property
       parameters:
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
         - description: The property name
           in: path
@@ -7006,12 +7008,12 @@ paths:
       description: Composes, per interface, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
       operationId: get-component-reachability
       parameters:
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "200":
@@ -7033,12 +7035,12 @@ paths:
       description: Pivots, per declared property, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is), with config-drift computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.
       operationId: get-component-reconciliation
       parameters:
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "200":
@@ -7060,12 +7062,12 @@ paths:
       description: Lists the tags bound directly on a component (not the resolved cascade). Gated by component:read.
       operationId: list-component-tags
       parameters:
-        - description: The entity's name
+        - description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
           in: path
           name: name
           required: true
           schema:
-            description: The entity's name
+            description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
             type: string
       responses:
         "200":
@@ -7087,12 +7089,12 @@ paths:
       description: Removes a key's value from a component. Gated by component:update.
       operationId: remove-component-tag
       parameters:
-        - description: The entity's name
+        - description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
           in: path
           name: name
           required: true
           schema:
-            description: The entity's name
+            description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
             type: string
       requestBody:
         content:
@@ -7116,12 +7118,12 @@ paths:
       description: Moves the component's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by component:rename; read and rename scopes drive the 404 versus 403 split.
       operationId: rename-component
       parameters:
-        - description: The component's current name, or its uuid
+        - description: The component's current name, a dotted address, or its uuid
           in: path
           name: name
           required: true
           schema:
-            description: The component's current name, or its uuid
+            description: The component's current name, a dotted address, or its uuid
             type: string
       requestBody:
         content:
@@ -7149,12 +7151,12 @@ paths:
       description: Binds a value for a key on a component. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by component:update.
       operationId: set-component-tag
       parameters:
-        - description: The entity's name
+        - description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
           in: path
           name: name
           required: true
           schema:
-            description: The entity's name
+            description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
             type: string
       requestBody:
         content:
@@ -8043,12 +8045,12 @@ paths:
       description: Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
       operationId: delete-location
       parameters:
-        - description: The location's unique name
+        - description: The location's name, or a dotted address (e.g. boi.17c.415a)
           in: path
           name: name
           required: true
           schema:
-            description: The location's unique name
+            description: The location's name, or a dotted address (e.g. boi.17c.415a)
             type: string
       responses:
         "204":
@@ -8065,12 +8067,12 @@ paths:
       description: Fetches a location by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by location:read.
       operationId: get-location
       parameters:
-        - description: The location's unique name
+        - description: The location's name, or a dotted address (e.g. boi.17c.415a)
           in: path
           name: name
           required: true
           schema:
-            description: The location's unique name
+            description: The location's name, or a dotted address (e.g. boi.17c.415a)
             type: string
       responses:
         "200":
@@ -8091,10 +8093,12 @@ paths:
       description: "Patches a location's display_name, location_type, or parent (a move). The name is not patchable: renaming is the :rename custom method. Gated by location:update; the read and update scopes drive the 404 versus 403 split."
       operationId: update-location
       parameters:
-        - in: path
+        - description: The location's name, or a dotted address (e.g. boi.17c.415a)
+          in: path
           name: name
           required: true
           schema:
+            description: The location's name, or a dotted address (e.g. boi.17c.415a)
             type: string
       requestBody:
         content:
@@ -8122,12 +8126,12 @@ paths:
       description: The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
       operationId: get-location-health
       parameters:
-        - description: The location's unique name
+        - description: The location's name, or a dotted address (e.g. boi.17c.415a)
           in: path
           name: name
           required: true
           schema:
-            description: The location's unique name
+            description: The location's name, or a dotted address (e.g. boi.17c.415a)
             type: string
       responses:
         "200":
@@ -8149,12 +8153,12 @@ paths:
       description: Every metric the location's type declares, resolved to the series' latest observed or calculated sample or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.
       operationId: list-location-metrics
       parameters:
-        - description: The location's unique name
+        - description: The location's name, or a dotted address (e.g. boi.17c.415a)
           in: path
           name: name
           required: true
           schema:
-            description: The location's unique name
+            description: The location's name, or a dotted address (e.g. boi.17c.415a)
             type: string
       responses:
         "200":
@@ -8176,12 +8180,12 @@ paths:
       description: Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.
       operationId: list-location-properties
       parameters:
-        - description: The location's unique name
+        - description: The location's name, or a dotted address (e.g. boi.17c.415a)
           in: path
           name: name
           required: true
           schema:
-            description: The location's unique name
+            description: The location's name, or a dotted address (e.g. boi.17c.415a)
             type: string
       responses:
         "200":
@@ -8203,12 +8207,12 @@ paths:
       description: Removes the location's declared value, so the property falls back to the location type contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the location never set is a 404. Gated by location:update; an out-of-scope location is a non-disclosing 404.
       operationId: clear-location-property
       parameters:
-        - description: The location's unique name
+        - description: The location's name, or a dotted address (e.g. boi.17c.415a)
           in: path
           name: name
           required: true
           schema:
-            description: The location's unique name
+            description: The location's name, or a dotted address (e.g. boi.17c.415a)
             type: string
         - description: The property name
           in: path
@@ -8232,12 +8236,12 @@ paths:
       description: "Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by location:update; an out-of-scope location is a non-disclosing 404."
       operationId: set-location-property
       parameters:
-        - description: The location's unique name
+        - description: The location's name, or a dotted address (e.g. boi.17c.415a)
           in: path
           name: name
           required: true
           schema:
-            description: The location's unique name
+            description: The location's name, or a dotted address (e.g. boi.17c.415a)
             type: string
         - description: The property name
           in: path
@@ -8272,12 +8276,12 @@ paths:
       description: Lists the tags bound directly on a location (not the resolved cascade). Gated by location:read.
       operationId: list-location-tags
       parameters:
-        - description: The entity's name
+        - description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
           in: path
           name: name
           required: true
           schema:
-            description: The entity's name
+            description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
             type: string
       responses:
         "200":
@@ -8299,12 +8303,12 @@ paths:
       description: Removes a key's value from a location. Gated by location:update.
       operationId: remove-location-tag
       parameters:
-        - description: The entity's name
+        - description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
           in: path
           name: name
           required: true
           schema:
-            description: The entity's name
+            description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
             type: string
       requestBody:
         content:
@@ -8328,12 +8332,12 @@ paths:
       description: Moves the location's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by location:rename; the read and rename scopes drive the 404 versus 403 split.
       operationId: rename-location
       parameters:
-        - description: The location's current name, or its uuid
+        - description: The location's current name, a dotted address, or its uuid
           in: path
           name: name
           required: true
           schema:
-            description: The location's current name, or its uuid
+            description: The location's current name, a dotted address, or its uuid
             type: string
       requestBody:
         content:
@@ -8361,12 +8365,12 @@ paths:
       description: Binds a value for a key on a location. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by location:update.
       operationId: set-location-tag
       parameters:
-        - description: The entity's name
+        - description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
           in: path
           name: name
           required: true
           schema:
-            description: The entity's name
+            description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
             type: string
       requestBody:
         content:
@@ -8719,12 +8723,12 @@ paths:
       description: Lists the tags bound directly on a node (not the resolved cascade). Gated by node:read.
       operationId: list-node-tags
       parameters:
-        - description: The entity's name
+        - description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
           in: path
           name: name
           required: true
           schema:
-            description: The entity's name
+            description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
             type: string
       responses:
         "200":
@@ -8746,12 +8750,12 @@ paths:
       description: Removes a key's value from a node. Gated by node:update.
       operationId: remove-node-tag
       parameters:
-        - description: The entity's name
+        - description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
           in: path
           name: name
           required: true
           schema:
-            description: The entity's name
+            description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
             type: string
       requestBody:
         content:
@@ -8775,12 +8779,12 @@ paths:
       description: Binds a value for a key on a node. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by node:update.
       operationId: set-node-tag
       parameters:
-        - description: The entity's name
+        - description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
           in: path
           name: name
           required: true
           schema:
-            description: The entity's name
+            description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
             type: string
       requestBody:
         content:
@@ -10972,12 +10976,12 @@ paths:
       description: Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
       operationId: delete-system
       parameters:
-        - description: The system's unique name
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: The system's unique name
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
       responses:
         "204":
@@ -10994,12 +10998,12 @@ paths:
       description: Fetches a system by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by system:read.
       operationId: get-system
       parameters:
-        - description: The system's unique name
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: The system's unique name
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
       responses:
         "200":
@@ -11020,10 +11024,12 @@ paths:
       description: "Patches a system's display_name, standard, location, or parent. The name is not patchable: renaming is the :rename custom method. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split."
       operationId: update-system
       parameters:
-        - in: path
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
+          in: path
           name: name
           required: true
           schema:
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
       requestBody:
         content:
@@ -11051,12 +11057,12 @@ paths:
       description: "The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. A role that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this role's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404."
       operationId: get-system-health
       parameters:
-        - description: The system's unique name
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: The system's unique name
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
       responses:
         "200":
@@ -11078,12 +11084,12 @@ paths:
       description: "The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Gated by system:read; an out-of-scope system is a non-disclosing 404."
       operationId: list-system-members
       parameters:
-        - description: Name of the system
+        - description: Name of the system, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: Name of the system
+            description: Name of the system, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
       responses:
         "200":
@@ -11105,19 +11111,19 @@ paths:
       description: "Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404."
       operationId: remove-system-member
       parameters:
-        - description: Name of the system
+        - description: Name of the system, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: Name of the system
+            description: Name of the system, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
-        - description: Name of the component
+        - description: Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: component
           required: true
           schema:
-            description: Name of the component
+            description: Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "204":
@@ -11134,19 +11140,19 @@ paths:
       description: Binds this component into the system. Idempotent. A component's first membership becomes its primary with nobody asking, so a component in exactly one system never has to think about the concept; a later membership does not take that default away. Gated by system:update; an out-of-scope system is a non-disclosing 404.
       operationId: add-system-member
       parameters:
-        - description: Name of the system
+        - description: Name of the system, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: Name of the system
+            description: Name of the system, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
-        - description: Name of the component
+        - description: Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: component
           required: true
           schema:
-            description: Name of the component
+            description: Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "204":
@@ -11164,19 +11170,19 @@ paths:
       description: Moves the component's default to this membership. The default answers questions asked without a system in hand; it does not decide anything that names a system explicitly. A component that was not a member here is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
       operationId: set-primary-member
       parameters:
-        - description: Name of the system
+        - description: Name of the system, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: Name of the system
+            description: Name of the system, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
-        - description: Name of the component
+        - description: Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: component
           required: true
           schema:
-            description: Name of the component
+            description: Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "204":
@@ -11194,12 +11200,12 @@ paths:
       description: Every metric the system's standard declares, resolved to the series' latest observed or calculated sample or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.
       operationId: list-system-metrics
       parameters:
-        - description: The system's unique name
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: The system's unique name
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
       responses:
         "200":
@@ -11221,12 +11227,12 @@ paths:
       description: Every property the system's standard declares, resolved to the system's own value or the contract default (is_set marks the override), plus any property set directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.
       operationId: list-system-properties
       parameters:
-        - description: The system's unique name
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: The system's unique name
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
       responses:
         "200":
@@ -11248,12 +11254,12 @@ paths:
       description: Removes the system's declared value, so the property falls back to the standard contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the system never set is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
       operationId: clear-system-property
       parameters:
-        - description: The system's unique name
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: The system's unique name
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
         - description: The property name
           in: path
@@ -11277,12 +11283,12 @@ paths:
       description: "Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by system:update; an out-of-scope system is a non-disclosing 404."
       operationId: set-system-property
       parameters:
-        - description: The system's unique name
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: The system's unique name
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
         - description: The property name
           in: path
@@ -11317,12 +11323,12 @@ paths:
       description: "Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the types it accepts (and products it pins, if any), the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404."
       operationId: list-system-roles
       parameters:
-        - description: The system's unique name
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: The system's unique name
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
       responses:
         "200":
@@ -11344,12 +11350,12 @@ paths:
       description: Removes a role declared on this system, and with it every assignment to it. A role the system does not declare itself is a 404 (a role inherited from its standard is withdrawn on the standard, not here). Gated by system:update; an out-of-scope system is a non-disclosing 404.
       operationId: delete-system-role
       parameters:
-        - description: The system's unique name
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: The system's unique name
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
         - description: The role name
           in: path
@@ -11373,12 +11379,12 @@ paths:
       description: Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. accepted_types and pinned_products each replace their set wholesale. Gated by system:update; an out-of-scope system is a non-disclosing 404.
       operationId: set-system-role
       parameters:
-        - description: The system's unique name
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: The system's unique name
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
         - description: The role name
           in: path
@@ -11413,12 +11419,12 @@ paths:
       description: Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
       operationId: unassign-system-role
       parameters:
-        - description: The system's unique name
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: The system's unique name
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
         - description: The role name
           in: path
@@ -11427,12 +11433,12 @@ paths:
           schema:
             description: The role name
             type: string
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: component
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "204":
@@ -11449,12 +11455,12 @@ paths:
       description: "Puts this component in the role for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the role accepts, or (if the role pins products) its product not one of them. A role with no accepted types takes any type. Idempotent. Gated by system:update; an out-of-scope system is a non-disclosing 404."
       operationId: assign-system-role
       parameters:
-        - description: The system's unique name
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: The system's unique name
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
         - description: The role name
           in: path
@@ -11463,12 +11469,12 @@ paths:
           schema:
             description: The role name
             type: string
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: component
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "204":
@@ -11486,12 +11492,12 @@ paths:
       description: "Exchanges the positions of whichever components currently hold position and with within this role: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404."
       operationId: swap-role-positions
       parameters:
-        - description: The system's unique name
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: The system's unique name
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
         - description: The role name
           in: path
@@ -11522,12 +11528,12 @@ paths:
       description: Lists the tags bound directly on a system (not the resolved cascade). Gated by system:read.
       operationId: list-system-tags
       parameters:
-        - description: The entity's name
+        - description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
           in: path
           name: name
           required: true
           schema:
-            description: The entity's name
+            description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
             type: string
       responses:
         "200":
@@ -11549,12 +11555,12 @@ paths:
       description: Removes a key's value from a system. Gated by system:update.
       operationId: remove-system-tag
       parameters:
-        - description: The entity's name
+        - description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
           in: path
           name: name
           required: true
           schema:
-            description: The entity's name
+            description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
             type: string
       requestBody:
         content:
@@ -11578,12 +11584,12 @@ paths:
       description: Moves the system's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by system:rename; read and rename scopes drive the 404 versus 403 split.
       operationId: rename-system
       parameters:
-        - description: The system's current name, or its uuid
+        - description: The system's current name, a dotted address, or its uuid
           in: path
           name: name
           required: true
           schema:
-            description: The system's current name, or its uuid
+            description: The system's current name, a dotted address, or its uuid
             type: string
       requestBody:
         content:
@@ -11611,12 +11617,12 @@ paths:
       description: Binds a value for a key on a system. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by system:update.
       operationId: set-system-tag
       parameters:
-        - description: The entity's name
+        - description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
           in: path
           name: name
           required: true
           schema:
-            description: The entity's name
+            description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
             type: string
       requestBody:
         content:

@@ -6197,11 +6197,11 @@ export interface components {
             standard_id?: string;
         };
         SystemMemberBody: {
-            /** @description Name of the component */
+            /** @description Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
             component: string;
             /** @description Whether this membership is the component's default when no system is given */
             primary: boolean;
-            /** @description Name of the system */
+            /** @description Name of the system, or a dotted address (e.g. boi.17c.$sys.av) */
             system: string;
             /**
              * Format: int64
@@ -7577,7 +7577,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The component's unique name */
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
                 name: string;
             };
             cookie?: never;
@@ -7609,7 +7609,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The component's unique name */
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
                 name: string;
             };
             cookie?: never;
@@ -7639,6 +7639,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
                 name: string;
             };
             cookie?: never;
@@ -7677,7 +7678,7 @@ export interface operations {
             };
             header?: never;
             path: {
-                /** @description The component's unique name */
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
                 name: string;
             };
             cookie?: never;
@@ -7709,7 +7710,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The component's unique name */
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
                 name: string;
             };
             cookie?: never;
@@ -7745,7 +7746,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The component's unique name */
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
                 name: string;
                 /** @description The alarm id */
                 id: string;
@@ -7777,7 +7778,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The component name */
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
                 name: string;
             };
             cookie?: never;
@@ -7813,7 +7814,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The component's name */
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
                 name: string;
             };
             cookie?: never;
@@ -7848,7 +7849,7 @@ export interface operations {
             };
             header?: never;
             path: {
-                /** @description The component's name */
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
                 name: string;
             };
             cookie?: never;
@@ -7880,7 +7881,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The component's name */
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
                 name: string;
             };
             cookie?: never;
@@ -7912,7 +7913,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The component's unique name */
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
                 name: string;
             };
             cookie?: never;
@@ -7944,7 +7945,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The component's unique name */
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
                 name: string;
             };
             cookie?: never;
@@ -7976,7 +7977,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Name of the component */
+                /** @description Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
                 name: string;
             };
             cookie?: never;
@@ -8008,7 +8009,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The component's unique name */
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
                 name: string;
             };
             cookie?: never;
@@ -8040,7 +8041,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The component's unique name */
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
                 name: string;
             };
             cookie?: never;
@@ -8072,7 +8073,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The component's unique name */
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
                 name: string;
                 /** @description The property name */
                 property: string;
@@ -8110,7 +8111,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The component's unique name */
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
                 name: string;
                 /** @description The property name */
                 property: string;
@@ -8142,7 +8143,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The component's unique name */
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
                 name: string;
             };
             cookie?: never;
@@ -8174,7 +8175,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The component's unique name */
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
                 name: string;
             };
             cookie?: never;
@@ -8206,7 +8207,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The entity's name */
+                /** @description The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token. */
                 name: string;
             };
             cookie?: never;
@@ -8238,7 +8239,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The entity's name */
+                /** @description The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token. */
                 name: string;
             };
             cookie?: never;
@@ -8272,7 +8273,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The component's current name, or its uuid */
+                /** @description The component's current name, a dotted address, or its uuid */
                 name: string;
             };
             cookie?: never;
@@ -8308,7 +8309,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The entity's name */
+                /** @description The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token. */
                 name: string;
             };
             cookie?: never;
@@ -9433,7 +9434,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The location's unique name */
+                /** @description The location's name, or a dotted address (e.g. boi.17c.415a) */
                 name: string;
             };
             cookie?: never;
@@ -9465,7 +9466,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The location's unique name */
+                /** @description The location's name, or a dotted address (e.g. boi.17c.415a) */
                 name: string;
             };
             cookie?: never;
@@ -9495,6 +9496,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The location's name, or a dotted address (e.g. boi.17c.415a) */
                 name: string;
             };
             cookie?: never;
@@ -9530,7 +9532,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The location's unique name */
+                /** @description The location's name, or a dotted address (e.g. boi.17c.415a) */
                 name: string;
             };
             cookie?: never;
@@ -9562,7 +9564,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The location's unique name */
+                /** @description The location's name, or a dotted address (e.g. boi.17c.415a) */
                 name: string;
             };
             cookie?: never;
@@ -9594,7 +9596,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The location's unique name */
+                /** @description The location's name, or a dotted address (e.g. boi.17c.415a) */
                 name: string;
             };
             cookie?: never;
@@ -9626,7 +9628,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The location's unique name */
+                /** @description The location's name, or a dotted address (e.g. boi.17c.415a) */
                 name: string;
                 /** @description The property name */
                 property: string;
@@ -9664,7 +9666,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The location's unique name */
+                /** @description The location's name, or a dotted address (e.g. boi.17c.415a) */
                 name: string;
                 /** @description The property name */
                 property: string;
@@ -9696,7 +9698,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The entity's name */
+                /** @description The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token. */
                 name: string;
             };
             cookie?: never;
@@ -9728,7 +9730,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The entity's name */
+                /** @description The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token. */
                 name: string;
             };
             cookie?: never;
@@ -9762,7 +9764,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The location's current name, or its uuid */
+                /** @description The location's current name, a dotted address, or its uuid */
                 name: string;
             };
             cookie?: never;
@@ -9798,7 +9800,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The entity's name */
+                /** @description The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token. */
                 name: string;
             };
             cookie?: never;
@@ -10250,7 +10252,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The entity's name */
+                /** @description The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token. */
                 name: string;
             };
             cookie?: never;
@@ -10282,7 +10284,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The entity's name */
+                /** @description The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token. */
                 name: string;
             };
             cookie?: never;
@@ -10316,7 +10318,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The entity's name */
+                /** @description The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token. */
                 name: string;
             };
             cookie?: never;
@@ -12977,7 +12979,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The system's unique name */
+                /** @description The system's name, or a dotted address (e.g. boi.17c.$sys.av) */
                 name: string;
             };
             cookie?: never;
@@ -13009,7 +13011,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The system's unique name */
+                /** @description The system's name, or a dotted address (e.g. boi.17c.$sys.av) */
                 name: string;
             };
             cookie?: never;
@@ -13039,6 +13041,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The system's name, or a dotted address (e.g. boi.17c.$sys.av) */
                 name: string;
             };
             cookie?: never;
@@ -13074,7 +13077,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The system's unique name */
+                /** @description The system's name, or a dotted address (e.g. boi.17c.$sys.av) */
                 name: string;
             };
             cookie?: never;
@@ -13106,7 +13109,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Name of the system */
+                /** @description Name of the system, or a dotted address (e.g. boi.17c.$sys.av) */
                 name: string;
             };
             cookie?: never;
@@ -13138,9 +13141,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Name of the system */
+                /** @description Name of the system, or a dotted address (e.g. boi.17c.$sys.av) */
                 name: string;
-                /** @description Name of the component */
+                /** @description Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
                 component: string;
             };
             cookie?: never;
@@ -13170,9 +13173,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Name of the system */
+                /** @description Name of the system, or a dotted address (e.g. boi.17c.$sys.av) */
                 name: string;
-                /** @description Name of the component */
+                /** @description Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
                 component: string;
             };
             cookie?: never;
@@ -13202,9 +13205,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Name of the system */
+                /** @description Name of the system, or a dotted address (e.g. boi.17c.$sys.av) */
                 name: string;
-                /** @description Name of the component */
+                /** @description Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
                 component: string;
             };
             cookie?: never;
@@ -13234,7 +13237,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The system's unique name */
+                /** @description The system's name, or a dotted address (e.g. boi.17c.$sys.av) */
                 name: string;
             };
             cookie?: never;
@@ -13266,7 +13269,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The system's unique name */
+                /** @description The system's name, or a dotted address (e.g. boi.17c.$sys.av) */
                 name: string;
             };
             cookie?: never;
@@ -13298,7 +13301,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The system's unique name */
+                /** @description The system's name, or a dotted address (e.g. boi.17c.$sys.av) */
                 name: string;
                 /** @description The property name */
                 property: string;
@@ -13336,7 +13339,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The system's unique name */
+                /** @description The system's name, or a dotted address (e.g. boi.17c.$sys.av) */
                 name: string;
                 /** @description The property name */
                 property: string;
@@ -13368,7 +13371,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The system's unique name */
+                /** @description The system's name, or a dotted address (e.g. boi.17c.$sys.av) */
                 name: string;
             };
             cookie?: never;
@@ -13400,7 +13403,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The system's unique name */
+                /** @description The system's name, or a dotted address (e.g. boi.17c.$sys.av) */
                 name: string;
                 /** @description The role name */
                 role: string;
@@ -13438,7 +13441,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The system's unique name */
+                /** @description The system's name, or a dotted address (e.g. boi.17c.$sys.av) */
                 name: string;
                 /** @description The role name */
                 role: string;
@@ -13470,11 +13473,11 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The system's unique name */
+                /** @description The system's name, or a dotted address (e.g. boi.17c.$sys.av) */
                 name: string;
                 /** @description The role name */
                 role: string;
-                /** @description The component's unique name */
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
                 component: string;
             };
             cookie?: never;
@@ -13504,11 +13507,11 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The system's unique name */
+                /** @description The system's name, or a dotted address (e.g. boi.17c.$sys.av) */
                 name: string;
                 /** @description The role name */
                 role: string;
-                /** @description The component's unique name */
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
                 component: string;
             };
             cookie?: never;
@@ -13538,7 +13541,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The system's unique name */
+                /** @description The system's name, or a dotted address (e.g. boi.17c.$sys.av) */
                 name: string;
                 /** @description The role name */
                 role: string;
@@ -13574,7 +13577,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The entity's name */
+                /** @description The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token. */
                 name: string;
             };
             cookie?: never;
@@ -13606,7 +13609,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The entity's name */
+                /** @description The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token. */
                 name: string;
             };
             cookie?: never;
@@ -13640,7 +13643,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The system's current name, or its uuid */
+                /** @description The system's current name, a dotted address, or its uuid */
                 name: string;
             };
             cookie?: never;
@@ -13676,7 +13679,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The entity's name */
+                /** @description The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token. */
                 name: string;
             };
             cookie?: never;

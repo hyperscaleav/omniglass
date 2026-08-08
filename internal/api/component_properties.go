@@ -75,12 +75,12 @@ type componentPropertyBody struct {
 
 // componentPropertyPathInput addresses one property on one component.
 type componentPropertyPathInput struct {
-	Name     string `path:"name" doc:"The component's unique name"`
+	Name     string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
 	Property string `path:"property" doc:"The property name"`
 }
 
 type setComponentPropertyInput struct {
-	Name     string `path:"name" doc:"The component's unique name"`
+	Name     string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
 	Property string `path:"property" doc:"The property name"`
 	Body     struct {
 		Value any `json:"value" doc:"The value to declare, shape given by the property's data_type"`

@@ -88,7 +88,7 @@ type locationOutput struct {
 }
 
 type locationPathInput struct {
-	Name string `path:"name" doc:"The location's unique name"`
+	Name string `path:"name" doc:"The location's name, or a dotted address (e.g. boi.17c.415a)"`
 }
 
 type createLocationInput struct {
@@ -103,7 +103,7 @@ type createLocationInput struct {
 // updateLocationInput is the PATCH body. It deliberately carries no name: a rename
 // is the :rename custom method, gated by location:rename.
 type updateLocationInput struct {
-	Name string `path:"name"`
+	Name string `path:"name" doc:"The location's name, or a dotted address (e.g. boi.17c.415a)"`
 	Body struct {
 		DisplayName  *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
 		LocationType *string `json:"location_type,omitempty" doc:"Re-types the location: a location_type, by name or uuid"`
@@ -114,7 +114,7 @@ type updateLocationInput struct {
 // renameLocationInput is the :rename body. The name rule lives here, in the
 // contract, not only in the prose below it.
 type renameLocationInput struct {
-	Name string `path:"name" doc:"The location's current name, or its uuid"`
+	Name string `path:"name" doc:"The location's current name, a dotted address, or its uuid"`
 	Body struct {
 		Name string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The new name, unique within its placement (lowercase letters, digits, hyphens)"`
 	}

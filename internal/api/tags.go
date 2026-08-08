@@ -108,7 +108,7 @@ type entityTagsOutput struct {
 }
 
 type effectiveTagsInput struct {
-	Name   string `path:"name" doc:"The component's name"`
+	Name   string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
 	System string `query:"system" doc:"Resolve against this system, name or uuid (ADR-0062), which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand."`
 }
 
@@ -290,7 +290,7 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 // entityRemoveTagInput carries the name and the key to remove. The entity kind
 // is fixed by the route the closure registers.
 type entitySetTagInput struct {
-	Name string `path:"name" doc:"The entity's name"`
+	Name string `path:"name" doc:"The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token."`
 	Body struct {
 		Key   string `json:"key" minLength:"1" doc:"The tag key (must exist and apply to this kind)"`
 		Value string `json:"value" minLength:"1" doc:"The bound value"`
@@ -298,14 +298,14 @@ type entitySetTagInput struct {
 }
 
 type entityRemoveTagInput struct {
-	Name string `path:"name" doc:"The entity's name"`
+	Name string `path:"name" doc:"The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token."`
 	Body struct {
 		Key string `json:"key" minLength:"1" doc:"The tag key to remove"`
 	}
 }
 
 type entityNameInput struct {
-	Name string `path:"name" doc:"The entity's name"`
+	Name string `path:"name" doc:"The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token."`
 }
 
 // registerEntityTagRoutes registers the list, set, and remove binding routes for
