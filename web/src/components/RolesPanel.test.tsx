@@ -7,6 +7,7 @@ import { COMPONENTS_KEY, type Component as Comp } from "../lib/components";
 import { SYSTEMS_KEY, type System } from "../lib/systems";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
+import { systemHealthKey, type EstateHealth } from "../lib/health";
 
 // The panel resolves a system's roles: what its standard declares plus what the
 // system declares of its own, each with the typed-slot guard (#626) it enforces
@@ -67,16 +68,47 @@ const components: Comp[] = [
 
 const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };
 
+// The health read's own arithmetic for the same three roles above, the
+// occupancy-aware counterpart of the roles read's understaffed: satisfying,
+// short, and spare replace assigned/understaffed once health has loaded (#626
+// Task 9). table-mic is short one occupant beyond its assignment count would
+// suggest, which is the case understaffed alone cannot express.
+const health: EstateHealth = {
+  owner_kind: "system",
+  owner: "boardroom",
+  verdict: "degraded",
+  transitions: [],
+  systems: [],
+  roles: [
+    {
+      name: "table-mic", display_name: "Table microphone", impact: "degraded",
+      quorum: 2, satisfying: 1, short: 1, spare: 0, impaired: true, active: true,
+      assigned_to: ["mic-1"], down: [], alarms: [],
+    },
+    {
+      name: "main-display", display_name: "Main display", impact: "outage",
+      quorum: 1, satisfying: 1, short: 0, spare: 0, impaired: false, active: true,
+      assigned_to: ["disp-1"], down: [], alarms: [],
+    },
+    {
+      name: "spare-panel", display_name: "Spare panel", impact: "none",
+      quorum: 1, satisfying: 0, short: 1, spare: 0, impaired: true, active: true,
+      assigned_to: [], down: [], alarms: [],
+    },
+  ],
+};
+
 function json(body: unknown, status = 200, type = "application/json") {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": type } });
 }
 
-function mount(opts: { rows?: EffectiveRole[]; canUpdate?: boolean } = {}) {
+function mount(opts: { rows?: EffectiveRole[]; canUpdate?: boolean; health?: EstateHealth | null } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...systemRolesKey("boardroom")], opts.rows ?? roles);
   qc.setQueryData([...COMPONENTS_KEY], components);
   qc.setQueryData([...SYSTEMS_KEY], [system]);
   qc.setQueryData([...ME_KEY], owner);
+  if (opts.health !== null) qc.setQueryData([...systemHealthKey("boardroom")], opts.health ?? health);
   return render(() => (
     <QueryClientProvider client={qc}>
       <RolesPanel system="boardroom" canUpdate={opts.canUpdate ?? true} />
@@ -95,16 +127,51 @@ describe("RolesPanel", () => {
     const row = roleRow(getByText("Table microphone"));
     expect(within(row).getByText("table-mic")).toBeTruthy(); // the address, beside the label
     expect(within(row).getByText("video-bar")).toBeTruthy();
-    expect(within(row).getByText("2 wanted, 1 assigned")).toBeTruthy();
+    // The health read's arithmetic (1 of 2 satisfying), not the roles read's
+    // assignment count: see the divergence test below for why they can differ.
+    expect(within(row).getByText("1 of 2 satisfying")).toBeTruthy();
     expect(within(row).getByText("mic-1")).toBeTruthy();
   });
 
-  it("marks an understaffed role, and leaves a staffed one unmarked", () => {
+  it("marks a short role from the health read, and leaves a satisfied one unmarked", () => {
     const { getByText } = mount();
+    expect(within(roleRow(getByText("Table microphone"))).getByText("short 1")).toBeTruthy();
+    const staffed = roleRow(getByText("Main display"));
+    expect(within(staffed).queryByText(/short/)).toBeNull();
+    expect(within(staffed).getByText("1 of 1 satisfying")).toBeTruthy();
+  });
+
+  it("falls back to the roles read's assignment arithmetic while health has not loaded yet", () => {
+    const { getByText } = mount({ health: null });
+    // No health seeded: the lens must not render undefined, so it falls back
+    // to the health-blind figures the roles read already carries.
     expect(within(roleRow(getByText("Table microphone"))).getByText("understaffed")).toBeTruthy();
+    expect(within(roleRow(getByText("Table microphone"))).getByText("2 wanted, 1 assigned")).toBeTruthy();
     const staffed = roleRow(getByText("Main display"));
     expect(within(staffed).queryByText("understaffed")).toBeNull();
     expect(within(staffed).getByText("1 wanted, 1 assigned")).toBeTruthy();
+  });
+
+  it("reads short from health, not assignment count: a down occupant still counts as assigned", () => {
+    // main-display's sole assignee carries a critical alarm: the roles read
+    // would still call it fully staffed (understaffed 0), but health's
+    // satisfying/short is occupancy-aware and must win on screen.
+    const degradedMainDisplay: EstateHealth = {
+      ...health,
+      roles: health.roles!.map((r) =>
+        r.name === "main-display"
+          ? { ...r, satisfying: 0, short: 1, impaired: true, down: ["disp-1"], alarms: [{ id: "a-1", severity: "critical", message: "HDMI failed", component: "disp-1", raised_at: new Date().toISOString() }] }
+          : r,
+      ),
+    };
+    const { getByText } = mount({ health: degradedMainDisplay });
+    const row = roleRow(getByText("Main display"));
+    expect(within(row).getByText("short 1")).toBeTruthy();
+    expect(within(row).getByText("0 of 1 satisfying")).toBeTruthy();
+    // The occupant is marked down, not silently dropped from "filled by".
+    const downBadge = within(row).getByTitle("An active alarm has taken this component down");
+    expect(downBadge.textContent).toContain("disp-1");
+    expect(downBadge.textContent).toContain("down");
   });
 
   it("groups a role declared on the system apart from the ones its standard declares", () => {
@@ -129,7 +196,9 @@ describe("RolesPanel", () => {
     });
 
     const { getByText, getByLabelText } = mount();
-    // The components already filling the role are not offered again.
+    // The component already filling table-mic itself is not offered again;
+    // disp-1 (main-display's occupant) still appears, just disabled (see the
+    // dedicated test below), so it stays out of this equality's true values.
     const picker = getByLabelText("Component to fill table-mic") as HTMLSelectElement;
     expect(Array.from(picker.options).map((o) => o.value)).toEqual(["", "disp-1", "panel-1"]);
 
@@ -139,6 +208,24 @@ describe("RolesPanel", () => {
     await waitFor(() => expect(put).toBeTruthy());
     expect(put!.url).toContain("/systems/boardroom/roles/table-mic/assignments/panel-1");
     expect(getByText("Table microphone")).toBeTruthy(); // the panel stays put
+  });
+
+  // #626: a component fills at most one role per system. Once a picker lets
+  // an operator pick a component already staffing a DIFFERENT role here, the
+  // server's 422 refusal is one the operator could not have anticipated,
+  // which the panel's own stated principle (the refusal teaches) forbids.
+  // Excluding it silently would be worse: showing it disabled, with the
+  // reason, is what the panel already does for the typed-slot guard.
+  it("disables a component already staffing a different role here, naming which one", () => {
+    const { getByLabelText } = mount();
+    const picker = getByLabelText("Component to fill table-mic") as HTMLSelectElement;
+    const disp1 = Array.from(picker.options).find((o) => o.value === "disp-1")!;
+    expect(disp1.disabled).toBe(true);
+    expect(disp1.textContent).toContain("already fills");
+    expect(disp1.textContent).toContain("Main display");
+    // panel-1 fills nothing anywhere in this system, so it stays selectable.
+    const panel1 = Array.from(picker.options).find((o) => o.value === "panel-1")!;
+    expect(panel1.disabled).toBe(false);
   });
 
   // The refusal is the lesson: a component may fill a role only if its product's

@@ -13,12 +13,26 @@ import {
   unassignRole,
   type EffectiveRole,
 } from "../lib/system_roles";
+import {
+  impactPhrase,
+  quorumLabel,
+  roles as healthRolesOf,
+  systemHealth,
+  systemHealthKey,
+  type HealthRole,
+} from "../lib/health";
 
 // RolesPanel lists the roles a system needs filled, resolved. A ROLE is a slot:
 // a table microphone, a main display. It names the TYPED-SLOT guard (#626) a
 // filling component's product must clear and carries a QUORUM, how many
 // components it wants, so a role reads as "2 wanted, 1 assigned" and is
-// UNDERSTAFFED until it has them.
+// UNDERSTAFFED until it has them. UNDERSTAFFED is assignment arithmetic
+// (quorum minus rows), health-blind; the panel's SHORT/SPARE figures come
+// from the health read instead (satisfying, occupancy-aware: an assigned
+// component whose own verdict is outage no longer counts), so a role can
+// read fully staffed here and still short there. Both read once an occupant
+// is down, since the roles read alone cannot tell the difference (settled by
+// #626 Task 9; see web/src/lib/health.ts's own header note).
 //
 // A role reaches a system two ways, and the panel keeps them apart exactly as the
 // Properties panel keeps contract values apart from off-contract ones, because
@@ -37,9 +51,18 @@ import {
 // slot unless its own health verdict goes to outage (a lesser alarm degrades
 // it but does not cost it the slot).
 //
+// A component fills at most one role per system (#626). The picker offers every
+// component, but one already staffing a DIFFERENT role here renders disabled
+// with the reason: dropping it silently would let an operator pick it, submit,
+// and hit a 422 they could not have anticipated, which throws away the same
+// lesson the typed-slot refusal above teaches.
+//
 // Writes are immediate, like the tag panel, so the panel has no Save of its own;
 // the caller passes canUpdate (the system detail computes it as "in edit mode AND
 // holding system:update"), which keeps view read-only per the console invariant.
+
+const IMPACT_BADGE: Record<string, string> = { outage: "badge-error", degraded: "badge-warning" };
+const impactBadgeClass = (impact: string) => IMPACT_BADGE[impact] ?? "badge-ghost";
 
 export default function RolesPanel(props: { system: string; canUpdate: boolean }): JSX.Element {
   const qc = useQueryClient();
@@ -50,6 +73,16 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
     refetchOnWindowFocus: false,
   }));
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
+  // The health read carries the occupancy-aware arithmetic (short, spare,
+  // satisfying, down, impact) this panel needs; the roles read alone is
+  // health-blind. See the header note above and health.ts's own warning
+  // about not recomputing what the API already sends.
+  const healthQ = useQuery(() => ({
+    queryKey: systemHealthKey(props.system),
+    queryFn: () => systemHealth(props.system),
+    refetchOnWindowFocus: false,
+  }));
+  const healthByName = createMemo(() => new Map<string, HealthRole>(healthRolesOf(healthQ.data).map((h) => [h.name, h])));
 
   const roles = createMemo<EffectiveRole[]>(() => q.data ?? []);
   const inherited = createMemo(() => roles().filter((r) => r.from_standard));
@@ -60,10 +93,22 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
   const [errs, setErrs] = createStore<Record<string, string | undefined>>({});
   const [busy, setBusy] = createSignal(false);
 
+  // Every component staffed anywhere in THIS system, by the role it holds
+  // (display name, for the disabled-option reason). A component fills at
+  // most one role per system, so this is a safe 1:1 lookup once assigned_to
+  // is unioned across every role.
+  const staffedHere = createMemo(() => {
+    const held = new Map<string, string>();
+    for (const r of roles()) for (const c of r.assigned_to ?? []) held.set(c, r.display_name || r.name);
+    return held;
+  });
+
   // The components a role can be offered, by label: those already filling it are
-  // dropped, and the ones in this system lead, since that is where an operator
-  // staffs from. Everything else is still offered, because the typed-slot guard
-  // (not the placement) is what decides, and its refusal is what teaches.
+  // dropped (re-offering a current occupant is a no-op), and the ones in this
+  // system lead, since that is where an operator staffs from. Everything else
+  // is still offered, including a component staffed by a DIFFERENT role here,
+  // rendered disabled rather than dropped: the disabled reason is what teaches,
+  // the same principle behind showing the server's 422 verbatim.
   const label = (c: Comp) => c.display_name || c.name;
   const candidates = (role: EffectiveRole): Comp[] => {
     const taken = new Set(role.assigned_to ?? []);
@@ -76,6 +121,10 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
         return mine || label(a).localeCompare(label(b));
       });
   };
+  // The role a candidate already holds elsewhere in this system, if any; null
+  // when it is free to pick. staffedHere already excludes this role's own
+  // occupants from candidates(), so any hit here is necessarily a DIFFERENT role.
+  const heldElsewhere = (c: Comp): string | null => staffedHere().get(c.name) ?? null;
 
   async function run(role: string, write: () => Promise<void>) {
     setBusy(true);
@@ -100,16 +149,45 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
   };
   const unassign = (role: string, component: string) => run(role, () => unassignRole(props.system, role, component));
 
-  const roleRow = (r: EffectiveRole, first: () => boolean) => (
+  const roleRow = (r: EffectiveRole, first: () => boolean) => {
+    const h = () => healthByName().get(r.name);
+    const down = () => new Set(h()?.down ?? []);
+    return (
     <div class="flex flex-col gap-1.5 px-3 py-2.5" classList={{ "border-t border-base-300": !first() }}>
       <div class="flex flex-wrap items-baseline gap-2">
         <span class="text-sm font-medium">{r.display_name || r.name}</span>
         <span class="font-data text-[11px] text-base-content/45">{r.name}</span>
         <span class="flex-1" />
-        <Show when={r.understaffed > 0}>
-          <span class="badge badge-warning badge-soft badge-sm">understaffed</span>
+        {/* short/spare are occupancy-aware (health read); understaffed is pure
+            assignment arithmetic (roles read) and only falls back here while
+            health has not loaded yet, so the row never shows undefined. */}
+        <Show
+          when={h()}
+          fallback={
+            <Show when={r.understaffed > 0}>
+              <span class="badge badge-warning badge-soft badge-sm">understaffed</span>
+            </Show>
+          }
+        >
+          {(hr) => (
+            <>
+              <Show when={hr().short > 0}>
+                <span class="badge badge-warning badge-soft badge-sm">short {hr().short}</span>
+              </Show>
+              <Show when={hr().spare > 0}>
+                <span class="badge badge-ghost badge-sm">spare {hr().spare}</span>
+              </Show>
+              <Show when={hr().impaired}>
+                <span class={`badge badge-soft badge-sm ${impactBadgeClass(hr().impact)}`}>{impactPhrase(hr().impact)}</span>
+              </Show>
+            </>
+          )}
         </Show>
-        <span class="tnum shrink-0 text-[11px] text-base-content/50">{staffingLabel(r)}</span>
+        <span class="tnum shrink-0 text-[11px] text-base-content/50">
+          <Show when={h()} fallback={staffingLabel(r)}>
+            {(hr) => quorumLabel(hr())}
+          </Show>
+        </span>
       </div>
 
       <div class="flex flex-col gap-1">
@@ -132,6 +210,20 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
             </For>
           </div>
         </Show>
+        {/* The declared position labels, shown as their own reference list
+            rather than zipped onto the occupant chips below: the wire gives
+            each role its OCCUPANTS in position order but not each occupant's
+            OWN position number, so pairing label[i] with assigned_to[i] would
+            mislabel the moment a lower position is vacant (TestUnassignLeavesGap
+            leaves exactly that kind of gap). */}
+        <Show when={(r.position_labels ?? []).length}>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">positions</span>
+            <For each={r.position_labels ?? []}>
+              {(pl, i) => <span class="badge badge-ghost badge-sm">{i() + 1}. {pl}</span>}
+            </For>
+          </div>
+        </Show>
       </div>
 
       <div class="flex flex-wrap items-center gap-1.5">
@@ -142,8 +234,12 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
         >
           <For each={r.assigned_to ?? []}>
             {(c) => (
-              <span class="badge badge-outline badge-sm gap-1 font-data">
+              <span
+                class={`badge badge-sm gap-1 font-data ${down().has(c) ? "badge-error badge-soft" : "badge-outline"}`}
+                title={down().has(c) ? "An active alarm has taken this component down" : "Occupying its slot"}
+              >
                 {c}
+                <Show when={down().has(c)}> down</Show>
                 <Show when={props.canUpdate}>
                   <button
                     type="button"
@@ -170,7 +266,16 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
             onChange={(e) => setPicked(r.name, e.currentTarget.value)}
           >
             <option value="">Assign a component…</option>
-            <For each={candidates(r)}>{(c) => <option value={c.name}>{label(c)}</option>}</For>
+            <For each={candidates(r)}>
+              {(c) => {
+                const holder = heldElsewhere(c);
+                return (
+                  <option value={c.name} disabled={!!holder}>
+                    {label(c)}{holder ? ` — already fills ${holder} here` : ""}
+                  </option>
+                );
+              }}
+            </For>
           </select>
           <Button
             square
@@ -190,7 +295,8 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
         <div role="alert" class="alert alert-error alert-soft py-1.5 text-xs"><span>{errs[r.name]}</span></div>
       </Show>
     </div>
-  );
+    );
+  };
 
   return (
     <div class="flex flex-col gap-2">
