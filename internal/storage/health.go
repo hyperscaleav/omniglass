@@ -793,20 +793,17 @@ func splitHealthRoles(rs []resolvedRole) (unconditional []health.Role, choices [
 // apart rather than that being a disagreement.
 func (p *PG) SystemHealth(ctx context.Context, systemName string, since time.Time, read scope.Set) (*HealthReport, error) {
 	// Resolved once, here, rather than through ownerInScope (which does the
-	// same scopedByName lookup but discards the id): every read below,
-	// including healthTransitions, binds sys.ID, neither re-derived from
-	// systemName once it might no longer be unique (#627). rep.OwnerID keeps
-	// echoing the caller's own reference, unchanged.
-	sys, err := scopedByName(ctx, p.pool, systemConfig, systemName)
+	// same lookup but discards the id): every read below, including
+	// healthTransitions, binds sys.ID, never re-derived from systemName once
+	// it might no longer be unique (#627). rep.OwnerID keeps echoing the
+	// caller's own reference, unchanged. scopedByNameInScope, not
+	// scopedByName-then-inScopeTree: ruling 2 requires ambiguity judged
+	// inside read, not estate-wide, since a name unique within this caller's
+	// own scope must resolve even when an unrelated out-of-scope row shares
+	// it.
+	sys, err := scopedByNameInScope(ctx, p.pool, systemConfig, systemName, read)
 	if err != nil {
 		return nil, err
-	}
-	inScope, err := inScopeTree(ctx, p.pool, systemTable, sys.ID, read)
-	if err != nil {
-		return nil, err
-	}
-	if !inScope {
-		return nil, ErrSystemNotFound
 	}
 	rep := &HealthReport{OwnerKind: "system", OwnerID: systemName, Roles: []HealthRole{}}
 	roles, err := p.resolveHealthRoles(ctx, p.pool, sys.ID)
@@ -853,18 +850,12 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, since time.Tim
 // drill-down can never disagree: a location cannot read healthy over a system it
 // itself lists as an outage.
 func (p *PG) LocationHealth(ctx context.Context, locationName string, since time.Time, read scope.Set) (*HealthReport, error) {
-	// Resolved once (see SystemHealth's comment); rep.OwnerID keeps echoing
-	// the caller's own reference, unchanged.
-	loc, err := scopedByName(ctx, p.pool, locationConfig, locationName)
+	// Resolved once via scopedByNameInScope, not scopedByName-then-
+	// inScopeTree (see SystemHealth's comment; ruling 2, #627); rep.OwnerID
+	// keeps echoing the caller's own reference, unchanged.
+	loc, err := scopedByNameInScope(ctx, p.pool, locationConfig, locationName, read)
 	if err != nil {
 		return nil, err
-	}
-	inScope, err := inScopeTree(ctx, p.pool, locationTable, loc.ID, read)
-	if err != nil {
-		return nil, err
-	}
-	if !inScope {
-		return nil, ErrLocationNotFound
 	}
 	rep := &HealthReport{OwnerKind: "location", OwnerID: locationName, Systems: []HealthSystem{}}
 	systems, err := p.subtreeSystemHealth(ctx, p.pool, loc.ID)

@@ -54,12 +54,14 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 	if !inScope {
 		return nil, oc.notFound
 	}
-	// Resolved once here (see EffectiveProperties, the property-lane twin
-	// this mirrors exactly): the inst CTEs below used to look the instance
-	// row up by name, a CTE that can hold more than one row once a name is
-	// no longer unique (#627), silently joining samples from every
-	// same-named row into one answer rather than raising an error.
-	arc, err := p.ownerArcValue(ctx, p.pool, ownerKind, ownerID)
+	// Resolved once here via ownerArcValueInScope (see EffectiveProperties,
+	// the property-lane twin this mirrors exactly): the inst CTEs below
+	// used to look the instance row up by name, a CTE that can hold more
+	// than one row once a name is no longer unique (#627), silently joining
+	// samples from every same-named row into one answer rather than raising
+	// an error. The scope-blind ownerArcValue would still leak an
+	// out-of-scope row's uuid here even though ownerInScope just passed.
+	arc, err := p.ownerArcValueInScope(ctx, p.pool, ownerKind, ownerID, read)
 	if err != nil {
 		return nil, err
 	}

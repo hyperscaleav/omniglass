@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -181,12 +182,19 @@ func (p *PG) commandIntendedValue(ctx context.Context, q querier, ct *CommandTyp
 
 // latestTargetValue reads the latest series row of a command_type's target for
 // one provenance, on whichever lane the target arc names (nil for no target).
+// ownerID here is always an already-resolved arc (a uuid), never the
+// caller's original possibly-ambiguous reference: settleCheck's own callers
+// (IssueCommand, CommandSettlement) both resolve the owner once, within
+// their own scope, before passing the arc down through settleCheck to here.
+// A uuid resolve is never ambiguous (it is a primary key lookup), so an all
+// scope is passed through rather than threading one more scope parameter
+// down a chain that never needs to narrow twice.
 func (p *PG) latestTargetValue(ctx context.Context, q querier, ct *CommandType, ownerKind, ownerID, instance, provenance string) (*CurrentValue, error) {
 	switch {
 	case ct.TargetMetricType != "":
 		return p.latestMetricValue(ctx, q, ownerKind, ownerID, ct.TargetMetricType, instance, provenance)
 	case ct.TargetPropertyType != "":
-		return p.latestValue(ctx, q, ownerKind, ownerID, ct.TargetPropertyType, instance, provenance)
+		return p.latestValue(ctx, q, ownerKind, ownerID, ct.TargetPropertyType, instance, provenance, scope.Set{All: true})
 	default:
 		return nil, nil
 	}

@@ -414,21 +414,27 @@ func (p *PG) ResolveTags(ctx context.Context, componentID, forSystem string, rea
 	if !in {
 		return nil, ErrComponentNotFound
 	}
-	// forSystem is resolved once here (uuid-or-name, ADR-0062) rather than
-	// left for seed_sys to match by name: that CTE, unlike a scalar subquery,
-	// can hold more than one row once a name is no longer unique (#627), so
-	// an ambiguous name there never raised SQLSTATE 21000, it silently seeded
-	// the cascade from every same-named system and unioned both systems' tag
-	// bindings into one answer (a scope leak too: the second system is never
-	// checked against the caller's read scope). A system reference that
-	// resolves to none at all binds uuid.Nil, a well-formed id no real row
-	// can ever have: seed_sys then matches nothing, preserving the existing
-	// "named a system with no binding here" silent-empty-band behavior
-	// (the doc comment on ResolveTags) rather than a new hard error, and
-	// distinctly from "" (which selects the primary membership instead).
+	// forSystem is resolved once here (uuid-or-name, ADR-0062), within the
+	// caller's OWN read scope (scopedByNameInScope, ruling 2, #627), rather
+	// than left for seed_sys to match by name: that CTE, unlike a scalar
+	// subquery, can hold more than one row once a name is no longer unique,
+	// so an ambiguous name there never raised SQLSTATE 21000, it silently
+	// seeded the cascade from every same-named system and unioned both
+	// systems' tag bindings into one answer, a scope leak in its own right
+	// (the second system was never checked against the caller's read scope
+	// either). Resolving within read closes both at once: a system unique to
+	// the caller's own scope still resolves even when an unrelated
+	// out-of-scope system shares its name, and a genuine collision inside
+	// read scope refuses rather than unions. A system reference that
+	// resolves to none at all (absent, or present but entirely outside read)
+	// binds uuid.Nil, a well-formed id no real row can ever have: seed_sys
+	// then matches nothing, preserving the existing "named a system with no
+	// binding here" silent-empty-band behavior (the doc comment on
+	// ResolveTags) rather than a new hard error, and distinctly from ""
+	// (which selects the primary membership instead).
 	systemArg := forSystem
 	if forSystem != "" {
-		sys, err := scopedByName(ctx, p.pool, systemConfig, forSystem)
+		sys, err := scopedByNameInScope(ctx, p.pool, systemConfig, forSystem, read)
 		if errors.Is(err, ErrSystemNotFound) {
 			systemArg = uuid.Nil.String()
 		} else if err != nil {

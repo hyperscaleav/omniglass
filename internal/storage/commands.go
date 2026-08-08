@@ -93,7 +93,11 @@ func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, comm
 	if err := p.guardOwnerScope(ctx, tx, ownerKind, ownerID, write); err != nil {
 		return nil, err
 	}
-	arc, err := p.ownerArcValue(ctx, tx, ownerKind, ownerID)
+	// ownerArcValueInScope, not ownerArcValue: guardOwnerScope already
+	// confirmed the owner within write, but a bare-name re-resolve here is
+	// STILL scope-blind unless it also goes through the scoped variant
+	// (ruling 2, #627).
+	arc, err := p.ownerArcValueInScope(ctx, tx, ownerKind, ownerID, write)
 	if err != nil {
 		return nil, err
 	}
@@ -204,12 +208,15 @@ func (p *PG) CommandSettlement(ctx context.Context, ownerKind, ownerID, commandT
 		return "", fmt.Errorf("storage: begin settle check: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	// Resolved once, inside this transaction, and threaded through every call
-	// below: ownerInScope above already confirmed the owner exists, so this
-	// cannot fail in the ordinary case, and passing the id avoids three
-	// separate re-derivations of it (settleCheck, twice through
-	// latestTargetValue) each independently re-resolving the same reference.
-	arc, err := p.ownerArcValue(ctx, tx, ownerKind, ownerID)
+	// Resolved once, inside this transaction, via ownerArcValueInScope (not
+	// the scope-blind ownerArcValue: ruling 2, #627, ownerInScope narrowing
+	// to read first does not help if this next statement re-resolves the
+	// same bare name scope-blind), and threaded through every call below:
+	// passing the id avoids three separate re-derivations of it (settleCheck,
+	// twice through latestTargetValue), each of which is then safe to
+	// resolve scope-blind because it is handed the uuid, never the original
+	// possibly-ambiguous reference.
+	arc, err := p.ownerArcValueInScope(ctx, tx, ownerKind, ownerID, read)
 	if err != nil {
 		return "", err
 	}

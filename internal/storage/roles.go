@@ -244,20 +244,13 @@ func (e *CapacityFullShortfall) Error() string {
 // only the ad-hoc arm. The system must be within the read scope; out of scope
 // is the non-disclosing ErrSystemNotFound.
 func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.Set) ([]EffectiveRole, error) {
-	// Resolved once, here, rather than through ownerInScope (which does the
-	// same lookup but discards the id): the query below binds sys.ID instead
-	// of re-deriving it from systemName, which #627 no longer guarantees is
-	// unique.
-	sys, err := scopedByName(ctx, p.pool, systemConfig, systemName)
+	// Resolved once via scopedByNameInScope, not scopedByName-then-
+	// inScopeTree (ruling 2, #627: ambiguity judged inside read, not
+	// estate-wide): the query below binds sys.ID instead of re-deriving it
+	// from systemName, which #627 no longer guarantees is unique.
+	sys, err := scopedByNameInScope(ctx, p.pool, systemConfig, systemName, read)
 	if err != nil {
 		return nil, err
-	}
-	inScope, err := inScopeTree(ctx, p.pool, systemTable, sys.ID, read)
-	if err != nil {
-		return nil, err
-	}
-	if !inScope {
-		return nil, ErrSystemNotFound
 	}
 	// Correlated subqueries, not a GROUP BY over three LEFT JOINs: this query
 	// joins types, products AND assignments in one shot, so a GROUP BY makes
@@ -336,16 +329,11 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 	// different row sharing the same name, or fail outright with SQLSTATE
 	// 21000 ("more than one row returned by a subquery used as an
 	// expression").
-	sys, err := scopedByName(ctx, tx, systemConfig, systemName)
+	// scopedByNameInScope, not scopedByName-then-inScopeTree: ruling 2
+	// (#627), ambiguity judged inside write rather than estate-wide.
+	sys, err := scopedByNameInScope(ctx, tx, systemConfig, systemName, write)
 	if err != nil {
-		return err // ErrSystemNotFound when absent
-	}
-	inScope, err := inScopeTree(ctx, tx, systemTable, sys.ID, write)
-	if err != nil {
-		return err
-	}
-	if !inScope {
-		return ErrSystemNotFound
+		return err // ErrSystemNotFound when absent or out of scope
 	}
 
 	roleID, roleDisplay, acceptedTypes, pinnedProducts, err := p.resolveRole(ctx, tx, sys.ID, roleName)
@@ -532,17 +520,12 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	// Resolved once (see AssignRole's comment): every statement below binds an
-	// id rather than re-deriving one from a name.
-	sys, err := scopedByName(ctx, tx, systemConfig, systemName)
+	// id rather than re-deriving one from a name. scopedByNameInScope, not
+	// scopedByName-then-inScopeTree: ruling 2 (#627), ambiguity judged
+	// inside write rather than estate-wide.
+	sys, err := scopedByNameInScope(ctx, tx, systemConfig, systemName, write)
 	if err != nil {
 		return err
-	}
-	inScope, err := inScopeTree(ctx, tx, systemTable, sys.ID, write)
-	if err != nil {
-		return err
-	}
-	if !inScope {
-		return ErrSystemNotFound
 	}
 	roleID, _, _, _, err := p.resolveRole(ctx, tx, sys.ID, roleName)
 	if err != nil {
@@ -607,17 +590,12 @@ func (p *PG) SwapPositions(ctx context.Context, actorID, systemName, roleName st
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Resolved once (see AssignRole's comment).
-	sys, err := scopedByName(ctx, tx, systemConfig, systemName)
+	// Resolved once (see AssignRole's comment). scopedByNameInScope, not
+	// scopedByName-then-inScopeTree: ruling 2 (#627), ambiguity judged
+	// inside write rather than estate-wide.
+	sys, err := scopedByNameInScope(ctx, tx, systemConfig, systemName, write)
 	if err != nil {
 		return err
-	}
-	inScope, err := inScopeTree(ctx, tx, systemTable, sys.ID, write)
-	if err != nil {
-		return err
-	}
-	if !inScope {
-		return ErrSystemNotFound
 	}
 	roleID, _, _, _, err := p.resolveRole(ctx, tx, sys.ID, roleName)
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
@@ -243,6 +244,114 @@ func TestNameAmbiguousGloballyButUniqueToCallerResolvesCleanly(t *testing.T) {
 	}
 	if got.ID != inZoneA.ID {
 		t.Fatalf("get display-1 scoped to zone-a resolved to %s, want %s", got.ID, inZoneA.ID)
+	}
+}
+
+// TestOwnerScopedReadsResolveAmbiguousNameWithinScope extends the same ruling
+// past GetComponent/GetSystem/GetLocation to the owner-arc reads, each of
+// which resolves its reference TWICE: once via ownerInScope (the scope
+// check) and, on success, a SECOND time via what used to be the scope-blind
+// ownerArcValue (to bind the arc column for the actual query). Ordering the
+// first resolve within scope is not enough on its own: unless the second
+// resolve ALSO goes through the scoped variant (ownerArcValueInScope), a
+// caller can pass the first check and then have the second one raise
+// ErrAmbiguousName anyway, discovered by tracing exactly this path, not
+// named in the review that asked for it: EffectiveProperties, EffectiveMetrics,
+// LatestValue, SystemHealth, LocationHealth, EffectiveRoles, SetProperty,
+// IssueCommand, and CommandSettlement all had this shape; this test drives
+// every one of them.
+func TestOwnerScopedReadsResolveAmbiguousNameWithinScope(t *testing.T) {
+	gw := openGateway(t)
+	ctx := context.Background()
+
+	// zoneA is the scope root (a system, since SystemHealth/EffectiveRoles
+	// scope-check against the system tree); sysInZone is its child, named
+	// "shared" (system_parent_name_key). An unrelated root system, also
+	// named "shared" (system_orphan_name_key), is what makes the bare name
+	// ambiguous estate-wide.
+	zoneA, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "zone-a"}, all)
+	if err != nil {
+		t.Fatalf("zone-a: %v", err)
+	}
+	sysInZone, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "shared", ParentName: strptr(zoneA.Name)}, all)
+	if err != nil {
+		t.Fatalf("shared under zone-a: %v", err)
+	}
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "shared"}, all); err != nil {
+		t.Fatalf("shared outside zone-a: %v", err)
+	}
+	readZoneA := scope.Set{IDs: []string{zoneA.ID}}
+
+	if _, err := gw.CreatePropertyType(ctx, "", storage.PropertyTypeSpec{Name: "note", DataType: "string"}); err != nil {
+		t.Fatalf("create property type: %v", err)
+	}
+	if _, err := gw.CreateMetricType(ctx, "", storage.MetricTypeSpec{Name: "load", DataType: "float"}); err != nil {
+		t.Fatalf("create metric type: %v", err)
+	}
+	if _, err := gw.CreateCommandType(ctx, "", storage.CommandTypeSpec{
+		Name: "set-load", TargetMetricType: "load", SettleWindowSeconds: 0,
+	}); err != nil {
+		t.Fatalf("create command type: %v", err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: make([]byte, 32), Prefix: "root0000"}); err != nil {
+		t.Fatalf("bootstrap owner: %v", err)
+	}
+	// IssueCommand's caused event needs a real actor uuid (the column is a
+	// foreign key), so the bootstrapped owner is resolved by username rather
+	// than passed as an empty string.
+	actor, err := gw.ResolvePrincipalRef(ctx, "root")
+	if err != nil {
+		t.Fatalf("resolve actor: %v", err)
+	}
+
+	if _, err := gw.EffectiveProperties(ctx, "system", "shared", readZoneA); err != nil {
+		t.Errorf("EffectiveProperties(shared) scoped to zone-a = %v, want ok", err)
+	}
+	if _, err := gw.EffectiveMetrics(ctx, "system", "shared", readZoneA); err != nil {
+		t.Errorf("EffectiveMetrics(shared) scoped to zone-a = %v, want ok", err)
+	}
+	if _, err := gw.SystemHealth(ctx, "shared", time.Time{}, readZoneA); err != nil {
+		t.Errorf("SystemHealth(shared) scoped to zone-a = %v, want ok", err)
+	}
+	if _, err := gw.EffectiveRoles(ctx, "shared", readZoneA); err != nil {
+		t.Errorf("EffectiveRoles(shared) scoped to zone-a = %v, want ok", err)
+	}
+	if _, err := gw.SetProperty(ctx, "", "system", "shared", "note", "", []byte(`"hi"`), readZoneA); err != nil {
+		t.Errorf("SetProperty(shared) scoped to zone-a = %v, want ok", err)
+	}
+	if _, err := gw.LatestValue(ctx, "system", "shared", "note", "", "declared", readZoneA); err != nil {
+		t.Errorf("LatestValue(shared) scoped to zone-a = %v, want ok", err)
+	}
+	if _, err := gw.IssueCommand(ctx, actor, "system", "shared", "set-load", "", []byte(`5`), nil, readZoneA); err != nil {
+		t.Errorf("IssueCommand(shared) scoped to zone-a = %v, want ok", err)
+	}
+	if _, err := gw.CommandSettlement(ctx, "system", "shared", "set-load", "", readZoneA); err != nil {
+		t.Errorf("CommandSettlement(shared) scoped to zone-a = %v, want ok", err)
+	}
+
+	// And each one actually landed on sysInZone, not the other "shared": a
+	// direct-by-id read confirms the write side, so a false pass (the read
+	// resolving to the WRONG row while still reporting "ok") cannot hide here.
+	got, err := gw.LatestValue(ctx, "system", sysInZone.ID, "note", "", "declared", all)
+	if err != nil || got == nil || string(got.Value) != `"hi"` {
+		t.Fatalf("LatestValue on sysInZone by id = %+v, %v, want the declared value written above", got, err)
+	}
+
+	// locationScope mirrors the system case for LocationHealth, which walks
+	// the location tree instead.
+	locZoneA, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "loc-zone-a", LocationType: "campus"}, all)
+	if err != nil {
+		t.Fatalf("loc-zone-a: %v", err)
+	}
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "loc-shared", LocationType: "room", ParentName: strptr(locZoneA.Name)}, all); err != nil {
+		t.Fatalf("loc-shared under loc-zone-a: %v", err)
+	}
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "loc-shared", LocationType: "campus"}, all); err != nil {
+		t.Fatalf("loc-shared outside loc-zone-a: %v", err)
+	}
+	readLocZoneA := scope.Set{IDs: []string{locZoneA.ID}}
+	if _, err := gw.LocationHealth(ctx, "loc-shared", time.Time{}, readLocZoneA); err != nil {
+		t.Errorf("LocationHealth(loc-shared) scoped to loc-zone-a = %v, want ok", err)
 	}
 }
 

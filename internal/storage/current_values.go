@@ -47,11 +47,11 @@ func (p *PG) Reconciliation(ctx context.Context, ownerKind, ownerID string, read
 	}
 	out := make([]PropertyReconciliation, 0, len(effs))
 	for _, e := range effs {
-		is, err := p.latestValue(ctx, p.pool, ownerKind, ownerID, e.PropertyTypeName, "", "observed")
+		is, err := p.latestValue(ctx, p.pool, ownerKind, ownerID, e.PropertyTypeName, "", "observed", read)
 		if err != nil {
 			return nil, err
 		}
-		told, err := p.latestValue(ctx, p.pool, ownerKind, ownerID, e.PropertyTypeName, "", "intended")
+		told, err := p.latestValue(ctx, p.pool, ownerKind, ownerID, e.PropertyTypeName, "", "intended", read)
 		if err != nil {
 			return nil, err
 		}
@@ -84,7 +84,7 @@ func (p *PG) LatestValue(ctx context.Context, ownerKind, ownerID, key, instance,
 	if !inScope {
 		return nil, oc.notFound
 	}
-	return p.latestValue(ctx, p.pool, ownerKind, ownerID, key, instance, provenance)
+	return p.latestValue(ctx, p.pool, ownerKind, ownerID, key, instance, provenance, read)
 }
 
 // latestValue is the unguarded series lookup, so a caller that has already
@@ -92,19 +92,24 @@ func (p *PG) LatestValue(ctx context.Context, ownerKind, ownerID, key, instance,
 // read many provenances without re-checking each time. ts desc, id desc: the
 // value's own time orders the series and the row id breaks same-instant ties,
 // the same rule LatestProperty applies.
-// ownerID is resolved once here, via ownerArcValue (uuid-or-name, ADR-0062;
-// ambiguity-safe for component/system/location, #627). An unknown owner folds
-// to nil, no error, matching the old inline subquery's silent no-match: both
-// of this function's callers (Reconciliation, LatestValue) already scope- and
-// existence-check the owner before reaching it, but a future caller that
-// doesn't must not start hard-erroring on a check this function never used to
-// perform.
-func (p *PG) latestValue(ctx context.Context, q querier, ownerKind, ownerID, key, instance, provenance string) (*CurrentValue, error) {
+// ownerID is resolved once here, via ownerArcValueInScope (uuid-or-name,
+// ADR-0062; ambiguity judged within s, ruling 2, #627): both of this
+// function's callers (Reconciliation, LatestValue) already scope-checked the
+// owner via EffectiveProperties or ownerInScope before reaching it, but
+// re-resolving the same bare name a second time SCOPE-BLIND would still leak
+// an out-of-scope row's uuid on a name unique to the caller's own scope but
+// ambiguous estate-wide, which is exactly what calling the scope-blind
+// ownerArcValue here used to do even after the first check passed. An
+// unknown (or entirely out-of-scope) owner folds to nil, no error, matching
+// the old inline subquery's silent no-match; a future caller that has not
+// already scope-checked the owner must not start hard-erroring on a check
+// this function never used to perform.
+func (p *PG) latestValue(ctx context.Context, q querier, ownerKind, ownerID, key, instance, provenance string, s scope.Set) (*CurrentValue, error) {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {
 		return nil, err
 	}
-	arc, err := p.ownerArcValue(ctx, q, ownerKind, ownerID)
+	arc, err := p.ownerArcValueInScope(ctx, q, ownerKind, ownerID, s)
 	if isOwnerNotFound(err) {
 		return nil, nil
 	} else if err != nil {

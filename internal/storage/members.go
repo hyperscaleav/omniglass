@@ -283,16 +283,11 @@ func (p *PG) membersWhere(ctx context.Context, where string, arg string) ([]Memb
 // the caller's name (ambiguous the moment two rows share it, #627); the scope
 // check already loads the system row, so its id costs nothing extra.
 func (p *PG) resolveMembershipEnds(ctx context.Context, q txQuerier, systemName, componentName string, write scope.Set) (systemID, componentID string, err error) {
-	sys, err := scopedByName(ctx, q, systemConfig, systemName)
+	// scopedByNameInScope, not scopedByName-then-inScopeTree: ruling 2
+	// (#627) requires ambiguity judged inside write, not estate-wide.
+	sys, err := scopedByNameInScope(ctx, q, systemConfig, systemName, write)
 	if err != nil {
-		return "", "", err // ErrSystemNotFound when absent
-	}
-	inScope, err := inScopeTree(ctx, q, systemTable, sys.ID, write)
-	if err != nil {
-		return "", "", err
-	}
-	if !inScope {
-		return "", "", ErrSystemNotFound
+		return "", "", err // ErrSystemNotFound when absent or out of scope
 	}
 	c, err := scopedByName(ctx, q, componentConfig, componentName)
 	if err != nil {
