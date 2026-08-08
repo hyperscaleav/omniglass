@@ -173,7 +173,18 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 
 		out := &pushOutput{Status: http.StatusAccepted}
 		batch := &ogv1.TelemetryBatch{
-			Owner:  &ogv1.Owner{Kind: "component", Ref: comp.Name},
+			// comp.ID, not comp.Name: this is the one and only authorization
+			// fence on the write (see the comment above), and the consumer
+			// that lands this batch runs untrusted-input-shaped re-resolves on
+			// every lane (ownerArcValue -> scopedByName). Publishing the name
+			// back out means an owner authorized cleanly by its stable uuid
+			// gets silently re-resolved by a name that #627 no longer
+			// guarantees is unique, discarding the batch after Term()
+			// with no operator-visible error even though the caller already
+			// got its 202. The wire's Owner.Ref stays dual-accept
+			// (ADR-0062, proto/og/v1/telemetry.proto) for any other producer;
+			// this route always has an id in hand, so it sends it.
+			Owner:  &ogv1.Owner{Kind: "component", Ref: comp.ID},
 			Source: in.Body.Source,
 		}
 		if !in.Body.TS.IsZero() {
