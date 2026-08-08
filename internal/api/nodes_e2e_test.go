@@ -198,3 +198,64 @@ func TestNodeAPI(t *testing.T) {
 	// Deleting an unknown node is a 404.
 	c.do(ownerTok, http.MethodDelete, "/nodes/ghost", nil, http.StatusNotFound)
 }
+
+// TestNodeCreateWithAmbiguousLocationIs409 closes I1: nodeLocationID resolves
+// the create/patch "location" field with the scope-blind scopedByName (correct
+// here, since node writes require an all scope by design, so there is no
+// narrower caller scope to filter against), and on ambiguity that returns the
+// raw *storage.ErrAmbiguousName, untranslated, up through CreateNode and
+// UpdateNode. Before mapNodeErr grew its mapRefErr check that error fell
+// through to the handler's own default, an unmapped 500, exactly like
+// mapInterfaceErr's component field before its own fix. Two locations sharing
+// a name is legal under #627 (one root, one nested), so this is a routine
+// state, not a corrupted one, and must 409, not 500. Skipped under -short.
+func TestNodeCreateWithAmbiguousLocationIs409(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatalf("mint owner: %v", err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	srv := httptest.NewServer(api.NewHandler(gw, api.WithNatsURL("nats://bus.example:4222")))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	all := scope.Set{All: true}
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "holder", LocationType: "campus"}, all); err != nil {
+		t.Fatalf("seed holder location: %v", err)
+	}
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "dup-loc", LocationType: "campus"}, all); err != nil {
+		t.Fatalf("seed root dup-loc: %v", err)
+	}
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "dup-loc", LocationType: "room", ParentName: ptr("holder")}, all); err != nil {
+		t.Fatalf("seed nested dup-loc: %v", err)
+	}
+
+	status, body := c.send(ownerTok, http.MethodPost, "/nodes", map[string]any{"name": "site-d", "location": "dup-loc"})
+	if status != http.StatusConflict {
+		t.Fatalf("create node with ambiguous location status = %d, want 409\nbody: %s", status, body)
+	}
+	if !strings.Contains(string(body), "dup-loc") {
+		t.Fatalf("409 body = %s, want it to name the ambiguous reference", body)
+	}
+
+	// Same refusal on the patch path (UpdateNode calls the same resolver).
+	c.do(ownerTok, http.MethodPost, "/nodes", map[string]any{"name": "site-e"}, http.StatusCreated)
+	status, body = c.send(ownerTok, http.MethodPatch, "/nodes/site-e", map[string]any{"location": "dup-loc"})
+	if status != http.StatusConflict {
+		t.Fatalf("patch node with ambiguous location status = %d, want 409\nbody: %s", status, body)
+	}
+}

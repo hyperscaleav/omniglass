@@ -84,6 +84,15 @@ func registerLogRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		since := time.Now().UTC().Add(-logHistoryWindow)
 		rows, err := gw.ListComponentLogs(ctx, comp.ID, since, logReadLimit)
 		if err != nil {
+			// mapRefErr first: comp.ID is always a uuid (GetComponent above
+			// already resolved it), so ListComponentLogs's own resolve can
+			// never actually be ambiguous today, but this is the same
+			// bare-name resolver every other component route runs through,
+			// and a future caller that passes a name instead of comp.ID must
+			// not silently regress to a 500 (ruling 1, #627).
+			if refErr, ok := mapRefErr(err); ok {
+				return nil, refErr
+			}
 			return nil, huma.Error500InternalServerError("read logs")
 		}
 		out := &logsOutput{}
