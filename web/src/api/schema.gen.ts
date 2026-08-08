@@ -435,7 +435,7 @@ export interface paths {
         head?: never;
         /**
          * Update a component
-         * @description Patches a component's display_name, product, location, or parent. The name is not patchable: renaming is the :rename custom method. Parent and location follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets); product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+         * @description Patches a component's display_name or product. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. Gated by component:update; read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-component"];
         trace?: never;
@@ -742,6 +742,26 @@ export interface paths {
         get: operations["list-component-tags"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}:move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move a component
+         * @description Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own verdict is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split.
+         */
+        post: operations["move-component"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1255,7 +1275,7 @@ export interface paths {
         head?: never;
         /**
          * Update a location
-         * @description Patches a location's display_name, location_type, or parent (a move). The name is not patchable: renaming is the :rename custom method. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
+         * @description Patches a location's display_name or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-location"];
         trace?: never;
@@ -1358,6 +1378,26 @@ export interface paths {
         get: operations["list-location-tags"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/locations/{name}:move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move a location
+         * @description Re-parents a location (a tree move): parent is required (422 if omitted), cycle-guarded, and placement-validated against the resolved location_type. Moving to root is not supported (422): MoveLocation gains no clear-to-root capability locations have never had. A separate act from update, and a separately grantable one (location:move), because a placement change is an authorization act, not a label edit. Recorded under its own audit verb, move, distinct from update. Does not recompute health. A taken name at the destination is a 409. Gated by location:move; the read and move scopes drive the 404 versus 403 split.
+         */
+        post: operations["move-location"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2811,7 +2851,7 @@ export interface paths {
         head?: never;
         /**
          * Update a system
-         * @description Patches a system's display_name, standard, location, or parent. The name is not patchable: renaming is the :rename custom method. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+         * @description Patches a system's display_name or standard. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard field follows the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system), a name sets. Gated by system:update; read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-system"];
         trace?: never;
@@ -3066,6 +3106,26 @@ export interface paths {
         get: operations["list-system-tags"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems/{name}:move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move a system
+         * @description Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. Gated by system:move; read and move scopes drive the 404 versus 403 split.
+         */
+        post: operations["move-system"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5272,6 +5332,40 @@ export interface components {
             /** @description The display unit of the series (ms, dB, percent) */
             unit?: string;
         };
+        MoveComponentInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/MoveComponentInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Relocates the component to this location name. An empty string clears its placement. */
+            location?: string;
+            /** @description Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component (requires an all-scoped move grant). */
+            parent?: string;
+        };
+        MoveLocationInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/MoveLocationInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Re-parents the location (a tree move) to this location name; cycle-guarded and placement-validated. Moving to root is not supported. */
+            parent?: string;
+        };
+        MoveSystemInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/MoveSystemInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Relocates the system to this location name. An empty string clears its placement. */
+            location?: string;
+            /** @description Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system (requires an all-scoped move grant). */
+            parent?: string;
+        };
         NodeBody: {
             /**
              * Format: uri
@@ -6379,10 +6473,6 @@ export interface components {
             readonly $schema?: string;
             /** @description A new operator-facing label */
             display_name?: string;
-            /** @description Relocates the component to this location name. An empty string clears its placement. */
-            location?: string;
-            /** @description Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component. */
-            parent?: string;
             /** @description Re-classifies the component to this product (catalog SKU), by name or uuid. Required once set: an empty string is refused (422), not a clear. Explicitly-set property values persist; the new product's contract defaults follow. */
             product?: string;
         };
@@ -6465,8 +6555,6 @@ export interface components {
             display_name?: string;
             /** @description Re-types the location: a location_type, by name or uuid */
             location_type?: string;
-            /** @description Re-parents the location (a tree move) to this location name, cycle-guarded and placement-validated. Moving to root is not supported via update this slice. */
-            parent?: string;
         };
         UpdateLocationTypeInputBody: {
             /**
@@ -6611,10 +6699,6 @@ export interface components {
             readonly $schema?: string;
             /** @description A new operator-facing label */
             display_name?: string;
-            /** @description Relocates the system to this location name. An empty string clears its placement. */
-            location?: string;
-            /** @description Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system. */
-            parent?: string;
             /** @description A new standard, by handle or uuid; "" clears it (a one-off system) */
             standard_id?: string;
         };
@@ -8234,6 +8318,42 @@ export interface operations {
             };
         };
     };
+    "move-component": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveComponentInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "remove-component-tag": {
         parameters: {
             query?: never;
@@ -9712,6 +9832,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EntityTagsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "move-location": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location's name, or a dotted address (e.g. boi.17c.415a) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveLocationInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationBody"];
                 };
             };
             /** @description Error */
@@ -13591,6 +13747,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EntityTagsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "move-system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's name, or a dotted address (e.g. boi.17c.$sys.av) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveSystemInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemBody"];
                 };
             };
             /** @description Error */

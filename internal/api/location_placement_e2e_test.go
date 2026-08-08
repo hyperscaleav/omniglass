@@ -59,7 +59,7 @@ func TestLocationPlacementAPI(t *testing.T) {
 
 	// A valid move: hq-b1 (building, allowed={root,campus}) moves from hq to
 	// lab, both campuses.
-	body = c.do(ownerTok, http.MethodPatch, "/locations/hq-b1", map[string]any{"parent": "lab"}, http.StatusOK)
+	body = c.do(ownerTok, http.MethodPost, "/locations/hq-b1:move", map[string]any{"parent": "lab"}, http.StatusOK)
 	var moved locResp
 	if err := json.Unmarshal(body, &moved); err != nil {
 		t.Fatalf("decode moved location: %v", err)
@@ -70,7 +70,7 @@ func TestLocationPlacementAPI(t *testing.T) {
 
 	// Out of order on move: hq-b1 (building) under hq-r1 (room) is refused
 	// (422), naming both types.
-	body = c.do(ownerTok, http.MethodPatch, "/locations/hq-b1", map[string]any{"parent": "hq-r1"}, http.StatusUnprocessableEntity)
+	body = c.do(ownerTok, http.MethodPost, "/locations/hq-b1:move", map[string]any{"parent": "hq-r1"}, http.StatusUnprocessableEntity)
 	if !bytes.Contains(body, []byte("building")) || !bytes.Contains(body, []byte("room")) {
 		t.Errorf("move-placement 422 body = %s, want it to name building and room", body)
 	}

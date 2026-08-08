@@ -45,8 +45,8 @@ func TestCreateComponentDottedMissingParentMatchesBareNameForm(t *testing.T) {
 	assertNotLeakedPathNotFound(t, dottedErr)
 }
 
-// TestUpdateComponentDottedMissingParentMatchesBareNameForm is the PATCH
-// twin: a different call site (resolveScopedRef inside UpdateComponent) but
+// TestUpdateComponentDottedMissingParentMatchesBareNameForm is the :move
+// twin: a different call site (resolveScopedRef inside MoveComponent) but
 // the same explicit-fold pattern.
 func TestUpdateComponentDottedMissingParentMatchesBareNameForm(t *testing.T) {
 	gw, _ := newDuplicateNameFixture(t)
@@ -58,14 +58,14 @@ func TestUpdateComponentDottedMissingParentMatchesBareNameForm(t *testing.T) {
 		t.Fatalf("create component: %v", err)
 	}
 
-	_, bareErr := gw.UpdateComponent(ctx, "", c.Name, storage.ComponentPatch{ParentName: strptr("ghost-parent")}, all, all)
+	_, bareErr := gw.MoveComponent(ctx, "", c.Name, storage.ComponentMove{ParentName: strptr("ghost-parent")}, all, all)
 	if !errors.Is(bareErr, storage.ErrParentComponentNotFound) {
-		t.Fatalf("bare-name missing patch parent = %v, want ErrParentComponentNotFound", bareErr)
+		t.Fatalf("bare-name missing move parent = %v, want ErrParentComponentNotFound", bareErr)
 	}
 
-	_, dottedErr := gw.UpdateComponent(ctx, "", c.Name, storage.ComponentPatch{ParentName: strptr("$comp.ghost-parent")}, all, all)
+	_, dottedErr := gw.MoveComponent(ctx, "", c.Name, storage.ComponentMove{ParentName: strptr("$comp.ghost-parent")}, all, all)
 	if !errors.Is(dottedErr, storage.ErrParentComponentNotFound) {
-		t.Fatalf("dotted missing patch parent = %v, want ErrParentComponentNotFound (same as bare-name form)", dottedErr)
+		t.Fatalf("dotted missing move parent = %v, want ErrParentComponentNotFound (same as bare-name form)", dottedErr)
 	}
 	assertNotLeakedPathNotFound(t, dottedErr)
 }

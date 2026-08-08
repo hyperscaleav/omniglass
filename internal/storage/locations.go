@@ -135,18 +135,31 @@ type LocationSpec struct {
 	ParentName   *string
 }
 
-// LocationPatch is the update input: nil fields are left unchanged. ParentName,
-// when set, re-parents the location (a tree move) to the named parent,
-// cycle-guarded and placement-validated exactly like create; a move to root (no
-// parent) is not supported via patch this slice.
+// LocationPatch is the update input: nil fields are left unchanged.
 //
 // There is deliberately no Name here. A rename is RenameLocation, its own act under
 // its own permission, because it breaks the references an operator stored outside
-// this system.
+// this system. There is deliberately no ParentName here either (#627 Task 13): a
+// reparent is its own act, MoveLocation, gated by location:move rather than
+// location:update; see that function's doc comment for why.
 type LocationPatch struct {
 	DisplayName  *string
 	LocationType *string
-	ParentName   *string
+}
+
+// LocationMove is the :move input: ParentName nil is a no-op (only a
+// direct-gateway caller would pass one; the API requires it, since a location's
+// :move carries no other field). A named parent re-parents the location (a tree
+// move), cycle-guarded and placement-validated exactly like create. An explicit
+// empty string is refused (ErrParentNotFound, 422): MoveLocation does NOT gain a
+// clear-to-root capability locations have never had. UpdateLocation's old
+// ParentName patch never had a "" branch either (it always resolved the parent
+// unconditionally, so an empty string already 422'd before this split), so this
+// is a straight carry of existing behavior into its own act, not a new
+// restriction; see the ADR for why the asymmetry with component/system (which
+// DO gain a guarded clear-to-root under :move) is deliberate rather than closed.
+type LocationMove struct {
+	ParentName *string
 }
 
 // LocationType is a registry row classifying a location: a stable id, the
@@ -436,10 +449,11 @@ func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSp
 
 // UpdateLocation applies a patch to a location addressed by name, enforcing the
 // three-way split: outside read scope is ErrLocationNotFound (404), readable but
-// outside the action scope is ErrLocationForbidden (403). When ParentName is
-// set, the move is cycle-guarded (ErrLocationCycle) and placement-validated
-// against the resolved (possibly also-patched) location_type, exactly like
-// create. The old and new shapes are audited in the same transaction.
+// outside the action scope is ErrLocationForbidden (403). The old and new shapes
+// are audited in the same transaction.
+//
+// Placement (a reparent) is NOT here (#627 Task 13): it is its own act,
+// MoveLocation, gated by location:move. See that function's doc comment.
 func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch LocationPatch, read, action scope.Set) (*Location, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -452,27 +466,78 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 		return nil, err
 	}
 
+	// A nil type patch keeps the ref column on name: the subselect gets NULL,
+	// resolves nothing, and coalesce keeps the current value, same as before.
+	typeRefCol := "name"
+	if patch.LocationType != nil {
+		typeRefCol = registryRefCol(*patch.LocationType)
+	}
+	after, err := scanLocation(tx.QueryRow(ctx, `
+		update location set
+			display_name  = coalesce($2, display_name),
+			location_type = coalesce((select id from location_type where `+typeRefCol+` = $3), location_type),
+			updated_at    = now()
+		where id = $1
+		returning `+locationCols,
+		before.ID, patch.DisplayName, patch.LocationType))
+	if err != nil {
+		return nil, mapLocationWriteErr(err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "update", "location", after.ID, before, after); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit update location: %w", err)
+	}
+	return after, nil
+}
+
+// MoveLocation re-parents a location addressed by name, the same three-way scope
+// split as UpdateLocation, in its own transaction with its own DISTINCT audit
+// verb ("move", not "update"). Its own act, not a PATCH field (#627 Task 13),
+// for the reason the ADR states on component and system: a PATCH that cleared
+// parent_id used to lift a row out of every subtree scope with no check, while
+// creating the same root requires an all-scoped grant. A location's own
+// UpdateLocation never had that hole (its ParentName patch always resolved the
+// new parent unconditionally, so it could only ever move the location to
+// somewhere that resolved, never clear it), so this split closes no bug here;
+// it exists so placement is one authorization act across all three tiers, the
+// same custom method with the same permission shape, rather than the odd one
+// out. Placement is checked before the cycle guard: a rejected placement (a
+// type mismatch) is reported as PlacementError even when the target parent also
+// happens to be a descendant, so the caller sees the more specific, actionable
+// reason.
+//
+// MoveLocation does NOT gain a clear-to-root capability: an explicit empty
+// ParentName resolves nothing (ErrParentNotFound, 422), the same 422 an empty
+// string already produced under the old UpdateLocation patch. Component and
+// system DO gain a guarded clear-to-root under their own :move (see
+// MoveComponent); this is the one deliberate asymmetry the ADR documents rather
+// than closes, because adding clear-to-root to locations is a product capability
+// nobody has asked for, not a security fix.
+func (p *PG) MoveLocation(ctx context.Context, actorID, name string, move LocationMove, read, action scope.Set) (*Location, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin move location: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	before, err := p.resolveForAction(ctx, tx, name, read, action)
+	if err != nil {
+		return nil, err
+	}
+
 	parentID := before.ParentID
-	if patch.ParentName != nil {
+	if move.ParentName != nil {
 		// resolveScopedRef, not locationByName-then-inScope: ruling 2
 		// (#627), ambiguity judged inside action rather than estate-wide.
-		newParent, err := resolveScopedRef(ctx, tx, locationConfig, *patch.ParentName, "location", action)
+		newParent, err := resolveScopedRef(ctx, tx, locationConfig, *move.ParentName, "location", action)
 		if errors.Is(err, ErrLocationNotFound) {
 			return nil, ErrParentNotFound
 		} else if err != nil {
 			return nil, err
 		}
-		finalType := before.LocationType
-		if patch.LocationType != nil {
-			finalType = *patch.LocationType
-		}
-		// Placement is checked before the cycle guard: a rejected placement
-		// (a type mismatch) is reported as PlacementError even when the target
-		// parent also happens to be a descendant, so the caller sees the more
-		// specific, actionable reason. The cycle guard remains the last-resort
-		// structural check, catching moves an unconstrained (or otherwise
-		// type-compatible) placement would otherwise let through.
-		if err := p.validatePlacement(ctx, tx, finalType, &newParent.LocationType); err != nil {
+		if err := p.validatePlacement(ctx, tx, before.LocationType, &newParent.LocationType); err != nil {
 			return nil, err
 		}
 		desc, err := p.locationIsDescendant(ctx, tx, before.ID, newParent.ID)
@@ -485,29 +550,28 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 		parentID = &newParent.ID
 	}
 
-	// A nil type patch keeps the ref column on name: the subselect gets NULL,
-	// resolves nothing, and coalesce keeps the current value, same as before.
-	typeRefCol := "name"
-	if patch.LocationType != nil {
-		typeRefCol = registryRefCol(*patch.LocationType)
-	}
 	after, err := scanLocation(tx.QueryRow(ctx, `
-		update location set
-			display_name  = coalesce($2, display_name),
-			location_type = coalesce((select id from location_type where `+typeRefCol+` = $3), location_type),
-			parent_id     = $4,
-			updated_at    = now()
-		where id = $1
-		returning `+locationCols,
-		before.ID, patch.DisplayName, patch.LocationType, parentID))
+		update location set parent_id = $2, updated_at = now() where id = $1 returning `+locationCols,
+		before.ID, parentID))
 	if err != nil {
 		return nil, mapLocationWriteErr(err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "location", after.ID, before, after); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "move", "location", after.ID, before, after); err != nil {
 		return nil, err
 	}
+	// No RecomputeHealth, per the ruling this whole verb applies uniformly
+	// (component, system, location): a placement move never recomputes. This
+	// carries forward UpdateLocation's own reparent branch, which never called
+	// recompute either. Note this is NOT the same claim UpdateComponent's
+	// doc comment makes: locationVerdict DOES roll up recursively through the
+	// location tree (locationsOver walks a system's location upward,
+	// locationVerdict folds every system in a location's own subtree
+	// downward), so a location with placed descendants moving to a new parent
+	// really does change what its old and new ancestors' rollups should read.
+	// That staleness is not new here; MoveLocation just carries the gap
+	// UpdateLocation already had.
 	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("storage: commit update location: %w", err)
+		return nil, fmt.Errorf("storage: commit move location: %w", err)
 	}
 	return after, nil
 }

@@ -599,7 +599,7 @@ func TestHealthInvariantAcrossEveryTrigger(t *testing.T) {
 		}},
 		{"withdraw it", func() error { return f.gw.DeleteSystemRole(ctx, "", "system", "sweep-sys", "screen") }},
 		{"relocate the system, which recomputes both ends", func() error {
-			_, err := f.gw.UpdateSystem(ctx, "", "sweep-sys", storage.SystemPatch{LocationName: &room2}, f.all, f.all)
+			_, err := f.gw.MoveSystem(ctx, "", "sweep-sys", storage.SystemMove{LocationName: &room2}, f.all, f.all)
 			return err
 		}},
 		{"convert it to a one-off, dropping the inherited role", func() error {

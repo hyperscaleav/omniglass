@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -66,23 +67,33 @@ type createComponentInput struct {
 }
 
 // updateComponentInput is the PATCH body. It deliberately carries no name: a
-// rename is the :rename custom method, gated by component:rename.
+// rename is the :rename custom method, gated by component:rename. It carries no
+// placement either (#627 Task 13): a move is the :move custom method, gated by
+// component:move, because a placement change is an authorization act, not a
+// label edit.
 type updateComponentInput struct {
 	Name string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
 	Body struct {
 		DisplayName *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
-		// Parent and Location take the house three-state convention: an omitted
-		// field is unchanged, an explicit empty string clears, and a name sets.
-		// So they are pointers passed straight through (never emptyPtrToNil,
-		// which would collapse an intended clear).
-		//
-		// Product does NOT: it is required (the classification floor, every
-		// component is an instance of a product), so it has no clear state.
-		// An omitted field is unchanged and a name reclassifies, same as the
-		// others, but an explicit empty string is a 422, not a clear.
-		Parent   *string `json:"parent,omitempty" doc:"Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component."`
+		// Product does NOT follow the house three-state convention: it is
+		// required (the classification floor, every component is an instance
+		// of a product), so it has no clear state. An omitted field is
+		// unchanged and a name reclassifies, but an explicit empty string is a
+		// 422, not a clear.
+		Product *string `json:"product,omitempty" doc:"Re-classifies the component to this product (catalog SKU), by name or uuid. Required once set: an empty string is refused (422), not a clear. Explicitly-set property values persist; the new product's contract defaults follow."`
+	}
+}
+
+// moveComponentInput is the :move body: at least one of Location or Parent is
+// required (422 otherwise). Both follow the house three-state convention: an
+// omitted field is unchanged, an explicit empty string clears, and a name sets.
+// So they are pointers passed straight through (never emptyPtrToNil, which
+// would collapse an intended clear).
+type moveComponentInput struct {
+	Name string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
+	Body struct {
 		Location *string `json:"location,omitempty" doc:"Relocates the component to this location name. An empty string clears its placement."`
-		Product  *string `json:"product,omitempty" doc:"Re-classifies the component to this product (catalog SKU), by name or uuid. Required once set: an empty string is refused (422), not a clear. Explicitly-set property values persist; the new product's contract defaults follow."`
+		Parent   *string `json:"parent,omitempty" doc:"Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component (requires an all-scoped move grant)."`
 	}
 }
 
@@ -185,21 +196,44 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Method:      http.MethodPatch,
 		Path:        "/components/{name}",
 		Summary:     "Update a component",
-		Description: "Patches a component's display_name, product, location, or parent. The name is not patchable: renaming is the :rename custom method. Parent and location follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets); product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
+		Description: "Patches a component's display_name or product. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
 	}, "component", "update"), func(ctx context.Context, in *updateComponentInput) (*componentOutput, error) {
 		if in.Body.Product != nil && *in.Body.Product == "" {
 			return nil, huma.Error422UnprocessableEntity("product cannot be cleared; a component must always be an instance of a product")
 		}
 		c, err := gw.UpdateComponent(ctx, actorID(ctx), in.Name, storage.ComponentPatch{
 			DisplayName: in.Body.DisplayName,
-			// Passed straight through, never emptyPtrToNil: the storage layer reads
-			// "" as clear, and collapsing it here would make a relocate-to-none,
-			// declassify, or lift-to-root impossible.
-			ParentName:   in.Body.Parent,
-			LocationName: in.Body.Location,
-			ProductName:  in.Body.Product,
+			ProductName: in.Body.Product,
 		}, a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "update"))
 		if err != nil {
+			return nil, mapComponentErr(err)
+		}
+		return &componentOutput{Body: toComponentBody(c)}, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "move-component",
+		Method:      http.MethodPost,
+		Path:        "/components/{name}:move",
+		Summary:     "Move a component",
+		Description: "Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own verdict is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split.",
+	}, "component", "move"), func(ctx context.Context, in *moveComponentInput) (*componentOutput, error) {
+		if in.Body.Location == nil && in.Body.Parent == nil {
+			return nil, huma.Error422UnprocessableEntity("move requires at least one of location or parent")
+		}
+		c, err := gw.MoveComponent(ctx, actorID(ctx), in.Name, storage.ComponentMove{
+			LocationName: in.Body.Location,
+			ParentName:   in.Body.Parent,
+		}, a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "move"))
+		if err != nil {
+			switch {
+			case errors.Is(err, storage.ErrComponentExistsUnderParent):
+				return nil, huma.Error409Conflict(fmt.Sprintf("a component named %q already exists under %q", componentMoverName(ctx, gw, a, in.Name), derefStr(in.Body.Parent)))
+			case errors.Is(err, storage.ErrComponentExistsInLocation):
+				return nil, huma.Error409Conflict(fmt.Sprintf("a component named %q already exists at %q", componentMoverName(ctx, gw, a, in.Name), derefStr(in.Body.Location)))
+			case errors.Is(err, storage.ErrComponentExistsUnplaced):
+				return nil, huma.Error409Conflict(fmt.Sprintf("an unplaced component named %q already exists", componentMoverName(ctx, gw, a, in.Name)))
+			}
 			return nil, mapComponentErr(err)
 		}
 		return &componentOutput{Body: toComponentBody(c)}, nil
@@ -265,6 +299,22 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		}
 		return nil, nil
 	})
+}
+
+// componentMoverName resolves ref (whatever form the caller addressed the
+// move by: a bare name, a dotted address, or a uuid) back to the component's
+// own name, for a 409 collision message that names the mover by what an
+// operator actually reads rather than echoing the raw path reference. The
+// move already failed and rolled back, so the row is unchanged; a fresh read
+// within the caller's own read scope is safe (it discloses nothing the
+// caller could not already read a moment ago) and falls back to ref itself if
+// the lookup somehow misses, so the 409 still names something rather than
+// producing an empty quote.
+func componentMoverName(ctx context.Context, gw storage.Gateway, a *authenticator, ref string) string {
+	if c, err := gw.GetComponent(ctx, ref, a.scopeFor(ctx, "component", "read")); err == nil {
+		return c.Name
+	}
+	return ref
 }
 
 func mapComponentErr(err error) error {

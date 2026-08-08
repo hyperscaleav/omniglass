@@ -722,7 +722,7 @@ func TestHealthMovesOnRelocation(t *testing.T) {
 	campus, _ := f.recorded(t, ctx, "location", "hq")
 
 	room := "hq-r2"
-	if _, err := f.gw.UpdateSystem(ctx, "", "hq-huddle", storage.SystemPatch{LocationName: &room}, f.all, f.all); err != nil {
+	if _, err := f.gw.MoveSystem(ctx, "", "hq-huddle", storage.SystemMove{LocationName: &room}, f.all, f.all); err != nil {
 		t.Fatalf("relocate: %v", err)
 	}
 

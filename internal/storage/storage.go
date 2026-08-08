@@ -218,6 +218,10 @@ type Gateway interface {
 	// Its own function, not a patch field, because a rename breaks the references
 	// an operator stored outside this system; the API gates it on location:rename.
 	RenameLocation(ctx context.Context, actorID, name, newName string, read, action scope.Set) (*Location, error)
+	// MoveLocation re-parents the location, scoped exactly as the update is. Its
+	// own function, not a patch field (#627 Task 13), because a placement change
+	// is an authorization act; the API gates it on location:move.
+	MoveLocation(ctx context.Context, actorID, name string, move LocationMove, read, action scope.Set) (*Location, error)
 	LocationNameTaken(ctx context.Context, name string, parentRef *string) (bool, error)
 	DeleteLocation(ctx context.Context, actorID, name string, read, action scope.Set) error
 
@@ -238,6 +242,10 @@ type Gateway interface {
 	// own function, not a patch field, because a rename breaks the references an
 	// operator stored outside this system; the API gates it on system:rename.
 	RenameSystem(ctx context.Context, actorID, name, newName string, read, action scope.Set) (*System, error)
+	// MoveSystem relocates and/or re-parents the system, scoped exactly as the
+	// update is. Its own function, not a patch field (#627 Task 13), because a
+	// placement change is an authorization act; the API gates it on system:move.
+	MoveSystem(ctx context.Context, actorID, name string, move SystemMove, read, action scope.Set) (*System, error)
 	SystemNameTaken(ctx context.Context, name string, parentRef, locationRef *string) (bool, error)
 	DeleteSystem(ctx context.Context, actorID, name string, read, action scope.Set) error
 
@@ -254,6 +262,11 @@ type Gateway interface {
 	// Its own function, not a patch field, because a rename breaks the references
 	// an operator stored outside this system; the API gates it on component:rename.
 	RenameComponent(ctx context.Context, actorID, name, newName string, read, action scope.Set) (*Component, error)
+	// MoveComponent relocates and/or re-parents the component, scoped exactly as
+	// the update is. Its own function, not a patch field (#627 Task 13), because
+	// a placement change is an authorization act; the API gates it on
+	// component:move.
+	MoveComponent(ctx context.Context, actorID, name string, move ComponentMove, read, action scope.Set) (*Component, error)
 	ComponentNameTaken(ctx context.Context, name string, parentRef, locationRef *string) (bool, error)
 	DeleteComponent(ctx context.Context, actorID, name string, read, action scope.Set) error
 

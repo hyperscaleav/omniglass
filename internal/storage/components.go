@@ -81,12 +81,7 @@ type ComponentSpec struct {
 	ProductName  *string
 }
 
-// ComponentPatch is the update input: nil fields unchanged. LocationName and
-// ParentName follow the house three-state convention: nil unchanged, an
-// explicit empty string CLEARS (an unplaced component, a root component), and
-// a name resolves to its id. ParentName is cycle-guarded and scope-injected
-// like a location reparent: the new parent must be inside the caller's update
-// scope and must not be the component itself or one of its own descendants.
+// ComponentPatch is the update input: nil fields unchanged.
 //
 // ProductName does NOT follow the clear convention: the #614 floor made
 // product_id required (every component is an instance of a product, the
@@ -98,10 +93,23 @@ type ComponentSpec struct {
 //
 // There is deliberately no Name here. A rename is RenameComponent, its own act
 // under its own permission, because it breaks the references an operator stored
-// outside this system.
+// outside this system. There is deliberately no LocationName or ParentName
+// here either (#627 Task 13): a placement change is its own act, MoveComponent,
+// gated by component:move rather than component:update; see that function's
+// doc comment for why.
 type ComponentPatch struct {
-	DisplayName  *string
-	ProductName  *string
+	DisplayName *string
+	ProductName *string
+}
+
+// ComponentMove is the :move input: nil fields unchanged, an explicit empty
+// string clears (an unplaced component, a root component), a name resolves to
+// its id. ParentName is cycle-guarded and scope-injected like a location
+// reparent: the new parent must be inside the caller's move scope and must not
+// be the component itself or one of its own descendants. Clearing ParentName
+// to root requires an all-scoped move grant (see MoveComponent's doc comment
+// for why).
+type ComponentMove struct {
 	LocationName *string
 	ParentName   *string
 }
@@ -336,13 +344,15 @@ func (p *PG) componentIsDescendant(ctx context.Context, q querier, targetID, can
 	return ok, nil
 }
 
-// UpdateComponent patches a component by name with the three-way scope split and
-// in-transaction audit. Product, location, and parent are all patchable, and none
-// of the three moves health any more: a component's own verdict is now purely its
-// active alarms (#626), so a product swap changes only its typed-slot
-// classification for the NEXT assignment, and a relocate or reparent are
-// structural placement moves the health chain (component -> systems-it-staffs ->
-// locations-over-those-systems) never depended on either.
+// UpdateComponent patches a component by name with the three-way scope split
+// and in-transaction audit. Only product is classification here; a product
+// swap does not move health any more: a component's own verdict is now purely
+// its active alarms (#626), so it changes only its typed-slot classification
+// for the NEXT assignment.
+//
+// Placement (a relocate or a reparent) is NOT here (#627 Task 13): it is its
+// own act, MoveComponent, gated by component:move. See that function's doc
+// comment.
 func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch ComponentPatch, read, action scope.Set) (*Component, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -367,81 +377,30 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 		}
 		patchProductID = &pid
 	}
-	// The location arrives as a name, the column holds an id: resolve the set
-	// branch to its id while leaving nil (unchanged) and "" (clear) intact, the
-	// same three-state the system relocate uses.
-	locationPatch := patch.LocationName
-	if patch.LocationName != nil && *patch.LocationName != "" {
-		// scopedByName, not scopedByNameInScope: cross-tier, same as the
-		// create-time binds above. action is resolved for "component", and
-		// checking it against the location table's own ancestor chain can
-		// never match, so threading it through denies every non-all caller
-		// rather than narrowing anything. Existence-only, withoutCandidates
-		// for the same no-scope-to-filter-by reason.
-		loc, err := scopedByName(ctx, tx, locationConfig, *patch.LocationName)
-		if err != nil {
-			return nil, withoutCandidates(err) // ErrLocationNotFound -> mapped to 422 by the API
-		}
-		locationPatch = &loc.ID
-	}
-	// The parent is a reparent within the component tree: resolve within the
-	// caller's action scope (resolveScopedRef, ruling 2), which both
-	// requires the new parent inside that scope and judges ambiguity inside
-	// it too, and cycle-guard against moving the component under itself or a
-	// descendant. "" clears to a root component; nil leaves the parent
-	// untouched.
-	parentPatch := patch.ParentName
-	if patch.ParentName != nil && *patch.ParentName != "" {
-		parent, err := resolveScopedRef(ctx, tx, componentConfig, *patch.ParentName, "component", action)
-		if errors.Is(err, ErrComponentNotFound) {
-			return nil, ErrParentComponentNotFound
-		} else if err != nil {
-			return nil, err
-		}
-		descendant, err := p.componentIsDescendant(ctx, tx, before.ID, parent.ID)
-		if err != nil {
-			return nil, err
-		}
-		if descendant {
-			return nil, ErrComponentCycle
-		}
-		parentPatch = &parent.ID
-	}
 	after, err := scanComponent(tx.QueryRow(ctx, `
 		update component set
 			display_name = coalesce($2, display_name),
 			-- product_id has no clear state: the floor makes it NOT NULL, so unlike
-			-- location_id/parent_id below there is no empty-string-means-null branch
-			-- here to attempt (that used to be the case before the #614 floor, and
-			-- would now fail loudly on the column's NOT NULL). A nil field is
-			-- unchanged; an explicit empty string reclassifies to generic-device,
-			-- the same fallback CreateComponent applies to an unclassified create,
-			-- rather than attempting a write the column can no longer accept.
-			-- Anything else names a product by handle or uuid, resolved to its id
-			-- (an unknown one lands as NULL and is caught below). The API refuses an
-			-- empty-string product before this is ever reached (422), so this branch
-			-- only matters to a caller that writes the gateway directly.
+			-- a three-state placement field there is no empty-string-means-null
+			-- branch here to attempt (that used to be the case before the #614
+			-- floor, and would now fail loudly on the column's NOT NULL). A nil
+			-- field is unchanged; an explicit empty string reclassifies to
+			-- generic-device, the same fallback CreateComponent applies to an
+			-- unclassified create, rather than attempting a write the column can
+			-- no longer accept. Anything else names a product by handle or uuid,
+			-- resolved to its id (an unknown one lands as NULL and is caught
+			-- below). The API refuses an empty-string product before this is ever
+			-- reached (422), so this branch only matters to a caller that writes
+			-- the gateway directly.
 			product_id   = case
 				when $3::text is null then product_id
 				when $3 = '' then (select id from product where name = 'generic-device')
 				else $4::uuid
 			end,
-			-- location_id and parent_id take the same three states, already resolved
-			-- to ids. Each set branch casts because a CASE cannot mix uuid and text.
-			location_id  = case
-				when $5::text is null then location_id
-				when $5 = '' then null
-				else $5::uuid
-			end,
-			parent_id    = case
-				when $6::text is null then parent_id
-				when $6 = '' then null
-				else $6::uuid
-			end,
 			updated_at   = now()
 		where id = $1
 		returning `+componentCols,
-		before.ID, patch.DisplayName, patch.ProductName, patchProductID, locationPatch, parentPatch))
+		before.ID, patch.DisplayName, patch.ProductName, patchProductID))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
 	}
@@ -453,6 +412,114 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 	// classified as. The next AssignRole is where a changed product matters.
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit update component: %w", err)
+	}
+	return after, nil
+}
+
+// MoveComponent relocates and/or reparents a component by name, the same
+// three-way scope split as UpdateComponent, in its own transaction with its
+// own DISTINCT audit verb ("move", not "update"). Its own act, not a PATCH
+// field (#627 Task 13): splitting placement out of the single four-column
+// UPDATE UpdateComponent used to run turns one operator gesture that touched
+// both product and placement together into two transactions and two audit
+// rows if a caller wants both, the same tradeoff RenameComponent already
+// established for name-plus-other-field edits, and is deliberate here for the
+// same reason rename earned its own act: a placement change is an
+// authorization act, not a label edit, so it deserves its own grant
+// (component:move) and its own audit trail entry, not a side effect that
+// rides along with a display_name or product PATCH.
+//
+// The ADR this closes: a PATCH that cleared parent_id used to lift a row out
+// of every subtree scope with no check at all (UpdateComponent's old reparent
+// branch only guarded the non-empty case), while CREATING the same root
+// component already required an all-scoped grant. Clearing ParentName to root
+// here now requires action.All too, closing that gap. Health is unaffected: a
+// component's own verdict is purely its active alarms (#626), so neither a
+// relocate nor a reparent has ever moved it, and this move continues that.
+func (p *PG) MoveComponent(ctx context.Context, actorID, name string, move ComponentMove, read, action scope.Set) (*Component, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin move component: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	before, err := resolveScoped(ctx, tx, componentConfig, name, read, action)
+	if err != nil {
+		return nil, err
+	}
+	// The location arrives as a name, the column holds an id: resolve the set
+	// branch to its id while leaving nil (unchanged) and "" (clear) intact, the
+	// same three-state the system relocate uses.
+	locationPatch := move.LocationName
+	if move.LocationName != nil && *move.LocationName != "" {
+		// scopedByName, not scopedByNameInScope: cross-tier, same as the
+		// create-time binds above. action is resolved for "component", and
+		// checking it against the location table's own ancestor chain can
+		// never match, so threading it through denies every non-all caller
+		// rather than narrowing anything. Existence-only, withoutCandidates
+		// for the same no-scope-to-filter-by reason.
+		loc, err := scopedByName(ctx, tx, locationConfig, *move.LocationName)
+		if err != nil {
+			return nil, withoutCandidates(err) // ErrLocationNotFound -> mapped to 422 by the API
+		}
+		locationPatch = &loc.ID
+	}
+	// The parent is a reparent within the component tree: resolve within the
+	// caller's action scope (resolveScopedRef, ruling 2), which both
+	// requires the new parent inside that scope and judges ambiguity inside
+	// it too, and cycle-guard against moving the component under itself or a
+	// descendant. nil leaves the parent untouched.
+	parentPatch := move.ParentName
+	if move.ParentName != nil {
+		if *move.ParentName == "" {
+			// Clearing to root: the same authorization CreateComponent already
+			// enforces for a root component. See the doc comment above: the old
+			// UpdateComponent patch had no such guard on this branch at all.
+			if !action.All {
+				return nil, ErrComponentForbidden
+			}
+		} else {
+			parent, err := resolveScopedRef(ctx, tx, componentConfig, *move.ParentName, "component", action)
+			if errors.Is(err, ErrComponentNotFound) {
+				return nil, ErrParentComponentNotFound
+			} else if err != nil {
+				return nil, err
+			}
+			descendant, err := p.componentIsDescendant(ctx, tx, before.ID, parent.ID)
+			if err != nil {
+				return nil, err
+			}
+			if descendant {
+				return nil, ErrComponentCycle
+			}
+			parentPatch = &parent.ID
+		}
+	}
+	after, err := scanComponent(tx.QueryRow(ctx, `
+		update component set
+			location_id = case
+				when $2::text is null then location_id
+				when $2 = '' then null
+				else $2::uuid
+			end,
+			parent_id   = case
+				when $3::text is null then parent_id
+				when $3 = '' then null
+				else $3::uuid
+			end,
+			updated_at  = now()
+		where id = $1
+		returning `+componentCols,
+		before.ID, locationPatch, parentPatch))
+	if err != nil {
+		return nil, mapComponentWriteErr(err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "move", "component", after.ID, before, after); err != nil {
+		return nil, err
+	}
+	// No RecomputeHealth: see the doc comment above.
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit move component: %w", err)
 	}
 	return after, nil
 }

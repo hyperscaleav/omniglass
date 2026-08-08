@@ -589,16 +589,16 @@ func TestScopedCreateBindsCrossTierSystemAndLocation(t *testing.T) {
 		t.Fatalf("child location = %v, want %s", child.LocationID, loc.ID)
 	}
 
-	// UpdateComponent's location patch, same scope.
-	updated, err := gw.UpdateComponent(ctx, "", child.Name, storage.ComponentPatch{LocationName: strptr(loc2.Name)}, compScope, compScope)
+	// MoveComponent's location bind, same scope.
+	updated, err := gw.MoveComponent(ctx, "", child.Name, storage.ComponentMove{LocationName: strptr(loc2.Name)}, compScope, compScope)
 	if err != nil {
-		t.Fatalf("scoped update with cross-tier location bind = %v, want ok", err)
+		t.Fatalf("scoped move with cross-tier location bind = %v, want ok", err)
 	}
 	if updated.LocationID == nil || *updated.LocationID != loc2.ID {
 		t.Fatalf("updated component location = %v, want %s", updated.LocationID, loc2.ID)
 	}
 
-	// CreateSystem's location bind and UpdateSystem's location patch, scoped
+	// CreateSystem's location bind and MoveSystem's location bind, scoped
 	// to a system-tier grant this time, to prove the fix is not accidentally
 	// component-specific.
 	rootSys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "root-sys"}, all)
@@ -615,9 +615,9 @@ func TestScopedCreateBindsCrossTierSystemAndLocation(t *testing.T) {
 	if childSys.LocationID == nil || *childSys.LocationID != loc.ID {
 		t.Fatalf("child system location = %v, want %s", childSys.LocationID, loc.ID)
 	}
-	updatedSys, err := gw.UpdateSystem(ctx, "", childSys.Name, storage.SystemPatch{LocationName: strptr(loc2.Name)}, sysScope, sysScope)
+	updatedSys, err := gw.MoveSystem(ctx, "", childSys.Name, storage.SystemMove{LocationName: strptr(loc2.Name)}, sysScope, sysScope)
 	if err != nil {
-		t.Fatalf("scoped system update with cross-tier location bind = %v, want ok", err)
+		t.Fatalf("scoped system move with cross-tier location bind = %v, want ok", err)
 	}
 	if updatedSys.LocationID == nil || *updatedSys.LocationID != loc2.ID {
 		t.Fatalf("updated system location = %v, want %s", updatedSys.LocationID, loc2.ID)

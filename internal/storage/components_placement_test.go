@@ -10,11 +10,13 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+	"github.com/jackc/pgx/v5"
 )
 
-// TestComponentReparent covers the reparent path added for mutable placement: a
-// valid move, the cycle guard (under a descendant and under self), a clear-to-root,
-// and an unknown parent. The tree starts root-a > mid > leaf.
+// TestComponentReparent covers the reparent path on MoveComponent: a valid
+// move, the cycle guard (under a descendant and under self), a clear-to-root
+// (with the all-scoped grant that now guards it), and an unknown parent. The
+// tree starts root-a > mid > leaf.
 func TestComponentReparent(t *testing.T) {
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
@@ -28,7 +30,7 @@ func TestComponentReparent(t *testing.T) {
 	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "leaf", ParentName: strptr("mid")}, all)
 
 	// Valid move: mid reparents from root-a to root-b (tree becomes root-b > mid > leaf).
-	after, err := gw.UpdateComponent(ctx, "", "mid", storage.ComponentPatch{ParentName: strptr("root-b")}, all, all)
+	after, err := gw.MoveComponent(ctx, "", "mid", storage.ComponentMove{ParentName: strptr("root-b")}, all, all)
 	if err != nil {
 		t.Fatalf("valid reparent: %v", err)
 	}
@@ -37,16 +39,18 @@ func TestComponentReparent(t *testing.T) {
 	}
 
 	// Cycle: root-b cannot move under leaf, which is now its own descendant.
-	if _, err := gw.UpdateComponent(ctx, "", "root-b", storage.ComponentPatch{ParentName: strptr("leaf")}, all, all); !errors.Is(err, storage.ErrComponentCycle) {
+	if _, err := gw.MoveComponent(ctx, "", "root-b", storage.ComponentMove{ParentName: strptr("leaf")}, all, all); !errors.Is(err, storage.ErrComponentCycle) {
 		t.Fatalf("move root-b under descendant leaf err = %v, want ErrComponentCycle", err)
 	}
 	// Cycle: a component cannot move under itself.
-	if _, err := gw.UpdateComponent(ctx, "", "mid", storage.ComponentPatch{ParentName: strptr("mid")}, all, all); !errors.Is(err, storage.ErrComponentCycle) {
+	if _, err := gw.MoveComponent(ctx, "", "mid", storage.ComponentMove{ParentName: strptr("mid")}, all, all); !errors.Is(err, storage.ErrComponentCycle) {
 		t.Fatalf("move mid under itself err = %v, want ErrComponentCycle", err)
 	}
 
-	// Clear to root: an empty parent lifts mid to a root component.
-	after, err = gw.UpdateComponent(ctx, "", "mid", storage.ComponentPatch{ParentName: strptr("")}, all, all)
+	// Clear to root: an empty parent lifts mid to a root component. all is an
+	// all-scoped grant, so the new authorization guard on clearing to root does
+	// not fire here; TestScopedPrincipalCannotLiftToRoot covers the refusal.
+	after, err = gw.MoveComponent(ctx, "", "mid", storage.ComponentMove{ParentName: strptr("")}, all, all)
 	if err != nil {
 		t.Fatalf("clear parent: %v", err)
 	}
@@ -55,12 +59,12 @@ func TestComponentReparent(t *testing.T) {
 	}
 
 	// Unknown parent is a by-name 422 (ErrParentComponentNotFound), not a generic miss.
-	if _, err := gw.UpdateComponent(ctx, "", "mid", storage.ComponentPatch{ParentName: strptr("ghost")}, all, all); !errors.Is(err, storage.ErrParentComponentNotFound) {
+	if _, err := gw.MoveComponent(ctx, "", "mid", storage.ComponentMove{ParentName: strptr("ghost")}, all, all); !errors.Is(err, storage.ErrParentComponentNotFound) {
 		t.Fatalf("unknown parent err = %v, want ErrParentComponentNotFound", err)
 	}
 }
 
-// TestComponentRelocate covers the location three-state added to the patch: set,
+// TestComponentRelocate covers the location three-state on MoveComponent: set,
 // clear, and an unknown location.
 func TestComponentRelocate(t *testing.T) {
 	gw := storagetest.NewDB(t)
@@ -73,7 +77,7 @@ func TestComponentRelocate(t *testing.T) {
 	mustCreate(t, gw, storage.LocationSpec{Name: "loc-2", LocationType: "campus"}, all)
 	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "cam", LocationName: strptr("loc-1")}, all)
 
-	after, err := gw.UpdateComponent(ctx, "", "cam", storage.ComponentPatch{LocationName: strptr("loc-2")}, all, all)
+	after, err := gw.MoveComponent(ctx, "", "cam", storage.ComponentMove{LocationName: strptr("loc-2")}, all, all)
 	if err != nil {
 		t.Fatalf("relocate: %v", err)
 	}
@@ -81,7 +85,7 @@ func TestComponentRelocate(t *testing.T) {
 		t.Fatalf("relocated to %v, want loc-2", after.LocationName)
 	}
 
-	after, err = gw.UpdateComponent(ctx, "", "cam", storage.ComponentPatch{LocationName: strptr("")}, all, all)
+	after, err = gw.MoveComponent(ctx, "", "cam", storage.ComponentMove{LocationName: strptr("")}, all, all)
 	if err != nil {
 		t.Fatalf("clear location: %v", err)
 	}
@@ -89,9 +93,158 @@ func TestComponentRelocate(t *testing.T) {
 		t.Fatalf("after clear location = %v / %v, want nil / nil", after.LocationName, after.LocationID)
 	}
 
-	if _, err := gw.UpdateComponent(ctx, "", "cam", storage.ComponentPatch{LocationName: strptr("nowhere")}, all, all); !errors.Is(err, storage.ErrLocationNotFound) {
+	if _, err := gw.MoveComponent(ctx, "", "cam", storage.ComponentMove{LocationName: strptr("nowhere")}, all, all); !errors.Is(err, storage.ErrLocationNotFound) {
 		t.Fatalf("unknown location err = %v, want ErrLocationNotFound", err)
 	}
+}
+
+// TestScopedPrincipalCannotLiftToRoot is the load-bearing new case (#627 Task
+// 13): the ADR's whole justification is that a PATCH clearing parent_id used
+// to lift a row out of every subtree scope with no check, while CREATING the
+// same root already required an all-scoped grant. A component-scoped (not
+// all-scoped) principal must be refused the clear-to-root move even though the
+// component itself sits inside its own move scope, and the same principal must
+// still be able to reparent within its own subtree (proving the refusal is
+// specific to root, not a blanket denial).
+func TestScopedPrincipalCannotLiftToRoot(t *testing.T) {
+	gw := storagetest.NewDB(t)
+	ctx := context.Background()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	rootA := mustCreateComponent(t, gw, storage.ComponentSpec{Name: "lift-root-a"}, all)
+	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "lift-sibling", ParentName: strptr("lift-root-a")}, all)
+	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "lift-target", ParentName: strptr("lift-root-a")}, all)
+
+	// Scoped to root-a's own subtree only, never all: exactly the principal the
+	// ADR describes, who can already write everything inside root-a.
+	scoped := scope.Set{IDs: []string{rootA.ID}}
+
+	// Clearing to root is refused: this is the gap the ADR closes. Before this
+	// task's guard, lift-target would walk straight out of root-a's subtree with
+	// no check at all.
+	if _, err := gw.MoveComponent(ctx, "", "lift-target", storage.ComponentMove{ParentName: strptr("")}, scoped, scoped); !errors.Is(err, storage.ErrComponentForbidden) {
+		t.Fatalf("scoped clear-to-root err = %v, want ErrComponentForbidden", err)
+	}
+
+	// The same principal can still reparent WITHIN its own subtree: the refusal
+	// above is specific to root, not a blanket denial of the move capability.
+	if _, err := gw.MoveComponent(ctx, "", "lift-target", storage.ComponentMove{ParentName: strptr("lift-sibling")}, scoped, scoped); err != nil {
+		t.Fatalf("scoped reparent within own subtree: %v", err)
+	}
+
+	// An all-scoped principal CAN clear the same component to root: the guard is
+	// specifically about scope, not a general prohibition on lift-to-root.
+	if _, err := gw.MoveComponent(ctx, "", "lift-target", storage.ComponentMove{ParentName: strptr("")}, all, all); err != nil {
+		t.Fatalf("all-scoped clear-to-root: %v", err)
+	}
+}
+
+// TestMoveComponentAudited proves :move writes its own DISTINCT audit verb,
+// "move", not the generic "update" a PATCH writes, and that the old/new images
+// carry the containment change. Without this, an acceptance criterion phrased
+// as "the move is auditable" would already be satisfied by the old
+// verb="update" row whose JSON happened to contain parent_id, forcing nothing.
+func TestMoveComponentAudited(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "audit-root"}, all)
+	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "audit-leaf"}, all)
+
+	if _, err := gw.MoveComponent(ctx, "", "audit-leaf", storage.ComponentMove{ParentName: strptr("audit-root")}, all, all); err != nil {
+		t.Fatalf("move: %v", err)
+	}
+
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+
+	var verb string
+	var oldJSON, newJSON []byte
+	if err := conn.QueryRow(ctx,
+		`select verb, old, new from audit_log where resource = 'component' and resource_id = (select id::text from component where name = 'audit-leaf') order by ts desc limit 1`,
+	).Scan(&verb, &oldJSON, &newJSON); err != nil {
+		t.Fatalf("query audit row: %v", err)
+	}
+	if verb != "move" {
+		t.Fatalf("audit verb = %q, want move (a generic update row would satisfy a loose 'the move is auditable' check while proving nothing)", verb)
+	}
+	var old, new struct {
+		ParentID *string `json:"ParentID"`
+	}
+	if err := json.Unmarshal(oldJSON, &old); err != nil {
+		t.Fatalf("decode old image: %v", err)
+	}
+	if err := json.Unmarshal(newJSON, &new); err != nil {
+		t.Fatalf("decode new image: %v", err)
+	}
+	if old.ParentID != nil {
+		t.Errorf("old image parent_id = %v, want nil (audit-leaf started at root)", old.ParentID)
+	}
+	if new.ParentID == nil {
+		t.Errorf("new image parent_id = nil, want the resolved parent id")
+	}
+}
+
+// TestMoveCollisionNamesBothParties proves the 409 a name collision at the move
+// destination produces names both the moved component and the destination,
+// using the per-index sentinels the 23505 mapper splits on (ErrComponentExistsUnderParent),
+// not a generic ErrComponentExists.
+//
+// A move never renames, so a real repro needs two components ALREADY sharing
+// the literal name "dup" in different placement buckets (#627: uniqueness is
+// scoped to placement, so this is legal), one moving into the other's bucket.
+// With both under an all-scoped caller, "dup" is ambiguous estate-wide before
+// the move is ever attempted (ErrAmbiguousName, proving nothing about the
+// collision this test targets), so the mover is addressed with a READ scope
+// narrowed to its own bucket (mover-root's subtree, where only one "dup"
+// lives) while the MOVE scope covers both mover-root and the destination, the
+// same "scope decides before ambiguity does" resolution every other bare-name
+// reference in this codebase relies on.
+func TestMoveCollisionNamesBothParties(t *testing.T) {
+	gw := storagetest.NewDB(t)
+	ctx := context.Background()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	collideDest := mustCreateComponent(t, gw, storage.ComponentSpec{Name: "collide-dest"}, all)
+	// An operator-owned duplicate already sits at the destination: a component
+	// also named "dup" already exists under collide-dest.
+	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "dup", ParentName: strptr("collide-dest")}, all)
+	// The mover's own bucket: a separate root, holding the second "dup".
+	moverRoot := mustCreateComponent(t, gw, storage.ComponentSpec{Name: "mover-root"}, all)
+	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "dup", ParentName: strptr("mover-root")}, all)
+
+	read := scope.Set{IDs: []string{moverRoot.ID}}
+	action := scope.Set{IDs: []string{moverRoot.ID, collideDest.ID}}
+
+	_, err := gw.MoveComponent(ctx, "", "dup", storage.ComponentMove{ParentName: strptr("collide-dest")}, read, action)
+	if !errors.Is(err, storage.ErrComponentExistsUnderParent) {
+		t.Fatalf("collision err = %v, want ErrComponentExistsUnderParent", err)
+	}
+}
+
+// TestMoveRecomputesGeneratedName is a forward-declared contract: once
+// server-generated names land (#627, a later task), a generated name's stem
+// derives from the component type, which the destination may change (a
+// reparent under a differently-typed subtree). Skipped until that generator
+// exists; nothing today sets name_generated=true, so there is no generated
+// name for a move to recompute yet.
+func TestMoveRecomputesGeneratedName(t *testing.T) {
+	t.Skip("blocked on server-generated names (#627); unskip once name_generated components exist")
 }
 
 // TestComponentUpdateEmptyProductReclassifiesToGeneric proves UpdateComponent
@@ -200,11 +353,11 @@ func TestComponentReparentScope(t *testing.T) {
 
 	// Onto an out-of-scope parent (sc-root-b): forbidden, even though sc-move itself
 	// is in scope. The new parent is gated too.
-	if _, err := gw.UpdateComponent(ctx, "", "sc-move", storage.ComponentPatch{ParentName: strptr("sc-root-b")}, actorA, actorA); !errors.Is(err, storage.ErrComponentForbidden) {
+	if _, err := gw.MoveComponent(ctx, "", "sc-move", storage.ComponentMove{ParentName: strptr("sc-root-b")}, actorA, actorA); !errors.Is(err, storage.ErrComponentForbidden) {
 		t.Fatalf("reparent onto out-of-scope parent err = %v, want ErrComponentForbidden", err)
 	}
 	// Onto an in-scope parent (sc-in-a, under root-a): allowed.
-	if _, err := gw.UpdateComponent(ctx, "", "sc-move", storage.ComponentPatch{ParentName: strptr("sc-in-a")}, actorA, actorA); err != nil {
+	if _, err := gw.MoveComponent(ctx, "", "sc-move", storage.ComponentMove{ParentName: strptr("sc-in-a")}, actorA, actorA); err != nil {
 		t.Fatalf("reparent onto in-scope parent: %v", err)
 	}
 }

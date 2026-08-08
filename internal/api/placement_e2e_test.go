@@ -15,10 +15,10 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// TestComponentPlacementAPI drives the newly patchable placement and classification
-// fields over HTTP: a PATCH sets parent, location, and product together; an explicit
-// empty string clears the parent to root; a reparent onto a descendant is a 422; an
-// unknown product is a 422. Skipped under -short.
+// TestComponentPlacementAPI drives the component :move and PATCH surfaces over
+// HTTP: :move sets parent and location together; an explicit empty string
+// clears the parent to root; a reparent onto a descendant is a 422; product
+// stays on PATCH, and an unknown one is a 422. Skipped under -short.
 func TestComponentPlacementAPI(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -58,6 +58,16 @@ func TestComponentPlacementAPI(t *testing.T) {
 		Location string `json:"location"`
 		Product  string `json:"product"`
 	}
+	move := func(p map[string]any, want int) placement {
+		out := c.do(ownerTok, http.MethodPost, "/components/dev:move", p, want)
+		var b placement
+		if want == http.StatusOK {
+			if err := json.Unmarshal(out, &b); err != nil {
+				t.Fatalf("decode component: %v", err)
+			}
+		}
+		return b
+	}
 	patch := func(p map[string]any, want int) placement {
 		out := c.do(ownerTok, http.MethodPatch, "/components/dev", p, want)
 		var b placement
@@ -69,27 +79,34 @@ func TestComponentPlacementAPI(t *testing.T) {
 		return b
 	}
 
-	// Set all three at once.
-	if got := patch(map[string]any{"parent": "rack", "location": "loc-x", "product": "prod-x"}, http.StatusOK); got.Parent != "rack" || got.Location != "loc-x" || got.Product != "prod-x" {
-		t.Fatalf("after set = %+v, want rack / loc-x / prod-x", got)
+	// :move sets parent and location together.
+	if got := move(map[string]any{"parent": "rack", "location": "loc-x"}, http.StatusOK); got.Parent != "rack" || got.Location != "loc-x" {
+		t.Fatalf("after move = %+v, want rack / loc-x", got)
+	}
+	// product stays a PATCH field.
+	if got := patch(map[string]any{"product": "prod-x"}, http.StatusOK); got.Product != "prod-x" {
+		t.Fatalf("after product patch = %+v, want prod-x", got)
 	}
 
-	// Clear the parent to root with an explicit empty string.
-	if got := patch(map[string]any{"parent": ""}, http.StatusOK); got.Parent != "" {
+	// Clear the parent to root with an explicit empty string, via :move.
+	if got := move(map[string]any{"parent": ""}, http.StatusOK); got.Parent != "" {
 		t.Fatalf("after clear parent = %q, want empty", got.Parent)
 	}
 
 	// Reparent onto a descendant is refused (422): sub under dev, then dev under sub.
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "sub", "parent": "dev", "product": "generic-device"}, http.StatusCreated)
-	patch(map[string]any{"parent": "sub"}, http.StatusUnprocessableEntity)
+	move(map[string]any{"parent": "sub"}, http.StatusUnprocessableEntity)
 
-	// An unknown product is a 422 (by name).
+	// An unknown product is a 422 (by name), still on PATCH.
 	patch(map[string]any{"product": "ghost"}, http.StatusUnprocessableEntity)
+
+	// :move refuses an empty body: at least one of location or parent is required.
+	c.do(ownerTok, http.MethodPost, "/components/dev:move", map[string]any{}, http.StatusUnprocessableEntity)
 }
 
-// TestSystemPlacementAPI drives the newly patchable system placement fields: a PATCH
-// sets parent and location, an empty string clears the parent to root, and a reparent
-// onto a descendant is a 422. Skipped under -short.
+// TestSystemPlacementAPI drives the system :move surface: it sets parent and
+// location together, an empty string clears the parent to root, and a
+// reparent onto a descendant is a 422. Skipped under -short.
 func TestSystemPlacementAPI(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -123,8 +140,8 @@ func TestSystemPlacementAPI(t *testing.T) {
 		Parent   string `json:"parent"`
 		Location string `json:"location"`
 	}
-	patch := func(p map[string]any, want int) placement {
-		out := c.do(ownerTok, http.MethodPatch, "/systems/sys-x", p, want)
+	move := func(p map[string]any, want int) placement {
+		out := c.do(ownerTok, http.MethodPost, "/systems/sys-x:move", p, want)
 		var b placement
 		if want == http.StatusOK {
 			if err := json.Unmarshal(out, &b); err != nil {
@@ -134,14 +151,17 @@ func TestSystemPlacementAPI(t *testing.T) {
 		return b
 	}
 
-	if got := patch(map[string]any{"parent": "sys-root", "location": "loc-x"}, http.StatusOK); got.Parent != "sys-root" || got.Location != "loc-x" {
-		t.Fatalf("after set = %+v, want sys-root / loc-x", got)
+	if got := move(map[string]any{"parent": "sys-root", "location": "loc-x"}, http.StatusOK); got.Parent != "sys-root" || got.Location != "loc-x" {
+		t.Fatalf("after move = %+v, want sys-root / loc-x", got)
 	}
 
-	if got := patch(map[string]any{"parent": ""}, http.StatusOK); got.Parent != "" {
+	if got := move(map[string]any{"parent": ""}, http.StatusOK); got.Parent != "" {
 		t.Fatalf("after clear parent = %q, want empty", got.Parent)
 	}
 
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "sys-sub", "parent": "sys-x"}, http.StatusCreated)
-	patch(map[string]any{"parent": "sys-sub"}, http.StatusUnprocessableEntity)
+	move(map[string]any{"parent": "sys-sub"}, http.StatusUnprocessableEntity)
+
+	// :move refuses an empty body: at least one of location or parent is required.
+	c.do(ownerTok, http.MethodPost, "/systems/sys-x:move", map[string]any{}, http.StatusUnprocessableEntity)
 }

@@ -85,20 +85,27 @@ type SystemSpec struct {
 	LocationName *string
 }
 
-// SystemPatch is the update input: nil fields unchanged. StandardID,
-// LocationName, and ParentName follow the house three-state convention, nil
-// unchanged and an explicit empty string CLEARS (converting a classified system
-// to a one-off, lifting a placed system out of its location, or making a nested
-// system a root). ParentName is cycle-guarded and scope-injected: the new parent
-// must be inside the caller's update scope and must not be the system itself or
-// one of its own descendants.
+// SystemPatch is the update input: nil fields unchanged. StandardID follows the
+// house three-state convention, nil unchanged and an explicit empty string
+// CLEARS it (converting a classified system to a one-off).
 //
 // There is deliberately no Name here. A rename is RenameSystem, its own act under
 // its own permission, because it breaks the references an operator stored outside
-// this system.
+// this system. There is deliberately no LocationName or ParentName here either
+// (#627 Task 13): a placement change is its own act, MoveSystem, gated by
+// system:move rather than system:update; see that function's doc comment.
 type SystemPatch struct {
-	DisplayName  *string
-	StandardID   *string
+	DisplayName *string
+	StandardID  *string
+}
+
+// SystemMove is the :move input: nil fields unchanged, an explicit empty string
+// clears (lifting a placed system out of its location, or making a nested
+// system a root), a name sets. ParentName is cycle-guarded and scope-injected:
+// the new parent must be inside the caller's move scope and must not be the
+// system itself or one of its own descendants. Clearing ParentName to root
+// requires an all-scoped move grant (see MoveSystem's doc comment for why).
+type SystemMove struct {
 	LocationName *string
 	ParentName   *string
 }
@@ -470,10 +477,12 @@ func (p *PG) systemIsDescendant(ctx context.Context, q querier, targetID, candid
 }
 
 // UpdateSystem patches a system by name with the three-way scope split and
-// in-transaction audit, recomputing health when the standard or the location
-// moved. A reparent is a structural move within the system tree (cycle-guarded and
-// scope-injected) that does not move health: the rollup runs system -> location,
-// not through the system tree.
+// in-transaction audit, recomputing health when the standard moved (it swaps
+// the whole inherited role set, so the verdict can flip in either direction).
+//
+// Placement (a relocate or a reparent) is NOT here (#627 Task 13): it is its
+// own act, MoveSystem, gated by system:move. See that function's doc comment,
+// including for why a relocate keeps recomputing health there.
 func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch SystemPatch, read, action scope.Set) (*System, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -485,23 +494,6 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	if err != nil {
 		return nil, err
 	}
-	// The location arrives as a name and the column holds an id, so the three-state
-	// value is resolved before the statement: nil stays nil (unchanged), "" stays ""
-	// (clear), and a named location becomes its id.
-	locationPatch := patch.LocationName
-	if patch.LocationName != nil && *patch.LocationName != "" {
-		// scopedByName, not scopedByNameInScope: cross-tier, same as the
-		// create-time bind above. action is resolved for "system", and
-		// checking it against the location table's own ancestor chain can
-		// never match, so threading it through denies every non-all caller
-		// rather than narrowing anything. Existence-only, withoutCandidates
-		// for the same no-scope-to-filter-by reason.
-		loc, err := scopedByName(ctx, tx, locationConfig, *patch.LocationName)
-		if err != nil {
-			return nil, withoutCandidates(err) // ErrLocationNotFound -> mapped to 422 by the API
-		}
-		locationPatch = &loc.ID
-	}
 	var standardPatchID *string
 	if patch.StandardID != nil && *patch.StandardID != "" {
 		var sid string
@@ -509,29 +501,6 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 			return nil, ErrUnknownStandard
 		}
 		standardPatchID = &sid
-	}
-	// The parent is a reparent within the system tree: resolve within the
-	// caller's action scope (resolveScopedRef, ruling 2), which both
-	// requires the new parent inside that scope and judges ambiguity inside
-	// it too, and cycle-guard against moving the system under itself or a
-	// descendant. "" clears to a root system; nil leaves the parent
-	// untouched.
-	parentPatch := patch.ParentName
-	if patch.ParentName != nil && *patch.ParentName != "" {
-		parent, err := resolveScopedRef(ctx, tx, systemConfig, *patch.ParentName, "system", action)
-		if errors.Is(err, ErrSystemNotFound) {
-			return nil, ErrParentSystemNotFound
-		} else if err != nil {
-			return nil, err
-		}
-		descendant, err := p.systemIsDescendant(ctx, tx, before.ID, parent.ID)
-		if err != nil {
-			return nil, err
-		}
-		if descendant {
-			return nil, ErrSystemCycle
-		}
-		parentPatch = &parent.ID
 	}
 	after, err := scanSystem(tx.QueryRow(ctx, `
 		update system set
@@ -543,52 +512,26 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 			standard_id  = case
 				when $3::text is null then standard_id
 				when $3 = '' then null
-				else $5::uuid
-			end,
-			-- location_id takes the same three states, already resolved to an id. The
-			-- column is a uuid, so the branch that sets it casts: a CASE cannot mix
-			-- uuid and text.
-			location_id  = case
-				when $4::text is null then location_id
-				when $4 = '' then null
 				else $4::uuid
-			end,
-			-- parent_id takes the same three states, resolved to an id above.
-			parent_id    = case
-				when $6::text is null then parent_id
-				when $6 = '' then null
-				else $6::uuid
 			end,
 			updated_at   = now()
 		where id = $1
 		returning `+systemCols,
-		before.ID, patch.DisplayName, patch.StandardID, locationPatch, standardPatchID, parentPatch))
+		before.ID, patch.DisplayName, patch.StandardID, standardPatchID))
 	if err != nil {
 		return nil, mapSystemWriteErr(err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "system", after.ID, before, after); err != nil {
 		return nil, err
 	}
-	// Two of these fields move health, and both are detected against the
-	// before-image the update already loaded rather than against the patch (a patch
-	// that sets a field to what it already held changes nothing).
-	//
-	// The standard swaps the whole inherited role set, so the verdict can flip in
-	// either direction. The location moves the system's contribution from one rollup
-	// to another, so BOTH are recomputed: the one it left may have just improved.
-	movedStandard := !sameOptional(before.StandardID, after.StandardID)
-	movedLocation := !sameOptional(before.LocationID, after.LocationID)
-	if movedStandard || movedLocation {
-		var left []string
-		if movedLocation && before.LocationID != nil {
-			// The id is already in hand; no lookup needed at all (see
-			// systemConfig.afterDelete for the same shape).
-			left = append(left, *before.LocationID)
-		}
+	// Detected against the before-image the update already loaded rather than
+	// against the patch (a patch that sets a field to what it already held
+	// changes nothing).
+	if !sameOptional(before.StandardID, after.StandardID) {
 		// after.ID, not after.Name: see CreateSystem's comment on the same
 		// shape. A rename in the same patch (not possible today, but the
 		// principle holds) would make this doubly wrong if it read the name.
-		if err := p.recomputeMovedSystem(ctx, tx, after.ID, left...); err != nil {
+		if err := p.recomputeMovedSystem(ctx, tx, after.ID); err != nil {
 			return nil, err
 		}
 	}
@@ -634,6 +577,132 @@ func (p *PG) RenameSystem(ctx context.Context, actorID, name, newName string, re
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit rename system: %w", err)
+	}
+	return after, nil
+}
+
+// MoveSystem relocates and/or reparents a system by name, the same three-way
+// scope split as UpdateSystem, in its own transaction with its own DISTINCT
+// audit verb ("move", not "update"). Its own act, not a PATCH field (#627 Task
+// 13), for the reason the ADR states: a PATCH that cleared parent_id lifted a
+// row out of every subtree scope with no check, while creating the same root
+// requires an all-scoped grant. Clearing ParentName to root here now requires
+// action.All (mirroring CreateSystem's own root check), the guard the old
+// UpdateSystem never had.
+//
+// The cycle guard and the resolveScopedRef ambiguity-inside-scope ordering
+// (ruling 2, #627) both carry over unchanged from the old UpdateSystem
+// reparent branch: dropping them here, rather than moving them, would delete
+// the only entry point for a system reparent and make the guard unreachable.
+//
+// Health: a reparent (moving within the system tree) does not move health, as
+// before (the rollup runs system -> location, not through the system tree). A
+// relocate (a location change) DOES still recompute, both ends, exactly as
+// UpdateSystem's old combined patch did: TestHealthMovesOnRelocation is the
+// proof this is load-bearing, not incidental, so "a placement move never
+// recomputes health" (true for every component move, and for a system
+// reparent) does NOT generalize to a system's own location field, which the
+// health rollup depends on directly.
+func (p *PG) MoveSystem(ctx context.Context, actorID, name string, move SystemMove, read, action scope.Set) (*System, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin move system: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	before, err := p.resolveSystemForAction(ctx, tx, name, read, action)
+	if err != nil {
+		return nil, err
+	}
+	// The location arrives as a name and the column holds an id, so the three-state
+	// value is resolved before the statement: nil stays nil (unchanged), "" stays ""
+	// (clear), and a named location becomes its id.
+	locationPatch := move.LocationName
+	if move.LocationName != nil && *move.LocationName != "" {
+		// scopedByName, not scopedByNameInScope: cross-tier, same as the
+		// create-time bind above. action is resolved for "system", and
+		// checking it against the location table's own ancestor chain can
+		// never match, so threading it through denies every non-all caller
+		// rather than narrowing anything. Existence-only, withoutCandidates
+		// for the same no-scope-to-filter-by reason.
+		loc, err := scopedByName(ctx, tx, locationConfig, *move.LocationName)
+		if err != nil {
+			return nil, withoutCandidates(err) // ErrLocationNotFound -> mapped to 422 by the API
+		}
+		locationPatch = &loc.ID
+	}
+	// The parent is a reparent within the system tree: resolve within the
+	// caller's action scope (resolveScopedRef, ruling 2), which both
+	// requires the new parent inside that scope and judges ambiguity inside
+	// it too, and cycle-guard against moving the system under itself or a
+	// descendant. nil leaves the parent untouched.
+	parentPatch := move.ParentName
+	if move.ParentName != nil {
+		if *move.ParentName == "" {
+			// Clearing to root: the same authorization CreateSystem already
+			// enforces for a root system. The old UpdateSystem patch let ANY
+			// action-scoped (not necessarily all-scoped) caller clear parent_id
+			// to NULL, lifting the system out of every subtree scope with no
+			// check at all; this closes that gap.
+			if !action.All {
+				return nil, ErrSystemForbidden
+			}
+		} else {
+			parent, err := resolveScopedRef(ctx, tx, systemConfig, *move.ParentName, "system", action)
+			if errors.Is(err, ErrSystemNotFound) {
+				return nil, ErrParentSystemNotFound
+			} else if err != nil {
+				return nil, err
+			}
+			descendant, err := p.systemIsDescendant(ctx, tx, before.ID, parent.ID)
+			if err != nil {
+				return nil, err
+			}
+			if descendant {
+				return nil, ErrSystemCycle
+			}
+			parentPatch = &parent.ID
+		}
+	}
+	after, err := scanSystem(tx.QueryRow(ctx, `
+		update system set
+			location_id = case
+				when $2::text is null then location_id
+				when $2 = '' then null
+				else $2::uuid
+			end,
+			parent_id   = case
+				when $3::text is null then parent_id
+				when $3 = '' then null
+				else $3::uuid
+			end,
+			updated_at  = now()
+		where id = $1
+		returning `+systemCols,
+		before.ID, locationPatch, parentPatch))
+	if err != nil {
+		return nil, mapSystemWriteErr(err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "move", "system", after.ID, before, after); err != nil {
+		return nil, err
+	}
+	// The location moves the system's contribution from one rollup to another,
+	// so BOTH are recomputed: the one it left may have just improved. See the
+	// doc comment above for why this survives the "a move never recomputes
+	// health" invariant that holds everywhere else.
+	if movedLocation := !sameOptional(before.LocationID, after.LocationID); movedLocation {
+		var left []string
+		if before.LocationID != nil {
+			// The id is already in hand; no lookup needed at all (see
+			// systemConfig.afterDelete for the same shape).
+			left = append(left, *before.LocationID)
+		}
+		if err := p.recomputeMovedSystem(ctx, tx, after.ID, left...); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit move system: %w", err)
 	}
 	return after, nil
 }

@@ -719,6 +719,27 @@ Example:
 omniglass component metric list <name>
 ```
 
+### `omniglass component move`
+
+Move a component
+
+```
+omniglass component move <name> [flags]
+```
+
+Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own verdict is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--location` | string | (none) | Relocates the component to this location name. An empty string clears its placement. |
+| `--parent` | string | (none) | Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component (requires an all-scoped move grant). |
+
+Example:
+
+```sh
+omniglass component move <name>
+```
+
 ### `omniglass component property`
 
 Commands for the property resource
@@ -884,13 +905,11 @@ Update a component
 omniglass component update <name> [flags]
 ```
 
-Patches a component's display_name, product, location, or parent. The name is not patchable: renaming is the :rename custom method. Parent and location follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets); product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+Patches a component's display_name or product. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. Gated by component:update; read and update scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) | A new operator-facing label |
-| `--location` | string | (none) | Relocates the component to this location name. An empty string clears its placement. |
-| `--parent` | string | (none) | Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component. |
 | `--product` | string | (none) | Re-classifies the component to this product (catalog SKU), by name or uuid. Required once set: an empty string is refused (422), not a clear. Explicitly-set property values persist; the new product's contract defaults follow. |
 
 Example:
@@ -1533,6 +1552,26 @@ Example:
 omniglass location metric list <name>
 ```
 
+### `omniglass location move`
+
+Move a location
+
+```
+omniglass location move <name> [flags]
+```
+
+Re-parents a location (a tree move): parent is required (422 if omitted), cycle-guarded, and placement-validated against the resolved location_type. Moving to root is not supported (422): MoveLocation gains no clear-to-root capability locations have never had. A separate act from update, and a separately grantable one (location:move), because a placement change is an authorization act, not a label edit. Recorded under its own audit verb, move, distinct from update. Does not recompute health. A taken name at the destination is a 409. Gated by location:move; the read and move scopes drive the 404 versus 403 split.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--parent` | string | (none) | Re-parents the location (a tree move) to this location name; cycle-guarded and placement-validated. Moving to root is not supported. |
+
+Example:
+
+```sh
+omniglass location move <name>
+```
+
 ### `omniglass location property`
 
 Commands for the property resource
@@ -1658,13 +1697,12 @@ Update a location
 omniglass location update <name> [flags]
 ```
 
-Patches a location's display_name, location_type, or parent (a move). The name is not patchable: renaming is the :rename custom method. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
+Patches a location's display_name or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) | A new operator-facing label |
 | `--location-type` | string | (none) | Re-types the location: a location_type, by name or uuid |
-| `--parent` | string | (none) | Re-parents the location (a tree move) to this location name, cycle-guarded and placement-validated. Moving to root is not supported via update this slice. |
 
 Example:
 
@@ -3934,6 +3972,27 @@ Example:
 omniglass system metric list <name>
 ```
 
+### `omniglass system move`
+
+Move a system
+
+```
+omniglass system move <name> [flags]
+```
+
+Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. Gated by system:move; read and move scopes drive the 404 versus 403 split.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--location` | string | (none) | Relocates the system to this location name. An empty string clears its placement. |
+| `--parent` | string | (none) | Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system (requires an all-scoped move grant). |
+
+Example:
+
+```sh
+omniglass system move <name>
+```
+
 ### `omniglass system property`
 
 Commands for the property resource
@@ -4179,13 +4238,11 @@ Update a system
 omniglass system update <name> [flags]
 ```
 
-Patches a system's display_name, standard, location, or parent. The name is not patchable: renaming is the :rename custom method. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+Patches a system's display_name or standard. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard field follows the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system), a name sets. Gated by system:update; read and update scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) | A new operator-facing label |
-| `--location` | string | (none) | Relocates the system to this location name. An empty string clears its placement. |
-| `--parent` | string | (none) | Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system. |
 | `--standard-id` | string | (none) | A new standard, by handle or uuid; "" clears it (a one-off system) |
 
 Example:
