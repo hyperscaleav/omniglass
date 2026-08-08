@@ -4261,6 +4261,11 @@ export interface components {
             assigned: number;
             /** @description The component names filling this role in this system */
             assigned_to: string[] | null;
+            /**
+             * Format: int64
+             * @description The most components the role will accept; null means no upper bound beyond quorum
+             */
+            capacity?: number;
             display_name: string;
             /** @description True when the role is inherited from the system's standard; false when declared on the system */
             from_standard: boolean;
@@ -4269,6 +4274,8 @@ export interface components {
             name: string;
             /** @description If set, a filling component's product must be one of these; empty accepts any product of an accepted type */
             pinned_products: string[] | null;
+            /** @description Human labels for each position within the role, by index; empty when unlabeled */
+            position_labels: string[] | null;
             /** Format: int64 */
             quorum: number;
             /**
@@ -5785,6 +5792,11 @@ export interface components {
             readonly $schema?: string;
             /** @description The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type */
             accepted_types?: string[] | null;
+            /**
+             * Format: int64
+             * @description The most components the role will accept; must be at least quorum. Omit to leave whatever is already declared unchanged (or unbounded on first declare); there is no way to explicitly clear a capacity back to unbounded once set
+             */
+            capacity?: number;
             /** @description The role's human label; defaults to the role name */
             display_name?: string;
             /**
@@ -5794,6 +5806,8 @@ export interface components {
             impact?: "outage" | "degraded" | "none";
             /** @description If set, a filling component's product must be one of these; replaces the pinned set wholesale. Omit or empty accepts any product of an accepted type */
             pinned_products?: string[] | null;
+            /** @description Human labels for each position within the role, by index; replaces the label set wholesale. Omit or empty clears labelling */
+            position_labels?: string[] | null;
             /**
              * Format: int64
              * @description How many components must fill the role; omit for one
@@ -6176,6 +6190,11 @@ export interface components {
             readonly $schema?: string;
             /** @description The component_types a filling component's product must be classified within (self or a descendant); empty accepts any type */
             accepted_types: string[] | null;
+            /**
+             * Format: int64
+             * @description The most components the role will accept; null means no upper bound beyond quorum
+             */
+            capacity?: number;
             /** @description The role's human label */
             display_name: string;
             /** @description What an impaired role means for its system: outage, degraded, or none */
@@ -6184,6 +6203,8 @@ export interface components {
             name: string;
             /** @description If set, a filling component's product must be one of these; empty accepts any product of an accepted type */
             pinned_products: string[] | null;
+            /** @description Human labels for each position within the role, by index; empty when unlabeled */
+            position_labels: string[] | null;
             /**
              * Format: int64
              * @description How many components must fill the role

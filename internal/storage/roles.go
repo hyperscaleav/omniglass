@@ -32,6 +32,19 @@ type SystemRole struct {
 	// occupant still counts.
 	AcceptedTypes  []string
 	PinnedProducts []string
+	// Capacity is the most components the role will accept, an optional upper
+	// bound above Quorum's floor; nil means unbounded. A pointer so "omitted"
+	// (leave whatever is already declared alone) is distinguishable from "an
+	// explicit small number": SetSystemRole otherwise wholesale-replaces a
+	// declaration on every write, which would silently reset capacity to
+	// unbounded on any edit that does not resend it.
+	Capacity *int
+	// PositionLabels names each position within the role, by index (position 1
+	// is PositionLabels[0]); empty means unlabeled. Unlike Capacity this
+	// wholesale-replaces on every write, the same rule AcceptedTypes and
+	// PinnedProducts already follow: a label set is a list, not a single bound,
+	// and there is no "leave unchanged" reading for one.
+	PositionLabels []string
 	// Impact is what an impaired role means for its system: outage, degraded, or
 	// none. It lives on the role because the same broken component matters
 	// differently depending on the slot it was filling, and it is the only input
@@ -41,14 +54,17 @@ type SystemRole struct {
 	UpdatedAt time.Time
 }
 
-// SystemRoleSpec is the declaration input. AcceptedTypes and PinnedProducts
-// each replace their set wholesale on an update.
+// SystemRoleSpec is the declaration input. AcceptedTypes, PinnedProducts, and
+// PositionLabels each replace their set wholesale on an update; Capacity does
+// not (nil leaves the existing cap alone, see SystemRole.Capacity).
 type SystemRoleSpec struct {
 	Name           string
 	DisplayName    string
 	Quorum         int
 	AcceptedTypes  []string
 	PinnedProducts []string
+	Capacity       *int
+	PositionLabels []string
 	Impact         string // outage | degraded | none; empty means degraded
 }
 
@@ -82,6 +98,18 @@ var (
 	ErrRoleRefNotFound   = errors.New("storage: role references a missing owner, type, or product")
 	ErrAssignmentMissing = errors.New("storage: role assignment not found")
 	ErrRoleImpact        = errors.New("storage: unknown role impact")
+	// ErrComponentAlreadyStaffed is the constraint-violation fallback for the
+	// one-role-per-component rule (#626): AssignRole's own pre-check normally
+	// catches this first and returns the richer ComponentStaffedShortfall, so
+	// this sentinel only fires under a genuine race the pre-check's snapshot
+	// missed.
+	ErrComponentAlreadyStaffed = errors.New("storage: component already fills a different role in this system")
+	// ErrRolePositionTaken is the constraint-violation fallback for a position
+	// race: two concurrent assignments (or a swap) computed the same slot.
+	ErrRolePositionTaken = errors.New("storage: that position is already taken")
+	// ErrCapacityBelowQuorum is the declaration-alone refusal (422): a capacity
+	// under the role's own quorum can never be satisfied by any staffing.
+	ErrCapacityBelowQuorum = errors.New("storage: capacity must be at least the role's quorum")
 )
 
 // roleImpacts is the impact domain, mirroring the table's CHECK. Validating here
@@ -119,6 +147,40 @@ func (e *ProductPinShortfall) Error() string {
 		e.Component, e.ComponentProduct, e.Role, strings.Join(e.WantProducts, " or "))
 }
 
+// ComponentStaffedShortfall is the assignment refusal when the component
+// already fills a DIFFERENT role in the same system: #626 permits a
+// component at most one role per system, so this names which role it
+// already holds rather than leaving the operator to guess. Assigning it to
+// the SAME role it already holds is unaffected (idempotent, as before).
+type ComponentStaffedShortfall struct {
+	Component string
+	HeldRole  string
+	System    string
+}
+
+func (e *ComponentStaffedShortfall) Error() string {
+	return fmt.Sprintf("storage: component %q already fills %q in %q; a component fills at most one role per system",
+		e.Component, e.HeldRole, e.System)
+}
+
+// CapacityShortfall is the declaration refusal when lowering a role's
+// capacity would put it below the number of components some conforming
+// system already has assigned to it. A standard-owned role is staffed
+// independently in every conforming system (assignments carry both role_id
+// and system_id), so the pre-check refuses if ANY conforming system would
+// exceed the new cap, naming whichever one exceeds it by the widest margin.
+type CapacityShortfall struct {
+	Role   string
+	System string
+	Have   int
+	Want   int
+}
+
+func (e *CapacityShortfall) Error() string {
+	return fmt.Sprintf("storage: role %q in system %q is filled by %d components; capacity cannot be lowered to %d",
+		e.Role, e.System, e.Have, e.Want)
+}
+
 // EffectiveRoles resolves the roles a system needs filled: those its standard
 // declares (inherited) plus those declared directly on it (ad-hoc), each with
 // its typed-slot requirement and current assignments. A one-off system has
@@ -145,8 +207,8 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 			select r.*, false as from_standard
 			from sys join system_role r on r.owner_kind = 'system' and r.system_id = sys.id
 		)
-		select roles.id, roles.name, roles.display_name, roles.quorum, roles.impact, roles.from_standard,
-		       roles.created_at, roles.updated_at,
+		select roles.id, roles.name, roles.display_name, roles.quorum, roles.capacity, roles.position_labels,
+		       roles.impact, roles.from_standard, roles.created_at, roles.updated_at,
 		       coalesce(array_agg(distinct ct.name) filter (where ct.name is not null), '{}') as types,
 		       coalesce(array_agg(distinct pr.name) filter (where pr.name is not null), '{}') as products,
 		       coalesce(array_agg(distinct ac.name) filter (where ac.name is not null), '{}') as assigned
@@ -158,8 +220,8 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 		left join system_role_assignment ra on ra.role_id = roles.id
 		     and ra.system_id = (select id from system where name = $1)
 		left join component ac on ac.id = ra.component_id
-		group by roles.id, roles.name, roles.display_name, roles.quorum, roles.impact, roles.from_standard,
-		         roles.created_at, roles.updated_at
+		group by roles.id, roles.name, roles.display_name, roles.quorum, roles.capacity, roles.position_labels,
+		         roles.impact, roles.from_standard, roles.created_at, roles.updated_at
 		order by roles.name`, systemName)
 	if err != nil {
 		return nil, fmt.Errorf("storage: effective roles %s: %w", systemName, err)
@@ -169,8 +231,9 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 	var out []EffectiveRole
 	for rows.Next() {
 		var e EffectiveRole
-		if err := rows.Scan(&e.ID, &e.Name, &e.DisplayName, &e.Quorum, &e.Impact, &e.FromStandard,
-			&e.CreatedAt, &e.UpdatedAt, &e.AcceptedTypes, &e.PinnedProducts, &e.AssignedTo); err != nil {
+		if err := rows.Scan(&e.ID, &e.Name, &e.DisplayName, &e.Quorum, &e.Capacity, &e.PositionLabels,
+			&e.Impact, &e.FromStandard, &e.CreatedAt, &e.UpdatedAt,
+			&e.AcceptedTypes, &e.PinnedProducts, &e.AssignedTo); err != nil {
 			return nil, fmt.Errorf("storage: scan effective role: %w", err)
 		}
 		out = append(out, e)
@@ -249,6 +312,27 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 				Role: roleDisplay, WantProducts: roleRefNames(pinnedProducts),
 			}
 		}
+	}
+
+	// A component fills at most one role per system (#626). This pre-check runs
+	// ahead of the unique index so the refusal can name BOTH parties: the
+	// component and the role it already holds, which a constraint name alone
+	// cannot do. Excluded is the target role itself, so re-assigning to the
+	// role a component already holds stays idempotent.
+	var heldRole string
+	err = tx.QueryRow(ctx, `
+		select r.display_name from system_role_assignment ra
+		join system_role r on r.id = ra.role_id
+		where ra.system_id = (select id from system where name = $1)
+		  and ra.component_id = (select id from component where name = $2)
+		  and ra.role_id <> $3`, systemName, componentName, roleID).Scan(&heldRole)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		// not staffed elsewhere in this system
+	case err != nil:
+		return fmt.Errorf("storage: check existing staffing %s/%s: %w", systemName, componentName, err)
+	default:
+		return &ComponentStaffedShortfall{Component: componentName, HeldRole: heldRole, System: systemName}
 	}
 
 	// Staffing a role IS membership, so the binding is created here rather than
@@ -432,17 +516,30 @@ func (p *PG) classifyComponent(ctx context.Context, q querier, componentName str
 	return &c, nil
 }
 
+// mapRoleWriteErr discriminates a role write's Postgres error by constraint
+// name (#626): a plain isUniqueViolation check cannot tell a name collision
+// from a double-staffing race from a position race, and would report all
+// three as "a role with this name is already declared here".
 func mapRoleWriteErr(err error) error {
-	if isUniqueViolation(err) {
-		return ErrRoleExists
-	}
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && (pgErr.Code == "23503" ||
-		// an unknown component_type or product name resolves to null on a
-		// not-null arc
-		(pgErr.Code == "23502" && (pgErr.ColumnName == "component_type_id" ||
-			pgErr.ColumnName == "product_id"))) {
-		return ErrRoleRefNotFound
+	if errors.As(err, &pgErr) {
+		switch {
+		case pgErr.Code == "23505":
+			switch pgErr.ConstraintName {
+			case "system_role_assignment_component_key":
+				return ErrComponentAlreadyStaffed
+			case "system_role_assignment_position_key":
+				return ErrRolePositionTaken
+			}
+			return ErrRoleExists
+		case pgErr.Code == "23514" && pgErr.ConstraintName == "system_role_capacity_check":
+			return ErrCapacityBelowQuorum
+		case pgErr.Code == "23503",
+			// an unknown component_type or product name resolves to null on a
+			// not-null arc
+			pgErr.Code == "23502" && (pgErr.ColumnName == "component_type_id" || pgErr.ColumnName == "product_id"):
+			return ErrRoleRefNotFound
+		}
 	}
 	return fmt.Errorf("storage: role write: %w", err)
 }

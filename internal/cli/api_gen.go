@@ -4669,9 +4669,11 @@ func generatedCommands() []*cobra.Command {
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
 					var fAcceptedTypes string
+					var fCapacity string
 					var fDisplayName string
 					var fImpact string
 					var fPinnedProducts string
+					var fPositionLabels string
 					var fQuorum string
 					cmd := &cobra.Command{
 						Use:     "update <id> <role>",
@@ -4685,6 +4687,9 @@ func generatedCommands() []*cobra.Command {
 							if cmd.Flags().Changed("accepted-types") {
 								body["accepted_types"] = jsonOrString(fAcceptedTypes)
 							}
+							if cmd.Flags().Changed("capacity") {
+								body["capacity"] = jsonOrString(fCapacity)
+							}
 							if cmd.Flags().Changed("display-name") {
 								body["display_name"] = fDisplayName
 							}
@@ -4694,6 +4699,9 @@ func generatedCommands() []*cobra.Command {
 							if cmd.Flags().Changed("pinned-products") {
 								body["pinned_products"] = jsonOrString(fPinnedProducts)
 							}
+							if cmd.Flags().Changed("position-labels") {
+								body["position_labels"] = jsonOrString(fPositionLabels)
+							}
 							if cmd.Flags().Changed("quorum") {
 								body["quorum"] = jsonOrString(fQuorum)
 							}
@@ -4701,9 +4709,11 @@ func generatedCommands() []*cobra.Command {
 						},
 					}
 					cmd.Flags().StringVar(&fAcceptedTypes, "accepted-types", "", "The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type")
+					cmd.Flags().StringVar(&fCapacity, "capacity", "", "The most components the role will accept; must be at least quorum. Omit to leave whatever is already declared unchanged (or unbounded on first declare); there is no way to explicitly clear a capacity back to unbounded once set")
 					cmd.Flags().StringVar(&fDisplayName, "display-name", "", "The role's human label; defaults to the role name")
 					cmd.Flags().StringVar(&fImpact, "impact", "", "What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display")
 					cmd.Flags().StringVar(&fPinnedProducts, "pinned-products", "", "If set, a filling component's product must be one of these; replaces the pinned set wholesale. Omit or empty accepts any product of an accepted type")
+					cmd.Flags().StringVar(&fPositionLabels, "position-labels", "", "Human labels for each position within the role, by index; replaces the label set wholesale. Omit or empty clears labelling")
 					cmd.Flags().StringVar(&fQuorum, "quorum", "", "How many components must fill the role; omit for one")
 					return cmd
 				}()
@@ -5201,9 +5211,11 @@ func generatedCommands() []*cobra.Command {
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
 					var fAcceptedTypes string
+					var fCapacity string
 					var fDisplayName string
 					var fImpact string
 					var fPinnedProducts string
+					var fPositionLabels string
 					var fQuorum string
 					cmd := &cobra.Command{
 						Use:     "update <name> <role>",
@@ -5217,6 +5229,9 @@ func generatedCommands() []*cobra.Command {
 							if cmd.Flags().Changed("accepted-types") {
 								body["accepted_types"] = jsonOrString(fAcceptedTypes)
 							}
+							if cmd.Flags().Changed("capacity") {
+								body["capacity"] = jsonOrString(fCapacity)
+							}
 							if cmd.Flags().Changed("display-name") {
 								body["display_name"] = fDisplayName
 							}
@@ -5226,6 +5241,9 @@ func generatedCommands() []*cobra.Command {
 							if cmd.Flags().Changed("pinned-products") {
 								body["pinned_products"] = jsonOrString(fPinnedProducts)
 							}
+							if cmd.Flags().Changed("position-labels") {
+								body["position_labels"] = jsonOrString(fPositionLabels)
+							}
 							if cmd.Flags().Changed("quorum") {
 								body["quorum"] = jsonOrString(fQuorum)
 							}
@@ -5233,9 +5251,11 @@ func generatedCommands() []*cobra.Command {
 						},
 					}
 					cmd.Flags().StringVar(&fAcceptedTypes, "accepted-types", "", "The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type")
+					cmd.Flags().StringVar(&fCapacity, "capacity", "", "The most components the role will accept; must be at least quorum. Omit to leave whatever is already declared unchanged (or unbounded on first declare); there is no way to explicitly clear a capacity back to unbounded once set")
 					cmd.Flags().StringVar(&fDisplayName, "display-name", "", "The role's human label; defaults to the role name")
 					cmd.Flags().StringVar(&fImpact, "impact", "", "What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display")
 					cmd.Flags().StringVar(&fPinnedProducts, "pinned-products", "", "If set, a filling component's product must be one of these; replaces the pinned set wholesale. Omit or empty accepts any product of an accepted type")
+					cmd.Flags().StringVar(&fPositionLabels, "position-labels", "", "Human labels for each position within the role, by index; replaces the label set wholesale. Omit or empty clears labelling")
 					cmd.Flags().StringVar(&fQuorum, "quorum", "", "How many components must fill the role; omit for one")
 					return cmd
 				}()

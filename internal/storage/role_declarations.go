@@ -21,7 +21,7 @@ var ErrUnknownRoleOwner = errors.New("storage: unknown role owner_kind")
 // OwnerID is not in the column list (it lives in whichever arc column the owner
 // kind selects), so the caller stamps it from the address it queried by, the way
 // property_value's scan does.
-const systemRoleCols = `id, owner_kind, name, display_name, quorum, impact, created_at, updated_at`
+const systemRoleCols = `id, owner_kind, name, display_name, quorum, capacity, position_labels, impact, created_at, updated_at`
 
 // roleOwnerColumn maps a role owner kind to its exclusive-arc column. Every
 // identifier it returns is a compile-time constant, never caller input, so
@@ -52,11 +52,23 @@ func roleOwnerColumn(ownerKind string) (string, error) {
 
 func scanSystemRole(row pgx.Row) (*SystemRole, error) {
 	var r SystemRole
-	if err := row.Scan(&r.ID, &r.OwnerKind, &r.Name, &r.DisplayName, &r.Quorum, &r.Impact,
-		&r.CreatedAt, &r.UpdatedAt); err != nil {
+	if err := row.Scan(&r.ID, &r.OwnerKind, &r.Name, &r.DisplayName, &r.Quorum, &r.Capacity, &r.PositionLabels,
+		&r.Impact, &r.CreatedAt, &r.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &r, nil
+}
+
+// normalizePositionLabels returns a non-nil slice so an omitted set writes
+// and reads back as an empty text[], not SQL NULL (position_labels is not
+// null). Unlike capacity, a label set always wholesale-replaces: there is no
+// "leave unchanged" reading for a list, the same rule accepted_types and
+// pinned_products already follow.
+func normalizePositionLabels(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }
 
 // ListSystemRoles returns the roles one owner declares itself, ordered by
@@ -72,7 +84,8 @@ func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]
 	// The columns are spelled out rather than reusing systemRoleCols: the join
 	// needs them qualified by the role alias.
 	q := fmt.Sprintf(`
-		select r.id, r.owner_kind, r.name, r.display_name, r.quorum, r.impact, r.created_at, r.updated_at,
+		select r.id, r.owner_kind, r.name, r.display_name, r.quorum, r.capacity, r.position_labels, r.impact,
+		       r.created_at, r.updated_at,
 		       coalesce(array_agg(distinct ct.name order by ct.name) filter (where ct.name is not null), '{}') as types,
 		       coalesce(array_agg(distinct pr.name order by pr.name) filter (where pr.name is not null), '{}') as products
 		from system_role r
@@ -93,8 +106,8 @@ func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]
 	out := []SystemRole{}
 	for rows.Next() {
 		var r SystemRole
-		if err := rows.Scan(&r.ID, &r.OwnerKind, &r.Name, &r.DisplayName, &r.Quorum, &r.Impact,
-			&r.CreatedAt, &r.UpdatedAt, &r.AcceptedTypes, &r.PinnedProducts); err != nil {
+		if err := rows.Scan(&r.ID, &r.OwnerKind, &r.Name, &r.DisplayName, &r.Quorum, &r.Capacity, &r.PositionLabels,
+			&r.Impact, &r.CreatedAt, &r.UpdatedAt, &r.AcceptedTypes, &r.PinnedProducts); err != nil {
 			return nil, fmt.Errorf("storage: scan role: %w", err)
 		}
 		r.OwnerID = ownerID
@@ -132,6 +145,8 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 	if !roleImpacts[impact] {
 		return nil, ErrRoleImpact
 	}
+	positionLabels := normalizePositionLabels(spec.PositionLabels)
+
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin set role: %w", err)
@@ -152,16 +167,42 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 		before = prior
 	}
 
+	// Lowering capacity below what some conforming system already has
+	// assigned refuses naming the worst-exceeding one: a standard-owned role
+	// is staffed independently in every system that conforms to it, so any
+	// one of them can exceed a new, lower cap regardless of what this system
+	// (the one whose edit triggered the check) looks like.
+	if spec.Capacity != nil && prior != nil {
+		var sysName string
+		var have int
+		err := tx.QueryRow(ctx, `
+			select s.name, count(*) from system_role_assignment ra
+			  join system s on s.id = ra.system_id
+			 where ra.role_id = $1
+			 group by s.name having count(*) > $2
+			 order by count(*) desc, s.name limit 1`, prior.ID, *spec.Capacity).Scan(&sysName, &have)
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			// nothing exceeds the new cap
+		case err != nil:
+			return nil, fmt.Errorf("storage: capacity precheck %s: %w", prior.ID, err)
+		default:
+			return nil, &CapacityShortfall{Role: prior.DisplayName, System: sysName, Have: have, Want: *spec.Capacity}
+		}
+	}
+
 	r, err := scanSystemRole(tx.QueryRow(ctx, fmt.Sprintf(`
-		insert into system_role (owner_kind, %s, name, display_name, quorum, impact)
-		values ($1, %s, $3, $4, $5, $6)
+		insert into system_role (owner_kind, %s, name, display_name, quorum, capacity, position_labels, impact)
+		values ($1, %s, $3, $4, $5, $6, $7, $8)
 		on conflict (owner_kind, standard_id, system_id, name) do update
-			set display_name = excluded.display_name,
-			    quorum       = excluded.quorum,
-			    impact       = excluded.impact,
-			    updated_at   = now()
+			set display_name    = excluded.display_name,
+			    quorum          = excluded.quorum,
+			    capacity        = coalesce(excluded.capacity, system_role.capacity),
+			    position_labels = excluded.position_labels,
+			    impact          = excluded.impact,
+			    updated_at      = now()
 		returning `+systemRoleCols, col, roleOwnerExpr(ownerKind)),
-		ownerKind, ownerID, spec.Name, spec.DisplayName, quorum, impact))
+		ownerKind, ownerID, spec.Name, spec.DisplayName, quorum, spec.Capacity, positionLabels, impact))
 	if err != nil {
 		return nil, mapRoleWriteErr(err)
 	}
@@ -282,13 +323,14 @@ func (p *PG) SeedSystemRole(ctx context.Context, ownerKind, ownerID string, spec
 	if !roleImpacts[impact] {
 		return ErrRoleImpact
 	}
+	positionLabels := normalizePositionLabels(spec.PositionLabels)
 	var id string
 	err = p.pool.QueryRow(ctx, fmt.Sprintf(`
-		insert into system_role (owner_kind, %s, name, display_name, quorum, impact)
-		values ($1, %s, $3, $4, $5, $6)
+		insert into system_role (owner_kind, %s, name, display_name, quorum, capacity, position_labels, impact)
+		values ($1, %s, $3, $4, $5, $6, $7, $8)
 		on conflict (owner_kind, standard_id, system_id, name) do nothing
 		returning id`, col, roleOwnerExpr(ownerKind)),
-		ownerKind, ownerID, spec.Name, spec.DisplayName, max(spec.Quorum, 1), impact).Scan(&id)
+		ownerKind, ownerID, spec.Name, spec.DisplayName, max(spec.Quorum, 1), spec.Capacity, positionLabels, impact).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil // already there, and the operator owns it now
 	}

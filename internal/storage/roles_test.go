@@ -343,6 +343,204 @@ func TestAssignProductPin(t *testing.T) {
 	}
 }
 
+// TestSecondRoleSameComponentRefused proves the #626 one-role-per-component
+// rule: a component already filling one role in a system is refused when
+// assigned to a second, and the refusal names both the component and the
+// role it already holds, not just the status.
+func TestSecondRoleSameComponentRefused(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	typedSlotSystem(t, ctx, gw, all, "double-staff-sys")
+
+	if _, err := gw.SetSystemRole(ctx, "", "system", "double-staff-sys", storage.SystemRoleSpec{
+		Name: "main-display", DisplayName: "Main Display",
+	}); err != nil {
+		t.Fatalf("declare main-display: %v", err)
+	}
+	if _, err := gw.SetSystemRole(ctx, "", "system", "double-staff-sys", storage.SystemRoleSpec{
+		Name: "confidence-monitor", DisplayName: "Confidence Monitor",
+	}); err != nil {
+		t.Fatalf("declare confidence-monitor: %v", err)
+	}
+
+	bar := "cisco-room-bar"
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	if err := gw.AssignRole(ctx, "", "double-staff-sys", "main-display", "bar-1", all); err != nil {
+		t.Fatalf("assign to first role: %v", err)
+	}
+
+	err = gw.AssignRole(ctx, "", "double-staff-sys", "confidence-monitor", "bar-1", all)
+	var staffed *storage.ComponentStaffedShortfall
+	if !errors.As(err, &staffed) {
+		t.Fatalf("assign a second role to the same component: err = %v, want ComponentStaffedShortfall", err)
+	}
+	if staffed.Component != "bar-1" || staffed.HeldRole != "Main Display" || staffed.System != "double-staff-sys" {
+		t.Fatalf("shortfall = %+v, want bar-1 refused because it already fills Main Display in double-staff-sys", staffed)
+	}
+	if !strings.Contains(err.Error(), "bar-1") || !strings.Contains(err.Error(), "Main Display") {
+		t.Fatalf("shortfall message = %q, want it to name both bar-1 and Main Display", err.Error())
+	}
+
+	// Re-assigning to the SAME role it already holds stays idempotent: the
+	// exclusion is role_id <> the target role, not "already staffed at all".
+	if err := gw.AssignRole(ctx, "", "double-staff-sys", "main-display", "bar-1", all); err != nil {
+		t.Fatalf("re-assign to the role it already holds: %v, want idempotent success", err)
+	}
+}
+
+// TestCapacitySurvivesUnrelatedEdit proves capacity reaches all six write
+// sites (#626): a declared capacity must not be silently cleared by a later
+// edit that only touches an unrelated field, the same live defect impact
+// carries today (Task 9 fixes that one; this test guards capacity from
+// inheriting it).
+func TestCapacitySurvivesUnrelatedEdit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	typedSlotSystem(t, ctx, gw, all, "capacity-persist-sys")
+
+	cap3 := 3
+	if _, err := gw.SetSystemRole(ctx, "", "system", "capacity-persist-sys", storage.SystemRoleSpec{
+		Name: "main-display", DisplayName: "Main Display", Capacity: &cap3,
+	}); err != nil {
+		t.Fatalf("declare with capacity: %v", err)
+	}
+
+	r, err := gw.SetSystemRole(ctx, "", "system", "capacity-persist-sys", storage.SystemRoleSpec{
+		Name: "main-display", DisplayName: "Main Display (renamed)",
+	})
+	if err != nil {
+		t.Fatalf("edit display_name only: %v", err)
+	}
+	if r.Capacity == nil || *r.Capacity != 3 {
+		t.Fatalf("capacity after an unrelated edit = %v, want it to survive at 3", r.Capacity)
+	}
+	if r.DisplayName != "Main Display (renamed)" {
+		t.Fatalf("display_name = %q, want the edit to take", r.DisplayName)
+	}
+}
+
+// TestCapacityBelowQuorumRefused proves the declaration-alone refusal (422):
+// a capacity below the role's own quorum can never be satisfied by any
+// staffing, so it is refused at declare time rather than left to confuse an
+// operator staffing to quorum later.
+func TestCapacityBelowQuorumRefused(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	typedSlotSystem(t, ctx, gw, all, "capacity-quorum-sys")
+
+	badCap := 1
+	_, err = gw.SetSystemRole(ctx, "", "system", "capacity-quorum-sys", storage.SystemRoleSpec{
+		Name: "main-display", DisplayName: "Main Display", Quorum: 2, Capacity: &badCap,
+	})
+	if !errors.Is(err, storage.ErrCapacityBelowQuorum) {
+		t.Fatalf("declare capacity below quorum: err = %v, want ErrCapacityBelowQuorum", err)
+	}
+}
+
+// TestLoweringCapacityBelowCountRefusedAcrossInheritingSystems proves the
+// other-rows refusal (409): a standard-owned role is staffed independently
+// in every conforming system, so lowering its capacity must be refused if
+// ANY conforming system exceeds the new cap, even when the system that
+// triggered the edit would itself be fine.
+func TestLoweringCapacityBelowCountRefusedAcrossInheritingSystems(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+
+	std := "pair-cap-standard"
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, DisplayName: "Pair Cap"}); err != nil {
+		t.Fatalf("create standard: %v", err)
+	}
+	if _, err := gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
+		Name: "table-mic", DisplayName: "Table Mic", AcceptedTypes: []string{"video-bar"},
+	}); err != nil {
+		t.Fatalf("declare standard role: %v", err)
+	}
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "cap-sys-a", StandardID: &std}, all); err != nil {
+		t.Fatalf("create system a: %v", err)
+	}
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "cap-sys-b", StandardID: &std}, all); err != nil {
+		t.Fatalf("create system b: %v", err)
+	}
+
+	bar := "cisco-room-bar"
+	newBar := func(name string) {
+		t.Helper()
+		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: name, ProductName: &bar}, all); err != nil {
+			t.Fatalf("create component %s: %v", name, err)
+		}
+	}
+
+	// System A stays under any cap we will try; system B does not.
+	newBar("a-bar-1")
+	if err := gw.AssignRole(ctx, "", "cap-sys-a", "table-mic", "a-bar-1", all); err != nil {
+		t.Fatalf("assign a-bar-1: %v", err)
+	}
+	for _, name := range []string{"b-bar-1", "b-bar-2", "b-bar-3"} {
+		newBar(name)
+		if err := gw.AssignRole(ctx, "", "cap-sys-b", "table-mic", name, all); err != nil {
+			t.Fatalf("assign %s: %v", name, err)
+		}
+	}
+
+	cap2 := 2
+	_, err = gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
+		Name: "table-mic", DisplayName: "Table Mic", AcceptedTypes: []string{"video-bar"}, Capacity: &cap2,
+	})
+	var short *storage.CapacityShortfall
+	if !errors.As(err, &short) {
+		t.Fatalf("lower capacity below the assigned count in one conforming system: err = %v, want CapacityShortfall", err)
+	}
+	if short.System != "cap-sys-b" || short.Have != 3 || short.Want != 2 {
+		t.Fatalf("shortfall = %+v, want cap-sys-b with 3 exceeding a new cap of 2", short)
+	}
+}
+
 func hasAll(got []string, want ...string) bool {
 	set := map[string]bool{}
 	for _, g := range got {

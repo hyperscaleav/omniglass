@@ -3673,9 +3673,11 @@ Declares a role every conforming system needs filled, or revises it in place (th
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--accepted-types` | string | (none) | The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type |
+| `--capacity` | string | (none) | The most components the role will accept; must be at least quorum. Omit to leave whatever is already declared unchanged (or unbounded on first declare); there is no way to explicitly clear a capacity back to unbounded once set |
 | `--display-name` | string | (none) | The role's human label; defaults to the role name |
 | `--impact` | string | (none) | What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display |
 | `--pinned-products` | string | (none) | If set, a filling component's product must be one of these; replaces the pinned set wholesale. Omit or empty accepts any product of an accepted type |
+| `--position-labels` | string | (none) | Human labels for each position within the role, by index; replaces the label set wholesale. Omit or empty clears labelling |
 | `--quorum` | string | (none) | How many components must fill the role; omit for one |
 
 Example:
@@ -4106,9 +4108,11 @@ Declares a role directly on this system (how a one-off system gets roles at all,
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--accepted-types` | string | (none) | The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type |
+| `--capacity` | string | (none) | The most components the role will accept; must be at least quorum. Omit to leave whatever is already declared unchanged (or unbounded on first declare); there is no way to explicitly clear a capacity back to unbounded once set |
 | `--display-name` | string | (none) | The role's human label; defaults to the role name |
 | `--impact` | string | (none) | What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display |
 | `--pinned-products` | string | (none) | If set, a filling component's product must be one of these; replaces the pinned set wholesale. Omit or empty accepts any product of an accepted type |
+| `--position-labels` | string | (none) | Human labels for each position within the role, by index; replaces the label set wholesale. Omit or empty clears labelling |
 | `--quorum` | string | (none) | How many components must fill the role; omit for one |
 
 Example:

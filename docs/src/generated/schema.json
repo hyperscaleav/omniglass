@@ -2388,9 +2388,24 @@
       "nullable": true,
       "fk": true,
       "fk_target": "standard.id"
+     },
+     {
+      "name": "capacity",
+      "type": "integer",
+      "nullable": true
+     },
+     {
+      "name": "position_labels",
+      "type": "ARRAY",
+      "nullable": false,
+      "default": "'{}'::text[]"
      }
     ],
     "checks": [
+     {
+      "name": "system_role_capacity_check",
+      "expr": "CHECK (((capacity IS NULL) OR (capacity \u003e= quorum)))"
+     },
      {
       "name": "system_role_impact_check",
       "expr": "CHECK ((impact = ANY (ARRAY['outage'::text, 'degraded'::text, 'none'::text])))"
@@ -2449,6 +2464,10 @@
      }
     ],
     "uniques": [
+     {
+      "name": "system_role_assignment_component_key",
+      "definition": "CREATE UNIQUE INDEX system_role_assignment_component_key ON public.system_role_assignment USING btree (system_id, component_id)"
+     },
      {
       "name": "system_role_assignment_system_id_role_id_component_id_key",
       "definition": "CREATE UNIQUE INDEX system_role_assignment_system_id_role_id_component_id_key ON public.system_role_assignment USING btree (system_id, role_id, component_id)"

@@ -36,23 +36,30 @@ type systemRoleBody struct {
 	Name           string   `json:"name" doc:"The role's name within its owner (the address)"`
 	DisplayName    string   `json:"display_name" doc:"The role's human label"`
 	Quorum         int      `json:"quorum" doc:"How many components must fill the role"`
+	Capacity       *int     `json:"capacity,omitempty" doc:"The most components the role will accept; null means no upper bound beyond quorum"`
+	PositionLabels []string `json:"position_labels" doc:"Human labels for each position within the role, by index; empty when unlabeled"`
 	AcceptedTypes  []string `json:"accepted_types" doc:"The component_types a filling component's product must be classified within (self or a descendant); empty accepts any type"`
 	PinnedProducts []string `json:"pinned_products" doc:"If set, a filling component's product must be one of these; empty accepts any product of an accepted type"`
 	Impact         string   `json:"impact" doc:"What an impaired role means for its system: outage, degraded, or none"`
 }
 
 func toSystemRoleBody(r *storage.SystemRole) systemRoleBody {
-	types, products := r.AcceptedTypes, r.PinnedProducts
+	types, products, labels := r.AcceptedTypes, r.PinnedProducts, r.PositionLabels
 	if types == nil {
 		types = []string{}
 	}
 	if products == nil {
 		products = []string{}
 	}
+	if labels == nil {
+		labels = []string{}
+	}
 	return systemRoleBody{
 		Name:           r.Name,
 		DisplayName:    r.DisplayName,
 		Quorum:         r.Quorum,
+		Capacity:       r.Capacity,
+		PositionLabels: labels,
 		AcceptedTypes:  types,
 		PinnedProducts: products,
 		Impact:         r.Impact,
@@ -66,6 +73,8 @@ type effectiveRoleBody struct {
 	Name           string   `json:"name"`
 	DisplayName    string   `json:"display_name"`
 	Quorum         int      `json:"quorum"`
+	Capacity       *int     `json:"capacity,omitempty" doc:"The most components the role will accept; null means no upper bound beyond quorum"`
+	PositionLabels []string `json:"position_labels" doc:"Human labels for each position within the role, by index; empty when unlabeled"`
 	AcceptedTypes  []string `json:"accepted_types" doc:"The component_types a filling component's product must be classified within (self or a descendant); empty accepts any type"`
 	PinnedProducts []string `json:"pinned_products" doc:"If set, a filling component's product must be one of these; empty accepts any product of an accepted type"`
 	Impact         string   `json:"impact" doc:"What an impaired role means for its system: outage, degraded, or none"`
@@ -76,7 +85,7 @@ type effectiveRoleBody struct {
 }
 
 func toEffectiveRoleBody(e *storage.EffectiveRole) effectiveRoleBody {
-	types, products, to := e.AcceptedTypes, e.PinnedProducts, e.AssignedTo
+	types, products, to, labels := e.AcceptedTypes, e.PinnedProducts, e.AssignedTo, e.PositionLabels
 	if types == nil {
 		types = []string{}
 	}
@@ -86,10 +95,15 @@ func toEffectiveRoleBody(e *storage.EffectiveRole) effectiveRoleBody {
 	if to == nil {
 		to = []string{}
 	}
+	if labels == nil {
+		labels = []string{}
+	}
 	return effectiveRoleBody{
 		Name:           e.Name,
 		DisplayName:    e.DisplayName,
 		Quorum:         e.Quorum,
+		Capacity:       e.Capacity,
+		PositionLabels: labels,
 		AcceptedTypes:  types,
 		PinnedProducts: products,
 		Impact:         e.Impact,
@@ -123,6 +137,8 @@ type listSystemRolesOutput struct {
 type roleSpecBody struct {
 	DisplayName    string   `json:"display_name,omitempty" doc:"The role's human label; defaults to the role name"`
 	Quorum         int      `json:"quorum,omitempty" minimum:"0" doc:"How many components must fill the role; omit for one"`
+	Capacity       *int     `json:"capacity,omitempty" minimum:"1" doc:"The most components the role will accept; must be at least quorum. Omit to leave whatever is already declared unchanged (or unbounded on first declare); there is no way to explicitly clear a capacity back to unbounded once set"`
+	PositionLabels []string `json:"position_labels,omitempty" doc:"Human labels for each position within the role, by index; replaces the label set wholesale. Omit or empty clears labelling"`
 	AcceptedTypes  []string `json:"accepted_types,omitempty" doc:"The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type"`
 	PinnedProducts []string `json:"pinned_products,omitempty" doc:"If set, a filling component's product must be one of these; replaces the pinned set wholesale. Omit or empty accepts any product of an accepted type"`
 	Impact         string   `json:"impact,omitempty" enum:"outage,degraded,none" doc:"What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display"`
@@ -314,6 +330,8 @@ func roleSpec(name string, body roleSpecBody) storage.SystemRoleSpec {
 		Name:           name,
 		DisplayName:    display,
 		Quorum:         body.Quorum,
+		Capacity:       body.Capacity,
+		PositionLabels: body.PositionLabels,
 		AcceptedTypes:  body.AcceptedTypes,
 		PinnedProducts: body.PinnedProducts,
 		Impact:         body.Impact,
@@ -361,6 +379,22 @@ func mapRoleErr(err error) error {
 			"component %q is product %q; role %q wants product %s",
 			pinShort.Component, pinShort.ComponentProduct, pinShort.Role, strings.Join(want, " or ")))
 	}
+	// A double-staffing or capacity-shortfall refusal depends on OTHER rows
+	// (what else is currently assigned), so it is a 409, not a 422: the
+	// declaration or assignment request is not invalid on its own, it
+	// conflicts with the estate's current state.
+	var staffed *storage.ComponentStaffedShortfall
+	if errors.As(err, &staffed) {
+		return huma.Error409Conflict(fmt.Sprintf(
+			"component %q already fills %q in %q; a component fills at most one role per system",
+			staffed.Component, staffed.HeldRole, staffed.System))
+	}
+	var capShort *storage.CapacityShortfall
+	if errors.As(err, &capShort) {
+		return huma.Error409Conflict(fmt.Sprintf(
+			"role %q in system %q is filled by %d components; capacity cannot be lowered to %d",
+			capShort.Role, capShort.System, capShort.Have, capShort.Want))
+	}
 	switch {
 	case errors.Is(err, storage.ErrEntityNameIsUUID):
 		return huma.Error422UnprocessableEntity("role name may not be a uuid")
@@ -376,6 +410,12 @@ func mapRoleErr(err error) error {
 		return huma.Error422UnprocessableEntity("unknown owner, type, or product")
 	case errors.Is(err, storage.ErrRoleImpact):
 		return huma.Error422UnprocessableEntity("impact must be outage, degraded, or none")
+	case errors.Is(err, storage.ErrComponentAlreadyStaffed):
+		return huma.Error409Conflict("component already fills a different role in this system")
+	case errors.Is(err, storage.ErrRolePositionTaken):
+		return huma.Error409Conflict("that position is already taken")
+	case errors.Is(err, storage.ErrCapacityBelowQuorum):
+		return huma.Error422UnprocessableEntity("capacity must be at least the role's quorum")
 	case errors.Is(err, storage.ErrSystemNotFound):
 		return huma.Error404NotFound("system not found")
 	case errors.Is(err, storage.ErrComponentNotFound):
