@@ -118,7 +118,7 @@ func (p *PG) RemoveMember(ctx context.Context, actorID, systemName, componentNam
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	systemID, componentID, err := p.resolveMembershipEnds(ctx, tx, systemName, componentName, write)
+	systemID, componentID, err := p.resolveMembershipEndsForRemoval(ctx, tx, systemName, componentName, write)
 	if err != nil {
 		return err
 	}
@@ -279,9 +279,20 @@ func (p *PG) membersWhere(ctx context.Context, where string, arg string) ([]Memb
 // resolveMembershipEnds checks both ends of the binding before it is written: the
 // system must be in the caller's write scope (a non-disclosing not-found when it
 // is not) and the component must exist. It returns both ids, resolved once here
-// rather than left for AddMember/RemoveMember/SetPrimaryMember to re-derive from
-// the caller's name (ambiguous the moment two rows share it, #627); the scope
+// rather than left for AddMember/SetPrimaryMember to re-derive from the
+// caller's name (ambiguous the moment two rows share it, #627); the scope
 // check already loads the system row, so its id costs nothing extra.
+//
+// AddMember and SetPrimaryMember only: RemoveMember uses
+// resolveMembershipEndsForRemoval instead (#627 review round 3), because the
+// component it resolves must already BE a member, and estate-wide is the
+// wrong set to judge that in. AddMember's own component is not yet a member
+// (that is the point of adding it), so it cannot use a members-only resolve;
+// its console callsite addresses the component by uuid now regardless (round
+// 3's assign/add fix), where this estate-wide scopedByName's ambiguity branch
+// cannot fire. SetPrimaryMember carries the same estate-wide-ambiguity shape
+// RemoveMember had; left alone here, out of this round's scope (#645 named
+// only unassign and remove).
 func (p *PG) resolveMembershipEnds(ctx context.Context, q txQuerier, systemName, componentName string, write scope.Set) (systemID, componentID string, err error) {
 	// scopedByNameInScope, not scopedByName-then-inScopeTree: ruling 2
 	// (#627) requires ambiguity judged inside write, not estate-wide.
@@ -299,6 +310,45 @@ func (p *PG) resolveMembershipEnds(ctx context.Context, q txQuerier, systemName,
 	c, err := scopedByName(ctx, q, componentConfig, componentName)
 	if err != nil {
 		return "", "", withoutCandidates(err) // ErrComponentNotFound when absent
+	}
+	return sys.ID, c.ID, nil
+}
+
+// resolveMembershipEndsForRemoval resolves the same pair resolveMembershipEnds
+// does, but judges the component's name ambiguity within THIS system's current
+// members, not estate-wide (#627 review round 3, closing #645 without a wire
+// change): RemoveMember is naming a component it already believes is a member
+// here, so a same-named component elsewhere in the estate that was never a
+// member of this system was never actually a candidate. A name matching
+// nothing anywhere is ErrComponentNotFound; a name matching something real
+// that just is not a member here is ErrMemberNotFound, the same sentinel
+// RemoveMember's own delete already falls back to when its statement affects
+// zero rows, reused rather than duplicated.
+func (p *PG) resolveMembershipEndsForRemoval(ctx context.Context, q txQuerier, systemName, componentName string, write scope.Set) (systemID, componentID string, err error) {
+	sys, err := scopedByNameInScope(ctx, q, systemConfig, systemName, "system", write)
+	if err != nil {
+		return "", "", err
+	}
+	all, members, err := loadByRefWithin(ctx, q, componentConfig, componentName, func(id string) (bool, error) {
+		var ok bool
+		err := q.QueryRow(ctx, `select exists(
+			select 1 from system_member
+			where system_id = $1::uuid and component_id = $2::uuid)`,
+			sys.ID, id).Scan(&ok)
+		return ok, err
+	})
+	if err != nil {
+		return "", "", err
+	}
+	c, err := resolveMatches(componentConfig, componentName, members)
+	if err != nil {
+		if errors.Is(err, ErrComponentNotFound) {
+			if len(all) > 0 {
+				return "", "", ErrMemberNotFound
+			}
+			return "", "", ErrComponentNotFound
+		}
+		return "", "", withoutCandidates(err)
 	}
 	return sys.ID, c.ID, nil
 }

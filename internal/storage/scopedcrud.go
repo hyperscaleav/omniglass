@@ -418,6 +418,43 @@ func resolveMatches[T any](cfg scopedConfig[T], ref string, matches []*T) (*T, e
 	}
 }
 
+// loadByRefWithin resolves ref (uuid, dotted address, or bare name) exactly
+// as loadByRef does, then splits the result into the full match set and the
+// subset satisfying member, a caller-supplied predicate over a row's id.
+// This is resolveRef's own shape (load, narrow, judge ambiguity within the
+// narrower set), generalized past scope.Set/inScopeTree: a caller here
+// narrows by membership in some OTHER relation (a role's current occupants,
+// a system's current members) rather than by tree scope, so ambiguity is
+// judged within that relation instead of estate-wide (#627 review round 3,
+// closing #645: a same-named row that never touched this relation was never
+// actually a candidate for THIS call, only for a coarser, relation-blind
+// resolve).
+//
+// Returning both sets, not just the narrowed one, is deliberate: a caller
+// that wants to distinguish "no such row anywhere" from "a real row, just
+// not a member of this relation" (UnassignRole's ErrAssignmentMissing,
+// RemoveMember's ErrMemberNotFound, both more specific and more honest than
+// a bare not-found) checks len(all) once the narrowed set comes back empty,
+// rather than losing that distinction the moment resolveMatches folds an
+// empty slice down to one generic sentinel.
+func loadByRefWithin[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref string, member func(id string) (bool, error)) (all, within []*T, err error) {
+	all, err = loadByRef(ctx, q, cfg, ref)
+	if err != nil {
+		return nil, nil, err
+	}
+	within = make([]*T, 0, len(all))
+	for _, v := range all {
+		ok, err := member(cfg.idOf(v))
+		if err != nil {
+			return nil, nil, err
+		}
+		if ok {
+			within = append(within, v)
+		}
+	}
+	return all, within, nil
+}
+
 // refPolicy is resolveRef's policy axis: what to report when a bare-name
 // reference matches at least one row, but none of the matches fall inside
 // the given scope.

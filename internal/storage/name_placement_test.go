@@ -675,21 +675,29 @@ func TestResolveTagsSystemBandSurvivesScopedCaller(t *testing.T) {
 }
 
 // TestAssignRoleComponentAmbiguityNeverLeaksCandidates closes the remaining
-// C1/C2 shape a review found in AssignRole's, UnassignRole's, and
-// resolveMembershipEnds's (AddMember's) component end: the only scope any of
-// the three hold is write (or read), resolved for "system", which can never
-// narrow a component resolve (the same tier-mismatch AS Critical A, just on
-// the read side of ambiguity rather than the deny side, since scopedByName
-// here is deliberately scope-blind and existence-only, not threaded at all).
-// Unlike the cross-tier BINDS Critical A fixed, an ambiguous component name
-// here is a real refusal a caller can hit, and withoutCandidates is what
-// keeps the resulting 409 from naming a component uuid a system:update-only
-// principal, with no component:read grant of any kind, holds no right to
-// see. All three functions share one fixture: AssignRole was the only one a
-// prior round pinned; UnassignRole and resolveMembershipEnds are
-// code-identical (the same scopedByName-plus-withoutCandidates shape) but
-// were left unpinned, so this drives all three against the same ambiguous
-// name rather than trusting the identical code to behave identically.
+// C1/C2 shape a review found in AssignRole's and resolveMembershipEnds's
+// (AddMember's) component end: the only scope either holds is write (or
+// read), resolved for "system", which can never narrow a component resolve
+// (the same tier-mismatch AS Critical A, just on the read side of ambiguity
+// rather than the deny side, since scopedByName here is deliberately
+// scope-blind and existence-only, not threaded at all). An ambiguous
+// component name here is a real refusal a caller can hit, and
+// withoutCandidates is what keeps the resulting 409 from naming a component
+// uuid a system:update-only principal, with no component:read grant of any
+// kind, holds no right to see.
+//
+// UnassignRole no longer shares this shape (#627 review round 3, closing
+// #645): it used to be code-identical to resolveMembershipEnds (the same
+// scopedByName-plus-withoutCandidates call), which is why a prior round
+// drove it through the same estate-wide-ambiguous fixture below and got the
+// same ErrAmbiguousName. It now resolves the component within THIS role's
+// current occupants instead, so an estate-wide-ambiguous name that occupies
+// nothing here is ErrAssignmentMissing, a cleaner and more honest answer
+// than a 409 over a component that was never actually a candidate for this
+// call. TestUnassignRoleResolvesEstateWideDuplicateWithinOccupancy and
+// TestUnassignRoleStillRefusesWhenBothDuplicatesOccupyTheSameRole below
+// cover UnassignRole's own new shape; this test keeps proving AssignRole and
+// AddMember, which did not change this round.
 func TestAssignRoleComponentAmbiguityNeverLeaksCandidates(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -739,16 +747,14 @@ func TestAssignRoleComponentAmbiguityNeverLeaksCandidates(t *testing.T) {
 		t.Fatalf("assign role ambiguous component candidates = %v, want none (system:update holds no component:read)", ambig.Candidates)
 	}
 
-	// UnassignRole's component resolve runs before it ever checks whether an
-	// assignment exists, so this hits the same ambiguity with no assignment
-	// in place.
-	ambig = nil
+	// UnassignRole resolves within the role's own occupants now (#645):
+	// "dup-seat" is estate-wide ambiguous but occupies nothing here (no
+	// assignment exists), so this is the honest, more specific
+	// ErrAssignmentMissing, not the ambiguity 409 it used to raise over a
+	// component that was never actually a candidate for this call.
 	err = gw.UnassignRole(ctx, "", sys.Name, "seat", "dup-seat", sysScope)
-	if !errors.As(err, &ambig) {
-		t.Fatalf("unassign role with ambiguous component = %v, want *ErrAmbiguousName", err)
-	}
-	if len(ambig.Candidates) != 0 {
-		t.Fatalf("unassign role ambiguous component candidates = %v, want none (system:update holds no component:read)", ambig.Candidates)
+	if !errors.Is(err, storage.ErrAssignmentMissing) {
+		t.Fatalf("unassign role with an unassigned, estate-wide-ambiguous component = %v, want ErrAssignmentMissing", err)
 	}
 
 	// AddMember drives resolveMembershipEnds directly: no role or assignment
@@ -760,5 +766,212 @@ func TestAssignRoleComponentAmbiguityNeverLeaksCandidates(t *testing.T) {
 	}
 	if len(ambig.Candidates) != 0 {
 		t.Fatalf("add member ambiguous component candidates = %v, want none (system:update holds no component:read)", ambig.Candidates)
+	}
+}
+
+// TestUnassignRoleResolvesEstateWideDuplicateWithinOccupancy is the epic's
+// headline promise, closed for the last remaining write (#627 review round
+// 3, #645): an operator who can staff a role with a duplicate-named
+// component must also be able to unstaff it, not get in with no way back
+// out. "dup-seat" is ambiguous estate-wide (two components, two placements),
+// but only the nested one occupies "seat" here, so UnassignRole resolves it
+// from the bare name alone, exactly the string the wire's own AssignedTo
+// gives a caller (internal/api's EffectiveRoleBody.AssignedTo, names only).
+func TestUnassignRoleResolvesEstateWideDuplicateWithinOccupancy(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+	all := scope.Set{All: true}
+
+	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "unassign-sys"}, all)
+	if err != nil {
+		t.Fatalf("create system: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `
+		insert into system_role (owner_kind, system_id, name, display_name)
+		values ('system', $1, 'seat', 'Seat')`, sys.ID); err != nil {
+		t.Fatalf("declare role: %v", err)
+	}
+	holder, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "holder"}, all)
+	if err != nil {
+		t.Fatalf("holder: %v", err)
+	}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-seat"}, all); err != nil {
+		t.Fatalf("root dup-seat: %v", err)
+	}
+	nested, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-seat", ParentName: strptr(holder.Name)}, all)
+	if err != nil {
+		t.Fatalf("nested dup-seat: %v", err)
+	}
+
+	sysScope := scope.Set{IDs: []string{sys.ID}}
+	// Staffed by uuid, exactly how the console addresses AssignRole's own
+	// component end today (round 3's assign/add fix): AssignRole itself did
+	// not change, only what a caller supplies, and a uuid never ambiguous.
+	if err := gw.AssignRole(ctx, "", sys.Name, "seat", nested.ID, sysScope); err != nil {
+		t.Fatalf("assign nested dup-seat: %v", err)
+	}
+	roles, err := gw.EffectiveRoles(ctx, sys.Name, sysScope)
+	if err != nil {
+		t.Fatalf("effective roles: %v", err)
+	}
+	if len(roles) != 1 || len(roles[0].AssignedTo) != 1 {
+		t.Fatalf("roles after assign = %+v, want one role with one occupant", roles)
+	}
+
+	// Unassigned by the bare, estate-wide-ambiguous name: the wire has no
+	// uuid to give here (AssignedTo is names only), so this is the case the
+	// fix exists for.
+	if err := gw.UnassignRole(ctx, "", sys.Name, "seat", "dup-seat", sysScope); err != nil {
+		t.Fatalf("unassign estate-wide-ambiguous but uniquely-occupying component = %v, want ok", err)
+	}
+	roles, err = gw.EffectiveRoles(ctx, sys.Name, sysScope)
+	if err != nil {
+		t.Fatalf("effective roles after unassign: %v", err)
+	}
+	if len(roles) != 1 || len(roles[0].AssignedTo) != 0 {
+		t.Fatalf("roles after unassign = %+v, want the role vacated", roles)
+	}
+}
+
+// TestUnassignRoleStillRefusesWhenBothDuplicatesOccupyTheSameRole is the
+// edge case the occupancy-scoped resolve must not paper over: a role's
+// capacity is unbounded by default, so nothing stops two DIFFERENT
+// same-named components (different placements) from both occupying the same
+// role at once. When that happens, "the name is unique within this role's
+// occupants" no longer holds, and the fix must still refuse ambiguously
+// rather than silently picking whichever row sorted first.
+func TestUnassignRoleStillRefusesWhenBothDuplicatesOccupyTheSameRole(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+	all := scope.Set{All: true}
+
+	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "both-occupy-sys"}, all)
+	if err != nil {
+		t.Fatalf("create system: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `
+		insert into system_role (owner_kind, system_id, name, display_name)
+		values ('system', $1, 'seat', 'Seat')`, sys.ID); err != nil {
+		t.Fatalf("declare role: %v", err)
+	}
+	holder, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "holder"}, all)
+	if err != nil {
+		t.Fatalf("holder: %v", err)
+	}
+	root, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-seat"}, all)
+	if err != nil {
+		t.Fatalf("root dup-seat: %v", err)
+	}
+	nested, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-seat", ParentName: strptr(holder.Name)}, all)
+	if err != nil {
+		t.Fatalf("nested dup-seat: %v", err)
+	}
+
+	sysScope := scope.Set{IDs: []string{sys.ID}}
+	if err := gw.AssignRole(ctx, "", sys.Name, "seat", root.ID, sysScope); err != nil {
+		t.Fatalf("assign root dup-seat: %v", err)
+	}
+	if err := gw.AssignRole(ctx, "", sys.Name, "seat", nested.ID, sysScope); err != nil {
+		t.Fatalf("assign nested dup-seat: %v", err)
+	}
+
+	var ambig *storage.ErrAmbiguousName
+	err = gw.UnassignRole(ctx, "", sys.Name, "seat", "dup-seat", sysScope)
+	if !errors.As(err, &ambig) {
+		t.Fatalf("unassign with both duplicates occupying the role = %v, want *ErrAmbiguousName", err)
+	}
+	if len(ambig.Candidates) != 0 {
+		t.Fatalf("unassign ambiguous-within-occupancy candidates = %v, want none (system:update holds no component:read)", ambig.Candidates)
+	}
+}
+
+// TestRemoveMemberResolvesEstateWideDuplicateWithinMembership is
+// TestUnassignRoleResolvesEstateWideDuplicateWithinOccupancy's membership
+// counterpart (#627 review round 3, #645): a duplicate-named component that
+// is a member of this system removes cleanly by its bare name, the only
+// form SystemMemberBody.component gives a caller (internal/api/members.go),
+// even though the same name is ambiguous estate-wide.
+func TestRemoveMemberResolvesEstateWideDuplicateWithinMembership(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+
+	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "remove-sys"}, all)
+	if err != nil {
+		t.Fatalf("create system: %v", err)
+	}
+	holder, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "holder"}, all)
+	if err != nil {
+		t.Fatalf("holder: %v", err)
+	}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-member"}, all); err != nil {
+		t.Fatalf("root dup-member: %v", err)
+	}
+	nested, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-member", ParentName: strptr(holder.Name)}, all)
+	if err != nil {
+		t.Fatalf("nested dup-member: %v", err)
+	}
+
+	sysScope := scope.Set{IDs: []string{sys.ID}}
+	// Added by uuid, exactly how the console addresses AddMember's own
+	// component end today (round 3's assign/add fix): AddMember itself did
+	// not change, only what a caller supplies, and a uuid never ambiguous.
+	if err := gw.AddMember(ctx, "", sys.Name, nested.ID, sysScope); err != nil {
+		t.Fatalf("add nested dup-member: %v", err)
+	}
+	members, err := gw.ListMembers(ctx, sys.Name, sysScope)
+	if err != nil {
+		t.Fatalf("list members: %v", err)
+	}
+	if len(members) != 1 {
+		t.Fatalf("members after add = %+v, want one", members)
+	}
+
+	// Removed by the bare, estate-wide-ambiguous name: the wire has no uuid
+	// to give here (SystemMemberBody.component is a name), so this is the
+	// case the fix exists for.
+	if err := gw.RemoveMember(ctx, "", sys.Name, "dup-member", sysScope); err != nil {
+		t.Fatalf("remove estate-wide-ambiguous but uniquely-member component = %v, want ok", err)
+	}
+	members, err = gw.ListMembers(ctx, sys.Name, sysScope)
+	if err != nil {
+		t.Fatalf("list members after remove: %v", err)
+	}
+	if len(members) != 0 {
+		t.Fatalf("members after remove = %+v, want none", members)
 	}
 }

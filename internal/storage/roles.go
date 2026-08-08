@@ -538,11 +538,39 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 	if err != nil {
 		return err
 	}
-	// scopedByName, not scopedByNameInScope: same tier-mismatch reasoning as
-	// AssignRole's component resolve, write is resolved for "system" here.
-	// withoutCandidates closes the same disclosure.
-	component, err := scopedByName(ctx, tx, componentConfig, componentName)
+	// Resolved within THIS role's current occupants, not estate-wide (#627
+	// review round 3, closing #645 without a wire change): the caller is
+	// naming a component it already believes fills this slot, so a
+	// same-named component elsewhere in the estate that never occupied it
+	// was never actually a candidate, only ambiguous under the coarser
+	// scopedByName resolve this replaced. A name matching nothing anywhere
+	// is ErrComponentNotFound; a name matching something real that just
+	// does not occupy this role is ErrAssignmentMissing, the more specific
+	// (and pre-existing) not-found the unfiltered "all" set preserves.
+	// withoutCandidates still applies to a genuine occupancy-scoped
+	// ambiguity (two same-named components both occupying this role, only
+	// possible at quorum > 1): defense in depth, even though every
+	// candidate here is already visible to this caller via the role's own
+	// assigned_to read.
+	all, occupying, err := loadByRefWithin(ctx, tx, componentConfig, componentName, func(id string) (bool, error) {
+		var ok bool
+		err := tx.QueryRow(ctx, `select exists(
+			select 1 from system_role_assignment
+			where system_id = $1::uuid and role_id = $2 and component_id = $3::uuid)`,
+			sys.ID, roleID, id).Scan(&ok)
+		return ok, err
+	})
 	if err != nil {
+		return err
+	}
+	component, err := resolveMatches(componentConfig, componentName, occupying)
+	if err != nil {
+		if errors.Is(err, ErrComponentNotFound) {
+			if len(all) > 0 {
+				return ErrAssignmentMissing
+			}
+			return ErrComponentNotFound
+		}
 		return withoutCandidates(err)
 	}
 	// Same key AssignRole and SwapPositions take: an unassign vacating a
