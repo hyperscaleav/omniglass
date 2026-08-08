@@ -129,16 +129,6 @@ func Resolve(grants []Grant, idx rbac.RoleIndex, resource, action string) Set {
 	return set
 }
 
-// applicableKinds returns the scope kinds that can contain a resource: "all"
-// always, plus the resource's own tier. The cross-tier cascade (a location scope
-// also covering its systems and components) is a later slice; today each estate
-// tree entity is scoped by its own kind. interface and task are the exception:
-// they are not tree entities of their own, they hang off a component (an
-// interface owns a component, a task owns an interface), so they cascade through
-// the COMPONENT tier. A component-scoped grant that carries interface:<action> /
-// task:<action> confers that scope on the interface/task; the gateway then
-// filters by "the owning component is in this component-tier scope". group joins
-// as it lands.
 // Covers reports whether a scope RESOLVED for resource (Resolve's own
 // resource argument, e.g. what a.scopeFor(ctx, "component", "read") was
 // called with) can be checked against a target tree tier (a storage
@@ -154,10 +144,33 @@ func Resolve(grants []Grant, idx rbac.RoleIndex, resource, action string) Set {
 // match, and the caller would be silently denied (or, on a write/advisory
 // path, would leak a candidate estate-wide) instead of being loudly caught.
 // See resolveRef in internal/storage/scopedcrud.go, the caller of this.
+//
+// Blind spot: for the four-tier family (secret, variable, field, telemetry),
+// Covers admits ANY of location/system/component paired with that resource,
+// with no way to tell whether the specific pairing a call site passed is the
+// one the owner actually sits at. A resolveRef call site that named the
+// right FAMILY (say "variable") but the wrong TIER within it (checking a
+// variable-family scope against componentConfig when the owner it actually
+// meant was a system) would pass Covers cleanly: this is exactly Critical
+// A's shape, just inside the one family this guard cannot discriminate
+// within. resolveVariableOwner and resolveSecretOwner are safe today only
+// because each switch arm passes the config that matches the ownerKind it is
+// already inside (the same self-evident construction scopedGet/resolveScoped
+// rely on for the single-tier resources), not because Covers checked it.
 func Covers(resource, target string) bool {
 	return applicableKinds(resource)[target]
 }
 
+// applicableKinds returns the scope kinds that can contain a resource: "all"
+// always, plus the resource's own tier. The cross-tier cascade (a location scope
+// also covering its systems and components) is a later slice; today each estate
+// tree entity is scoped by its own kind. interface and task are the exception:
+// they are not tree entities of their own, they hang off a component (an
+// interface owns a component, a task owns an interface), so they cascade through
+// the COMPONENT tier. A component-scoped grant that carries interface:<action> /
+// task:<action> confers that scope on the interface/task; the gateway then
+// filters by "the owning component is in this component-tier scope". group joins
+// as it lands.
 func applicableKinds(resource string) map[string]bool {
 	switch resource {
 	case "location":

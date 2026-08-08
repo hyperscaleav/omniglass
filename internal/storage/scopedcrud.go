@@ -217,6 +217,21 @@ const (
 // binds, ResolveTags' forSystem filter) before this guard existed; it is
 // deliberately a panic, not a returned error, because a tier mismatch is a
 // caller bug to fix in code, not a runtime condition to route around.
+//
+// What this guard is NOT: proof that every call site's resource label is
+// correct today. Each one passes a label its own author already reasoned to
+// match cfg (a hardcoded literal beside a hardcoded config, or ownerKind
+// pulled from inside the switch arm that already selected that same
+// config), so resource == cfg.resource (or Covers admits it) by
+// construction at every current site; the guard cannot fire on any input
+// the current code produces, and a green suite running with it live proves
+// nothing beyond that. It is forward insurance for the NEXT call site that
+// copies a pattern without updating the label, not a validator of this
+// round's own hand-traced re-derivation (that trace's real check was
+// behavioral: the full test suite exercising actual read/write outcomes).
+// scope.Covers also documents a blind spot this guard inherits: within the
+// secret/variable/field/telemetry family it cannot tell a right tier from a
+// wrong one, only a right family from a wrong one.
 func resolveRef[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref, resource string, set scope.Set, policy refPolicy) (*T, error) {
 	if !set.All && !scope.Covers(resource, cfg.resource) {
 		panic(fmt.Sprintf("storage: resolveRef: a scope resolved for %q cannot be checked against %q (resolving %q)", resource, cfg.resource, ref))
