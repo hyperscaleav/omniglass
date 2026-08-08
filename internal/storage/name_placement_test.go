@@ -10,6 +10,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+	"github.com/jackc/pgx/v5"
 )
 
 // openGateway is the shared open-and-seed boilerplate every test in this file
@@ -498,5 +499,198 @@ func TestCheckNameIsScopedToPlacement(t *testing.T) {
 	}
 	if taken, err := gw.LocationNameTaken(ctx, "room-a", nil); err != nil || !taken {
 		t.Fatalf("room-a taken at root = %v, %v, want true, nil", taken, err)
+	}
+}
+
+// TestScopedCreateBindsCrossTierSystemAndLocation closes a critical a review
+// caught in this task's own scope-ordering fix round: CreateComponent's
+// system and location binds, UpdateComponent's location patch, and
+// CreateSystem's/UpdateSystem's location binds all threaded the caller's OWN
+// scope (resolved for "component" or "system") into a resolve against a
+// DIFFERENT tier's table (system or location). inScopeTree walks the TARGET
+// table's own ancestor chain, so a component-tier id can never appear in a
+// location's ancestor chain: the bind denied every non-all caller, 100% of
+// the time, not just a genuinely out-of-scope one. These binds are
+// existence-only by design now (scope-blind, like the *NameTaken advisories),
+// because no scope narrower than "all" ever meaningfully applies to a
+// cross-tier reference from these call sites.
+func TestScopedCreateBindsCrossTierSystemAndLocation(t *testing.T) {
+	gw := openGateway(t)
+	ctx := context.Background()
+
+	container, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "container"}, all)
+	if err != nil {
+		t.Fatalf("container: %v", err)
+	}
+	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "wing-sys"}, all)
+	if err != nil {
+		t.Fatalf("wing-sys: %v", err)
+	}
+	loc, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "wing-loc", LocationType: "campus"}, all)
+	if err != nil {
+		t.Fatalf("wing-loc: %v", err)
+	}
+	loc2, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "wing-loc-2", LocationType: "campus"}, all)
+	if err != nil {
+		t.Fatalf("wing-loc-2: %v", err)
+	}
+
+	// A deploy principal scoped to component:<container> only (the review's
+	// own failure scenario): posting a child with a system AND a location
+	// bind used to 422 unconditionally.
+	compScope := scope.Set{IDs: []string{container.ID}}
+	child, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
+		Name: "x", ParentName: strptr(container.Name),
+		SystemName: strptr(sys.Name), LocationName: strptr(loc.Name),
+	}, compScope)
+	if err != nil {
+		t.Fatalf("scoped create with cross-tier system+location bind = %v, want ok", err)
+	}
+	if child.LocationID == nil || *child.LocationID != loc.ID {
+		t.Fatalf("child location = %v, want %s", child.LocationID, loc.ID)
+	}
+
+	// UpdateComponent's location patch, same scope.
+	updated, err := gw.UpdateComponent(ctx, "", child.Name, storage.ComponentPatch{LocationName: strptr(loc2.Name)}, compScope, compScope)
+	if err != nil {
+		t.Fatalf("scoped update with cross-tier location bind = %v, want ok", err)
+	}
+	if updated.LocationID == nil || *updated.LocationID != loc2.ID {
+		t.Fatalf("updated component location = %v, want %s", updated.LocationID, loc2.ID)
+	}
+
+	// CreateSystem's location bind and UpdateSystem's location patch, scoped
+	// to a system-tier grant this time, to prove the fix is not accidentally
+	// component-specific.
+	rootSys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "root-sys"}, all)
+	if err != nil {
+		t.Fatalf("root-sys: %v", err)
+	}
+	sysScope := scope.Set{IDs: []string{rootSys.ID}}
+	childSys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
+		Name: "child-sys", ParentName: strptr(rootSys.Name), LocationName: strptr(loc.Name),
+	}, sysScope)
+	if err != nil {
+		t.Fatalf("scoped system create with cross-tier location bind = %v, want ok", err)
+	}
+	if childSys.LocationID == nil || *childSys.LocationID != loc.ID {
+		t.Fatalf("child system location = %v, want %s", childSys.LocationID, loc.ID)
+	}
+	updatedSys, err := gw.UpdateSystem(ctx, "", childSys.Name, storage.SystemPatch{LocationName: strptr(loc2.Name)}, sysScope, sysScope)
+	if err != nil {
+		t.Fatalf("scoped system update with cross-tier location bind = %v, want ok", err)
+	}
+	if updatedSys.LocationID == nil || *updatedSys.LocationID != loc2.ID {
+		t.Fatalf("updated system location = %v, want %s", updatedSys.LocationID, loc2.ID)
+	}
+}
+
+// TestResolveTagsSystemBandSurvivesScopedCaller closes Critical B: forSystem
+// used to be checked against read, which ResolveTags resolves for
+// "component" (the inScopeTree check on componentID just above it), not
+// "system". A component-tier id can never appear in a system's own ancestor
+// chain, so every non-all caller's ?system= filter silently fell into the
+// "named a system with no binding here" empty-band branch regardless of
+// whether the system genuinely had one, a wrong answer with no error, not a
+// refusal. A scoped principal that can read the component must still see the
+// system band its own tags cascade includes.
+func TestResolveTagsSystemBandSurvivesScopedCaller(t *testing.T) {
+	gw := openGateway(t)
+	ctx := context.Background()
+
+	if _, err := gw.CreateTag(ctx, "", storage.TagSpec{Name: "note", Propagates: true}, all); err != nil {
+		t.Fatalf("create tag: %v", err)
+	}
+	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "cascade-sys"}, all)
+	if err != nil {
+		t.Fatalf("cascade-sys: %v", err)
+	}
+	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "cascade-comp"}, all)
+	if err != nil {
+		t.Fatalf("cascade-comp: %v", err)
+	}
+	if err := gw.AddMember(ctx, "", sys.Name, comp.Name, all); err != nil {
+		t.Fatalf("add member: %v", err)
+	}
+	if _, err := gw.SetTagBinding(ctx, "", "note", "system", strptr(sys.ID), "from-system", all, all); err != nil {
+		t.Fatalf("bind system tag: %v", err)
+	}
+
+	// A viewer scoped only to component:<comp> (read-only, no system grant at
+	// all) still resolves the component's effective tags including the
+	// system band its own membership cascades from.
+	compScope := scope.Set{IDs: []string{comp.ID}}
+	resolved, err := gw.ResolveTags(ctx, comp.ID, sys.Name, compScope)
+	if err != nil {
+		t.Fatalf("resolve tags scoped to component = %v, want ok", err)
+	}
+	found := false
+	for _, rt := range resolved {
+		if rt.Key == "note" && rt.OwnerKind == "system" && rt.Value == "from-system" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("resolved tags = %+v, want the system band's note=from-system present", resolved)
+	}
+}
+
+// TestAssignRoleComponentAmbiguityNeverLeaksCandidates closes the remaining
+// C1/C2 shape a review found in AssignRole's, UnassignRole's, and
+// resolveMembershipEnds's component end: the only scope any of the three
+// hold is write (or read), resolved for "system", which can never narrow a
+// component resolve (the same tier-mismatch AS Critical A, just on the read
+// side of ambiguity rather than the deny side, since scopedByName here is
+// deliberately scope-blind and existence-only, not threaded at all). Unlike
+// the cross-tier BINDS Critical A fixed, an ambiguous component name here is
+// a real refusal a caller can hit, and withoutCandidates is what keeps the
+// resulting 409 from naming a component uuid a system:update-only principal,
+// with no component:read grant of any kind, holds no right to see.
+func TestAssignRoleComponentAmbiguityNeverLeaksCandidates(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+
+	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "role-sys"}, all)
+	if err != nil {
+		t.Fatalf("role-sys: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `
+		insert into system_role (owner_kind, system_id, name, display_name)
+		values ('system', $1, 'seat', 'Seat')`, sys.ID); err != nil {
+		t.Fatalf("declare role: %v", err)
+	}
+
+	holder, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "holder"}, all)
+	if err != nil {
+		t.Fatalf("holder: %v", err)
+	}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-seat"}, all); err != nil {
+		t.Fatalf("root dup-seat: %v", err)
+	}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-seat", ParentName: strptr(holder.Name)}, all); err != nil {
+		t.Fatalf("nested dup-seat: %v", err)
+	}
+
+	sysScope := scope.Set{IDs: []string{sys.ID}}
+	err = gw.AssignRole(ctx, "", sys.Name, "seat", "dup-seat", sysScope)
+	var ambig *storage.ErrAmbiguousName
+	if !errors.As(err, &ambig) {
+		t.Fatalf("assign role with ambiguous component = %v, want *ErrAmbiguousName", err)
+	}
+	if len(ambig.Candidates) != 0 {
+		t.Fatalf("ambiguous component candidates = %v, want none (system:update holds no component:read)", ambig.Candidates)
 	}
 }

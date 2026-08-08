@@ -351,10 +351,17 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 	}
 	// Confirm the component exists before judging what it is. An absent
 	// component has no product to classify, which would otherwise surface as a
-	// confusing type refusal for what is really a typo.
+	// confusing type refusal for what is really a typo. scopedByName, not
+	// scopedByNameInScope: the only scope in hand here is write, resolved for
+	// "system", and a component's ancestor chain is unrelated to it, so
+	// checking write against componentConfig could never match (the same
+	// tier-mismatch shape Critical A fixed elsewhere). withoutCandidates
+	// closes the resulting disclosure: an ambiguous component name here
+	// listed every matching uuid estate-wide, including ones a
+	// system:update-only caller holds no component:read grant to see.
 	component, err := scopedByName(ctx, tx, componentConfig, componentName)
 	if err != nil {
-		return err // ErrComponentNotFound when absent
+		return withoutCandidates(err) // ErrComponentNotFound when absent
 	}
 	cls, err := p.classifyComponent(ctx, tx, component.ID)
 	if err != nil {
@@ -531,9 +538,12 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 	if err != nil {
 		return err
 	}
+	// scopedByName, not scopedByNameInScope: same tier-mismatch reasoning as
+	// AssignRole's component resolve, write is resolved for "system" here.
+	// withoutCandidates closes the same disclosure.
 	component, err := scopedByName(ctx, tx, componentConfig, componentName)
 	if err != nil {
-		return err
+		return withoutCandidates(err)
 	}
 	// Same key AssignRole and SwapPositions take: an unassign vacating a
 	// position must serialize against a concurrent assign that could

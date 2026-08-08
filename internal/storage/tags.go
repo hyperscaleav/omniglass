@@ -414,19 +414,27 @@ func (p *PG) ResolveTags(ctx context.Context, componentID, forSystem string, rea
 	if !in {
 		return nil, ErrComponentNotFound
 	}
-	// forSystem is resolved once here (uuid-or-name, ADR-0062), within the
-	// caller's OWN read scope (scopedByNameInScope, ruling 2, #627), rather
-	// than left for seed_sys to match by name: that CTE, unlike a scalar
-	// subquery, can hold more than one row once a name is no longer unique,
-	// so an ambiguous name there never raised SQLSTATE 21000, it silently
-	// seeded the cascade from every same-named system and unioned both
-	// systems' tag bindings into one answer, a scope leak in its own right
-	// (the second system was never checked against the caller's read scope
-	// either). Resolving within read closes both at once: a system unique to
-	// the caller's own scope still resolves even when an unrelated
-	// out-of-scope system shares its name, and a genuine collision inside
-	// read scope refuses rather than unions. A system reference that
-	// resolves to none at all (absent, or present but entirely outside read)
+	// forSystem is resolved once here (uuid-or-name, ADR-0062), scope-blind
+	// (scopedByName, not scopedByNameInScope): read above is resolved for
+	// "component" (this route is gated on component:read alone, no
+	// system:read grant is required or checked), and read's ids are
+	// component-tree ids, not system-tree ones, so checking them against the
+	// system table's own ancestor chain can never match a real row. Threading
+	// it through denied the system band for every non-all caller regardless
+	// of the truth (a tier-mismatch defect a review caught), not just a
+	// genuinely out-of-scope one. forSystem previewing a system's cascade
+	// contribution is not itself a disclosure of that system's own data: the
+	// caller only ever gets back tag VALUES flowing onto a component they
+	// already proved read access to, the same posture as a *NameTaken
+	// advisory, which is why an ambiguous forSystem redacts Candidates below
+	// rather than trying to filter by a scope that cannot apply here.
+	//
+	// This still closes the CTE-side leak the scope check was added for:
+	// resolving once here, rather than leaving seed_sys to match forSystem by
+	// name over possibly more than one row (#627), means an ambiguous name is
+	// refused up front instead of silently seeding the cascade from every
+	// same-named system and unioning both systems' bindings into one answer.
+	// A system reference that resolves to none at all (absent, or ambiguous)
 	// binds uuid.Nil, a well-formed id no real row can ever have: seed_sys
 	// then matches nothing, preserving the existing "named a system with no
 	// binding here" silent-empty-band behavior (the doc comment on
@@ -434,11 +442,11 @@ func (p *PG) ResolveTags(ctx context.Context, componentID, forSystem string, rea
 	// (which selects the primary membership instead).
 	systemArg := forSystem
 	if forSystem != "" {
-		sys, err := scopedByNameInScope(ctx, p.pool, systemConfig, forSystem, read)
+		sys, err := scopedByName(ctx, p.pool, systemConfig, forSystem)
 		if errors.Is(err, ErrSystemNotFound) {
 			systemArg = uuid.Nil.String()
 		} else if err != nil {
-			return nil, err
+			return nil, withoutCandidates(err)
 		} else {
 			systemArg = sys.ID
 		}

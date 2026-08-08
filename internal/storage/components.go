@@ -239,25 +239,29 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 	// scope to placement.
 	var sysID string
 	if spec.SystemName != nil {
-		// scopedByNameInScope, not scopedByName: ruling 2 (#627), ambiguity
-		// judged inside create rather than estate-wide. No separate
-		// forbidden sentinel exists for this binding today (only existence
-		// was ever checked), so a system that resolves to none within
-		// create scope folds into the same ErrSystemNotFound -> 422 a truly
-		// absent one gets, not a new status.
-		sys, err := scopedByNameInScope(ctx, tx, systemConfig, *spec.SystemName, create)
+		// scopedByName, not scopedByNameInScope: this bind is CROSS-tier (the
+		// caller's create scope is resolved for "component", and a system's
+		// scope tree is its own, unrelated ancestor chain), so create has no
+		// id in it inScopeTree could ever match against the system table.
+		// Threading it through would not narrow the resolve, it would deny
+		// it outright for every non-all caller (the tier-mismatch defect a
+		// review caught). Existence-only, as before this task, and
+		// withoutCandidates for the same reason the *NameTaken advisories
+		// redact: no scope is being checked here, so listing every matching
+		// uuid would disclose rows the caller may hold no grant to read.
+		sys, err := scopedByName(ctx, tx, systemConfig, *spec.SystemName)
 		if err != nil {
-			return nil, err // ErrSystemNotFound -> 422
+			return nil, withoutCandidates(err) // ErrSystemNotFound -> 422
 		}
 		sysID = sys.ID
 	}
 	var locationID *string
 	if spec.LocationName != nil {
-		// scopedByNameInScope, not scopedByName: same reasoning as the
-		// system bind above.
-		loc, err := scopedByNameInScope(ctx, tx, locationConfig, *spec.LocationName, create)
+		// scopedByName, not scopedByNameInScope: same cross-tier reasoning as
+		// the system bind above.
+		loc, err := scopedByName(ctx, tx, locationConfig, *spec.LocationName)
 		if err != nil {
-			return nil, err // ErrLocationNotFound -> 422
+			return nil, withoutCandidates(err) // ErrLocationNotFound -> 422
 		}
 		locationID = &loc.ID
 	}
@@ -368,13 +372,15 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 	// same three-state the system relocate uses.
 	locationPatch := patch.LocationName
 	if patch.LocationName != nil && *patch.LocationName != "" {
-		// scopedByNameInScope, not scopedByName: ruling 2 (#627), ambiguity
-		// judged inside action rather than estate-wide. No separate
-		// forbidden sentinel exists for this bind today, so out-of-scope
-		// folds into the same ErrLocationNotFound a truly absent one gets.
-		loc, err := scopedByNameInScope(ctx, tx, locationConfig, *patch.LocationName, action)
+		// scopedByName, not scopedByNameInScope: cross-tier, same as the
+		// create-time binds above. action is resolved for "component", and
+		// checking it against the location table's own ancestor chain can
+		// never match, so threading it through denies every non-all caller
+		// rather than narrowing anything. Existence-only, withoutCandidates
+		// for the same no-scope-to-filter-by reason.
+		loc, err := scopedByName(ctx, tx, locationConfig, *patch.LocationName)
 		if err != nil {
-			return nil, err // ErrLocationNotFound -> mapped to 422 by the API
+			return nil, withoutCandidates(err) // ErrLocationNotFound -> mapped to 422 by the API
 		}
 		locationPatch = &loc.ID
 	}

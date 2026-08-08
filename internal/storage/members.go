@@ -285,13 +285,20 @@ func (p *PG) membersWhere(ctx context.Context, where string, arg string) ([]Memb
 func (p *PG) resolveMembershipEnds(ctx context.Context, q txQuerier, systemName, componentName string, write scope.Set) (systemID, componentID string, err error) {
 	// scopedByNameInScope, not scopedByName-then-inScopeTree: ruling 2
 	// (#627) requires ambiguity judged inside write, not estate-wide.
-	sys, err := scopedByNameInScope(ctx, q, systemConfig, systemName, write)
+	sys, err := scopedByNameInScope(ctx, q, systemConfig, systemName, "system", write)
 	if err != nil {
 		return "", "", err // ErrSystemNotFound when absent or out of scope
 	}
+	// scopedByName, not scopedByNameInScope: write is resolved for "system"
+	// here (the system check above), and a component's ancestor chain is
+	// unrelated to it, so checking write against componentConfig could never
+	// match (the tier-mismatch shape a review caught elsewhere).
+	// withoutCandidates closes the disclosure an ambiguous component name
+	// would otherwise carry: every matching uuid estate-wide, including ones
+	// this system:update-only caller holds no component:read grant to see.
 	c, err := scopedByName(ctx, q, componentConfig, componentName)
 	if err != nil {
-		return "", "", err // ErrComponentNotFound when absent
+		return "", "", withoutCandidates(err) // ErrComponentNotFound when absent
 	}
 	return sys.ID, c.ID, nil
 }

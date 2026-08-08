@@ -384,15 +384,20 @@ func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, 
 		parentID = &parent.ID
 	}
 
-	// Resolve the optional located-at location by name to its id, within
-	// create scope (scopedByNameInScope, ruling 2). No separate forbidden
-	// sentinel exists for this bind today, so out-of-scope folds into the
-	// same ErrLocationNotFound a truly absent one gets.
+	// Resolve the optional located-at location by name to its id.
+	// scopedByName, not scopedByNameInScope: this bind is CROSS-tier (create
+	// is resolved for "system", a location's scope tree is its own,
+	// unrelated ancestor chain), so inScopeTree could never match it against
+	// the location table; threading create through denies every non-all
+	// caller instead of narrowing anything (the tier-mismatch defect a
+	// review caught). Existence-only, as before this task, and
+	// withoutCandidates since no scope is being checked, so listing every
+	// matching uuid would disclose rows the caller may hold no grant to read.
 	var locationID *string
 	if spec.LocationName != nil {
-		loc, err := scopedByNameInScope(ctx, tx, locationConfig, *spec.LocationName, create)
+		loc, err := scopedByName(ctx, tx, locationConfig, *spec.LocationName)
 		if err != nil {
-			return nil, err // ErrLocationNotFound -> mapped to 422 by the API
+			return nil, withoutCandidates(err) // ErrLocationNotFound -> mapped to 422 by the API
 		}
 		locationID = &loc.ID
 	}
@@ -485,11 +490,15 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	// (clear), and a named location becomes its id.
 	locationPatch := patch.LocationName
 	if patch.LocationName != nil && *patch.LocationName != "" {
-		// scopedByNameInScope, not locationByName: ruling 2 (#627),
-		// ambiguity judged inside action rather than estate-wide.
-		loc, err := scopedByNameInScope(ctx, tx, locationConfig, *patch.LocationName, action)
+		// scopedByName, not scopedByNameInScope: cross-tier, same as the
+		// create-time bind above. action is resolved for "system", and
+		// checking it against the location table's own ancestor chain can
+		// never match, so threading it through denies every non-all caller
+		// rather than narrowing anything. Existence-only, withoutCandidates
+		// for the same no-scope-to-filter-by reason.
+		loc, err := scopedByName(ctx, tx, locationConfig, *patch.LocationName)
 		if err != nil {
-			return nil, err // ErrLocationNotFound -> mapped to 422 by the API
+			return nil, withoutCandidates(err) // ErrLocationNotFound -> mapped to 422 by the API
 		}
 		locationPatch = &loc.ID
 	}
