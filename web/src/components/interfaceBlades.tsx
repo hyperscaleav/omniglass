@@ -16,6 +16,7 @@ import {
 import { REACHABILITY_KEY } from "../lib/reachability";
 import { COMPONENTS_KEY, listComponents } from "../lib/components";
 import { NODES_KEY, listNodes } from "../lib/nodes";
+import { entityLabel } from "../lib/entities";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
@@ -86,9 +87,13 @@ function InterfaceBladeBody(props: { id: string }): JSX.Element {
 
   // Invalidate the interfaces list and, when the interface is on a component, that
   // component's reachability read, so the component's Interfaces panel refreshes.
+  // Keyed on component_id (the uuid), not component (a NAME per the wire,
+  // internal/api/interfaces.go): ReachabilityPanel reads REACHABILITY_KEY by the
+  // component's uuid (#627 review finding 1), and a name-keyed invalidate here
+  // missed that cache entry entirely (review round 3, regression 2).
   async function refresh(iface: Interface) {
     await qc.invalidateQueries({ queryKey: INTERFACES_KEY });
-    if (iface.component) await qc.invalidateQueries({ queryKey: REACHABILITY_KEY(iface.component) });
+    if (iface.component_id) await qc.invalidateQueries({ queryKey: REACHABILITY_KEY(iface.component_id) });
   }
 
   createEffect(on(edit.editing, (editing) => {
@@ -213,7 +218,16 @@ function InterfaceCreateBody(props: { component: string }): JSX.Element {
 // created interface to onCreated, which opens its detail blade.
 function CreateInterfaceForm(props: { onCreated: (i: Interface) => void; component?: string }) {
   const qc = useQueryClient();
-  const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: () => listComponents(), enabled: !props.component }));
+  // Always fetched (not gated on `!props.component`): a preset component still
+  // needs this list to resolve its uuid to a readable label below. The
+  // TreeList page already warms COMPONENTS_KEY, so this reuses that cache
+  // entry rather than issuing a second request.
+  const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: () => listComponents() }));
+  const componentLabel = () => {
+    if (!props.component) return "";
+    const match = components.data?.find((c) => c.id === props.component);
+    return match ? entityLabel(match) : props.component;
+  };
   const [type, setType] = createSignal<string>(INTERFACE_TYPES[0]);
   const [component, setComponent] = createSignal(props.component ?? "");
   const [node, setNode] = createSignal("");
@@ -275,7 +289,7 @@ function CreateInterfaceForm(props: { onCreated: (i: Interface) => void; compone
       >
         <div>
           <span class="eyebrow mb-1.5 block">Component</span>
-          <div class="input input-bordered flex w-full items-center font-data text-sm text-base-content/70">{props.component}</div>
+          <div class="input input-bordered flex w-full items-center font-data text-sm text-base-content/70">{componentLabel()}</div>
         </div>
       </Show>
       <div>

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@solidjs/testing-library";
+import { render, screen, waitFor, fireEvent, within } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Components from "./Components";
@@ -11,6 +11,8 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 import { uuidFor } from "../lib/testids";
 import { hueFor } from "../lib/system_color";
+import { INTERFACES_KEY, type Interface } from "../lib/interfaces";
+import { REACHABILITY_KEY } from "../lib/reachability";
 
 // The Components page on the shared TreeList in the create-as-route model: New routes
 // to /components/create (a draft accordion), Save hands off to /components/<name> in
@@ -519,6 +521,82 @@ describe("Components create-as-route", () => {
     const submit = screen.getByText("Create interface").closest("button")!;
     expect(top.querySelector("footer")!.contains(submit)).toBe(true);
     expect(top.querySelector("form")!.querySelectorAll("button").length).toBe(0);
+  });
+
+  // Review round 3, regression 1 (task-15-review.md): the new-interface blade
+  // addresses its owning component by uuid now (#627 Task 15), but the
+  // read-only Component field kept rendering that raw uuid verbatim instead
+  // of resolving the component's readable label.
+  it("shows the owning component's label, not its uuid, in the new-interface blade's read-only Component field", async () => {
+    mount("/components/mic-2");
+    await waitFor(() => expect(screen.getByText("Add interface")).toBeTruthy());
+    fireEvent.click(screen.getByText("Add interface"));
+    await waitFor(() => expect(screen.getByText(/An API on a component/)).toBeTruthy());
+
+    const blades = document.querySelectorAll("aside[data-blade]");
+    const top = blades[blades.length - 1] as HTMLElement;
+    const field = top.querySelector(".input.input-bordered.flex") as HTMLElement;
+    expect(field.textContent).toBe("Ceiling Mic 2");
+    expect(field.textContent).not.toBe(comp.id);
+  });
+
+  // Review round 3, regression 2 (task-15-review.md): the interface detail
+  // blade's refresh() invalidated REACHABILITY_KEY(iface.component), a NAME
+  // per the wire (internal/api/interfaces.go), while ReachabilityPanel now
+  // keys its read on the component's uuid (#627 review finding 1). A write
+  // here silently stopped refreshing the sibling Interfaces panel.
+  it("invalidates the reachability read by the owning component's uuid, not its name, after an interface delete", async () => {
+    const iface: Interface = { id: uuidFor("iface-1"), name: "ssh", interface_type: "tcp", component: comp.name, component_id: comp.id };
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...COMPONENTS_KEY], [comp]);
+    qc.setQueryData([...SYSTEMS_KEY], []);
+    qc.setQueryData([...LOCATIONS_KEY], []);
+    qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...ME_KEY], me);
+    qc.setQueryData([...TAGS_KEY], []);
+    qc.setQueryData([...entityTagsKey("component", "mic-2")], []);
+    qc.setQueryData([...INTERFACES_KEY], [iface]);
+    qc.setQueryData([...REACHABILITY_KEY(comp.id)], {
+      component: comp.id,
+      interfaces: [{ interface: iface.name, interface_type: iface.interface_type, verdict: null, layers: [], history: [] }],
+    });
+    window.history.pushState({}, "", "/components/mic-2");
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="/components" component={Components} />
+          <Route path="/components/:id" component={Components} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    await waitFor(() => expect(screen.getByLabelText(`Manage ${iface.name}`)).toBeTruthy());
+    fireEvent.click(screen.getByLabelText(`Manage ${iface.name}`));
+    let top: HTMLElement;
+    await waitFor(() => {
+      const blades = document.querySelectorAll("aside[data-blade]");
+      top = blades[blades.length - 1] as HTMLElement;
+      expect(top?.textContent).toContain("Delete");
+    });
+    const deleteBtn = within(top!).getByText("Delete");
+
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const invalidate = vi.spyOn(qc, "invalidateQueries");
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const { method, url } = req;
+      if (method === "DELETE" && url.includes(`/interfaces/${iface.id}`)) {
+        return new Response(null, { status: 204 });
+      }
+      throw new Error(`unexpected fetch in this test: ${method} ${url}`);
+    });
+    fireEvent.click(deleteBtn);
+    // refresh() invalidates in two awaited steps (the interfaces list, then the
+    // reachability read), so wait for both rather than stopping at the first.
+    await waitFor(() => expect(invalidate.mock.calls.length).toBeGreaterThanOrEqual(2));
+
+    const keys = invalidate.mock.calls.map((c) => JSON.stringify((c[0] as { queryKey: unknown[] }).queryKey));
+    expect(keys).toContain(JSON.stringify(REACHABILITY_KEY(comp.id)));
+    expect(keys).not.toContain(JSON.stringify(REACHABILITY_KEY(comp.name)));
   });
 });
 
