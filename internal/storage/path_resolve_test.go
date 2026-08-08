@@ -214,6 +214,56 @@ func TestResolvePathOutOfScopeIsNonDisclosing(t *testing.T) {
 	_ = fx
 }
 
+// TestResolvePathUnderNonAllScope closes the coverage gap task-12-review.md
+// named: TestResolvePathOutOfScopeIsNonDisclosing proves non-disclosure holds
+// under a scope that can never admit the target (a location root, which
+// cannot appear in a component's own parent_id ancestor chain, per
+// inScopeTree's own doc), but that test would pass even if resolvePath's
+// wiring into loadByRef were entirely absent, because the literal address
+// string never matches a `name` column value either way. What was never
+// exercised anywhere in the suite is a non-All principal SCOPED TO A REAL
+// SUBTREE of the address's own target tier resolving successfully, and the
+// SAME scope correctly denying a sibling outside it: exactly the shape that
+// produced two criticals in Task 11 which three green full-suite runs missed
+// (progress.md: "cross-tier scope filtering denies EVERY non-all-scoped
+// caller", found only once a scoped-caller write-path test existed).
+//
+// The scope root is dsp-1's own id (a component-tier grant, the tier
+// dante-card-1 and display-1 both belong to), not a location id: component
+// scope is own-tier only today (no location-to-component cascade), so a
+// location-rooted scope could never positively admit either of these and
+// would prove nothing about the ancestor walk.
+func TestResolvePathUnderNonAllScope(t *testing.T) {
+	gw, _ := newDuplicateNameFixture(t)
+	fx := buildAddressFixture(t, gw)
+	ctx := context.Background()
+	scopedToDsp1 := scope.Set{IDs: []string{fx.dsp1.ID}}
+
+	// Positive control: dante-card-1 is dsp-1's own child (component_parent_
+	// name_key), so a scope rooted at dsp-1 covers it via the ancestor walk,
+	// and the dotted sub-component address must still resolve to the right
+	// row, not merely fail to disclose.
+	got, err := gw.GetComponent(ctx, "boi.17c.415a.$comp.dsp-1.dante-card-1", scopedToDsp1)
+	if err != nil {
+		t.Fatalf("GetComponent(dante-card-1) under a scope rooted at its own parent = %v, want success", err)
+	}
+	if got.ID != fx.danteCard1.ID {
+		t.Errorf("resolved id = %s, want %s (dante-card-1)", got.ID, fx.danteCard1.ID)
+	}
+
+	// Negative control, same scope: display-1 is dsp-1's SIBLING (both placed
+	// at 415a, neither the other's ancestor), so the identical scope that
+	// just admitted dante-card-1 must deny display-1, non-disclosingly.
+	_, err = gw.GetComponent(ctx, "boi.17c.415a.$comp.display-1", scopedToDsp1)
+	if !errors.Is(err, storage.ErrComponentNotFound) {
+		t.Fatalf("GetComponent(display-1) under a scope rooted at its sibling's parent = %v, want storage.ErrComponentNotFound", err)
+	}
+	var pathNotFound *storage.ErrPathNotFound
+	if errors.As(err, &pathNotFound) {
+		t.Fatalf("GetComponent(display-1) leaked *storage.ErrPathNotFound (%v) instead of the non-disclosing sentinel", err)
+	}
+}
+
 // TestResolvePathDisambiguatesWhatABareNameCannot is the point of the whole
 // feature: two locations legitimately share a name (component_parent_name_key
 // / here location_parent_name_key, #627 Task 10) under different parents, so
