@@ -194,6 +194,14 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 	if !inScope {
 		return nil, ErrSystemNotFound
 	}
+	// Correlated subqueries, not a GROUP BY over three LEFT JOINs: this query
+	// joins types, products AND assignments in one shot, so a GROUP BY makes
+	// assignment rows fan out once per (type, product) pair, and DISTINCT
+	// (the previous shape) hid that cartesian product at the cost of losing
+	// order. array_agg(distinct ... order by ra.position) is rejected by
+	// Postgres outright (the ORDER BY expression must appear in the DISTINCT
+	// argument list), so the assigned array is resolved as its own subquery,
+	// scoped to this system, ordered by the occupant's position (#626).
 	rows, err := p.pool.Query(ctx, `
 		with sys as (
 			select id, name, standard_id from system where name = $1
@@ -209,19 +217,16 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 		)
 		select roles.id, roles.name, roles.display_name, roles.quorum, roles.capacity, roles.position_labels,
 		       roles.impact, roles.from_standard, roles.created_at, roles.updated_at,
-		       coalesce(array_agg(distinct ct.name) filter (where ct.name is not null), '{}') as types,
-		       coalesce(array_agg(distinct pr.name) filter (where pr.name is not null), '{}') as products,
-		       coalesce(array_agg(distinct ac.name) filter (where ac.name is not null), '{}') as assigned
-		from roles
-		left join system_role_type rt on rt.role_id = roles.id
-		left join component_type ct on ct.id = rt.component_type_id
-		left join system_role_product rp on rp.role_id = roles.id
-		left join product pr on pr.id = rp.product_id
-		left join system_role_assignment ra on ra.role_id = roles.id
-		     and ra.system_id = (select id from system where name = $1)
-		left join component ac on ac.id = ra.component_id
-		group by roles.id, roles.name, roles.display_name, roles.quorum, roles.capacity, roles.position_labels,
-		         roles.impact, roles.from_standard, roles.created_at, roles.updated_at
+		       coalesce((select array_agg(ct.name order by ct.name)
+		                   from system_role_type rt join component_type ct on ct.id = rt.component_type_id
+		                  where rt.role_id = roles.id), '{}') as types,
+		       coalesce((select array_agg(pr.name order by pr.name)
+		                   from system_role_product rp join product pr on pr.id = rp.product_id
+		                  where rp.role_id = roles.id), '{}') as products,
+		       coalesce((select array_agg(ac.name order by ra.position)
+		                   from system_role_assignment ra join component ac on ac.id = ra.component_id
+		                  where ra.role_id = roles.id and ra.system_id = sys.id), '{}') as assigned
+		from roles, sys
 		order by roles.name`, systemName)
 	if err != nil {
 		return nil, fmt.Errorf("storage: effective roles %s: %w", systemName, err)
@@ -267,6 +272,15 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 
 	roleID, roleDisplay, acceptedTypes, pinnedProducts, err := p.resolveRole(ctx, tx, systemName, roleName)
 	if err != nil {
+		return err
+	}
+	// Position allocation reads and acts on the same (system, role) staffing
+	// snapshot it is about to change, so it takes this role's advisory lock
+	// for the rest of the transaction (#626): two concurrent assigns must
+	// not compute the same next-free position, and UnassignRole and
+	// SwapPositions take the same key, so allocation and reordering
+	// serialize against each other too.
+	if err := lockAdvisory(ctx, tx, rolePositionLockKey(systemName, roleID)); err != nil {
 		return err
 	}
 	// Confirm the component exists before judging what it is. An absent
@@ -342,12 +356,45 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 	if err := addMemberTx(ctx, tx, systemName, componentName); err != nil {
 		return err
 	}
+	// Next free position: the lowest unused positive integer within
+	// (system, role), capped at capacity when the role declares one. Not
+	// max(position)+1: TestUnassignLeavesGapThenRefills requires a vacated
+	// slot to be reused rather than growing without bound while the
+	// occupant count stays under capacity.
+	//
+	// The search space is bounded by count+1 (pigeonhole: with n existing
+	// occupants there are at most n gaps below the maximum, so a free slot
+	// always exists at or before position n+1), further capped at capacity
+	// when the role declares one. This is what keeps generate_series small
+	// (proportional to the role's own occupancy, never a materialized
+	// billion-row series for an unbounded role) while still finding a gap
+	// rather than skipping past it. At a role already full to its capacity,
+	// count+1 exceeds capacity, so the bound collapses to capacity itself;
+	// every slot in [1, capacity] is occupied, nothing is found free, and
+	// this resolves to position 1 (occupied), which then collides on the
+	// deferrable uniqueness constraint below and is refused as
+	// ErrRolePositionTaken rather than silently exceeding the declared cap.
+	var position int
+	if err := tx.QueryRow(ctx, `
+		with cnt as (
+			select count(*) as n from system_role_assignment
+			 where system_id = (select id from system where name = $1) and role_id = $2
+		)
+		select coalesce(min(g.n), 1)
+		  from cnt, generate_series(1, least(coalesce((select capacity from system_role where id = $2), cnt.n + 1), cnt.n + 1)) g(n)
+		 where not exists (
+		     select 1 from system_role_assignment ra
+		      where ra.system_id = (select id from system where name = $1)
+		        and ra.role_id = $2 and ra.position = g.n)`,
+		systemName, roleID).Scan(&position); err != nil {
+		return fmt.Errorf("storage: next free position %s/%s: %w", systemName, roleID, err)
+	}
 	if _, err := tx.Exec(ctx, `
-		insert into system_role_assignment (system_id, role_id, component_id)
+		insert into system_role_assignment (system_id, role_id, component_id, position)
 		values ((select id from system where name = $1), $2,
-		        (select id from component where name = $3))
+		        (select id from component where name = $3), $4)
 		on conflict (system_id, role_id, component_id) do nothing`,
-		systemName, roleID, componentName); err != nil {
+		systemName, roleID, componentName, position); err != nil {
 		return mapRoleWriteErr(err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "system_role_assignment", roleID, nil,
@@ -386,6 +433,13 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 	if err != nil {
 		return err
 	}
+	// Same key AssignRole and SwapPositions take: an unassign vacating a
+	// position must serialize against a concurrent assign that could
+	// otherwise compute the same now-free slot as its "next free" before
+	// this transaction's delete commits.
+	if err := lockAdvisory(ctx, tx, rolePositionLockKey(systemName, roleID)); err != nil {
+		return err
+	}
 	var assignmentID string
 	if err := tx.QueryRow(ctx, `
 		delete from system_role_assignment
@@ -407,6 +461,81 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("storage: commit unassign role: %w", err)
+	}
+	return nil
+}
+
+// rolePositionLockKey is the advisory-lock key AssignRole, UnassignRole and
+// SwapPositions all take on a (system, role) pair, so position allocation and
+// reordering serialize against each other (#626). role is the resolved role
+// id, not its name: two roles can share a name across different owners, but
+// never an id.
+func rolePositionLockKey(systemName, roleID string) string {
+	return "system_role_assignment/" + systemName + "/" + roleID
+}
+
+// SwapPositions exchanges the positions of whichever components currently
+// hold positions a and b within a role. It is an ordering change only: who
+// occupies the role and the system's health are unaffected, so this does
+// not recompute health the way AssignRole and UnassignRole do. Either
+// position not currently held by an occupant is ErrAssignmentMissing, the
+// same not-found the rest of the staffing surface uses for "there is
+// nothing here to act on". Swapping a position with itself is a no-op.
+func (p *PG) SwapPositions(ctx context.Context, actorID, systemName, roleName string, a, b int, write scope.Set) error {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin swap positions: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	inScope, err := p.ownerInScope(ctx, tx, "system", systemName, write)
+	if err != nil {
+		return err
+	}
+	if !inScope {
+		return ErrSystemNotFound
+	}
+	roleID, _, _, _, err := p.resolveRole(ctx, tx, systemName, roleName)
+	if err != nil {
+		return err
+	}
+	if err := lockAdvisory(ctx, tx, rolePositionLockKey(systemName, roleID)); err != nil {
+		return err
+	}
+	if a == b {
+		return nil
+	}
+
+	// The uniqueness constraint on (system_id, role_id, position) is
+	// DEFERRABLE INITIALLY IMMEDIATE precisely for this statement: a plain
+	// unique index is checked per updated tuple, so a single UPDATE moving
+	// two rows into each other's slots would raise the moment the first row
+	// lands on the other's position. Deferring it to end-of-transaction
+	// lets both land before either is checked. No ON CONFLICT may ever name
+	// this constraint as its arbiter (Postgres refuses a deferrable
+	// constraint as an arbiter); AssignRole's own arbiter is the unrelated,
+	// non-deferrable (system_id, role_id, component_id) key.
+	if _, err := tx.Exec(ctx, `set constraints system_role_assignment_position_key deferred`); err != nil {
+		return fmt.Errorf("storage: defer position uniqueness: %w", err)
+	}
+	tag, err := tx.Exec(ctx, `
+		update system_role_assignment
+		   set position = case position when $3 then $4 when $4 then $3 end
+		 where system_id = (select id from system where name = $1)
+		   and role_id = $2
+		   and position in ($3, $4)`, systemName, roleID, a, b)
+	if err != nil {
+		return mapRoleWriteErr(err)
+	}
+	if tag.RowsAffected() != 2 {
+		return ErrAssignmentMissing
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "update", "system_role_assignment", roleID, nil,
+		map[string]any{"system": systemName, "role": roleName, "swap": [2]int{a, b}}); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: commit swap positions: %w", err)
 	}
 	return nil
 }

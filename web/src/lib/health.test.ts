@@ -21,6 +21,8 @@ const role = (over: Partial<HealthRole>): HealthRole => ({
   impaired: true,
   quorum: 2,
   satisfying: 1,
+  short: 1,
+  spare: 0,
   down: [],
   assigned_to: [],
   alarms: [],

@@ -266,6 +266,98 @@ func TestSeededStandardTypedRoles(t *testing.T) {
 	c.do(ownerTok, http.MethodPut, "/systems/seeded-room/roles/main-display/assignments/panel-9", nil, http.StatusUnprocessableEntity)
 }
 
+// TestSwapPositionsAndCapacityRefusalsAPI drives the #626 position and
+// capacity surfaces over HTTP: the ordered read reflects assignment order,
+// :swapPositions exchanges two occupants in place, and the new refusals
+// carry the status the architect ruling assigns them: 409 when the problem
+// depends on other rows (double-staffing, a capacity too low for what is
+// already assigned), 422 when the declaration alone is invalid (capacity
+// below quorum).
+func TestSwapPositionsAndCapacityRefusalsAPI(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ownerTok := bootstrapOwnerTok(t, ctx, gw)
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "swap-api-sys"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPut, "/systems/swap-api-sys/roles/table-mic", map[string]any{
+		"display_name": "Table Mic", "quorum": 2, "accepted_types": []string{"video-bar"},
+	}, http.StatusOK)
+	// No accepted_types: main-display takes any type, so the double-staffing
+	// refusal below is isolated from the typed-slot guard.
+	c.do(ownerTok, http.MethodPut, "/systems/swap-api-sys/roles/main-display", map[string]any{
+		"display_name": "Main Display",
+	}, http.StatusOK)
+
+	bar := "cisco-room-bar"
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "zeta", "product": bar}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "alpha", "product": bar}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPut, "/systems/swap-api-sys/roles/table-mic/assignments/zeta", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodPut, "/systems/swap-api-sys/roles/table-mic/assignments/alpha", nil, http.StatusNoContent)
+
+	read := func() systemRolesWire {
+		t.Helper()
+		var w systemRolesWire
+		if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/systems/swap-api-sys/roles", nil, http.StatusOK), &w); err != nil {
+			t.Fatalf("decode system roles: %v", err)
+		}
+		return w
+	}
+	if got := read().find(t, "table-mic").AssignedTo; !hasAllString(got, "zeta", "alpha") || got[0] != "zeta" || got[1] != "alpha" {
+		t.Fatalf("assigned_to before swap = %v, want [zeta alpha] (assignment order)", got)
+	}
+
+	c.do(ownerTok, http.MethodPost, "/systems/swap-api-sys/roles/table-mic:swapPositions",
+		map[string]any{"a": 1, "b": 2}, http.StatusNoContent)
+	if got := read().find(t, "table-mic").AssignedTo; got[0] != "alpha" || got[1] != "zeta" {
+		t.Fatalf("assigned_to after swap = %v, want [alpha zeta]", got)
+	}
+
+	// A component already filling one role is refused (409, names both
+	// parties) when assigned to a second in the same system.
+	body := c.do(ownerTok, http.MethodPut, "/systems/swap-api-sys/roles/main-display/assignments/zeta", nil, http.StatusConflict)
+	var problem struct {
+		Detail string `json:"detail"`
+	}
+	if err := json.Unmarshal(body, &problem); err != nil {
+		t.Fatalf("decode refusal: %v (%s)", err, body)
+	}
+	if !strings.Contains(problem.Detail, "zeta") || !strings.Contains(problem.Detail, "Table Mic") {
+		t.Fatalf("double-staffing refusal detail = %q, want it to name zeta and Table Mic", problem.Detail)
+	}
+
+	// A capacity below the role's own quorum is a 422 (the declaration alone
+	// is invalid, independent of any other row): main-display has nobody
+	// assigned yet, so this cannot also trip the below-assigned-count check.
+	c.do(ownerTok, http.MethodPut, "/systems/swap-api-sys/roles/main-display", map[string]any{
+		"display_name": "Main Display", "quorum": 2, "accepted_types": []string{"display"}, "capacity": 1,
+	}, http.StatusUnprocessableEntity)
+
+	// A capacity below what is currently assigned is a 409 (it conflicts
+	// with other rows), isolated from the quorum-alone check above by
+	// staffing a third bar so the assigned count (3) exceeds quorum (2):
+	// the proposed capacity of 2 clears "at least quorum" and fails only on
+	// the assigned count.
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "gamma", "product": bar}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPut, "/systems/swap-api-sys/roles/table-mic/assignments/gamma", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodPut, "/systems/swap-api-sys/roles/table-mic", map[string]any{
+		"display_name": "Table Mic", "quorum": 2, "accepted_types": []string{"video-bar"}, "capacity": 2,
+	}, http.StatusConflict)
+}
+
 // hasAllString is hasAll's API-test-package twin (the storage package's
 // version lives in internal/storage, unexported).
 func hasAllString(got []string, want ...string) bool {

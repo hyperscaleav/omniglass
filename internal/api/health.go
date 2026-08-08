@@ -34,15 +34,23 @@ type healthAlarmBody struct {
 }
 
 type healthRoleBody struct {
-	Name        string            `json:"name"`
-	DisplayName string            `json:"display_name"`
-	Impact      string            `json:"impact" doc:"What an impaired role means for its system: outage, degraded, or none"`
-	Quorum      int               `json:"quorum"`
-	Satisfying  int               `json:"satisfying" doc:"How many assigned components currently occupy the role (their own verdict is not outage; a degraded component still occupies)"`
-	Impaired    bool              `json:"impaired" doc:"True when satisfying is below quorum"`
-	AssignedTo  []string          `json:"assigned_to"`
-	Down        []string          `json:"down" doc:"The assigned components whose own verdict is outage; empty when the role is merely short-staffed or only degraded"`
-	Alarms      []healthAlarmBody `json:"alarms" doc:"The active alarms on those down components"`
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name"`
+	Impact      string `json:"impact" doc:"What an impaired role means for its system: outage, degraded, or none"`
+	Quorum      int    `json:"quorum"`
+	Satisfying  int    `json:"satisfying" doc:"How many assigned components currently occupy the role (their own verdict is not outage; a degraded component still occupies)"`
+	// Short and Spare are occupancy-aware, unlike the roles read's
+	// understaffed (Quorum minus len(assigned_to), health-blind): a role can
+	// report understaffed 0 here and still be short if an assigned
+	// component's own verdict is outage. They live here rather than on the
+	// declaration read because computing them needs each occupant's
+	// current verdict, which only this read resolves.
+	Short      int               `json:"short" doc:"How many more occupants the role needs to reach quorum, counting only those currently occupying (own verdict not outage); zero once it does. Diverges from the roles read's understaffed when an assigned component is down"`
+	Spare      int               `json:"spare" doc:"How many occupants the role has beyond quorum; zero at or below quorum"`
+	Impaired   bool              `json:"impaired" doc:"True when satisfying is below quorum"`
+	AssignedTo []string          `json:"assigned_to"`
+	Down       []string          `json:"down" doc:"The assigned components whose own verdict is outage; empty when the role is merely short-staffed or only degraded"`
+	Alarms     []healthAlarmBody `json:"alarms" doc:"The active alarms on those down components"`
 }
 
 type healthSystemBody struct {
@@ -93,6 +101,8 @@ func toHealthRoleBody(r *storage.HealthRole) healthRoleBody {
 		Impact:      r.Impact,
 		Quorum:      r.Quorum,
 		Satisfying:  r.Satisfying,
+		Short:       r.Short,
+		Spare:       r.Spare,
 		Impaired:    r.Impaired,
 		AssignedTo:  nonNil(r.AssignedTo),
 		Down:        nonNil(r.Down),

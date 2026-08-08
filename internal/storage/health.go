@@ -102,6 +102,8 @@ type HealthRole struct {
 	Impact      string
 	Quorum      int
 	Satisfying  int
+	Short       int // how many more occupants the role needs to reach quorum
+	Spare       int // how many occupants the role has beyond quorum
 	Impaired    bool
 	AssignedTo  []string
 	Down        []string // assigned components whose own verdict is outage
@@ -473,6 +475,12 @@ func (p *PG) locationVerdict(ctx context.Context, q txQuerier, locationName stri
 // verdict. It is the resolution EffectiveRoles does, carried far enough for the
 // verdict: the quorum, the impact, and who occupies the slot today.
 func (p *PG) resolveHealthRoles(ctx context.Context, q txQuerier, systemName string) ([]resolvedRole, error) {
+	// A correlated subquery for assigned, not a GROUP BY: array_agg(distinct
+	// ... order by ra.position) is rejected by Postgres outright (the ORDER
+	// BY expression must appear in the DISTINCT argument list), and this
+	// query joins nothing else that would fan assignment rows out, so the
+	// subquery form EffectiveRoles needs for its extra joins works here too,
+	// ordered by the occupant's position (#626) rather than alphabetically.
 	rows, err := q.Query(ctx, `
 		with sys as (
 			select id, name, standard_id from system where name = $1
@@ -487,12 +495,10 @@ func (p *PG) resolveHealthRoles(ctx context.Context, q txQuerier, systemName str
 		select roles.id, roles.name, roles.display_name, roles.quorum, roles.impact,
 		       -- NAMES, not ids: the rollup looks each assignee's alarms up by
 		       -- name, and the report displays them.
-		       coalesce(array_agg(distinct ac.name) filter (where ac.name is not null), '{}')
-		from roles
-		left join system_role_assignment ra on ra.role_id = roles.id
-		     and ra.system_id = (select id from system where name = $1)
-		left join component ac on ac.id = ra.component_id
-		group by roles.id, roles.name, roles.display_name, roles.quorum, roles.impact
+		       coalesce((select array_agg(ac.name order by ra.position)
+		                   from system_role_assignment ra join component ac on ac.id = ra.component_id
+		                  where ra.role_id = roles.id and ra.system_id = sys.id), '{}')
+		from roles, sys
 		order by roles.name`, systemName)
 	if err != nil {
 		return nil, fmt.Errorf("storage: resolve health roles %q: %w", systemName, err)
@@ -518,8 +524,10 @@ func (p *PG) resolveHealthRoles(ctx context.Context, q txQuerier, systemName str
 	}
 	rows.Close()
 
-	// One component can fill several roles in a system, so its verdict is
-	// resolved once and reused.
+	// A component fills at most one role per system (#626), so a name can no
+	// longer repeat across this system's role list: the cache below costs
+	// nothing to keep even so, since a miss is just one extra query, not a
+	// wrong answer.
 	resolved := map[string]health.Component{}
 	out := make([]resolvedRole, 0, len(raw))
 	for _, r := range raw {
@@ -642,6 +650,8 @@ func (p *PG) explainRole(ctx context.Context, q txQuerier, r resolvedRole) (Heal
 		Impact:      r.Impact,
 		Quorum:      r.Quorum,
 		Satisfying:  role.Satisfying(),
+		Short:       role.Short(),
+		Spare:       role.Spare(),
 		Impaired:    role.Impaired(),
 		AssignedTo:  make([]string, 0, len(r.Assigned)),
 		Down:        []string{},

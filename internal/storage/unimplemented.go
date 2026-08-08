@@ -691,6 +691,9 @@ func (UnimplementedGateway) AssignRole(context.Context, string, string, string, 
 func (UnimplementedGateway) UnassignRole(context.Context, string, string, string, string, scope.Set) error {
 	return nil
 }
+func (UnimplementedGateway) SwapPositions(context.Context, string, string, string, int, int, scope.Set) error {
+	return nil
+}
 func (UnimplementedGateway) ListSystemRoles(context.Context, string, string) ([]SystemRole, error) {
 	return nil, nil
 }

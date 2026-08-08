@@ -2461,12 +2461,27 @@
       "nullable": false,
       "fk": true,
       "fk_target": "system.id"
+     },
+     {
+      "name": "position",
+      "type": "integer",
+      "nullable": false
+     }
+    ],
+    "checks": [
+     {
+      "name": "system_role_assignment_position_check",
+      "expr": "CHECK ((\"position\" \u003e= 1))"
      }
     ],
     "uniques": [
      {
       "name": "system_role_assignment_component_key",
       "definition": "CREATE UNIQUE INDEX system_role_assignment_component_key ON public.system_role_assignment USING btree (system_id, component_id)"
+     },
+     {
+      "name": "system_role_assignment_position_key",
+      "definition": "CREATE UNIQUE INDEX system_role_assignment_position_key ON public.system_role_assignment USING btree (system_id, role_id, \"position\")"
      },
      {
       "name": "system_role_assignment_system_id_role_id_component_id_key",

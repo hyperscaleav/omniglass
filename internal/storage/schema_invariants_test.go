@@ -32,6 +32,11 @@ func TestChurnDroppedConstraintsRestored(t *testing.T) {
 		{"product_property", "property_type_id"},
 		{"standard_property", "property_type_id"},
 		{"location_type_property", "property_type_id"},
+		// The position floor (20260807146000_assignment_position_floor.sql,
+		// #626): every assignment carries its ordering position within its
+		// role, not just those written after the floor landed (the
+		// preceding backfill fills every existing row first).
+		{"system_role_assignment", "position"},
 	}
 	for _, c := range notNull {
 		var nullable string

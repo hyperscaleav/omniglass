@@ -106,14 +106,37 @@ func (r Role) Satisfying() int {
 	return n
 }
 
-// Impaired reports whether the role has fallen below its quorum. A quorum of
-// zero or less is treated as one: a role that wants nobody is not a role.
-func (r Role) Impaired() bool {
-	want := r.Quorum
-	if want < 1 {
-		want = 1
+// want is the quorum floor Impaired, Short, and Spare all measure against. A
+// quorum of zero or less is treated as one: a role that wants nobody is not
+// a role.
+func (r Role) want() int {
+	if r.Quorum < 1 {
+		return 1
 	}
-	return r.Satisfying() < want
+	return r.Quorum
+}
+
+// Impaired reports whether the role has fallen below its quorum.
+func (r Role) Impaired() bool {
+	return r.Satisfying() < r.want()
+}
+
+// Short is how many more occupants the role needs to reach quorum; zero
+// once it does.
+func (r Role) Short() int {
+	if n := r.want() - r.Satisfying(); n > 0 {
+		return n
+	}
+	return 0
+}
+
+// Spare is how many occupants the role has beyond quorum, the depth it has
+// left before losing one would impair it; zero at or below quorum.
+func (r Role) Spare() int {
+	if n := r.Satisfying() - r.want(); n > 0 {
+		return n
+	}
+	return 0
 }
 
 // Contributes is the verdict this role hands its system: its declared impact

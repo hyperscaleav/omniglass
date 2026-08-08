@@ -5210,6 +5210,36 @@ func generatedCommands() []*cobra.Command {
 			}())
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
+					var fA string
+					var fB string
+					cmd := &cobra.Command{
+						Use:     "swapPositions <name> <role>",
+						Short:   "Exchange two occupants' positions within a role",
+						Long:    "Exchanges the positions of whichever components currently hold positions a and b within this role: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
+						Example: "  omniglass system role swapPositions <name> <role> --a a --b b",
+						Args:    cobra.ExactArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/systems/%s/roles/%s:swapPositions", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("a") {
+								body["a"] = jsonOrString(fA)
+							}
+							if cmd.Flags().Changed("b") {
+								body["b"] = jsonOrString(fB)
+							}
+							return runAPICommand(cmd, "POST", path, body)
+						},
+					}
+					cmd.Flags().StringVar(&fA, "a", "", "One of the two positions to exchange")
+					_ = cmd.MarkFlagRequired("a")
+					cmd.Flags().StringVar(&fB, "b", "", "The other position to exchange with")
+					_ = cmd.MarkFlagRequired("b")
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
 					var fAcceptedTypes string
 					var fCapacity string
 					var fDisplayName string

@@ -512,6 +512,10 @@ type Gateway interface {
 	EffectiveRoles(ctx context.Context, systemName string, read scope.Set) ([]EffectiveRole, error)
 	AssignRole(ctx context.Context, actorID, systemName, roleName, componentName string, write scope.Set) error
 	UnassignRole(ctx context.Context, actorID, systemName, roleName, componentName string, write scope.Set) error
+	// SwapPositions exchanges two occupants' positions within a role: an
+	// ordering change only, so it takes no read counterpart of its own
+	// (EffectiveRoles already reports the ordered result).
+	SwapPositions(ctx context.Context, actorID, systemName, roleName string, a, b int, write scope.Set) error
 	// The declaration side of the same tier: what a standard or a system declares
 	// it needs filled. ownerKind is "standard" or "system"; SeedSystemRole is the
 	// boot-seed lane.

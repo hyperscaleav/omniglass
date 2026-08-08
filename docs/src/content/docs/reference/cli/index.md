@@ -4095,6 +4095,27 @@ Example:
 omniglass system role list <name>
 ```
 
+#### `omniglass system role swapPositions`
+
+Exchange two occupants' positions within a role
+
+```
+omniglass system role swapPositions <name> <role> [flags]
+```
+
+Exchanges the positions of whichever components currently hold positions a and b within this role: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--a` | string | (none) | One of the two positions to exchange |
+| `--b` | string | (none) | The other position to exchange with |
+
+Example:
+
+```sh
+omniglass system role swapPositions <name> <role> --a a --b b
+```
+
 #### `omniglass system role update`
 
 Declare a role on a system

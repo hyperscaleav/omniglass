@@ -3032,6 +3032,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/systems/{name}/roles/{role}:swapPositions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exchange two occupants' positions within a role
+         * @description Exchanges the positions of whichever components currently hold positions a and b within this role: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         */
+        post: operations["swap-role-positions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/systems/{name}:listTags": {
         parameters: {
             query?: never;
@@ -4280,7 +4300,7 @@ export interface components {
             quorum: number;
             /**
              * Format: int64
-             * @description How many more the role wants before quorum; zero when staffed
+             * @description How many more assignment rows the role wants before quorum, health-blind; zero when enough are assigned regardless of their own condition. See the health read's short for the occupancy-aware figure
              */
             understaffed: number;
         };
@@ -4567,6 +4587,16 @@ export interface components {
              * @description How many assigned components currently occupy the role (their own verdict is not outage; a degraded component still occupies)
              */
             satisfying: number;
+            /**
+             * Format: int64
+             * @description How many more occupants the role needs to reach quorum, counting only those currently occupying (own verdict not outage); zero once it does. Diverges from the roles read's understaffed when an assigned component is down
+             */
+            short: number;
+            /**
+             * Format: int64
+             * @description How many occupants the role has beyond quorum; zero at or below quorum
+             */
+            spare: number;
         };
         HealthSystemBody: {
             name: string;
@@ -6097,6 +6127,24 @@ export interface components {
         };
         SvcBody: {
             label: string;
+        };
+        SwapRolePositionsInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SwapRolePositionsInputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description One of the two positions to exchange
+             */
+            a: number;
+            /**
+             * Format: int64
+             * @description The other position to exchange with
+             */
+            b: number;
         };
         SystemBody: {
             /**
@@ -13450,6 +13498,42 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "swap-role-positions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's unique name */
+                name: string;
+                /** @description The role name */
+                role: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SwapRolePositionsInputBody"];
+            };
+        };
         responses: {
             /** @description No Content */
             204: {

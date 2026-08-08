@@ -81,7 +81,13 @@ type effectiveRoleBody struct {
 	FromStandard   bool     `json:"from_standard" doc:"True when the role is inherited from the system's standard; false when declared on the system"`
 	AssignedTo     []string `json:"assigned_to" doc:"The component names filling this role in this system"`
 	Assigned       int      `json:"assigned" doc:"How many components fill the role"`
-	Understaffed   int      `json:"understaffed" doc:"How many more the role wants before quorum; zero when staffed"`
+	// Understaffed counts assignment rows against quorum regardless of
+	// health, so it can disagree with the health read's short for the same
+	// role at the same instant when an assigned component's own verdict is
+	// outage: this answers "did enough components sign up", short answers
+	// "is enough of it actually occupying the slot". Both are correct under
+	// their own definition.
+	Understaffed int `json:"understaffed" doc:"How many more assignment rows the role wants before quorum, health-blind; zero when enough are assigned regardless of their own condition. See the health read's short for the occupancy-aware figure"`
 }
 
 func toEffectiveRoleBody(e *storage.EffectiveRole) effectiveRoleBody {
@@ -170,6 +176,21 @@ type roleAssignmentPathInput struct {
 	Name      string `path:"name" doc:"The system's unique name"`
 	Role      string `path:"role" doc:"The role name"`
 	Component string `path:"component" doc:"The component's unique name"`
+}
+
+// swapRolePositionsInput is the :swapPositions verb's input: the role,
+// addressed the same way every other role route addresses it, and the two
+// 1-based positions to exchange. Position stays an ordering attribute of an
+// assignment rather than a second address for one (identity_shape.go's
+// declaration that system_role_assignment is id-only stays true): the verb
+// is role-level, not a per-position resource.
+type swapRolePositionsInput struct {
+	Name string `path:"name" doc:"The system's unique name"`
+	Role string `path:"role" doc:"The role name"`
+	Body struct {
+		A int `json:"a" minimum:"1" doc:"One of the two positions to exchange"`
+		B int `json:"b" minimum:"1" doc:"The other position to exchange with"`
+	}
 }
 
 // registerRoleRoutes wires the two arcs of the role surface.
@@ -312,6 +333,24 @@ func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Description:   "Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
 	}, "system", "update"), func(ctx context.Context, in *roleAssignmentPathInput) (*struct{}, error) {
 		if err := gw.UnassignRole(ctx, actorID(ctx), in.Name, in.Role, in.Component,
+			a.scopeFor(ctx, "system", "update")); err != nil {
+			return nil, mapRoleErr(err)
+		}
+		return nil, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID:   "swap-role-positions",
+		Method:        http.MethodPost,
+		Path:          "/systems/{name}/roles/{role}:swapPositions",
+		DefaultStatus: http.StatusNoContent,
+		Summary:       "Exchange two occupants' positions within a role",
+		Description:   "Exchanges the positions of whichever components currently hold positions a and b within this role: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
+	}, "system", "update"), func(ctx context.Context, in *swapRolePositionsInput) (*struct{}, error) {
+		if err := requireSystemInScope(ctx, a, gw, in.Name); err != nil {
+			return nil, err
+		}
+		if err := gw.SwapPositions(ctx, actorID(ctx), in.Name, in.Role, in.Body.A, in.Body.B,
 			a.scopeFor(ctx, "system", "update")); err != nil {
 			return nil, mapRoleErr(err)
 		}
