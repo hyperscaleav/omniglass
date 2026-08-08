@@ -37,7 +37,8 @@ func TestResolveTaskOwner(t *testing.T) {
 			t.Fatalf("create %s: %v", name, err)
 		}
 	}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1"}, all); err != nil {
+	disp1, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1"}, all)
+	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 
@@ -65,8 +66,8 @@ func TestResolveTaskOwner(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("resolve t-bound for node-a: ok=%v err=%v", ok, err)
 	}
-	if owner.Component != "disp-1" || owner.InterfaceName != "disp-1-tcp" || owner.InterfaceType != "tcp" {
-		t.Fatalf("owner = %+v, want disp-1 / disp-1-tcp / tcp", owner)
+	if owner.ComponentID != disp1.ID || owner.InterfaceName != "disp-1-tcp" || owner.InterfaceType != "tcp" {
+		t.Fatalf("owner = %+v, want %s / disp-1-tcp / tcp", owner, disp1.ID)
 	}
 
 	// CONFINEMENT: the same task queried by node-b resolves to nothing.

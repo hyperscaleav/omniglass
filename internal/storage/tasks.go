@@ -182,8 +182,16 @@ func (p *PG) GetTask(ctx context.Context, id string, read scope.Set) (*Task, err
 // TaskOwner is a task's resolved ingest binding: the component its interface
 // dedicates its samples to, plus the interface identity the write records as
 // source (type) and instance (name).
+//
+// ComponentID is the component's uuid, never its name: it is what
+// ResolveTaskOwner reads directly off the interface's own FK column
+// (i.component), and every downstream write (deriveMetrics, deriveProperties,
+// deriveEvents, dedupeProperties) stamps it as OwnerID verbatim. #627 scopes
+// component name uniqueness to placement, so a name here would be resolved a
+// second time, ambiguously, by ownerArcValue on the write side; the id needs no
+// second resolution and can never collide.
 type TaskOwner struct {
-	Component     string
+	ComponentID   string
 	InterfaceName string
 	InterfaceType string
 }
@@ -191,7 +199,7 @@ type TaskOwner struct {
 // ResolveTaskOwner binds the component a node's task collects for and, in the same
 // query, confines the node to its own tasks. Given a task id and the node that
 // published the telemetry (extracted from the NATS subject), it returns the task's
-// interface component. Confinement is against the INTERFACE's placement
+// interface component id. Confinement is against the INTERFACE's placement
 // (i.node_name), the authoritative node binding, since a task carries no node
 // column. ok is false (the sample is an orphan the ingest consumer drops, never
 // writes) when the task is unknown, its interface belongs to a DIFFERENT node (a
@@ -201,15 +209,19 @@ type TaskOwner struct {
 // redelivery.
 func (p *PG) ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (TaskOwner, bool, error) {
 	var (
-		owner     TaskOwner
-		component *string
-		ifaceNode *string
+		owner       TaskOwner
+		componentID *string
+		ifaceNode   *string
 	)
+	// i.component is bound directly (the FK column, not a name derived from
+	// it): the row already has it, and re-deriving one from a name only to
+	// have the write side resolve it a second time is exactly the shape #627
+	// makes ambiguous.
 	err := p.pool.QueryRow(ctx, `
-		select (select c.name from component c where c.id = i.component), (select n.name from node n where n.principal_id = i.node_name), i.name, (select it.name from interface_type it where it.id = i.type)
+		select i.component, (select n.name from node n where n.principal_id = i.node_name), i.name, (select it.name from interface_type it where it.id = i.type)
 		from task t
 		join interface i on i.id = t.interface_id
-		where t.id = $1`, taskID).Scan(&component, &ifaceNode, &owner.InterfaceName, &owner.InterfaceType)
+		where t.id = $1`, taskID).Scan(&componentID, &ifaceNode, &owner.InterfaceName, &owner.InterfaceType)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return TaskOwner{}, false, nil
 	} else if err != nil {
@@ -218,9 +230,9 @@ func (p *PG) ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (Tas
 	if ifaceNode == nil || *ifaceNode != nodeName {
 		return TaskOwner{}, false, nil // confinement: not this node's interface
 	}
-	if component == nil || *component == "" {
+	if componentID == nil || *componentID == "" {
 		return TaskOwner{}, false, nil // shared interface: no pre-bound owner
 	}
-	owner.Component = *component
+	owner.ComponentID = *componentID
 	return owner, true, nil
 }
