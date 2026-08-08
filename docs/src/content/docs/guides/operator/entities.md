@@ -84,19 +84,28 @@ sits beside it on the forms that offer one; where it does not, the header **x** 
   bookmarks, runbooks, and integration config holding the old name stop resolving. Nothing inside
   Omniglass breaks: every reference holds the entity's `id`, so its tags, grants, alarms, and
   recorded history follow the rename, and the audit trail stays attributable across it.
-- A **location**'s edit mode also makes its **Parent** editable: the Placement section swaps its
-  read-only fact for a picker narrowed to the location type's allowed parents (or, when
-  unconstrained, every location), excluding the location's own subtree. Moving back to root is
-  not offered; a move a stale picker still lets through is refused the same way as create, inline,
-  naming both types.
-- A **component** and a **system** are just as mobile: edit re-opens their **Placement** (location
-  and parent) and, for a component, its **Product**. Nothing here is fixed at create. A component
-  can move rooms, re-parent under a different component, or be re-classified onto a different
-  product; a system can move location or re-parent. Re-classifying a component keeps every property
-  value you set by hand and lets the new product's contract defaults take over the rest, so a swap
-  never silently loses your data. Clearing a field is a first-class move: an empty location unplaces
-  it, an empty parent lifts it to a root, an empty product makes it a one-off. A re-parent that would
-  put an entity under itself or one of its own children is refused.
+- **Moving is a separate act from an update too, and separately granted**, the same split renaming
+  draws. Placement (Parent on a component, a system, or a location; Location on a component or a
+  system) is not a field on the regular edit save: it is its own call, `<resource>:move` rather than
+  `<resource>:update`. An operator holding update but not move can still edit the label, type, or
+  product, but the placement fields stay read-only. Where the console offers a live picker, **Save**
+  patches the other fields first and sends the move second, so a refused move (a cycle, a
+  placement-type mismatch, or a taken name at the destination, naming both parties) leaves the rest of
+  the edit in place rather than undoing it.
+- A **location**'s edit mode makes its **Parent** editable, the console's one live placement picker
+  today (with the move permission): the Placement section swaps its read-only fact for a picker
+  narrowed to the location type's allowed parents (or, when unconstrained, every location), excluding
+  the location's own subtree. Moving back to root is not offered here, and the platform has no
+  clear-to-root capability for a location at all, not even from the API or CLI.
+- A **component**'s and a **system**'s Placement (System, Location, Parent, and, for a component,
+  Product) is **read-only in the console today**, in view and in edit alike: you set them at create
+  and re-home an entity through the API or CLI (`omniglass component move`, `omniglass system move`).
+  Both are movable via `:move` the same way a location's Parent is (an empty location unplaces a
+  component or a system; clearing parent to lift an entity to a root needs an all-scoped grant, the
+  same authorization creating a root entity already requires, since a scope-limited operator clearing
+  parent would otherwise walk an entity out of every subtree their own grant was ever limited to; a
+  re-parent that would put an entity under itself or one of its own children is refused); the console
+  just has no picker for either yet.
 - **Delete** removes it, with a confirm. These actions appear only if your grants allow them.
 
 ## Properties on the detail
