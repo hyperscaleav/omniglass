@@ -130,6 +130,45 @@ func TestRootLocationNamesGloballyUnique(t *testing.T) {
 	}
 }
 
+// TestSubLocationScopesToParent covers the location_parent_name_key bucket
+// (parent_id IS NOT NULL), the twin of TestRootLocationNamesGloballyUnique's
+// root bucket: a nested location's name is unique among the children of ONE
+// parent, not across the whole location tree. Two rooms named "room-1" under
+// different buildings are both legal; two named "room-1" under the SAME
+// building are not. Nothing else in the suite pins ErrLocationExistsUnderParent
+// specifically (every existing collision assertion hits the root bucket
+// instead), so this is the only test that would catch a fallthrough to the
+// generic ErrLocationExists sentinel or a mismatched constraint name in
+// mapLocationWriteErr's 23505 switch.
+func TestSubLocationScopesToParent(t *testing.T) {
+	gw := openGateway(t)
+	ctx := context.Background()
+
+	bldgA, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "bldg-a", LocationType: "campus"}, all)
+	if err != nil {
+		t.Fatalf("bldg-a: %v", err)
+	}
+	bldgB, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "bldg-b", LocationType: "campus"}, all)
+	if err != nil {
+		t.Fatalf("bldg-b: %v", err)
+	}
+	roomA, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-1", LocationType: "room", ParentName: strptr(bldgA.Name)}, all)
+	if err != nil {
+		t.Fatalf("room-1 under bldg-a: %v", err)
+	}
+	roomB, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-1", LocationType: "room", ParentName: strptr(bldgB.Name)}, all)
+	if err != nil {
+		t.Fatalf("room-1 under bldg-b: %v", err)
+	}
+	if roomA.ID == roomB.ID {
+		t.Fatal("the two room-1s did not actually land on different rows")
+	}
+
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-1", LocationType: "room", ParentName: strptr(bldgA.Name)}, all); !errors.Is(err, storage.ErrLocationExistsUnderParent) {
+		t.Fatalf("second room-1 under bldg-a = %v, want ErrLocationExistsUnderParent", err)
+	}
+}
+
 // TestSubComponentScopesToParent covers the component_parent_name_key bucket
 // directly (parent_id IS NOT NULL): a name is unique among the children of ONE
 // parent, not across the whole component tree. Two components named "port-1"
