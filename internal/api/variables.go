@@ -224,6 +224,9 @@ func registerVariableRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 
 // mapVariableErr translates the gateway's variable sentinels into HTTP status.
 func mapVariableErr(err error) error {
+	if refErr, ok := mapRefErr(err); ok {
+		return refErr
+	}
 	switch {
 	case errors.Is(err, storage.ErrVariableNotFound):
 		return huma.Error404NotFound("variable not found")

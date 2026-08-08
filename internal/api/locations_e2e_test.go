@@ -94,7 +94,7 @@ func TestLocationAPI(t *testing.T) {
 
 // TestLocationRenameAndCheckName drives the :rename custom method and the
 // collection-level :checkName advisory over HTTP: checkName reports valid +
-// available (scope-blind), :rename moves the name, a rename onto a taken name is a
+// available (against the root bucket here), :rename moves the name, a rename onto a taken name is a
 // 409, and a bad slug is rejected at the edge by the Huma pattern (422). Skipped
 // under -short.
 func TestLocationRenameAndCheckName(t *testing.T) {
@@ -190,11 +190,16 @@ func TestLocationRenameAndCheckName(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "Bad Name", "location_type": "campus"}, http.StatusUnprocessableEntity)
 }
 
-// checkName is scope-blind: a caller with location:update scoped to one subtree
-// still sees a name taken in a subtree it cannot read, so its rename never
-// false-positives "available" only to 409 at Save on the global unique
-// constraint. Skipped under -short.
-func TestLocationCheckNameScopeBlind(t *testing.T) {
+// TestLocationCheckNameIsScopedToPlacement drives the #627 fix over HTTP:
+// checkName now reports availability against the SAME placement bucket a
+// create would land in, named by the Parent field, not a single global fact.
+// A name taken under one parent is reported free under another (the exact
+// false-positive that used to block a legal create), and the advisory stays
+// blind to the caller's OWN grant scope, same as before: a deploy principal
+// scoped to one subtree still gets a correct answer about a placement it
+// cannot GET, because the check is a query against the target bucket, not a
+// read of the target row. Skipped under -short.
+func TestLocationCheckNameIsScopedToPlacement(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
@@ -218,7 +223,7 @@ func TestLocationCheckNameScopeBlind(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	// Two locations in separate scopes.
+	// Two root locations, and a "room-1" child under scope-hq only.
 	var hq struct {
 		ID string `json:"id"`
 	}
@@ -226,23 +231,40 @@ func TestLocationCheckNameScopeBlind(t *testing.T) {
 		t.Fatalf("decode create: %v", err)
 	}
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "scope-lab", "location_type": "campus"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "room-1", "location_type": "room", "parent": "scope-hq"}, http.StatusCreated)
 
 	// A deploy principal (location:update) scoped ONLY to scope-hq.
 	deployTok := setupScopedViewer(t, ctx, dsn, "deploy-hq", "deploy", "location", hq.ID)
 	// It cannot read scope-lab (out of scope -> non-disclosing 404).
 	c.do(deployTok, http.MethodGet, "/locations/scope-lab", nil, http.StatusNotFound)
 
-	// But checkName reports scope-lab taken (scope-blind), never available.
-	out := c.do(deployTok, http.MethodPost, "/locations:checkName", map[string]any{"name": "scope-lab"}, http.StatusOK)
-	var nc struct {
-		Valid     bool `json:"valid"`
-		Available bool `json:"available"`
+	check := func(body map[string]any) (valid, available bool) {
+		out := c.do(deployTok, http.MethodPost, "/locations:checkName", body, http.StatusOK)
+		var nc struct {
+			Valid     bool `json:"valid"`
+			Available bool `json:"available"`
+		}
+		if err := json.Unmarshal(out, &nc); err != nil {
+			t.Fatalf("decode checkName: %v", err)
+		}
+		return nc.Valid, nc.Available
 	}
-	if err := json.Unmarshal(out, &nc); err != nil {
-		t.Fatalf("decode checkName: %v", err)
+
+	// room-1 is taken under scope-hq, the same placement it was created at.
+	if valid, available := check(map[string]any{"name": "room-1", "parent": "scope-hq"}); !valid || available {
+		t.Fatalf("checkName(room-1, parent=scope-hq) = valid=%v available=%v, want true,false", valid, available)
 	}
-	if !nc.Valid || nc.Available {
-		t.Fatalf("scope-blind checkName(scope-lab) = %+v, want valid=true available=false (name exists out-of-scope)", nc)
+	// The identical name is FREE under scope-lab: this is the false positive
+	// #627 fixes. The caller cannot even GET scope-lab, and the check still
+	// answers correctly (blind to the caller's own grant, aware of the
+	// placement bucket named in the request).
+	if valid, available := check(map[string]any{"name": "room-1", "parent": "scope-lab"}); !valid || !available {
+		t.Fatalf("checkName(room-1, parent=scope-lab) = valid=%v available=%v, want true,true", valid, available)
+	}
+	// scope-lab is taken at ROOT (no parent field): the advisory remains
+	// scope-blind to the caller's own grant for this bucket too.
+	if valid, available := check(map[string]any{"name": "scope-lab"}); !valid || available {
+		t.Fatalf("checkName(scope-lab, root) = valid=%v available=%v, want true,false", valid, available)
 	}
 }
 

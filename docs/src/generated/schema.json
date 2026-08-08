@@ -1501,12 +1501,26 @@
       "nullable": false,
       "fk": true,
       "fk_target": "product.id"
+     },
+     {
+      "name": "name_generated",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
      }
     ],
     "uniques": [
      {
-      "name": "component_name_key",
-      "definition": "CREATE UNIQUE INDEX component_name_key ON public.component USING btree (name)"
+      "name": "component_location_name_key",
+      "definition": "CREATE UNIQUE INDEX component_location_name_key ON public.component USING btree (location_id, name) WHERE ((parent_id IS NULL) AND (location_id IS NOT NULL))"
+     },
+     {
+      "name": "component_orphan_name_key",
+      "definition": "CREATE UNIQUE INDEX component_orphan_name_key ON public.component USING btree (name) WHERE ((parent_id IS NULL) AND (location_id IS NULL))"
+     },
+     {
+      "name": "component_parent_name_key",
+      "definition": "CREATE UNIQUE INDEX component_parent_name_key ON public.component USING btree (parent_id, name) WHERE (parent_id IS NOT NULL)"
      }
     ]
    },
@@ -1665,8 +1679,12 @@
     ],
     "uniques": [
      {
-      "name": "location_name_key",
-      "definition": "CREATE UNIQUE INDEX location_name_key ON public.location USING btree (name)"
+      "name": "location_parent_name_key",
+      "definition": "CREATE UNIQUE INDEX location_parent_name_key ON public.location USING btree (parent_id, name) WHERE (parent_id IS NOT NULL)"
+     },
+     {
+      "name": "location_root_name_key",
+      "definition": "CREATE UNIQUE INDEX location_root_name_key ON public.location USING btree (name) WHERE (parent_id IS NULL)"
      }
     ]
    },
@@ -1884,8 +1902,16 @@
     ],
     "uniques": [
      {
-      "name": "system_name_key",
-      "definition": "CREATE UNIQUE INDEX system_name_key ON public.system USING btree (name)"
+      "name": "system_location_name_key",
+      "definition": "CREATE UNIQUE INDEX system_location_name_key ON public.system USING btree (location_id, name) WHERE ((parent_id IS NULL) AND (location_id IS NOT NULL))"
+     },
+     {
+      "name": "system_orphan_name_key",
+      "definition": "CREATE UNIQUE INDEX system_orphan_name_key ON public.system USING btree (name) WHERE ((parent_id IS NULL) AND (location_id IS NULL))"
+     },
+     {
+      "name": "system_parent_name_key",
+      "definition": "CREATE UNIQUE INDEX system_parent_name_key ON public.system USING btree (parent_id, name) WHERE (parent_id IS NOT NULL)"
      }
     ]
    },

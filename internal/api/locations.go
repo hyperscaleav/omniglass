@@ -93,7 +93,7 @@ type locationPathInput struct {
 
 type createLocationInput struct {
 	Body struct {
-		Name         string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Globally unique name (the address; lowercase letters, digits, hyphens)"`
+		Name         string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens)"`
 		DisplayName  string  `json:"display_name,omitempty" doc:"What an operator reads; the name is the address"`
 		LocationType string  `json:"location_type" minLength:"1" doc:"The location_type, by name or uuid (campus, building, ...)"`
 		Parent       *string `json:"parent,omitempty" doc:"Parent location name; omit for a root location"`
@@ -116,7 +116,7 @@ type updateLocationInput struct {
 type renameLocationInput struct {
 	Name string `path:"name" doc:"The location's current name, or its uuid"`
 	Body struct {
-		Name string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The new globally unique name (lowercase letters, digits, hyphens)"`
+		Name string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The new name, unique within its placement (lowercase letters, digits, hyphens)"`
 	}
 }
 
@@ -308,7 +308,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPost,
 		Path:        "/locations:checkName",
 		Summary:     "Check a location name",
-		Description: "Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.",
+		Description: "Reports whether a proposed name is a valid slug and currently free within the given placement (under the given parent, or among roots when no parent is given). Advisory (Save is still gated by the unique constraint). Gated by location:update.",
 	}, "location", "update"), func(ctx context.Context, in *checkNameInput) (*checkNameOutput, error) {
 		out := &checkNameOutput{}
 		if err := storage.ValidateName("location", in.Body.Name); err != nil {
@@ -323,9 +323,9 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 			return out, nil
 		}
 		out.Body.Valid = true
-		taken, err := gw.LocationNameTaken(ctx, in.Body.Name)
+		taken, err := gw.LocationNameTaken(ctx, in.Body.Name, in.Body.Parent)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("check location name")
+			return nil, mapLocationErr(err)
 		}
 		out.Body.Available = !taken
 		if taken {
@@ -364,6 +364,9 @@ func actorID(ctx context.Context) string {
 // name-clash 409, and the request faults 422. A placement violation carries
 // the offending child and parent type names in its message.
 func mapLocationErr(err error) error {
+	if refErr, ok := mapRefErr(err); ok {
+		return refErr
+	}
 	var placementErr *storage.PlacementError
 	if errors.As(err, &placementErr) {
 		return huma.Error422UnprocessableEntity(placementErr.Error())

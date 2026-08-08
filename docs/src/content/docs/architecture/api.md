@@ -63,10 +63,12 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   `POST /systems:checkName` (also `/components:checkName`, `/locations:checkName`) is an advisory
   precheck for a technical-name rename, returning `{ valid, available, reason }`, gated by
   `<entity>:update` (the advisory reads a name's availability; performing the rename needs
-  `<entity>:rename`). Its availability answer is **scope-blind**: the `name` uniqueness
-  constraint is global, so a scope-filtered answer would report a name held outside the caller's
-  scope as free and then 409 at save. A bounded exception to the ABAC-scope-on-every-query rule (it
-  discloses only that a name is taken somewhere), not a license to skip scope elsewhere.
+  `<entity>:rename`). Name uniqueness is scoped to **placement**, not the whole estate
+  ([#627](https://github.com/hyperscaleav/omniglass/issues/627)): the request carries the same
+  `parent`/`location` fields a create would, and availability is checked against that specific
+  placement bucket, not a single global fact. It stays **blind to the caller's own grant scope**:
+  a deploy principal scoped to one subtree still gets a correct answer for a placement it cannot
+  read via `GET`, because the check queries the target bucket directly rather than reading the row.
 - **A principal is addressable by uuid or username.** Every `/principals/{id}` route resolves either
   server-side (a value that parses as a uuid is used directly, else a username lookup, an unknown one
   a 404). The uuid stays the stable identity (a username is mutable, nothing keys on it); service

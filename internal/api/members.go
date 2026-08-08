@@ -145,6 +145,9 @@ func registerMemberRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 }
 
 func mapMemberErr(err error) error {
+	if refErr, ok := mapRefErr(err); ok {
+		return refErr
+	}
 	switch {
 	case errors.Is(err, storage.ErrMemberNotFound):
 		return huma.Error404NotFound("component is not a member of this system")

@@ -819,7 +819,7 @@ export interface paths {
         put?: never;
         /**
          * Check a component name
-         * @description Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.
+         * @description Reports whether a proposed name is a valid slug and currently free within the given placement (parent wins over location; neither means the unplaced/root bucket). Advisory (Save is still gated by the unique constraint). Gated by component:update.
          */
         post: operations["check-component-name"];
         delete?: never;
@@ -1435,7 +1435,7 @@ export interface paths {
         put?: never;
         /**
          * Check a location name
-         * @description Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.
+         * @description Reports whether a proposed name is a valid slug and currently free within the given placement (under the given parent, or among roots when no parent is given). Advisory (Save is still gated by the unique constraint). Gated by location:update.
          */
         post: operations["check-location-name"];
         delete?: never;
@@ -3143,7 +3143,7 @@ export interface paths {
         put?: never;
         /**
          * Check a system name
-         * @description Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.
+         * @description Reports whether a proposed name is a valid slug and currently free within the given placement (parent wins over location; neither means the root/unplaced bucket). Advisory (Save is still gated by the unique constraint). Gated by system:update.
          */
         post: operations["check-system-name"];
         delete?: never;
@@ -3529,8 +3529,12 @@ export interface components {
              * @example /api/v1/schemas/CheckNameInputBody.json
              */
             readonly $schema?: string;
+            /** @description The location (by name or uuid) the entity would be placed at, if any and if unparented; ignored by the locations check */
+            location?: string;
             /** @description The proposed name to check */
             name: string;
+            /** @description The parent (by name or uuid) the entity would be created under, if any; omit for a root/unplaced check */
+            parent?: string;
         };
         CheckNameOutputBody: {
             /**
@@ -3539,7 +3543,7 @@ export interface components {
              * @example /api/v1/schemas/CheckNameOutputBody.json
              */
             readonly $schema?: string;
-            /** @description Whether the name is free (scope-blind, matches the global unique constraint) */
+            /** @description Whether the name is free within the checked placement (parent/location); a name taken elsewhere in the estate is still available here */
             available: boolean;
             /** @description Human explanation when not valid or not available */
             reason?: string;
@@ -3638,6 +3642,8 @@ export interface components {
             /** @description The location's id, the canonical handle */
             location_id?: string;
             name: string;
+            /** @description Whether the platform picked this name (a server-side generator) rather than an operator typing it. */
+            name_generated: boolean;
             /** @description The parent component's name, for display; absent for a root component */
             parent?: string;
             /** @description The parent component's id, the canonical handle */
@@ -3754,7 +3760,7 @@ export interface components {
             display_name?: string;
             /** @description Location name this component is placed at */
             location?: string;
-            /** @description Globally unique name (the address; lowercase letters, digits, hyphens) */
+            /** @description Name, unique within its placement (the address; lowercase letters, digits, hyphens) */
             name: string;
             /** @description Parent component name; omit for a root component */
             parent?: string;
@@ -3916,7 +3922,7 @@ export interface components {
             display_name?: string;
             /** @description The location_type, by name or uuid (campus, building, ...) */
             location_type: string;
-            /** @description Globally unique name (the address; lowercase letters, digits, hyphens) */
+            /** @description Name, unique within its placement (the address; lowercase letters, digits, hyphens) */
             name: string;
             /** @description Parent location name; omit for a root location */
             parent?: string;
@@ -4127,7 +4133,7 @@ export interface components {
             display_name?: string;
             /** @description Location name this system is placed at */
             location?: string;
-            /** @description Globally unique name (the address; lowercase letters, digits, hyphens) */
+            /** @description Name, unique within its placement (the address; lowercase letters, digits, hyphens) */
             name: string;
             /** @description Parent system name; omit for a root system */
             parent?: string;
@@ -5635,7 +5641,7 @@ export interface components {
              * @example /api/v1/schemas/RenameComponentInputBody.json
              */
             readonly $schema?: string;
-            /** @description The new globally unique name (lowercase letters, digits, hyphens) */
+            /** @description The new name, unique within its placement (lowercase letters, digits, hyphens) */
             name: string;
         };
         RenameGroupInputBody: {
@@ -5655,7 +5661,7 @@ export interface components {
              * @example /api/v1/schemas/RenameLocationInputBody.json
              */
             readonly $schema?: string;
-            /** @description The new globally unique name (lowercase letters, digits, hyphens) */
+            /** @description The new name, unique within its placement (lowercase letters, digits, hyphens) */
             name: string;
         };
         RenameSystemInputBody: {
@@ -5665,7 +5671,7 @@ export interface components {
              * @example /api/v1/schemas/RenameSystemInputBody.json
              */
             readonly $schema?: string;
-            /** @description The new globally unique name (lowercase letters, digits, hyphens) */
+            /** @description The new name, unique within its placement (lowercase letters, digits, hyphens) */
             name: string;
         };
         ResetPasswordInputBody: {

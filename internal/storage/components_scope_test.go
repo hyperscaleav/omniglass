@@ -29,8 +29,12 @@ func TestComponentScopeCRUD(t *testing.T) {
 
 	// A location and a system for the component to bind to. campus is the
 	// official type allowed at root; the type is incidental here, only the
-	// name (rm-1) is asserted below.
+	// name (rm-1) is asserted below. rm-2 is a second placement, so the
+	// same-name-different-bucket case below has somewhere legal to land.
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "rm-1", LocationType: "campus"}, all); err != nil {
+		t.Fatalf("seed location: %v", err)
+	}
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "rm-2", LocationType: "campus"}, all); err != nil {
 		t.Fatalf("seed location: %v", err)
 	}
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-1"}, all); err != nil {
@@ -73,11 +77,22 @@ func TestComponentScopeCRUD(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "y", SystemName: strptr("nope")}, all); !errors.Is(err, storage.ErrSystemNotFound) {
 		t.Errorf("unknown system = %v, want ErrSystemNotFound", err)
 	}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp"}, all); !errors.Is(err, storage.ErrComponentExists) {
-		t.Errorf("dup name = %v, want ErrComponentExists", err)
+	// A duplicate name in the SAME placement bucket still collides: disp was
+	// created unparented at rm-1 (component_location_name_key), and this one
+	// names the same location, so it lands in the identical bucket (#627
+	// scopes name uniqueness to placement, it does not remove uniqueness
+	// within one).
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp", LocationName: strptr("rm-1")}, all); !errors.Is(err, storage.ErrComponentExists) {
+		t.Errorf("dup name in same location = %v, want ErrComponentExists", err)
+	}
+	// The same name in a DIFFERENT placement bucket is legal: two rooms may
+	// each hold their own "disp", because the unique index is keyed on
+	// (location_id, name), not name alone.
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp", LocationName: strptr("rm-2")}, all); err != nil {
+		t.Errorf("dup name in different location = %v, want ok", err)
 	}
 
-	// Audit: 3 create + 1 delete = 4 component rows.
+	// Audit: 4 create + 1 delete = 5 component rows.
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		t.Fatalf("audit connect: %v", err)
@@ -87,8 +102,8 @@ func TestComponentScopeCRUD(t *testing.T) {
 	if err := conn.QueryRow(ctx, `select count(*) from audit_log where resource = 'component'`).Scan(&n); err != nil {
 		t.Fatalf("count audit: %v", err)
 	}
-	if n != 4 {
-		t.Errorf("component audit rows = %d, want 4", n)
+	if n != 5 {
+		t.Errorf("component audit rows = %d, want 5", n)
 	}
 }
 

@@ -358,6 +358,71 @@ func TestSwapPositionsAndCapacityRefusalsAPI(t *testing.T) {
 	}, http.StatusConflict)
 }
 
+// TestSetSystemRoleResolvesAmbiguousNameWithinCallerScope closes a gap Task
+// 10's round 4 left: requireSystemInScope (roles.go) resolves its reference
+// through gw.GetSystem, which after #627 can return storage.ErrAmbiguousName
+// the moment two systems share a name, and that round added no test for it,
+// because the behaviour-changing case needs the real migrated schema (a
+// duplicate name is now legitimately reachable through an ordinary write
+// path), not the constraint-dropped test fixture the earlier storage-layer
+// duplicate-name tests use.
+//
+// The architect ruling ("scope decides before ambiguity does") means a
+// caller scoped to one subtree, where the name is unique, must still
+// succeed: only a caller who can see BOTH same-named rows is genuinely
+// ambiguous. Both halves are asserted here, against the same route: the
+// scoped deploy principal succeeds, and the all-scoped owner (who can see
+// both "seat-1" rows) is refused with a 409, not a silent pick of either row
+// and not a 500. Skipped under -short.
+func TestSetSystemRoleResolvesAmbiguousNameWithinCallerScope(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ownerTok := bootstrapOwnerTok(t, ctx, gw)
+
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	// A root system a scoped deploy principal will be granted, with a child
+	// "seat-1" (the system_parent_name_key bucket).
+	var scopeAV struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "scope-av"}, http.StatusCreated), &scopeAV); err != nil {
+		t.Fatalf("decode create: %v", err)
+	}
+	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "seat-1", "parent": "scope-av"}, http.StatusCreated)
+	// An UNRELATED "seat-1" elsewhere (a root, the system_orphan_name_key
+	// bucket), making the bare name ambiguous estate-wide.
+	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "seat-1"}, http.StatusCreated)
+
+	// A deploy principal (system:update) scoped ONLY to scope-av's subtree.
+	deployTok := setupScopedViewer(t, ctx, dsn, "deploy-av", "deploy", "system", scopeAV.ID)
+
+	// Within scope-av's subtree, "seat-1" is unique (the other row sits
+	// entirely outside it), so the scoped caller's declare succeeds even
+	// though the bare name is ambiguous estate-wide.
+	c.do(deployTok, http.MethodPut, "/systems/seat-1/roles/table-mic", map[string]any{
+		"display_name": "Table Mic", "quorum": 1,
+	}, http.StatusOK)
+
+	// The all-scoped owner, who CAN see both rows, is genuinely ambiguous.
+	status, body := c.send(ownerTok, http.MethodPut, "/systems/seat-1/roles/table-mic", map[string]any{
+		"display_name": "Table Mic", "quorum": 1,
+	})
+	if status != http.StatusConflict {
+		t.Fatalf("owner declare on ambiguous seat-1 status = %d, want 409\nbody: %s", status, body)
+	}
+}
+
 // hasAllString is hasAll's API-test-package twin (the storage package's
 // version lives in internal/storage, unexported).
 func hasAllString(got []string, want ...string) bool {

@@ -565,24 +565,34 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fLocation string
 				var fName string
+				var fParent string
 				cmd := &cobra.Command{
 					Use:     "checkName",
 					Short:   "Check a component name",
-					Long:    "Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.",
+					Long:    "Reports whether a proposed name is a valid slug and currently free within the given placement (parent wins over location; neither means the unplaced/root bucket). Advisory (Save is still gated by the unique constraint). Gated by component:update.",
 					Example: "  omniglass component checkName --name name",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/components:checkName")
 						body := map[string]any{}
+						if cmd.Flags().Changed("location") {
+							body["location"] = fLocation
+						}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
+						}
+						if cmd.Flags().Changed("parent") {
+							body["parent"] = fParent
 						}
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
+				cmd.Flags().StringVar(&fLocation, "location", "", "The location (by name or uuid) the entity would be placed at, if any and if unparented; ignored by the locations check")
 				cmd.Flags().StringVar(&fName, "name", "", "The proposed name to check")
 				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fParent, "parent", "", "The parent (by name or uuid) the entity would be created under, if any; omit for a root/unplaced check")
 				return cmd
 			}()
 			return cmd
@@ -673,7 +683,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads; the name is the address")
 				cmd.Flags().StringVar(&fLocation, "location", "", "Location name this component is placed at")
-				cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address; lowercase letters, digits, hyphens)")
+				cmd.Flags().StringVar(&fName, "name", "", "Name, unique within its placement (the address; lowercase letters, digits, hyphens)")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParent, "parent", "", "Parent component name; omit for a root component")
 				cmd.Flags().StringVar(&fProduct, "product", "", "Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled.")
@@ -1082,7 +1092,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fName, "name", "", "The new globally unique name (lowercase letters, digits, hyphens)")
+				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique within its placement (lowercase letters, digits, hyphens)")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
@@ -1813,24 +1823,34 @@ func generatedCommands() []*cobra.Command {
 		}
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fLocation string
 				var fName string
+				var fParent string
 				cmd := &cobra.Command{
 					Use:     "checkName",
 					Short:   "Check a location name",
-					Long:    "Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.",
+					Long:    "Reports whether a proposed name is a valid slug and currently free within the given placement (under the given parent, or among roots when no parent is given). Advisory (Save is still gated by the unique constraint). Gated by location:update.",
 					Example: "  omniglass location checkName --name name",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/locations:checkName")
 						body := map[string]any{}
+						if cmd.Flags().Changed("location") {
+							body["location"] = fLocation
+						}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
+						}
+						if cmd.Flags().Changed("parent") {
+							body["parent"] = fParent
 						}
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
+				cmd.Flags().StringVar(&fLocation, "location", "", "The location (by name or uuid) the entity would be placed at, if any and if unparented; ignored by the locations check")
 				cmd.Flags().StringVar(&fName, "name", "", "The proposed name to check")
 				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fParent, "parent", "", "The parent (by name or uuid) the entity would be created under, if any; omit for a root/unplaced check")
 				return cmd
 			}()
 			return cmd
@@ -1868,7 +1888,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads; the name is the address")
 				cmd.Flags().StringVar(&fLocationType, "location-type", "", "The location_type, by name or uuid (campus, building, ...)")
 				_ = cmd.MarkFlagRequired("location-type")
-				cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address; lowercase letters, digits, hyphens)")
+				cmd.Flags().StringVar(&fName, "name", "", "Name, unique within its placement (the address; lowercase letters, digits, hyphens)")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParent, "parent", "", "Parent location name; omit for a root location")
 				return cmd
@@ -2098,7 +2118,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fName, "name", "", "The new globally unique name (lowercase letters, digits, hyphens)")
+				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique within its placement (lowercase letters, digits, hyphens)")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
@@ -4763,24 +4783,34 @@ func generatedCommands() []*cobra.Command {
 		}
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fLocation string
 				var fName string
+				var fParent string
 				cmd := &cobra.Command{
 					Use:     "checkName",
 					Short:   "Check a system name",
-					Long:    "Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.",
+					Long:    "Reports whether a proposed name is a valid slug and currently free within the given placement (parent wins over location; neither means the root/unplaced bucket). Advisory (Save is still gated by the unique constraint). Gated by system:update.",
 					Example: "  omniglass system checkName --name name",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/systems:checkName")
 						body := map[string]any{}
+						if cmd.Flags().Changed("location") {
+							body["location"] = fLocation
+						}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
+						}
+						if cmd.Flags().Changed("parent") {
+							body["parent"] = fParent
 						}
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
+				cmd.Flags().StringVar(&fLocation, "location", "", "The location (by name or uuid) the entity would be placed at, if any and if unparented; ignored by the locations check")
 				cmd.Flags().StringVar(&fName, "name", "", "The proposed name to check")
 				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fParent, "parent", "", "The parent (by name or uuid) the entity would be created under, if any; omit for a root/unplaced check")
 				return cmd
 			}()
 			return cmd
@@ -4821,7 +4851,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads; the name is the address")
 				cmd.Flags().StringVar(&fLocation, "location", "", "Location name this system is placed at")
-				cmd.Flags().StringVar(&fName, "name", "", "Globally unique name (the address; lowercase letters, digits, hyphens)")
+				cmd.Flags().StringVar(&fName, "name", "", "Name, unique within its placement (the address; lowercase letters, digits, hyphens)")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParent, "parent", "", "Parent system name; omit for a root system")
 				cmd.Flags().StringVar(&fStandardId, "standard-id", "", "The standard it conforms to, by handle or uuid; omit for a one-off system")
@@ -5127,7 +5157,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fName, "name", "", "The new globally unique name (lowercase letters, digits, hyphens)")
+				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique within its placement (lowercase letters, digits, hyphens)")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()

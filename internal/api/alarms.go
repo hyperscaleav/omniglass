@@ -147,6 +147,9 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 // mapAlarmErr translates the alarm sentinels into HTTP status. A bad severity is
 // something the caller sent, so it is a 422.
 func mapAlarmErr(err error) error {
+	if refErr, ok := mapRefErr(err); ok {
+		return refErr
+	}
 	switch {
 	case errors.Is(err, storage.ErrAlarmNotFound):
 		return huma.Error404NotFound("alarm not found")

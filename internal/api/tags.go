@@ -381,6 +381,9 @@ func propagatesOr(p *bool) bool {
 // component sentinels leak through the binding paths (owner resolution), so they
 // are mapped here too.
 func mapTagErr(err error) error {
+	if refErr, ok := mapRefErr(err); ok {
+		return refErr
+	}
 	switch {
 	case errors.Is(err, storage.ErrTagNotFound):
 		return huma.Error404NotFound("tag key not found")

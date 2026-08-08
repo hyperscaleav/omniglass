@@ -13,8 +13,10 @@ import (
 // row shares that name (#627 relaxes name uniqueness from global to scoped): the
 // reference is refused rather than one row being picked and the other hidden.
 // Kind is the entity table ("component", "system", "location"); Ref is the
-// reference as the caller sent it; Candidates is every matching row's id, in the
-// same order scopedByName's ORDER BY resolved them, capped by its LIMIT.
+// reference as the caller sent it; Candidates is every matching row's id, in
+// the order loadByRef's ORDER BY resolved them. Through scopedByNameInScope
+// (the path a plain GET takes) Candidates never names a row the caller could
+// not otherwise read: the id list is built AFTER the scope filter, not before.
 type ErrAmbiguousName struct {
 	Kind       string
 	Ref        string
@@ -24,6 +26,25 @@ type ErrAmbiguousName struct {
 func (e *ErrAmbiguousName) Error() string {
 	return fmt.Sprintf("storage: %q is ambiguous for %s (matches %s)", e.Ref, e.Kind, strings.Join(e.Candidates, ", "))
 }
+
+// The partial-unique index names the #627 migration creates, one per placement
+// bucket per tree entity. Postgres reports the violated index's name as
+// pgconn.PgError.ConstraintName on a 23505, so each entity's write mapper
+// switches on these to report which specific bucket collided, rather than
+// folding every placement into one generic duplicate sentinel. Declared once
+// here rather than as string literals in three files.
+const (
+	idxLocationParentName = "location_parent_name_key"
+	idxLocationRootName   = "location_root_name_key"
+
+	idxComponentParentName   = "component_parent_name_key"
+	idxComponentLocationName = "component_location_name_key"
+	idxComponentOrphanName   = "component_orphan_name_key"
+
+	idxSystemParentName   = "system_parent_name_key"
+	idxSystemLocationName = "system_location_name_key"
+	idxSystemOrphanName   = "system_orphan_name_key"
+)
 
 // The generic scoped-CRUD helpers: the read, resolve, and delete paths that are
 // identical for every scoped tree entity (location, system, component), given
@@ -97,37 +118,17 @@ func scopedList[T any](ctx context.Context, p *PG, cfg scopedConfig[T], read sco
 	return out, rows.Err()
 }
 
-// scopedByName loads one entity by its unique name (notFound if absent), with no
-// scope check; callers layer scope on top.
-// scopedByName resolves an entity by REFERENCE, which is either its uuid or its
-// name. The uuid is the canonical handle and the name is the friendly alias, and
-// a caller uses whichever it holds: a script that just created something has the
-// id, a human at a CLI has the name.
-//
-// The uuid is tried first, and that ordering is only unambiguous because a name
-// can never be uuid-shaped (ValidateName refuses the form). Without that
-// rule the same reference would resolve differently depending on which entity
-// happened to exist, making the answer a property of the data rather than of the
-// request.
-//
-// A well-formed uuid that matches nothing is an ordinary not-found rather than a
-// fallback to a name lookup that would also miss: falling through would turn one
-// clear miss into two and report the second.
-//
-// A bare name is no longer assumed unique (#627 scopes name uniqueness to
-// placement rather than holding it global): the read asks for two rows, not
-// one, via ORDER BY id LIMIT 2 rather than QueryRow. Zero is the existing
-// notFound sentinel; exactly one is the ordinary resolved row; two is
-// ErrAmbiguousName, refusing the reference rather than silently taking
-// whichever row sorted first and hiding the rest, the way QueryRow used to. A
-// uuid reference is never ambiguous (it is a primary key), so this only ever
-// bites a bare-name lookup.
-func scopedByName[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref string) (*T, error) {
+// loadByRef runs the reference lookup shared by every scopedByName variant: a
+// well-formed uuid matches on id (a primary key, never ambiguous), anything else
+// matches on name (possibly more than one row, #627 scopes name uniqueness to
+// placement rather than holding it global). Ordered by id so a caller that later
+// caps the result with a LIMIT gets a stable "first" row.
+func loadByRef[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref string) ([]*T, error) {
 	col := "name"
 	if isUUID(ref) {
 		col = "id"
 	}
-	rows, err := q.Query(ctx, `select `+cfg.cols+` from `+string(cfg.table)+` where `+col+` = $1 order by id limit 2`, ref)
+	rows, err := q.Query(ctx, `select `+cfg.cols+` from `+string(cfg.table)+` where `+col+` = $1 order by id`, ref)
 	if err != nil {
 		return nil, fmt.Errorf("storage: load %s %q: %w", cfg.table, ref, err)
 	}
@@ -144,6 +145,15 @@ func scopedByName[T any](ctx context.Context, q querier, cfg scopedConfig[T], re
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("storage: load %s %q: %w", cfg.table, ref, err)
 	}
+	return matches, nil
+}
+
+// resolveMatches turns a candidate row set into the single-row-or-refuse
+// contract every scopedByName variant shares: zero is the entity's notFound
+// sentinel, exactly one is the resolved row, and two or more is
+// ErrAmbiguousName, refusing the reference rather than silently taking
+// whichever row sorted first and hiding the rest.
+func resolveMatches[T any](cfg scopedConfig[T], ref string, matches []*T) (*T, error) {
 	switch len(matches) {
 	case 0:
 		return nil, cfg.notFound
@@ -158,37 +168,80 @@ func scopedByName[T any](ctx context.Context, q querier, cfg scopedConfig[T], re
 	}
 }
 
-// scopedGet resolves an entity by name within the caller's read scope; absent or
-// out of scope is the same non-disclosing notFound.
+// scopedByName resolves an entity by REFERENCE, which is either its uuid or its
+// name, with NO scope check: callers that need one layer it on afterward (a
+// create's placement resolve, for example, checks the resolved row against a
+// create/action scope of its own right after). The uuid is the canonical handle
+// and the name is the friendly alias, and a caller uses whichever it holds: a
+// script that just created something has the id, a human at a CLI has the name.
+//
+// The uuid is tried first, and that ordering is only unambiguous because a name
+// can never be uuid-shaped (ValidateName refuses the form). Without that
+// rule the same reference would resolve differently depending on which entity
+// happened to exist, making the answer a property of the data rather than of the
+// request.
+//
+// A well-formed uuid that matches nothing is an ordinary not-found rather than a
+// fallback to a name lookup that would also miss: falling through would turn one
+// clear miss into two and report the second.
+//
+// Ambiguity here is estate-wide: every row sharing the name, in or out of any
+// scope. That is the right answer for the callers above (a create's placement
+// reference is not itself a caller-scoped read), and the wrong one for a plain
+// GET, which is why scopedGet and resolveScoped do NOT call this directly; see
+// scopedByNameInScope.
+func scopedByName[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref string) (*T, error) {
+	matches, err := loadByRef(ctx, q, cfg, ref)
+	if err != nil {
+		return nil, err
+	}
+	return resolveMatches(cfg, ref, matches)
+}
+
+// scopedByNameInScope resolves a reference the same way scopedByName does, but
+// narrows the candidate rows to the caller's read scope BEFORE deciding whether
+// the reference is ambiguous, rather than after (architect ruling, #627: "scope
+// decides before ambiguity does"). Two consequences follow. First, a name that
+// is ambiguous estate-wide but unique within the caller's own scope resolves
+// cleanly: an operator scoped to room-b, where exactly one "display-1" exists,
+// is not refused just because room-a holds an unrelated same-named row they
+// cannot even read. Second, an ErrAmbiguousName's Candidates list can never
+// name an id the caller is not allowed to read: disclosing that a row exists
+// out of scope, even only as a uuid in a 409, is the same leak the
+// non-disclosing 404 exists to prevent. A uuid reference still narrows to at
+// most one row (a primary key), so this only ever changes the bare-name path.
+func scopedByNameInScope[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref string, read scope.Set) (*T, error) {
+	matches, err := loadByRef(ctx, q, cfg, ref)
+	if err != nil {
+		return nil, err
+	}
+	inScope := make([]*T, 0, len(matches))
+	for _, v := range matches {
+		ok, err := inScopeTree(ctx, q, cfg.table, cfg.idOf(v), read)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			inScope = append(inScope, v)
+		}
+	}
+	return resolveMatches(cfg, ref, inScope)
+}
+
+// scopedGet resolves an entity by name within the caller's read scope; absent,
+// out of scope, or ambiguous only outside the caller's scope is the same
+// non-disclosing notFound (scopedByNameInScope narrows to read scope first).
 func scopedGet[T any](ctx context.Context, p *PG, cfg scopedConfig[T], name string, read scope.Set) (*T, error) {
-	v, err := scopedByName(ctx, p.pool, cfg, name)
-	if err != nil {
-		return nil, err
-	}
-	in, err := inScopeTree(ctx, p.pool, cfg.table, cfg.idOf(v), read)
-	if err != nil {
-		return nil, err
-	}
-	if !in {
-		return nil, cfg.notFound
-	}
-	return v, nil
+	return scopedByNameInScope(ctx, p.pool, cfg, name, read)
 }
 
 // resolveScoped loads an entity by name and enforces the read-then-action scope
-// split: out of read scope is notFound (non-disclosing), readable but out of
-// action scope is forbidden.
+// split: out of read scope (or ambiguous only outside it) is notFound
+// (non-disclosing), readable but out of action scope is forbidden.
 func resolveScoped[T any](ctx context.Context, q querier, cfg scopedConfig[T], name string, read, action scope.Set) (*T, error) {
-	v, err := scopedByName(ctx, q, cfg, name)
+	v, err := scopedByNameInScope(ctx, q, cfg, name, read)
 	if err != nil {
 		return nil, err
-	}
-	readable, err := inScopeTree(ctx, q, cfg.table, cfg.idOf(v), read)
-	if err != nil {
-		return nil, err
-	}
-	if !readable {
-		return nil, cfg.notFound
 	}
 	actionable, err := inScopeTree(ctx, q, cfg.table, cfg.idOf(v), action)
 	if err != nil {

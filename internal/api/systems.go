@@ -98,7 +98,7 @@ type systemPathInput struct {
 
 type createSystemInput struct {
 	Body struct {
-		Name        string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Globally unique name (the address; lowercase letters, digits, hyphens)"`
+		Name        string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens)"`
 		DisplayName string  `json:"display_name,omitempty" doc:"What an operator reads; the name is the address"`
 		StandardID  string  `json:"standard_id,omitempty" doc:"The standard it conforms to, by handle or uuid; omit for a one-off system"`
 		Parent      *string `json:"parent,omitempty" doc:"Parent system name; omit for a root system"`
@@ -126,25 +126,33 @@ type updateSystemInput struct {
 type renameSystemInput struct {
 	Name string `path:"name" doc:"The system's current name, or its uuid"`
 	Body struct {
-		Name string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The new globally unique name (lowercase letters, digits, hyphens)"`
+		Name string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The new name, unique within its placement (lowercase letters, digits, hyphens)"`
 	}
 }
 
 // checkNameInput is the request for the collection-level :checkName advisory.
-// Shared across the systems/components/locations name checks; declared once here.
+// Shared across the systems/components/locations name checks; declared once
+// here. Parent and Location mirror the create body's own placement fields
+// (#627: name uniqueness is scoped to placement, not the whole estate), so the
+// availability check runs against the same bucket a create would actually
+// land in. A parent wins over a location, matching CreateComponent's and
+// CreateSystem's own resolution order; the location route ignores Location
+// (it carries no located-at column of its own) and checks only Parent.
 type checkNameInput struct {
 	Body struct {
-		Name string `json:"name" doc:"The proposed name to check"`
+		Name     string  `json:"name" doc:"The proposed name to check"`
+		Parent   *string `json:"parent,omitempty" doc:"The parent (by name or uuid) the entity would be created under, if any; omit for a root/unplaced check"`
+		Location *string `json:"location,omitempty" doc:"The location (by name or uuid) the entity would be placed at, if any and if unparented; ignored by the locations check"`
 	}
 }
 
 // checkNameOutput is the advisory verdict: whether the proposed name is a valid
-// slug and whether it is currently free. Availability is scope-blind to match
-// the global unique constraint. Shared across the three entity name checks.
+// slug and whether it is currently free within the checked placement. Shared
+// across the three entity name checks.
 type checkNameOutput struct {
 	Body struct {
 		Valid     bool   `json:"valid" doc:"Whether the name matches the slug rule"`
-		Available bool   `json:"available" doc:"Whether the name is free (scope-blind, matches the global unique constraint)"`
+		Available bool   `json:"available" doc:"Whether the name is free within the checked placement (parent/location); a name taken elsewhere in the estate is still available here"`
 		Reason    string `json:"reason,omitempty" doc:"Human explanation when not valid or not available"`
 	}
 }
@@ -264,7 +272,7 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodPost,
 		Path:        "/systems:checkName",
 		Summary:     "Check a system name",
-		Description: "Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.",
+		Description: "Reports whether a proposed name is a valid slug and currently free within the given placement (parent wins over location; neither means the root/unplaced bucket). Advisory (Save is still gated by the unique constraint). Gated by system:update.",
 	}, "system", "update"), func(ctx context.Context, in *checkNameInput) (*checkNameOutput, error) {
 		out := &checkNameOutput{}
 		if err := storage.ValidateName("system", in.Body.Name); err != nil {
@@ -279,9 +287,9 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			return out, nil
 		}
 		out.Body.Valid = true
-		taken, err := gw.SystemNameTaken(ctx, in.Body.Name)
+		taken, err := gw.SystemNameTaken(ctx, in.Body.Name, in.Body.Parent, in.Body.Location)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("check system name")
+			return nil, mapSystemErr(err)
 		}
 		out.Body.Available = !taken
 		if taken {
@@ -309,6 +317,9 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 // mapSystemErr translates the gateway's system sentinels into HTTP status,
 // mirroring locations.
 func mapSystemErr(err error) error {
+	if refErr, ok := mapRefErr(err); ok {
+		return refErr
+	}
 	switch {
 	case errors.Is(err, storage.ErrSystemNotFound):
 		return huma.Error404NotFound("system not found")

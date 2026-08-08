@@ -19,8 +19,14 @@ they pin are [templates](/architecture/templates/); the data they own is
 Built today: `component`, `system`, and `location` as name-addressable, variable-depth (`parent_id`)
 trees with full scoped CRUD; a delete is refused while a structural child remains. **A rename is its
 own custom method** (`POST /components/{name}:rename` and its siblings) gated `<resource>:rename`,
-with no `name` in the `PATCH` body and a scope-blind `:checkName` precheck beside it
+with no `name` in the `PATCH` body and a placement-scoped `:checkName` precheck beside it
 ([ADR-0076](/architecture/decisions/#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)).
+**A name is unique within its placement, not across the whole estate**
+([#627](https://github.com/hyperscaleav/omniglass/issues/627)): two components (or systems) may
+share a name under different parents or at different locations, and two rooms may hold their own
+same-named child; only a root (no parent) location's name and a node's name (also its NATS subject)
+stay estate-wide unique. A bare-name reference that now matches more than one row is refused
+(`409`, naming the candidates) rather than silently resolving to whichever row sorted first.
 **Placement and classification are mutable, not fixed at create**
 ([ADR-0064](/architecture/decisions/#adr-0064-placement-and-classification-are-mutable-after-create)):
 re-parent (cycle-guarded), relocate, re-classify, or clear each field; a product swap keeps hand-set

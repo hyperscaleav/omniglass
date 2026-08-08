@@ -20,6 +20,19 @@ var (
 	ErrParentComponentNotFound = errors.New("storage: parent component not found")
 	ErrProductNotFound         = errors.New("storage: product not found")
 	ErrComponentCycle          = errors.New("storage: cannot move a component under itself or a descendant")
+
+	// ErrComponentExistsUnderParent / ErrComponentExistsInLocation /
+	// ErrComponentExistsUnplaced name which placement bucket a 23505 collided
+	// in (#627 scopes name uniqueness to placement, not the whole estate: a
+	// name is unique under a given parent, or at a given location when
+	// unparented, or in the unplaced/root bucket, but not across all three at
+	// once). Each wraps ErrComponentExists via %w, so errors.Is(err,
+	// ErrComponentExists) still matches any of them generically; a caller
+	// that wants the specific bucket (a later task's 409 message) checks the
+	// specific sentinel instead.
+	ErrComponentExistsUnderParent = fmt.Errorf("storage: a component with this name already exists under this parent: %w", ErrComponentExists)
+	ErrComponentExistsInLocation  = fmt.Errorf("storage: a component with this name already exists at this location: %w", ErrComponentExists)
+	ErrComponentExistsUnplaced    = fmt.Errorf("storage: an unplaced component with this name already exists: %w", ErrComponentExists)
 )
 
 // Component is a leaf of the estate: name-addressable, nestable via parent_id,
@@ -47,6 +60,11 @@ type Component struct {
 	ProductID    *string
 	// ProductHandle is the product's kebab name, projected for display beside the id.
 	ProductHandle *string
+	// NameGenerated marks a name the platform picked (a stem+ordinal generator,
+	// #627) rather than one an operator typed. False for every row that
+	// existed before the generator landed; the gateway sets it explicitly on
+	// insert once that generator writes.
+	NameGenerated bool
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }
@@ -103,12 +121,13 @@ const componentCols = `id, name, coalesce(display_name, ''), parent_id,
 	(select p.name from component p where p.id = component.parent_id) as parent_name,
 	(select l.name from location l where l.id = component.location_id) as location_name,
 	(select pr.name from product pr where pr.id = component.product_id) as product_handle,
+	name_generated,
 	created_at, updated_at`
 
 func scanComponent(row pgx.Row) (*Component, error) {
 	var c Component
 	if err := row.Scan(&c.ID, &c.Name, &c.DisplayName, &c.ParentID, &c.PrimarySystem, &c.PrimarySystemID, &c.SystemCount,
-		&c.LocationID, &c.ProductID, &c.ParentName, &c.LocationName, &c.ProductHandle, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		&c.LocationID, &c.ProductID, &c.ParentName, &c.LocationName, &c.ProductHandle, &c.NameGenerated, &c.CreatedAt, &c.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &c, nil
@@ -132,15 +151,39 @@ func (p *PG) DeleteComponent(ctx context.Context, actorID, name string, read, ac
 	return scopedDelete(ctx, p, componentConfig, actorID, name, read, action)
 }
 
-// ComponentNameTaken reports whether a component with this name exists.
-// Scope-blind by design: the name unique constraint is global, so availability
-// must be a global fact to match it (a scope-aware answer would false-positive
-// on a name held outside the caller's scope). Gated at the API by
+// ComponentNameTaken reports whether name is already used within the placement
+// a create would actually land in (#627: the unique constraint is scoped to
+// placement, not global, so availability has to be checked against the same
+// bucket the constraint enforces or the advisory would false-positive on a
+// name that is free in the operator's own room). parentRef wins over
+// locationRef, mirroring CreateComponent's own placement resolution: a parent
+// makes it a child (component_parent_name_key), no parent but a location makes
+// it a room-level component (component_location_name_key), and neither is the
+// unplaced/root bucket (component_orphan_name_key). Gated at the API by
 // component:update.
-func (p *PG) ComponentNameTaken(ctx context.Context, name string) (bool, error) {
+func (p *PG) ComponentNameTaken(ctx context.Context, name string, parentRef, locationRef *string) (bool, error) {
 	var exists bool
-	if err := p.pool.QueryRow(ctx, `select exists(select 1 from component where name = $1)`, name).Scan(&exists); err != nil {
-		return false, fmt.Errorf("storage: component name taken: %w", err)
+	switch {
+	case parentRef != nil && *parentRef != "":
+		parent, err := scopedByName(ctx, p.pool, componentConfig, *parentRef)
+		if err != nil {
+			return false, err
+		}
+		if err := p.pool.QueryRow(ctx, `select exists(select 1 from component where parent_id = $1 and name = $2)`, parent.ID, name).Scan(&exists); err != nil {
+			return false, fmt.Errorf("storage: component name taken: %w", err)
+		}
+	case locationRef != nil && *locationRef != "":
+		loc, err := scopedByName(ctx, p.pool, locationConfig, *locationRef)
+		if err != nil {
+			return false, err
+		}
+		if err := p.pool.QueryRow(ctx, `select exists(select 1 from component where parent_id is null and location_id = $1 and name = $2)`, loc.ID, name).Scan(&exists); err != nil {
+			return false, fmt.Errorf("storage: component name taken: %w", err)
+		}
+	default:
+		if err := p.pool.QueryRow(ctx, `select exists(select 1 from component where parent_id is null and location_id is null and name = $1)`, name).Scan(&exists); err != nil {
+			return false, fmt.Errorf("storage: component name taken: %w", err)
+		}
 	}
 	return exists, nil
 }
@@ -495,6 +538,14 @@ func mapComponentWriteErr(err error) error {
 	if errors.As(err, &pgErr) {
 		switch pgErr.Code {
 		case "23505":
+			switch pgErr.ConstraintName {
+			case idxComponentParentName:
+				return ErrComponentExistsUnderParent
+			case idxComponentLocationName:
+				return ErrComponentExistsInLocation
+			case idxComponentOrphanName:
+				return ErrComponentExistsUnplaced
+			}
 			return ErrComponentExists
 		case "23503":
 			switch pgErr.ConstraintName {

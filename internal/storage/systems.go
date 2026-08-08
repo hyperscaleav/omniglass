@@ -22,6 +22,15 @@ var (
 	ErrSystemCycle            = errors.New("storage: cannot move a system under itself or a descendant")
 	ErrUnknownStandard        = errors.New("storage: unknown standard")
 	ErrParentStandardNotFound = errors.New("storage: parent standard not found")
+
+	// ErrSystemExistsUnderParent / ErrSystemExistsInLocation / ErrSystemExistsUnplaced
+	// name which placement bucket a 23505 collided in, mirroring the component
+	// set: #627 scopes name uniqueness to placement, not the whole estate. Each
+	// wraps ErrSystemExists via %w, so errors.Is(err, ErrSystemExists) still
+	// matches any of them generically.
+	ErrSystemExistsUnderParent = fmt.Errorf("storage: a system with this name already exists under this parent: %w", ErrSystemExists)
+	ErrSystemExistsInLocation  = fmt.Errorf("storage: a system with this name already exists at this location: %w", ErrSystemExists)
+	ErrSystemExistsUnplaced    = fmt.Errorf("storage: an unplaced system with this name already exists: %w", ErrSystemExists)
 )
 
 // Standard is the blueprint a system conforms to (huddle room, classroom,
@@ -637,14 +646,36 @@ func (p *PG) systemByName(ctx context.Context, q querier, name string) (*System,
 	return scopedByName(ctx, q, systemConfig, name)
 }
 
-// SystemNameTaken reports whether a system with this name exists. Scope-blind
-// by design: the name unique constraint is global, so availability must be a
-// global fact to match it (a scope-aware answer would false-positive on a name
-// held outside the caller's scope). Gated at the API by system:update.
-func (p *PG) SystemNameTaken(ctx context.Context, name string) (bool, error) {
+// SystemNameTaken reports whether name is already used within the placement a
+// create would actually land in (#627: the unique constraint is scoped to
+// placement, not global). parentRef wins over locationRef, mirroring
+// CreateSystem's own placement resolution: a parent makes it a child
+// (system_parent_name_key), no parent but a location makes it a room-level
+// system (system_location_name_key), and neither is the unplaced/root bucket
+// (system_orphan_name_key). Gated at the API by system:update.
+func (p *PG) SystemNameTaken(ctx context.Context, name string, parentRef, locationRef *string) (bool, error) {
 	var exists bool
-	if err := p.pool.QueryRow(ctx, `select exists(select 1 from system where name = $1)`, name).Scan(&exists); err != nil {
-		return false, fmt.Errorf("storage: system name taken: %w", err)
+	switch {
+	case parentRef != nil && *parentRef != "":
+		parent, err := scopedByName(ctx, p.pool, systemConfig, *parentRef)
+		if err != nil {
+			return false, err
+		}
+		if err := p.pool.QueryRow(ctx, `select exists(select 1 from system where parent_id = $1 and name = $2)`, parent.ID, name).Scan(&exists); err != nil {
+			return false, fmt.Errorf("storage: system name taken: %w", err)
+		}
+	case locationRef != nil && *locationRef != "":
+		loc, err := scopedByName(ctx, p.pool, locationConfig, *locationRef)
+		if err != nil {
+			return false, err
+		}
+		if err := p.pool.QueryRow(ctx, `select exists(select 1 from system where parent_id is null and location_id = $1 and name = $2)`, loc.ID, name).Scan(&exists); err != nil {
+			return false, fmt.Errorf("storage: system name taken: %w", err)
+		}
+	default:
+		if err := p.pool.QueryRow(ctx, `select exists(select 1 from system where parent_id is null and location_id is null and name = $1)`, name).Scan(&exists); err != nil {
+			return false, fmt.Errorf("storage: system name taken: %w", err)
+		}
 	}
 	return exists, nil
 }
@@ -654,6 +685,14 @@ func mapSystemWriteErr(err error) error {
 	if errors.As(err, &pgErr) {
 		switch pgErr.Code {
 		case "23505":
+			switch pgErr.ConstraintName {
+			case idxSystemParentName:
+				return ErrSystemExistsUnderParent
+			case idxSystemLocationName:
+				return ErrSystemExistsInLocation
+			case idxSystemOrphanName:
+				return ErrSystemExistsUnplaced
+			}
 			return ErrSystemExists
 		case "23503":
 			switch pgErr.ConstraintName {

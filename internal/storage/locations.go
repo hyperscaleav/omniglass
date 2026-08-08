@@ -27,6 +27,14 @@ var (
 	ErrPlacementNotAllowed = errors.New("storage: placement not allowed for this location_type")
 	ErrLocationCycle       = errors.New("storage: cannot move a location under itself or a descendant")
 	ErrReservedTypeID      = errors.New("storage: \"root\" is a reserved location_type id")
+
+	// ErrLocationExistsUnderParent / ErrLocationExistsAtRoot name which
+	// placement bucket a 23505 collided in (#627 scopes name uniqueness to
+	// placement: unique under a given parent, or unique among roots, but not
+	// across both at once). Each wraps ErrLocationExists via %w, so
+	// errors.Is(err, ErrLocationExists) still matches either generically.
+	ErrLocationExistsUnderParent = fmt.Errorf("storage: a location with this name already exists under this parent: %w", ErrLocationExists)
+	ErrLocationExistsAtRoot      = fmt.Errorf("storage: a root location with this name already exists: %w", ErrLocationExists)
 )
 
 // RootPlacement is the reserved allowed_parent_types member meaning "may sit at
@@ -573,13 +581,25 @@ func (p *PG) locationByName(ctx context.Context, q querier, name string) (*Locat
 	return scopedByName(ctx, q, locationConfig, name)
 }
 
-// LocationNameTaken reports whether a location with this name exists. Scope-blind
-// by design: the name unique constraint is global, so availability must be a
-// global fact to match it (a scope-aware answer would false-positive on a name
-// held outside the caller's scope). Gated at the API by location:update.
-func (p *PG) LocationNameTaken(ctx context.Context, name string) (bool, error) {
+// LocationNameTaken reports whether name is already used within the placement
+// a create would actually land in (#627: the unique constraint is scoped to
+// placement, not global). A parentRef makes it a child location
+// (location_parent_name_key); no parentRef (nil or "") is the root bucket
+// (location_root_name_key), the only bucket a location has since it carries no
+// located-at column of its own. Gated at the API by location:update.
+func (p *PG) LocationNameTaken(ctx context.Context, name string, parentRef *string) (bool, error) {
 	var exists bool
-	if err := p.pool.QueryRow(ctx, `select exists(select 1 from location where name = $1)`, name).Scan(&exists); err != nil {
+	if parentRef != nil && *parentRef != "" {
+		parent, err := scopedByName(ctx, p.pool, locationConfig, *parentRef)
+		if err != nil {
+			return false, err
+		}
+		if err := p.pool.QueryRow(ctx, `select exists(select 1 from location where parent_id = $1 and name = $2)`, parent.ID, name).Scan(&exists); err != nil {
+			return false, fmt.Errorf("storage: location name taken: %w", err)
+		}
+		return exists, nil
+	}
+	if err := p.pool.QueryRow(ctx, `select exists(select 1 from location where parent_id is null and name = $1)`, name).Scan(&exists); err != nil {
 		return false, fmt.Errorf("storage: location name taken: %w", err)
 	}
 	return exists, nil
@@ -644,6 +664,12 @@ func mapLocationWriteErr(err error) error {
 	if errors.As(err, &pgErr) {
 		switch pgErr.Code {
 		case "23505": // unique_violation
+			switch pgErr.ConstraintName {
+			case idxLocationParentName:
+				return ErrLocationExistsUnderParent
+			case idxLocationRootName:
+				return ErrLocationExistsAtRoot
+			}
 			return ErrLocationExists
 		case "23502": // not-null: an unknown location_type name resolved to null
 			if pgErr.ColumnName == "location_type" {

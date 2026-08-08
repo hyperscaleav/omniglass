@@ -218,7 +218,7 @@ type Gateway interface {
 	// Its own function, not a patch field, because a rename breaks the references
 	// an operator stored outside this system; the API gates it on location:rename.
 	RenameLocation(ctx context.Context, actorID, name, newName string, read, action scope.Set) (*Location, error)
-	LocationNameTaken(ctx context.Context, name string) (bool, error)
+	LocationNameTaken(ctx context.Context, name string, parentRef *string) (bool, error)
 	DeleteLocation(ctx context.Context, actorID, name string, read, action scope.Set) error
 
 	// The system tier: the standard catalog (the blueprint a system conforms to,
@@ -238,7 +238,7 @@ type Gateway interface {
 	// own function, not a patch field, because a rename breaks the references an
 	// operator stored outside this system; the API gates it on system:rename.
 	RenameSystem(ctx context.Context, actorID, name, newName string, read, action scope.Set) (*System, error)
-	SystemNameTaken(ctx context.Context, name string) (bool, error)
+	SystemNameTaken(ctx context.Context, name string, parentRef, locationRef *string) (bool, error)
 	DeleteSystem(ctx context.Context, actorID, name string, read, action scope.Set) error
 
 	// The component tier: a type registry and scoped CRUD, on the same helpers.
@@ -254,7 +254,7 @@ type Gateway interface {
 	// Its own function, not a patch field, because a rename breaks the references
 	// an operator stored outside this system; the API gates it on component:rename.
 	RenameComponent(ctx context.Context, actorID, name, newName string, read, action scope.Set) (*Component, error)
-	ComponentNameTaken(ctx context.Context, name string) (bool, error)
+	ComponentNameTaken(ctx context.Context, name string, parentRef, locationRef *string) (bool, error)
 	DeleteComponent(ctx context.Context, actorID, name string, read, action scope.Set) error
 
 	// The component_make registry: a flat manufacturer registry (Cisco,

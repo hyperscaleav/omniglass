@@ -62,8 +62,14 @@ func TestChurnDroppedConstraintsRestored(t *testing.T) {
 	}
 
 	// This index existed before the churn and was dropped when its column was
-	// recreated; the sibling tables kept theirs.
-	indexes := []string{"property_owner_idx"}
+	// recreated; the sibling tables kept theirs. The three *_name_idx entries
+	// are a different cause, same symptom: #627's migration drops
+	// component_name_key/system_name_key/location_name_key (each a UNIQUE
+	// constraint, which was also the only index on that bare name column) and
+	// replaces them with partial uniques that all lead with the FK column, so
+	// none of them can serve `where name = $1` (the ambiguity scan in
+	// scopedByName, and the *NameTaken advisories) without a plain btree back.
+	indexes := []string{"property_owner_idx", "component_name_idx", "system_name_idx", "location_name_idx"}
 	for _, idx := range indexes {
 		var exists bool
 		if err := conn.QueryRow(ctx,

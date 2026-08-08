@@ -180,7 +180,7 @@ func (UnimplementedGateway) UpdateLocation(context.Context, string, string, Loca
 func (UnimplementedGateway) RenameLocation(context.Context, string, string, string, scope.Set, scope.Set) (*Location, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) LocationNameTaken(context.Context, string) (bool, error) {
+func (UnimplementedGateway) LocationNameTaken(context.Context, string, *string) (bool, error) {
 	return false, nil
 }
 func (UnimplementedGateway) DeleteLocation(context.Context, string, string, scope.Set, scope.Set) error {
@@ -216,7 +216,7 @@ func (UnimplementedGateway) UpdateSystem(context.Context, string, string, System
 func (UnimplementedGateway) RenameSystem(context.Context, string, string, string, scope.Set, scope.Set) (*System, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) SystemNameTaken(context.Context, string) (bool, error) {
+func (UnimplementedGateway) SystemNameTaken(context.Context, string, *string, *string) (bool, error) {
 	return false, nil
 }
 func (UnimplementedGateway) DeleteSystem(context.Context, string, string, scope.Set, scope.Set) error {
@@ -240,7 +240,7 @@ func (UnimplementedGateway) UpdateComponent(context.Context, string, string, Com
 func (UnimplementedGateway) RenameComponent(context.Context, string, string, string, scope.Set, scope.Set) (*Component, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) ComponentNameTaken(context.Context, string) (bool, error) {
+func (UnimplementedGateway) ComponentNameTaken(context.Context, string, *string, *string) (bool, error) {
 	return false, nil
 }
 func (UnimplementedGateway) DeleteComponent(context.Context, string, string, scope.Set, scope.Set) error {

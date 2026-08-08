@@ -70,8 +70,15 @@ func TestRenameSystem(t *testing.T) {
 		t.Fatalf("old name should be free after rename: %v", err)
 	}
 
-	// Renaming onto a taken name -> ErrSystemExists (the API's 409).
-	if _, err := gw.RenameSystem(ctx, "", "av-child", newName, all, all); !errors.Is(err, storage.ErrSystemExists) {
+	// Renaming onto a taken name -> ErrSystemExists (the API's 409). The
+	// collision has to land in av-child's OWN placement bucket (#627 scopes
+	// name uniqueness to placement): av-child is a child of av-root-renamed
+	// (system_parent_name_key), so newName itself (the root/orphan bucket)
+	// can no longer collide with it; a sibling under the same parent can.
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av-sibling", ParentName: strptr(newName)}, all); err != nil {
+		t.Fatalf("sibling for dup-rename case: %v", err)
+	}
+	if _, err := gw.RenameSystem(ctx, "", "av-child", "av-sibling", all, all); !errors.Is(err, storage.ErrSystemExists) {
 		t.Fatalf("dup rename err = %v, want ErrSystemExists", err)
 	}
 
@@ -96,11 +103,12 @@ func TestRenameSystem(t *testing.T) {
 		t.Fatalf("bad-format create err = %v, want ErrInvalidEntityName", err)
 	}
 
-	// SystemNameTaken is scope-blind existence.
-	if taken, err := gw.SystemNameTaken(ctx, newName); err != nil || !taken {
+	// SystemNameTaken checks the unplaced/root bucket here: av-root has
+	// neither a parent nor a location.
+	if taken, err := gw.SystemNameTaken(ctx, newName, nil, nil); err != nil || !taken {
 		t.Fatalf("SystemNameTaken(%q) = %v,%v want true,nil", newName, taken, err)
 	}
-	if taken, err := gw.SystemNameTaken(ctx, "nope-not-here"); err != nil || taken {
+	if taken, err := gw.SystemNameTaken(ctx, "nope-not-here", nil, nil); err != nil || taken {
 		t.Fatalf("SystemNameTaken(free) = %v,%v want false,nil", taken, err)
 	}
 

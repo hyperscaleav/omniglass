@@ -191,8 +191,14 @@ components:
           format: uri
           readOnly: true
           type: string
+        location:
+          description: The location (by name or uuid) the entity would be placed at, if any and if unparented; ignored by the locations check
+          type: string
         name:
           description: The proposed name to check
+          type: string
+        parent:
+          description: The parent (by name or uuid) the entity would be created under, if any; omit for a root/unplaced check
           type: string
       required:
         - name
@@ -208,7 +214,7 @@ components:
           readOnly: true
           type: string
         available:
-          description: Whether the name is free (scope-blind, matches the global unique constraint)
+          description: Whether the name is free within the checked placement (parent/location); a name taken elsewhere in the estate is still available here
           type: boolean
         reason:
           description: Human explanation when not valid or not available
@@ -373,6 +379,9 @@ components:
           type: string
         name:
           type: string
+        name_generated:
+          description: Whether the platform picked this name (a server-side generator) rather than an operator typing it.
+          type: boolean
         parent:
           description: The parent component's name, for display; absent for a root component
           type: string
@@ -399,6 +408,7 @@ components:
         - id
         - name
         - system_count
+        - name_generated
       type: object
     ComponentMetricsOutputBody:
       additionalProperties: false
@@ -574,7 +584,7 @@ components:
           description: Location name this component is placed at
           type: string
         name:
-          description: Globally unique name (the address; lowercase letters, digits, hyphens)
+          description: Name, unique within its placement (the address; lowercase letters, digits, hyphens)
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
@@ -857,7 +867,7 @@ components:
           minLength: 1
           type: string
         name:
-          description: Globally unique name (the address; lowercase letters, digits, hyphens)
+          description: Name, unique within its placement (the address; lowercase letters, digits, hyphens)
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
@@ -1223,7 +1233,7 @@ components:
           description: Location name this system is placed at
           type: string
         name:
-          description: Globally unique name (the address; lowercase letters, digits, hyphens)
+          description: Name, unique within its placement (the address; lowercase letters, digits, hyphens)
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
@@ -4068,7 +4078,7 @@ components:
           readOnly: true
           type: string
         name:
-          description: The new globally unique name (lowercase letters, digits, hyphens)
+          description: The new name, unique within its placement (lowercase letters, digits, hyphens)
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
@@ -4106,7 +4116,7 @@ components:
           readOnly: true
           type: string
         name:
-          description: The new globally unique name (lowercase letters, digits, hyphens)
+          description: The new name, unique within its placement (lowercase letters, digits, hyphens)
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
@@ -4125,7 +4135,7 @@ components:
           readOnly: true
           type: string
         name:
-          description: The new globally unique name (lowercase letters, digits, hyphens)
+          description: The new name, unique within its placement (lowercase letters, digits, hyphens)
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
@@ -7169,7 +7179,7 @@ paths:
       x-omniglass-permission: component:update
   /components:checkName:
     post:
-      description: Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.
+      description: Reports whether a proposed name is a valid slug and currently free within the given placement (parent wins over location; neither means the unplaced/root bucket). Advisory (Save is still gated by the unique constraint). Gated by component:update.
       operationId: check-component-name
       requestBody:
         content:
@@ -8381,7 +8391,7 @@ paths:
       x-omniglass-permission: location:update
   /locations:checkName:
     post:
-      description: Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.
+      description: Reports whether a proposed name is a valid slug and currently free within the given placement (under the given parent, or among roots when no parent is given). Advisory (Save is still gated by the unique constraint). Gated by location:update.
       operationId: check-location-name
       requestBody:
         content:
@@ -11631,7 +11641,7 @@ paths:
       x-omniglass-permission: system:update
   /systems:checkName:
     post:
-      description: Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.
+      description: Reports whether a proposed name is a valid slug and currently free within the given placement (parent wins over location; neither means the root/unplaced bucket). Advisory (Save is still gated by the unique constraint). Gated by system:update.
       operationId: check-system-name
       requestBody:
         content:

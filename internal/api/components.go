@@ -22,6 +22,7 @@ type componentBody struct {
 	Location      *string           `json:"location,omitempty" doc:"The location's name, for display"`
 	ProductID     *string           `json:"product_id,omitempty" doc:"The product (catalog SKU) this component is an instance of, if any; the stable handle that survives a rename."`
 	Product       *string           `json:"product,omitempty" doc:"The product's name, for display; the form a body round-trips."`
+	NameGenerated bool              `json:"name_generated" doc:"Whether the platform picked this name (a server-side generator) rather than an operator typing it."`
 	Actions       []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
 	EffectiveTags map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this component; for the Tags column. Provenance is in the effective-tags detail view."`
 }
@@ -30,6 +31,7 @@ func toComponentBody(c *storage.Component) componentBody {
 	return componentBody{
 		ID: c.ID, Name: c.Name, DisplayName: c.DisplayName,
 		ParentID: c.ParentID, Parent: c.ParentName, SystemID: c.PrimarySystemID, System: c.PrimarySystem, SystemCount: c.SystemCount, LocationID: c.LocationID, Location: c.LocationName, ProductID: c.ProductID, Product: c.ProductHandle,
+		NameGenerated: c.NameGenerated,
 	}
 }
 
@@ -49,7 +51,7 @@ type componentPathInput struct {
 
 type createComponentInput struct {
 	Body struct {
-		Name        string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Globally unique name (the address; lowercase letters, digits, hyphens)"`
+		Name        string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens)"`
 		DisplayName string  `json:"display_name,omitempty" doc:"What an operator reads; the name is the address"`
 		Parent      *string `json:"parent,omitempty" doc:"Parent component name; omit for a root component"`
 		System      *string `json:"system,omitempty" doc:"Primary system name this component belongs to"`
@@ -90,7 +92,7 @@ type updateComponentInput struct {
 type renameComponentInput struct {
 	Name string `path:"name" doc:"The component's current name, or its uuid"`
 	Body struct {
-		Name string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The new globally unique name (lowercase letters, digits, hyphens)"`
+		Name string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The new name, unique within its placement (lowercase letters, digits, hyphens)"`
 	}
 }
 
@@ -223,7 +225,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Method:      http.MethodPost,
 		Path:        "/components:checkName",
 		Summary:     "Check a component name",
-		Description: "Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.",
+		Description: "Reports whether a proposed name is a valid slug and currently free within the given placement (parent wins over location; neither means the unplaced/root bucket). Advisory (Save is still gated by the unique constraint). Gated by component:update.",
 	}, "component", "update"), func(ctx context.Context, in *checkNameInput) (*checkNameOutput, error) {
 		out := &checkNameOutput{}
 		if err := storage.ValidateName("component", in.Body.Name); err != nil {
@@ -238,9 +240,9 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 			return out, nil
 		}
 		out.Body.Valid = true
-		taken, err := gw.ComponentNameTaken(ctx, in.Body.Name)
+		taken, err := gw.ComponentNameTaken(ctx, in.Body.Name, in.Body.Parent, in.Body.Location)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("check component name")
+			return nil, mapComponentErr(err)
 		}
 		out.Body.Available = !taken
 		if taken {
@@ -266,6 +268,9 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 }
 
 func mapComponentErr(err error) error {
+	if refErr, ok := mapRefErr(err); ok {
+		return refErr
+	}
 	switch {
 	case errors.Is(err, storage.ErrComponentNotFound):
 		return huma.Error404NotFound("component not found")

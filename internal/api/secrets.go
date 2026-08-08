@@ -325,6 +325,9 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 // mapSecretErr translates the gateway's secret sentinels into HTTP status.
 func mapSecretErr(err error) error {
+	if refErr, ok := mapRefErr(err); ok {
+		return refErr
+	}
 	switch {
 	case errors.Is(err, storage.ErrSecretNotFound):
 		return huma.Error404NotFound("secret not found")

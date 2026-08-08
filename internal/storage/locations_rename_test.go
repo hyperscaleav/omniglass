@@ -97,11 +97,11 @@ func TestRenameLocation(t *testing.T) {
 		t.Fatalf("bad-format create err = %v, want ErrInvalidEntityName", err)
 	}
 
-	// LocationNameTaken is scope-blind existence.
-	if taken, err := gw.LocationNameTaken(ctx, newName); err != nil || !taken {
+	// LocationNameTaken checks the root bucket here: hq-root has no parent.
+	if taken, err := gw.LocationNameTaken(ctx, newName, nil); err != nil || !taken {
 		t.Fatalf("LocationNameTaken(%q) = %v,%v want true,nil", newName, taken, err)
 	}
-	if taken, err := gw.LocationNameTaken(ctx, "nope-not-here"); err != nil || taken {
+	if taken, err := gw.LocationNameTaken(ctx, "nope-not-here", nil); err != nil || taken {
 		t.Fatalf("LocationNameTaken(free) = %v,%v want false,nil", taken, err)
 	}
 

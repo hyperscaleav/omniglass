@@ -2,10 +2,35 @@ package api
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
+
+// mapRefErr translates the sentinels shared by every bare-name resolution path
+// (scopedByName/scopedByNameInScope) into HTTP status. A caller runs it FIRST
+// and falls through to its own entity-specific mapping when ok is false; every
+// map*Err that resolves a component, system, or location reference needs this,
+// not only the three tree-entity mappers, because a name Task 10's read paths
+// resolve once at the top of a handler can now be ambiguous too (#627 scopes
+// name uniqueness to placement, so a bare-name reference that used to be
+// unique by construction can match more than one row).
+//
+// Today this only recognizes storage.ErrAmbiguousName. A later slice's path
+// resolver adds storage.ErrPathNotFound's non-disclosing 404 here too, once
+// that sentinel exists; this function is the one place both belong; nothing
+// downstream refuses ambiguity on its own.
+func mapRefErr(err error) (error, bool) {
+	var ambig *storage.ErrAmbiguousName
+	if errors.As(err, &ambig) {
+		return huma.Error409Conflict(fmt.Sprintf(
+			"%q is ambiguous for %s: matches %s. Address it by uuid instead of by name.",
+			ambig.Ref, ambig.Kind, strings.Join(ambig.Candidates, ", "))), true
+	}
+	return nil, false
+}
 
 // mapTypeErr translates the shared type-registry storage sentinels into HTTP
 // status. kind is the wire label used in the message (e.g. "location_type").

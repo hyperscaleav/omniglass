@@ -13,12 +13,22 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// newDuplicateNameFixture opens a gateway on a throwaway database with
-// component_name_key dropped by raw DDL, so two components can legitimately
-// share a name the way they will once #627 scopes name uniqueness to placement.
-// The migration that relaxes the constraint for real is a later task; this
-// fixture only needs to prove the GATEWAY's own queries survive that world, not
-// implement it.
+// newDuplicateNameFixture opens a gateway on a throwaway database with the
+// #627 migration already applied, so two components (or systems, or
+// locations) can legitimately share a name as long as they land in
+// different placement buckets, exactly the way every fixture below builds
+// them (twoDisplayOnes places its two "display-1" components in different
+// rooms; twoSameNamedSystems places its two "huddle-1" systems at different
+// locations).
+//
+// This used to drop component_name_key/system_name_key/location_name_key by
+// raw DDL, because the migration that relaxes those constraints for real was
+// a later task and this fixture only needed to prove the GATEWAY's own
+// queries survive that world, not implement it. That DDL now runs for real
+// (db/migrations/20260808090000_names_scope_to_placement.sql), and the three
+// constraints it drops no longer exist to drop a second time here, so the
+// hack is gone: NewPG on a freshly migrated database already gives every
+// fixture below the world it was built for.
 func newDuplicateNameFixture(t *testing.T) (gw storage.Gateway, conn *pgx.Conn) {
 	t.Helper()
 	if testing.Short() {
@@ -32,15 +42,6 @@ func newDuplicateNameFixture(t *testing.T) (gw storage.Gateway, conn *pgx.Conn) 
 		t.Fatalf("connect: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.Close(ctx) })
-	for _, drop := range []string{
-		`alter table component drop constraint component_name_key`,
-		`alter table system drop constraint system_name_key`,
-		`alter table location drop constraint location_name_key`,
-	} {
-		if _, err := conn.Exec(ctx, drop); err != nil {
-			t.Fatalf("%s: %v", drop, err)
-		}
-	}
 
 	gw, err = storage.NewPG(ctx, dsn)
 	if err != nil {

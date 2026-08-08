@@ -71,8 +71,16 @@ func TestRenameComponent(t *testing.T) {
 		t.Fatalf("old name should be free after rename: %v", err)
 	}
 
-	// Renaming onto a taken name -> ErrComponentExists (the API's 409).
-	if _, err := gw.RenameComponent(ctx, "", "disp-child", newName, all, all); !errors.Is(err, storage.ErrComponentExists) {
+	// Renaming onto a taken name -> ErrComponentExists (the API's 409). The
+	// collision has to land in disp-child's OWN placement bucket (#627 scopes
+	// name uniqueness to placement): disp-child is a child of
+	// disp-root-renamed (component_parent_name_key), so newName itself (the
+	// root/orphan bucket) can no longer collide with it; a sibling under the
+	// same parent can.
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-sibling", ParentName: strptr(newName)}, all); err != nil {
+		t.Fatalf("sibling for dup-rename case: %v", err)
+	}
+	if _, err := gw.RenameComponent(ctx, "", "disp-child", "disp-sibling", all, all); !errors.Is(err, storage.ErrComponentExists) {
 		t.Fatalf("dup rename err = %v, want ErrComponentExists", err)
 	}
 
@@ -97,11 +105,12 @@ func TestRenameComponent(t *testing.T) {
 		t.Fatalf("bad-format create err = %v, want ErrInvalidEntityName", err)
 	}
 
-	// ComponentNameTaken is scope-blind existence.
-	if taken, err := gw.ComponentNameTaken(ctx, newName); err != nil || !taken {
+	// ComponentNameTaken checks the unplaced/root bucket here: disp-root has
+	// neither a parent nor a location.
+	if taken, err := gw.ComponentNameTaken(ctx, newName, nil, nil); err != nil || !taken {
 		t.Fatalf("ComponentNameTaken(%q) = %v,%v want true,nil", newName, taken, err)
 	}
-	if taken, err := gw.ComponentNameTaken(ctx, "nope-not-here"); err != nil || taken {
+	if taken, err := gw.ComponentNameTaken(ctx, "nope-not-here", nil, nil); err != nil || taken {
 		t.Fatalf("ComponentNameTaken(free) = %v,%v want false,nil", taken, err)
 	}
 

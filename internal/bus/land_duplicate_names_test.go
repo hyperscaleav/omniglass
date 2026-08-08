@@ -27,6 +27,14 @@ func landStrptr(s string) *string { return &s }
 // real (proving the storage-layer fix), and Server.land (the one write path
 // both ingest lanes share) writing a real TelemetryBatch through it, asserting
 // the sample lands on the task's own component and not its same-named sibling.
+//
+// The two components below share a name legitimately, by placement (#627:
+// db/migrations/20260808090000_names_scope_to_placement.sql), one per room;
+// this used to need component_name_key dropped by raw DDL first, because
+// that migration was a later task and this test only needed to prove the
+// ingest lane survives that world, not implement it. The DDL now runs for
+// real and the constraint it drops no longer exists to drop a second time
+// here, so the hack is gone.
 func TestLandSurvivesDuplicateComponentNames(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -39,12 +47,6 @@ func TestLandSurvivesDuplicateComponentNames(t *testing.T) {
 		t.Fatalf("connect: %v", err)
 	}
 	defer conn.Close(ctx)
-	// component_name_key is dropped so this test's own database can hold two
-	// same-named components, the condition #627's DDL (not yet landed) will
-	// make legal for real; this proves the ingest lane is already safe for it.
-	if _, err := conn.Exec(ctx, `alter table component drop constraint component_name_key`); err != nil {
-		t.Fatalf("drop component name constraint: %v", err)
-	}
 
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {

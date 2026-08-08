@@ -34,6 +34,14 @@ func pushDupStrptr(s string) *string { return &s }
 // fails loudly at GetComponent, so only the uuid-addressed caller is at
 // risk), through a real bus, asserting the sample lands on the addressed
 // component and not its same-named sibling.
+//
+// The two components below share a name legitimately, by placement (#627:
+// db/migrations/20260808090000_names_scope_to_placement.sql), one per room;
+// this used to need component_name_key dropped by raw DDL first, because
+// that migration was a later task and this test only needed to prove the
+// PUSH ROUTE survives that world, not implement it. The DDL now runs for
+// real and the constraint it drops no longer exists to drop a second time
+// here, so the hack is gone.
 func TestTelemetryPushSurvivesDuplicateComponentNames(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
@@ -46,9 +54,6 @@ func TestTelemetryPushSurvivesDuplicateComponentNames(t *testing.T) {
 		t.Fatalf("connect: %v", err)
 	}
 	defer conn.Close(ctx)
-	if _, err := conn.Exec(ctx, `alter table component drop constraint component_name_key`); err != nil {
-		t.Fatalf("drop component name constraint: %v", err)
-	}
 
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {

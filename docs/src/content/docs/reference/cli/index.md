@@ -445,11 +445,13 @@ Check a component name
 omniglass component checkName [flags]
 ```
 
-Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.
+Reports whether a proposed name is a valid slug and currently free within the given placement (parent wins over location; neither means the unplaced/root bucket). Advisory (Save is still gated by the unique constraint). Gated by component:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--location` | string | (none) | The location (by name or uuid) the entity would be placed at, if any and if unparented; ignored by the locations check |
 | `--name` | string | (none) | The proposed name to check |
+| `--parent` | string | (none) | The parent (by name or uuid) the entity would be created under, if any; omit for a root/unplaced check |
 
 Example:
 
@@ -498,7 +500,7 @@ Creates a component, optionally under a parent (a root needs an all-scoped grant
 |---|---|---|---|
 | `--display-name` | string | (none) | What an operator reads; the name is the address |
 | `--location` | string | (none) | Location name this component is placed at |
-| `--name` | string | (none) | Globally unique name (the address; lowercase letters, digits, hyphens) |
+| `--name` | string | (none) | Name, unique within its placement (the address; lowercase letters, digits, hyphens) |
 | `--parent` | string | (none) | Parent component name; omit for a root component |
 | `--product` | string | (none) | Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled. |
 | `--system` | string | (none) | Primary system name this component belongs to |
@@ -845,7 +847,7 @@ Moves the component's name, the address an operator types and every external ref
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | string | (none) | The new globally unique name (lowercase letters, digits, hyphens) |
+| `--name` | string | (none) | The new name, unique within its placement (lowercase letters, digits, hyphens) |
 
 Example:
 
@@ -1390,11 +1392,13 @@ Check a location name
 omniglass location checkName [flags]
 ```
 
-Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.
+Reports whether a proposed name is a valid slug and currently free within the given placement (under the given parent, or among roots when no parent is given). Advisory (Save is still gated by the unique constraint). Gated by location:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--location` | string | (none) | The location (by name or uuid) the entity would be placed at, if any and if unparented; ignored by the locations check |
 | `--name` | string | (none) | The proposed name to check |
+| `--parent` | string | (none) | The parent (by name or uuid) the entity would be created under, if any; omit for a root/unplaced check |
 
 Example:
 
@@ -1416,7 +1420,7 @@ Creates a location, optionally under a parent (a root needs an all-scoped grant)
 |---|---|---|---|
 | `--display-name` | string | (none) | What an operator reads; the name is the address |
 | `--location-type` | string | (none) | The location_type, by name or uuid (campus, building, ...) |
-| `--name` | string | (none) | Globally unique name (the address; lowercase letters, digits, hyphens) |
+| `--name` | string | (none) | Name, unique within its placement (the address; lowercase letters, digits, hyphens) |
 | `--parent` | string | (none) | Parent location name; omit for a root location |
 
 Example:
@@ -1617,7 +1621,7 @@ Moves the location's name, the address an operator types and every external refe
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | string | (none) | The new globally unique name (lowercase letters, digits, hyphens) |
+| `--name` | string | (none) | The new name, unique within its placement (lowercase letters, digits, hyphens) |
 
 Example:
 
@@ -3720,11 +3724,13 @@ Check a system name
 omniglass system checkName [flags]
 ```
 
-Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.
+Reports whether a proposed name is a valid slug and currently free within the given placement (parent wins over location; neither means the root/unplaced bucket). Advisory (Save is still gated by the unique constraint). Gated by system:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--location` | string | (none) | The location (by name or uuid) the entity would be placed at, if any and if unparented; ignored by the locations check |
 | `--name` | string | (none) | The proposed name to check |
+| `--parent` | string | (none) | The parent (by name or uuid) the entity would be created under, if any; omit for a root/unplaced check |
 
 Example:
 
@@ -3746,7 +3752,7 @@ Creates a system, optionally under a parent (a root needs an all-scoped grant) a
 |---|---|---|---|
 | `--display-name` | string | (none) | What an operator reads; the name is the address |
 | `--location` | string | (none) | Location name this system is placed at |
-| `--name` | string | (none) | Globally unique name (the address; lowercase letters, digits, hyphens) |
+| `--name` | string | (none) | Name, unique within its placement (the address; lowercase letters, digits, hyphens) |
 | `--parent` | string | (none) | Parent system name; omit for a root system |
 | `--standard-id` | string | (none) | The standard it conforms to, by handle or uuid; omit for a one-off system |
 
@@ -4016,7 +4022,7 @@ Moves the system's name, the address an operator types and every external refere
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | string | (none) | The new globally unique name (lowercase letters, digits, hyphens) |
+| `--name` | string | (none) | The new name, unique within its placement (lowercase letters, digits, hyphens) |
 
 Example:
 
