@@ -210,3 +210,40 @@ func TestCreateComponentWithDottedMissingParentIs422(t *testing.T) {
 		t.Fatalf("422 body = %s, want it to name the parent reference, not the component being created", body)
 	}
 }
+
+// Fix round 1, finding 3: the three node tag-binding routes
+// (:listTags/:setTag/:removeTag) had no RejectAddressForm guard, so a
+// dotted node ref there fell through to the plain 404 five other node
+// routes already refuse explicitly with a 422.
+
+// TestListNodeTagsByDottedRefIs422 covers :listTags, which needs no tag key
+// to exist first (resolveTagBindingOwner runs before any key lookup).
+func TestListNodeTagsByDottedRefIs422(t *testing.T) {
+	c, tok := pathTestServer(t)
+
+	status, body := c.send(tok, http.MethodGet, "/nodes/boi.17c:listTags", nil)
+	if status != http.StatusUnprocessableEntity {
+		t.Fatalf("GET /nodes/{dotted}:listTags status = %d, want 422\nbody: %s", status, body)
+	}
+	if !strings.Contains(string(body), "single token") {
+		t.Fatalf("422 body = %s, want it to say a node name is a single token", body)
+	}
+}
+
+// TestSetNodeTagByDottedRefIs422 covers :setTag, which resolves the tag key
+// BEFORE the owner, so a real key is seeded first to prove the guard fires
+// on the OWNER resolve, not merely because the key lookup already 404'd.
+func TestSetNodeTagByDottedRefIs422(t *testing.T) {
+	c, tok := pathTestServer(t)
+
+	c.do(tok, http.MethodPost, "/tags", map[string]any{"name": "environment"}, http.StatusCreated)
+
+	status, body := c.send(tok, http.MethodPost, "/nodes/boi.17c:setTag",
+		map[string]any{"key": "environment", "value": "prod"})
+	if status != http.StatusUnprocessableEntity {
+		t.Fatalf("POST /nodes/{dotted}:setTag status = %d, want 422\nbody: %s", status, body)
+	}
+	if !strings.Contains(string(body), "single token") {
+		t.Fatalf("422 body = %s, want it to say a node name is a single token", body)
+	}
+}

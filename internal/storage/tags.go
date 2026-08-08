@@ -794,6 +794,14 @@ func resolveTagBindingOwner(ctx context.Context, q querier, kind string, name *s
 	case "node":
 		// A node is estate-wide (not a scope tree), so tagging it needs an all
 		// scope on both legs, like a global owner; the owner id is its principal_id.
+		// RejectAddressForm first, same as GetNode/UpdateNode/DeleteNode/
+		// SetEnrollmentToken: a node's name stays a single token, and this arm's
+		// raw `where name = $1` had no guard of its own, unlike GetNode et al,
+		// so a dotted ref reached the query and simply missed (task-12-review.md
+		// finding 3).
+		if err := RejectAddressForm("node", *name); err != nil {
+			return nil, "", err
+		}
 		if !read.All || !action.All {
 			return nil, "", ErrNodeForbidden
 		}
