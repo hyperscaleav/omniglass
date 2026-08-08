@@ -255,13 +255,18 @@ describe("RolesPanel", () => {
     // disp-1 (main-display's occupant) still appears, just disabled (see the
     // dedicated test below), so it stays out of this equality's true values.
     const picker = getByLabelText("Component to fill table-mic") as HTMLSelectElement;
-    expect(Array.from(picker.options).map((o) => o.value)).toEqual(["", "disp-1", "panel-1"]);
+    // Options carry the component's uuid, not its name (#627 review, the
+    // pre-existing surface: staffing a role resolves the component
+    // estate-wide via scopedByName, ADR-0062, so a duplicate-named component
+    // 409s on a bare name regardless of scope; the picker must submit the
+    // unambiguous uuid to keep the promise Task 15 already made elsewhere).
+    expect(Array.from(picker.options).map((o) => o.value)).toEqual(["", uuidFor("c-3"), uuidFor("c-2")]);
 
-    fireEvent.change(picker, { target: { value: "panel-1" } });
+    fireEvent.change(picker, { target: { value: uuidFor("c-2") } });
     fireEvent.click(getByLabelText("Assign to table-mic"));
 
     await waitFor(() => expect(put).toBeTruthy());
-    expect(put!.url).toContain("/systems/boardroom/roles/table-mic/assignments/panel-1");
+    expect(put!.url).toContain(`/systems/boardroom/roles/table-mic/assignments/${uuidFor("c-2")}`);
     expect(getByText("Table microphone")).toBeTruthy(); // the panel stays put
   });
 
@@ -280,7 +285,7 @@ describe("RolesPanel", () => {
     const { qc, getByLabelText } = mount();
     const spy = vi.spyOn(qc, "invalidateQueries");
 
-    fireEvent.change(getByLabelText("Component to fill table-mic"), { target: { value: "panel-1" } });
+    fireEvent.change(getByLabelText("Component to fill table-mic"), { target: { value: uuidFor("c-2") } });
     fireEvent.click(getByLabelText("Assign to table-mic"));
 
     await waitFor(() => {
@@ -304,7 +309,7 @@ describe("RolesPanel", () => {
     const { qc, getByLabelText } = mount();
     const spy = vi.spyOn(qc, "invalidateQueries");
 
-    fireEvent.change(getByLabelText("Component to fill table-mic"), { target: { value: "panel-1" } });
+    fireEvent.change(getByLabelText("Component to fill table-mic"), { target: { value: uuidFor("c-2") } });
     fireEvent.click(getByLabelText("Assign to table-mic"));
 
     await waitFor(() => {
@@ -323,12 +328,12 @@ describe("RolesPanel", () => {
   it("disables a component already staffing a different role here, naming which one", () => {
     const { getByLabelText } = mount();
     const picker = getByLabelText("Component to fill table-mic") as HTMLSelectElement;
-    const disp1 = Array.from(picker.options).find((o) => o.value === "disp-1")!;
+    const disp1 = Array.from(picker.options).find((o) => o.value === uuidFor("c-3"))!;
     expect(disp1.disabled).toBe(true);
     expect(disp1.textContent).toContain("already fills");
     expect(disp1.textContent).toContain("Main display");
     // panel-1 fills nothing anywhere in this system, so it stays selectable.
-    const panel1 = Array.from(picker.options).find((o) => o.value === "panel-1")!;
+    const panel1 = Array.from(picker.options).find((o) => o.value === uuidFor("c-2"))!;
     expect(panel1.disabled).toBe(false);
   });
 
@@ -354,7 +359,7 @@ describe("RolesPanel", () => {
     });
 
     const { getByText, getByLabelText, queryByText } = mount();
-    fireEvent.change(getByLabelText("Component to fill table-mic"), { target: { value: "panel-1" } });
+    fireEvent.change(getByLabelText("Component to fill table-mic"), { target: { value: uuidFor("c-2") } });
     fireEvent.click(getByLabelText("Assign to table-mic"));
 
     // The refusal belongs to the role that refused, and reads as the server sent it.

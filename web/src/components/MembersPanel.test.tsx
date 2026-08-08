@@ -120,8 +120,12 @@ describe("MembersPanel", () => {
   it("offers only components not already in this system", () => {
     const { getByLabelText } = mount();
     const opts = [...(getByLabelText("Component to add") as HTMLSelectElement).options].map((o) => o.value);
-    expect(opts).toContain("spare-panel");
-    expect(opts).not.toContain("boardroom-a-bar");
+    // Options carry the component's uuid, not its name (#627 review, the
+    // pre-existing surface: adding a member resolves the component
+    // estate-wide via scopedByName, internal/api/members.go, which 409s an
+    // estate-wide-ambiguous name regardless of this system's own scope).
+    expect(opts).toContain(uuidFor("c-4"));
+    expect(opts).not.toContain(uuidFor("c-1"));
   });
 
   // The refusal is the lesson. The server explains that the component still fills
@@ -139,13 +143,13 @@ describe("MembersPanel", () => {
   it("adds a component and refreshes", async () => {
     const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(json({}, 204));
     const { getByLabelText, getByText } = mount();
-    fireEvent.change(getByLabelText("Component to add"), { target: { value: "spare-panel" } });
+    fireEvent.change(getByLabelText("Component to add"), { target: { value: uuidFor("c-4") } });
     fireEvent.click(getByText("Add"));
     await waitFor(() => expect(spy).toHaveBeenCalled());
     // openapi-fetch calls fetch with a Request, not a bare URL string.
     const arg = spy.mock.calls[0]?.[0] as Request | string;
     const url = typeof arg === "string" ? arg : arg.url;
-    expect(url).toContain("/systems/boardroom-a/members/spare-panel");
+    expect(url).toContain(`/systems/boardroom-a/members/${uuidFor("c-4")}`);
   });
 
   // The health read (RolesPanel's primary readout since task 9) is
@@ -158,7 +162,7 @@ describe("MembersPanel", () => {
     const { qc, getByLabelText, getByText } = mount();
     const spy = vi.spyOn(qc, "invalidateQueries");
 
-    fireEvent.change(getByLabelText("Component to add"), { target: { value: "spare-panel" } });
+    fireEvent.change(getByLabelText("Component to add"), { target: { value: uuidFor("c-4") } });
     fireEvent.click(getByText("Add"));
 
     await waitFor(() => {

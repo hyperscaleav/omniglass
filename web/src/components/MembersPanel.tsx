@@ -175,7 +175,12 @@ export default function MembersPanel(props: {
             onChange={(e) => setPicked(e.currentTarget.value)}
           >
             <option value="">Add a component...</option>
-            <For each={addable()}>{(c) => <option value={c.name}>{c.name}</option>}</For>
+            {/* The uuid, not the name (#627 review, the pre-existing
+                surface): addMember resolves the component estate-wide via
+                scopedByName (internal/api/members.go), which dual-accepts a
+                uuid unambiguously (ADR-0062) but 409s an estate-wide-
+                ambiguous name regardless of this system's own scope. */}
+            <For each={addable()}>{(c) => <option value={c.id}>{c.name}</option>}</For>
           </select>
           <Button
             size="sm"
