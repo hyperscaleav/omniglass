@@ -132,7 +132,7 @@ describe("chainSentence", () => {
       "outage",
     );
     expect(s).toBe(
-      "A critical alarm on disp-2, taking disp-2 out of the role, so Main display satisfies 1 of 2 and contributes outage, which is why this system reads outage.",
+      "A critical alarm on disp-2 takes it out of the role, so Main display satisfies 1 of 2 and contributes outage, which is why this system reads outage.",
     );
   });
 

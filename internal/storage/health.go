@@ -104,7 +104,7 @@ type HealthRole struct {
 	Satisfying  int
 	Impaired    bool
 	AssignedTo  []string
-	Down        []string // assigned components whose own verdict is not healthy
+	Down        []string // assigned components whose own verdict is outage
 	Alarms      []Alarm  // the active alarms on those down components
 }
 

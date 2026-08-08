@@ -28,7 +28,8 @@ type SystemRole struct {
 	// optionally narrows further to specific products within an accepted type;
 	// empty means any product of an accepted type. This pair is what
 	// AssignRole checks (#626); once assigned, an occupant satisfies the slot
-	// as long as its own verdict is healthy (internal/health).
+	// unless its own verdict is outage (internal/health); a merely degraded
+	// occupant still counts.
 	AcceptedTypes  []string
 	PinnedProducts []string
 	// Impact is what an impaired role means for its system: outage, degraded, or

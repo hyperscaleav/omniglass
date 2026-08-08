@@ -74,12 +74,15 @@ type Component struct {
 }
 
 // Occupies reports whether this component currently satisfies a slot it
-// fills: a component whose own verdict is not Healthy cannot be counted
+// fills: a component whose own verdict is Outage (down) cannot be counted
 // toward a role's quorum, regardless of which role asked or which alarm is
-// behind it. This is the whole mechanism by which an alarm reaches a system
-// now: impair the component, and every role it occupies loses one occupant.
+// behind it. A Degraded component still occupies: severity is how loudly to
+// page somebody, not a second threshold for staffing, so an info or warning
+// alarm never shorts a role by itself. This is the mechanism by which a
+// critical alarm reaches a system: impair the component down to Outage, and
+// every role it occupies loses one occupant.
 func (c Component) Occupies() bool {
-	return c.Verdict == Healthy
+	return c.Verdict != Outage
 }
 
 // Role is a role as the rollup sees it: how many occupants it needs, what its
@@ -92,7 +95,7 @@ type Role struct {
 }
 
 // Satisfying counts the assigned components that currently occupy the role
-// (their own verdict is Healthy).
+// (their own verdict is not Outage).
 func (r Role) Satisfying() int {
 	n := 0
 	for _, c := range r.Assigned {

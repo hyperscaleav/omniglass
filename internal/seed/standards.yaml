@@ -13,9 +13,10 @@ standards:
     # worked example (the shipped Cisco Room Bar, video-bar, satisfies room-mic;
     # the Samsung QM55, display, satisfies main-display; a room with one bar
     # reads as understaffed until the second lands). An occupant satisfies its
-    # slot as long as its own verdict is healthy: an alarm impairs a component
-    # wholesale now, not by named capability (#626). Seeded if absent, so an
-    # operator who retunes them keeps the edit.
+    # slot unless its own verdict is outage: an alarm impairs a component
+    # wholesale now, not by named capability, but only a critical one costs
+    # the component its slots (#626). Seeded if absent, so an operator who
+    # retunes them keeps the edit.
     roles:
       - name: room-mic
         display_name: Room Microphone

@@ -12,8 +12,10 @@ func healthy(name string) health.Component {
 }
 
 // down is a component an alarm has taken to the given verdict (Degraded or
-// Outage). Either one is "down": it stops occupying every slot it fills,
-// which is the whole mechanism by which an alarm reaches a system now.
+// Outage). Only Outage is "down" in the staffing sense: it stops occupying
+// every slot it fills, which is the whole mechanism by which a critical
+// alarm reaches a system now. Degraded still occupies; it exists as a
+// verdict a component can carry without costing it any slot.
 func down(name string, v health.Verdict) health.Component {
 	return health.Component{Name: name, Verdict: v}
 }
@@ -25,15 +27,15 @@ func TestOccupies(t *testing.T) {
 		}
 	})
 
-	t.Run("a degraded component does not occupy its slot", func(t *testing.T) {
-		if down("a", health.Degraded).Occupies() {
-			t.Fatal("a degraded component must not count: this is how an alarm reaches a system")
+	t.Run("a degraded component still occupies its slot", func(t *testing.T) {
+		if !down("a", health.Degraded).Occupies() {
+			t.Fatal("a degraded component must still count: severity is how loudly to page somebody, not a second staffing threshold")
 		}
 	})
 
 	t.Run("an outage component does not occupy its slot", func(t *testing.T) {
 		if down("a", health.Outage).Occupies() {
-			t.Fatal("an outage component must not count")
+			t.Fatal("an outage component must not count: this is how a critical alarm reaches a system")
 		}
 	})
 }
@@ -62,21 +64,37 @@ func TestRoleQuorumBoundary(t *testing.T) {
 	}
 }
 
-// A down assignee stops counting toward quorum, which is the path from an
-// alarm on one component to a verdict on the system that depends on it.
+// A down (outage) assignee stops counting toward quorum, which is the path
+// from a critical alarm on one component to a verdict on the system that
+// depends on it.
 func TestDownAssigneeDropsBelowQuorum(t *testing.T) {
 	a, b := healthy("a"), healthy("b")
 	r := health.Role{Name: "mic", Quorum: 2, Impact: "degraded", Assigned: []health.Component{a, b}}
 	if r.Impaired() {
 		t.Fatal("two healthy assignees meet a quorum of two")
 	}
-	b = down("b", health.Degraded)
+	b = down("b", health.Outage)
 	r.Assigned = []health.Component{a, b}
 	if !r.Impaired() {
-		t.Fatal("one down assignee should drop the role below quorum")
+		t.Fatal("one outage assignee should drop the role below quorum")
 	}
 	if got := r.Contributes(); got != health.Degraded {
 		t.Fatalf("contributes = %v, want degraded", got)
+	}
+}
+
+// TestDegradedAssigneeStaysAboveQuorum pins the boundary: a merely degraded
+// assignee (an info or warning alarm, never outage) is not "down" in the
+// staffing sense. It still occupies its slot, so a role staffed exactly to
+// quorum by degraded-but-not-outage components is not impaired.
+func TestDegradedAssigneeStaysAboveQuorum(t *testing.T) {
+	a, b := down("a", health.Degraded), healthy("b")
+	r := health.Role{Name: "mic", Quorum: 2, Impact: "degraded", Assigned: []health.Component{a, b}}
+	if r.Impaired() {
+		t.Fatal("a degraded assignee still occupies its slot: quorum of two is still met")
+	}
+	if got := r.Contributes(); got != health.Healthy {
+		t.Fatalf("contributes = %v, want healthy: nobody dropped out", got)
 	}
 }
 
@@ -84,7 +102,7 @@ func TestDownAssigneeDropsBelowQuorum(t *testing.T) {
 // role, and the system above it, never move.
 func TestSpareOccupantAbsorbsOneDown(t *testing.T) {
 	r := health.Role{Name: "mic", Quorum: 1, Impact: "degraded",
-		Assigned: []health.Component{down("a", health.Degraded), healthy("b")}}
+		Assigned: []health.Component{down("a", health.Outage), healthy("b")}}
 	if r.Impaired() {
 		t.Fatal("a spare occupant still meets a quorum of one")
 	}

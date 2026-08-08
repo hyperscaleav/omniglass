@@ -465,15 +465,16 @@ A **semantic** refusal, the 422 case in the [status table](#errors-one-problemjs
 authorization one: the message tells the operator the next move. Around it: an unknown role is a
 **404**, an unknown standard or type or product on a declaration a **422**, and an unknown (or
 out-of-scope) system or component the same non-disclosing **404**. The guard runs once, at assignment;
-afterward an occupant keeps its slot as long as its own [health](#health-the-verdict-and-why) verdict
-stays healthy.
+afterward an occupant keeps its slot unless its own [health](#health-the-verdict-and-why) verdict
+goes to outage (a lesser alarm degrades it but does not cost it the slot).
 
 ## Health: the verdict, and why
 
 **[Health](/architecture/health/)** is two shapes on this surface: the **alarm** (what is wrong with one
 component) and the **report** (what that means for a system or a location); an alarm is
-component-local, reaching a room only through the component's own verdict, which impairs every role
-that component occupies while the alarm is active.
+component-local, reaching a room only through the component's own verdict. Only a `critical` alarm
+takes that verdict to outage and impairs every role the component occupies while it is active; an
+`info` or `warning` alarm degrades the component but leaves it occupying its roles.
 
 An alarm hangs off its component and rides that component's gating:
 
@@ -494,9 +495,10 @@ The reports are one shape over two owners:
 
 - `GET /systems/{name}/health` (`system:read`) returns the verdict (`healthy` / `degraded` /
   `outage`) plus `roles`: every role the system needs filled, where `satisfying` counts the assigned
-  components currently occupying it (their own verdict is healthy), `down` names the **assigned**
-  components that are not, and `alarms` the active alarms on those. An impaired role with an **empty**
-  `down` is **short-staffed**, not broken, a different job for the operator.
+  components currently occupying it (their own verdict is not outage; a degraded one still counts),
+  `down` names the **assigned** components whose own verdict is outage, and `alarms` the active
+  alarms on those. An impaired role with an **empty** `down` is **short-staffed**, not broken, a
+  different job for the operator.
 - `GET /locations/{name}/health` (`location:read`) returns the same envelope with `systems` filled
   instead: every system placed **anywhere** beneath the location, with its verdict, as the drill-down.
 - `transitions` is the **recorded edges** over the last 30 days, oldest first, each `{ts, verdict}`: one

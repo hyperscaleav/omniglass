@@ -387,7 +387,7 @@ Raise an alarm on a component
 omniglass component alarm create <name> [flags]
 ```
 
-Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (a critical alarm), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser (info or warning) alarm degrades the component but leaves it occupying its roles. Gated by component:update; an out-of-scope component is a non-disclosing 404.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|

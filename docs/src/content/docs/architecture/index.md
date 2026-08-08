@@ -114,8 +114,9 @@ own verdict** wholesale, turning a detection into a verdict on the system.
 ## Model health
 
 A single alarm is rarely the point. The headline is **[health](/architecture/health/)**: a verdict on
-the **system**, carried as a calculated sample. The chain: an alarm takes a component's own verdict
-down, so it no longer **occupies** the **role** it was filling; a role below its **quorum** is
+the **system**, carried as a calculated sample. The chain: a critical alarm takes a component's own
+verdict to outage, so it no longer **occupies** the **role** it was filling (a lesser alarm degrades
+it but leaves it in place); a role below its **quorum** is
 impaired and contributes its declared **impact** (outage, degraded, or none); the system takes the
 worst contribution, and a location the worst of its systems. A target on that verdict over time is a
 real uptime **SLA**.

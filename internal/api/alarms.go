@@ -107,7 +107,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Path:          "/components/{name}/alarms",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Raise an alarm on a component",
-		Description:   "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it. Gated by component:update; an out-of-scope component is a non-disclosing 404.",
+		Description:   "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (a critical alarm), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser (info or warning) alarm degrades the component but leaves it occupying its roles. Gated by component:update; an out-of-scope component is a non-disclosing 404.",
 	}, "component", "update"), func(ctx context.Context, in *raiseAlarmInput) (*alarmOutput, error) {
 		if err := requireComponentInScope(ctx, a, gw, in.Name, "update"); err != nil {
 			return nil, err

@@ -35,8 +35,9 @@ import {
 //   role CONTRIBUTES  ->  this verdict
 //
 // Every link is a real API field, joined here and nowhere else: the role's
-// `down` list is the assigned components whose own verdict is not healthy, and
-// the role's `alarms` are the active alarms on those. The verdict itself is
+// `down` list is the assigned components whose own verdict is outage (a
+// merely degraded one still occupies its slot), and the role's `alarms` are
+// the active alarms on those. The verdict itself is
 // never recomputed in the browser; the server sends it and the panel shows its
 // derivation, so the console and the API can never disagree about whether a
 // room is out.
@@ -106,7 +107,7 @@ function ChainRow(props: { cause: Cause; role: HealthRole; onOpenComponent?: (na
       <Arrow />
       <Step caption="Component down">
         <span class="badge badge-error badge-soft badge-sm w-fit font-data">{props.cause.component}</span>
-        <span class="text-[11px] text-base-content/45">its own verdict is not healthy, so it no longer occupies this slot</span>
+        <span class="text-[11px] text-base-content/45">its own verdict is outage, so it no longer occupies this slot</span>
       </Step>
       <Arrow />
       <Step caption="Role below quorum">
@@ -210,8 +211,9 @@ export default function SystemHealthPanel(props: { system: string; onOpenCompone
       <Show when={q.data}>
         {/* The model, stated once, so the blocks below are read as its instances. */}
         <p class="text-[11px] text-base-content/50">
-          An alarm takes a component's own verdict down, wholesale. A role that component fills no longer counts it
-          toward quorum, and can drop below it. The system takes the worst impact among its impaired roles.
+          An alarm degrades a component's own verdict wholesale; a critical one takes it to outage. Only then does a
+          role that component fills stop counting it toward quorum, and can drop below it. The system takes the
+          worst impact among its impaired roles.
         </p>
 
         <Show

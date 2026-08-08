@@ -2034,7 +2034,7 @@ components:
         display_name:
           type: string
         down:
-          description: The assigned components whose own verdict is not healthy; empty when the role is merely short-staffed
+          description: The assigned components whose own verdict is outage; empty when the role is merely short-staffed or only degraded
           items:
             type: string
           type:
@@ -2052,7 +2052,7 @@ components:
           format: int64
           type: integer
         satisfying:
-          description: How many assigned components currently occupy the role (their own verdict is healthy)
+          description: How many assigned components currently occupy the role (their own verdict is not outage; a degraded component still occupies)
           format: int64
           type: integer
       required:
@@ -6513,7 +6513,7 @@ paths:
       summary: List a component's alarms
       x-omniglass-permission: component:read
     post:
-      description: "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it. Gated by component:update; an out-of-scope component is a non-disclosing 404."
+      description: "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (a critical alarm), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser (info or warning) alarm degrades the component but leaves it occupying its roles. Gated by component:update; an out-of-scope component is a non-disclosing 404."
       operationId: raise-component-alarm
       parameters:
         - description: The component's unique name

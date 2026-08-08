@@ -34,7 +34,8 @@ import {
 // parties, which this panel shows verbatim against the role that refused. A
 // generic "something went wrong" would throw away the only thing the operator
 // needs. The guard runs once, at assignment; after that, an occupant keeps its
-// slot as long as its own health verdict stays healthy.
+// slot unless its own health verdict goes to outage (a lesser alarm degrades
+// it but does not cost it the slot).
 //
 // Writes are immediate, like the tag panel, so the panel has no Save of its own;
 // the caller passes canUpdate (the system detail computes it as "in edit mode AND

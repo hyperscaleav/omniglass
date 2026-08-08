@@ -23,8 +23,9 @@ import (
 // 422 that NAMES both parties, what the component actually is (or which product
 // it is) and what the role wants, because "no" that does not say why leaves the
 // operator nothing to do. Capability retired with the family (#626): once
-// assigned, an occupant satisfies its slot as long as its own verdict is
-// healthy (internal/health), nothing more.
+// assigned, an occupant satisfies its slot as long as its own verdict is not
+// outage (internal/health); a merely degraded occupant still counts, nothing
+// more.
 //
 // Gating follows the owner: the standard arc rides standard:read/update/delete,
 // the system arc rides system:read/update. Every system arc route resolves its

@@ -38,10 +38,10 @@ type healthRoleBody struct {
 	DisplayName string            `json:"display_name"`
 	Impact      string            `json:"impact" doc:"What an impaired role means for its system: outage, degraded, or none"`
 	Quorum      int               `json:"quorum"`
-	Satisfying  int               `json:"satisfying" doc:"How many assigned components currently occupy the role (their own verdict is healthy)"`
+	Satisfying  int               `json:"satisfying" doc:"How many assigned components currently occupy the role (their own verdict is not outage; a degraded component still occupies)"`
 	Impaired    bool              `json:"impaired" doc:"True when satisfying is below quorum"`
 	AssignedTo  []string          `json:"assigned_to"`
-	Down        []string          `json:"down" doc:"The assigned components whose own verdict is not healthy; empty when the role is merely short-staffed"`
+	Down        []string          `json:"down" doc:"The assigned components whose own verdict is outage; empty when the role is merely short-staffed or only degraded"`
 	Alarms      []healthAlarmBody `json:"alarms" doc:"The active alarms on those down components"`
 }
 

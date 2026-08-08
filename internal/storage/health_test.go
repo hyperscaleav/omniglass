@@ -162,10 +162,15 @@ func TestHealthTransitionsThroughTheChain(t *testing.T) {
 
 	// Baseline. Staffing the role already recorded a healthy start for everything
 	// in the chain, so the assertions below are on the DELTA an alarm causes.
-	type owner struct{ kind, id string }
+	// The component's own arc reads the alarm severity directly (outage, once
+	// the deciding alarm is critical); everything above it reads the role's
+	// declared impact (degraded), a different axis entirely.
+	type owner struct {
+		kind, id, downWant string
+	}
 	chain := []owner{
-		{"component", "bar-1"}, {"system", "hq-huddle"},
-		{"location", "hq-r1"}, {"location", "hq-b1"}, {"location", "hq"},
+		{"component", "bar-1", "outage"}, {"system", "hq-huddle", "degraded"},
+		{"location", "hq-r1", "degraded"}, {"location", "hq-b1", "degraded"}, {"location", "hq", "degraded"},
 	}
 	before := map[owner]int{}
 	for _, o := range chain {
@@ -176,10 +181,10 @@ func TestHealthTransitionsThroughTheChain(t *testing.T) {
 		before[o] = n
 	}
 
-	// The alarm takes bar-1 down, its only occupant, so the role drops below
-	// quorum.
+	// The critical alarm takes bar-1 down, its only occupant, so the role drops
+	// below quorum.
 	alarm, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "warning", Message: "mic array not responding",
+		Severity: "critical", Message: "mic array not responding",
 	})
 	if err != nil {
 		t.Fatalf("raise alarm: %v", err)
@@ -187,8 +192,8 @@ func TestHealthTransitionsThroughTheChain(t *testing.T) {
 
 	for _, o := range chain {
 		n, v := f.recorded(t, ctx, o.kind, o.id)
-		if v != "degraded" {
-			t.Errorf("after the alarm %s/%s = %q, want degraded", o.kind, o.id, v)
+		if v != o.downWant {
+			t.Errorf("after the alarm %s/%s = %q, want %s", o.kind, o.id, v, o.downWant)
 		}
 		if got := n - before[o]; got != 1 {
 			t.Errorf("%s/%s recorded %d rows for one transition, want exactly 1", o.kind, o.id, got)
@@ -196,9 +201,10 @@ func TestHealthTransitionsThroughTheChain(t *testing.T) {
 		before[o] = n
 	}
 
-	// A SECOND alarm that changes nothing: the component is already degraded, the
-	// role is already below quorum, so no verdict in the chain moves. Nothing may
-	// be written. This is the property the whole recording design exists for.
+	// A SECOND, lesser alarm that changes nothing: the component is already
+	// outage from the first, worse wins so it stays outage, and the role is
+	// already below quorum, so no verdict in the chain moves. Nothing may be
+	// written. This is the property the whole recording design exists for.
 	second, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
 		Severity: "warning", Message: "speaker distortion",
 	})
@@ -220,9 +226,9 @@ func TestHealthTransitionsThroughTheChain(t *testing.T) {
 	}
 	for _, o := range chain {
 		n, v := f.recorded(t, ctx, o.kind, o.id)
-		if n != before[o] || v != "degraded" {
-			t.Errorf("%s/%s = %d rows / %q after clearing a non-deciding alarm, want %d / degraded",
-				o.kind, o.id, n, v, before[o])
+		if n != before[o] || v != o.downWant {
+			t.Errorf("%s/%s = %d rows / %q after clearing a non-deciding alarm, want %d / %s",
+				o.kind, o.id, n, v, before[o], o.downWant)
 		}
 	}
 
@@ -319,7 +325,7 @@ func TestHealthImpactAndQuorum(t *testing.T) {
 	ctx := context.Background()
 
 	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "warning", Message: "mic dead",
+		Severity: "critical", Message: "mic dead",
 	}); err != nil {
 		t.Fatalf("raise alarm: %v", err)
 	}
@@ -355,8 +361,8 @@ func TestHealthImpactAndQuorum(t *testing.T) {
 	}
 	// The component itself is still alarmed: impact governs the system, never the
 	// component's own condition.
-	if _, v := f.recorded(t, ctx, "component", "bar-1"); v != "degraded" {
-		t.Errorf("component = %q, want degraded regardless of the role's impact", v)
+	if _, v := f.recorded(t, ctx, "component", "bar-1"); v != "outage" {
+		t.Errorf("component = %q, want outage regardless of the role's impact", v)
 	}
 
 	// An unknown impact is a named refusal, not a constraint violation.
@@ -392,10 +398,11 @@ func TestHealthMovesOnUnassign(t *testing.T) {
 		t.Fatalf("system after re-staffing = %q, want healthy", v)
 	}
 
-	// An alarm is the other removal shape: the component stays assigned, but it
-	// stops occupying the slot because its own verdict is no longer healthy.
+	// An alarm is the other removal shape: the component stays assigned, but a
+	// critical one stops it occupying the slot because its own verdict went to
+	// outage.
 	alarm, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "warning", Message: "mic dead",
+		Severity: "critical", Message: "mic dead",
 	})
 	if err != nil {
 		t.Fatalf("raise alarm: %v", err)
@@ -703,7 +710,7 @@ func TestHealthMovesOnRelocation(t *testing.T) {
 	f.mustLocation(t, ctx, "hq-r2", "room", ptrStr("hq-b2"))
 
 	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "warning", Message: "mic dead",
+		Severity: "critical", Message: "mic dead",
 	}); err != nil {
 		t.Fatalf("raise alarm: %v", err)
 	}
@@ -793,13 +800,13 @@ func TestAlarmImpairsComponentImpairsSlot(t *testing.T) {
 	}
 
 	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "warning", Message: "mic array not responding",
+		Severity: "critical", Message: "mic array not responding",
 	}); err != nil {
 		t.Fatalf("raise alarm: %v", err)
 	}
 
-	if _, v := f.recorded(t, ctx, "component", "bar-1"); v != "degraded" {
-		t.Errorf("component = %q, want degraded", v)
+	if _, v := f.recorded(t, ctx, "component", "bar-1"); v != "outage" {
+		t.Errorf("component = %q, want outage: only a critical alarm takes it down (a degraded component still occupies)", v)
 	}
 
 	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", time.Time{}, f.all)
@@ -821,6 +828,49 @@ func TestAlarmImpairsComponentImpairsSlot(t *testing.T) {
 	}
 	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "degraded" {
 		t.Errorf("recorded system = %q, want degraded", v)
+	}
+}
+
+// TestDegradedOccupantStillSatisfies pins the boundary #626 and the epic both
+// state verbatim: "an occupant satisfies its slot when its component verdict
+// is not down". Down means outage; a merely degraded component (an info or
+// warning alarm) still occupies the slot it fills, so the role stays
+// satisfied and the system's verdict does not move.
+func TestDegradedOccupantStillSatisfies(t *testing.T) {
+	f := newHealthFixture(t)
+	ctx := context.Background()
+
+	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
+		Severity: "warning", Message: "mic array a little quiet",
+	}); err != nil {
+		t.Fatalf("raise alarm: %v", err)
+	}
+	if _, v := f.recorded(t, ctx, "component", "bar-1"); v != "degraded" {
+		t.Errorf("component = %q, want degraded (a warning alarm)", v)
+	}
+
+	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", time.Time{}, f.all)
+	if err != nil {
+		t.Fatalf("system health: %v", err)
+	}
+	if len(rep.Roles) != 1 {
+		t.Fatalf("roles = %+v, want the one table-mic", rep.Roles)
+	}
+	role := rep.Roles[0]
+	if role.Satisfying != 1 {
+		t.Errorf("satisfying = %d, want 1: a degraded occupant still occupies its slot", role.Satisfying)
+	}
+	if role.Impaired {
+		t.Errorf("role impaired = %v, want false: quorum 1 is still met by the degraded occupant", role.Impaired)
+	}
+	if rep.Verdict != "healthy" {
+		t.Fatalf("system verdict = %q, want healthy: the role never lost its occupant", rep.Verdict)
+	}
+	// A component's own verdict is recorded regardless of whether it fills a
+	// role, but nothing about the system's own recorded arc should move: no
+	// role went from satisfied to impaired, so no new transition is due.
+	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "healthy" {
+		t.Errorf("recorded system = %q, want healthy: nothing may be written for a no-op", v)
 	}
 }
 

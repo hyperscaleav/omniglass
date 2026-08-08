@@ -152,9 +152,9 @@ Raising one takes two things:
 
 - a **severity**: `info`, `warning`, or `critical`. This is how loudly to treat it, and it sets the
   **component's own** verdict (any active alarm makes the component degraded, a critical one an
-  outage), the whole mechanism by which an alarm reaches a room: while a component is not healthy,
-  it stops occupying every role it fills, regardless of how many other alarms name it or what they
-  say;
+  outage). Only an **outage** stops a component occupying a role it fills: an info or warning
+  alarm still degrades it, but the component keeps its slot, so a quiet issue does not short-staff
+  a room on its own;
 - a **message**, for whoever reads it later. Write it for the person who finds this at 8am, not for you.
 
 **Clearing keeps the row.** The alarm moves to the history with the time it was cleared, so what was wrong

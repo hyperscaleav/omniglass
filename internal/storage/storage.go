@@ -273,6 +273,7 @@ type Gateway interface {
 	CreateDriver(ctx context.Context, actorID string, d Driver) (*Driver, error)
 	UpdateDriver(ctx context.Context, actorID, id string, patch DriverPatch) (*Driver, error)
 	DeleteDriver(ctx context.Context, actorID, id string) error
+
 	// The component_type registry: the hierarchical taxonomy a product is
 	// classified by (mic, camera, wireless-mic under mic). ResolveTypeFacts
 	// and TypeIsWithin walk the tree in Go; no DB logic.

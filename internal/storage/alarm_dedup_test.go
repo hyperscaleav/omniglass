@@ -11,8 +11,9 @@ import (
 // TestAlarmOneOpenPerCondition pins #465 (ADR-0075): the one-open invariant is
 // per (component, condition), the condition identified by a raiser-supplied
 // dedup key. Raising the same condition twice returns the existing open alarm
-// instead of a duplicate; different conditions coexist on one component (the
-// capability-degradation model); clearing reopens the key for a fresh incident.
+// instead of a duplicate; different conditions coexist on one component (each
+// impairs the component's own verdict wholesale, #626); clearing reopens the
+// key for a fresh incident.
 func TestAlarmOneOpenPerCondition(t *testing.T) {
 	gw, _ := secretGateway(t)
 	ctx := context.Background()

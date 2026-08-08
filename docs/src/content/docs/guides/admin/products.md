@@ -38,8 +38,9 @@ model.
   [role assignment](/guides/admin/standards/#staff-a-system-against-its-standard) checks: a
   component fills a slot only when its product's type falls within a type the role accepts (self or
   a descendant), and, if the role pins specific products, only when its product is one of them. That
-  guard runs once, at assignment; afterward the occupant keeps its slot as long as its own health
-  verdict stays healthy (see [Work with an entity](/guides/operator/entities/#roles-on-a-system)).
+  guard runs once, at assignment; afterward the occupant keeps its slot unless its own health
+  verdict goes to outage (a lesser alarm degrades it but does not cost it the slot); see
+  [Work with an entity](/guides/operator/entities/#roles-on-a-system).
 - **Icon** is an optional override on the type's icon: unset, a product's glyph is whatever its type
   resolves to (walking up the type's own tree if the type itself leaves its icon blank); set, the
   override wins. A per-SKU glyph is the exception, not the rule.

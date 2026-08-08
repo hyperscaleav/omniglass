@@ -10,7 +10,8 @@ import { sortAlarms } from "./alarms";
 //   an ALARM impairs its COMPONENT's own verdict wholesale (#626: no longer
 //   per named capability)
 //   -> a ROLE carries a QUORUM; when too few assigned components currently
-//      occupy it (their own verdict is healthy), the role is IMPAIRED
+//      occupy it (their own verdict is not outage; degraded still occupies),
+//      the role is IMPAIRED
 //   -> an impaired role contributes its IMPACT (outage, degraded, or none)
 //   -> a SYSTEM takes the worst contribution among its roles
 //   -> a LOCATION takes the worst verdict among the systems placed beneath it
@@ -135,7 +136,7 @@ export function chainSentence(r: HealthRole, verdict: string): string {
   if (!alarm) {
     return `No component assigned to ${role} is down: it satisfies ${r.satisfying} of ${r.quorum} because too few are assigned, and ${contribution(r, verdict)}.`;
   }
-  const took = down ? `, taking ${down} out of the role` : "";
+  const took = down ? " takes it out of the role" : "";
   return `A ${alarm.severity} alarm on ${alarm.component}${took}, so ${role} satisfies ${r.satisfying} of ${r.quorum} and ${contribution(r, verdict)}.`;
 }
 

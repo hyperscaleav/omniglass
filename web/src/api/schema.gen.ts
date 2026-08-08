@@ -455,7 +455,7 @@ export interface paths {
         put?: never;
         /**
          * Raise an alarm on a component
-         * @description Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+         * @description Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (a critical alarm), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser (info or warning) alarm degrades the component but leaves it occupying its roles. Gated by component:update; an out-of-scope component is a non-disclosing 404.
          */
         post: operations["raise-component-alarm"];
         delete?: never;
@@ -4546,7 +4546,7 @@ export interface components {
             alarms: components["schemas"]["HealthAlarmBody"][] | null;
             assigned_to: string[] | null;
             display_name: string;
-            /** @description The assigned components whose own verdict is not healthy; empty when the role is merely short-staffed */
+            /** @description The assigned components whose own verdict is outage; empty when the role is merely short-staffed or only degraded */
             down: string[] | null;
             /** @description What an impaired role means for its system: outage, degraded, or none */
             impact: string;
@@ -4557,7 +4557,7 @@ export interface components {
             quorum: number;
             /**
              * Format: int64
-             * @description How many assigned components currently occupy the role (their own verdict is healthy)
+             * @description How many assigned components currently occupy the role (their own verdict is not outage; a degraded component still occupies)
              */
             satisfying: number;
         };

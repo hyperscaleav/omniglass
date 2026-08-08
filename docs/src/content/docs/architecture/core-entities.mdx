@@ -323,7 +323,8 @@ component "panel-1" is a display; role "table-mic" wants a video-bar
 ```
 
 A refusal on **modeled** grounds, and it runs **once**, at assignment; afterward an occupant keeps its
-slot as long as its own [health](/architecture/health/) verdict stays healthy
+slot unless its own [health](/architecture/health/) verdict goes to outage (a lesser alarm degrades
+it but does not cost it the slot)
 ([ADR-0049](/architecture/decisions/#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)).
 
 **A role also declares its `impact`**: `outage`, `degraded`, or `none`, what an **impaired** role

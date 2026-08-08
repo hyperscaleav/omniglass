@@ -9,9 +9,9 @@ sidebar:
 
 Health answers "is this system working right now?" and "since when?". It is a **first-class
 model**, not a rules-engine byproduct: a deliberate chain (an alarm impairs a component's own
-verdict, a down component no longer occupies the role it fills, an impaired role sinks its system
-by a declared impact) carried on the ordinary sample pipeline: stored, queried, and trended like any
-other signal.
+verdict, an outage component no longer occupies the role it fills, an impaired role sinks its
+system by a declared impact) carried on the ordinary sample pipeline: stored, queried, and trended
+like any other signal.
 
 :::note[Partial]
 Built today: the **`alarm`** table (component-local, impairing its component wholesale), **`impact`**
@@ -28,8 +28,10 @@ Health is a chain, every hop a thing an operator already models:
 
 ```text
 alarm on a component
-  -> the component's own verdict goes down (any active alarm; #626)
-    -> it no longer occupies the roles it is assigned to
+  -> the component's own verdict moves (any active alarm; #626)
+    -> a critical alarm takes it to outage, and only then does it stop
+       occupying the roles it is assigned to (a lesser alarm still degrades
+       it, but it keeps its slot)
       -> a role falls below its quorum and is impaired
         -> the role contributes its declared impact
           -> the system takes the worst contribution
@@ -40,9 +42,10 @@ alarm on a component
   component **wholesale**: any active alarm degrades it, a critical one is an outage. It no longer
   names what it takes away (#626 retired the capability registry that used to route it).
 - A component **occupies** a [system role](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)
-  it is assigned to only when its own verdict is currently **healthy**. The typed-slot guard
-  (accepted `component_type`s, optionally pinned products) is checked once, at assignment; it plays
-  no further part in health.
+  it is assigned to unless its own verdict is currently **outage**: a merely **degraded** component
+  (an info or warning alarm) still counts, since severity is how loudly to page somebody, not a
+  second threshold for staffing. The typed-slot guard (accepted `component_type`s, optionally
+  pinned products) is checked once, at assignment; it plays no further part in health.
 - A role with fewer occupying components than its **quorum** is **impaired**, contributing its
   **impact**; the system takes the **worst** contribution, the location the worst across its
   subtree's systems.
@@ -184,10 +187,10 @@ An alarm is a row on a component with a **`severity`** (`info`, `warning`, or `c
 **keeps the row**; clearing an already-cleared alarm is an explicit miss, not a silent success.
 
 Severity drives the **component's own** verdict (any active alarm makes it `degraded`, a `critical`
-one an `outage`) and **nothing above it**: what reaches a role is whether its occupant's verdict is
-`healthy` or not, not the severity that produced it. Severity is how loudly to page somebody, impact
-is what the room lost. A component's verdict records on its own arc, so a component filling no role
-still carries accurate history.
+one an `outage`) and **nothing above it**: what reaches a role is only whether its occupant's
+verdict is `outage`, not the severity that produced it or whether it is merely `degraded`. Severity
+is how loudly to page somebody, impact is what the room lost. A component's verdict records on its
+own arc, so a component filling no role still carries accurate history.
 
 ::::design[Target design (ADR-0050)]
 
