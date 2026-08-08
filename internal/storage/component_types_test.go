@@ -402,3 +402,94 @@ func TestSeedComponentTypesIdempotent(t *testing.T) {
 		t.Fatalf("delete official mic err = %v, want ErrTypeOfficial", err)
 	}
 }
+
+// TestComponentTypeStemMustBeAValidName proves the #627 Task 14 fix: a stem
+// is a name prefix (the generator mints it straight into a component's
+// name, internal/storage/namegen.go), so it is validated by the same rule
+// name is, on both create and update. A nil stem (inherit from the parent)
+// is untouched: there is nothing to validate.
+func TestComponentTypeStemMustBeAValidName(t *testing.T) {
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if _, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
+		Name: "stem-guard-create", DisplayName: "Stem Guard Create", Stem: strp("Bad Stem"),
+	}); !errors.Is(err, storage.ErrInvalidEntityName) {
+		t.Fatalf("create with stem %q err = %v, want ErrInvalidEntityName", "Bad Stem", err)
+	}
+
+	ct, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
+		Name: "stem-guard-ok", DisplayName: "Stem Guard OK", Stem: strp("good-stem"),
+	})
+	if err != nil {
+		t.Fatalf("create with a valid stem: %v", err)
+	}
+	if ct.Stem == nil || *ct.Stem != "good-stem" {
+		t.Fatalf("created stem = %v, want good-stem", ct.Stem)
+	}
+
+	// A nil stem (inherit) is unaffected by the guard: nothing to validate.
+	if _, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
+		Name: "stem-guard-nil", DisplayName: "Stem Guard Nil", ParentID: &ct.ID,
+	}); err != nil {
+		t.Fatalf("create with a nil (inherited) stem: %v", err)
+	}
+
+	if _, err := gw.UpdateComponentType(ctx, "", ct.Name, storage.ComponentTypePatch{Stem: strp("also bad")}); !errors.Is(err, storage.ErrInvalidEntityName) {
+		t.Fatalf("update stem to %q err = %v, want ErrInvalidEntityName", "also bad", err)
+	}
+	if _, err := gw.UpdateComponentType(ctx, "", ct.Name, storage.ComponentTypePatch{Stem: strp("better-stem")}); err != nil {
+		t.Fatalf("update with a valid stem: %v", err)
+	}
+}
+
+// TestBadStemNeverProducesAnInvalidComponentName is the consequence-level
+// regression the #627 Task 14 review caught a green suite missing: it does
+// not assert HOW the invariant holds (the guard could move, or gain a
+// second layer), it asserts the invariant itself, so it stays meaningful
+// even if the fix's shape changes later. Either CreateComponentType refuses
+// the bad stem outright (today's fix, the common case below), or, if it
+// somehow did not, a component generated under it would still have to
+// produce a name satisfying the same rule an operator-typed name does.
+// Reverting the storage-layer guard alone (leaving the generator as
+// written, which deliberately skips ValidateName by design) makes this test
+// fail: CreateComponentType then succeeds with the bad stem, the component
+// generates "Bad Stem-1", and the final ValidateName check catches it.
+func TestBadStemNeverProducesAnInvalidComponentName(t *testing.T) {
+	gw := storagetest.NewDB(t)
+	ctx := context.Background()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	ct, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
+		Name: "bad-stem-type", DisplayName: "Bad Stem Type", Stem: strp("Bad Stem"),
+	})
+	if err != nil {
+		if !errors.Is(err, storage.ErrInvalidEntityName) {
+			t.Fatalf("create component_type with a bad stem failed with %v, want ErrInvalidEntityName", err)
+		}
+		return // the guard closed this at the source; nothing downstream can see it
+	}
+
+	prod, err := gw.CreateProduct(ctx, "", storage.Product{
+		Name: "bad-stem-product", DisplayName: "Bad Stem Product", Kind: "device", ComponentType: ct.Name,
+	})
+	if err != nil {
+		t.Fatalf("create product under the unrefused bad-stem type: %v", err)
+	}
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &prod.Name}, all)
+	if err != nil {
+		t.Fatalf("create component under the unrefused bad-stem product: %v", err)
+	}
+	if err := storage.ValidateName("component", c.Name); err != nil {
+		t.Fatalf("a component generated under an unrefused bad stem produced an invalid name %q: %v", c.Name, err)
+	}
+}

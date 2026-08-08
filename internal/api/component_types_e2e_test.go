@@ -141,3 +141,45 @@ func TestComponentTypesAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodDelete, "/component-types/custom-mic", nil, http.StatusNoContent)
 	c.do(ownerTok, http.MethodGet, "/component-types", nil, http.StatusOK)
 }
+
+// TestComponentTypeStemRejectsBadNames drives the #627 Task 14 fix over
+// HTTP: a stem is a name prefix (the generator mints it straight into a
+// component's name), so it is refused a bad slug at the edge exactly like
+// name is, on both create and update, and a valid one still works.
+func TestComponentTypeStemRejectsBadNames(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ownerTok := bootstrapOwnerTok(t, ctx, gw)
+
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	// A stem with a space and an uppercase letter is refused on create.
+	c.do(ownerTok, http.MethodPost, "/component-types",
+		map[string]any{"name": "stem-bad-create", "display_name": "Stem Bad Create", "stem": "Bad Stem"},
+		http.StatusUnprocessableEntity)
+
+	// A valid stem still works.
+	var created componentTypeWire
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/component-types", map[string]any{
+		"name": "stem-ok", "display_name": "Stem OK", "stem": "good-stem",
+	}, http.StatusCreated), &created); err != nil {
+		t.Fatalf("decode create with a valid stem: %v", err)
+	}
+	if created.Stem != "good-stem" {
+		t.Fatalf("created stem = %q, want good-stem", created.Stem)
+	}
+
+	// The same guard applies to an update of an existing row.
+	c.do(ownerTok, http.MethodPatch, "/component-types/stem-ok",
+		map[string]any{"stem": "also bad"}, http.StatusUnprocessableEntity)
+}

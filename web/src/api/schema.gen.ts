@@ -3868,7 +3868,7 @@ export interface components {
             name: string;
             /** @description The parent component_type, by name or uuid; omit for a root type */
             parent_id?: string;
-            /** @description The auto-generated component name's prefix; omit to inherit the parent's */
+            /** @description The auto-generated component name's prefix; omit to inherit the parent's. Lowercase letters, digits, and hyphens. */
             stem?: string;
         };
         CreateDriverInputBody: {
@@ -6511,7 +6511,7 @@ export interface components {
             display_name?: string;
             /** @description A new glyph key */
             icon?: string;
-            /** @description A new name prefix */
+            /** @description A new name prefix. Lowercase letters, digits, and hyphens. */
             stem?: string;
         };
         UpdateDriverInputBody: {

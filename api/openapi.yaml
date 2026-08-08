@@ -636,7 +636,10 @@ components:
           description: The parent component_type, by name or uuid; omit for a root type
           type: string
         stem:
-          description: The auto-generated component name's prefix; omit to inherit the parent's
+          description: The auto-generated component name's prefix; omit to inherit the parent's. Lowercase letters, digits, and hyphens.
+          maxLength: 100
+          minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
       required:
         - name
@@ -5451,7 +5454,10 @@ components:
           description: A new glyph key
           type: string
         stem:
-          description: A new name prefix
+          description: A new name prefix. Lowercase letters, digits, and hyphens.
+          maxLength: 100
+          minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
       type: object
     UpdateDriverInputBody:

@@ -56,9 +56,12 @@ type componentTypePathInput struct {
 
 type createComponentTypeInput struct {
 	Body struct {
-		Name        string   `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique name"`
-		DisplayName string   `json:"display_name" minLength:"1" doc:"What an operator reads in pickers and lists"`
-		Stem        string   `json:"stem,omitempty" doc:"The auto-generated component name's prefix; omit to inherit the parent's"`
+		Name        string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique name"`
+		DisplayName string `json:"display_name" minLength:"1" doc:"What an operator reads in pickers and lists"`
+		// A stem is a name prefix (#627 Task 14 mints it straight into
+		// "<stem>-<n>" component names), so it follows the same rule a name
+		// does.
+		Stem        string   `json:"stem,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The auto-generated component name's prefix; omit to inherit the parent's. Lowercase letters, digits, and hyphens."`
 		Icon        string   `json:"icon,omitempty" doc:"A glyph key; omit to inherit the parent's"`
 		Abbrev      string   `json:"abbrev,omitempty" doc:"A compact form of display_name; omit to inherit the parent's"`
 		DefaultTags []string `json:"default_tags,omitempty" doc:"Tags every instance of this type starts with"`
@@ -69,8 +72,9 @@ type createComponentTypeInput struct {
 type updateComponentTypeInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		DisplayName *string   `json:"display_name,omitempty" doc:"A new operator-facing label"`
-		Stem        *string   `json:"stem,omitempty" doc:"A new name prefix"`
+		DisplayName *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
+		// Same rule as create's Stem: a name prefix follows the name rule.
+		Stem        *string   `json:"stem,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"A new name prefix. Lowercase letters, digits, and hyphens."`
 		Icon        *string   `json:"icon,omitempty" doc:"A new glyph key"`
 		Abbrev      *string   `json:"abbrev,omitempty" doc:"A new compact form"`
 		DefaultTags *[]string `json:"default_tags,omitempty" doc:"Replaces the default-tag set; omit to leave unchanged"`

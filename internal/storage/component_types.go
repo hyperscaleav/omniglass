@@ -144,9 +144,26 @@ func (p *PG) GetComponentType(ctx context.Context, ref string) (*ComponentType, 
 // CreateComponentType inserts a custom (official=false) component_type and
 // audits it. A duplicate name is ErrTypeExists; a ParentID naming no row is
 // ErrParentTypeNotFound.
+//
+// Stem is validated by the same rule as Name (validateEntityName, not the
+// table-dispatched ValidateName: a stem is not itself a component_type's
+// name, it is a name-shaped fragment). Before #627 Task 14 an odd stem was
+// inert data, read back and displayed, never consumed. Task 14's generator
+// is what turns it into a live input: it is minted straight into
+// "<stem>-<n>" component names with no re-check downstream, so a stem with a
+// dot would produce a name the Task 12 address parser splits into segments,
+// and a space or an uppercase letter would produce a name that violates the
+// one grammar every addressing and rendering surface assumes. Guarding it
+// here, at the one place it is written, closes that instead of trusting
+// every future reader of the column to re-derive the same rule.
 func (p *PG) CreateComponentType(ctx context.Context, actorID string, ct ComponentType) (*ComponentType, error) {
 	if err := ValidateName("component_type", ct.Name); err != nil {
 		return nil, err
+	}
+	if ct.Stem != nil {
+		if err := validateEntityName(*ct.Stem); err != nil {
+			return nil, err
+		}
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -175,7 +192,16 @@ func (p *PG) CreateComponentType(ctx context.Context, actorID string, ct Compone
 // UpdateComponentType patches a custom component_type's display_name, stem,
 // icon, abbrev, or default_tags (nil fields unchanged) and audits it. Official
 // rows are read-only (ErrTypeOfficial); an unknown ref is ErrTypeNotFound.
+//
+// Stem is validated exactly as CreateComponentType validates it (see that
+// doc comment): a bad stem here is reachable from an existing, previously
+// valid row, not just a fresh create.
 func (p *PG) UpdateComponentType(ctx context.Context, actorID, ref string, patch ComponentTypePatch) (*ComponentType, error) {
+	if patch.Stem != nil {
+		if err := validateEntityName(*patch.Stem); err != nil {
+			return nil, err
+		}
+	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin update component_type: %w", err)

@@ -1257,7 +1257,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParentId, "parent-id", "", "The parent component_type, by name or uuid; omit for a root type")
-				cmd.Flags().StringVar(&fStem, "stem", "", "The auto-generated component name's prefix; omit to inherit the parent's")
+				cmd.Flags().StringVar(&fStem, "stem", "", "The auto-generated component name's prefix; omit to inherit the parent's. Lowercase letters, digits, and hyphens.")
 				return cmd
 			}()
 			return cmd
@@ -1334,7 +1334,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDefaultTags, "default-tags", "", "Replaces the default-tag set; omit to leave unchanged")
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A new glyph key")
-				cmd.Flags().StringVar(&fStem, "stem", "", "A new name prefix")
+				cmd.Flags().StringVar(&fStem, "stem", "", "A new name prefix. Lowercase letters, digits, and hyphens.")
 				return cmd
 			}()
 			return cmd

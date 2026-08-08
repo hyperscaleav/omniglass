@@ -956,7 +956,7 @@ Creates a custom (non-official) component_type, optionally under a parent. Gated
 | `--icon` | string | (none) | A glyph key; omit to inherit the parent's |
 | `--name` | string | (none) | The globally unique name |
 | `--parent-id` | string | (none) | The parent component_type, by name or uuid; omit for a root type |
-| `--stem` | string | (none) | The auto-generated component name's prefix; omit to inherit the parent's |
+| `--stem` | string | (none) | The auto-generated component name's prefix; omit to inherit the parent's. Lowercase letters, digits, and hyphens. |
 
 Example:
 
@@ -1012,7 +1012,7 @@ Patches a custom component_type's display_name, stem, icon, abbrev, or default_t
 | `--default-tags` | string | (none) | Replaces the default-tag set; omit to leave unchanged |
 | `--display-name` | string | (none) | A new operator-facing label |
 | `--icon` | string | (none) | A new glyph key |
-| `--stem` | string | (none) | A new name prefix |
+| `--stem` | string | (none) | A new name prefix. Lowercase letters, digits, and hyphens. |
 
 Example:
 
