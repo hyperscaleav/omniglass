@@ -55,6 +55,17 @@ Column schemas live with each owning feature: [samples](/architecture/properties
 - **Ownership is the exclusive-arc**, though not one uniform arc: the sample tables, `event`, and `command` carry `owner_kind` (`component` / `system` / `location` / `node`) plus the matching typed FK and a CHECK (no platform or global arm on a sample); `log_line` is **component-only** (a single NOT NULL `component_id`; a node's self-logs live in `node_log`); `variable`'s arc is `platform` / `component` / `system` / `location` (no node arm; `platform` sets all three FKs null); `alarm` carries **no arc**, a single NOT NULL `component_id`, component-local by design today. Full pattern: [core entities](/architecture/core-entities/#ownership-the-exclusive-arc).
 - **A write struct takes the `Write` suffix; the bare noun is the row**: `MetricSampleWrite` in, `MetricSample` back, likewise `PropertySampleWrite`, `EventWrite`, `LogLineWrite`. A carrier is named for what it carries: hence the wire message is a `TelemetryBatch` ([ADR-0072](/architecture/decisions/#adr-0072-an-envelope-is-not-named-after-its-passengers-and-an-insert-struct-takes-the-write-suffix)).
 - **Keys**: samples and events use a surrogate id plus `ts`; each catalog (`metric_type`, `property_type`, `event_type`, `command_type`) is name-unique with the **`official` boolean** deciding authority, and the three ingest catalogs refuse a name a sibling holds; structural entities carry a unique, renameable `name` over a uuid primary key; a `task` is **content-addressed** (`sha256` over `(interface_id, mode, spec)`); a `node` by its `principal_id`. Every foreign key stores the target's primary key, so a rename is free ([ADR-0056](/architecture/decisions/#adr-0056-every-foreign-key-stores-a-primary-key)).
+- **A `location`, `system`, or `component` name is unique within its placement, not across the estate**
+  ([ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup)):
+  each table trades its old global `UNIQUE (name)` constraint for a set of partial unique indexes, one
+  per placement bucket (`component_parent_name_key`, `component_location_name_key`,
+  `component_orphan_name_key`, and the matching pair for `location` and `system`,
+  `db/migrations/20260808090000_names_scope_to_placement.sql`), plus a plain btree on the bare `name`
+  column for the ambiguity scan every bare-name resolve runs. A **dotted address**
+  (`boi.17c.415a.$comp.display-1`) resolves structurally against these same indexes, one deterministic
+  hop per segment, before any scope or ambiguity check runs; see [core entities](/architecture/core-entities/#an-address-a-uuid-or-a-dotted-path)
+  for the grammar and [identity and access](/architecture/identity-access/#a-reference-resolves-within-a-scope)
+  for how scope and ambiguity are then decided against the resolved candidate set.
 
 ## Migrations: three buckets, kept separate
 

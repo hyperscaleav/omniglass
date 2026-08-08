@@ -2782,3 +2782,120 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   409-versus-422 rule ADR-0087 does. `storage.md`'s three-buckets section is where ADR-0087's
   boot-seed carve-out belongs and had never landed; added there (and mirrored in `CLAUDE.md` and
   the `storage-schema-change` skill) rather than existing only in the ADR and this file.
+- **Every gateway read that could resolve a name twice now resolves it once and binds the uuid**
+  ([#627](https://github.com/hyperscaleav/omniglass/issues/627) Task 10, ahead of the placement-scoped
+  uniqueness DDL below). The ingest lanes for telemetry, commands, and reconciliation (`840066a`,
+  `cab918e`, `dd92017`, `63b715e`) resolved a component or node once at the edge and carried its
+  **name** onward, re-resolving it up to four more times downstream; a health rollup's
+  system-conformance walk and a standard-owned role's recompute resolved by name inside a CTE, which
+  would have silently UNIONed two same-named owners' data rather than failing loudly (`7802b32`,
+  `4707bcb`); role-choice writes bound a raw name straight into a scalar subquery (`47864bc`). Every
+  one now resolves the reference **once**, binds the uuid, and threads that. Two independent sweeps
+  (a 30-agent adversarial pass, then a fresh hunt told to ignore the first) converged on the same list;
+  a scanner over every SQL string literal in the tree caught a fourth, identically-shaped miss the
+  earlier passes had not (`d64b314`). No caller-observable behaviour changed: every existing fixture
+  used globally-distinct names, so the whole suite stayed green throughout, and the new duplicate-name
+  tests (`b84a398`, `d889bbc`, `839d4d1`) are the only regression net this class of bug now has. Filed
+  [#641](https://github.com/hyperscaleav/omniglass/issues/641): effective tags' `?system=` filter still
+  resolves outside the caller's own read scope, narrowed by the uuid bind but not closed, deliberately
+  left for a later slice since this task's own contract was to change no observable behaviour.
+- **A location, system, or component name is unique within its placement, not the whole estate**
+  ([#627](https://github.com/hyperscaleav/omniglass/issues/627) Task 11, `f132a80`, `87207b7`,
+  [ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup)).
+  Each of the three tables trades its global `UNIQUE (name)` constraint for three partial unique
+  indexes, one per placement bucket (parented, located-but-unparented, orphan/root), plus a plain
+  btree for the ambiguity scan a bare-name resolve now has to run. A bare name matching more than one
+  row in the caller's scope is a `409` naming the candidates. A review round found the console's tree
+  builders (Components, Systems, Locations, the placement pickers) still keyed on the now-ambiguous
+  name and fixed all four to key on uuid instead (`c097dd6`). The scope-resolution primitive converged
+  from three near-identical functions (`scopedByName` / `scopedByNameInScope` / `resolveScopedRef`)
+  into one, `resolveRef`, with a policy axis for the read-versus-write disclosure split (`1cf8d74`,
+  `9de2fe7`); the SAME review round found the convergence itself had introduced two new criticals (a
+  cross-tier scope check denying every non-all-scoped caller on a write carrying a location or system
+  binding, and a scoped `component:read` caller's effective-tags system band silently vanishing),
+  fixed by a byte-identical revert to the pre-task baseline rather than a new authorization posture,
+  with two tests genuinely red against the introducing commit closing the coverage hole that had let
+  them ship (`ba8a9e6`). A forward-insurance tier guard landed on the same primitive, documented as
+  unable to fire on any input the current code produces (`48db30f`). Six known edges this convergence
+  ships with, stated rather than hidden, are recorded in
+  [ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup).
+- **A dotted address resolves to a uuid, beside the existing uuid-or-name dual accept**
+  ([#627](https://github.com/hyperscaleav/omniglass/issues/627) Task 12, `72147c1`, `87e170d`,
+  `3773fe1`, `e09e7b0`). `boi.17c.415a.$comp.display-1` parses to a location-tree walk plus a plane
+  switch (`$comp` / `$sys`, `$role` reserved but unresolved) plus a plane-local descent, every segment
+  validated against the entity name rule before it reaches a query; a percent-encoded slash arrives at
+  the handler already decoded, closing the smuggling path a preflight probe had found. A registry
+  whose names are a single global token (`node`, `tag`, the lane types) refuses a dotted ref up front
+  rather than 404ing silently (`ec12bf2`). A review pass found the resolved address's not-found case
+  reaching a create's body-reference field as the wrong status (a `404` naming the entity being
+  `PATCH`ed rather than the missing reference); fixed by folding it to the entity's own sentinel one
+  hop upstream of the generic path-param mapper, closing the same defect shape at every other
+  body-reference site for free (`a71a549`). The route census was hand-derived twice and wrong both
+  times before the third count (82 operations, 57 tree-addressable, 25 single-token) was verified
+  against the registration functions rather than a literal-string grep: the tag-binding routes are
+  built by string concatenation, invisible to grep, the second time on this branch a route-builder
+  helper defeated a coverage sweep the same way.
+  [ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup)
+  records the address grammar and its known edges; this slice is what makes it real.
+- **A placement change is its own gated act, `:move`, not a `PATCH` field**
+  ([#627](https://github.com/hyperscaleav/omniglass/issues/627) Task 13, `b4449f3`,
+  [ADR-0088](/architecture/decisions/#adr-0088-a-placement-change-is-an-authorization-act-so-a-move-is-its-own-verb)).
+  `parent` and `location` leave the component, system, and location `PATCH` bodies entirely, a
+  **wire-breaking** change the rolled-up PR title carries a `BREAKING CHANGE:` footer for. `:move`
+  writes its own audit verb rather than the generic `update`, recomputes a platform-owned generated
+  name at both ends of a component or system move, and closes a real gap the split surfaced: the old
+  `PATCH`'s reparent branch only guarded a non-empty parent, so an explicit empty string cleared
+  `parent_id` to root with no scope check at all, letting a scope-limited principal walk a row out of
+  every subtree their grant ever covered; `MoveComponent` / `MoveSystem` now require the same
+  all-scoped grant creating a root already needed. `MoveLocation` deliberately gains no matching
+  clear-to-root capability, since none existed before this split either. A review pass found the
+  console still `PATCH`ing `parent` through the now-`additionalProperties:false` body, `422`ing an
+  entire location save over an unrelated field; fixed with tests that assert HTTP method and path and
+  throw on any unexpected request, the shape that would have caught the original bug where three tests
+  mocking `fetch` at the body level had not (`1382567`). Filed
+  [#642](https://github.com/hyperscaleav/omniglass/issues/642): a location move leaves both the old and
+  new ancestor chains' recorded health verdicts stale, a pre-existing gap this split carries forward
+  rather than introduces or closes.
+- **A component's name can generate itself from its type**
+  ([#627](https://github.com/hyperscaleav/omniglass/issues/627) Task 14, `3a571f1`,
+  [ADR-0090](/architecture/decisions/#adr-0090-a-derived-value-is-a-default-that-tracks-until-touched)).
+  Left blank on create, the platform mints `<stem>-<n>` from the resolved `component_type` chain and
+  the next free ordinal in the placement scope, serialized by a transaction-scoped advisory lock keyed
+  on stem plus scope rather than a `23505` retry. `name_generated` tracks who holds the pen: true on a
+  generated create, false forever once `:rename` touches it, true again only through the new
+  `:resetName` (gated by the same `component:rename` token `:rename` uses). A `:move` or a product
+  reclassify recomputes a still-platform-owned name in the same transaction as the write that changed
+  its inputs; an operator-typed name is never touched by either. A review pass found the generator
+  trusted an unvalidated `component_type.stem` (an operator could mint a dotted or spaced stem that
+  would either split under the address grammar above or violate the entity name rule outright), fixed
+  by validating a stem at `component_type` write time with the same rule as a name (`77febe5`); a
+  second pass found the malformed-stem fix had left the **absent** case open, an empty resolved stem
+  minting the entity name `-1`, fixed by refusing an empty stem in the generator itself, requiring a
+  stem on a root `component_type` (which has no ancestor to inherit one from), and validating the
+  generated name as an enforced postcondition rather than an asserted comment (`49b84f6`).
+- **A component, system, or location's resolved path, its renders, and the console's own addressing
+  all move to uuid** ([#627](https://github.com/hyperscaleav/omniglass/issues/627) Task 15, `c381060`,
+  `cc8918b`, `280f95f`, `cb164ad`). A `GET` / `LIST` response now carries `path`, `path_segments`, and
+  two display-only `renders` (`dash`, the accessor stripped; `bare`, the final segment further
+  compacted to the component's `component_type.abbrev`), computed by walking the entity's own
+  placement, never a system it happens to belong to; a `LIST` skips the extra queries the bare render's
+  abbrev needs, since no console surface reads it there. The console's URL, every panel, and every
+  write on a component, system, and location detail page now address by `id`, ending the bare-name
+  addressing this epic exists to retire, with a disambiguation chooser offered when a search matches
+  more than one same-named row. A review pass found the chooser pointed at a dead end: every panel on
+  the detail page it opened still addressed by name, so the exact case the epic legalizes, two
+  same-named components in different rooms, landed an operator on a page where every write `409`d
+  (`bfdd7c8`); traced and fixed panel by panel to the wire. A second review pass found three more
+  swapped-value consumers the edit sites had not been traced past (a raw uuid painted in a field
+  labelled "Component", a reachability-panel cache key still built from the old name, a systems-list
+  health badge still keyed on name against panels now invalidating by uuid), the fourth time on this
+  branch that enumerating consumers from the edit site rather than the value's type and usage missed a
+  real one (`2330954`, `01e4693`). A pre-existing asymmetry closed alongside: staffing a role or adding
+  a member with a duplicate-named component worked, but unstaffing or removing it `409`d, because the
+  resolve was estate-wide when the component was already unique within the relation being edited (this
+  role's occupants, this system's members); a new `loadByRefWithin` primitive resolves within that
+  relation instead, no wire change needed (`5a97266`, closing
+  [#645](https://github.com/hyperscaleav/omniglass/issues/645)). `render_test.go`'s ten cases were
+  found to exercise a test-local reimplementation of the segment shape rather than `PathOf` itself, the
+  fourth occurrence on this branch of a test built on a reimplementation of the thing it is meant to
+  catch; rewritten to assert against real fixture rows (`79c2ccb`).

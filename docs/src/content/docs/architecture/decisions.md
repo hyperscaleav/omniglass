@@ -123,6 +123,8 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0086](#adr-0086-the-product-classification-floor-and-the-kind-split) | 2026-08-07 | Accepted | Every component is required to name a product (the three seeded generics cover anything unmodeled); product.kind narrows to device / app / service, no default, required at create; vm retires, folded into app |
 | [ADR-0087](#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability) | 2026-08-07 | Accepted | The alarm-capability-role chain retires: an alarm impairs its component's own verdict wholesale, an occupant satisfies its role whenever its own verdict is not outage, and the typed-slot guard is the only assignment-time check; records the 409-vs-422 refusal line and the choice/alternate boot-seed reconciliation carve-out. Supersedes ADR-0049, amends ADR-0050 |
 | [ADR-0088](#adr-0088-a-placement-change-is-an-authorization-act-so-a-move-is-its-own-verb) | 2026-08-08 | Accepted | Placement (parent, location) leaves the component/system/location PATCH body and becomes its own `:move` custom method under its own `<resource>:move` permission, closing the gap where clearing parent_id to root via PATCH needed no scope check while creating the same root already required an all-scoped grant; MoveLocation deliberately gains no clear-to-root capability |
+| [ADR-0089](#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup) | 2026-08-08 | Accepted | A uuid is the address the platform generates; a dotted path (location segments, a `$comp`/`$sys`/`$role` accessor, plane-local segments) is a human-typed positional lookup, resolved by an allowlist name rule that renders as a CLI argument, a REST path, a NATS subject, or a DNS label with no escaping; dash and bare renders are display-only and never accepted back. Extends ADR-0062, amends ADR-0076 in justification |
+| [ADR-0090](#adr-0090-a-derived-value-is-a-default-that-tracks-until-touched) | 2026-08-08 | Accepted | A derivable value fills at create, tracks live while the platform holds the pen, freezes on the operator's first edit, and resumes tracking only on an explicit reset; `component.name_generated` ships `DEFAULT false`, not the epic's `DEFAULT true`, so no pre-existing operator-typed name is silently claimed by the platform |
 
 ## Entries
 
@@ -2189,6 +2191,10 @@ below from the project's history. From here it grows one slice at a time.
   gap, a component response that carried `product_id` without the product's name, is fixed). The
   storage helper collapses too: the per-registry `productRefCol` / `vendorRefCol` and the
   `registryHandles` set fold into one `registryRefCol(ref)`, since every registry now behaves the same.
+- **Extended by [ADR-0089](#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup):**
+  this decision's dual-accept clause already said a reference "resolves whichever form it is given";
+  ADR-0089 makes a third form, a dotted path, a real one for `location`, `system`, and `component`,
+  resolved structurally to a uuid before the ordinary name-or-id lookup runs.
 
 ### ADR-0063: The telemetry model is typed registries over bare-noun data tables
 
@@ -2641,6 +2647,14 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   using the name can detect the move by diffing the id it holds. The cost is real and accepted: an external
   reference held as a name breaks on rename, and nothing on the server can repair it. Alias and redirect
   machinery is deliberately not built yet; it is the first thing to reach for if that cost shows up.
+- **Amended by [ADR-0089](#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup)** in
+  justification, not shape: `:rename` stays exactly this custom method, gains a second job as the
+  operator's pen-taking act ([ADR-0090](#adr-0090-a-derived-value-is-a-default-that-tracks-until-touched)),
+  and the accepted cost above is repaired rather than removed. Once the uuid is the address, an
+  external reference held as a name no longer breaks on rename in the way this entry describes: an
+  integration holding the id survives every rename, and one holding a dotted path is a positional
+  lookup honestly reporting whatever occupies that position now. What remains, and stands on its own,
+  is the permission split this entry already named.
 
 ### ADR-0077: A group name obeys the entity name rule, tightening a pattern the code had excused
 
@@ -3070,4 +3084,207 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   (`map[string]any` bodies, resolved only at request time) did not, and were found by re-reading every
   `PATCH .../parent` and `PATCH .../location` call site by hand. `location:checkName` is unaffected:
   it is the advisory placement-availability precheck, unrelated to `:move`, and was not touched.
+- **Tracked under** epic [#627](https://github.com/hyperscaleav/omniglass/issues/627).
+
+### ADR-0089: A uuid is the address, a dotted path is a positional lookup
+
+- **Date:** 2026-08-08 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
+  [storage](/architecture/storage/), [identity and access](/architecture/identity-access/),
+  [API](/architecture/api/), [glossary](/architecture/glossary/)
+- **Decision:** An entity has two resolvable references, different guarantees, both legitimate and
+  labelled as such. The **uuid is the address**: immutable, surviving rename and move, the only
+  reference the platform itself ever generates or persists. The **dotted path is a positional
+  lookup**: human-typed, resolving to whatever occupies that position now (`boi.17c.415a.$comp.display-1`
+  after a panel swap resolves to the replacement, which is the point of a positional reference, not a
+  defect of one). The containment rule: a reference the platform **generates** is always a uuid; a
+  reference a human **types** may be a uuid, a bare name, or a dotted path. The console persists and
+  addresses every read and write by `n().raw.id` (`web/src/pages/Components.tsx`, `Systems.tsx`,
+  `Locations.tsx`), so a stale path can only ever exist where an operator typed one, into a CLI, a
+  runbook, or a hand-built request. Because a platform-owned name recomputes at every `:move`
+  ([ADR-0090](#adr-0090-a-derived-value-is-a-default-that-tracks-until-touched)), a path built
+  entirely from platform-owned segments cannot itself go stale between the read that produced it and
+  the write that consumes it; only an operator-owned segment can drift, and only because an operator
+  chose to rename it.
+
+  **This does not reopen [ADR-0079](#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)'s
+  one-name-rule collapse (#586).** That decision killed a NAME that could itself contain a dot
+  (`icmp.rtt-avg`, a keyspace catalog key); today every name, keyspace or entity, is exactly one kebab
+  segment, no dots, at most 100 characters, on the one rule `storage.ValidateName` applies everywhere
+  (`internal/storage/name_rule.go`). What this decision adds is a **reference**, syntactically distinct
+  from a name, that concatenates several individually-valid single-segment names with `.` and a
+  `$accessor` (`$comp`, `$sys`, `$role`) into one positional path. No table's `name` column has ever
+  held a dot, before this epic or after it; a dotted value is never stored, only resolved.
+
+  **The allowlist is the load-bearing fact.** The entity name rule, `^[a-z0-9][a-z0-9-]*$`
+  (`internal/storage/name.go`), is an allowlist, not a denylist of characters someone remembered to
+  exclude. A name can never contain a separator or wildcard from any protocol, chosen or not yet
+  chosen: `.` (path segments), `$` (accessors), `*` and `>` (NATS), `/` and `#` (MQTT), `%` (URL
+  escaping), or `:` (reserved by the router for a custom method's verb suffix, `POST
+  /components/{ref}:rename`, so a name could never collide with `:verb` even if the allowlist admitted
+  the character, which it does not). That single property is what lets one grammar render as a CLI
+  argument, a REST path segment, a NATS subject, a DNS label, or an email localpart with no escaping
+  anywhere: an allowlist composes across every namespace it has not met yet, where a denylist has to
+  be re-audited for each new one.
+
+  **A percent-encoded slash arrives already decoded.** The HTTP handler decodes a path parameter
+  before the address parser ever sees it (verified against the router, not assumed, before Task 12
+  built on it), so a caller cannot smuggle an extra path level past `ParseAddress` by encoding a `/` or
+  a `.`. Every segment, in the location root, the plane tail, and the role name alike, passes the
+  entity name rule inside `ParseAddress` itself (`internal/storage/path.go:74-77`) before any of it
+  reaches a query: validation is structural, not a property of what happens to already be in the
+  database.
+
+  **A dash render and a bare render are display-only, and the resolver refuses both back.**
+  `RenderDash` (`boi-17c-216b-display-1`) strips the accessor; `RenderBare` (`boi17c216bfp1`) further
+  compacts the final segment to the component type's `abbrev` plus its ordinal
+  (`internal/storage/render.go`). Both exist for labelling only (a cable tag, an asset sticker, a
+  compact row sub-line): accessor-stripping is lossy for the dash form and stem-compaction is lossier
+  still for the bare form, so neither round-trips through `ParseAddress`/`resolvePath`. The resolver
+  accepts exactly three forms, uuid, bare name, and the full dotted path (accessor included); a dash
+  or bare string reaching it fails as an ordinary invalid reference, the same as any other malformed
+  input.
+
+- **Decision (six edges, recorded rather than hidden):** the read path (`scopedByNameInScope`,
+  `refPolicyHide`) and the write path (`resolveScopedRef`, `refPolicyForbid`) share one primitive,
+  `resolveRef` (`internal/storage/scopedcrud.go:521-546`), but they do not share every guarantee, and
+  the gaps below are shipped as stated limits, not silently left for the next reader to discover.
+
+  1. **`resolveRef`'s write-path policy proves "writable here," not "readable here."**
+     `resolveScopedRef` (`scopedcrud.go:633-649`) narrows candidates by the caller's create- or
+     action-scope, not its read scope. A resolved reference is one the caller may place a binding
+     against, which is a narrower claim than the scope ruling's own wording ("scope decides before
+     ambiguity does") suggests on its own.
+  2. **A bare-name `forbidden` is a name-existence oracle.** A name matching at least one row, none of
+     them in the caller's action scope, is `cfg.forbidden` (403), not the read path's non-disclosing
+     404 (`scopedcrud.go:469-475`). A caller can learn a name exists somewhere in the estate from the
+     status code alone. This predates the epic and is tested (`interfaces_scope_test.go:82`), and it
+     is now asymmetric with the read path this branch tightened (`scopedByNameInScope` folds the same
+     two cases into one 404), by design: several routes' contracts already depend on the 403/404 split
+     a caller supplied its own reference into, which is not the new disclosure a read's uuid would be.
+  3. **An ambiguous `?system=` on a component's tags read is a new, narrower oracle, preferred over
+     what it replaced.** `ResolveTags` (`internal/storage/tags.go:449-459`) now 409s a `component:read`
+     caller whose `forSystem` filter matches more than one system, redacting candidates
+     (`withoutCandidates`). A caller with no `system:read` grant learns two systems share that name.
+     This is a deliberate improvement: the alternative silently seeded the tag cascade from whichever
+     system a bare-name lookup happened to resolve to, returning a wrong answer with no signal at all.
+  4. **The `$role` accessor parses but resolves nowhere.** `AddressRole`
+     (`internal/storage/path.go:35-42`) is syntactically real: `boi.17c.$sys.av.$role.primary-dsp`
+     parses to a well-formed `Address`. `addressKindTable` (`scopedcrud.go:247-263`) has no table for
+     it, so `resolvePath` reports the same `ErrPathNotFound` it would for any other plane mismatch, a
+     non-disclosing 404 that does not distinguish "role addressing is not built" from "this role does
+     not exist." Reserving the grammar ahead of its resolution is a stated decision here, not a gap
+     found later: the day a system-role read exists, it inherits a grammar it never has to renegotiate.
+  5. **The boot-seed reconcile-and-delete carve-out is a separate pattern, cross-referenced, not
+     restated.** `choice_alternate`'s every-boot reconciliation
+     ([ADR-0087](#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability),
+     [storage](/architecture/storage/#migrations-three-buckets-kept-separate)) is about which seeded
+     rows a reboot may remove, not about how a reference resolves or who holds the pen on a value; it
+     shares no mechanism with this decision or with [ADR-0090](#adr-0090-a-derived-value-is-a-default-that-tracks-until-touched)
+     and is named here only so a reader does not conflate the two governance patterns.
+  6. **The tier guard inside `resolveRef` is forward insurance, not proof.** `resolveRef` panics if the
+     caller's scope was resolved for a resource that does not `Cover` the config being checked
+     (`scopedcrud.go:521-524`). Every one of its eighteen call sites today passes a `resource` label
+     already derived from the same config it is checked against, so the guard **cannot fire on any
+     input the current code produces**, and a green suite running with it live proves nothing beyond
+     that (`scopedcrud.go:507-517`, in the code, says so explicitly). It is insurance for the next call
+     site that copies a pattern without updating the label. It also inherits a blind spot from
+     `scope.Covers`: for `secret`, `variable`, `field`, and `telemetry`, every tier is admissible, so
+     the guard tells a right family from a wrong one but not a right tier from a wrong one within that
+     family, exactly the shape a real cross-tier regression took in this epic's own review before a
+     scoped test, not this guard, caught it.
+
+- **Extends [ADR-0062](#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle):** that
+  decision's dual-accept clause already said a reference "resolves whichever form it is given"; this
+  decision makes the third form literal rather than aspirational. `loadByRef`
+  (`internal/storage/scopedcrud.go:158-202`) tries a uuid, then a parsed dotted address, then a bare
+  name, in that order, for every scoped tree entity.
+- **Amends [ADR-0076](#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)**
+  in justification, not shape: `:rename` stays exactly the gated custom method ADR-0076 built, and it
+  earns a second job under [ADR-0090](#adr-0090-a-derived-value-is-a-default-that-tracks-until-touched):
+  it is now precisely the boundary where an operator takes the pen from the platform's name-tracking.
+  What changes is why the ceremony still earns its keep. ADR-0076 accepted "an external reference held
+  as a name breaks on rename, and nothing on the server can repair it" as the renameable identifier's
+  cost. Once the uuid is the address that argument is repaired: an integration holding the id survives
+  every rename, and one holding a path is a positional lookup honestly reporting whatever occupies that
+  position now, not a broken link. What remains, and is sufficient on its own, is the permission split
+  (an operator trusted to edit `display_name` is not thereby trusted to rewrite the identifier
+  colleagues type) and the pen-taking act itself.
+- **Context:** every estate name was globally unique before this epic, so operators hand-encoded the
+  building into every name and the encoding went stale on every move, twice per room (location and
+  system). ADR-0076 already made the id the durable reference and the name the renameable display key;
+  this decision (identity-model epic [#627](https://github.com/hyperscaleav/omniglass/issues/627),
+  Tasks 10 through 12 and 15) makes the id literally an address a caller composes, types, and resolves,
+  and gives a human a second, positional way to reach the same row without inventing a third identity
+  field. The path grammar was reserved, syntax-only, in `internal/storage/name.go` since ADR-0076;
+  Task 10 made every internal owner-resolve id-based ahead of the placement-scoped uniqueness DDL
+  (Task 11, [ADR extends the scope table below]), Task 12 built the parser and resolver
+  (`internal/storage/path.go`, `resolvePath`), and Task 15 put the resolved path, its segments, and
+  both renders on the wire and pointed the console at uuids exclusively. Task 13's `:move` verb
+  ([ADR-0088](#adr-0088-a-placement-change-is-an-authorization-act-so-a-move-is-its-own-verb)) and
+  Task 14's name generation ([ADR-0090](#adr-0090-a-derived-value-is-a-default-that-tracks-until-touched))
+  are what make a platform-owned segment of a path trustworthy rather than merely typeable.
+- **Tracked under** epic [#627](https://github.com/hyperscaleav/omniglass/issues/627).
+
+### ADR-0090: A derived value is a default that tracks until touched
+
+- **Date:** 2026-08-08 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
+  [storage](/architecture/storage/)
+- **Decision:** when the platform can compute a value an operator would otherwise type, it follows one
+  rule with four binding clauses, and none of the four make the value a constraint: a derived value can
+  prefill a field but it can never cause a write elsewhere to be refused.
+
+  1. **The platform fills.** A component's `name` is minted at create when an operator leaves it
+     blank: `<component_type stem>-<n>`, the ordinal the smallest positive integer no sibling shares in
+     the same placement scope (`generateComponentName`, `internal/storage/namegen.go:129-168`).
+  2. **A platform-owned value tracks its facts.** While `component.name_generated = true`, the name
+     recomputes inside the same transaction as whatever changed its inputs: a `:move` to a new
+     placement (`internal/storage/components.go:632-655`) or an ordinary product `PATCH` that
+     reclassifies the component to a new type (`components.go:470-496`). Both ride the causing write's
+     own audit event, old and new name in its payload; a platform-driven recompute is never itself a
+     `:rename`.
+  3. **The operator owns it on first touch.** `:rename` (`components.go:706-727`) clears
+     `name_generated` to `false` unconditionally, whether or not the row was already operator-owned,
+     and from that write the platform never recomputes the name again no matter how the facts move
+     afterward.
+  4. **The operator can hand it back.** `:resetName` (`components.go:744-774`, gated by the same
+     `component:rename` token `:rename` uses, since both change the identifier) regenerates the name
+     from the component's **current** type and placement and sets `name_generated = true` again,
+     whether or not it already was.
+
+  The contrapositive is the other half of the rule: a value the platform must own unconditionally (a
+  health verdict, a resolved effective-tags set) is computed on every read, never stored as a default
+  an operator could edit into a lie. The boundary between the two is whether the operator is allowed to
+  disagree with the platform's answer.
+
+- **Decision (the migration default deviates from the epic's own wording):**
+  `component.name_generated boolean not null default false`
+  (`db/migrations/20260808090000_names_scope_to_placement.sql:39-46`) ships `DEFAULT false`, not the
+  `DEFAULT true` the epic issue specified. This is deliberate: every component row that exists before
+  this column lands was operator-typed under the pre-#627 model, where no generator existed to have
+  picked a name for it. `DEFAULT true` would hand the platform a pen it never earned over real,
+  pre-existing operator data and let the very first `:move` against one of those rows silently rename
+  it. The gateway writes the flag explicitly on every insert from Task 14 onward, `true` on a generated
+  create and `false` on an operator-typed one; the column default describes only a row this migration
+  found already sitting in the table, never a row created after it.
+
+- **Context:** the same shape resolved independently three times on this branch before it was named as
+  one principle, which is what promotes it from a per-feature habit to a rule to check new work
+  against. A component's name (Task 14) is the built case above. `createIdentity`
+  (`web/src/lib/entities.ts`) already ran clauses 2 and 3 client-side for a catalog entity, deriving a
+  slug from a display name live and freezing it on first edit, before this decision gave the
+  server-side pattern a name. The product classification floor
+  ([ADR-0086](#adr-0086-the-product-classification-floor-and-the-kind-split)) is the contrapositive's
+  own evidence: a silent schema default on `product.kind` let a mislabeled cloud service read as
+  correct forever, exactly the failure clause 1's explicit fill and clause 3's no-silent-default guard
+  against, which is why `kind` is required at create rather than defaulted. A system's `location_id`
+  ([ADR-0064](#adr-0064-placement-and-classification-are-mutable-after-create)) is the one field where
+  the tracking clause was tried and deliberately not adopted: continuous derivation from members made a
+  uniqueness scope unstable and produced 409s from writes that were not naming operations, so it stays
+  authored, filled once, drift reported only, proof that clause 2's live tracking is a per-field policy
+  choice, not a mandate every derived field must take. The boot-seed reconcile-and-delete carve-out
+  (`choice_alternate`,
+  [ADR-0087](#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability),
+  [storage](/architecture/storage/#migrations-three-buckets-kept-separate)) is a related but distinct
+  pattern, about which seeded rows a reboot may remove rather than who holds the pen on an
+  operator-facing value; it is cross-referenced here, not restated.
 - **Tracked under** epic [#627](https://github.com/hyperscaleav/omniglass/issues/627).

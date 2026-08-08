@@ -59,7 +59,10 @@ sits beside it on the forms that offer one; where it does not, the header **x** 
   **name** is the identifier the API, the CLI, and the URL carry (`hq-boardroom-dsp`, lowercase
   letters, digits, and hyphens, changeable later, see Edit), and the `id` is a uuid the platform mints
   and keeps internally. The name fills itself in from the display name until you edit it, so most of
-  the time you type one field and check the other. The classifier is the entity's shape: a component
+  the time you type one field and check the other. **On a component, name is optional**: leave it
+  blank and the platform mints one from the component's type and the next free number in its room
+  (`display-1`, `display-2`, ...), a **Generated** badge marking it as the platform's to keep current.
+  The classifier is the entity's shape: a component
   picks its [product](/guides/admin/products/), a system the
   [standard](/guides/admin/standards/) it conforms to, a location its
   [type](/guides/admin/location-types/). On a component and a system the classifier is **optional**, so a
@@ -83,7 +86,11 @@ sits beside it on the forms that offer one; where it does not, the header **x** 
   read-only in the console and moves from the API or the CLI. Renaming changes the entity's URL, so
   bookmarks, runbooks, and integration config holding the old name stop resolving. Nothing inside
   Omniglass breaks: every reference holds the entity's `id`, so its tags, grants, alarms, and
-  recorded history follow the rename, and the audit trail stays attributable across it.
+  recorded history follow the rename, and the audit trail stays attributable across it. **Renaming a
+  Generated component's name hands you the pen for good**: the platform stops tracking it, even
+  through a later move or a product swap. A reset icon beside the name field (gated the same as
+  rename) hands it back, regenerating from the component's current type and room and marking it
+  Generated again.
 - **Moving is a separate act from an update too, and separately granted**, the same split renaming
   draws. Placement (Parent on a component, a system, or a location; Location on a component or a
   system) is not a field on the regular edit save: it is its own call, `<resource>:move` rather than
@@ -105,7 +112,11 @@ sits beside it on the forms that offer one; where it does not, the header **x** 
   same authorization creating a root entity already requires, since a scope-limited operator clearing
   parent would otherwise walk an entity out of every subtree their own grant was ever limited to; a
   re-parent that would put an entity under itself or one of its own children is refused); the console
-  just has no picker for either yet.
+  just has no picker for either yet. From the CLI, an entity's `<name>` argument takes a uuid, a bare
+  name, or its full **dotted address** (`boi.17c.415a.$comp.display-1`), the location path down to a
+  `$comp`/`$sys` accessor and the entity's own place from there. **Quote it**: an unquoted `$comp`
+  disappears before the shell ever sends the request, so `omniglass component get
+  'boi.17c.415a.$comp.display-1'` (single quotes), never bare.
 - **Delete** removes it, with a confirm. These actions appear only if your grants allow them.
 
 ## Properties on the detail

@@ -36,12 +36,12 @@ create unique index if not exists system_location_name_key on system(location_id
 create unique index if not exists system_orphan_name_key   on system(name)              where parent_id is null and location_id is null;
 create index if not exists system_name_idx on system(name);
 
--- name_generated marks a component whose name the platform picked (Task 13's
+-- name_generated marks a component whose name the platform picked (Task 14's
 -- stem+ordinal generator) rather than an operator typing one. DEFAULT false,
 -- not the epic's DEFAULT true, is deliberate: every row that exists before this
 -- migration runs was operator-typed, so DEFAULT true would hand the pen to the
 -- platform retroactively and let the first :move silently rename real estate.
--- The gateway writes the flag explicitly on insert from Task 13 onward; this
+-- The gateway writes the flag explicitly on insert from Task 14 onward; this
 -- default only ever describes a pre-existing row.
 alter table component add column if not exists name_generated boolean not null default false;
 

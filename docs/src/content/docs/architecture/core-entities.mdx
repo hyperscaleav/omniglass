@@ -26,7 +26,16 @@ with no `name` in the `PATCH` body and a placement-scoped `:checkName` precheck 
 share a name under different parents or at different locations, and two rooms may hold their own
 same-named child; only a root (no parent) location's name and a node's name (also its NATS subject)
 stay estate-wide unique. A bare-name reference that now matches more than one row is refused
-(`409`, naming the candidates) rather than silently resolving to whichever row sorted first.
+(`409`, naming the candidates) rather than silently resolving to whichever row sorted first. **A uuid
+is the address; a dotted path is a positional lookup**
+([ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup)),
+resolved beside the bare name on the same `{ref}` parameter every route already took; a `GET`/`LIST`
+response also carries the resolved `path`, `path_segments`, and two display-only renders. **A
+component's name can generate**: left blank on create, the platform mints `<type>-<n>` from the
+component's resolved `component_type` stem, tracks through a `:move` or a reclassify, and freezes the
+moment an operator renames it (`:resetName` is the only way back,
+[ADR-0090](/architecture/decisions/#adr-0090-a-derived-value-is-a-default-that-tracks-until-touched)).
+See [an address](#an-address-a-uuid-or-a-dotted-path) below.
 **Placement and classification are mutable, not fixed at create**
 ([ADR-0064](/architecture/decisions/#adr-0064-placement-and-classification-are-mutable-after-create)):
 re-parent (cycle-guarded), relocate, re-classify, or clear each field. **Placement is its own act, not
@@ -581,4 +590,50 @@ name-shaped from a distance and must never acquire the name rule.
 
 Everything else is **id-only**: a join row and a telemetry row are addressed by uuid because nobody
 names them. An operator names the component, not the metric.
+
+## An address: a uuid or a dotted path
+
+Every component, system, and location resolves two ways, with different guarantees
+([ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup)).
+The **uuid is the address**: immutable, the only reference the platform itself ever generates or
+persists, surviving every rename and move. A **dotted path is a positional lookup**: location
+segments from a root, an accessor that switches plane (`$comp` into the component tree, `$sys` into
+the system tree, `$role` reserved for a future system-role read but resolved by nothing today), then
+plane-local segments: `boi.17c.415a.$comp.dsp-1.dante-card-1` is a Dante card inside a DSP chassis in
+room 415a. Where the resource is already known from context (a CLI noun, a REST collection), a bare
+name with no accessor works the same way, resolving within that resource's own placement.
+
+The containment rule is what keeps a path from going stale on its own: **the platform generates uuids
+only**, so a dotted path exists only where a human typed one, into a CLI, a runbook, or a hand-built
+request. A path built entirely from platform-owned name segments cannot drift either, because a
+platform-owned name recomputes at every `:move` (below); only a segment an operator renamed can go
+stale, and only because the operator chose to.
+
+Every reference form the API accepts resolves through one `{ref}` path parameter (`GET
+/components/{ref}`, and every custom method beside it): a uuid, a bare name, or a dotted address,
+tried in that order. A bare name matching more than one row in the caller's scope is a `409` naming
+the candidates rather than silently resolving to whichever sorted first, since **#627 scopes a name's
+uniqueness to its placement, not the whole estate**: a component scopes to its parent component when
+it has one, else its location, else the estate; a system and a location follow the same rule one level
+up. The accessor needs its `$` sigil because a shell strips a bare `$comp` to nothing before the
+request leaves the terminal (`url.PathEscape` does not help; it leaves `$` unescaped): every CLI
+example carrying an accessor is single-quoted, `'boi.17c.415a.$comp.display-1'`, never bare.
+
+**The name rule is an allowlist, not a denylist**, which is the fact the address grammar depends on:
+`^[a-z0-9][a-z0-9-]*$` never admits `.`, `$`, `*`, `>`, `/`, `#`, `%`, or `:`, so a name can never
+collide with a path separator, an accessor, a NATS or MQTT wildcard, a URL escape, or the router's own
+`:verb` suffix, in any protocol the platform speaks today or adds later. A `GET`/`LIST` response on a
+component, system, or location carries the resolved `path` and `path_segments` alongside two
+**display-only** renders, a dash-joined form (`boi-17c-415a-display-1`) and a compact form using the
+component type's `abbrev` in place of the last segment (`boi17c415afp1`); neither round-trips through
+the resolver, because stripping the accessor or compacting the stem both lose information a resolve
+needs back.
+
+**A component's name can generate itself**
+([ADR-0090](/architecture/decisions/#adr-0090-a-derived-value-is-a-default-that-tracks-until-touched)).
+Left blank on create, the platform mints `<component_type stem>-<n>` from the resolved type and the
+next free ordinal in the component's placement scope; while `name_generated` stays true the name
+recomputes on a `:move` or a product reclassify, riding that write's own audit event. `:rename` freezes
+it; `:resetName` hands the pen back and regenerates from the component's current facts, gated by the
+same `component:rename` permission `:rename` uses.
 
