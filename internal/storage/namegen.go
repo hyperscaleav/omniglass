@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -10,6 +11,18 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
+
+// ErrComponentTypeNoStem is generateNameForProduct's refusal when the
+// resolved component_type chain (the type itself and every ancestor,
+// ResolveTypeFacts's walk) has no stem anywhere. CreateComponentType now
+// requires a root component_type to carry one (there is no ancestor left to
+// inherit from), so this should only be reachable through data that
+// predates that guard or bypasses it (UpsertComponentType, the trusted
+// boot-seed path). It is a data defect, not a normal "nothing to generate
+// from" case: minting "-1" from an empty stem would silently violate the
+// entity name rule and the address grammar every downstream reader trusts,
+// so this is refused instead, naming the offending component_type.
+var ErrComponentTypeNoStem = errors.New("storage: component_type chain has no stem to generate a name from")
 
 // The name generator (#627 Task 14): when an operator leaves name empty on
 // create, or hands the pen back with :resetName, or a move or a product
@@ -132,6 +145,13 @@ func siblingNamesInScope(ctx context.Context, q querier, parentID, locationID, e
 //
 // excludeID is threaded straight through to siblingNamesInScope; see its
 // doc comment.
+//
+// The mint never returns without passing validateEntityName first: an
+// enforced postcondition of this primitive, not an assumed one a caller's
+// comment claims on its behalf. Every caller (create, :resetName, a move, a
+// reclassify) trusts this return value with no re-check of its own, so the
+// guarantee has to live here, the one place all of them funnel through, or
+// it is not a guarantee at all.
 func generateComponentName(ctx context.Context, tx pgx.Tx, stem string, parentID, locationID, excludeID *string) (string, error) {
 	if err := lockAdvisory(ctx, tx, "component_name/"+stem+"/"+nameGenScopeKey(parentID, locationID)); err != nil {
 		return "", err
@@ -140,7 +160,11 @@ func generateComponentName(ctx context.Context, tx pgx.Tx, stem string, parentID
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%s-%d", stem, pickOrdinal(existing, stem)), nil
+	name := fmt.Sprintf("%s-%d", stem, pickOrdinal(existing, stem))
+	if err := validateEntityName(name); err != nil {
+		return "", fmt.Errorf("storage: generated name %q is invalid: %w", name, err)
+	}
+	return name, nil
 }
 
 // genericDeviceProductID resolves generic-device's id, the same fallback
@@ -185,6 +209,14 @@ func generateNameForProduct(ctx context.Context, tx pgx.Tx, productID string, pa
 	stem, _, _, _, err := resolveTypeFacts(ctx, tx, typeID)
 	if err != nil {
 		return "", fmt.Errorf("storage: resolve type facts for product %q: %w", productID, err)
+	}
+	// A resolved stem of "" means the walk reached the root of this
+	// component_type's ancestry with no stem set anywhere on it: refused by
+	// name rather than minted into "-1", which would pass straight through
+	// as a real component name and fail every downstream reader that
+	// assumes the entity name grammar.
+	if stem == "" {
+		return "", fmt.Errorf("%w: component_type %s (product %q)", ErrComponentTypeNoStem, typeID, productID)
 	}
 	return generateComponentName(ctx, tx, stem, parentID, locationID, excludeID)
 }

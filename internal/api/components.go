@@ -364,6 +364,8 @@ func mapComponentErr(err error) error {
 		return huma.Error422UnprocessableEntity("location not found")
 	case errors.Is(err, storage.ErrProductNotFound):
 		return huma.Error422UnprocessableEntity("product not found")
+	case errors.Is(err, storage.ErrComponentTypeNoStem):
+		return huma.Error422UnprocessableEntity("this product's component_type has no stem to generate a name from; supply a name explicitly, or fix the component_type registry")
 	default:
 		return huma.Error500InternalServerError("component operation failed")
 	}

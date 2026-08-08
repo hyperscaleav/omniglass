@@ -94,6 +94,9 @@ func mapComponentTypeErr(err error) error {
 	if errors.Is(err, storage.ErrParentTypeNotFound) {
 		return huma.Error422UnprocessableEntity("parent component_type not found")
 	}
+	if errors.Is(err, storage.ErrRootComponentTypeNeedsStem) {
+		return huma.Error422UnprocessableEntity("a root component_type (no parent) must have a stem; there is no ancestor to inherit one from")
+	}
 	return mapTypeErr(err, "component_type")
 }
 

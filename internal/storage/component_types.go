@@ -14,6 +14,17 @@ import (
 // not exist: the component_type counterpart of ErrParentStandardNotFound.
 var ErrParentTypeNotFound = errors.New("storage: parent component_type not found")
 
+// ErrRootComponentTypeNeedsStem is CreateComponentType's refusal for a root
+// type (ParentID nil) with no stem. A root has no ancestor to inherit one
+// from, so ResolveTypeFacts's walk stops immediately with nothing: every
+// descendant that does not set its own stem would resolve to "", and #627
+// Task 14's name generator refuses to mint a name from that (see
+// ErrComponentTypeNoStem, internal/storage/namegen.go). Enforced here,
+// structurally, at write time, rather than trusting the generator's own
+// guard to be the only thing standing between a data-entry mistake and a
+// broken address grammar.
+var ErrRootComponentTypeNeedsStem = errors.New("storage: a root component_type (no parent) must have a stem; there is no ancestor to inherit one from")
+
 // maxComponentTypeDepth caps the parent walk ResolveTypeFacts and TypeIsWithin
 // run. The tree cannot form a cycle through normal writes (a row can only
 // reference a parent that already exists, so a parent always predates its
@@ -156,6 +167,14 @@ func (p *PG) GetComponentType(ctx context.Context, ref string) (*ComponentType, 
 // one grammar every addressing and rendering surface assumes. Guarding it
 // here, at the one place it is written, closes that instead of trusting
 // every future reader of the column to re-derive the same rule.
+//
+// A ROOT type (ParentID nil) additionally requires a non-nil Stem
+// (ErrRootComponentTypeNeedsStem): a root has no ancestor to inherit one
+// from, so a nil stem here is not "inherit," it is "nothing," and the walk
+// would resolve every stemless descendant to "". Malformed and absent are
+// two distinct failure modes of the same invariant (a resolved stem must be
+// a valid, non-empty name fragment); this closes the absent half, the
+// validateEntityName call above closes the malformed half.
 func (p *PG) CreateComponentType(ctx context.Context, actorID string, ct ComponentType) (*ComponentType, error) {
 	if err := ValidateName("component_type", ct.Name); err != nil {
 		return nil, err
@@ -164,6 +183,8 @@ func (p *PG) CreateComponentType(ctx context.Context, actorID string, ct Compone
 		if err := validateEntityName(*ct.Stem); err != nil {
 			return nil, err
 		}
+	} else if ct.ParentID == nil {
+		return nil, ErrRootComponentTypeNeedsStem
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {

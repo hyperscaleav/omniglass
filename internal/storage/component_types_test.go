@@ -93,8 +93,9 @@ func TestComponentTypeRoundTrip(t *testing.T) {
 		t.Fatalf("update display_name = %q, want %q", upd.DisplayName, dn)
 	}
 
-	// Duplicate name is ErrTypeExists.
-	if _, err := gw.CreateComponentType(ctx, "", storage.ComponentType{Name: "rt-mic", DisplayName: "Dup"}); !errors.Is(err, storage.ErrTypeExists) {
+	// Duplicate name is ErrTypeExists. Stem set (a root needs one) so the
+	// write reaches the unique-name check this asserts, not the stem guard.
+	if _, err := gw.CreateComponentType(ctx, "", storage.ComponentType{Name: "rt-mic", DisplayName: "Dup", Stem: strp("dup")}); !errors.Is(err, storage.ErrTypeExists) {
 		t.Fatalf("dup create err = %v, want ErrTypeExists", err)
 	}
 
@@ -131,7 +132,7 @@ func TestComponentTypeUpdateTagsPatch(t *testing.T) {
 	}
 
 	root, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
-		Name: "tp-mic", DisplayName: "Mic", DefaultTags: []string{"audio", "av"},
+		Name: "tp-mic", DisplayName: "Mic", Stem: strp("mic"), DefaultTags: []string{"audio", "av"},
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -268,7 +269,7 @@ func TestComponentTypeDeleteRestricted(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	root, err := gw.CreateComponentType(ctx, "", storage.ComponentType{Name: "dr-mic", DisplayName: "Mic"})
+	root, err := gw.CreateComponentType(ctx, "", storage.ComponentType{Name: "dr-mic", DisplayName: "Mic", Stem: strp("mic")})
 	if err != nil {
 		t.Fatalf("create root: %v", err)
 	}
@@ -300,7 +301,7 @@ func TestComponentTypeSubtree(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	root, err := gw.CreateComponentType(ctx, "", storage.ComponentType{Name: "st-mic", DisplayName: "Mic"})
+	root, err := gw.CreateComponentType(ctx, "", storage.ComponentType{Name: "st-mic", DisplayName: "Mic", Stem: strp("mic")})
 	if err != nil {
 		t.Fatalf("create root: %v", err)
 	}
@@ -310,7 +311,7 @@ func TestComponentTypeSubtree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create child: %v", err)
 	}
-	sibling, err := gw.CreateComponentType(ctx, "", storage.ComponentType{Name: "st-camera", DisplayName: "Camera"})
+	sibling, err := gw.CreateComponentType(ctx, "", storage.ComponentType{Name: "st-camera", DisplayName: "Camera", Stem: strp("camera")})
 	if err != nil {
 		t.Fatalf("create sibling root: %v", err)
 	}
@@ -491,5 +492,80 @@ func TestBadStemNeverProducesAnInvalidComponentName(t *testing.T) {
 	}
 	if err := storage.ValidateName("component", c.Name); err != nil {
 		t.Fatalf("a component generated under an unrefused bad stem produced an invalid name %q: %v", c.Name, err)
+	}
+}
+
+// TestEmptyStemRefusesGeneration is the consequence-level regression for the
+// ABSENT half of the stem invariant (TestBadStemNeverProducesAnInvalidComponentName
+// covers the malformed half). CreateComponentType now refuses a stemless
+// ROOT type outright (ErrRootComponentTypeNeedsStem), so the operator-facing
+// create path can no longer reach this case; the only way left to construct
+// it is UpsertComponentType, the trusted boot-seed primitive that
+// deliberately bypasses every write-time guard here, the same reasoning
+// that lets a seeded row skip character validation too. This is exactly the
+// shape a root row from before this guard existed, or a future seed bug,
+// would produce: ResolveTypeFacts's walk resolving "" all the way to the
+// root with nothing to inherit. The generator must refuse to mint "-1" from
+// that (ErrComponentTypeNoStem), not silently hand back an invalid name.
+//
+// Reverting the empty-stem guard in generateNameForProduct alone (leaving
+// everything else as written) makes this test fail: CreateComponent then
+// succeeds, minting the component name "-1", which is not what this test
+// asserts and is not a legal entity name either.
+func TestEmptyStemRefusesGeneration(t *testing.T) {
+	gw := storagetest.NewDB(t)
+	ctx := context.Background()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if err := gw.UpsertComponentType(ctx, storage.ComponentType{
+		Name: "stemless-root", DisplayName: "Stemless Root", Official: true,
+	}); err != nil {
+		t.Fatalf("upsert a stemless root type: %v", err)
+	}
+	prod, err := gw.CreateProduct(ctx, "", storage.Product{
+		Name: "stemless-product", DisplayName: "Stemless Product", Kind: "device", ComponentType: "stemless-root",
+	})
+	if err != nil {
+		t.Fatalf("create product under the stemless type: %v", err)
+	}
+
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &prod.Name}, all); !errors.Is(err, storage.ErrComponentTypeNoStem) {
+		t.Fatalf("create component under a stemless type err = %v, want ErrComponentTypeNoStem", err)
+	}
+}
+
+// TestRootComponentTypeRequiresStem is the direct, structural test of the
+// third fix (#627 Task 14 review): a root component_type (no parent) is
+// refused at create time with no stem, since it has no ancestor to inherit
+// one from, while a CHILD with no stem still works exactly as before
+// (TestComponentTypeStemMustBeAValidName's stem-guard-nil case already
+// covers that; this test is specifically the root side of the same
+// invariant).
+func TestRootComponentTypeRequiresStem(t *testing.T) {
+	gw := storagetest.NewDB(t)
+	ctx := context.Background()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if _, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
+		Name: "root-no-stem", DisplayName: "Root No Stem",
+	}); !errors.Is(err, storage.ErrRootComponentTypeNeedsStem) {
+		t.Fatalf("create root with no stem err = %v, want ErrRootComponentTypeNeedsStem", err)
+	}
+
+	root, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
+		Name: "root-with-stem", DisplayName: "Root With Stem", Stem: strp("rootstem"),
+	})
+	if err != nil {
+		t.Fatalf("create root with a stem: %v", err)
+	}
+	// A child with no stem is unaffected: it has an ancestor to inherit from.
+	if _, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
+		Name: "child-no-stem", DisplayName: "Child No Stem", ParentID: &root.ID,
+	}); err != nil {
+		t.Fatalf("create child with no stem under a stemmed root: %v", err)
 	}
 }

@@ -216,8 +216,12 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	// An operator-typed name is validated now, before any other resolve, so a
-	// bad slug fails fast (the existing behavior). A generated name needs no
-	// such check: generateNameForProduct only ever mints a legal slug.
+	// bad slug fails fast (the existing behavior). A generated name is
+	// validated too, but later (inside generateComponentName itself, the one
+	// place every generation call site funnels through): an empty or bad
+	// stem is only knowable once placement and product resolve below, and an
+	// invariant a comment merely asserts, rather than a callee enforces, is
+	// exactly the shape that let "-1" through review the first time.
 	if spec.Name != "" {
 		if err := ValidateName("component", spec.Name); err != nil {
 			return nil, err

@@ -52,6 +52,27 @@ func TestCreateGeneratesFromTypeStem(t *testing.T) {
 	if third.Name != "display-1" {
 		t.Fatalf("third generated name (new placement bucket) = %q, want display-1", third.Name)
 	}
+
+	// The LOCATION bucket (unparented, placed) is its own scope too, not
+	// just the parent and orphan buckets exercised above.
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "namegen-loc", LocationType: "campus"}, all); err != nil {
+		t.Fatalf("create location: %v", err)
+	}
+	locName := "namegen-loc"
+	fourth, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55, LocationName: &locName}, all)
+	if err != nil {
+		t.Fatalf("create fourth (at a location): %v", err)
+	}
+	if fourth.Name != "display-1" {
+		t.Fatalf("fourth generated name (location bucket) = %q, want display-1", fourth.Name)
+	}
+	fifth, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55, LocationName: &locName}, all)
+	if err != nil {
+		t.Fatalf("create fifth (same location): %v", err)
+	}
+	if fifth.Name != "display-2" {
+		t.Fatalf("fifth generated name (same location bucket) = %q, want display-2", fifth.Name)
+	}
 }
 
 // TestSubtypeInheritsStem proves a product classified under a CHILD type with
@@ -217,6 +238,61 @@ func TestReclassifyRecomputes(t *testing.T) {
 	}
 	if untouched.Name != "mic-1" {
 		t.Fatalf("name after a display_name-only patch = %q, want unchanged mic-1", untouched.Name)
+	}
+}
+
+// TestComponentTypeStemEditDoesNotRecomputeExistingNames proves what
+// deliberately does NOT happen: editing a component_type's stem after
+// components already generated names from it never touches those existing
+// component rows. Nothing wires a component_type write to a component name
+// recompute, only a component-level trigger does (a move or a reclassify of
+// THAT component, UpdateComponent/MoveComponent's own recompute above); this
+// pins that absence so a future "helpful" cascade from the registry side
+// does not silently become the norm. Uses a CUSTOM component_type, not a
+// seeded official one: official rows are read-only (ErrTypeOfficial), so
+// this is the only way to reach UpdateComponentType's stem branch at all.
+func TestComponentTypeStemEditDoesNotRecomputeExistingNames(t *testing.T) {
+	gw := storagetest.NewDB(t)
+	ctx := context.Background()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	ct, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
+		Name: "registry-edit-type", DisplayName: "Registry Edit Type", Stem: strp("orig-stem"),
+	})
+	if err != nil {
+		t.Fatalf("create custom component_type: %v", err)
+	}
+	prod, err := gw.CreateProduct(ctx, "", storage.Product{
+		Name: "registry-edit-product", DisplayName: "Registry Edit Product", Kind: "device", ComponentType: ct.Name,
+	})
+	if err != nil {
+		t.Fatalf("create product: %v", err)
+	}
+
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &prod.Name}, all)
+	if err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	if c.Name != "orig-stem-1" {
+		t.Fatalf("precondition name = %q, want orig-stem-1", c.Name)
+	}
+
+	newStem := "changed-stem"
+	if _, err := gw.UpdateComponentType(ctx, "", ct.Name, storage.ComponentTypePatch{Stem: &newStem}); err != nil {
+		t.Fatalf("update the type's stem: %v", err)
+	}
+
+	got, err := gw.GetComponent(ctx, c.ID, all)
+	if err != nil {
+		t.Fatalf("get component after registry edit: %v", err)
+	}
+	if got.Name != "orig-stem-1" {
+		t.Fatalf("name after an unrelated component_type stem edit = %q, want unchanged orig-stem-1 (a registry edit recomputes nothing)", got.Name)
+	}
+	if !got.NameGenerated {
+		t.Fatalf("NameGenerated after registry edit = false, want unchanged true")
 	}
 }
 
