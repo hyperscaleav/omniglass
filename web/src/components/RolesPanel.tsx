@@ -2,12 +2,14 @@ import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { createStore } from "solid-js/store";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
-import { Check, X } from "./icons";
+import { Check, GripVertical, X } from "./icons";
 import { describeError } from "../lib/format";
 import { COMPONENTS_KEY, listComponents, type Component as Comp } from "../lib/components";
 import {
   assignRole,
   staffingLabel,
+  swapPath,
+  swapRolePositions,
   systemRoles,
   systemRolesKey,
   unassignRole,
@@ -149,9 +151,28 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
   };
   const unassign = (role: string, component: string) => run(role, () => unassignRole(props.system, role, component));
 
+  // Reorders a role's occupants by dragging one onto another's slot. The
+  // server only exchanges two positions per call, so swapPath decomposes the
+  // drag (a moveItem-shaped "from index N to index M") into the adjacent
+  // swaps that reproduce it, run in order inside one busy/error cycle.
+  const reorder = (role: string, from: number, to: number) => {
+    if (from === to) return;
+    return run(role, async () => {
+      for (const [a, b] of swapPath(from, to)) {
+        await swapRolePositions(props.system, role, a, b);
+      }
+    });
+  };
+
   const roleRow = (r: EffectiveRole, first: () => boolean) => {
     const h = () => healthByName().get(r.name);
     const down = () => new Set(h()?.down ?? []);
+    // Drag-to-reorder the occupant list: only worth wiring, and only sound to
+    // wire, once there is more than one position to reorder AND the caller
+    // can write. dragIdx is this row's own state (reset whenever the row
+    // remounts, e.g. after a reorder refetches).
+    const [dragIdx, setDragIdx] = createSignal<number | null>(null);
+    const canReorder = () => props.canUpdate && (r.assigned_to ?? []).length > 1;
     return (
     <div class="flex flex-col gap-1.5 px-3 py-2.5" classList={{ "border-t border-base-300": !first() }}>
       <div class="flex flex-wrap items-baseline gap-2">
@@ -227,17 +248,32 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
       </div>
 
       <div class="flex flex-wrap items-center gap-1.5">
-        <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">filled by</span>
+        <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">
+          filled by{canReorder() ? " · drag to reorder" : ""}
+        </span>
         <Show
           when={(r.assigned_to ?? []).length}
           fallback={<span class="text-[11px] italic text-base-content/40">nobody yet</span>}
         >
           <For each={r.assigned_to ?? []}>
-            {(c) => (
+            {(c, i) => (
               <span
                 class={`badge badge-sm gap-1 font-data ${down().has(c) ? "badge-error badge-soft" : "badge-outline"}`}
+                classList={{ "cursor-grab": canReorder(), "opacity-40": canReorder() && dragIdx() === i() }}
                 title={down().has(c) ? "An active alarm has taken this component down" : "Occupying its slot"}
+                draggable={canReorder()}
+                onDragStart={() => canReorder() && setDragIdx(i())}
+                onDragOver={(e) => { if (canReorder()) e.preventDefault(); }}
+                onDrop={() => {
+                  const from = dragIdx();
+                  if (canReorder() && from !== null && from !== i()) void reorder(r.name, from, i());
+                  setDragIdx(null);
+                }}
+                onDragEnd={() => setDragIdx(null)}
               >
+                <Show when={canReorder()}>
+                  <GripVertical size={10} />
+                </Show>
                 {c}
                 <Show when={down().has(c)}> down</Show>
                 <Show when={props.canUpdate}>

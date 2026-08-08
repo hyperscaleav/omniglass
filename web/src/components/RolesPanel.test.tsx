@@ -276,6 +276,40 @@ describe("RolesPanel", () => {
     expect(del!.url).toContain("/systems/boardroom/roles/table-mic/assignments/mic-1");
   });
 
+  // Drag-to-reorder, gated on TestAssignedToIsPositionOrdered (Go, green):
+  // reuses moveItem's shape (listmodel.ts) via swapPath, but the wire call is
+  // the server's actual primitive, a single pairwise swap.
+  it("drag-reorders two occupants via the position-swap route", async () => {
+    const twoOccupants: EffectiveRole[] = [{ ...roles[0], assigned_to: ["mic-1", "panel-1"] }, roles[1], roles[2]];
+    const swaps: Request[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes(":swapPositions")) {
+        swaps.push(req.clone());
+        return new Response(null, { status: 204 });
+      }
+      return json({ system: "boardroom", roles: twoOccupants });
+    });
+
+    const { getByText } = mount({ rows: twoOccupants });
+    const from = getByText("mic-1").closest("span.badge") as HTMLElement;
+    const to = getByText("panel-1").closest("span.badge") as HTMLElement;
+
+    fireEvent.dragStart(from);
+    fireEvent.dragOver(to);
+    fireEvent.drop(to);
+
+    await waitFor(() => expect(swaps.length).toBe(1));
+    expect(swaps[0].url).toContain("/systems/boardroom/roles/table-mic:swapPositions");
+    expect(await swaps[0].json()).toEqual({ position: 1, with: 2 });
+  });
+
+  it("does not wire dragging when there is only one occupant to reorder", () => {
+    const { getByText } = mount(); // default fixture: table-mic has one occupant
+    const badge = getByText("mic-1").closest("span.badge") as HTMLElement;
+    expect(badge.draggable).toBe(false);
+  });
+
   it("shows no assign or unassign control when the caller cannot update the system", () => {
     const { getByText, queryByLabelText } = mount({ canUpdate: false });
     expect(getByText("Table microphone")).toBeTruthy(); // the read still renders

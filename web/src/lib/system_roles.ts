@@ -84,6 +84,32 @@ export async function unassignRole(system: string, role: string, component: stri
   if (error) throw error;
 }
 
+// swapRolePositions exchanges two 1-based positions within a role: the only
+// reorder primitive the server exposes (there is no "move to index N" route,
+// position stays an ordering attribute of an assignment, not a second
+// address for one; see identity_shape.go).
+export async function swapRolePositions(system: string, role: string, position: number, withPos: number): Promise<void> {
+  const { error } = await api.POST("/systems/{name}/roles/{role}:swapPositions", {
+    params: { path: { name: system, role } },
+    body: { position, with: withPos },
+  });
+  if (error) throw error;
+}
+
+// swapPath decomposes a moveItem(list, from, to)-shaped reorder (listmodel.ts)
+// into the sequence of adjacent-position swaps that reproduces it, since
+// swapRolePositions exchanges exactly two positions and nothing shifts around
+// them. from/to are 0-based indices into assigned_to, matching moveItem's own
+// signature; the returned pairs are 1-based positions, ready to feed
+// swapRolePositions in order.
+export function swapPath(from: number, to: number): [number, number][] {
+  if (from === to) return [];
+  const path: [number, number][] = [];
+  const step = from < to ? 1 : -1;
+  for (let i = from; i !== to; i += step) path.push([i + 1, i + step + 1]);
+  return path;
+}
+
 // staffingLabel reads the quorum against the fill count, in the operator's words:
 // how many the role wants, how many it has. The shortfall itself is the server's
 // `understaffed`, not recomputed here, so the console and the API never disagree

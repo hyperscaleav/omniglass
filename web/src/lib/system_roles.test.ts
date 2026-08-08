@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { roleByComponent, staffingLabel, standardRolesKey, systemRolesKey, type EffectiveRole } from "./system_roles";
+import { roleByComponent, staffingLabel, standardRolesKey, swapPath, systemRolesKey, type EffectiveRole } from "./system_roles";
 
 // The staffing line every roles surface reads a quorum through. It is pure, so it
 // is tested without a server.
@@ -51,5 +51,45 @@ describe("roleByComponent", () => {
 
   it("returns an empty map for a system with no roles", () => {
     expect(roleByComponent([]).size).toBe(0);
+  });
+});
+
+// swapPath is the bridge between the console's generic drag-reorder primitive
+// (moveItem, listmodel.ts) and the server's only reorder route, a pairwise
+// swap. Every case here checks that replaying swapPath's swaps by hand
+// reproduces exactly what moveItem would have produced, so the drag gesture
+// and the server end up agreeing on the final order.
+function applySwaps<T>(list: T[], path: [number, number][]): T[] {
+  const a = [...list];
+  for (const [p, w] of path) {
+    const i = p - 1;
+    const j = w - 1;
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+describe("swapPath", () => {
+  it("is empty when from equals to", () => {
+    expect(swapPath(2, 2)).toEqual([]);
+  });
+
+  it("returns 1-based adjacent position pairs, stepping toward the target", () => {
+    expect(swapPath(0, 2)).toEqual([
+      [1, 2],
+      [2, 3],
+    ]);
+  });
+
+  it("reproduces moveItem's reorder moving right", async () => {
+    const { moveItem } = await import("./listmodel");
+    const list = ["a", "b", "c", "d"];
+    expect(applySwaps(list, swapPath(0, 3))).toEqual(moveItem(list, 0, 3));
+  });
+
+  it("reproduces moveItem's reorder moving left", async () => {
+    const { moveItem } = await import("./listmodel");
+    const list = ["a", "b", "c", "d"];
+    expect(applySwaps(list, swapPath(3, 1))).toEqual(moveItem(list, 3, 1));
   });
 });
