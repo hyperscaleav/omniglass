@@ -153,6 +153,11 @@ describe("Locations create-as-route", () => {
       const method = req.method;
       const url = req.url;
       if (method === "PATCH" && url.includes("/locations/b2")) {
+        return new Response(JSON.stringify(b2), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      // The move is its own call, POST .../{name}:move, not a PATCH field
+      // (#627): placement left the patch body entirely.
+      if (method === "POST" && url.includes("/locations/b2:move")) {
         captured = JSON.parse(await req.clone().text());
         return new Response(JSON.stringify({ ...b2, parent: "hq" }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
@@ -176,6 +181,9 @@ describe("Locations create-as-route", () => {
       const method = req.method;
       const url = req.url;
       if (method === "PATCH" && url.includes("/locations/hq-b1")) {
+        return new Response(JSON.stringify(hqB1), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (method === "POST" && url.includes("/locations/hq-b1:move")) {
         return new Response(JSON.stringify({ detail: "building may not be placed under campus lab" }), { status: 422, headers: { "Content-Type": "application/json" } });
       }
       throw new Error(`unexpected fetch in this test: ${method} ${url}`);

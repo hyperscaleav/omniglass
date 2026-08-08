@@ -52,10 +52,6 @@ export async function createLocation(body: CreateLocation): Promise<Location> {
 export type UpdateLocation = {
   display_name?: string;
   location_type?: string;
-  // Re-parents the location (a tree move) to this location name. Omit to leave
-  // the parent unchanged; moving to root (no parent) is not supported this
-  // slice (mirrors storage.LocationPatch.ParentName).
-  parent?: string;
 };
 
 export async function updateLocation(name: string, body: UpdateLocation): Promise<Location> {
@@ -69,6 +65,17 @@ export async function updateLocation(name: string, body: UpdateLocation): Promis
 // stored references and is worth being able to withhold on its own.
 export async function renameLocation(name: string, to: string): Promise<Location> {
   const { data, error } = await api.POST("/locations/{name}:rename", { params: { path: { name } }, body: { name: to } });
+  if (error) throw error;
+  return data as Location;
+}
+
+// A move (re-parent) is its own call too, not a field on the patch body (#627):
+// the API gates it with `location:move` rather than `location:update`, because a
+// placement change is an authorization act. Moving to root is not supported: the
+// server 422s an omitted or empty parent, so parent is required here, not
+// optional the way the retired UpdateLocation.parent used to be.
+export async function moveLocation(name: string, parent: string): Promise<Location> {
+  const { data, error } = await api.POST("/locations/{name}:move", { params: { path: { name } }, body: { parent } });
   if (error) throw error;
   return data as Location;
 }

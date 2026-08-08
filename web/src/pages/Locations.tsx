@@ -16,7 +16,7 @@ import {
   LOCATIONS_KEY,
   listLocations,
   createLocation,
-  updateLocation, renameLocation,
+  updateLocation, renameLocation, moveLocation,
   checkLocationName,
   deleteLocation,
 } from "../lib/locations";
@@ -231,6 +231,11 @@ export default function Locations() {
     const path = () => ctx.pathOf(n());
     const kids = () => n().children;
     const canUpdate = () => can(me.data, "location", "update");
+    // Placement (the Parent picker) is gated on its own permission (#627): a
+    // reparent is :move, not the PATCH update gate, so an operator holding
+    // location:update but not location:move can still edit the label and type
+    // but sees the parent as read-only, same as the non-editing view.
+    const canMove = () => can(me.data, "location", "move");
 
     // The reparent picker's candidate list, narrowed to the location's own
     // (stored, not live-edited) type's allowed_parent_types; empty means
@@ -297,14 +302,21 @@ export default function Locations() {
       save: async () => {
         setSaveErr(null);
         const renamed = name().trim() !== n().raw.name;
+        const moved = canMove() && parentName() !== initialParentName();
         try {
-          const movedParent = parentName() !== initialParentName() ? parentName() : undefined;
           await updateLocation(n().raw.name, {
             display_name: display() || undefined,
             location_type: type() || undefined,
-            ...(movedParent ? { parent: movedParent } : {}),
           });
-          // The rename is a second call and it goes LAST, because it is the one that
+          // The move is a second call, not a PATCH field (#627): placement left the
+          // patch body entirely, since a reparent is its own authorization act
+          // (location:move, distinct from location:update) and its own audit verb.
+          // It goes after the base patch and before the rename, separately
+          // refusable (a cycle, a placement-type mismatch, or a name collision at
+          // the destination the advisory precheck cannot rule out), the same
+          // reasoning that already puts rename last below.
+          if (moved) await moveLocation(n().raw.name, parentName());
+          // The rename is a third call and it goes LAST, because it is the one that
           // can be refused on its own: it needs <resource>:rename, and a duplicate
           // name is a 409 the advisory :checkName precheck cannot rule out. Doing it
           // last means a refusal leaves the other edits saved and the name unchanged.
@@ -408,7 +420,7 @@ export default function Locations() {
           <span class="eyebrow">Placement</span>
           <div class="grid grid-cols-2 gap-5">
             <Show
-              when={editing()}
+              when={editing() && canMove()}
               fallback={
                 <KVStacked
                   label="Parent"

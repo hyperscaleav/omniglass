@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { listLocations, createLocation, updateLocation, deleteLocation } from "./locations";
+import { listLocations, createLocation, updateLocation, moveLocation, deleteLocation } from "./locations";
 import { uuidFor } from "./testids";
 
 // The data layer is the unit under test; fetch is the seam we fake, so these
@@ -38,14 +38,26 @@ describe("locations data layer", () => {
     expect(sent).toMatchObject({ name: "hq-b1", location_type: "building", parent: "hq" });
   });
 
-  it("patches the parent to move a location", async () => {
+  it("patches display_name and location_type, never parent", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({ id: uuidFor("4"), name: "hq-b1", location_type: "building", display_name: "Building 1" }),
+    );
+    await updateLocation("hq-b1", { display_name: "Building 1", location_type: "building" });
+    const req = fetchMock.mock.calls[0][0] as Request;
+    expect(req.method).toBe("PATCH");
+    const sent = await req.json();
+    expect(sent).not.toHaveProperty("parent");
+  });
+
+  it("posts :move to move a location, not PATCH", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({ id: uuidFor("3"), name: "hq-b1", location_type: "building", parent: "lab" }),
     );
-    const moved = await updateLocation("hq-b1", { parent: "lab" });
+    const moved = await moveLocation("hq-b1", "lab");
     expect(moved.name).toBe("hq-b1");
     const req = fetchMock.mock.calls[0][0] as Request;
-    expect(req.method).toBe("PATCH");
+    expect(req.method).toBe("POST");
+    expect(req.url).toContain("/locations/hq-b1:move");
     const sent = await req.json();
     expect(sent).toMatchObject({ parent: "lab" });
   });
