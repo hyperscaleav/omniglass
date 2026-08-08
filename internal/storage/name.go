@@ -20,12 +20,15 @@ import (
 // expression and the uuid disambiguation, not its rationale restated a second time.
 //
 // The word **segment** means one dot-separated component of a #627 dotted ADDRESS
-// (`boi.17c.$comp.display-1`), never of a name: no name has ever contained a dot,
-// before #627 or after it (name_rule.go). An address is a reference that concatenates
-// several individually-valid single-segment names; it is resolved, never stored. Why
+// (`boi.17c.$comp.display-1`), never of a name: #586 backfilled the last dotted name
+// (a keyspace catalog key) dot-free before this branch existed, and no name has held
+// one since (name_rule.go). An address is a reference that concatenates several
+// individually-valid single-segment names; it is resolved, never stored. Why
 // the rule below is an allowlist rather than a denylist, and why that is what lets
-// one grammar render as a CLI argument, a REST path, a NATS subject, or a DNS label
-// with no escaping, is recorded in
+// one grammar render as a CLI argument, a REST path, or a NATS subject with no
+// escaping (a DNS label and an email localpart too, for a segment that also fits
+// the 63-octet ceiling and does not end in the hyphen this rule alone permits), is
+// recorded in
 // [ADR-0089](https://docs.omniglass.hyperscaleav.com/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup),
 // not restated here.
 

@@ -123,7 +123,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0086](#adr-0086-the-product-classification-floor-and-the-kind-split) | 2026-08-07 | Accepted | Every component is required to name a product (the three seeded generics cover anything unmodeled); product.kind narrows to device / app / service, no default, required at create; vm retires, folded into app |
 | [ADR-0087](#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability) | 2026-08-07 | Accepted | The alarm-capability-role chain retires: an alarm impairs its component's own verdict wholesale, an occupant satisfies its role whenever its own verdict is not outage, and the typed-slot guard is the only assignment-time check; records the 409-vs-422 refusal line and the choice/alternate boot-seed reconciliation carve-out. Supersedes ADR-0049, amends ADR-0050 |
 | [ADR-0088](#adr-0088-a-placement-change-is-an-authorization-act-so-a-move-is-its-own-verb) | 2026-08-08 | Accepted | Placement (parent, location) leaves the component/system/location PATCH body and becomes its own `:move` custom method under its own `<resource>:move` permission, closing the gap where clearing parent_id to root via PATCH needed no scope check while creating the same root already required an all-scoped grant; MoveLocation deliberately gains no clear-to-root capability |
-| [ADR-0089](#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup) | 2026-08-08 | Accepted | A uuid is the address the platform generates; a dotted path (location segments, a `$comp`/`$sys`/`$role` accessor, plane-local segments) is a human-typed positional lookup, resolved by an allowlist name rule that renders as a CLI argument, a REST path, a NATS subject, or a DNS label with no escaping; dash and bare renders are display-only and never accepted back. Extends ADR-0062, amends ADR-0076 in justification |
+| [ADR-0089](#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup) | 2026-08-08 | Accepted | A uuid is the address the platform generates; a dotted path (location segments, a `$comp`/`$sys`/`$role` accessor, plane-local segments) is a human-typed positional lookup, resolved by an allowlist name rule that renders as a CLI argument, a REST path, or a NATS subject with no escaping; dash and bare renders are display-only and never accepted back. Extends ADR-0062, amends ADR-0076 in justification |
 | [ADR-0090](#adr-0090-a-derived-value-is-a-default-that-tracks-until-touched) | 2026-08-08 | Accepted | A derivable value fills at create, tracks live while the platform holds the pen, freezes on the operator's first edit, and resumes tracking only on an explicit reset; `component.name_generated` ships `DEFAULT false`, not the epic's `DEFAULT true`, so no pre-existing operator-typed name is silently claimed by the platform |
 
 ## Entries
@@ -3112,19 +3112,26 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   segment, no dots, at most 100 characters, on the one rule `storage.ValidateName` applies everywhere
   (`internal/storage/name_rule.go`). What this decision adds is a **reference**, syntactically distinct
   from a name, that concatenates several individually-valid single-segment names with `.` and a
-  `$accessor` (`$comp`, `$sys`, `$role`) into one positional path. No table's `name` column has ever
-  held a dot, before this epic or after it; a dotted value is never stored, only resolved.
+  `$accessor` (`$comp`, `$sys`, `$role`) into one positional path. `icmp.rtt-avg` was the last name a
+  table's `name` column held with a dot in it, backfilled dot-free by #586 itself
+  (`icmp.rtt-avg` to `icmp-rtt-avg`); no name column has held one since, and this epic adds none: a
+  dotted value is never stored, only resolved.
 
   **The allowlist is the load-bearing fact.** The entity name rule, `^[a-z0-9][a-z0-9-]*$`
   (`internal/storage/name.go`), is an allowlist, not a denylist of characters someone remembered to
   exclude. A name can never contain a separator or wildcard from any protocol, chosen or not yet
   chosen: `.` (path segments), `$` (accessors), `*` and `>` (NATS), `/` and `#` (MQTT), `%` (URL
   escaping), or `:` (reserved by the router for a custom method's verb suffix, `POST
-  /components/{ref}:rename`, so a name could never collide with `:verb` even if the allowlist admitted
-  the character, which it does not). That single property is what lets one grammar render as a CLI
-  argument, a REST path segment, a NATS subject, a DNS label, or an email localpart with no escaping
-  anywhere: an allowlist composes across every namespace it has not met yet, where a denylist has to
-  be re-audited for each new one.
+  /components/{ref}:rename`: a name admitting `:` would make `rm215a:rename` ambiguous between the
+  entity `rm215a:rename` and the entity `rm215a` with the `:rename` verb, so the allowlist excludes it
+  for the same reason it excludes everything else on this list). That single property is what lets one
+  grammar render as a CLI argument, a REST path segment, or a NATS subject with no escaping anywhere,
+  and lets most segments render as a DNS label or an email localpart, since the character set alone is
+  a subset of both: what the allowlist does **not** guarantee is a segment's fit under DNS's own
+  63-octet label ceiling (the 100-character entity limit is wider) or DNS's ban on a trailing hyphen
+  (`^[a-z0-9][a-z0-9-]*$` legally admits `abc-`); both are a render-time concern for whichever segment
+  eventually feeds a hostname, not a naming rule this decision enforces. An allowlist still composes
+  across every namespace it has not met yet, where a denylist has to be re-audited for each new one.
 
   **A percent-encoded slash arrives already decoded.** The HTTP handler decodes a path parameter
   before the address parser ever sees it (verified against the router, not assumed, before Task 12
@@ -3134,15 +3141,17 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   reaches a query: validation is structural, not a property of what happens to already be in the
   database.
 
-  **A dash render and a bare render are display-only, and the resolver refuses both back.**
-  `RenderDash` (`boi-17c-216b-display-1`) strips the accessor; `RenderBare` (`boi17c216bfp1`) further
-  compacts the final segment to the component type's `abbrev` plus its ordinal
-  (`internal/storage/render.go`). Both exist for labelling only (a cable tag, an asset sticker, a
-  compact row sub-line): accessor-stripping is lossy for the dash form and stem-compaction is lossier
-  still for the bare form, so neither round-trips through `ParseAddress`/`resolvePath`. The resolver
-  accepts exactly three forms, uuid, bare name, and the full dotted path (accessor included); a dash
-  or bare string reaching it fails as an ordinary invalid reference, the same as any other malformed
-  input.
+  **A dash render and a bare render are display-only, and neither is a form the resolver ever treats
+  as a path.** `RenderDash` (`boi-17c-216b-display-1`) strips the accessor; `RenderBare`
+  (`boi17c216bfp1`) further compacts the final segment to the component type's `abbrev` plus its
+  ordinal and drops every separator, hyphens included (`internal/storage/render.go`). Both exist for
+  labelling only (a cable tag, an asset sticker, a compact row sub-line): accessor-stripping is lossy
+  for the dash form and stem-compaction is lossier still for the bare form, so neither round-trips
+  through `ParseAddress`/`resolvePath`. Both also still satisfy the entity name rule on their own
+  (letters, digits, and hyphens, no dot or `$`), so a dash or bare string handed back to the resolver
+  is not refused as malformed: `ParseAddress` reports it is not an address at all and it falls through
+  to the ordinary bare-name path, almost always matching no row, an unremarkable 404 rather than a
+  distinguishable error.
 
 - **Decision (six edges, recorded rather than hidden):** the read path (`scopedByNameInScope`,
   `refPolicyHide`) and the write path (`resolveScopedRef`, `refPolicyForbid`) share one primitive,
@@ -3183,8 +3192,9 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
      and is named here only so a reader does not conflate the two governance patterns.
   6. **The tier guard inside `resolveRef` is forward insurance, not proof.** `resolveRef` panics if the
      caller's scope was resolved for a resource that does not `Cover` the config being checked
-     (`scopedcrud.go:521-524`). Every one of its eighteen call sites today passes a `resource` label
-     already derived from the same config it is checked against, so the guard **cannot fire on any
+     (`scopedcrud.go:521-524`). Every one of the 29 non-test call sites of `scopedByNameInScope` and
+     `resolveScopedRef` today passes a `resource` label already derived from the same config it is
+     checked against, so the guard **cannot fire on any
      input the current code produces**, and a green suite running with it live proves nothing beyond
      that (`scopedcrud.go:507-517`, in the code, says so explicitly). It is insurance for the next call
      site that copies a pattern without updating the label. It also inherits a blind spot from
@@ -3217,7 +3227,7 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   and gives a human a second, positional way to reach the same row without inventing a third identity
   field. The path grammar was reserved, syntax-only, in `internal/storage/name.go` since ADR-0076;
   Task 10 made every internal owner-resolve id-based ahead of the placement-scoped uniqueness DDL
-  (Task 11, [ADR extends the scope table below]), Task 12 built the parser and resolver
+  (Task 11, `db/migrations/20260808090000_names_scope_to_placement.sql`), Task 12 built the parser and resolver
   (`internal/storage/path.go`, `resolvePath`), and Task 15 put the resolved path, its segments, and
   both renders on the wire and pointed the console at uuids exclusively. Task 13's `:move` verb
   ([ADR-0088](#adr-0088-a-placement-change-is-an-authorization-act-so-a-move-is-its-own-verb)) and
@@ -3234,8 +3244,9 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   prefill a field but it can never cause a write elsewhere to be refused.
 
   1. **The platform fills.** A component's `name` is minted at create when an operator leaves it
-     blank: `<component_type stem>-<n>`, the ordinal the smallest positive integer no sibling shares in
-     the same placement scope (`generateComponentName`, `internal/storage/namegen.go:129-168`).
+     blank: `<component_type stem>-<n>`, the ordinal the smallest positive integer no sibling matching
+     that stem already claims in the same placement scope, a sibling on a different stem never blocking
+     it (`generateComponentName`, `internal/storage/namegen.go:129-168`).
   2. **A platform-owned value tracks its facts.** While `component.name_generated = true`, the name
      recomputes inside the same transaction as whatever changed its inputs: a `:move` to a new
      placement (`internal/storage/components.go:632-655`) or an ordinary product `PATCH` that
@@ -3267,7 +3278,7 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   create and `false` on an operator-typed one; the column default describes only a row this migration
   found already sitting in the table, never a row created after it.
 
-- **Context:** the same shape resolved independently three times on this branch before it was named as
+- **Context:** the same shape resolved independently twice on this branch before it was named as
   one principle, which is what promotes it from a per-feature habit to a rule to check new work
   against. A component's name (Task 14) is the built case above. `createIdentity`
   (`web/src/lib/entities.ts`) already ran clauses 2 and 3 client-side for a catalog entity, deriving a
@@ -3276,12 +3287,13 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   ([ADR-0086](#adr-0086-the-product-classification-floor-and-the-kind-split)) is the contrapositive's
   own evidence: a silent schema default on `product.kind` let a mislabeled cloud service read as
   correct forever, exactly the failure clause 1's explicit fill and clause 3's no-silent-default guard
-  against, which is why `kind` is required at create rather than defaulted. A system's `location_id`
-  ([ADR-0064](#adr-0064-placement-and-classification-are-mutable-after-create)) is the one field where
-  the tracking clause was tried and deliberately not adopted: continuous derivation from members made a
-  uniqueness scope unstable and produced 409s from writes that were not naming operations, so it stays
-  authored, filled once, drift reported only, proof that clause 2's live tracking is a per-field policy
-  choice, not a mandate every derived field must take. The boot-seed reconcile-and-delete carve-out
+  against, which is why `kind` is required at create rather than defaulted. A system's own
+  `location_id` (`internal/storage/systems.go`) is a live counterexample to clause 2, worth naming
+  because a reader could otherwise assume every platform-computable field tracks live: it is authored
+  at create and changed only through `:move` ([ADR-0088](#adr-0088-a-placement-change-is-an-authorization-act-so-a-move-is-its-own-verb)),
+  never derived from `system_member` rows, so clause 2's live tracking is confirmed here as a per-field
+  policy choice this decision's own build makes differently for a system's placement and a component's
+  name, not a mandate every derived field must take. The boot-seed reconcile-and-delete carve-out
   (`choice_alternate`,
   [ADR-0087](#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability),
   [storage](/architecture/storage/#migrations-three-buckets-kept-separate)) is a related but distinct

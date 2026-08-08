@@ -58,10 +58,13 @@ Column schemas live with each owning feature: [samples](/architecture/properties
 - **A `location`, `system`, or `component` name is unique within its placement, not across the estate**
   ([ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup)):
   each table trades its old global `UNIQUE (name)` constraint for a set of partial unique indexes, one
-  per placement bucket (`component_parent_name_key`, `component_location_name_key`,
-  `component_orphan_name_key`, and the matching pair for `location` and `system`,
-  `db/migrations/20260808090000_names_scope_to_placement.sql`), plus a plain btree on the bare `name`
-  column for the ambiguity scan every bare-name resolve runs. A **dotted address**
+  per placement bucket, plus a plain btree on the bare `name` column for the ambiguity scan every
+  bare-name resolve runs. `component` and `system` both carry three buckets (parent, location, orphan:
+  `component_parent_name_key` / `component_location_name_key` / `component_orphan_name_key` and the
+  matching triple on `system`), since both carry their own `parent_id` and `location_id`. `location`
+  carries only two (`location_parent_name_key` / `location_root_name_key`): it has no `location_id`
+  column of its own, so its two buckets are parented and root
+  (`db/migrations/20260808090000_names_scope_to_placement.sql`). A **dotted address**
   (`boi.17c.415a.$comp.display-1`) resolves structurally against these same indexes, one deterministic
   hop per segment, before any scope or ambiguity check runs; see [core entities](/architecture/core-entities/#an-address-a-uuid-or-a-dotted-path)
   for the grammar and [identity and access](/architecture/identity-access/#a-reference-resolves-within-a-scope)

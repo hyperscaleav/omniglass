@@ -2784,40 +2784,58 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   the `storage-schema-change` skill) rather than existing only in the ADR and this file.
 - **Every gateway read that could resolve a name twice now resolves it once and binds the uuid**
   ([#627](https://github.com/hyperscaleav/omniglass/issues/627) Task 10, ahead of the placement-scoped
-  uniqueness DDL below). The ingest lanes for telemetry, commands, and reconciliation (`840066a`,
-  `cab918e`, `dd92017`, `63b715e`) resolved a component or node once at the edge and carried its
-  **name** onward, re-resolving it up to four more times downstream; a health rollup's
-  system-conformance walk and a standard-owned role's recompute resolved by name inside a CTE, which
-  would have silently UNIONed two same-named owners' data rather than failing loudly (`7802b32`,
-  `4707bcb`); role-choice writes bound a raw name straight into a scalar subquery (`47864bc`). Every
-  one now resolves the reference **once**, binds the uuid, and threads that. Two independent sweeps
-  (a 30-agent adversarial pass, then a fresh hunt told to ignore the first) converged on the same list;
-  a scanner over every SQL string literal in the tree caught a fourth, identically-shaped miss the
-  earlier passes had not (`d64b314`). No caller-observable behaviour changed: every existing fixture
-  used globally-distinct names, so the whole suite stayed green throughout, and the new duplicate-name
-  tests (`b84a398`, `d889bbc`, `839d4d1`) are the only regression net this class of bug now has. Filed
-  [#641](https://github.com/hyperscaleav/omniglass/issues/641): effective tags' `?system=` filter still
-  resolves outside the caller's own read scope, narrowed by the uuid bind but not closed, deliberately
-  left for a later slice since this task's own contract was to change no observable behaviour.
+  uniqueness DDL below). A first pass (`840066a`) converted roughly 40 inline scalar name subqueries
+  gateway-wide to resolve a reference once via `scopedByName` and bind the resulting uuid. A controller
+  trace rejected that pass's own deferral of the collection ingest write path: `current_values.go`,
+  `settlement.go`, and `property_samples.go` still resolved a component, system, or location by an
+  inline name subquery on the hot path, which the moment two rows shared a name would raise SQLSTATE
+  21000 or silently fail a CHECK constraint; the same fix round also found `EffectiveProperties` and
+  `EffectiveMetrics` resolving their owner inside a CTE rather than a scalar subquery, which never
+  raises 21000 at all, it silently joins rows from every same-named owner into one answer, and a
+  `CreateSystem`/`UpdateSystem` recompute passing a system's own freshly-written name, with its id
+  already in hand, into the health rollup (`d64b314`). A 30-agent adversarial sweep then found five
+  more of the same class the first two passes had missed: the node ingest lane discarding a task's own
+  component uuid for a re-derived name at four downstream sinks (`cab918e`), the push telemetry route
+  authorizing by id then publishing `comp.Name` (`dd92017`), five role-choice writes binding a raw name
+  into a scalar subquery (`47864bc`), a standard-owned role recompute re-deriving conforming systems'
+  ids from names and raising an unmapped `ErrAmbiguousName` that rolled back the whole write rather
+  than failing usefully (`4707bcb`), the command and reconciliation routes re-deriving an id from a
+  name the gateway had just resolved moments earlier (`63b715e`), and effective tags' own `?system=`
+  filter repeating the CTE silent-union shape in its `seed_sys` clause (`7802b32`). A later,
+  independent hunt, told to ignore all prior analysis, wrote a scanner over every SQL string literal in
+  the tree and verified closure rather than finding anything new: only four production sites still
+  resolve by bare-name scalar subquery, all four verified safe (the three `*NameTaken` advisories, and
+  `roleOwnerExpr`'s standard branch, whose caller pre-resolves the id). No caller-observable behaviour
+  changed throughout: every existing fixture used globally-distinct names, so the whole suite stayed
+  green, and the new duplicate-name tests (`b84a398`, `d889bbc`, `839d4d1`) are the only regression net
+  this class of bug now has. Filed [#641](https://github.com/hyperscaleav/omniglass/issues/641):
+  effective tags' `?system=` filter still resolves outside the caller's own read scope, narrowed by the
+  uuid bind but not closed, deliberately left for a later slice since this task's own contract was to
+  change no observable behaviour.
 - **A location, system, or component name is unique within its placement, not the whole estate**
   ([#627](https://github.com/hyperscaleav/omniglass/issues/627) Task 11, `f132a80`, `87207b7`,
   [ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup)).
-  Each of the three tables trades its global `UNIQUE (name)` constraint for three partial unique
-  indexes, one per placement bucket (parented, located-but-unparented, orphan/root), plus a plain
-  btree for the ambiguity scan a bare-name resolve now has to run. A bare name matching more than one
-  row in the caller's scope is a `409` naming the candidates. A review round found the console's tree
-  builders (Components, Systems, Locations, the placement pickers) still keyed on the now-ambiguous
-  name and fixed all four to key on uuid instead (`c097dd6`). The scope-resolution primitive converged
-  from three near-identical functions (`scopedByName` / `scopedByNameInScope` / `resolveScopedRef`)
-  into one, `resolveRef`, with a policy axis for the read-versus-write disclosure split (`1cf8d74`,
-  `9de2fe7`); the SAME review round found the convergence itself had introduced two new criticals (a
-  cross-tier scope check denying every non-all-scoped caller on a write carrying a location or system
-  binding, and a scoped `component:read` caller's effective-tags system band silently vanishing),
-  fixed by a byte-identical revert to the pre-task baseline rather than a new authorization posture,
-  with two tests genuinely red against the introducing commit closing the coverage hole that had let
-  them ship (`ba8a9e6`). A forward-insurance tier guard landed on the same primitive, documented as
-  unable to fire on any input the current code produces (`48db30f`). Six known edges this convergence
-  ships with, stated rather than hidden, are recorded in
+  Each of the three tables trades its global `UNIQUE (name)` constraint for a set of partial unique
+  indexes, one per placement bucket, plus a plain btree for the ambiguity scan a bare-name resolve now
+  has to run. `component` and `system` each carry three buckets (parented, located-but-unparented,
+  orphan/root); `location`, which carries no `location_id` column of its own, carries two (parented,
+  root). A bare name matching more than one row in the caller's scope is a `409` naming the candidates. A review round (fix round 1: `f55daa2`,
+  `829dc6e`, `9e3c017`, `0e4aea0`, `c097dd6`, the last also rekeying the console's tree builders
+  (Components, Systems, Locations, the placement pickers) off the now-ambiguous name onto uuid) closed
+  its own findings but introduced two new criticals in doing so: a cross-tier scope check that denied
+  every non-all-scoped caller on a write carrying a location or system binding, and a scoped
+  `component:read` caller's effective-tags system band silently vanishing, neither caught by a fresh
+  full test run because no existing test covered a scoped non-all principal on a write path carrying a
+  cross-tier binding. The next round fixed both by a byte-identical revert to the pre-task baseline
+  rather than a new authorization posture, with two tests genuinely red against the introducing round
+  closing the coverage hole that had let them ship (`ba8a9e6`). The same round converged three
+  near-identical scope-resolution functions (`scopedByName` / `scopedByNameInScope` /
+  `resolveScopedRef`) into one, `resolveRef`, with a policy axis for the read-versus-write disclosure
+  split, on the ruling that the converged primitive, checking its caller-supplied scope against the
+  resource it was actually resolved for, would have caught both criticals at the first scoped test
+  rather than after (`1cf8d74`, `9de2fe7`). A forward-insurance tier guard landed on the same
+  primitive, documented as unable to fire on any input the current code produces (`48db30f`). Six
+  known edges this convergence ships with, stated rather than hidden, are recorded in
   [ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup).
 - **A dotted address resolves to a uuid, beside the existing uuid-or-name dual accept**
   ([#627](https://github.com/hyperscaleav/omniglass/issues/627) Task 12, `72147c1`, `87e170d`,
@@ -2860,8 +2878,8 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   ([#627](https://github.com/hyperscaleav/omniglass/issues/627) Task 14, `3a571f1`,
   [ADR-0090](/architecture/decisions/#adr-0090-a-derived-value-is-a-default-that-tracks-until-touched)).
   Left blank on create, the platform mints `<stem>-<n>` from the resolved `component_type` chain and
-  the next free ordinal in the placement scope, serialized by a transaction-scoped advisory lock keyed
-  on stem plus scope rather than a `23505` retry. `name_generated` tracks who holds the pen: true on a
+  the next free ordinal among siblings sharing that stem in the placement scope, serialized by a
+  transaction-scoped advisory lock keyed on stem plus scope rather than a `23505` retry. `name_generated` tracks who holds the pen: true on a
   generated create, false forever once `:rename` touches it, true again only through the new
   `:resetName` (gated by the same `component:rename` token `:rename` uses). A `:move` or a product
   reclassify recomputes a still-platform-owned name in the same transaction as the write that changed
@@ -2890,11 +2908,13 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   labelled "Component", a reachability-panel cache key still built from the old name, a systems-list
   health badge still keyed on name against panels now invalidating by uuid), the fourth time on this
   branch that enumerating consumers from the edit site rather than the value's type and usage missed a
-  real one (`2330954`, `01e4693`). A pre-existing asymmetry closed alongside: staffing a role or adding
-  a member with a duplicate-named component worked, but unstaffing or removing it `409`d, because the
-  resolve was estate-wide when the component was already unique within the relation being edited (this
-  role's occupants, this system's members); a new `loadByRefWithin` primitive resolves within that
-  relation instead, no wire change needed (`5a97266`, closing
+  real one (`2330954`, `01e4693`). Fixing the assign and add pickers to submit a uuid, above, closed
+  staffing but left an asymmetry open on the way out: unassigning a role or removing a member still
+  addressed the component by name through `UnassignRole` / `resolveMembershipEnds`, both resolving
+  estate-wide via `scopedByName`, so an operator could staff a role or add a member with a
+  duplicate-named component and then not undo it. A new `loadByRefWithin` primitive resolves within the
+  relation actually being edited (this role's occupants, this system's members) instead of the whole
+  estate, closing the gap with no wire change (`5a97266`, closing
   [#645](https://github.com/hyperscaleav/omniglass/issues/645)). `render_test.go`'s ten cases were
   found to exercise a test-local reimplementation of the segment shape rather than `PathOf` itself, the
   fourth occurrence on this branch of a test built on a reimplementation of the thing it is meant to

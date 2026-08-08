@@ -613,26 +613,34 @@ Every reference form the API accepts resolves through one `{ref}` path parameter
 /components/{ref}`, and every custom method beside it): a uuid, a bare name, or a dotted address,
 tried in that order. A bare name matching more than one row in the caller's scope is a `409` naming
 the candidates rather than silently resolving to whichever sorted first, since **#627 scopes a name's
-uniqueness to its placement, not the whole estate**: a component scopes to its parent component when
-it has one, else its location, else the estate; a system and a location follow the same rule one level
-up. The accessor needs its `$` sigil because a shell strips a bare `$comp` to nothing before the
-request leaves the terminal (`url.PathEscape` does not help; it leaves `$` unescaped): every CLI
-example carrying an accessor is single-quoted, `'boi.17c.415a.$comp.display-1'`, never bare.
+uniqueness to its placement, not the whole estate**: a component and a system both scope to their
+parent when they have one, else their location, else the estate, a three-bucket split each carries its
+own partial unique index for; a location, which has no `location_id` column of its own, scopes to its
+parent when it has one, else the estate, two buckets rather than three. The accessor is spelled with a
+`$` precisely because the name rule excludes it, so `$comp` can never collide with a location
+legitimately named `comp`; the cost is that an unquoted `$comp` is exactly what a shell strips to
+nothing before the request ever leaves the terminal (`url.PathEscape` does not help; it leaves `$`
+unescaped), so every CLI example carrying an accessor is
+single-quoted, `'boi.17c.415a.$comp.display-1'`, never bare.
 
 **The name rule is an allowlist, not a denylist**, which is the fact the address grammar depends on:
 `^[a-z0-9][a-z0-9-]*$` never admits `.`, `$`, `*`, `>`, `/`, `#`, `%`, or `:`, so a name can never
 collide with a path separator, an accessor, a NATS or MQTT wildcard, a URL escape, or the router's own
 `:verb` suffix, in any protocol the platform speaks today or adds later. A `GET`/`LIST` response on a
 component, system, or location carries the resolved `path` and `path_segments` alongside two
-**display-only** renders, a dash-joined form (`boi-17c-415a-display-1`) and a compact form using the
-component type's `abbrev` in place of the last segment (`boi17c415afp1`); neither round-trips through
-the resolver, because stripping the accessor or compacting the stem both lose information a resolve
-needs back.
+**display-only** renders, a dash-joined form (`boi-17c-415a-display-1`) and a compact form that
+substitutes the last segment's component type `abbrev` for its stem (`boi17c415afp1`); neither
+round-trips through the resolver, because stripping the accessor or compacting the stem both lose
+information a resolve needs back. The abbrev substitution is a single-row cost a `LIST` skips (no
+console surface reads it there): a listed row's compact render falls back to the segment concatenated
+as-is (`boi17c415adisplay-1`), and only a single `GET` pays the extra lookup and substitutes the
+abbrev in full.
 
 **A component's name can generate itself**
 ([ADR-0090](/architecture/decisions/#adr-0090-a-derived-value-is-a-default-that-tracks-until-touched)).
 Left blank on create, the platform mints `<component_type stem>-<n>` from the resolved type and the
-next free ordinal in the component's placement scope; while `name_generated` stays true the name
+next free ordinal among siblings sharing that stem in the component's placement scope; while
+`name_generated` stays true the name
 recomputes on a `:move` or a product reclassify, riding that write's own audit event. `:rename` freezes
 it; `:resetName` hands the pen back and regenerates from the component's current facts, gated by the
 same `component:rename` permission `:rename` uses.

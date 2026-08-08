@@ -33,9 +33,12 @@ first `:verb` routes in the wild. See [implementation status](/architecture/stat
 Everything lives under `/api/v1`. The path shape is derivable, not special-cased:
 
 - **Plural resource collections**, standard methods addressed by the entity's `name` where it has one
-  and by its uuid where it does not (AIP-style): `POST` creates (409 when the `name` is already taken;
-  the uuid primary key is the server's to mint and cannot collide), `GET` reads, `PATCH`
-  partial-updates (AIP-134), `DELETE` removes. No upsert shortcuts.
+  and by its uuid where it does not (AIP-style): `POST` creates (409 when the `name` is already taken
+  in its placement bucket; the uuid primary key is the server's to mint and cannot collide), `GET`
+  reads, `PATCH` partial-updates (AIP-134), `DELETE` removes. No upsert shortcuts. On `location`,
+  `system`, and `component`, the `{ref}` path parameter takes a third form beside uuid and bare name: a
+  dotted address, a positional lookup resolved structurally before any scope or ambiguity check runs
+  ([ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup)).
 - **Every name-bearing body carries both handles**: a uuid **`id`** (stable identity, the target every
   foreign key stores) and a unique, renameable **`name`** (the identifier an operator reads and
   types). A create takes the `name`; the uuid is the database's to mint, and **every write returns
