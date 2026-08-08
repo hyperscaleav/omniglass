@@ -89,4 +89,53 @@ describe("FilterBar", () => {
     // The only buttons on a presence chip are the operator glyph and remove (no value).
     expect(container.querySelectorAll(".font-medium").length).toBe(0);
   });
+
+  // Review finding 4 (task-15-review.md #4): a facet whose values are opaque
+  // (a uuid, #627's own system_id after the ?system= drill-in swap) painted
+  // the uuid in the committed chip and as the option's primary text, with no
+  // label indirection anywhere FilterBar itself renders a value, and typing
+  // the name an operator actually reads matched no suggestion at all.
+  const uuidKeys: FilterKey<Row>[] = [
+    {
+      key: "system", type: "string", hint: "exact", get: (r) => r.type,
+      values: () => ["uuid-1"],
+      valueLabel: (v) => (v === "uuid-1" ? "boardroom" : v),
+    },
+  ];
+
+  it("shows a value's label, not its raw id, in the committed chip", () => {
+    const chips: Chip[] = [{ key: "system", op: "eq", values: ["uuid-1"] }];
+    const { getByText, queryByText } = render(() => <FilterBar keys={uuidKeys} rows={[]} chips={chips} onChips={vi.fn()} />);
+    expect(getByText("boardroom")).toBeTruthy();
+    expect(queryByText("uuid-1")).toBeNull();
+  });
+
+  it("shows a value's label as the suggestion's primary text, not its raw id", () => {
+    const { getByRole, getAllByRole } = render(() => <FilterBar keys={uuidKeys} rows={[]} chips={[]} onChips={vi.fn()} />);
+    fireEvent.input(getByRole("combobox"), { target: { value: "system:=" } });
+    const option = getAllByRole("option")[0];
+    // The PRIMARY span specifically, not textContent as a whole: the raw
+    // value's own hint span already carried the label before this fix (as
+    // the dim secondary text), so asserting on the option's full text would
+    // pass whether or not the label ever reached the primary slot.
+    const primary = option.querySelector("span.inline-flex")?.textContent ?? "";
+    expect(primary).toBe("boardroom");
+  });
+
+  it("matches a suggestion by its label as well as its raw id", () => {
+    const { getByRole, getAllByRole } = render(() => <FilterBar keys={uuidKeys} rows={[]} chips={[]} onChips={vi.fn()} />);
+    // Typing the operator-readable name, not the uuid: the raw value alone
+    // (the old matcher) would find nothing here.
+    fireEvent.input(getByRole("combobox"), { target: { value: "system:=boardr" } });
+    const options = getAllByRole("option");
+    expect(options.length).toBeGreaterThan(0);
+  });
+
+  it("commits the raw id, not the label, when a labelled suggestion is picked", () => {
+    const onChips = vi.fn();
+    const { getByRole, getAllByRole } = render(() => <FilterBar keys={uuidKeys} rows={[]} chips={[]} onChips={onChips} />);
+    fireEvent.input(getByRole("combobox"), { target: { value: "system:=boardr" } });
+    fireEvent.mouseDown(getAllByRole("option")[0]);
+    expect(onChips).toHaveBeenCalledWith([{ key: "system", op: "eq", values: ["uuid-1"] }]);
+  });
 });

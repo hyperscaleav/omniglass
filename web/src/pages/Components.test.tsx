@@ -108,6 +108,15 @@ describe("Components create-as-route", () => {
     ));
     await waitFor(() => expect(screen.getByText("In-room Mic")).toBeTruthy());
     expect(screen.queryByText("Annex Mic")).toBeNull();
+    // Review finding 4 (task-15-review.md #4): the committed chip must show
+    // the system's own readable label, not the raw uuid the query string
+    // and the facet's own value now carry. Scoped to the chip's own value
+    // button (font-data font-medium): "boardroom" also legitimately
+    // appears in the row's own System column, so an unscoped query would
+    // pass whether or not the chip itself carries the label.
+    const chipValue = document.querySelector(".font-data.font-medium");
+    expect(chipValue?.textContent).toBe("boardroom");
+    expect(screen.queryByText(sysId)).toBeNull();
   });
 
   // A root component (no component parent) sitting at a location has no
@@ -260,6 +269,7 @@ describe("Components create-as-route", () => {
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     expect(screen.queryByText("Generated")).toBeNull();
   });
+
 
   it("the reset affordance calls :resetName and updates the name field from the response", async () => {
     mount("/components/mic-2");
