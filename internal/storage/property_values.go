@@ -478,19 +478,19 @@ func (p *PG) ownerArcValue(ctx context.Context, q querier, ownerKind, ownerRef s
 func (p *PG) ownerArcValueInScope(ctx context.Context, q querier, ownerKind, ownerRef string, s scope.Set) (string, error) {
 	switch ownerKind {
 	case "component":
-		c, err := scopedByNameInScope(ctx, q, componentConfig, ownerRef, s)
+		c, err := scopedByNameInScope(ctx, q, componentConfig, ownerRef, ownerKind, s)
 		if err != nil {
 			return "", err
 		}
 		return c.ID, nil
 	case "system":
-		sys, err := scopedByNameInScope(ctx, q, systemConfig, ownerRef, s)
+		sys, err := scopedByNameInScope(ctx, q, systemConfig, ownerRef, ownerKind, s)
 		if err != nil {
 			return "", err
 		}
 		return sys.ID, nil
 	case "location":
-		l, err := scopedByNameInScope(ctx, q, locationConfig, ownerRef, s)
+		l, err := scopedByNameInScope(ctx, q, locationConfig, ownerRef, ownerKind, s)
 		if err != nil {
 			return "", err
 		}
@@ -536,13 +536,13 @@ func errAsNotFound(err, notFound error) (bool, error) {
 func (p *PG) ownerInScope(ctx context.Context, q querier, ownerKind, ownerID string, s scope.Set) (bool, error) {
 	switch ownerKind {
 	case "component":
-		_, err := scopedByNameInScope(ctx, q, componentConfig, ownerID, s)
+		_, err := scopedByNameInScope(ctx, q, componentConfig, ownerID, ownerKind, s)
 		return errAsNotFound(err, ErrComponentNotFound)
 	case "system":
-		_, err := scopedByNameInScope(ctx, q, systemConfig, ownerID, s)
+		_, err := scopedByNameInScope(ctx, q, systemConfig, ownerID, ownerKind, s)
 		return errAsNotFound(err, ErrSystemNotFound)
 	case "location":
-		_, err := scopedByNameInScope(ctx, q, locationConfig, ownerID, s)
+		_, err := scopedByNameInScope(ctx, q, locationConfig, ownerID, ownerKind, s)
 		return errAsNotFound(err, ErrLocationNotFound)
 	case "node":
 		// A node is not a scope tree, so existence is the whole check.
@@ -597,7 +597,7 @@ func mapPropertyWriteErr(err error) error {
 // so the next caller does not have to rediscover the scope-blind version's
 // disclosure bug.
 func (p *PG) componentIDResolved(ctx context.Context, q querier, name string, s scope.Set) (id string, inScope bool, err error) {
-	c, err := scopedByNameInScope(ctx, q, componentConfig, name, s)
+	c, err := scopedByNameInScope(ctx, q, componentConfig, name, "component", s)
 	if errors.Is(err, ErrComponentNotFound) {
 		return "", false, nil
 	}

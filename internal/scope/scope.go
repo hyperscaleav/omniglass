@@ -139,6 +139,25 @@ func Resolve(grants []Grant, idx rbac.RoleIndex, resource, action string) Set {
 // task:<action> confers that scope on the interface/task; the gateway then
 // filters by "the owning component is in this component-tier scope". group joins
 // as it lands.
+// Covers reports whether a scope RESOLVED for resource (Resolve's own
+// resource argument, e.g. what a.scopeFor(ctx, "component", "read") was
+// called with) can be checked against a target tree tier (a storage
+// scopedConfig's own resource label: "component", "system", or "location").
+// It is the query-time twin of Resolve's own applicableKinds. Most resources
+// are scoped to exactly one tier, so Covers is only ever true for resource ==
+// target there; secret, variable, field, and telemetry are owned on the
+// exclusive arc, so a grant at ANY of the three tree tiers can confer them,
+// and the one resolved Set is checked against whichever tier the owner
+// actually sits at. A caller that resolves a scope for one tier and checks it
+// against a tier Covers says no for is comparing incompatible id spaces:
+// inScopeTree walks the target's own ancestor chain, so the ids can never
+// match, and the caller would be silently denied (or, on a write/advisory
+// path, would leak a candidate estate-wide) instead of being loudly caught.
+// See resolveRef in internal/storage/scopedcrud.go, the caller of this.
+func Covers(resource, target string) bool {
+	return applicableKinds(resource)[target]
+}
+
 func applicableKinds(resource string) map[string]bool {
 	switch resource {
 	case "location":

@@ -801,7 +801,7 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, since time.Tim
 	// inside read, not estate-wide, since a name unique within this caller's
 	// own scope must resolve even when an unrelated out-of-scope row shares
 	// it.
-	sys, err := scopedByNameInScope(ctx, p.pool, systemConfig, systemName, read)
+	sys, err := scopedByNameInScope(ctx, p.pool, systemConfig, systemName, "system", read)
 	if err != nil {
 		return nil, err
 	}
@@ -853,7 +853,7 @@ func (p *PG) LocationHealth(ctx context.Context, locationName string, since time
 	// Resolved once via scopedByNameInScope, not scopedByName-then-
 	// inScopeTree (see SystemHealth's comment; ruling 2, #627); rep.OwnerID
 	// keeps echoing the caller's own reference, unchanged.
-	loc, err := scopedByNameInScope(ctx, p.pool, locationConfig, locationName, read)
+	loc, err := scopedByNameInScope(ctx, p.pool, locationConfig, locationName, "location", read)
 	if err != nil {
 		return nil, err
 	}

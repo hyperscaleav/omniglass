@@ -355,19 +355,19 @@ func (p *PG) resolveVariableOwner(ctx context.Context, q querier, kind string, n
 	switch kind {
 	case "component":
 		var c *Component
-		c, err = resolveScopedRef(ctx, q, componentConfig, *name, create)
+		c, err = resolveScopedRef(ctx, q, componentConfig, *name, "variable", create)
 		if c != nil {
 			id = c.ID
 		}
 	case "system":
 		var s *System
-		s, err = resolveScopedRef(ctx, q, systemConfig, *name, create)
+		s, err = resolveScopedRef(ctx, q, systemConfig, *name, "variable", create)
 		if s != nil {
 			id = s.ID
 		}
 	case "location":
 		var l *Location
-		l, err = resolveScopedRef(ctx, q, locationConfig, *name, create)
+		l, err = resolveScopedRef(ctx, q, locationConfig, *name, "variable", create)
 		if l != nil {
 			id = l.ID
 		}

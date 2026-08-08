@@ -403,7 +403,7 @@ func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSp
 		// requires ambiguity judged inside create, not estate-wide. A parent
 		// that exists only outside create scope stays ErrLocationForbidden
 		// (preserved, not collapsed into not-found).
-		parent, err := resolveScopedRef(ctx, tx, locationConfig, *spec.ParentName, create)
+		parent, err := resolveScopedRef(ctx, tx, locationConfig, *spec.ParentName, "location", create)
 		if errors.Is(err, ErrLocationNotFound) {
 			return nil, ErrParentNotFound
 		} else if err != nil {
@@ -456,7 +456,7 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 	if patch.ParentName != nil {
 		// resolveScopedRef, not locationByName-then-inScope: ruling 2
 		// (#627), ambiguity judged inside action rather than estate-wide.
-		newParent, err := resolveScopedRef(ctx, tx, locationConfig, *patch.ParentName, action)
+		newParent, err := resolveScopedRef(ctx, tx, locationConfig, *patch.ParentName, "location", action)
 		if errors.Is(err, ErrLocationNotFound) {
 			return nil, ErrParentNotFound
 		} else if err != nil {

@@ -248,7 +248,7 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 	// inScopeTree (ruling 2, #627: ambiguity judged inside read, not
 	// estate-wide): the query below binds sys.ID instead of re-deriving it
 	// from systemName, which #627 no longer guarantees is unique.
-	sys, err := scopedByNameInScope(ctx, p.pool, systemConfig, systemName, read)
+	sys, err := scopedByNameInScope(ctx, p.pool, systemConfig, systemName, "system", read)
 	if err != nil {
 		return nil, err
 	}
@@ -331,7 +331,7 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 	// expression").
 	// scopedByNameInScope, not scopedByName-then-inScopeTree: ruling 2
 	// (#627), ambiguity judged inside write rather than estate-wide.
-	sys, err := scopedByNameInScope(ctx, tx, systemConfig, systemName, write)
+	sys, err := scopedByNameInScope(ctx, tx, systemConfig, systemName, "system", write)
 	if err != nil {
 		return err // ErrSystemNotFound when absent or out of scope
 	}
@@ -530,7 +530,7 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 	// id rather than re-deriving one from a name. scopedByNameInScope, not
 	// scopedByName-then-inScopeTree: ruling 2 (#627), ambiguity judged
 	// inside write rather than estate-wide.
-	sys, err := scopedByNameInScope(ctx, tx, systemConfig, systemName, write)
+	sys, err := scopedByNameInScope(ctx, tx, systemConfig, systemName, "system", write)
 	if err != nil {
 		return err
 	}
@@ -603,7 +603,7 @@ func (p *PG) SwapPositions(ctx context.Context, actorID, systemName, roleName st
 	// Resolved once (see AssignRole's comment). scopedByNameInScope, not
 	// scopedByName-then-inScopeTree: ruling 2 (#627), ambiguity judged
 	// inside write rather than estate-wide.
-	sys, err := scopedByNameInScope(ctx, tx, systemConfig, systemName, write)
+	sys, err := scopedByNameInScope(ctx, tx, systemConfig, systemName, "system", write)
 	if err != nil {
 		return err
 	}

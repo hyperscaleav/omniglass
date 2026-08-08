@@ -169,12 +169,91 @@ func resolveMatches[T any](cfg scopedConfig[T], ref string, matches []*T) (*T, e
 	}
 }
 
-// scopedByName resolves an entity by REFERENCE, which is either its uuid or its
-// name, with NO scope check: callers that need one layer it on afterward (a
-// create's placement resolve, for example, checks the resolved row against a
-// create/action scope of its own right after). The uuid is the canonical handle
-// and the name is the friendly alias, and a caller uses whichever it holds: a
-// script that just created something has the id, a human at a CLI has the name.
+// refPolicy is resolveRef's policy axis: what to report when a bare-name
+// reference matches at least one row, but none of the matches fall inside
+// the given scope.
+type refPolicy int
+
+const (
+	// refPolicyHide reports the SAME non-disclosing notFound whether the
+	// reference is absent or merely out of scope: the read-path posture
+	// (architect ruling 2, #627), where a caller must never learn that an
+	// out-of-scope row exists at all, not even via a different status.
+	refPolicyHide refPolicy = iota
+	// refPolicyForbid preserves a write path's pre-existing notFound-versus-
+	// forbidden split: absent anywhere is cfg.notFound, present only outside
+	// scope is cfg.forbidden. This is not a new disclosure the way a read's
+	// uuid would be (the caller supplied the reference itself, in the same
+	// request), and several routes' tested contracts already distinguish
+	// the two (interfaces_scope_test.go:82).
+	refPolicyForbid
+)
+
+// resolveRef is the single primitive behind every bare-name/uuid resolve
+// against a scoped tree entity. It used to be three near-identical
+// functions (scopedByName, scopedByNameInScope, resolveScopedRef), which is
+// exactly how architect ruling 2 (#627, "scope decides before ambiguity
+// does") landed on two of them and missed the rest, and how this task's own
+// review-response round then chased nine more call sites one at a time:
+// three copies means the next ruling gets applied two or three times.
+// scopedByName's old scope-blind, existence-only behavior is not a separate
+// code path here, it is what this degenerates to when set.All is true:
+// inScopeTree's own short-circuit (scopetree.go) treats every row as in
+// scope, so refPolicyHide and refPolicyForbid become indistinguishable and
+// every match is a candidate, which is scopedByName's exact contract.
+//
+// resource names the resource the caller's set was actually RESOLVED for
+// (e.g. what a.scopeFor(ctx, "component", "read") was called with at the
+// API layer), which is not always cfg.resource: interface and task cascade
+// through the component tier, and secret/variable/field/telemetry cascade
+// through all three tree tiers (scope.Covers, mirroring Resolve's own
+// applicableKinds). Unless set.All, resource must Cover cfg.resource: a
+// scope resolved for one tier checked against a DIFFERENT tier's table is
+// comparing incompatible id spaces (inScopeTree walks the target's own
+// ancestor chain, so the ids can never match), which silently denies every
+// non-all caller on a read/write path or leaks a candidate estate-wide on
+// an advisory one, rather than being caught. This exact mismatch shipped
+// twice in this task's own history (CreateComponent's system/location
+// binds, ResolveTags' forSystem filter) before this guard existed; it is
+// deliberately a panic, not a returned error, because a tier mismatch is a
+// caller bug to fix in code, not a runtime condition to route around.
+func resolveRef[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref, resource string, set scope.Set, policy refPolicy) (*T, error) {
+	if !set.All && !scope.Covers(resource, cfg.resource) {
+		panic(fmt.Sprintf("storage: resolveRef: a scope resolved for %q cannot be checked against %q (resolving %q)", resource, cfg.resource, ref))
+	}
+	matches, err := loadByRef(ctx, q, cfg, ref)
+	if err != nil {
+		return nil, err
+	}
+	if policy == refPolicyForbid && len(matches) == 0 {
+		return nil, cfg.notFound
+	}
+	inScope := make([]*T, 0, len(matches))
+	for _, v := range matches {
+		ok, err := inScopeTree(ctx, q, cfg.table, cfg.idOf(v), set)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			inScope = append(inScope, v)
+		}
+	}
+	if policy == refPolicyForbid && len(inScope) == 0 {
+		return nil, cfg.forbidden
+	}
+	return resolveMatches(cfg, ref, inScope)
+}
+
+// scopedByName resolves an entity by REFERENCE, which is either its uuid or
+// its name, with NO scope check: callers that need one layer it on
+// afterward (a create's placement resolve, for example, checks the resolved
+// row against a create/action scope of its own right after), or have no
+// caller scope that could ever apply (a cross-tier existence-only bind, or
+// the three *NameTaken advisories, which are intentionally blind to the
+// caller's own grant by design). A thin wrapper over resolveRef with an All
+// set: every row is a candidate, matching scopedByName's original contract
+// exactly (see resolveRef's doc for why this is a degenerate case, not a
+// separate implementation to keep in sync).
 //
 // The uuid is tried first, and that ordering is only unambiguous because a name
 // can never be uuid-shaped (ValidateName refuses the form). Without that
@@ -192,11 +271,7 @@ func resolveMatches[T any](cfg scopedConfig[T], ref string, matches []*T) (*T, e
 // GET, which is why scopedGet and resolveScoped do NOT call this directly; see
 // scopedByNameInScope.
 func scopedByName[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref string) (*T, error) {
-	matches, err := loadByRef(ctx, q, cfg, ref)
-	if err != nil {
-		return nil, err
-	}
-	return resolveMatches(cfg, ref, matches)
+	return resolveRef(ctx, q, cfg, ref, cfg.resource, scope.Set{All: true}, refPolicyHide)
 }
 
 // scopedByNameInScope resolves a reference the same way scopedByName does, but
@@ -211,31 +286,20 @@ func scopedByName[T any](ctx context.Context, q querier, cfg scopedConfig[T], re
 // out of scope, even only as a uuid in a 409, is the same leak the
 // non-disclosing 404 exists to prevent. A uuid reference still narrows to at
 // most one row (a primary key), so this only ever changes the bare-name path.
-func scopedByNameInScope[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref string, read scope.Set) (*T, error) {
-	matches, err := loadByRef(ctx, q, cfg, ref)
-	if err != nil {
-		return nil, err
-	}
-	inScope := make([]*T, 0, len(matches))
-	for _, v := range matches {
-		ok, err := inScopeTree(ctx, q, cfg.table, cfg.idOf(v), read)
-		if err != nil {
-			return nil, err
-		}
-		if ok {
-			inScope = append(inScope, v)
-		}
-	}
-	return resolveMatches(cfg, ref, inScope)
+// resource is the resource read was resolved for (see resolveRef).
+func scopedByNameInScope[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref, resource string, read scope.Set) (*T, error) {
+	return resolveRef(ctx, q, cfg, ref, resource, read, refPolicyHide)
 }
 
 // withoutCandidates redacts an *ErrAmbiguousName's Candidates, for a
 // resolution path that has no caller scope to filter by at all (the three
 // *NameTaken advisories, which intentionally resolve scope-blind so
 // availability matches the placement bucket asked about rather than the
-// caller's own grant, ADR the checkName routes document). The reference is
-// still refused as ambiguous; the response just never names uuids the caller
-// might have no scope to read, since nothing here can tell which ones do.
+// caller's own grant, ADR the checkName routes document; and a cross-tier
+// existence-only bind, whose caller scope is the wrong tier to apply here at
+// all). The reference is still refused as ambiguous; the response just
+// never names uuids the caller might have no scope to read, since nothing
+// here can tell which ones do.
 func withoutCandidates(err error) error {
 	var ambig *ErrAmbiguousName
 	if errors.As(err, &ambig) {
@@ -256,43 +320,28 @@ func withoutCandidates(err error) error {
 // several routes' tested contracts already distinguish "no such row" from
 // "that row is not yours to use here"). A genuine collision within scope is
 // ErrAmbiguousName, whose Candidates never name a row outside the given
-// scope, same guarantee as scopedByNameInScope.
-func resolveScopedRef[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref string, set scope.Set) (*T, error) {
-	matches, err := loadByRef(ctx, q, cfg, ref)
-	if err != nil {
-		return nil, err
-	}
-	if len(matches) == 0 {
-		return nil, cfg.notFound
-	}
-	inScope := make([]*T, 0, len(matches))
-	for _, v := range matches {
-		ok, err := inScopeTree(ctx, q, cfg.table, cfg.idOf(v), set)
-		if err != nil {
-			return nil, err
-		}
-		if ok {
-			inScope = append(inScope, v)
-		}
-	}
-	if len(inScope) == 0 {
-		return nil, cfg.forbidden
-	}
-	return resolveMatches(cfg, ref, inScope)
+// scope, same guarantee as scopedByNameInScope. resource is the resource set
+// was resolved for (see resolveRef).
+func resolveScopedRef[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref, resource string, set scope.Set) (*T, error) {
+	return resolveRef(ctx, q, cfg, ref, resource, set, refPolicyForbid)
 }
 
 // scopedGet resolves an entity by name within the caller's read scope; absent,
 // out of scope, or ambiguous only outside the caller's scope is the same
 // non-disclosing notFound (scopedByNameInScope narrows to read scope first).
+// read is always resolved for cfg's own resource: scopedGet is one
+// entity-generic helper called once per tree entity with its own matching
+// scope, never a cross-tier reference, so no mismatch can occur here.
 func scopedGet[T any](ctx context.Context, p *PG, cfg scopedConfig[T], name string, read scope.Set) (*T, error) {
-	return scopedByNameInScope(ctx, p.pool, cfg, name, read)
+	return scopedByNameInScope(ctx, p.pool, cfg, name, cfg.resource, read)
 }
 
 // resolveScoped loads an entity by name and enforces the read-then-action scope
 // split: out of read scope (or ambiguous only outside it) is notFound
-// (non-disclosing), readable but out of action scope is forbidden.
+// (non-disclosing), readable but out of action scope is forbidden. Same
+// same-tier guarantee as scopedGet.
 func resolveScoped[T any](ctx context.Context, q querier, cfg scopedConfig[T], name string, read, action scope.Set) (*T, error) {
-	v, err := scopedByNameInScope(ctx, q, cfg, name, read)
+	v, err := scopedByNameInScope(ctx, q, cfg, name, cfg.resource, read)
 	if err != nil {
 		return nil, err
 	}

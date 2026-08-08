@@ -586,13 +586,13 @@ func (p *PG) resolveSecretOwner(ctx context.Context, q querier, kind string, nam
 	switch kind {
 	case "component":
 		var c *Component
-		c, err = resolveScopedRef(ctx, q, componentConfig, *name, create)
+		c, err = resolveScopedRef(ctx, q, componentConfig, *name, "secret", create)
 		if c != nil {
 			id = c.ID
 		}
 	case "location":
 		var l *Location
-		l, err = resolveScopedRef(ctx, q, locationConfig, *name, create)
+		l, err = resolveScopedRef(ctx, q, locationConfig, *name, "secret", create)
 		if l != nil {
 			id = l.ID
 		}

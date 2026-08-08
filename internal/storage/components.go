@@ -220,7 +220,7 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 		// caller cannot reach. A parent that exists only outside create
 		// scope stays ErrComponentForbidden (preserved, not collapsed into
 		// not-found: the caller supplied this reference itself).
-		parent, err := resolveScopedRef(ctx, tx, componentConfig, *spec.ParentName, create)
+		parent, err := resolveScopedRef(ctx, tx, componentConfig, *spec.ParentName, "component", create)
 		if errors.Is(err, ErrComponentNotFound) {
 			return nil, ErrParentComponentNotFound
 		} else if err != nil {
@@ -392,7 +392,7 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 	// untouched.
 	parentPatch := patch.ParentName
 	if patch.ParentName != nil && *patch.ParentName != "" {
-		parent, err := resolveScopedRef(ctx, tx, componentConfig, *patch.ParentName, action)
+		parent, err := resolveScopedRef(ctx, tx, componentConfig, *patch.ParentName, "component", action)
 		if errors.Is(err, ErrComponentNotFound) {
 			return nil, ErrParentComponentNotFound
 		} else if err != nil {

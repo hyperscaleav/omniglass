@@ -375,7 +375,7 @@ func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, 
 		// (#627) requires ambiguity judged inside create, not estate-wide.
 		// A parent that exists only outside create scope stays
 		// ErrSystemForbidden (preserved, not collapsed into not-found).
-		parent, err := resolveScopedRef(ctx, tx, systemConfig, *spec.ParentName, create)
+		parent, err := resolveScopedRef(ctx, tx, systemConfig, *spec.ParentName, "system", create)
 		if errors.Is(err, ErrSystemNotFound) {
 			return nil, ErrParentSystemNotFound
 		} else if err != nil {
@@ -518,7 +518,7 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	// untouched.
 	parentPatch := patch.ParentName
 	if patch.ParentName != nil && *patch.ParentName != "" {
-		parent, err := resolveScopedRef(ctx, tx, systemConfig, *patch.ParentName, action)
+		parent, err := resolveScopedRef(ctx, tx, systemConfig, *patch.ParentName, "system", action)
 		if errors.Is(err, ErrSystemNotFound) {
 			return nil, ErrParentSystemNotFound
 		} else if err != nil {

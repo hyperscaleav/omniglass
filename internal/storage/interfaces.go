@@ -128,7 +128,7 @@ func interfaceComponentID(ctx context.Context, q querier, ref *string, create sc
 	if ref == nil {
 		return nil, nil
 	}
-	c, err := resolveScopedRef(ctx, q, componentConfig, *ref, create)
+	c, err := resolveScopedRef(ctx, q, componentConfig, *ref, "interface", create)
 	switch {
 	case errors.Is(err, ErrComponentNotFound):
 		return nil, ErrInterfaceComponentNotFound
