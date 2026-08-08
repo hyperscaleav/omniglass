@@ -676,15 +676,20 @@ func TestResolveTagsSystemBandSurvivesScopedCaller(t *testing.T) {
 
 // TestAssignRoleComponentAmbiguityNeverLeaksCandidates closes the remaining
 // C1/C2 shape a review found in AssignRole's, UnassignRole's, and
-// resolveMembershipEnds's component end: the only scope any of the three
-// hold is write (or read), resolved for "system", which can never narrow a
-// component resolve (the same tier-mismatch AS Critical A, just on the read
-// side of ambiguity rather than the deny side, since scopedByName here is
-// deliberately scope-blind and existence-only, not threaded at all). Unlike
-// the cross-tier BINDS Critical A fixed, an ambiguous component name here is
-// a real refusal a caller can hit, and withoutCandidates is what keeps the
-// resulting 409 from naming a component uuid a system:update-only principal,
-// with no component:read grant of any kind, holds no right to see.
+// resolveMembershipEnds's (AddMember's) component end: the only scope any of
+// the three hold is write (or read), resolved for "system", which can never
+// narrow a component resolve (the same tier-mismatch AS Critical A, just on
+// the read side of ambiguity rather than the deny side, since scopedByName
+// here is deliberately scope-blind and existence-only, not threaded at all).
+// Unlike the cross-tier BINDS Critical A fixed, an ambiguous component name
+// here is a real refusal a caller can hit, and withoutCandidates is what
+// keeps the resulting 409 from naming a component uuid a system:update-only
+// principal, with no component:read grant of any kind, holds no right to
+// see. All three functions share one fixture: AssignRole was the only one a
+// prior round pinned; UnassignRole and resolveMembershipEnds are
+// code-identical (the same scopedByName-plus-withoutCandidates shape) but
+// were left unpinned, so this drives all three against the same ambiguous
+// name rather than trusting the identical code to behave identically.
 func TestAssignRoleComponentAmbiguityNeverLeaksCandidates(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -724,12 +729,36 @@ func TestAssignRoleComponentAmbiguityNeverLeaksCandidates(t *testing.T) {
 	}
 
 	sysScope := scope.Set{IDs: []string{sys.ID}}
-	err = gw.AssignRole(ctx, "", sys.Name, "seat", "dup-seat", sysScope)
 	var ambig *storage.ErrAmbiguousName
+
+	err = gw.AssignRole(ctx, "", sys.Name, "seat", "dup-seat", sysScope)
 	if !errors.As(err, &ambig) {
 		t.Fatalf("assign role with ambiguous component = %v, want *ErrAmbiguousName", err)
 	}
 	if len(ambig.Candidates) != 0 {
-		t.Fatalf("ambiguous component candidates = %v, want none (system:update holds no component:read)", ambig.Candidates)
+		t.Fatalf("assign role ambiguous component candidates = %v, want none (system:update holds no component:read)", ambig.Candidates)
+	}
+
+	// UnassignRole's component resolve runs before it ever checks whether an
+	// assignment exists, so this hits the same ambiguity with no assignment
+	// in place.
+	ambig = nil
+	err = gw.UnassignRole(ctx, "", sys.Name, "seat", "dup-seat", sysScope)
+	if !errors.As(err, &ambig) {
+		t.Fatalf("unassign role with ambiguous component = %v, want *ErrAmbiguousName", err)
+	}
+	if len(ambig.Candidates) != 0 {
+		t.Fatalf("unassign role ambiguous component candidates = %v, want none (system:update holds no component:read)", ambig.Candidates)
+	}
+
+	// AddMember drives resolveMembershipEnds directly: no role or assignment
+	// involved, just the (system, component) membership resolve.
+	ambig = nil
+	err = gw.AddMember(ctx, "", sys.Name, "dup-seat", sysScope)
+	if !errors.As(err, &ambig) {
+		t.Fatalf("add member with ambiguous component = %v, want *ErrAmbiguousName", err)
+	}
+	if len(ambig.Candidates) != 0 {
+		t.Fatalf("add member ambiguous component candidates = %v, want none (system:update holds no component:read)", ambig.Candidates)
 	}
 }
