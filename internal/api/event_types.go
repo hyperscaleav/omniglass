@@ -162,8 +162,15 @@ func registerEventTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 	})
 }
 
-// mapEventTypeErr translates the gateway's event-type sentinels into HTTP status.
+// mapEventTypeErr translates the gateway's event-type sentinels into HTTP
+// status. mapRefErr runs first: an event type's name stays a single global
+// token (#627 Task 12), so a dotted ref is storage.ErrAddressNotAccepted, a
+// 422 naming the kind, rather than falling through to the plain not-found
+// below.
 func mapEventTypeErr(err error) error {
+	if refErr, ok := mapRefErr(err); ok {
+		return refErr
+	}
 	switch {
 	case errors.Is(err, storage.ErrEventTypeNotFound):
 		return huma.Error404NotFound("event type not found")

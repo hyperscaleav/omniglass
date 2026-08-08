@@ -160,8 +160,15 @@ func registerMetricTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 	})
 }
 
-// mapMetricTypeErr translates the gateway's metric-type sentinels into HTTP status.
+// mapMetricTypeErr translates the gateway's metric-type sentinels into HTTP
+// status. mapRefErr runs first: a metric type's name stays a single global
+// token (#627 Task 12), so a dotted ref is storage.ErrAddressNotAccepted, a
+// 422 naming the kind, rather than falling through to the plain not-found
+// below.
 func mapMetricTypeErr(err error) error {
+	if refErr, ok := mapRefErr(err); ok {
+		return refErr
+	}
 	switch {
 	case errors.Is(err, storage.ErrMetricTypeNotFound):
 		return huma.Error404NotFound("metric type not found")

@@ -181,8 +181,15 @@ func marshalValidation(v any) ([]byte, error) {
 	return raw, nil
 }
 
-// mapPropertyErr translates the gateway's property sentinels into HTTP status.
+// mapPropertyErr translates the gateway's property sentinels into HTTP
+// status. mapRefErr runs first: a property type's name stays a single global
+// token (#627 Task 12), so a dotted ref is storage.ErrAddressNotAccepted, a
+// 422 naming the kind, rather than falling through to the plain not-found
+// below.
 func mapPropertyErr(err error) error {
+	if refErr, ok := mapRefErr(err); ok {
+		return refErr
+	}
 	switch {
 	case errors.Is(err, storage.ErrPropertyTypeNotFound):
 		return huma.Error404NotFound("property not found")
