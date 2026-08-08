@@ -32,8 +32,14 @@ func newDuplicateNameFixture(t *testing.T) (gw storage.Gateway, conn *pgx.Conn) 
 		t.Fatalf("connect: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.Close(ctx) })
-	if _, err := conn.Exec(ctx, `alter table component drop constraint component_name_key`); err != nil {
-		t.Fatalf("drop component name constraint: %v", err)
+	for _, drop := range []string{
+		`alter table component drop constraint component_name_key`,
+		`alter table system drop constraint system_name_key`,
+		`alter table location drop constraint location_name_key`,
+	} {
+		if _, err := conn.Exec(ctx, drop); err != nil {
+			t.Fatalf("%s: %v", drop, err)
+		}
 	}
 
 	gw, err = storage.NewPG(ctx, dsn)
@@ -86,6 +92,265 @@ func twoDisplayOnes(t *testing.T, gw storage.Gateway) (compA, compB *storage.Com
 		t.Fatalf("declare role: %v", err)
 	}
 	return compA, compB, sys
+}
+
+// twoSameNamedSystems creates two systems both named "huddle-1", at different
+// locations, so component/location fixtures are not the only shared name in
+// play: the collection ingest path and role_declarations.go's roleOwnerExpr
+// key on system, not component.
+func twoSameNamedSystems(t *testing.T, gw storage.Gateway) (sysA, sysB *storage.System) {
+	t.Helper()
+	ctx := context.Background()
+	all := scope.Set{All: true}
+
+	locA, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "sys-room-a", LocationType: "campus"}, all)
+	if err != nil {
+		t.Fatalf("sys-room-a: %v", err)
+	}
+	locB, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "sys-room-b", LocationType: "campus"}, all)
+	if err != nil {
+		t.Fatalf("sys-room-b: %v", err)
+	}
+	sysA, err = gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "huddle-1", LocationName: strptr(locA.Name)}, all)
+	if err != nil {
+		t.Fatalf("system in sys-room-a: %v", err)
+	}
+	sysB, err = gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "huddle-1", LocationName: strptr(locB.Name)}, all)
+	if err != nil {
+		t.Fatalf("system in sys-room-b: %v", err)
+	}
+	if sysA.ID == sysB.ID {
+		t.Fatalf("the two systems did not actually land on different rows")
+	}
+	return sysA, sysB
+}
+
+// TestDuplicateNamesDoNotBreakIngestPath covers the collection ingest and
+// command-settlement paths TestDuplicateNamesDoNotBreakGatewayReads does not
+// reach: property_samples.go's InsertPropertySamples (the hot write path:
+// every telemetry batch for a component takes it), settlement.go's
+// settleCheck and latestMetricValue (reached through IssueCommand and
+// CommandSettlement), and current_values.go's LatestValue. All four build
+// their SQL through the shared, owner-kind-generic ownerArcExprN, which
+// resolved a component/system/location owner by an inline name subquery; that
+// primitive is also used by health.go (already covered) and by callers this
+// test exercises directly. property_values.go's EffectiveProperties and
+// metric_values.go's EffectiveMetrics are covered too: their owner lookup is
+// a CTE, not a scalar subquery, so an ambiguous name there does not raise
+// SQLSTATE 21000 at all, it silently unions rows from every same-named owner
+// into one answer, a worse failure this task's fix (binding the resolved id
+// instead of a name) also closes.
+func TestDuplicateNamesDoNotBreakIngestPath(t *testing.T) {
+	gw, conn := newDuplicateNameFixture(t)
+	ctx := context.Background()
+	all := scope.Set{All: true}
+	compA, compB, _ := twoDisplayOnes(t, gw)
+
+	if _, err := gw.CreatePropertyType(ctx, "", storage.PropertyTypeSpec{Name: "video-input-x", DataType: "string"}); err != nil {
+		t.Fatalf("create property type: %v", err)
+	}
+	if _, err := gw.CreateMetricType(ctx, "", storage.MetricTypeSpec{Name: "volume-x", DataType: "float"}); err != nil {
+		t.Fatalf("create metric type: %v", err)
+	}
+
+	// The ingest write path, by uuid: InsertPropertySamples must not 21000 and
+	// must land on the right row (property_samples.go).
+	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{
+		OwnerKind: "component", OwnerID: compA.ID, Key: "video-input-x", Value: "hdmi2", Source: "test", TS: time.Now().UTC(),
+	}}); err != nil {
+		t.Fatalf("insert property sample on compA by id: %v", err)
+	}
+	var landedComponent string
+	if err := conn.QueryRow(ctx,
+		`select component_id from property where property_type_id = (select id from property_type where name = 'video-input-x') and provenance = 'observed'`,
+	).Scan(&landedComponent); err != nil {
+		t.Fatalf("read landed property sample: %v", err)
+	}
+	if landedComponent != compA.ID {
+		t.Fatalf("property sample landed on %s, want %s", landedComponent, compA.ID)
+	}
+
+	// A declared value, by uuid, then read back through LatestValue
+	// (current_values.go's public entry over latestValue) and
+	// EffectiveProperties (property_values.go): both must not 21000, and
+	// compB's read of the same series must come back empty, not compA's value.
+	if _, err := gw.SetProperty(ctx, "", "component", compA.ID, "video-input-x", "", []byte(`"hdmi1"`), all); err != nil {
+		t.Fatalf("declare property on compA by id: %v", err)
+	}
+	cur, err := gw.LatestValue(ctx, "component", compA.ID, "video-input-x", "", "declared", all)
+	if err != nil {
+		t.Fatalf("latest value on compA by id: %v", err)
+	}
+	if cur == nil || string(cur.Value) != `"hdmi1"` {
+		t.Fatalf("latest value on compA = %+v, want hdmi1", cur)
+	}
+	curB, err := gw.LatestValue(ctx, "component", compB.ID, "video-input-x", "", "declared", all)
+	if err != nil {
+		t.Fatalf("latest value on compB by id: %v", err)
+	}
+	if curB != nil {
+		t.Fatalf("latest value on compB = %+v, want nil (cross-contaminated by the shared name)", curB)
+	}
+	effA, err := gw.EffectiveProperties(ctx, "component", compA.ID, all)
+	if err != nil {
+		t.Fatalf("effective properties on compA by id: %v", err)
+	}
+	if !anyEffectiveProperty(effA, "video-input-x", `"hdmi1"`) {
+		t.Fatalf("effective properties on compA = %+v, want video-input-x = hdmi1", effA)
+	}
+	effB, err := gw.EffectiveProperties(ctx, "component", compB.ID, all)
+	if err != nil {
+		t.Fatalf("effective properties on compB by id: %v", err)
+	}
+	if anyEffectiveProperty(effB, "video-input-x", `"hdmi1"`) {
+		t.Fatalf("effective properties on compB = %+v, leaked compA's declared value (cross-contaminated by the shared name)", effB)
+	}
+
+	// A metric sample, by uuid, then read back through EffectiveMetrics
+	// (metric_values.go, the CTE twin of EffectiveProperties): same shape.
+	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{{
+		OwnerKind: "component", OwnerID: compA.ID, Key: "volume-x", Value: 42, Source: "test", TS: time.Now().UTC(),
+	}}); err != nil {
+		t.Fatalf("insert metric sample on compA by id: %v", err)
+	}
+	metA, err := gw.EffectiveMetrics(ctx, "component", compA.ID, all)
+	if err != nil {
+		t.Fatalf("effective metrics on compA by id: %v", err)
+	}
+	if !anyEffectiveMetricSampled(metA, "volume-x") {
+		t.Fatalf("effective metrics on compA = %+v, want volume-x sampled", metA)
+	}
+	metB, err := gw.EffectiveMetrics(ctx, "component", compB.ID, all)
+	if err != nil {
+		t.Fatalf("effective metrics on compB by id: %v", err)
+	}
+	if anyEffectiveMetricSampled(metB, "volume-x") {
+		t.Fatalf("effective metrics on compB = %+v, leaked compA's sample (cross-contaminated by the shared name)", metB)
+	}
+
+	// A metric settlement, by uuid: IssueCommand opens an intended value and
+	// runs the settle-check in the same transaction (settleCheck,
+	// latestTargetValue -> latestMetricValue); CommandSettlement re-derives
+	// the verdict. Both must not 21000 and must settle against compA's own
+	// observed sample, not compB's (which has none).
+	if _, err := gw.CreateCommandType(ctx, "", storage.CommandTypeSpec{
+		Name: "set-volume-x", TargetMetricType: "volume-x", SettleWindowSeconds: 0,
+	}); err != nil {
+		t.Fatalf("create command type: %v", err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: make([]byte, 32), Prefix: "root0000"}); err != nil {
+		t.Fatalf("bootstrap owner: %v", err)
+	}
+	var actor string
+	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+		t.Fatalf("resolve actor: %v", err)
+	}
+	cmd, err := gw.IssueCommand(ctx, actor, "component", compA.ID, "set-volume-x", "", []byte(`42`), nil, all)
+	if err != nil {
+		t.Fatalf("issue command on compA by id: %v", err)
+	}
+	var status string
+	if err := conn.QueryRow(ctx, `select status from command where id = $1`, cmd.ID).Scan(&status); err != nil {
+		t.Fatalf("read command status: %v", err)
+	}
+	if status != "settled" {
+		t.Fatalf("command status = %q, want settled (matches compA's own observed sample)", status)
+	}
+	verdict, err := gw.CommandSettlement(ctx, "component", compA.ID, "set-volume-x", "", all)
+	if err != nil {
+		t.Fatalf("command settlement on compA by id: %v", err)
+	}
+	if verdict != storage.SettlementSettled {
+		t.Fatalf("command settlement = %q, want settled", verdict)
+	}
+}
+
+func anyEffectiveProperty(effs []storage.EffectiveProperty, name, value string) bool {
+	for _, e := range effs {
+		if e.PropertyTypeName == name && string(e.Value) == value {
+			return true
+		}
+	}
+	return false
+}
+
+func anyEffectiveMetricSampled(mets []storage.EffectiveMetric, name string) bool {
+	for _, m := range mets {
+		if m.MetricTypeName == name && m.IsSampled {
+			return true
+		}
+	}
+	return false
+}
+
+// TestSystemOwnedRoleDeclarationSurvivesDuplicateNames covers
+// role_declarations.go's roleOwnerExpr, the system branch of the role-owner
+// arc: SetSystemRole/ListSystemRoles/DeleteSystemRole must resolve a
+// system-owner reference once and bind its uuid rather than re-deriving one
+// from a name a second system might now share, and roleOwnerArg's
+// not-found-falls-through-to-the-CHECK-constraint behavior must stay intact
+// for an owner that genuinely does not exist.
+func TestSystemOwnedRoleDeclarationSurvivesDuplicateNames(t *testing.T) {
+	gw, _ := newDuplicateNameFixture(t)
+	ctx := context.Background()
+	sysA, sysB := twoSameNamedSystems(t, gw)
+
+	if _, err := gw.SetSystemRole(ctx, "", "system", sysA.ID, storage.SystemRoleSpec{
+		Name: "seat", DisplayName: "Seat", Quorum: 1,
+	}); err != nil {
+		t.Fatalf("declare role on sysA by id: %v", err)
+	}
+
+	rolesA, err := gw.ListSystemRoles(ctx, "system", sysA.ID)
+	if err != nil {
+		t.Fatalf("list roles on sysA by id: %v", err)
+	}
+	if len(rolesA) != 1 || rolesA[0].Name != "seat" {
+		t.Fatalf("sysA roles = %+v, want one role named seat", rolesA)
+	}
+	rolesB, err := gw.ListSystemRoles(ctx, "system", sysB.ID)
+	if err != nil {
+		t.Fatalf("list roles on sysB by id: %v", err)
+	}
+	if len(rolesB) != 0 {
+		t.Fatalf("sysB roles = %+v, want none (cross-contaminated by the shared name)", rolesB)
+	}
+
+	// Re-declaring (an upsert on owner_kind/owner_arc/name) must still land on
+	// sysA only.
+	if _, err := gw.SetSystemRole(ctx, "", "system", sysA.ID, storage.SystemRoleSpec{
+		Name: "seat", DisplayName: "Seat (revised)", Quorum: 1,
+	}); err != nil {
+		t.Fatalf("revise role on sysA by id: %v", err)
+	}
+	rolesA, err = gw.ListSystemRoles(ctx, "system", sysA.ID)
+	if err != nil {
+		t.Fatalf("list roles on sysA by id (after revise): %v", err)
+	}
+	if len(rolesA) != 1 || rolesA[0].DisplayName != "Seat (revised)" {
+		t.Fatalf("sysA roles after revise = %+v, want the revised display name", rolesA)
+	}
+
+	if err := gw.DeleteSystemRole(ctx, "", "system", sysA.ID, "seat"); err != nil {
+		t.Fatalf("delete role on sysA by id: %v", err)
+	}
+	rolesA, err = gw.ListSystemRoles(ctx, "system", sysA.ID)
+	if err != nil {
+		t.Fatalf("list roles on sysA by id (after delete): %v", err)
+	}
+	if len(rolesA) != 0 {
+		t.Fatalf("sysA roles after delete = %+v, want none", rolesA)
+	}
+
+	// A genuinely unknown system owner still falls through to the arc CHECK
+	// constraint's ErrRoleRefNotFound, unchanged (roleOwnerArg's documented
+	// not-found behavior).
+	_, err = gw.SetSystemRole(ctx, "", "system", "00000000-0000-0000-0000-000000000000", storage.SystemRoleSpec{
+		Name: "seat", DisplayName: "Seat", Quorum: 1,
+	})
+	if !errors.Is(err, storage.ErrRoleRefNotFound) {
+		t.Fatalf("declare role on an unknown system = %v, want ErrRoleRefNotFound", err)
+	}
 }
 
 // TestDuplicateNamesDoNotBreakGatewayReads is the regression #627 Task 10 exists

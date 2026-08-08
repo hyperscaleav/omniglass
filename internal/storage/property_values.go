@@ -292,6 +292,19 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 	if !inScope {
 		return nil, oc.notFound
 	}
+	// Resolved once here, ambiguity-safe (ownerArcValue -> scopedByName,
+	// #627): the inst CTEs below used to look the instance row up by name
+	// (`where name = $1`), which is a CTE that can hold more than one row
+	// once a name is no longer unique, not a scalar subquery, so it never
+	// raised SQLSTATE 21000 -- it silently joined properties from every
+	// same-named row into one "effective properties" answer instead, a
+	// worse failure than an error. Binding the resolved id directly (matched
+	// on oc.arcMatch, the same primary-key-equivalent column ownerArcValue
+	// itself resolves against) makes inst exactly one row again.
+	arc, err := p.ownerArcValue(ctx, p.pool, ownerKind, ownerID)
+	if err != nil {
+		return nil, err
+	}
 
 	// The current declared value per property: the latest series row of each
 	// (property, instance='') declared series on this owner's arc, a tombstone
@@ -312,7 +325,7 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 		// The ad-hoc arm alone when the owner kind has no classifier to inherit
 		// from: everything the instance declares, minus tombstoned series.
 		q = fmt.Sprintf(`
-		with inst as (select %[3]s as arc from %[1]s where name = $1), %[2]s
+		with inst as (select %[3]s as arc from %[1]s where %[3]s = $1), %[2]s
 		select pr.name as property_type_name, pr.id as property_type_id, pr.display_name, pr.data_type, false as required,
 		       null::jsonb as default_value,
 		       d.value as set_value,
@@ -328,7 +341,7 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 	} else {
 		q = fmt.Sprintf(`
 		with inst as (
-			select %[6]s as arc, %[2]s as classifier from %[1]s where name = $1
+			select %[6]s as arc, %[2]s as classifier from %[1]s where %[6]s = $1
 		), %[5]s
 		-- The contract arm: what the instance's classifier declares, resolved
 		-- against the instance's own current declared value.
@@ -361,7 +374,7 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 			oc.instanceTable, oc.classifierCol, oc.contractTable, oc.contractKeyCol, declared, oc.arcMatch)
 	}
 
-	rows, err := p.pool.Query(ctx, q, ownerID)
+	rows, err := p.pool.Query(ctx, q, arc)
 	if err != nil {
 		return nil, fmt.Errorf("storage: effective properties %s/%s: %w", ownerKind, ownerID, err)
 	}
@@ -436,6 +449,19 @@ func (p *PG) ownerArcValue(ctx context.Context, q querier, ownerKind, ownerRef s
 		return pid, nil
 	}
 	return ownerRef, nil
+}
+
+// isOwnerNotFound reports whether err is one of the owner-kind not-found
+// sentinels ownerArcValue can return. Several read paths that build SQL on the
+// owner arc (current_values.go's latestValue, settlement.go's settleCheck and
+// latestMetricValue) fold this back into their old "nothing yet" result: an
+// unknown owner's name used to resolve an inline subquery to no match,
+// silently, and a caller that never had to handle a hard not-found error here
+// must not start seeing one just because the resolution moved from a
+// same-query subquery to an up-front resolve.
+func isOwnerNotFound(err error) bool {
+	return errors.Is(err, ErrComponentNotFound) || errors.Is(err, ErrSystemNotFound) ||
+		errors.Is(err, ErrLocationNotFound) || errors.Is(err, ErrNodeNotFound)
 }
 
 func (p *PG) ownerInScope(ctx context.Context, q querier, ownerKind, ownerID string, s scope.Set) (bool, error) {

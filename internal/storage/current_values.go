@@ -92,22 +92,35 @@ func (p *PG) LatestValue(ctx context.Context, ownerKind, ownerID, key, instance,
 // read many provenances without re-checking each time. ts desc, id desc: the
 // value's own time orders the series and the row id breaks same-instant ties,
 // the same rule LatestProperty applies.
+// ownerID is resolved once here, via ownerArcValue (uuid-or-name, ADR-0062;
+// ambiguity-safe for component/system/location, #627). An unknown owner folds
+// to nil, no error, matching the old inline subquery's silent no-match: both
+// of this function's callers (Reconciliation, LatestValue) already scope- and
+// existence-check the owner before reaching it, but a future caller that
+// doesn't must not start hard-erroring on a check this function never used to
+// perform.
 func (p *PG) latestValue(ctx context.Context, q querier, ownerKind, ownerID, key, instance, provenance string) (*CurrentValue, error) {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {
 		return nil, err
 	}
+	arc, err := p.ownerArcValue(ctx, q, ownerKind, ownerID)
+	if isOwnerNotFound(err) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
 	sql := fmt.Sprintf(`select `+declaredCurrentExpr+`, ts, provenance from property
-		where owner_kind = $1 and %s = %s
+		where owner_kind = $1 and %s = $2
 		  and property_type_id = (select id from property_type where name = $3)
 		  and instance = $4 and provenance = $5
 		order by ts desc, id desc
-		limit 1`, col, ownerArcExprN(ownerKind, 2))
+		limit 1`, col)
 	var (
 		cv    CurrentValue
 		value []byte
 	)
-	err = q.QueryRow(ctx, sql, ownerKind, ownerID, key, instance, provenance).Scan(&value, &cv.TS, &cv.Provenance)
+	err = q.QueryRow(ctx, sql, ownerKind, arc, key, instance, provenance).Scan(&value, &cv.TS, &cv.Provenance)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

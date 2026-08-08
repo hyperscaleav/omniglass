@@ -151,7 +151,9 @@ func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, comm
 		}
 		// The settle-check runs at the write, so a command whose window is
 		// already past (a zero window) is recorded terminal in this transaction.
-		if err := p.settleCheck(ctx, tx, ct, ownerKind, ownerID, instance, time.Now().UTC()); err != nil {
+		// arc is already resolved above; passed through rather than left for
+		// settleCheck to re-derive.
+		if err := p.settleCheck(ctx, tx, ct, ownerKind, arc, instance, time.Now().UTC()); err != nil {
 			return nil, err
 		}
 	}
@@ -202,17 +204,26 @@ func (p *PG) CommandSettlement(ctx context.Context, ownerKind, ownerID, commandT
 		return "", fmt.Errorf("storage: begin settle check: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	// Resolved once, inside this transaction, and threaded through every call
+	// below: ownerInScope above already confirmed the owner exists, so this
+	// cannot fail in the ordinary case, and passing the id avoids three
+	// separate re-derivations of it (settleCheck, twice through
+	// latestTargetValue) each independently re-resolving the same reference.
+	arc, err := p.ownerArcValue(ctx, tx, ownerKind, ownerID)
+	if err != nil {
+		return "", err
+	}
 	now := time.Now().UTC()
-	if err := p.settleCheck(ctx, tx, ct, ownerKind, ownerID, instance, now); err != nil {
+	if err := p.settleCheck(ctx, tx, ct, ownerKind, arc, instance, now); err != nil {
 		return "", err
 	}
 	verdict := SettlementNone
 	if ct.TargetPropertyType != "" || ct.TargetMetricType != "" {
-		intended, err := p.latestTargetValue(ctx, tx, ct, ownerKind, ownerID, instance, "intended")
+		intended, err := p.latestTargetValue(ctx, tx, ct, ownerKind, arc, instance, "intended")
 		if err != nil {
 			return "", err
 		}
-		observed, err := p.latestTargetValue(ctx, tx, ct, ownerKind, ownerID, instance, "observed")
+		observed, err := p.latestTargetValue(ctx, tx, ct, ownerKind, arc, instance, "observed")
 		if err != nil {
 			return "", err
 		}

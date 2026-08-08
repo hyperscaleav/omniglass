@@ -61,9 +61,21 @@ func (p *PG) InsertPropertySamples(ctx context.Context, evs []PropertySampleWrit
 		if ts.IsZero() {
 			ts = time.Now().UTC()
 		}
+		// The arc stores the owner's primary key. Resolving here, once per
+		// row (mirrors InsertMetricSamples/InsertEvents/InsertLogLines),
+		// rather than through the shared ownerArcExprN's inline subquery,
+		// means an unknown owner is this same named error instead of a NULL
+		// that trips the arc CHECK opaquely, AND a component/system/location
+		// owner whose name now collides with another row (#627) fails
+		// cleanly here rather than raising SQLSTATE 21000 on ingest, the
+		// collection hot path.
+		arc, err := p.ownerArcValue(ctx, tx, ev.OwnerKind, ev.OwnerID)
+		if err != nil {
+			return fmt.Errorf("storage: property sample %s/%s: %w", ev.OwnerID, ev.Key, err)
+		}
 		sql := fmt.Sprintf(`insert into property (ts, owner_kind, %s, property_type_id, instance, value, provenance, source)
-			values ($1, $2, %s, (select id from property_type where name = $4), $5, to_jsonb($6::text), 'observed', $7)`, col, ownerArcExprN(ev.OwnerKind, 3))
-		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, ev.OwnerID, ev.Key, ev.Instance, ev.Value, ev.Source); err != nil {
+			values ($1, $2, $3, (select id from property_type where name = $4), $5, to_jsonb($6::text), 'observed', $7)`, col)
+		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arc, ev.Key, ev.Instance, ev.Value, ev.Source); err != nil {
 			return fmt.Errorf("storage: insert property sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
 	}

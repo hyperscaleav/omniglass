@@ -420,7 +420,15 @@ func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, 
 	// assigned yet, so it is usually born impaired. Recording the opening verdict is
 	// what gives its history a defined beginning: without it the first edge would be
 	// whatever a later write happened to notice.
-	if err := p.recomputeSystems(ctx, tx, s.Name); err != nil {
+	//
+	// s.ID, not s.Name: the row this transaction just inserted is passed by
+	// its own id, never re-resolved by name. Under scoped name uniqueness
+	// (#627) the name this system was just given may already be shared by
+	// another system elsewhere, and recomputeSystems' own name-to-id
+	// resolution would then refuse the ambiguous reference (ErrAmbiguousName)
+	// for a create that has nothing ambiguous about it: the row it means is
+	// the one it is holding.
+	if err := p.recomputeSystems(ctx, tx, s.ID); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -560,13 +568,14 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	if movedStandard || movedLocation {
 		var left []string
 		if movedLocation && before.LocationID != nil {
-			name, err := locationNameByID(ctx, tx, *before.LocationID)
-			if err != nil {
-				return nil, err
-			}
-			left = append(left, name)
+			// The id is already in hand; no lookup needed at all (see
+			// systemConfig.afterDelete for the same shape).
+			left = append(left, *before.LocationID)
 		}
-		if err := p.recomputeMovedSystem(ctx, tx, after.Name, left...); err != nil {
+		// after.ID, not after.Name: see CreateSystem's comment on the same
+		// shape. A rename in the same patch (not possible today, but the
+		// principle holds) would make this doubly wrong if it read the name.
+		if err := p.recomputeMovedSystem(ctx, tx, after.ID, left...); err != nil {
 			return nil, err
 		}
 	}

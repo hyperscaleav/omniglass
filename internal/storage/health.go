@@ -385,7 +385,7 @@ func (p *PG) recomputeMovedSystem(ctx context.Context, q txQuerier, system strin
 // ownerID is an id for a component/system/location owner (recomputeChain
 // always has one, via ownerRef; SystemHealth and LocationHealth resolve their
 // own before calling healthTransitions below), a name for a node (unchanged;
-// node names stay globally unique). See healthOwnerArcExprN.
+// node names stay globally unique). See ownerArcExprN.
 func recordHealth(ctx context.Context, q txQuerier, ownerKind, ownerID string, v health.Verdict) error {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {
@@ -398,7 +398,7 @@ func recordHealth(ctx context.Context, q txQuerier, ownerKind, ownerID string, v
 	// event_id stays null. The CHECK enforces exactly that shape.
 	// The WHERE is the transition rule: no previous row (is distinct from null) or
 	// a different one writes; the same value writes nothing.
-	owner := healthOwnerArcExpr(ownerKind)
+	owner := ownerArcExpr(ownerKind)
 	sql := fmt.Sprintf(`insert into property (ts, owner_kind, %[1]s, property_type_id, instance, value, provenance, source_rule)
 		select clock_timestamp(), $1::text, %[3]s, (select id from property_type where name = $3::text), '', to_jsonb($4::text), 'calculated', $5::text
 		where $4::text is distinct from (
@@ -412,45 +412,31 @@ func recordHealth(ctx context.Context, q txQuerier, ownerKind, ownerID string, v
 	return nil
 }
 
-// healthOwnerArcExpr and healthOwnerArcExprN are recordHealth's and
-// healthTransitions' OWN owner-arc expression, deliberately not the shared
-// ownerArcExpr/ownerArcExprN current_values.go, property_samples.go and
-// settlement.go also build their SQL from (converting that shared primitive
-// to expect a pre-resolved id would ripple into those files' own callers,
-// which this task's file list does not reach).
-//
-// The two diverge because every recordHealth/healthTransitions caller IN
-// THIS FILE already holds a resolved id for a component/system/location
-// owner (ownerRef's whole reason to exist, #627), so binding it directly
-// here needs no lookup at all, let alone one that could raise SQLSTATE 21000
-// the moment two rows share the name recomputeChain also carries alongside
-// (health-rollup ran into exactly that: a component resolved unambiguously
-// by uuid still had its OWN recorded verdict fail to write, because the old
-// shared expression re-derived the write's target id from that component's
-// name, and another component elsewhere happened to share it). A node stays
-// name-resolved through the shared expression: node names remain globally
-// unique, and this file never resolves one to an id.
-func healthOwnerArcExpr(ownerKind string) string { return healthOwnerArcExprN(ownerKind, 2) }
-
-func healthOwnerArcExprN(ownerKind string, n int) string {
-	switch ownerKind {
-	case "component", "system", "location":
-		return fmt.Sprintf("$%d::uuid", n)
-	}
-	return ownerArcExprN(ownerKind, n)
-}
+// ownerArcExpr is the SQL for the value a health owner column stores, given the
+// reference the recompute passes around. It is the shared, owner-kind-generic
+// primitive: current_values.go, property_samples.go, and settlement.go build
+// their own SQL from it too, so ownerID here follows the same contract theirs
+// does. For a component, system, or location it binds an id directly ($N::uuid,
+// no lookup): #627 scopes name uniqueness to placement, so a name-based
+// subquery here would raise SQLSTATE 21000 the moment two rows share a name.
+// Every caller across all four files resolves the reference to an id once,
+// before it ever reaches this expression (recomputeChain's ownerRef in this
+// file; ownerArcValue in the others), so ownerID is always already an id for
+// these three kinds, never a bare name. A node stays name-resolved: node names
+// remain globally unique (they ride NATS subjects), so there is nothing to
+// convert.
+func ownerArcExpr(ownerKind string) string { return ownerArcExprN(ownerKind, 2) }
 
 // ownerArcExprN is the same expression at an arbitrary parameter position, since
 // the reads and the write do not agree on where the owner sits.
 func ownerArcExprN(ownerKind string, n int) string {
-	p := fmt.Sprintf("$%d::text", n)
 	switch ownerKind {
 	case "component", "system", "location":
-		return `(select id from ` + ownerKind + ` where name = ` + p + `)`
+		return fmt.Sprintf("$%d::uuid", n)
 	case "node":
-		return `(select principal_id from node where name = ` + p + `)`
+		return fmt.Sprintf("(select principal_id from node where name = $%d::text)", n)
 	}
-	return p
+	return fmt.Sprintf("$%d::text", n)
 }
 
 // activeAlarmSeverities lists the severities of a component's active alarms, the
@@ -988,7 +974,7 @@ func (p *PG) subtreeSystemHealth(ctx context.Context, q txQuerier, locationID st
 // healthTransitions reads an owner's recorded edges at or after since,
 // oldest-first: the same ordered flip sequence the reachability strip reads, on
 // the owner arc rather than the component-and-instance one. ownerID follows
-// recordHealth's contract (see healthOwnerArcExprN): an id for
+// recordHealth's contract (see ownerArcExprN): an id for
 // component/system/location, a name for node.
 func healthTransitions(ctx context.Context, q txQuerier, ownerKind, ownerID string, since time.Time) ([]HealthTransition, error) {
 	col, err := ownerColumn(ownerKind)
@@ -997,7 +983,7 @@ func healthTransitions(ctx context.Context, q txQuerier, ownerKind, ownerID stri
 	}
 	sql := fmt.Sprintf(`select ts, value #>> '{}' from property
 		where %s = %s and property_type_id = (select id from property_type where name = $2) and instance = '' and ts >= $3
-		order by ts asc, id asc`, col, healthOwnerArcExprN(ownerKind, 1))
+		order by ts asc, id asc`, col, ownerArcExprN(ownerKind, 1))
 	rows, err := q.Query(ctx, sql, ownerID, healthKey, since)
 	if err != nil {
 		return nil, fmt.Errorf("storage: health transitions %s/%s: %w", ownerKind, ownerID, err)
