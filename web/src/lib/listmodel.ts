@@ -14,10 +14,19 @@ import { buildPredicate, type Chip, type FilterKey } from "./predicate";
 // (that is the whole reason id moved to uuid): byAddr keeps only the
 // last-written node per addr, the same single-arbitrary-pick a name-keyed
 // index always gave, not a new ambiguity.
-export type TreeLike<N> = { id: string; display: string; children: N[]; addr?: string };
+// pathRender is the server's own dotted-path dash render (#627 Task 15,
+// storage.PathOf/RenderDash on the Go side: component/system/location's
+// `renders.dash` field), fed straight onto the row rather than recomputed
+// from the page's own tree. pathOf below walks parentOf, which is built from
+// THIS forest alone, so it cannot cross the component-tree-to-location-tree
+// boundary: a component with no component parent sitting directly in a room
+// has no ancestor in the component forest at all, even though it plainly
+// sits under that room (#627 Task 10 is exactly what makes that placement
+// legal). pathRender carries the answer pathOf structurally cannot reach.
+export type TreeLike<N> = { id: string; display: string; children: N[]; addr?: string; pathRender?: string };
 
 export type Crumb = { id: string; display: string };
-export type Row<N> = { n: N; depth: number; path: Crumb[] | null };
+export type Row<N> = { n: N; depth: number; path: Crumb[] | null; pathRender?: string };
 export type SortState = { key: string; dir: 1 | -1 } | null;
 export type ListIndex<N> = {
   byId: Map<string, N>;
@@ -84,7 +93,7 @@ export function flattenRows<N extends TreeLike<N>>(
       return r * s.dir;
     });
   }
-  return list.map((n) => ({ n, depth: 0, path: pathOf(index, n) }));
+  return list.map((n) => ({ n, depth: 0, path: pathOf(index, n), pathRender: n.pathRender }));
 }
 
 // treeRows walks the forest, descending only into expanded containers.

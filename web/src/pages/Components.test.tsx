@@ -78,6 +78,41 @@ describe("Components create-as-route", () => {
     expect(dot.style.getPropertyValue("--sys-h")).toBe(String(hueFor(sysId)));
   });
 
+  // A root component (no component parent) sitting at a location has no
+  // ancestor in the PAGE'S OWN tree (the component forest), so the list's
+  // client-side pathOf walk finds nothing to show, even though the
+  // component plainly sits under that location's rooms (#627 Task 10 is
+  // exactly what makes that placement legal). The server's own dash render
+  // (renders.dash, #627 Task 15) is what fills that gap; this asserts the
+  // row actually shows it in list mode, not just that the data layer
+  // carries it (a mocked-fetch test asserting only the request body would
+  // pass on a page that fetched the field and never rendered it anywhere).
+  it("shows a root component's server-rendered path in list mode, where the local tree walk has none", async () => {
+    const placed: Component = { ...comp, renders: { dash: "boi-17c-216b-display-1", bare: "boi17c216bdsp1" } };
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...COMPONENTS_KEY], [placed]);
+    qc.setQueryData([...SYSTEMS_KEY], []);
+    qc.setQueryData([...LOCATIONS_KEY], []);
+    qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...ME_KEY], me);
+    qc.setQueryData([...TAGS_KEY], []);
+    // Force list (flattened) mode: the tree-local ancestor path (Row.path)
+    // renders only in flattened mode, and a root's tree-local path is empty
+    // regardless, so this isolates pathRender as the only possible source.
+    localStorage.setItem("og-cmp-view", "list");
+    window.history.pushState({}, "", "/components");
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="/components" component={Components} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    await waitFor(() => expect(screen.getByText("Ceiling Mic 2")).toBeTruthy());
+    expect(screen.getByText("boi-17c-216b-display-1")).toBeTruthy();
+    localStorage.removeItem("og-cmp-view");
+  });
+
   it("renders the draft-create accordion at /components/create", async () => {
     mount("/components/create");
     await waitFor(() => expect(screen.getByText("New component")).toBeTruthy());

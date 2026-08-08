@@ -94,7 +94,11 @@ export default function Locations() {
     const list = locations.data ?? [];
     const byUuid = new Map<string, LocNode>();
     for (const l of list) {
-      byUuid.set(l.id, { id: l.id, addr: l.name, display: entityLabel(l), children: [], type: l.location_type, actions: l.actions, tags: l.effective_tags ?? {}, raw: l });
+      // pathRender: the server's own dash render of this location's dotted
+      // path (#627 Task 15); a location's own tree never crosses a plane
+      // boundary the way component/system can, but it is wired through for
+      // the same reason (one server-authoritative render, not two).
+      byUuid.set(l.id, { id: l.id, addr: l.name, display: entityLabel(l), pathRender: l.renders?.dash, children: [], type: l.location_type, actions: l.actions, tags: l.effective_tags ?? {}, raw: l });
     }
     const roots: LocNode[] = [];
     for (const l of list) {

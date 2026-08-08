@@ -111,6 +111,9 @@ export default function Systems() {
         id: s.id,
         addr: s.name,
         display: entityLabel(s),
+        // See Components.tsx's own nodes memo for why this beats the
+        // page's tree-local pathOf walk for a system with no system parent.
+        pathRender: s.renders?.dash,
         children: [],
         actions: s.actions,
         standard: standardLabel(s.standard),

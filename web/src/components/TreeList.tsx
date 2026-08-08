@@ -45,6 +45,13 @@ export interface ListNode {
   // does not match. Not guaranteed unique the way id is; omit it entirely on
   // a page where id already IS the addressable value.
   addr?: string;
+  // The server's own dash render of this node's dotted path (#627 Task 15:
+  // component/system/location renders.dash), fed straight onto the row
+  // label's ancestor sub-line in list mode. Not derived here: the page's own
+  // pathOf walk covers only THIS page's tree, and cannot cross the
+  // component-tree-to-location-tree boundary a parentless node in a scoped
+  // placement (#627 Task 10) sits across.
+  pathRender?: string;
   display: string;
   // The scope-aware actions the server says the caller may perform on THIS row
   // (create a child, update, delete), from the read-side `actions` field. When
@@ -454,8 +461,17 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
               <span class="inline-flex flex-none items-center">{cfg.leadIcon!(n)}</span>
             </Show>
             <span class="flex min-w-0 flex-col gap-0.5 py-0.5">
-              <Show when={p.row.path && p.row.path.length}>
-                <span class="truncate text-[11px] text-base-content/40">{p.row.path!.map((x) => x.display).join(" › ")}</span>
+              {/* The list-mode ancestor sub-line. pathRender (the server's own
+                  dotted-path dash render, #627 Task 15) wins when present: pathOf's
+                  tree-local walk (p.row.path) cannot cross the component-tree-to-
+                  location-tree boundary, so a component with no component parent
+                  sitting directly in a room has no LOCAL ancestor to show even
+                  though it plainly sits under that room. p.row.path is still the
+                  fallback for a node the server has not (yet) annotated. */}
+              <Show when={p.row.pathRender || (p.row.path && p.row.path.length)}>
+                <span class="truncate text-[11px] text-base-content/40">
+                  {p.row.pathRender ?? p.row.path!.map((x) => x.display).join(" › ")}
+                </span>
               </Show>
               {/* The label, then the key beneath it. A row's key (n.addr when
                   set, else n.id) is what the API and CLI address it by, so an

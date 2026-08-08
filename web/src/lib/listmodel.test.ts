@@ -84,6 +84,31 @@ describe("flattenRows", () => {
     expect(rows.map((r) => r.n.id)).toEqual(["r1", "r2"]);
     expect(rows[0].path?.map((c) => c.id)).toEqual(["hq", "b1", "f1"]);
   });
+
+  // pathOf walks the PAGE'S OWN tree (parentOf, built from this same forest),
+  // so it cannot cross the component-tree-to-location-tree boundary: a
+  // component with no component parent sitting directly in a room has no
+  // ancestor in the component forest at all, even though it plainly sits
+  // "under" that room. pathRender is the server's own dotted-path render
+  // (#627 Task 15, storage.PathOf on the Go side), fed straight through
+  // rather than recomputed from local tree structure, so a row like that
+  // still shows where it lives.
+  it("carries a node's own pathRender through to the row, unlike the tree-local path", () => {
+    type R = N & { pathRender?: string };
+    const rootWithNoLocalAncestor: R[] = [
+      { id: "c1", display: "Display 1", type: "component", children: [], pathRender: "boi-17c-216b-display-1" },
+    ];
+    const idx = buildIndex(rootWithNoLocalAncestor);
+    const rows = flattenRows(idx, keys, [], null, sortVal);
+    expect(rows[0].path).toEqual([]); // the tree-local walk finds no ancestor
+    expect(rows[0].pathRender).toBe("boi-17c-216b-display-1"); // the server's render still does
+  });
+
+  it("omits pathRender when the node carries none", () => {
+    const idx = buildIndex(estate());
+    const rows = flattenRows(idx, keys, [], null, sortVal);
+    expect(rows[0].pathRender).toBeUndefined();
+  });
 });
 
 describe("treeRows", () => {
