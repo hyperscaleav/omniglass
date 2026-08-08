@@ -208,7 +208,7 @@ func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, system
 		if err != nil {
 			return err
 		}
-		unconditional, choices := splitHealthRoles(roles)
+		unconditional, choices, _ := splitHealthRoles(roles)
 		if err := recordHealth(ctx, q, "system", s, health.SystemVerdictWith(unconditional, choices)); err != nil {
 			return err
 		}
@@ -600,7 +600,17 @@ func (p *PG) resolveHealthRoles(ctx context.Context, q txQuerier, systemName str
 // by choice or position, so grouping has to happen here regardless of scan
 // order. Choices are then sorted by name and each choice's alternates by
 // position for a deterministic, map-iteration-free result.
-func splitHealthRoles(rs []resolvedRole) (unconditional []health.Role, choices []health.Choice) {
+//
+// byID is choices again, keyed by choice_id rather than indexed by name:
+// health.Choice carries only a Name (the pure package has no notion of a
+// storage id), but two DISTINCT choices can share one, a system inheriting
+// a standard-owned "conferencing" while also declaring its own ad-hoc
+// "conferencing" (role_choice_name_key is scoped to one owner arc, not
+// globally). A caller building a name-keyed lookup from choices alone would
+// silently collapse the two; byID is what lets explainRole (SystemHealth)
+// resolve a role's active status by the same id resolvedRole already
+// carries instead.
+func splitHealthRoles(rs []resolvedRole) (unconditional []health.Role, choices []health.Choice, byID map[string]health.Choice) {
 	type altGroup struct {
 		name  string
 		pos   int
@@ -650,8 +660,12 @@ func splitHealthRoles(rs []resolvedRole) (unconditional []health.Role, choices [
 			out.Alternates = append(out.Alternates, health.Alternate{Name: g.name, Roles: g.roles})
 		}
 		choices = append(choices, out)
+		if byID == nil {
+			byID = make(map[string]health.Choice, len(cids))
+		}
+		byID[cid] = out
 	}
-	return unconditional, choices
+	return unconditional, choices, byID
 }
 
 // SystemHealth reports a system's current verdict, the roles that produced it,
@@ -681,7 +695,7 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, since time.Tim
 	if err != nil {
 		return nil, err
 	}
-	unconditional, choices := splitHealthRoles(roles)
+	unconditional, choices, choicesByID := splitHealthRoles(roles)
 	rep.Verdict = health.SystemVerdictWith(unconditional, choices).String()
 	// The same choices splitHealthRoles just grouped for the verdict name
 	// which alternate is active in each, so explainRole can mark every role
@@ -689,11 +703,14 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, since time.Tim
 	// roads-not-taken alternate's role: the report would otherwise repeat
 	// the pre-#626 contradiction the fold itself was built to fix, just one
 	// level lower, listing an unbuilt alternate's roles as impaired beside a
-	// verdict that already knows to ignore them.
-	activeAlt := map[string]string{} // choice name -> its active alternate's name
-	for _, c := range choices {
+	// verdict that already knows to ignore them. Keyed by choice id
+	// (choicesByID), not name: a system can reach two distinct choices that
+	// happen to share a name (its standard's and its own ad-hoc one), and a
+	// name-keyed lookup would silently collapse them.
+	activeAlt := map[string]string{} // choice id -> its active alternate's name
+	for cid, c := range choicesByID {
 		if active, ok := c.Active(); ok {
-			activeAlt[c.Name] = active.Name
+			activeAlt[cid] = active.Name
 		}
 	}
 	for i := range roles {
@@ -750,17 +767,19 @@ func systemVerdicts(systems []HealthSystem) []health.Verdict {
 // explainRole turns a resolved role into the report row, adding the causing chain
 // when the role is impaired: which assigned components are not occupying their
 // slot (down), and which active alarms took them down. A satisfied role needs
-// no explanation, so it costs no alarm read. activeAlt is the choice-name to
+// no explanation, so it costs no alarm read. activeAlt is the choice-id to
 // active-alternate-name lookup SystemHealth built from the same
 // splitHealthRoles grouping the verdict itself folds, so a role's Active flag
-// can never disagree with what actually decided the verdict.
+// can never disagree with what actually decided the verdict. Keyed by id, not
+// name: two distinct choices (a system's own and its standard's) can share a
+// name, and a name-keyed lookup would answer for the wrong one.
 func (p *PG) explainRole(ctx context.Context, q txQuerier, r resolvedRole, activeAlt map[string]string) (HealthRole, error) {
 	role := health.Role{Name: r.Name, Quorum: r.Quorum, Impact: r.Impact, Assigned: r.Assigned}
 	var choiceName, altName string
 	active := true // unconditional: always counts
 	if r.ChoiceID != nil {
 		choiceName, altName = *r.ChoiceName, *r.AlternateName
-		active = activeAlt[choiceName] == altName
+		active = activeAlt[*r.ChoiceID] == altName
 	}
 	row := HealthRole{
 		Name:        r.Name,

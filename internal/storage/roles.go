@@ -49,9 +49,16 @@ type SystemRole struct {
 	// none. It lives on the role because the same broken component matters
 	// differently depending on the slot it was filling, and it is the only input
 	// the rollup takes from the declaration side beyond the requirement itself.
-	Impact    string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	Impact string
+	// AlternateID is the choice_alternate this role joins (#626); nil means
+	// unconditional. Carried here purely so SetSystemRole and
+	// DeleteSystemRole's audit before/after images (systemRoleCols) capture
+	// a change to it; nothing on the read side (ListSystemRoles,
+	// systemRoleBody) surfaces it yet, deliberately deferred to the
+	// operator-facing read surface.
+	AlternateID *string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 // SystemRoleSpec is the declaration input. AcceptedTypes, PinnedProducts, and

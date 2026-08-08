@@ -227,12 +227,13 @@ func TestUnbuiltAlternateDoesNotImpair(t *testing.T) {
 // read is the explicit sort.Slice by position; deleting it leaves the whole
 // suite green until a real tie is reached. Both alternates here are 0 of 1
 // (a genuine tie, the state every choice-bearing system starts in) and carry
-// DIFFERENT impact, and they are declared to SeedRoleChoice in the reverse
-// of their intended position order (b-alt second in the slice would be
-// position 2 if declared as written; it is deliberately named to sort
-// alphabetically ahead of a-alt, so a latent bug that ordered by name
-// instead of position would also be caught) so nothing about insertion or
-// naming order coincides with the position that must actually decide it.
+// DIFFERENT impact. b-alt is declared first (position 1, the one that must
+// win) and a-alt second (position 2, the one that must NOT win), but their
+// NAMES sort the opposite way (a-alt before b-alt alphabetically): nothing
+// about the order they were typed in, or their names, coincides with the
+// position that must actually decide the tie, so a latent bug that ordered
+// by declaration order or by name instead of by position would also be
+// caught here, not just a bug that drops the ordering guarantee entirely.
 func TestAlternateTieBreaksByPosition(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx := context.Background()

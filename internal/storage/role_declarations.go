@@ -20,8 +20,13 @@ var ErrUnknownRoleOwner = errors.New("storage: unknown role owner_kind")
 
 // OwnerID is not in the column list (it lives in whichever arc column the owner
 // kind selects), so the caller stamps it from the address it queried by, the way
-// property_value's scan does.
-const systemRoleCols = `id, owner_kind, name, display_name, quorum, capacity, position_labels, impact, created_at, updated_at`
+// property_value's scan does. alternate_id is here (unlike the rest of the
+// choice-side identity, which the read side does not surface yet) because
+// SetSystemRole and DeleteSystemRole's before/after images are built from
+// this list: omitting it left the audit trail blind to exactly the field
+// this fix round made deliberately writable, so a role moving between
+// alternates left no evidence.
+const systemRoleCols = `id, owner_kind, name, display_name, quorum, capacity, position_labels, impact, alternate_id, created_at, updated_at`
 
 // roleOwnerColumn maps a role owner kind to its exclusive-arc column. Every
 // identifier it returns is a compile-time constant, never caller input, so
@@ -53,7 +58,7 @@ func roleOwnerColumn(ownerKind string) (string, error) {
 func scanSystemRole(row pgx.Row) (*SystemRole, error) {
 	var r SystemRole
 	if err := row.Scan(&r.ID, &r.OwnerKind, &r.Name, &r.DisplayName, &r.Quorum, &r.Capacity, &r.PositionLabels,
-		&r.Impact, &r.CreatedAt, &r.UpdatedAt); err != nil {
+		&r.Impact, &r.AlternateID, &r.CreatedAt, &r.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &r, nil

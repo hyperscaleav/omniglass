@@ -3673,7 +3673,7 @@ Declares a role every conforming system needs filled, or revises it in place (th
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--accepted-types` | string | (none) | The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type |
-| `--alternate` | string | (none) | The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626). Omit (or send null) to leave whatever is already declared unchanged; an empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422 |
+| `--alternate` | string | (none) | The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626). Omit to leave whatever is already declared unchanged; an empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422 |
 | `--capacity` | string | (none) | The most components the role will accept; must be at least quorum. Omit to leave whatever is already declared unchanged (or unbounded on first declare); there is no way to explicitly clear a capacity back to unbounded once set |
 | `--display-name` | string | (none) | The role's human label; defaults to the role name |
 | `--impact` | string | (none) | What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display |
@@ -4130,7 +4130,7 @@ Declares a role directly on this system (how a one-off system gets roles at all,
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--accepted-types` | string | (none) | The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type |
-| `--alternate` | string | (none) | The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626). Omit (or send null) to leave whatever is already declared unchanged; an empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422 |
+| `--alternate` | string | (none) | The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626). Omit to leave whatever is already declared unchanged; an empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422 |
 | `--capacity` | string | (none) | The most components the role will accept; must be at least quorum. Omit to leave whatever is already declared unchanged (or unbounded on first declare); there is no way to explicitly clear a capacity back to unbounded once set |
 | `--display-name` | string | (none) | The role's human label; defaults to the role name |
 | `--impact` | string | (none) | What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display |

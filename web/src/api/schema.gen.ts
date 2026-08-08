@@ -5828,7 +5828,7 @@ export interface components {
             readonly $schema?: string;
             /** @description The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type */
             accepted_types?: string[] | null;
-            /** @description The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626). Omit (or send null) to leave whatever is already declared unchanged; an empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422 */
+            /** @description The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626). Omit to leave whatever is already declared unchanged; an empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422 */
             alternate?: string;
             /**
              * Format: int64

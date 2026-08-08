@@ -105,27 +105,30 @@ func (p *PG) ResolveAlternate(ctx context.Context, ownerKind, ownerID, ref strin
 }
 
 // SeedRoleChoice installs one choice and its alternates for the boot-seed
-// phase, on the same seed-if-absent lane SeedSystemRole and SeedStandard
-// already use for NAME and DISPLAY_NAME: an operator's rename of a shipped
-// alternate survives the next boot, so a re-run neither duplicates nor
-// reasserts over either field. POSITION is the one field this lane does
-// reassert, every boot, existing alternates included: it is derived from
-// spec.Alternates' order, not something an operator sets independently of
-// standards.yaml, and a fixed 1-based-index-at-insert-time (the pre-fix-round
-// shape) crashed server boot the first time a release was anything but a
-// pure append, because the arbiter is (choice_id, name) but the collision is
-// on (choice_id, position): a new name landing at an already-taken position
-// raises 23505 on choice_alternate_position_key rather than being absorbed,
-// and a pure reorder among existing names hit the name arbiter's DO NOTHING
-// and silently kept the OLD position, which is worse than a crash because it
-// changes which alternate wins internal/health.Choice.Active's tie-break
-// silently and only on upgraded databases. The fix converges every
-// alternate on the declared order in one transaction with the position
-// uniqueness deferred (see the migration comment on
-// choice_alternate_position_key): every alternate's position is written
-// unconditionally to its 1-based index in spec.Alternates, which can pass
-// through a duplicate mid-transaction on the way to a valid permutation, and
-// only the state at commit has to be one.
+// phase. DISPLAY_NAME is the one field that stays truly insert-if-absent,
+// the same lane SeedSystemRole and SeedStandard use: an operator's edit to
+// it survives a re-run, never reasserted. NAME (membership: which
+// alternates exist at all) and POSITION are NOT operator-owned, and both
+// reconcile to the declared set every boot, existing alternates included.
+// This has to be true of both together, not just position: a fixed
+// 1-based-index-at-insert-time with no membership reconciliation (the
+// original shape) crashed server boot the first time a release was
+// anything but a pure append (a new name landing at an already-taken
+// position collides on choice_alternate_position_key), and fixing
+// position alone still crashed on a rename or a removal, because the
+// dropped name's row was never touched, kept its old position, and
+// collided with whatever the declared set now put there. A rename reads
+// identically to a drop-plus-add on this lane (there is no "renamed from"
+// tracking), so both take the same path: any alternate under this choice
+// not present in spec.Alternates is deleted, unless a role still points at
+// it, in which case the whole call refuses with ChoiceInUseShortfall
+// rather than let the FK's RESTRICT surface as a bare constraint violation
+// or silently detach the role. Every declared alternate's position is then
+// written unconditionally to its 1-based index in spec.Alternates, inside
+// one transaction with choice_alternate_position_key's uniqueness
+// deferred (see the migration comment there): the reconciliation and the
+// reassignment can both pass through a duplicate mid-transaction on the
+// way to a valid permutation, and only the state at commit has to be one.
 //
 // The alternates' owner columns are stamped from the choice row itself,
 // never taken from the caller (the FK that keeps a role from joining a
@@ -166,6 +169,56 @@ func (p *PG) SeedRoleChoice(ctx context.Context, ownerKind, ownerID string, spec
 
 	if _, err := tx.Exec(ctx, `set constraints choice_alternate_position_key deferred`); err != nil {
 		return nil, fmt.Errorf("storage: defer alternate position uniqueness: %w", err)
+	}
+
+	// Reconcile the STORED alternates to the DECLARED set before touching
+	// position: converging the declared names on their declared positions
+	// is not enough on its own, because a rename or a removal against an
+	// already-seeded database leaves a name that dropped OUT of
+	// spec.Alternates still sitting in the table under its old position,
+	// which then collides with whichever declared name lands there now. A
+	// rename is indistinguishable from a drop-plus-add here (the seed has
+	// no "renamed from" tracking), so both are handled the same way: any
+	// alternate under this choice not named in spec.Alternates is removed,
+	// unless a role still points at it, in which case the whole call
+	// refuses with ChoiceInUseShortfall rather than let the FK's RESTRICT
+	// surface as a bare constraint violation, or silently detach the role.
+	declared := make([]string, len(spec.Alternates))
+	for i, alt := range spec.Alternates {
+		declared[i] = alt.Name
+	}
+	orphanRows, err := tx.Query(ctx,
+		`select id, name from choice_alternate where choice_id = $1 and name <> all($2::text[])`,
+		choiceID, declared)
+	if err != nil {
+		return nil, fmt.Errorf("storage: find orphaned alternates %s: %w", spec.Name, err)
+	}
+	type orphan struct{ id, name string }
+	var orphans []orphan
+	for orphanRows.Next() {
+		var o orphan
+		if err := orphanRows.Scan(&o.id, &o.name); err != nil {
+			orphanRows.Close()
+			return nil, fmt.Errorf("storage: scan orphaned alternate: %w", err)
+		}
+		orphans = append(orphans, o)
+	}
+	if err := orphanRows.Err(); err != nil {
+		orphanRows.Close()
+		return nil, fmt.Errorf("storage: iterate orphaned alternates: %w", err)
+	}
+	orphanRows.Close()
+	for _, o := range orphans {
+		attached, err := attachedRoleNames(ctx, tx, o.id)
+		if err != nil {
+			return nil, err
+		}
+		if len(attached) > 0 {
+			return nil, &ChoiceInUseShortfall{Choice: spec.Name, Alternate: o.name, Roles: attached}
+		}
+		if _, err := tx.Exec(ctx, `delete from choice_alternate where id = $1`, o.id); err != nil {
+			return nil, mapRoleWriteErr(err)
+		}
 	}
 
 	out := make(map[string]string, len(spec.Alternates))

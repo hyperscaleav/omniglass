@@ -4416,7 +4416,7 @@ components:
             - array
             - "null"
         alternate:
-          description: The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626). Omit (or send null) to leave whatever is already declared unchanged; an empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422
+          description: The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626). Omit to leave whatever is already declared unchanged; an empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422
           type: string
         capacity:
           description: The most components the role will accept; must be at least quorum. Omit to leave whatever is already declared unchanged (or unbounded on first declare); there is no way to explicitly clear a capacity back to unbounded once set

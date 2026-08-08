@@ -496,3 +496,126 @@ func TestSeedRoleChoiceConvergesOnReorderedPositions(t *testing.T) {
 		}
 	}
 }
+
+// TestSeedRoleChoiceReconcilesRenamesAndDrops is the second round of the
+// third finding's fix: converging position for the DECLARED set is not
+// enough, because a rename or a drop against an already-seeded database is
+// a name dropping OUT of spec.Alternates, and the pre-fix SeedRoleChoice
+// never touched a stored row whose name was no longer declared. That row
+// kept its old position, and the newly-declared name (the rename's other
+// half, or any alternate whose declared position happened to land where the
+// orphan still sat) collided with it at commit: a rename is a drop plus an
+// add on this lane, indistinguishable from a genuine removal without
+// "renamed from" tracking the seed does not have, so both must reconcile
+// the same way. Covers three cases against a database that already ran the
+// first seed: a pure drop, a rename, and a drop that is refused because a
+// role still points at the alternate being removed (the FK is RESTRICT;
+// refusing and naming the role is more honest than a silent cascade that
+// would detach it).
+func TestSeedRoleChoiceReconcilesRenamesAndDrops(t *testing.T) {
+	gw, ctx, dsn := newChoiceTestGateway(t)
+
+	std := "reconcile-std"
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, DisplayName: "Reconcile"}); err != nil {
+		t.Fatalf("create standard: %v", err)
+	}
+	first, err := gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
+		Name: "conferencing", DisplayName: "Conferencing",
+		Alternates: []storage.AlternateSpec{
+			{Name: "all-in-one", DisplayName: "All-in-one"},
+			{Name: "component-system", DisplayName: "Component System"},
+			{Name: "legacy", DisplayName: "Legacy"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("seed first shape: %v", err)
+	}
+
+	// A role holds "legacy": dropping it must be refused, not silently
+	// detach the role or crash on the FK.
+	if _, err := gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
+		Name: "legacy-role", DisplayName: "Legacy Role", Quorum: 1, AlternateID: strp(first["legacy"]),
+	}); err != nil {
+		t.Fatalf("declare legacy role: %v", err)
+	}
+
+	// Drop "legacy" (still holds a role) and rename "component-system" to
+	// "hybrid", keeping "all-in-one" untouched.
+	_, err = gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
+		Name: "conferencing", DisplayName: "Conferencing",
+		Alternates: []storage.AlternateSpec{
+			{Name: "all-in-one", DisplayName: "All-in-one"},
+			{Name: "hybrid", DisplayName: "Hybrid"},
+		},
+	})
+	var shortfall *storage.ChoiceInUseShortfall
+	if !errors.As(err, &shortfall) {
+		t.Fatalf("reseed dropping legacy (still holds a role) = %v, want ChoiceInUseShortfall", err)
+	}
+	if shortfall.Alternate != "legacy" || len(shortfall.Roles) != 1 || shortfall.Roles[0] != "legacy-role" {
+		t.Fatalf("shortfall = %+v, want conferencing/legacy naming legacy-role", shortfall)
+	}
+
+	// The refusal rolled back the whole call: legacy is still there,
+	// unchanged, and nothing about component-system moved either.
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+	var stillThere int
+	if err := conn.QueryRow(ctx, `select count(*) from choice_alternate where id = $1`, first["legacy"]).Scan(&stillThere); err != nil {
+		t.Fatalf("count legacy: %v", err)
+	}
+	if stillThere != 1 {
+		t.Fatalf("legacy rows after refused reseed = %d, want 1 (the refusal must not have deleted it)", stillThere)
+	}
+
+	// Detach the role, then the same reseed (drop legacy, rename
+	// component-system to hybrid) must succeed.
+	if _, err := gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
+		Name: "legacy-role", DisplayName: "Legacy Role", Quorum: 1, AlternateID: strp(""),
+	}); err != nil {
+		t.Fatalf("detach legacy-role: %v", err)
+	}
+	second, err := gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
+		Name: "conferencing", DisplayName: "Conferencing",
+		Alternates: []storage.AlternateSpec{
+			{Name: "all-in-one", DisplayName: "All-in-one"},
+			{Name: "hybrid", DisplayName: "Hybrid"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("reseed after detaching legacy-role: %v", err)
+	}
+
+	// all-in-one kept its id (untouched by the reorder/rename around it);
+	// legacy and the old component-system name are both gone; hybrid is a
+	// fresh row, not component-system reused under a new name (the seed has
+	// no rename tracking, so this is the honest outcome).
+	if second["all-in-one"] != first["all-in-one"] {
+		t.Fatalf("all-in-one id changed across reseed: %s -> %s", first["all-in-one"], second["all-in-one"])
+	}
+	if second["hybrid"] == first["component-system"] {
+		t.Fatalf("hybrid reused component-system's id; the seed has no rename tracking, this must be a fresh row")
+	}
+	for _, id := range []string{first["legacy"], first["component-system"]} {
+		var count int
+		if err := conn.QueryRow(ctx, `select count(*) from choice_alternate where id = $1`, id).Scan(&count); err != nil {
+			t.Fatalf("count dropped row %s: %v", id, err)
+		}
+		if count != 0 {
+			t.Errorf("dropped alternate %s still has %d row(s), want 0", id, count)
+		}
+	}
+	var allInOnePos, hybridPos int
+	if err := conn.QueryRow(ctx, `select position from choice_alternate where id = $1`, second["all-in-one"]).Scan(&allInOnePos); err != nil {
+		t.Fatalf("read all-in-one position: %v", err)
+	}
+	if err := conn.QueryRow(ctx, `select position from choice_alternate where id = $1`, second["hybrid"]).Scan(&hybridPos); err != nil {
+		t.Fatalf("read hybrid position: %v", err)
+	}
+	if allInOnePos != 1 || hybridPos != 2 {
+		t.Errorf("positions after reconcile: all-in-one=%d, hybrid=%d, want 1, 2", allInOnePos, hybridPos)
+	}
+}

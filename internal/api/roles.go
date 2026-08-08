@@ -154,7 +154,7 @@ type roleSpecBody struct {
 	// and a role's alternate silently detaching on an unrelated edit (#626)
 	// took a shipped standard's systems from healthy to degraded with no
 	// audit trail and no way back except raw SQL.
-	Alternate *string `json:"alternate,omitempty" doc:"The choice/alternate this role joins, addressed as \"choice-name/alternate-name\" (#626). Omit (or send null) to leave whatever is already declared unchanged; an empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422"`
+	Alternate *string `json:"alternate,omitempty" doc:"The choice/alternate this role joins, addressed as \"choice-name/alternate-name\" (#626). Omit to leave whatever is already declared unchanged; an empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422"`
 }
 
 type standardRolePathInput struct {
