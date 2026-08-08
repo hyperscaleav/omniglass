@@ -13,12 +13,21 @@ import { sortAlarms } from "./alarms";
 //      occupy it (their own verdict is not outage; degraded still occupies),
 //      the role is IMPAIRED
 //   -> an impaired role contributes its IMPACT (outage, degraded, or none)
-//   -> a SYSTEM takes the worst contribution among its roles
+//      UNLESS it belongs to a CHOICE (#626: an exclusive-or group, such as an
+//      all-in-one alternate versus a component-built one) whose best-satisfied
+//      alternate is a different one; the role's own ACTIVE flag says so, and
+//      its impaired/short/spare figures are then read-only trivia, not part
+//      of why the system is what it is
+//   -> a SYSTEM takes the worst contribution among its ACTIVE roles
 //   -> a LOCATION takes the worst verdict among the systems placed beneath it
 //
 // The verdict is never computed here: the server sends it, and the console shows
 // the chain that produced it. Recomputing it in the browser is exactly how a
-// console starts disagreeing with the API it reads.
+// console starts disagreeing with the API it reads. The same discipline applies
+// to ACTIVE: rendering a role's impaired figure without checking it first is
+// exactly the contradiction the field exists to prevent (a badge over an
+// impaired list that flatly disagrees with it), so every derivation below
+// filters through activeRoles rather than the raw list.
 
 export type Verdict = "healthy" | "degraded" | "outage";
 export type HealthRole = components["schemas"]["HealthRoleBody"];
@@ -71,19 +80,39 @@ export const roles = (h: EstateHealth | undefined): HealthRole[] => h?.roles ?? 
 export const systems = (h: EstateHealth | undefined): HealthSystem[] => h?.systems ?? [];
 export const transitions = (h: EstateHealth | undefined): HealthTransition[] => h?.transitions ?? [];
 
+// activeRoles is every role whose own figures actually counted toward the
+// verdict: unconditional roles (no choice) plus the role of whichever
+// alternate answered its choice. A role whose alternate LOST reads active
+// false; it can still be impaired on its own terms, but rendering that
+// impairment as part of "why this system reads what it does" is exactly the
+// contradiction active exists to catch, so every other derivation here reads
+// through this rather than the raw roles list.
+export function activeRoles(h: EstateHealth | undefined): HealthRole[] {
+  return roles(h).filter((r) => r.active);
+}
+
+// inactiveRoles is the complement: roles belonging to a choice's alternate
+// that lost. Surfaced separately (not silently dropped) so an operator can
+// still see what the unbuilt alternate would need, without it reading as a
+// current impairment.
+export function inactiveRoles(h: EstateHealth | undefined): HealthRole[] {
+  return roles(h).filter((r) => !r.active);
+}
+
 // The roles that explain the verdict, worst impact first, so the reconciliation
 // panel leads with the role that took the system down rather than the one that
 // merely dented it.
 export function impairedRoles(h: EstateHealth | undefined): HealthRole[] {
-  return roles(h)
+  return activeRoles(h)
     .filter((r) => r.impaired)
     .sort((a, b) => impactRank(a.impact) - impactRank(b.impact) || (a.display_name || a.name).localeCompare(b.display_name || b.name));
 }
 
 // The roles that are holding: named too, because "which roles are fine" is half of
-// why a system is only degraded and not out.
+// why a system is only degraded and not out. An inactive role is neither
+// impaired nor holding here: it is not in play, so it belongs to neither list.
 export function holdingRoles(h: EstateHealth | undefined): HealthRole[] {
-  return roles(h).filter((r) => !r.impaired);
+  return activeRoles(h).filter((r) => !r.impaired);
 }
 
 function impactRank(impact: string): number {

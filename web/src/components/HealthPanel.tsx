@@ -5,15 +5,16 @@ import HealthHistory from "./HealthHistory";
 import { ChevronRight } from "./icons";
 import { describeError } from "../lib/format";
 import {
+  activeRoles as activeRolesOf,
   causes,
   chainSentence,
   holdingRoles,
   impactPhrase,
   impairedRoles,
+  inactiveRoles as inactiveRolesOf,
   locationHealth,
   locationHealthKey,
   quorumLabel,
-  roles as rolesOf,
   systemHealth,
   systemHealthKey,
   systems as systemsOf,
@@ -192,7 +193,12 @@ export default function SystemHealthPanel(props: { system: string; onOpenCompone
   const verdict = () => q.data?.verdict ?? "";
   const impaired = createMemo(() => impairedRoles(q.data));
   const holding = createMemo(() => holdingRoles(q.data));
-  const all = createMemo(() => rolesOf(q.data));
+  // ACTIVE roles only: a role whose choice was answered by a different
+  // alternate is neither impaired nor holding for this system, so it must
+  // not inflate either count (see health.ts's own header note on why every
+  // derivation here reads through activeRoles rather than the raw list).
+  const all = createMemo(() => activeRolesOf(q.data));
+  const inactive = createMemo(() => inactiveRolesOf(q.data));
 
   return (
     <div class="flex flex-col gap-2">
@@ -261,6 +267,27 @@ export default function SystemHealthPanel(props: { system: string; onOpenCompone
                   </span>
                 )}
               </For>
+            </div>
+          </Show>
+
+          {/* A role can belong to a choice (#626, an exclusive-or group such
+              as an all-in-one alternate versus a component-built one) and
+              still read impaired on its own terms while its ACTIVE flag is
+              false: a different alternate answered the choice, so this
+              role's own figures did not move the verdict above. Named, not
+              hidden, so the console does not silently drop what an unbuilt
+              alternate would still need. */}
+          <Show when={inactive().length}>
+            <div class="flex flex-wrap items-center gap-1.5">
+              <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">not counted</span>
+              <For each={inactive()}>
+                {(r) => (
+                  <span class="badge badge-ghost badge-sm gap-1" title={`${r.display_name || r.name} belongs to ${r.choice}/${r.alternate}, a choice a different alternate answered`}>
+                    {r.display_name || r.name}
+                  </span>
+                )}
+              </For>
+              <span class="text-[10.5px] text-base-content/40">a different alternate answered their choice</span>
             </div>
           </Show>
         </Show>

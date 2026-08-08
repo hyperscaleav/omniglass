@@ -211,6 +211,51 @@ describe("SystemHealthPanel reconciliation", () => {
     const { getByText } = mountSystem({ ...healthy, owner: "bare", roles: [] });
     expect(getByText(/This system declares no roles/)).toBeTruthy();
   });
+
+  // The seeded huddle-room shape: a satisfied all-in-one alternate beside an
+  // unbuilt component-built one. Rendering the component-built alternate's
+  // roles as ordinary impairments would show "healthy" at the top and an
+  // "impaired" list underneath, flatly contradicting each other; active is
+  // what the console must consult to avoid that (#626 Task 9).
+  const huddleRoom: EstateHealth = {
+    owner: "huddle-room",
+    owner_kind: "system",
+    verdict: "healthy",
+    systems: [],
+    roles: [
+      {
+        name: "video-bar", display_name: "Video bar", impact: "outage", impaired: false, active: true,
+        quorum: 1, satisfying: 1, short: 0, spare: 0, down: [], assigned_to: ["bar-1"], alarms: [],
+        choice: "conferencing", alternate: "all-in-one",
+      },
+      {
+        name: "codec", display_name: "Codec", impact: "outage", impaired: true, active: false,
+        quorum: 1, satisfying: 0, short: 1, spare: 0, down: [], assigned_to: [], alarms: [],
+        choice: "conferencing", alternate: "component-built",
+      },
+      {
+        name: "camera", display_name: "Camera", impact: "outage", impaired: true, active: false,
+        quorum: 1, satisfying: 0, short: 1, spare: 0, down: [], assigned_to: [], alarms: [],
+        choice: "conferencing", alternate: "component-built",
+      },
+    ],
+    transitions: [],
+  };
+
+  it("does not render a losing alternate's impaired roles as why the system reads what it does", () => {
+    const { getByRole, queryByText } = mountSystem(huddleRoom);
+    // Healthy, and it says so plainly: the active alternate (video-bar) is
+    // satisfied, so nothing counts as impaired.
+    const status = getByRole("status");
+    expect(status.textContent).toMatch(/This system is healthy/);
+    expect(status.textContent).toMatch(/All 1 role it needs are filled/);
+    expect(queryByText("impaired")).toBeNull();
+    // The losing alternate's roles are not silently dropped either: named
+    // under their own heading, not folded into "impaired".
+    expect(queryByText("Codec")).toBeTruthy();
+    expect(queryByText("Camera")).toBeTruthy();
+    expect(queryByText(/a different alternate answered their choice/)).toBeTruthy();
+  });
 });
 
 // The recorded edges: the durable requirement behind the design. An operator has to

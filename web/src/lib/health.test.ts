@@ -81,6 +81,30 @@ describe("impairedRoles", () => {
     expect(impairedRoles(undefined)).toEqual([]);
     expect(holdingRoles(undefined)).toEqual([]);
   });
+
+  // A role belonging to a choice's LOSING alternate can still read impaired
+  // on its own terms (active: false); its impaired/short/spare did not move
+  // the verdict, because a different alternate answered the choice. Showing
+  // it as an ordinary impairment is the exact contradiction active exists to
+  // prevent (see healthRoleBody's own doc string): the seeded huddle-room
+  // shape is precisely this (a satisfied all-in-one alternate beside an
+  // unbuilt component-built one).
+  const withInactiveChoice = {
+    verdict: "healthy",
+    roles: [
+      role({ name: "video-bar", display_name: "Video bar", impaired: false, impact: "outage", active: true, choice: "conferencing", alternate: "all-in-one" }),
+      role({ name: "codec", display_name: "Codec", impaired: true, impact: "outage", active: false, choice: "conferencing", alternate: "component-built" }),
+      role({ name: "camera", display_name: "Camera", impaired: true, impact: "outage", active: false, choice: "conferencing", alternate: "component-built" }),
+    ],
+  } as unknown as EstateHealth;
+
+  it("excludes an impaired role whose alternate lost the choice: it did not move the verdict", () => {
+    expect(impairedRoles(withInactiveChoice)).toEqual([]);
+  });
+
+  it("does not count an inactive role as holding either: it is not in play, not fine", () => {
+    expect(holdingRoles(withInactiveChoice).map((r) => r.name)).toEqual(["video-bar"]);
+  });
 });
 
 describe("quorumLabel and impactPhrase", () => {
