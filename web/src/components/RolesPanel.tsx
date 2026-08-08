@@ -16,9 +16,10 @@ import {
   type EffectiveRole,
 } from "../lib/system_roles";
 import {
+  activeRoles as activeRolesOf,
   impactPhrase,
+  inactiveRoles as inactiveRolesOf,
   quorumLabel,
-  roles as healthRolesOf,
   systemHealth,
   systemHealthKey,
   type HealthRole,
@@ -84,7 +85,14 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
     queryFn: () => systemHealth(props.system),
     refetchOnWindowFocus: false,
   }));
-  const healthByName = createMemo(() => new Map<string, HealthRole>(healthRolesOf(healthQ.data).map((h) => [h.name, h])));
+  // Split active from inactive (#626 choices): a role whose alternate LOST
+  // its choice can still read impaired on its own terms, but its own figures
+  // did not move the verdict, so it must never render through the same
+  // short/spare/impact path as an active role (the exact contradiction fixed
+  // one panel over, commit 5472723 on HealthPanel; task 9 review, finding
+  // C5, caught it reintroduced here).
+  const activeByName = createMemo(() => new Map<string, HealthRole>(activeRolesOf(healthQ.data).map((h) => [h.name, h])));
+  const inactiveByName = createMemo(() => new Map<string, HealthRole>(inactiveRolesOf(healthQ.data).map((h) => [h.name, h])));
 
   const roles = createMemo<EffectiveRole[]>(() => q.data ?? []);
   const inherited = createMemo(() => roles().filter((r) => r.from_standard));
@@ -133,13 +141,26 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
     setErrs(role, undefined);
     try {
       await write();
-      await qc.invalidateQueries({ queryKey: key() });
       setPicked(role, "");
     } catch (e) {
       // The server's 422 names both parties: what the component is, and what
       // the role wants. That message IS the answer, so it is shown as sent.
       setErrs(role, describeError(e));
     } finally {
+      // Both queries invalidate here, not just on success: a reorder issues
+      // several independent server-committed swaps in sequence (swapPath),
+      // so a failure partway through still leaves the earlier swaps applied;
+      // invalidating only in the try block would leave the console showing
+      // the pre-drag order while the server holds a partly reordered one
+      // (task 9 review, finding C4). The health key invalidates alongside
+      // the roles key because short/spare/impact, this panel's primary
+      // readout since task 9, come from the health read, not the roles read:
+      // an assign, unassign, or reorder that only invalidated roles left
+      // those badges frozen at their pre-write values (finding C6).
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: key() }),
+        qc.invalidateQueries({ queryKey: systemHealthKey(props.system) }),
+      ]);
       setBusy(false);
     }
   }
@@ -153,26 +174,36 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
 
   // Reorders a role's occupants by dragging one onto another's slot. The
   // server only exchanges two positions per call, so swapPath decomposes the
-  // drag (a moveItem-shaped "from index N to index M") into the adjacent
-  // swaps that reproduce it, run in order inside one busy/error cycle.
-  const reorder = (role: string, from: number, to: number) => {
+  // drag (a moveItem-shaped "from index N to index M") into the REAL-position
+  // swaps that reproduce it (positions is EffectiveRoleBody's own per-occupant
+  // position array, not assumed index-plus-one: a role's positions are not
+  // dense once an unassign leaves a gap, #626), run in order inside one
+  // busy/error cycle.
+  const reorder = (role: string, positions: number[], from: number, to: number) => {
     if (from === to) return;
     return run(role, async () => {
-      for (const [a, b] of swapPath(from, to)) {
+      for (const [a, b] of swapPath(positions, from, to)) {
         await swapRolePositions(props.system, role, a, b);
       }
     });
   };
 
   const roleRow = (r: EffectiveRole, first: () => boolean) => {
-    const h = () => healthByName().get(r.name);
+    const h = () => activeByName().get(r.name);
+    const inactiveHealth = () => inactiveByName().get(r.name);
     const down = () => new Set(h()?.down ?? []);
     // Drag-to-reorder the occupant list: only worth wiring, and only sound to
-    // wire, once there is more than one position to reorder AND the caller
-    // can write. dragIdx is this row's own state (reset whenever the row
-    // remounts, e.g. after a reorder refetches).
+    // wire, once there is more than one position to reorder, the caller can
+    // write, AND the wire's positions array is actually usable (defends a
+    // stale cache from before EffectiveRoleBody carried it, or any future
+    // shape it does not match assigned_to length for). dragIdx is this row's
+    // own state (reset whenever the row remounts, e.g. after a reorder
+    // refetches).
     const [dragIdx, setDragIdx] = createSignal<number | null>(null);
-    const canReorder = () => props.canUpdate && (r.assigned_to ?? []).length > 1;
+    const canReorder = () =>
+      props.canUpdate &&
+      (r.assigned_to ?? []).length > 1 &&
+      (r.positions ?? []).length === (r.assigned_to ?? []).length;
     return (
     <div class="flex flex-col gap-1.5 px-3 py-2.5" classList={{ "border-t border-base-300": !first() }}>
       <div class="flex flex-wrap items-baseline gap-2">
@@ -181,12 +212,30 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
         <span class="flex-1" />
         {/* short/spare are occupancy-aware (health read); understaffed is pure
             assignment arithmetic (roles read) and only falls back here while
-            health has not loaded yet, so the row never shows undefined. */}
+            health has not loaded yet, so the row never shows undefined. An
+            INACTIVE role (its choice was answered by a different alternate)
+            gets neither: its own short/spare/impact never counted toward the
+            verdict, so showing them would be the exact contradiction commit
+            5472723 fixed on HealthPanel, one panel over. */}
         <Show
           when={h()}
           fallback={
-            <Show when={r.understaffed > 0}>
-              <span class="badge badge-warning badge-soft badge-sm">understaffed</span>
+            <Show
+              when={inactiveHealth()}
+              fallback={
+                <Show when={r.understaffed > 0}>
+                  <span class="badge badge-warning badge-soft badge-sm">understaffed</span>
+                </Show>
+              }
+            >
+              {(ih) => (
+                <span
+                  class="badge badge-ghost badge-sm"
+                  title={`${ih().choice}/${ih().alternate} is not the alternate currently answering this choice, so this role's own figures did not count toward the verdict`}
+                >
+                  not counted
+                </span>
+              )}
             </Show>
           }
         >
@@ -266,7 +315,7 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
                 onDragOver={(e) => { if (canReorder()) e.preventDefault(); }}
                 onDrop={() => {
                   const from = dragIdx();
-                  if (canReorder() && from !== null && from !== i()) void reorder(r.name, from, i());
+                  if (canReorder() && from !== null && from !== i()) void reorder(r.name, r.positions ?? [], from, i());
                   setDragIdx(null);
                 }}
                 onDragEnd={() => setDragIdx(null)}

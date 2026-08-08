@@ -5,6 +5,7 @@ import MembersPanel from "./MembersPanel";
 import { systemMembersKey, type Member } from "../lib/members";
 import { COMPONENTS_KEY, type Component as Comp } from "../lib/components";
 import { systemRolesKey, type EffectiveRole } from "../lib/system_roles";
+import { systemHealthKey } from "../lib/health";
 import { uuidFor } from "../lib/testids";
 
 // The panel answers "what is in this system". Membership is the attachment and a
@@ -35,7 +36,7 @@ const roles: EffectiveRole[] = [
   {
     name: "video-bar", display_name: "Video bar", quorum: 1, impact: "outage",
     accepted_types: [], pinned_products: [], position_labels: [], from_standard: true,
-    assigned_to: ["boardroom-a-bar"], assigned: 1, understaffed: 0,
+    assigned_to: ["boardroom-a-bar"], positions: [1], assigned: 1, understaffed: 0,
   },
 ];
 
@@ -54,11 +55,12 @@ function mount(opts: { rows?: Member[]; canUpdate?: boolean; roles?: EffectiveRo
   qc.setQueryData([...systemMembersKey("boardroom-a")], opts.rows ?? members);
   qc.setQueryData([...COMPONENTS_KEY], components);
   qc.setQueryData([...systemRolesKey("boardroom-a")], opts.roles ?? roles);
-  return render(() => (
+  const result = render(() => (
     <QueryClientProvider client={qc}>
       <MembersPanel system="boardroom-a" canUpdate={opts.canUpdate ?? true} />
     </QueryClientProvider>
   ));
+  return { ...result, qc };
 }
 
 const memberRow = (label: HTMLElement) => label.closest("div.flex-col") as HTMLElement;
@@ -144,5 +146,24 @@ describe("MembersPanel", () => {
     const arg = spy.mock.calls[0]?.[0] as Request | string;
     const url = typeof arg === "string" ? arg : arg.url;
     expect(url).toContain("/systems/boardroom-a/members/spare-panel");
+  });
+
+  // The health read (RolesPanel's primary readout since task 9) is
+  // invalidated alongside members and roles, not just the two this panel
+  // itself renders (task 9 review, finding C6): a membership change is
+  // staffing-relevant even though it never writes system_role_assignment
+  // directly.
+  it("invalidates the health key alongside members and roles on a write", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(json({}, 204));
+    const { qc, getByLabelText, getByText } = mount();
+    const spy = vi.spyOn(qc, "invalidateQueries");
+
+    fireEvent.change(getByLabelText("Component to add"), { target: { value: "spare-panel" } });
+    fireEvent.click(getByText("Add"));
+
+    await waitFor(() => {
+      const invalidated = spy.mock.calls.map((c) => JSON.stringify((c[0] as { queryKey: unknown }).queryKey));
+      expect(invalidated).toContain(JSON.stringify(systemHealthKey("boardroom-a")));
+    });
   });
 });

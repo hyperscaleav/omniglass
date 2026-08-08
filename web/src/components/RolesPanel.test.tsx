@@ -26,6 +26,7 @@ const roles: EffectiveRole[] = [
     position_labels: [],
     from_standard: true,
     assigned_to: ["mic-1"],
+    positions: [1],
     assigned: 1,
     understaffed: 1,
   },
@@ -40,6 +41,7 @@ const roles: EffectiveRole[] = [
     position_labels: [],
     from_standard: true,
     assigned_to: ["disp-1"],
+    positions: [1],
     assigned: 1,
     understaffed: 0,
   },
@@ -54,6 +56,7 @@ const roles: EffectiveRole[] = [
     position_labels: [],
     from_standard: false,
     assigned_to: [],
+    positions: [],
     assigned: 0,
     understaffed: 1,
   },
@@ -109,11 +112,12 @@ function mount(opts: { rows?: EffectiveRole[]; canUpdate?: boolean; health?: Est
   qc.setQueryData([...SYSTEMS_KEY], [system]);
   qc.setQueryData([...ME_KEY], owner);
   if (opts.health !== null) qc.setQueryData([...systemHealthKey("boardroom")], opts.health ?? health);
-  return render(() => (
+  const result = render(() => (
     <QueryClientProvider client={qc}>
       <RolesPanel system="boardroom" canUpdate={opts.canUpdate ?? true} />
     </QueryClientProvider>
   ));
+  return { ...result, qc };
 }
 
 // A role's row is the block its display name sits in.
@@ -174,6 +178,31 @@ describe("RolesPanel", () => {
     expect(downBadge.textContent).toContain("down");
   });
 
+  // #626 choices: a role belonging to a choice's losing alternate can read
+  // impaired on its own terms, but its own figures never counted toward the
+  // verdict. Rendering short/spare/impact for it anyway is the exact
+  // contradiction commit 5472723 fixed on HealthPanel; task 9 review, finding
+  // C5, caught it reintroduced here.
+  it("does not render short/spare/impact for a role whose alternate lost its choice", () => {
+    const withInactiveChoice: EstateHealth = {
+      ...health,
+      roles: health.roles!.map((r) =>
+        r.name === "table-mic"
+          ? { ...r, active: false, choice: "conferencing", alternate: "component-built" }
+          : r,
+      ),
+    };
+    const { getByText } = mount({ health: withInactiveChoice });
+    const row = roleRow(getByText("Table microphone"));
+    expect(within(row).queryByText("short 1")).toBeNull();
+    expect(within(row).queryByText("degraded")).toBeNull(); // the impact badge
+    expect(within(row).getByText("not counted")).toBeTruthy();
+    // Only table-mic is inactive; main-display's own active figures still render.
+    const mainDisplayRow = roleRow(getByText("Main display"));
+    expect(within(mainDisplayRow).queryByText("not counted")).toBeNull();
+    expect(within(mainDisplayRow).getByText("1 of 1 satisfying")).toBeTruthy();
+  });
+
   it("groups a role declared on the system apart from the ones its standard declares", () => {
     const { getByRole, getByText } = mount();
     const adhoc = getByRole("group", { name: /ad hoc/i });
@@ -208,6 +237,55 @@ describe("RolesPanel", () => {
     await waitFor(() => expect(put).toBeTruthy());
     expect(put!.url).toContain("/systems/boardroom/roles/table-mic/assignments/panel-1");
     expect(getByText("Table microphone")).toBeTruthy(); // the panel stays put
+  });
+
+  // short/spare/impact, this panel's primary readout since task 9, come from
+  // the health read, not the roles read. Invalidating only the roles key
+  // after a write left those badges frozen at their pre-write values (task 9
+  // review, finding C6): a role reading "short 1" that just got its
+  // component assigned kept showing "short 1" with two occupant chips below
+  // it, since nothing ever told the health query it was stale.
+  it("invalidates the health key too, not just the roles key, on a successful write", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "PUT") return new Response(null, { status: 204 });
+      return json({ system: "boardroom", roles });
+    });
+    const { qc, getByLabelText } = mount();
+    const spy = vi.spyOn(qc, "invalidateQueries");
+
+    fireEvent.change(getByLabelText("Component to fill table-mic"), { target: { value: "panel-1" } });
+    fireEvent.click(getByLabelText("Assign to table-mic"));
+
+    await waitFor(() => {
+      const invalidated = spy.mock.calls.map((c) => JSON.stringify((c[0] as { queryKey: unknown }).queryKey));
+      expect(invalidated).toContain(JSON.stringify(systemRolesKey("boardroom")));
+      expect(invalidated).toContain(JSON.stringify(systemHealthKey("boardroom")));
+    });
+  });
+
+  // A reorder issues several independent, individually-committed swaps in
+  // sequence (swapPath); a failure partway through still leaves the earlier
+  // swaps applied server-side. Invalidating only on success left the console
+  // showing the pre-drag order while the server held a partly reordered one
+  // (task 9 review, finding C4).
+  it("invalidates both keys even when the write fails, so a partial reorder is not hidden", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "PUT") return json({ detail: "refused" }, 422);
+      return json({ system: "boardroom", roles });
+    });
+    const { qc, getByLabelText } = mount();
+    const spy = vi.spyOn(qc, "invalidateQueries");
+
+    fireEvent.change(getByLabelText("Component to fill table-mic"), { target: { value: "panel-1" } });
+    fireEvent.click(getByLabelText("Assign to table-mic"));
+
+    await waitFor(() => {
+      const invalidated = spy.mock.calls.map((c) => JSON.stringify((c[0] as { queryKey: unknown }).queryKey));
+      expect(invalidated).toContain(JSON.stringify(systemRolesKey("boardroom")));
+      expect(invalidated).toContain(JSON.stringify(systemHealthKey("boardroom")));
+    });
   });
 
   // #626: a component fills at most one role per system. Once a picker lets
@@ -280,7 +358,11 @@ describe("RolesPanel", () => {
   // reuses moveItem's shape (listmodel.ts) via swapPath, but the wire call is
   // the server's actual primitive, a single pairwise swap.
   it("drag-reorders two occupants via the position-swap route", async () => {
-    const twoOccupants: EffectiveRole[] = [{ ...roles[0], assigned_to: ["mic-1", "panel-1"] }, roles[1], roles[2]];
+    const twoOccupants: EffectiveRole[] = [
+      { ...roles[0], assigned_to: ["mic-1", "panel-1"], positions: [1, 2] },
+      roles[1],
+      roles[2],
+    ];
     const swaps: Request[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
@@ -304,8 +386,51 @@ describe("RolesPanel", () => {
     expect(await swaps[0].json()).toEqual({ position: 1, with: 2 });
   });
 
+  // #626: an unassign leaves a gap rather than compacting, so a role's real
+  // positions are not assumed dense. Task 9 review, finding C3: an
+  // index-plus-one assumption would have swapped position 2 here, which
+  // nobody holds, either 404ing or silently misordering. mic-1 and panel-1
+  // hold real positions 1 and 3 (position 2 vacant).
+  it("drags across a position gap, addressing the real positions, not index-plus-one", async () => {
+    const gapped: EffectiveRole[] = [
+      { ...roles[0], assigned_to: ["mic-1", "panel-1"], positions: [1, 3] },
+      roles[1],
+      roles[2],
+    ];
+    const swaps: Request[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes(":swapPositions")) {
+        swaps.push(req.clone());
+        return new Response(null, { status: 204 });
+      }
+      return json({ system: "boardroom", roles: gapped });
+    });
+
+    const { getByText } = mount({ rows: gapped });
+    const from = getByText("mic-1").closest("span.badge") as HTMLElement;
+    const to = getByText("panel-1").closest("span.badge") as HTMLElement;
+
+    fireEvent.dragStart(from);
+    fireEvent.dragOver(to);
+    fireEvent.drop(to);
+
+    await waitFor(() => expect(swaps.length).toBe(1));
+    expect(await swaps[0].json()).toEqual({ position: 1, with: 3 });
+  });
+
   it("does not wire dragging when there is only one occupant to reorder", () => {
     const { getByText } = mount(); // default fixture: table-mic has one occupant
+    const badge = getByText("mic-1").closest("span.badge") as HTMLElement;
+    expect(badge.draggable).toBe(false);
+  });
+
+  it("does not wire dragging when the cached role predates the positions field", () => {
+    // A stale cache entry (or a test fixture that forgot positions) must
+    // disable dragging rather than guess, since the length mismatch is
+    // exactly the signal that index-plus-one cannot be trusted.
+    const stale: EffectiveRole[] = [{ ...roles[0], assigned_to: ["mic-1", "panel-1"], positions: null }, roles[1], roles[2]];
+    const { getByText } = mount({ rows: stale });
     const badge = getByText("mic-1").closest("span.badge") as HTMLElement;
     expect(badge.draggable).toBe(false);
   });

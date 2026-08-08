@@ -12,6 +12,7 @@ import {
   type Member,
 } from "../lib/members";
 import { roleByComponent, systemRoles, systemRolesKey } from "../lib/system_roles";
+import { systemHealthKey } from "../lib/health";
 
 // MembersPanel lists the components bound into a system. MEMBERSHIP is the
 // attachment and a ROLE is what it does, so this panel answers "what is in this
@@ -69,13 +70,17 @@ export default function MembersPanel(props: {
     return (components.data ?? []).filter((c) => !held.has(c.name));
   });
 
-  // Both caches move on a write: removing a member cannot change staffing (the
-  // server refuses while a role is held), but adding one changes who the roles
-  // panel can offer.
+  // All three caches move on a write: removing a member cannot change staffing
+  // (the server refuses while a role is held), but adding one changes who the
+  // roles panel can offer, and the health read (whose short/spare/impact are
+  // RolesPanel's primary readout since task 9) is invalidated alongside it so
+  // a change here never leaves those badges looking stale on the sibling
+  // panel (task 9 review, finding C6).
   const refresh = async () => {
     await Promise.all([
       qc.invalidateQueries({ queryKey: key() }),
       qc.invalidateQueries({ queryKey: systemRolesKey(props.system) }),
+      qc.invalidateQueries({ queryKey: systemHealthKey(props.system) }),
     ]);
   };
 

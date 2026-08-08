@@ -97,16 +97,34 @@ export async function swapRolePositions(system: string, role: string, position: 
 }
 
 // swapPath decomposes a moveItem(list, from, to)-shaped reorder (listmodel.ts)
-// into the sequence of adjacent-position swaps that reproduces it, since
+// into the sequence of REAL-position swaps that reproduces it, since
 // swapRolePositions exchanges exactly two positions and nothing shifts around
-// them. from/to are 0-based indices into assigned_to, matching moveItem's own
-// signature; the returned pairs are 1-based positions, ready to feed
-// swapRolePositions in order.
-export function swapPath(from: number, to: number): [number, number][] {
+// them. positions[i] is AssignedTo[i]'s own 1-based position (EffectiveRoleBody's
+// Positions field): a role's occupied positions are not assumed dense, because
+// an unassign leaves a gap rather than compacting (#626,
+// TestUnassignLeavesGapThenRefills), so a role with occupants at [1, 3] must
+// swap positions 1 and 3, never the "1 and 2" an index-plus-one assumption
+// would guess and 404 or misorder against (task 9 review, finding C3).
+//
+// from/to are 0-based indices into positions (and assigned_to, index for
+// index), matching moveItem's own signature. moveItem's shift is equivalent
+// to a chain of ADJACENT-RANK swaps walking the moved item across (the
+// standard splice-as-swap-chain identity); each step exchanges whichever two
+// occupants currently hold ranks i and i+step. Critically, positions ITSELF
+// never needs to change mid-walk: swapping two occupants changes who sits at
+// a position, never which positions are occupied, so "rank i's real
+// position" is the same positions[i] at every step, not a value that moves
+// with its occupant. (An earlier draft of this function mutated a working
+// copy as if it did; verifying the gapped case by hand against moveItem's
+// own output is what caught it, and system_roles.test.ts's gapped
+// "reproduces moveItem" case pins the regression.)
+export function swapPath(positions: number[], from: number, to: number): [number, number][] {
   if (from === to) return [];
   const path: [number, number][] = [];
   const step = from < to ? 1 : -1;
-  for (let i = from; i !== to; i += step) path.push([i + 1, i + step + 1]);
+  for (let i = from; i !== to; i += step) {
+    path.push([positions[i], positions[i + step]]);
+  }
   return path;
 }
 
