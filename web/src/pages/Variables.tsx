@@ -270,11 +270,16 @@ function CreateVariableForm(p: { onCreated: (v: Variable) => void }): JSX.Elemen
     if (!ownerKinds().includes(ownerKind())) setOwnerKind(ownerKinds()[0]);
   });
 
+  // Keyed on uuid, not name (#627): two same-named owners in different
+  // placement buckets are legal, and flattenTree keys its id set and children
+  // map on TreeNode.id, so a name-keyed picker rendered duplicates as
+  // identical, value-indistinguishable options. The posted owner is a uuid,
+  // which resolveVariableOwner accepts (ADR-0062, uuid-or-name dual accept).
   const ownerTree = createMemo<TreeNode[]>(() => {
     switch (ownerKind()) {
-      case "location": return (locations.data ?? []).map((l) => ({ id: l.name, value: l.name, label: entityLabel(l), parentId: l.parent }));
-      case "system": return (systems.data ?? []).map((s) => ({ id: s.name, value: s.name, label: entityLabel(s), parentId: s.parent }));
-      case "component": return (components.data ?? []).map((c) => ({ id: c.name, value: c.name, label: entityLabel(c), parentId: c.parent }));
+      case "location": return (locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id }));
+      case "system": return (systems.data ?? []).map((s) => ({ id: s.id, value: s.id, label: entityLabel(s), parentId: s.parent_id }));
+      case "component": return (components.data ?? []).map((c) => ({ id: c.id, value: c.id, label: entityLabel(c), parentId: c.parent_id }));
       default: return [];
     }
   });

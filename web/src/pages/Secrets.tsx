@@ -266,11 +266,16 @@ function CreateSecretForm(p: { onCreated: (s: Secret) => void }): JSX.Element {
   const operatorFields = createMemo(() => (shape()?.fields ?? []).filter((f) => f.origin !== "lifecycle"));
   // The owner picker is a tree: locations and components nest by
   // parent_id, so the dropdown indents each candidate to its tier (the shared
-  // TreeSelect, same as the location/parent pickers).
+  // TreeSelect, same as the location/parent pickers). Keyed on uuid, not name
+  // (#627): two same-named owners in different placement buckets are legal,
+  // and flattenTree keys its id set and children map on TreeNode.id, so a
+  // name-keyed picker rendered duplicates as identical, value-indistinguishable
+  // options. The posted owner is a uuid, which resolveSecretOwner accepts
+  // (ADR-0062, uuid-or-name dual accept).
   const ownerTree = createMemo<TreeNode[]>(() => {
     switch (ownerKind()) {
-      case "location": return (locations.data ?? []).map((l) => ({ id: l.name, value: l.name, label: l.display_name || l.name, parentId: l.parent }));
-      case "component": return (components.data ?? []).map((c) => ({ id: c.name, value: c.name, label: c.display_name || c.name, parentId: c.parent }));
+      case "location": return (locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: l.display_name || l.name, parentId: l.parent_id }));
+      case "component": return (components.data ?? []).map((c) => ({ id: c.id, value: c.id, label: c.display_name || c.name, parentId: c.parent_id }));
       default: return [];
     }
   });
