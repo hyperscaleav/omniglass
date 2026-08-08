@@ -234,11 +234,18 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
 
   // redirectToId swaps the route's trailing segment for id via history
   // replace: the operator's back button still lands where they came from,
-  // not on the just-resolved old-address URL.
+  // not on the just-resolved old-address URL. location.pathname is the
+  // FULL browser path, base included ("/web/components/mic-2" in the real
+  // app, which mounts <Router base="/web">), so the reconstructed target is
+  // base-inclusive too. { resolve: false } is required: solid-router's
+  // default resolve treats a leading-"/" `to` as relative to the router's
+  // OWN base and prepends it again, which double-prefixes to
+  // "/web/web/components/<id>" and 404s. resolve:false takes `to` as the
+  // literal path to set, matching what it already is.
   const redirectToId = (id: string) => {
     const parts = location.pathname.split("/");
     parts[parts.length - 1] = encodeURIComponent(id);
-    routerNavigate(parts.join("/"), { replace: true });
+    routerNavigate(parts.join("/"), { replace: true, resolve: false });
   };
 
   // After a refetch, drop any open blade whose node no longer exists (e.g. it was

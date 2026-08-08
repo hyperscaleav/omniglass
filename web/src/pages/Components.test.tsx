@@ -468,6 +468,38 @@ describe("Components create-as-route", () => {
     expect(window.location.pathname).toBe(`/components/${comp.id}`);
   });
 
+  // Regression: the app's real router (web/src/index.tsx) mounts <Router
+  // base="/web">, which `mount()` above deliberately does not reproduce, so
+  // the base-less assertion two tests up cannot see a base-prefixed
+  // redirect target double the base. useLocation().pathname under a
+  // base-carrying router is the FULL path (base included), and passing that
+  // straight to navigate() with the router's default resolve semantics
+  // re-prepends the base, landing on "/web/web/components/<id>" and a 404.
+  // Caught live against `make dev` (a real browser, a real "/web" base),
+  // invisible to every other test in this file.
+  it("redirects a name-shaped deep link to the resolved uuid under the app's real /web base, without doubling it", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...COMPONENTS_KEY], [comp]);
+    qc.setQueryData([...SYSTEMS_KEY], []);
+    qc.setQueryData([...LOCATIONS_KEY], []);
+    qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...ME_KEY], me);
+    qc.setQueryData([...TAGS_KEY], []);
+    qc.setQueryData([...entityTagsKey("component", "mic-2")], []);
+    window.history.pushState({}, "", "/web/components/mic-2");
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router base="/web">
+          <Route path="/components" component={Components} />
+          <Route path="/components/:id" component={Components} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    await waitFor(() => expect(window.location.pathname).toBe(`/web/components/${comp.id}`));
+    expect(window.location.pathname).not.toContain("/web/web/");
+    expect(await screen.findByText("Edit")).toBeTruthy();
+  });
+
   it("renders an explicit not-found state for an address that matches no component, not the old silent list fallback", async () => {
     mount("/components/no-such-widget");
     expect(await screen.findByText(/No such component/)).toBeTruthy();
