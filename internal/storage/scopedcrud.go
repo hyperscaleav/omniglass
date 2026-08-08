@@ -120,14 +120,30 @@ func scopedList[T any](ctx context.Context, p *PG, cfg scopedConfig[T], read sco
 }
 
 // loadByRef runs the reference lookup shared by every scopedByName variant: a
-// well-formed uuid matches on id (a primary key, never ambiguous), anything else
-// matches on name (possibly more than one row, #627 scopes name uniqueness to
-// placement rather than holding it global). Ordered by id so a caller that later
-// caps the result with a LIMIT gets a stable "first" row.
+// well-formed uuid matches on id (a primary key, never ambiguous), a dotted
+// address (#627 Task 12) resolves structurally to a uuid via resolvePath and
+// then matches on id the same way, and anything else matches on name
+// (possibly more than one row, #627 Task 10/11 scopes name uniqueness to
+// placement rather than holding it global). Ordered by id so a caller that
+// later caps the result with a LIMIT gets a stable "first" row.
 func loadByRef[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref string) ([]*T, error) {
 	col := "name"
-	if isUUID(ref) {
+	switch {
+	case isUUID(ref):
 		col = "id"
+	default:
+		addr, err := ParseAddress(ref)
+		if err != nil {
+			return nil, err
+		}
+		if addr != nil {
+			resolved, err := resolvePath(ctx, q, cfg, addr, ref)
+			if err != nil {
+				return nil, err
+			}
+			ref = resolved
+			col = "id"
+		}
 	}
 	rows, err := q.Query(ctx, `select `+cfg.cols+` from `+string(cfg.table)+` where `+col+` = $1 order by id`, ref)
 	if err != nil {
@@ -147,6 +163,175 @@ func loadByRef[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref s
 		return nil, fmt.Errorf("storage: load %s %q: %w", cfg.table, ref, err)
 	}
 	return matches, nil
+}
+
+// ErrPathNotFound is returned when a dotted address (#627 Task 12) fails to
+// resolve structurally: some segment along the walk does not exist, or the
+// address's terminal plane does not match the entity being resolved (a
+// location address handed to the component resolver, say). Both collapse to
+// this one sentinel rather than two, because which of them happened is not a
+// distinction worth leaking: mapRefErr turns it into the entity's own
+// non-disclosing 404, the same one an absent uuid or an out-of-scope row
+// already produces.
+type ErrPathNotFound struct {
+	Kind string
+	Ref  string
+}
+
+func (e *ErrPathNotFound) Error() string {
+	return fmt.Sprintf("storage: %q does not resolve for %s", e.Ref, e.Kind)
+}
+
+// addressKindTable maps an Address's terminal plane to the tree table that
+// resolves it: the same three tables scopeTable already allow-lists, plus
+// AddressRole, which resolves to none (no scopedConfig addresses a role
+// today), so it always falls to the not-ok branch and reports ErrPathNotFound
+// like any other kind mismatch.
+func addressKindTable(k AddressKind) (scopeTable, bool) {
+	switch k {
+	case AddressLocation:
+		return locationTable, true
+	case AddressComponent:
+		return componentTable, true
+	case AddressSystem:
+		return systemTable, true
+	default:
+		return "", false
+	}
+}
+
+// resolveTreeRoot finds a root row (parent_id IS NULL) by name in tbl:
+// location_root_name_key's shape, the first segment of every address's
+// location-tree walk. Returns "" (not an error) when no row matches, so the
+// caller can fold "does not exist" into ErrPathNotFound uniformly with every
+// other kind of structural miss.
+func resolveTreeRoot(ctx context.Context, q querier, tbl scopeTable, name string) (string, error) {
+	var id string
+	err := q.QueryRow(ctx, `select id from `+string(tbl)+` where parent_id is null and name = $1`, name).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("storage: resolve %s root %q: %w", tbl, name, err)
+	}
+	return id, nil
+}
+
+// resolveTreeChild finds a direct child by (parent_id, name) in tbl: every
+// root-tree segment after the first (location_parent_name_key), and every
+// plane-tail segment after the first (component_parent_name_key /
+// system_parent_name_key).
+func resolveTreeChild(ctx context.Context, q querier, tbl scopeTable, parentID, name string) (string, error) {
+	var id string
+	err := q.QueryRow(ctx, `select id from `+string(tbl)+` where parent_id = $1 and name = $2`, parentID, name).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("storage: resolve %s child %q: %w", tbl, name, err)
+	}
+	return id, nil
+}
+
+// resolvePlaneRoot finds the top-level row of a plane switch ($comp/$sys):
+// component_location_name_key / system_location_name_key when locID is
+// non-nil (the address gave at least one location segment before the
+// accessor), component_orphan_name_key / system_orphan_name_key when it is
+// nil (the accessor came first, addressing an unplaced row directly).
+func resolvePlaneRoot(ctx context.Context, q querier, tbl scopeTable, locID *string, name string) (string, error) {
+	var id string
+	var err error
+	if locID != nil {
+		err = q.QueryRow(ctx,
+			`select id from `+string(tbl)+` where parent_id is null and location_id = $1 and name = $2`,
+			*locID, name).Scan(&id)
+	} else {
+		err = q.QueryRow(ctx,
+			`select id from `+string(tbl)+` where parent_id is null and location_id is null and name = $1`,
+			name).Scan(&id)
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("storage: resolve %s plane root %q: %w", tbl, name, err)
+	}
+	return id, nil
+}
+
+// resolvePath turns a parsed dotted address (#627 Task 12) into the uuid it
+// names, by walking the location tree from a root and, if the address
+// switches plane, descending the component or system tree from there. Each
+// hop is a deterministic single-row match: the placement-scoped unique
+// indexes (component_parent_name_key and its seven siblings, #627 Task 10)
+// guarantee at most one row per (parent, name) or (location, name) pair, so
+// this walk carries no ambiguity to detect, unlike a bare name. What it can
+// hit is a structural miss (some segment does not exist) or a kind mismatch
+// (the address's terminal plane is not cfg's table), and both report the
+// same ErrPathNotFound.
+//
+// Deliberately NOT scope-aware: it is pure tree structure, run before any
+// scope check, the same way a caller-supplied uuid carries no scope
+// information of its own. loadByRef uses the uuid this returns exactly as it
+// would use one the caller typed directly, so the existing resolveRef
+// machinery still applies the caller's read/action scope to the row the
+// address named, same as any other reference (architect ruling 2, #627:
+// scope decides before ambiguity does; an address has no ambiguity to
+// decide, but it gets the same non-disclosing treatment on a scope miss).
+func resolvePath[T any](ctx context.Context, q querier, cfg scopedConfig[T], addr *Address, ref string) (string, error) {
+	notFound := func() (string, error) { return "", &ErrPathNotFound{Kind: string(cfg.table), Ref: ref} }
+
+	tbl, ok := addressKindTable(addr.Kind)
+	if !ok || tbl != cfg.table {
+		return notFound()
+	}
+
+	var locID *string
+	for _, seg := range addr.Root {
+		var id string
+		var err error
+		if locID == nil {
+			id, err = resolveTreeRoot(ctx, q, locationTable, seg)
+		} else {
+			id, err = resolveTreeChild(ctx, q, locationTable, *locID, seg)
+		}
+		if err != nil {
+			return "", err
+		}
+		if id == "" {
+			return notFound()
+		}
+		locID = &id
+	}
+
+	if addr.Kind == AddressLocation {
+		if locID == nil {
+			return notFound()
+		}
+		return *locID, nil
+	}
+
+	if len(addr.Tail) == 0 {
+		return notFound()
+	}
+	id, err := resolvePlaneRoot(ctx, q, tbl, locID, addr.Tail[0])
+	if err != nil {
+		return "", err
+	}
+	if id == "" {
+		return notFound()
+	}
+	for _, seg := range addr.Tail[1:] {
+		next, err := resolveTreeChild(ctx, q, tbl, id, seg)
+		if err != nil {
+			return "", err
+		}
+		if next == "" {
+			return notFound()
+		}
+		id = next
+	}
+	return id, nil
 }
 
 // resolveMatches turns a candidate row set into the single-row-or-refuse
