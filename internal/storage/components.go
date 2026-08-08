@@ -204,7 +204,10 @@ func (p *PG) ComponentNameTaken(ctx context.Context, name string, parentRef, loc
 // CreateComponent inserts a component under an optional parent, bound to an
 // optional system and location, writing the audit row in the same transaction.
 // A root component requires an all create scope; a child requires the parent in
-// the create scope.
+// the create scope. spec.Name empty is not an error: it is the operator
+// handing the pen to the platform (#627 Task 14), which mints
+// "<resolved-stem>-<n>" from the classified product's component_type once
+// placement and product are both resolved, below.
 func (p *PG) CreateComponent(ctx context.Context, actorID string, spec ComponentSpec, create scope.Set) (*Component, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -212,8 +215,13 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := ValidateName("component", spec.Name); err != nil {
-		return nil, err
+	// An operator-typed name is validated now, before any other resolve, so a
+	// bad slug fails fast (the existing behavior). A generated name needs no
+	// such check: generateNameForProduct only ever mints a legal slug.
+	if spec.Name != "" {
+		if err := ValidateName("component", spec.Name); err != nil {
+			return nil, err
+		}
 	}
 
 	var parentID *string
@@ -289,6 +297,31 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 		productID = &pid
 	}
 
+	// name empty means "generate one": resolved now, after placement and
+	// product are both known, since the stem comes from the product's
+	// component_type and the ordinal from siblings at this exact placement.
+	// The effective product id is resolved here even when spec.ProductName was
+	// nil (the same generic-device fallback the insert below applies at the
+	// SQL level) because the generator needs to know which component_type it
+	// is minting from; the API layer requires an explicit product on create,
+	// so this fallback only matters to a caller that writes the gateway
+	// directly, exactly like the insert's own COALESCE.
+	name := spec.Name
+	generated := name == ""
+	if generated {
+		genProductID := productID
+		if genProductID == nil {
+			id, err := genericDeviceProductID(ctx, tx)
+			if err != nil {
+				return nil, err
+			}
+			genProductID = &id
+		}
+		if name, err = generateNameForProduct(ctx, tx, *genProductID, parentID, locationID, nil); err != nil {
+			return nil, err
+		}
+	}
+
 	// product is required (the floor: every component is an instance of a
 	// product), so an unclassified write here defaults to the generic device
 	// the product_type_backfill migration guarantees exists. The API layer
@@ -296,10 +329,10 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 	// gate naming the generics); this default only ever fires below it, for a
 	// caller that writes the gateway directly (seed, devseed, tests).
 	c, err := scanComponent(tx.QueryRow(ctx, `
-		insert into component (name, display_name, parent_id, location_id, product_id)
-		values ($1, $2, $3, $4, coalesce($5::uuid, (select id from product where name = 'generic-device')))
+		insert into component (name, display_name, parent_id, location_id, product_id, name_generated)
+		values ($1, $2, $3, $4, coalesce($5::uuid, (select id from product where name = 'generic-device')), $6)
 		returning `+componentCols,
-		spec.Name, nullize(spec.DisplayName), parentID, locationID, productID))
+		name, nullize(spec.DisplayName), parentID, locationID, productID, generated))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
 	}
@@ -377,8 +410,36 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 		}
 		patchProductID = &pid
 	}
+	// A product patch that leaves the component still platform-owned (#627
+	// Task 14) may no longer fit its old stem: an interactive-display's
+	// "display-1" reclassified to a mic-type product needs a mic stem, not
+	// its old one. before.NameGenerated is the read of record; an
+	// operator-typed name (RenameComponent clears the flag forever) is never
+	// touched by a reclassify. Computed before the write below so both land
+	// in the same UPDATE and the same audit image.
+	var namePatch *string
+	if patch.ProductName != nil && before.NameGenerated {
+		finalProductID := patchProductID
+		if finalProductID == nil {
+			// An explicit empty string reclassifies to generic-device, the
+			// same fallback the product_id CASE below applies at the SQL
+			// level; the generator needs the id as a plain Go value to find
+			// generic-device's own component_type.
+			id, err := genericDeviceProductID(ctx, tx)
+			if err != nil {
+				return nil, err
+			}
+			finalProductID = &id
+		}
+		newName, err := generateNameForProduct(ctx, tx, *finalProductID, before.ParentID, before.LocationID, &before.ID)
+		if err != nil {
+			return nil, err
+		}
+		namePatch = &newName
+	}
 	after, err := scanComponent(tx.QueryRow(ctx, `
 		update component set
+			name         = coalesce($5, name),
 			display_name = coalesce($2, display_name),
 			-- product_id has no clear state: the floor makes it NOT NULL, so unlike
 			-- a three-state placement field there is no empty-string-means-null
@@ -400,7 +461,7 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 			updated_at   = now()
 		where id = $1
 		returning `+componentCols,
-		before.ID, patch.DisplayName, patch.ProductName, patchProductID))
+		before.ID, patch.DisplayName, patch.ProductName, patchProductID, namePatch))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
 	}
@@ -495,8 +556,54 @@ func (p *PG) MoveComponent(ctx context.Context, actorID, name string, move Compo
 			parentPatch = &parent.ID
 		}
 	}
+	// A still-platform-owned name (#627 Task 14) is scoped to the OLD
+	// placement's siblings; a move changes that scope, so the ordinal (and,
+	// crossing into a differently-typed subtree, the stem) may no longer be
+	// what a fresh generate would pick. The product does not change on a
+	// move, so only the ordinal actually shifts in the common case, but the
+	// stem is re-resolved from before.ProductID's component_type anyway
+	// (one rule, no special case for "same stem, different ordinal" versus
+	// "different stem too"). An operator-typed name (RenameComponent clears
+	// the flag forever) is left exactly where the operator put it.
+	//
+	// effLocationID/effParentID decode the same three-state patches the
+	// UPDATE's own CASE expressions apply (nil unchanged, "" clear, else
+	// set), computed here in Go because the generator needs the DESTINATION
+	// scope to scan siblings in, not the component's placement as it reads
+	// right now.
+	var namePatch *string
+	if before.NameGenerated {
+		effLocationID := before.LocationID
+		if locationPatch != nil {
+			if *locationPatch == "" {
+				effLocationID = nil
+			} else {
+				v := *locationPatch
+				effLocationID = &v
+			}
+		}
+		effParentID := before.ParentID
+		if parentPatch != nil {
+			if *parentPatch == "" {
+				effParentID = nil
+			} else {
+				v := *parentPatch
+				effParentID = &v
+			}
+		}
+		productID := ""
+		if before.ProductID != nil {
+			productID = *before.ProductID
+		}
+		newName, err := generateNameForProduct(ctx, tx, productID, effParentID, effLocationID, &before.ID)
+		if err != nil {
+			return nil, err
+		}
+		namePatch = &newName
+	}
 	after, err := scanComponent(tx.QueryRow(ctx, `
 		update component set
+			name        = coalesce($4, name),
 			location_id = case
 				when $2::text is null then location_id
 				when $2 = '' then null
@@ -510,7 +617,7 @@ func (p *PG) MoveComponent(ctx context.Context, actorID, name string, move Compo
 			updated_at  = now()
 		where id = $1
 		returning `+componentCols,
-		before.ID, locationPatch, parentPatch))
+		before.ID, locationPatch, parentPatch, namePatch))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
 	}
@@ -538,6 +645,13 @@ func (p *PG) MoveComponent(ctx context.Context, actorID, name string, move Compo
 // Health is not recomputed. The chain runs component -> systems-it-staffs ->
 // locations-over-those-systems and every link of it is an id, so a name move
 // changes no verdict.
+//
+// name_generated is always cleared to false here, whether or not it was
+// already (#627 Task 14): an operator who types a specific name is claiming
+// the pen, and a rename is the one act whose entire point is an
+// operator-chosen name. A later move or product reclassify then leaves this
+// name alone, since it is no longer platform-owned; :resetName is how an
+// operator hands the pen back.
 func (p *PG) RenameComponent(ctx context.Context, actorID, name, newName string, read, action scope.Set) (*Component, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -553,7 +667,7 @@ func (p *PG) RenameComponent(ctx context.Context, actorID, name, newName string,
 		return nil, err
 	}
 	after, err := scanComponent(tx.QueryRow(ctx,
-		`update component set name = $2, updated_at = now() where id = $1 returning `+componentCols,
+		`update component set name = $2, name_generated = false, updated_at = now() where id = $1 returning `+componentCols,
 		before.ID, newName))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
@@ -563,6 +677,53 @@ func (p *PG) RenameComponent(ctx context.Context, actorID, name, newName string,
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit rename component: %w", err)
+	}
+	return after, nil
+}
+
+// ResetComponentName hands the pen back to the platform (#627 Task 14): it
+// regenerates the component's name from its CURRENT type and placement, the
+// exact rule CreateComponent applies when no name is given, and marks the
+// result name_generated again. It does not matter whether the name was
+// already platform-owned or an operator had typed one: either way the
+// answer is a fresh "<stem>-<n>". Scoped exactly as RenameComponent (the
+// same read-then-action split), because it is the same act from the
+// permission's point of view: it changes the name, gated by
+// component:rename, no new token.
+//
+// The audit verb is "reset", distinct from "rename": the row records what
+// actually happened (the platform picked the name, not the caller), the
+// same reasoning that gave move its own verb apart from update.
+func (p *PG) ResetComponentName(ctx context.Context, actorID, name string, read, action scope.Set) (*Component, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin reset component name: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	before, err := resolveScoped(ctx, tx, componentConfig, name, read, action)
+	if err != nil {
+		return nil, err
+	}
+	productID := ""
+	if before.ProductID != nil {
+		productID = *before.ProductID
+	}
+	newName, err := generateNameForProduct(ctx, tx, productID, before.ParentID, before.LocationID, &before.ID)
+	if err != nil {
+		return nil, err
+	}
+	after, err := scanComponent(tx.QueryRow(ctx,
+		`update component set name = $2, name_generated = true, updated_at = now() where id = $1 returning `+componentCols,
+		before.ID, newName))
+	if err != nil {
+		return nil, mapComponentWriteErr(err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "reset", "component", after.ID, before, after); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit reset component name: %w", err)
 	}
 	return after, nil
 }

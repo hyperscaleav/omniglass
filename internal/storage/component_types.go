@@ -260,11 +260,24 @@ func loadComponentTypeWalk(ctx context.Context, q querier, id uuid.UUID) (*compo
 // icon, and abbrev to the first non-null value found (the type itself, then
 // its ancestors), and default_tags to the first non-empty set. No DB logic:
 // the walk is one row-fetch at a time here in Go, not a recursive query.
+//
+// It runs on p.pool, so it is only correct for a caller with nothing else
+// open. A caller resolving facts inside its own transaction (the name
+// generator, #627 Task 14, recomputing a stem after a :move or a product
+// reclassify) calls resolveTypeFacts directly with its own querier instead:
+// this method's pool read would otherwise see the pre-transaction committed
+// state, not the write still in flight.
 func (p *PG) ResolveTypeFacts(ctx context.Context, id uuid.UUID) (stem, icon, abbrev string, tags []string, err error) {
+	return resolveTypeFacts(ctx, p.pool, id)
+}
+
+// resolveTypeFacts is ResolveTypeFacts's walk, taking a querier so it can run
+// inside a caller's transaction (loadComponentTypeWalk already does).
+func resolveTypeFacts(ctx context.Context, q querier, id uuid.UUID) (stem, icon, abbrev string, tags []string, err error) {
 	cur := id
 	var gotStem, gotIcon, gotAbbrev, gotTags bool
 	for range maxComponentTypeDepth {
-		row, rerr := loadComponentTypeWalk(ctx, p.pool, cur)
+		row, rerr := loadComponentTypeWalk(ctx, q, cur)
 		if rerr != nil {
 			return "", "", "", nil, rerr
 		}

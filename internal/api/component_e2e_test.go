@@ -409,3 +409,113 @@ func TestComponentCreateResolvesParentWithinScopeAndNeverLeaksCandidates(t *test
 		t.Fatalf("409 body = %s, leaks the out-of-scope shared's uuid %s", body, outOfScopeShared.ID)
 	}
 }
+
+// TestComponentCreateWithoutNameGenerates drives #627 Task 14 over HTTP: name
+// is optional on create (a dropped Huma "required", not just a Go zero value),
+// the platform mints "<stem>-<n>" from the named product's component_type,
+// and the read side reports name_generated=true. Supplying a name still works
+// exactly as before, reporting name_generated=false.
+func TestComponentCreateWithoutNameGenerates(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatalf("mint owner: %v", err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	type comp struct {
+		ID            string `json:"id"`
+		Name          string `json:"name"`
+		NameGenerated bool   `json:"name_generated"`
+	}
+
+	// No "name" key in the body at all: the omission itself, not an empty
+	// string, is what the Huma pattern/minLength guards must tolerate.
+	var first comp
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components", map[string]any{"product": "samsung-qm55"}, http.StatusCreated), &first); err != nil {
+		t.Fatalf("decode create without name: %v", err)
+	}
+	if first.Name != "display-1" || !first.NameGenerated {
+		t.Fatalf("create without name = %+v, want name=display-1 name_generated=true", first)
+	}
+
+	// The read side (a plain GET) reports the same flag: it survives a round
+	// trip through the API, not just the create response.
+	var got comp
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/"+first.ID, nil, http.StatusOK), &got); err != nil {
+		t.Fatalf("decode get: %v", err)
+	}
+	if !got.NameGenerated {
+		t.Fatalf("get after create = %+v, want name_generated=true on the read side too", got)
+	}
+
+	// Supplying a name still behaves exactly as before.
+	var typed comp
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "operator-typed", "product": "samsung-qm55"}, http.StatusCreated), &typed); err != nil {
+		t.Fatalf("decode create with name: %v", err)
+	}
+	if typed.Name != "operator-typed" || typed.NameGenerated {
+		t.Fatalf("create with an explicit name = %+v, want name=operator-typed name_generated=false", typed)
+	}
+}
+
+// TestComponentResetName drives :resetName over HTTP: it regenerates the
+// name and flips name_generated to true, and it is gated by the SAME
+// component:rename token :rename uses (a scoped principal holding rename but
+// not the all-scope create grant can still call it).
+func TestComponentResetName(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatalf("mint owner: %v", err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "reset-me", "product": "samsung-qm55"}, http.StatusCreated)
+
+	var reset struct {
+		Name          string `json:"name"`
+		NameGenerated bool   `json:"name_generated"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components/reset-me:resetName", nil, http.StatusOK), &reset); err != nil {
+		t.Fatalf("decode resetName: %v", err)
+	}
+	if reset.Name != "display-1" || !reset.NameGenerated {
+		t.Fatalf("resetName = %+v, want name=display-1 name_generated=true", reset)
+	}
+
+	// A missing component is the ordinary 404, same as :rename.
+	c.do(ownerTok, http.MethodPost, "/components/no-such-component:resetName", nil, http.StatusNotFound)
+}

@@ -584,7 +584,7 @@ components:
           description: Location name this component is placed at
           type: string
         name:
-          description: Name, unique within its placement (the address; lowercase letters, digits, hyphens)
+          description: Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the product's type.
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
@@ -598,8 +598,6 @@ components:
         system:
           description: Primary system name this component belongs to
           type: string
-      required:
-        - name
       type: object
     CreateComponentTypeInputBody:
       additionalProperties: false
@@ -7211,6 +7209,33 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Rename a component
+      x-omniglass-permission: component:rename
+  /components/{name}:resetName:
+    post:
+      description: "Hands the pen back to the platform: regenerates the name from the component's current type and placement (the same \"<stem>-<n>\" rule a nameless create applies) and marks it name_generated, whether or not it already was. Gated by component:rename, the same token :rename uses: it changes the name, exactly that permission's blast radius."
+      operationId: reset-component-name
+      parameters:
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Regenerate a component's name
       x-omniglass-permission: component:rename
   /components/{name}:setTag:
     post:

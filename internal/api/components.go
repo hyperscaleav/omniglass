@@ -52,7 +52,10 @@ type componentPathInput struct {
 
 type createComponentInput struct {
 	Body struct {
-		Name        string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens)"`
+		// Name is optional (#627 Task 14): omit it and the platform mints
+		// "<stem>-<n>" from the classified product's component_type, marking
+		// name_generated. Supplied, it is validated exactly as before.
+		Name        string  `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the product's type."`
 		DisplayName string  `json:"display_name,omitempty" doc:"What an operator reads; the name is the address"`
 		Parent      *string `json:"parent,omitempty" doc:"Parent component name; omit for a root component"`
 		System      *string `json:"system,omitempty" doc:"Primary system name this component belongs to"`
@@ -247,6 +250,21 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Description: "Moves the component's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by component:rename; read and rename scopes drive the 404 versus 403 split.",
 	}, "component", "rename"), func(ctx context.Context, in *renameComponentInput) (*componentOutput, error) {
 		c, err := gw.RenameComponent(ctx, actorID(ctx), in.Name, in.Body.Name,
+			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "rename"))
+		if err != nil {
+			return nil, mapComponentErr(err)
+		}
+		return &componentOutput{Body: toComponentBody(c)}, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "reset-component-name",
+		Method:      http.MethodPost,
+		Path:        "/components/{name}:resetName",
+		Summary:     "Regenerate a component's name",
+		Description: "Hands the pen back to the platform: regenerates the name from the component's current type and placement (the same \"<stem>-<n>\" rule a nameless create applies) and marks it name_generated, whether or not it already was. Gated by component:rename, the same token :rename uses: it changes the name, exactly that permission's blast radius.",
+	}, "component", "rename"), func(ctx context.Context, in *componentPathInput) (*componentOutput, error) {
+		c, err := gw.ResetComponentName(ctx, actorID(ctx), in.Name,
 			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "rename"))
 		if err != nil {
 			return nil, mapComponentErr(err)

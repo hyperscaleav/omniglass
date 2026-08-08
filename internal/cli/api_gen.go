@@ -655,7 +655,7 @@ func generatedCommands() []*cobra.Command {
 					Use:     "create",
 					Short:   "Create a component",
 					Long:    "Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create.",
-					Example: "  omniglass component create --name name",
+					Example: "  omniglass component create",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/components")
@@ -683,8 +683,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads; the name is the address")
 				cmd.Flags().StringVar(&fLocation, "location", "", "Location name this component is placed at")
-				cmd.Flags().StringVar(&fName, "name", "", "Name, unique within its placement (the address; lowercase letters, digits, hyphens)")
-				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fName, "name", "", "Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the product's type.")
 				cmd.Flags().StringVar(&fParent, "parent", "", "Parent component name; omit for a root component")
 				cmd.Flags().StringVar(&fProduct, "product", "", "Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled.")
 				cmd.Flags().StringVar(&fSystem, "system", "", "Primary system name this component belongs to")
@@ -1122,6 +1121,23 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique within its placement (lowercase letters, digits, hyphens)")
 				_ = cmd.MarkFlagRequired("name")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "resetName <name>",
+					Short:   "Regenerate a component's name",
+					Long:    "Hands the pen back to the platform: regenerates the name from the component's current type and placement (the same \"<stem>-<n>\" rule a nameless create applies) and marks it name_generated, whether or not it already was. Gated by component:rename, the same token :rename uses: it changes the name, exactly that permission's blast radius.",
+					Example: "  omniglass component resetName <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/components/%s:resetName", url.PathEscape(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
 				return cmd
 			}()
 			return cmd

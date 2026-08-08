@@ -50,7 +50,12 @@ export async function getComponent(name: string): Promise<Component> {
 }
 
 export type CreateComponent = {
-  name: string;
+  // Optional (#627 Task 14): omit it and the platform mints "<stem>-<n>" from
+  // the classified product's component_type. The console create form still
+  // always sends one today (a later task optionalises the field itself); this
+  // type just follows the API contract, which the CLI and a direct API caller
+  // can already leave blank.
+  name?: string;
   display_name?: string;
   parent?: string;
   system?: string;

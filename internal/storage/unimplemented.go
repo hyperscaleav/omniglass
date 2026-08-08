@@ -249,6 +249,9 @@ func (UnimplementedGateway) RenameComponent(context.Context, string, string, str
 func (UnimplementedGateway) MoveComponent(context.Context, string, string, ComponentMove, scope.Set, scope.Set) (*Component, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) ResetComponentName(context.Context, string, string, scope.Set, scope.Set) (*Component, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) ComponentNameTaken(context.Context, string, *string, *string) (bool, error) {
 	return false, nil
 }

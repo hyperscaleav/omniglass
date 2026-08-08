@@ -500,7 +500,7 @@ Creates a component, optionally under a parent (a root needs an all-scoped grant
 |---|---|---|---|
 | `--display-name` | string | (none) | What an operator reads; the name is the address |
 | `--location` | string | (none) | Location name this component is placed at |
-| `--name` | string | (none) | Name, unique within its placement (the address; lowercase letters, digits, hyphens) |
+| `--name` | string | (none) | Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the product's type. |
 | `--parent` | string | (none) | Parent component name; omit for a root component |
 | `--product` | string | (none) | Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled. |
 | `--system` | string | (none) | Primary system name this component belongs to |
@@ -508,7 +508,7 @@ Creates a component, optionally under a parent (a root needs an all-scoped grant
 Example:
 
 ```sh
-omniglass component create --name name
+omniglass component create
 ```
 
 ### `omniglass component delete`
@@ -874,6 +874,22 @@ Example:
 
 ```sh
 omniglass component rename <name> --name name
+```
+
+### `omniglass component resetName`
+
+Regenerate a component's name
+
+```
+omniglass component resetName <name>
+```
+
+Hands the pen back to the platform: regenerates the name from the component's current type and placement (the same "<stem>-<n>" rule a nameless create applies) and marks it name_generated, whether or not it already was. Gated by component:rename, the same token :rename uses: it changes the name, exactly that permission's blast radius.
+
+Example:
+
+```sh
+omniglass component resetName <name>
 ```
 
 ### `omniglass component setTag`

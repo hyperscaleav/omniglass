@@ -267,6 +267,13 @@ type Gateway interface {
 	// a placement change is an authorization act; the API gates it on
 	// component:move.
 	MoveComponent(ctx context.Context, actorID, name string, move ComponentMove, read, action scope.Set) (*Component, error)
+	// ResetComponentName hands the pen back to the platform (#627 Task 14): it
+	// regenerates the component's name from its current type and placement,
+	// the same <stem>-<n> rule CreateComponent applies when no name is given,
+	// and marks it name_generated again, whether or not it already was. The
+	// API gates it on component:rename, the existing token whose blast radius
+	// (changing the name) this is exactly.
+	ResetComponentName(ctx context.Context, actorID, name string, read, action scope.Set) (*Component, error)
 	ComponentNameTaken(ctx context.Context, name string, parentRef, locationRef *string) (bool, error)
 	DeleteComponent(ctx context.Context, actorID, name string, read, action scope.Set) error
 
