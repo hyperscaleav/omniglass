@@ -89,12 +89,20 @@ func (p *PG) ResolveAlternate(ctx context.Context, ownerKind, ownerID, ref strin
 	if err != nil {
 		return "", err
 	}
+	// Resolved once (see role_declarations.go's roleOwnerArg): a system
+	// owner's ownerID is ambiguity-safe here rather than left for
+	// roleOwnerExpr's scalar subquery, which raises SQLSTATE 21000 the
+	// moment two systems share a name (#627).
+	ownerArg, err := p.roleOwnerArg(ctx, p.pool, ownerKind, ownerID)
+	if err != nil {
+		return "", err
+	}
 	var id string
 	err = p.pool.QueryRow(ctx, fmt.Sprintf(`
 		select ca.id from choice_alternate ca
 		join role_choice rc on rc.id = ca.choice_id
 		where rc.owner_kind = $1 and rc.%s = %s and rc.name = $3 and ca.name = $4`,
-		col, roleOwnerExpr(ownerKind)), ownerKind, ownerID, choiceName, altName).Scan(&id)
+		col, roleOwnerExpr(ownerKind)), ownerKind, ownerArg, choiceName, altName).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrRoleRefNotFound
 	}
@@ -151,17 +159,28 @@ func (p *PG) SeedRoleChoice(ctx context.Context, ownerKind, ownerID string, spec
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// Resolved once, inside this transaction (see role_declarations.go's
+	// roleOwnerArg): SeedRoleChoice's only non-test caller passes
+	// ownerKind="standard" today (a registry, unaffected), but this is a
+	// published gateway method whose ownerID is documented name-or-uuid, and
+	// a future system-owned seed must not raise SQLSTATE 21000 on server
+	// boot the moment two systems share a name (#627).
+	ownerArg, err := p.roleOwnerArg(ctx, tx, ownerKind, ownerID)
+	if err != nil {
+		return nil, err
+	}
+
 	var choiceID string
 	err = tx.QueryRow(ctx, fmt.Sprintf(`
 		insert into role_choice (owner_kind, %s, name, display_name)
 		values ($1, %s, $3, $4)
 		on conflict (owner_kind, owner_ref, name) do nothing
 		returning id`, col, roleOwnerExpr(ownerKind)),
-		ownerKind, ownerID, spec.Name, spec.DisplayName).Scan(&choiceID)
+		ownerKind, ownerArg, spec.Name, spec.DisplayName).Scan(&choiceID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = tx.QueryRow(ctx, fmt.Sprintf(
 			`select id from role_choice where owner_kind = $1 and %s = %s and name = $3`,
-			col, roleOwnerExpr(ownerKind)), ownerKind, ownerID, spec.Name).Scan(&choiceID)
+			col, roleOwnerExpr(ownerKind)), ownerKind, ownerArg, spec.Name).Scan(&choiceID)
 	}
 	if err != nil {
 		return nil, mapRoleWriteErr(err)
@@ -287,12 +306,18 @@ func (p *PG) DeleteAlternate(ctx context.Context, actorID, ownerKind, ownerID, c
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// Resolved once (see SeedRoleChoice / role_declarations.go's roleOwnerArg).
+	ownerArg, err := p.roleOwnerArg(ctx, tx, ownerKind, ownerID)
+	if err != nil {
+		return err
+	}
+
 	var altID string
 	err = tx.QueryRow(ctx, fmt.Sprintf(`
 		select ca.id from choice_alternate ca
 		join role_choice rc on rc.id = ca.choice_id
 		where rc.owner_kind = $1 and rc.%s = %s and rc.name = $3 and ca.name = $4`,
-		col, roleOwnerExpr(ownerKind)), ownerKind, ownerID, choiceName, altName).Scan(&altID)
+		col, roleOwnerExpr(ownerKind)), ownerKind, ownerArg, choiceName, altName).Scan(&altID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrAlternateNotFound
 	}
@@ -335,10 +360,16 @@ func (p *PG) DeleteChoice(ctx context.Context, actorID, ownerKind, ownerID, name
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// Resolved once (see DeleteAlternate).
+	ownerArg, err := p.roleOwnerArg(ctx, tx, ownerKind, ownerID)
+	if err != nil {
+		return err
+	}
+
 	var choiceID string
 	err = tx.QueryRow(ctx, fmt.Sprintf(
 		`select id from role_choice where owner_kind = $1 and %s = %s and name = $3`,
-		col, roleOwnerExpr(ownerKind)), ownerKind, ownerID, name).Scan(&choiceID)
+		col, roleOwnerExpr(ownerKind)), ownerKind, ownerArg, name).Scan(&choiceID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrChoiceNotFound
 	}
