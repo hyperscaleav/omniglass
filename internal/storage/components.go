@@ -171,7 +171,17 @@ var componentConfig = scopedConfig[Component]{
 // one, but not through a direct-gateway caller) or whose type resolves no
 // abbrev anywhere in its chain gets "" and RenderBare's own no-abbrev
 // fallback.
-func attachComponentPath(ctx context.Context, q querier, c *Component) error {
+//
+// full gates the abbrev resolution (review finding 3, task-15-review.md #2):
+// componentTypeIDForProduct plus resolveTypeFacts' own ancestor walk (up to
+// maxComponentTypeDepth levels) are two more queries on top of PathOf's own
+// two or three, paid per row on an unpaginated LIST for renders.bare, a
+// field no console surface reads (only renders.dash, which needs no abbrev
+// at all). scopedList calls this with full=false; scopedGet, the one-row
+// case where the extra cost is a single request's, not the whole estate's,
+// passes true. Path/PathSegments/Renders.Dash are computed either way, since
+// those cost nothing extra beyond PathOf itself.
+func attachComponentPath(ctx context.Context, q querier, c *Component, full bool) error {
 	segs, err := PathOf(ctx, q, componentTable, c.ID)
 	if err != nil {
 		return err
@@ -179,7 +189,7 @@ func attachComponentPath(ctx context.Context, q querier, c *Component) error {
 	c.PathSegments = segs
 	c.Path = strings.Join(segs, ".")
 	abbrev := ""
-	if c.ProductID != nil {
+	if full && c.ProductID != nil {
 		if typeID, err := componentTypeIDForProduct(ctx, q, *c.ProductID); err == nil {
 			if _, _, a, _, err := resolveTypeFacts(ctx, q, typeID); err == nil {
 				abbrev = a

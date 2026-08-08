@@ -338,8 +338,12 @@ func scanSystem(row pgx.Row) (*System, error) {
 // no bare-render abbreviation source: a standard (the system-side
 // counterpart of a product) carries no abbrev column the way component_type
 // does, so RenderBare always gets "" here and falls back to its
-// no-abbrev concatenation.
-func attachSystemPath(ctx context.Context, q querier, s *System) error {
+// no-abbrev concatenation. full is unused here (nothing to gate: PathOf is
+// the whole cost); it exists so this matches scopedConfig.attachPath's
+// shared signature, which attachComponentPath's own full does need (review
+// finding 3, task-15-review.md #2).
+func attachSystemPath(ctx context.Context, q querier, s *System, full bool) error {
+	_ = full
 	segs, err := PathOf(ctx, q, systemTable, s.ID)
 	if err != nil {
 		return err

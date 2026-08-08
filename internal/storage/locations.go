@@ -380,8 +380,10 @@ func scanLocation(row pgx.Row) (*Location, error) {
 // attachLocationPath fills l.Path/.PathSegments/.Renders (#627 Task 15). A
 // location has no accessor and no type-level abbreviation (location_type
 // carries no abbrev column the way component_type does), so RenderBare
-// always gets "" here.
-func attachLocationPath(ctx context.Context, q querier, l *Location) error {
+// always gets "" here. full is unused (see attachSystemPath's own doc
+// comment for why the parameter exists anyway).
+func attachLocationPath(ctx context.Context, q querier, l *Location, full bool) error {
+	_ = full
 	segs, err := PathOf(ctx, q, locationTable, l.ID)
 	if err != nil {
 		return err

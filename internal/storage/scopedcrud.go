@@ -78,7 +78,18 @@ type scopedConfig[T any] struct {
 	// compute that parent's own full path). Optional; nil for an entity this
 	// task's grammar does not address (none of the three tree entities leave
 	// it nil today).
-	attachPath func(ctx context.Context, q querier, v *T) error
+	//
+	// full is false on scopedList's per-row call and true on scopedGet's
+	// (review finding 3, task-15-review.md #2): a component's bare render
+	// needs its product's resolved component_type abbrev, which costs two
+	// more queries beyond PathOf's own two-to-three (componentTypeIDForProduct
+	// plus resolveTypeFacts' own ancestor walk, up to maxComponentTypeDepth
+	// levels), paid on EVERY row of an unpaginated LIST for a field
+	// (renders.bare) no console surface reads (only renders.dash). A single
+	// GET still computes it in full; attachComponentPath is the only
+	// implementation that reads full today, the location/system ones ignore
+	// it (neither has a bare-render abbrev source at all).
+	attachPath func(ctx context.Context, q querier, v *T, full bool) error
 }
 
 // sameOptional reports whether two optional columns hold the same value, absence
@@ -130,7 +141,7 @@ func scopedList[T any](ctx context.Context, p *PG, cfg scopedConfig[T], read sco
 	}
 	if cfg.attachPath != nil {
 		for i := range out {
-			if err := cfg.attachPath(ctx, p.pool, &out[i]); err != nil {
+			if err := cfg.attachPath(ctx, p.pool, &out[i], false); err != nil {
 				return nil, err
 			}
 		}
@@ -606,7 +617,7 @@ func scopedGet[T any](ctx context.Context, p *PG, cfg scopedConfig[T], name stri
 		return nil, err
 	}
 	if cfg.attachPath != nil {
-		if err := cfg.attachPath(ctx, p.pool, v); err != nil {
+		if err := cfg.attachPath(ctx, p.pool, v, true); err != nil {
 			return nil, err
 		}
 	}
