@@ -15,6 +15,11 @@
       "reason": "content-addressed by sha256, for the same reason"
     },
     {
+      "table": "choice_alternate",
+      "shape": "key-bearing",
+      "proved_elsewhere": "seeded only, no create path on the gateway"
+    },
+    {
       "table": "command",
       "shape": "id only"
     },
@@ -148,6 +153,11 @@
     },
     {
       "table": "role",
+      "shape": "key-bearing",
+      "proved_elsewhere": "seeded only, no create path on the gateway"
+    },
+    {
+      "table": "role_choice",
       "shape": "key-bearing",
       "proved_elsewhere": "seeded only, no create path on the gateway"
     },

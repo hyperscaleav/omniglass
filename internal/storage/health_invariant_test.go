@@ -144,6 +144,79 @@ func TestHealthRecordsOneRowPerChange(t *testing.T) {
 	f.assertTransitionOnly(t, ctx)
 }
 
+// TestUnbuiltAlternateDoesNotImpair is the choice-bearing fixture the
+// recompute-and-compare invariant needs (#626): before splitHealthRoles
+// existed, every role of every alternate folded as an ordinary role, so an
+// all-in-one room with a satisfied video-bar still read outage over its
+// component-system alternate's five unstaffed, unbuilt roles. This is the
+// RED that caught it, and it stays as the standing regression guard: the
+// no-DB-logic rule leaves this file's recompute-and-compare as the only
+// invariant a future change to the fold has to survive, and it catches
+// nothing about alternates unless a fixture here actually has one.
+func TestUnbuiltAlternateDoesNotImpair(t *testing.T) {
+	f := newHealthFixture(t)
+	ctx := context.Background()
+
+	std := "choice-huddle"
+	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: std, DisplayName: "Choice Huddle"}); err != nil {
+		t.Fatalf("create standard: %v", err)
+	}
+	alts, err := f.gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
+		Name: "conferencing", DisplayName: "Conferencing",
+		Alternates: []storage.AlternateSpec{
+			{Name: "all-in-one", DisplayName: "All-in-one"},
+			{Name: "component-system", DisplayName: "Component System"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("seed choice: %v", err)
+	}
+
+	// All-in-one: one role, a video bar.
+	if _, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
+		Name: "conf-bar", DisplayName: "Conferencing Bar", Quorum: 1, Impact: "outage",
+		AcceptedTypes: []string{"video-bar"}, AlternateID: alts["all-in-one"],
+	}); err != nil {
+		t.Fatalf("declare all-in-one role: %v", err)
+	}
+	// Component-system: five roles, none of them ever staffed in this test,
+	// the same shape the memo's worked example carries (codec, camera, dsp,
+	// amp, mic).
+	for _, name := range []string{"conf-codec", "conf-camera", "conf-dsp", "conf-amp", "conf-mic"} {
+		if _, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
+			Name: name, DisplayName: name, Quorum: 1, Impact: "outage",
+			AlternateID: alts["component-system"],
+		}); err != nil {
+			t.Fatalf("declare component-system role %s: %v", name, err)
+		}
+	}
+
+	room := "hq-r1"
+	if _, err := f.gw.CreateSystem(ctx, "", storage.SystemSpec{
+		Name: "choice-room", StandardID: &std, LocationName: &room,
+	}, f.all); err != nil {
+		t.Fatalf("create system: %v", err)
+	}
+	// Before anything is staffed, both alternates are at zero: the choice
+	// contributes its best-satisfied (tied, so position-1) alternate's
+	// impact.
+	f.mustAgreeWithRecord(t, ctx, "choice-room", "outage")
+
+	bar := "cisco-room-bar"
+	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "choice-bar-1", ProductName: &bar}, f.all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	if err := f.gw.AssignRole(ctx, "", "choice-room", "conf-bar", "choice-bar-1", f.all); err != nil {
+		t.Fatalf("assign: %v", err)
+	}
+
+	// The all-in-one alternate is now fully satisfied. The five unbuilt
+	// component-system roles must not read as impairments of a system that
+	// chose the other way: this is the #626 defect the fold exists to close.
+	f.mustAgreeWithRecord(t, ctx, "choice-room", "healthy")
+	f.assertTransitionOnly(t, ctx)
+}
+
 // TestHealthRecordsEveryRealChange is the mirror of the duplicate: a verdict that
 // really moves must always land a row. The two failure modes share a mechanism, a
 // recorded value that does not match what the roles say, so they are asserted

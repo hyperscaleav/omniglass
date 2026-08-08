@@ -348,7 +348,7 @@ func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Path:          "/systems/{name}/roles/{role}:swapPositions",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Exchange two occupants' positions within a role",
-		Description:   "Exchanges the positions of whichever components currently hold positions a and b within this role: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
+		Description:   "Exchanges the positions of whichever components currently hold position and with within this role: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
 	}, "system", "update"), func(ctx context.Context, in *swapRolePositionsInput) (*struct{}, error) {
 		// No requireSystemInScope here: unlike set/delete-system-role,
 		// SwapPositions takes a scope argument and resolves it itself

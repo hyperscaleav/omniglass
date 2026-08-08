@@ -27,6 +27,52 @@ standards:
         accepted_types: [display]
   - id: huddle-room
     display_name: Huddle Room
+    # A huddle room can be built either of two ways, and only one has to be
+    # true (#626): an all-in-one video bar, or a component build of a codec
+    # driving a separate camera, dsp, amplifier and mic. Staffing either
+    # alternate in full answers the choice; the other alternate's roles stay
+    # unbuilt without impairing the room, which is the worked example
+    # internal/health.Choice.Active and the storage-layer split exist for.
+    choices:
+      - name: conferencing
+        display_name: Conferencing
+        alternates:
+          - name: all-in-one
+            display_name: All-in-one
+          - name: component-system
+            display_name: Component System
+    roles:
+      - name: conf-bar
+        display_name: Conferencing Bar
+        quorum: 1
+        accepted_types: [video-bar]
+        choice: conferencing
+        alternate: all-in-one
+      - name: conf-codec
+        display_name: Codec
+        accepted_types: [codec]
+        choice: conferencing
+        alternate: component-system
+      - name: conf-camera
+        display_name: Camera
+        accepted_types: [camera]
+        choice: conferencing
+        alternate: component-system
+      - name: conf-dsp
+        display_name: DSP
+        accepted_types: [dsp]
+        choice: conferencing
+        alternate: component-system
+      - name: conf-amp
+        display_name: Amplifier
+        accepted_types: [amplifier]
+        choice: conferencing
+        alternate: component-system
+      - name: conf-mic
+        display_name: Microphone
+        accepted_types: [mic]
+        choice: conferencing
+        alternate: component-system
   - id: classroom
     display_name: Classroom
   - id: auditorium

@@ -1944,6 +1944,78 @@
    }
   },
   "identity": {
+   "choice_alternate": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "choice_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "role_choice.id"
+     },
+     {
+      "name": "owner_kind",
+      "type": "text",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "role_choice.owner_kind"
+     },
+     {
+      "name": "standard_id",
+      "type": "uuid",
+      "nullable": true
+     },
+     {
+      "name": "system_id",
+      "type": "uuid",
+      "nullable": true
+     },
+     {
+      "name": "owner_ref",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "role_choice.owner_ref"
+     },
+     {
+      "name": "name",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "display_name",
+      "type": "text",
+      "nullable": false,
+      "default": "''::text"
+     },
+     {
+      "name": "position",
+      "type": "integer",
+      "nullable": false
+     }
+    ],
+    "uniques": [
+     {
+      "name": "choice_alternate_name_key",
+      "definition": "CREATE UNIQUE INDEX choice_alternate_name_key ON public.choice_alternate USING btree (choice_id, name)"
+     },
+     {
+      "name": "choice_alternate_owner_key",
+      "definition": "CREATE UNIQUE INDEX choice_alternate_owner_key ON public.choice_alternate USING btree (id, owner_kind, owner_ref)"
+     },
+     {
+      "name": "choice_alternate_position_key",
+      "definition": "CREATE UNIQUE INDEX choice_alternate_position_key ON public.choice_alternate USING btree (choice_id, \"position\")"
+     }
+    ]
+   },
    "human": {
     "columns": [
      {
@@ -2310,6 +2382,84 @@
      }
     ]
    },
+   "role_choice": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "owner_kind",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "standard_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "standard.id"
+     },
+     {
+      "name": "system_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "system.id"
+     },
+     {
+      "name": "owner_ref",
+      "type": "uuid",
+      "nullable": true
+     },
+     {
+      "name": "name",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "display_name",
+      "type": "text",
+      "nullable": false,
+      "default": "''::text"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ],
+    "checks": [
+     {
+      "name": "role_choice_owner_arc_check",
+      "expr": "CHECK ((((owner_kind = 'standard'::text) AND (standard_id IS NOT NULL) AND (system_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (standard_id IS NULL))))"
+     },
+     {
+      "name": "role_choice_owner_kind_check",
+      "expr": "CHECK ((owner_kind = ANY (ARRAY['standard'::text, 'system'::text])))"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "role_choice_name_key",
+      "definition": "CREATE UNIQUE INDEX role_choice_name_key ON public.role_choice USING btree (owner_kind, owner_ref, name)"
+     },
+     {
+      "name": "role_choice_owner_key",
+      "definition": "CREATE UNIQUE INDEX role_choice_owner_key ON public.role_choice USING btree (id, owner_kind, owner_ref)"
+     }
+    ]
+   },
    "service": {
     "columns": [
      {
@@ -2339,7 +2489,9 @@
      {
       "name": "owner_kind",
       "type": "text",
-      "nullable": false
+      "nullable": false,
+      "fk": true,
+      "fk_target": "choice_alternate.owner_kind"
      },
      {
       "name": "name",
@@ -2399,6 +2551,20 @@
       "type": "ARRAY",
       "nullable": false,
       "default": "'{}'::text[]"
+     },
+     {
+      "name": "alternate_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "choice_alternate.id"
+     },
+     {
+      "name": "owner_ref",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "choice_alternate.owner_ref"
      }
     ],
     "checks": [
@@ -2409,6 +2575,10 @@
      {
       "name": "system_role_impact_check",
       "expr": "CHECK ((impact = ANY (ARRAY['outage'::text, 'degraded'::text, 'none'::text])))"
+     },
+     {
+      "name": "system_role_owner_arc_check",
+      "expr": "CHECK ((((owner_kind = 'standard'::text) AND (standard_id IS NOT NULL) AND (system_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (standard_id IS NULL))))"
      },
      {
       "name": "system_role_owner_kind_check",

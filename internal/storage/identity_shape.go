@@ -66,6 +66,11 @@ var IdentityShapes = map[string]TableIdentity{
 	"system": {Shape: ShapeKeyBearing}, "system_role": {Shape: ShapeKeyBearing},
 	"tag": {Shape: ShapeKeyBearing}, "variable": {Shape: ShapeKeyBearing},
 	"vendor": {Shape: ShapeKeyBearing}, "component_type": {Shape: ShapeKeyBearing},
+	// role_choice is named the same way system_role is: within its owner
+	// arc (owner_kind, standard_id, system_id). choice_alternate is named
+	// within its choice (choice_id, name), one level narrower, the same
+	// relationship component_type's root/child split already has.
+	"role_choice": {Shape: ShapeKeyBearing}, "choice_alternate": {Shape: ShapeKeyBearing},
 
 	// Keyspace: a name, on the other rule.
 	"property_type": {ShapeKeyspace, "serial-number, a signal name referenced from drivers and templates"},
@@ -105,9 +110,11 @@ var IdentityShapes = map[string]TableIdentity{
 // with the reason it cannot be reached that way. Classification without proof is a
 // claim and not a guard, so the excuse is written down rather than inferred.
 var KeyProvedElsewhere = map[string]string{
-	"interface_type": "seeded only, no create path on the gateway",
-	"role":           "seeded only, no create path on the gateway",
-	"secret_type":    "seeded only, no create path on the gateway",
+	"interface_type":   "seeded only, no create path on the gateway",
+	"role":             "seeded only, no create path on the gateway",
+	"secret_type":      "seeded only, no create path on the gateway",
+	"role_choice":      "seeded only, no create path on the gateway",
+	"choice_alternate": "seeded only, no create path on the gateway",
 	"interface": "the name is server-derived, not operator-typed: InterfaceSpec carries no Name " +
 		"and the column is set from spec.Type, an already-validated interface_type name",
 }

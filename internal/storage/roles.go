@@ -54,9 +54,10 @@ type SystemRole struct {
 	UpdatedAt time.Time
 }
 
-// SystemRoleSpec is the declaration input. AcceptedTypes, PinnedProducts, and
-// PositionLabels each replace their set wholesale on an update; Capacity does
-// not (nil leaves the existing cap alone, see SystemRole.Capacity).
+// SystemRoleSpec is the declaration input. AcceptedTypes, PinnedProducts,
+// PositionLabels and AlternateID each replace their value wholesale on an
+// update; Capacity does not (nil leaves the existing cap alone, see
+// SystemRole.Capacity).
 type SystemRoleSpec struct {
 	Name           string
 	DisplayName    string
@@ -66,6 +67,15 @@ type SystemRoleSpec struct {
 	Capacity       *int
 	PositionLabels []string
 	Impact         string // outage | degraded | none; empty means degraded
+	// AlternateID joins this role to one alternate of a choice (#626): empty
+	// means unconditional, always folded directly by
+	// health.SystemVerdictWith. Set from a choice_alternate.id the caller
+	// already resolved (SeedRoleChoice returns the ids its choice created),
+	// never from a name the write itself would have to look up: the
+	// composite FK (system_role_alternate_fk) is what refuses an id that
+	// belongs to a different owner, mapped to ErrRoleRefNotFound the same
+	// way an unknown accepted type or pinned product is.
+	AlternateID string
 }
 
 // EffectiveRole is one role resolved for a system: the declaration plus who fills
@@ -716,9 +726,16 @@ func mapRoleWriteErr(err error) error {
 			return ErrRoleExists
 		case pgErr.Code == "23514" && pgErr.ConstraintName == "system_role_capacity_check":
 			return ErrCapacityBelowQuorum
+		case pgErr.Code == "23514" && (pgErr.ConstraintName == "system_role_owner_arc_check" || pgErr.ConstraintName == "role_choice_owner_arc_check"):
+			// A bogus owner name resolves to NULL through roleOwnerExpr rather
+			// than failing outright (#626): the arc CHECK is what catches it, so
+			// the same unknown-reference sentinel a bad accepted type or pinned
+			// product gets applies here too.
+			return ErrRoleRefNotFound
 		case pgErr.Code == "23503",
-			// an unknown component_type or product name resolves to null on a
-			// not-null arc
+			// an unknown component_type, product, or alternate id resolves to
+			// null (or, for the four-column system_role_alternate_fk, a
+			// foreign owner) on a guarded reference
 			pgErr.Code == "23502" && (pgErr.ColumnName == "component_type_id" || pgErr.ColumnName == "product_id"):
 			return ErrRoleRefNotFound
 		}

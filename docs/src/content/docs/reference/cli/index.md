@@ -4103,7 +4103,7 @@ Exchange two occupants' positions within a role
 omniglass system role swapPositions <name> <role> [flags]
 ```
 
-Exchanges the positions of whichever components currently hold positions a and b within this role: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+Exchanges the positions of whichever components currently hold position and with within this role: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|

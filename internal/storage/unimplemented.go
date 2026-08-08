@@ -706,6 +706,15 @@ func (UnimplementedGateway) DeleteSystemRole(context.Context, string, string, st
 func (UnimplementedGateway) SeedSystemRole(context.Context, string, string, SystemRoleSpec) error {
 	return nil
 }
+func (UnimplementedGateway) SeedRoleChoice(context.Context, string, string, RoleChoiceSpec) (map[string]string, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteChoice(context.Context, string, string, string, string) error {
+	return nil
+}
+func (UnimplementedGateway) DeleteAlternate(context.Context, string, string, string, string, string) error {
+	return nil
+}
 func (UnimplementedGateway) RaiseAlarm(context.Context, string, string, AlarmSpec) (*Alarm, error) {
 	return nil, nil
 }

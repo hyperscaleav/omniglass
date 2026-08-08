@@ -43,6 +43,13 @@ SVG.
 direction: right
 
 identity: {
+  choice_alternate: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+    choice_id: uuid {constraint: foreign_key}
+    owner_kind: text {constraint: foreign_key}
+    owner_ref: uuid {constraint: foreign_key}
+  }
   human: {
     shape: sql_table
     principal_id: uuid {constraint: primary_key}
@@ -77,6 +84,12 @@ identity: {
     shape: sql_table
     id: uuid {constraint: primary_key}
   }
+  role_choice: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+    standard_id: uuid {constraint: foreign_key}
+    system_id: uuid {constraint: foreign_key}
+  }
   service: {
     shape: sql_table
     principal_id: uuid {constraint: primary_key}
@@ -84,6 +97,9 @@ identity: {
   system_role: {
     shape: sql_table
     id: uuid {constraint: primary_key}
+    alternate_id: uuid {constraint: foreign_key}
+    owner_kind: text {constraint: foreign_key}
+    owner_ref: uuid {constraint: foreign_key}
     standard_id: uuid {constraint: foreign_key}
     system_id: uuid {constraint: foreign_key}
   }
@@ -423,6 +439,10 @@ estate.system.parent_id -> estate.system.id
 estate.system.standard_id -> catalog.standard.id
 estate.system_member.component_id -> estate.component.id
 estate.system_member.system_id -> estate.system.id
+identity.choice_alternate.choice_id -> identity.role_choice.id
+identity.choice_alternate.choice_id -> identity.role_choice.id
+identity.choice_alternate.owner_kind -> identity.role_choice.owner_kind
+identity.choice_alternate.owner_ref -> identity.role_choice.owner_ref
 identity.human.principal_id -> identity.principal.id
 identity.impersonation_session.real_actor_principal_id -> identity.principal.id
 identity.impersonation_session.target_principal_id -> identity.principal.id
@@ -431,7 +451,12 @@ identity.principal_grant.principal_id -> identity.principal.id
 identity.principal_grant.role_id -> identity.role.id
 identity.principal_group_member.group_id -> identity.principal_group.id
 identity.principal_group_member.principal_id -> identity.principal.id
+identity.role_choice.standard_id -> catalog.standard.id
+identity.role_choice.system_id -> estate.system.id
 identity.service.principal_id -> identity.principal.id
+identity.system_role.alternate_id -> identity.choice_alternate.id
+identity.system_role.owner_kind -> identity.choice_alternate.owner_kind
+identity.system_role.owner_ref -> identity.choice_alternate.owner_ref
 identity.system_role.standard_id -> catalog.standard.id
 identity.system_role.system_id -> estate.system.id
 identity.system_role_assignment.component_id -> estate.component.id

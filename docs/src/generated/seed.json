@@ -454,7 +454,57 @@
   },
   {
    "id": "huddle-room",
-   "display_name": "Huddle Room"
+   "display_name": "Huddle Room",
+   "roles": [
+    {
+     "name": "conf-bar",
+     "display_name": "Conferencing Bar",
+     "quorum": 1,
+     "accepted_types": [
+      "video-bar"
+     ]
+    },
+    {
+     "name": "conf-codec",
+     "display_name": "Codec",
+     "quorum": 0,
+     "accepted_types": [
+      "codec"
+     ]
+    },
+    {
+     "name": "conf-camera",
+     "display_name": "Camera",
+     "quorum": 0,
+     "accepted_types": [
+      "camera"
+     ]
+    },
+    {
+     "name": "conf-dsp",
+     "display_name": "DSP",
+     "quorum": 0,
+     "accepted_types": [
+      "dsp"
+     ]
+    },
+    {
+     "name": "conf-amp",
+     "display_name": "Amplifier",
+     "quorum": 0,
+     "accepted_types": [
+      "amplifier"
+     ]
+    },
+    {
+     "name": "conf-mic",
+     "display_name": "Microphone",
+     "quorum": 0,
+     "accepted_types": [
+      "mic"
+     ]
+    }
+   ]
   },
   {
    "id": "classroom",

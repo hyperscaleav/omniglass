@@ -184,6 +184,125 @@ func TestRollUpAndComponentVerdict(t *testing.T) {
 	}
 }
 
+// TestAlternateFraction pins Fraction's contract, especially the trap a naive
+// "satisfied count == total count" comparison falls into at zero: 0 == 0
+// reads as vacuously true, which would make an alternate nobody declared
+// anything for read as fully satisfied.
+func TestAlternateFraction(t *testing.T) {
+	if got := (health.Alternate{Name: "empty"}).Fraction(); got != 0 {
+		t.Fatalf("empty alternate fraction = %v, want 0 (never vacuously satisfied)", got)
+	}
+	satisfied := health.Role{Name: "a", Quorum: 1, Assigned: []health.Component{healthy("a")}}
+	short := health.Role{Name: "b", Quorum: 1}
+	if got := (health.Alternate{Name: "half", Roles: []health.Role{satisfied, short}}).Fraction(); got != 0.5 {
+		t.Fatalf("one of two satisfied = %v, want 0.5", got)
+	}
+	if got := (health.Alternate{Name: "full", Roles: []health.Role{satisfied}}).Fraction(); got != 1 {
+		t.Fatalf("all satisfied = %v, want 1", got)
+	}
+}
+
+// TestEmptyAlternateNeverSatisfies is the choice-level mirror of
+// TestAlternateFraction's zero case: Active must never pick an alternate
+// nobody declared any roles for, even when it is the only alternate a choice
+// has, because an empty group answering the choice would make any choice
+// that ships with an unbuilt alternate permanently satisfied.
+func TestEmptyAlternateNeverSatisfies(t *testing.T) {
+	c := health.Choice{Name: "conferencing", Alternates: []health.Alternate{{Name: "unbuilt"}}}
+	if _, ok := c.Active(); ok {
+		t.Fatal("a choice with only an empty alternate must have no active alternate")
+	}
+	if got := c.Contributes(); got != health.Healthy {
+		t.Fatalf("contributes = %v, want healthy: nothing declared, nothing to be impaired by", got)
+	}
+
+	// An empty alternate loses to a real one even at fraction zero: a
+	// declared-but-unstaffed alternate is still a candidate, an
+	// undeclared one never is.
+	real := health.Alternate{Name: "component-system", Roles: []health.Role{{Name: "codec", Quorum: 1}}}
+	c2 := health.Choice{Name: "conferencing", Alternates: []health.Alternate{{Name: "unbuilt"}, real}}
+	active, ok := c2.Active()
+	if !ok || active.Name != "component-system" {
+		t.Fatalf("active = %+v, ok=%v; want component-system active over the empty alternate", active, ok)
+	}
+}
+
+// TestTieBreaksByDeclarationOrder pins the tie-break rule the storage layer
+// leans on to make choice_alternate.position load-bearing: two alternates
+// equally satisfied resolve to the earlier-declared one, and repeated calls
+// (this is a pure function, so nothing about the input changes between them)
+// must never flip which one explains the verdict.
+func TestTieBreaksByDeclarationOrder(t *testing.T) {
+	oneOfTwo := func(name string) health.Alternate {
+		return health.Alternate{Name: name, Roles: []health.Role{
+			{Name: name + "-a", Quorum: 1, Assigned: []health.Component{healthy("x")}},
+			{Name: name + "-b", Quorum: 1},
+		}}
+	}
+	c := health.Choice{Name: "conferencing", Alternates: []health.Alternate{oneOfTwo("first"), oneOfTwo("second")}}
+	for i := 0; i < 5; i++ {
+		active, ok := c.Active()
+		if !ok || active.Name != "first" {
+			t.Fatalf("read %d: active = %+v, ok=%v; want the position-1 alternate on every read", i, active, ok)
+		}
+	}
+}
+
+// TestChoiceContributesActiveAlternateOwnImpact pins that winning a choice
+// does not immunize the winning alternate's own roles from their own
+// impact: an active alternate that is itself short still contributes what
+// its short roles declare, the same per-role fold an unconditional role set
+// gets.
+func TestChoiceContributesActiveAlternateOwnImpact(t *testing.T) {
+	winner := health.Alternate{Name: "component-system", Roles: []health.Role{
+		{Name: "codec", Quorum: 1, Impact: "outage", Assigned: []health.Component{healthy("c")}},
+		{Name: "camera", Quorum: 1, Impact: "degraded"}, // unstaffed, so the winner is still short one
+	}}
+	loser := health.Alternate{Name: "all-in-one", Roles: []health.Role{{Name: "bar", Quorum: 1, Impact: "outage"}}}
+	c := health.Choice{Name: "conferencing", Alternates: []health.Alternate{winner, loser}}
+	if got := c.Contributes(); got != health.Degraded {
+		t.Fatalf("contributes = %v, want degraded: the winning alternate's own short role still counts", got)
+	}
+}
+
+// TestSystemVerdictWithChoices is the integration point: an unbuilt
+// alternate of a satisfied choice must not impair the system (the defect
+// #626 exists to close), and SystemVerdict is confirmed to still be exactly
+// SystemVerdictWith(roles, nil) so every pre-existing caller keeps compiling
+// and behaving the same.
+func TestSystemVerdictWithChoices(t *testing.T) {
+	allInOne := health.Alternate{Name: "all-in-one", Roles: []health.Role{
+		{Name: "bar", Quorum: 1, Impact: "outage", Assigned: []health.Component{healthy("bar-1")}},
+	}}
+	componentSystem := health.Alternate{Name: "component-system", Roles: []health.Role{
+		{Name: "codec", Quorum: 1, Impact: "outage"},
+		{Name: "camera", Quorum: 1, Impact: "outage"},
+		{Name: "dsp", Quorum: 1, Impact: "outage"},
+		{Name: "amp", Quorum: 1, Impact: "outage"},
+		{Name: "mic", Quorum: 1, Impact: "outage"},
+	}}
+	choice := health.Choice{Name: "conferencing", Alternates: []health.Alternate{allInOne, componentSystem}}
+
+	if got := health.SystemVerdictWith(nil, []health.Choice{choice}); got != health.Healthy {
+		t.Fatalf("a satisfied all-in-one beside five unbuilt component-system roles = %v, want healthy", got)
+	}
+
+	// An unconditional role beside the same satisfied choice still counts on
+	// its own: the choice grouping does not swallow every role in the system.
+	mandatory := health.Role{Name: "screen", Quorum: 1, Impact: "degraded"}
+	if got := health.SystemVerdictWith([]health.Role{mandatory}, []health.Choice{choice}); got != health.Degraded {
+		t.Fatalf("an unstaffed mandatory role beside a satisfied choice = %v, want degraded", got)
+	}
+
+	roles := []health.Role{
+		{Name: "ok", Quorum: 1, Impact: "outage", Assigned: []health.Component{healthy("a")}},
+		{Name: "deg", Quorum: 1, Impact: "degraded"},
+	}
+	if got, want := health.SystemVerdict(roles), health.SystemVerdictWith(roles, nil); got != want {
+		t.Fatalf("SystemVerdict(roles) = %v, want it to equal SystemVerdictWith(roles, nil) = %v", got, want)
+	}
+}
+
 // The recorded string round-trips, since the transition log stores it as text and
 // a misread would silently change an estate's history.
 func TestVerdictRoundTrip(t *testing.T) {

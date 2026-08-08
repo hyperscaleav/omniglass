@@ -133,6 +133,16 @@ type resolvedRole struct {
 	Quorum      int
 	Impact      string
 	Assigned    []health.Component
+	// ChoiceID, ChoiceName, AlternateID, AlternateName and AlternatePos are
+	// set when this role joins one alternate of a choice (#626); nil means
+	// unconditional (system_role.alternate_id is NULL), always folded
+	// directly rather than grouped. splitHealthRoles is what turns these
+	// back into health.SystemVerdictWith's shape.
+	ChoiceID      *string
+	ChoiceName    *string
+	AlternateID   *string
+	AlternateName *string
+	AlternatePos  *int
 }
 
 // RecomputeHealth recomputes and records the health chain a component sits in:
@@ -185,7 +195,8 @@ func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, system
 		if err != nil {
 			return err
 		}
-		if err := recordHealth(ctx, q, "system", s, health.SystemVerdict(healthRoles(roles))); err != nil {
+		unconditional, choices := splitHealthRoles(roles)
+		if err := recordHealth(ctx, q, "system", s, health.SystemVerdictWith(unconditional, choices)); err != nil {
 			return err
 		}
 	}
@@ -486,10 +497,10 @@ func (p *PG) resolveHealthRoles(ctx context.Context, q txQuerier, systemName str
 			select id, name, standard_id from system where name = $1
 		),
 		roles as (
-			select r.id, r.name, r.display_name, r.quorum, r.impact
+			select r.id, r.name, r.display_name, r.quorum, r.impact, r.alternate_id
 			from sys join system_role r on r.owner_kind = 'standard' and r.standard_id = sys.standard_id
 			union all
-			select r.id, r.name, r.display_name, r.quorum, r.impact
+			select r.id, r.name, r.display_name, r.quorum, r.impact, r.alternate_id
 			from sys join system_role r on r.owner_kind = 'system' and r.system_id = sys.id
 		)
 		select roles.id, roles.name, roles.display_name, roles.quorum, roles.impact,
@@ -497,8 +508,17 @@ func (p *PG) resolveHealthRoles(ctx context.Context, q txQuerier, systemName str
 		       -- name, and the report displays them.
 		       coalesce((select array_agg(ac.name order by ra.position)
 		                   from system_role_assignment ra join component ac on ac.id = ra.component_id
-		                  where ra.role_id = roles.id and ra.system_id = sys.id), '{}')
-		from roles, sys
+		                  where ra.role_id = roles.id and ra.system_id = sys.id), '{}'),
+		       roles.alternate_id, ca.name, ca.position, rc.id, rc.name
+		-- sys first, then roles: a bare comma before a JOIN...ON only puts the
+		-- item immediately to its right in scope for that ON clause, so
+		-- "roles, sys left join choice_alternate" would leave "roles"
+		-- invisible to ca's ON clause. roles must be adjacent to the joins
+		-- that reference it; sys is only needed by the correlated subquery
+		-- above, which (unlike an ON clause) can reach any FROM-list item.
+		from sys, roles
+		left join choice_alternate ca on ca.id = roles.alternate_id
+		left join role_choice rc on rc.id = ca.choice_id
 		order by roles.name`, systemName)
 	if err != nil {
 		return nil, fmt.Errorf("storage: resolve health roles %q: %w", systemName, err)
@@ -512,7 +532,7 @@ func (p *PG) resolveHealthRoles(ctx context.Context, q txQuerier, systemName str
 	for rows.Next() {
 		var r rawRole
 		if err := rows.Scan(&r.ID, &r.Name, &r.DisplayName, &r.Quorum, &r.Impact,
-			&r.assignedTo); err != nil {
+			&r.assignedTo, &r.AlternateID, &r.AlternateName, &r.AlternatePos, &r.ChoiceID, &r.ChoiceName); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("storage: scan health role %q: %w", systemName, err)
 		}
@@ -550,18 +570,75 @@ func (p *PG) resolveHealthRoles(ctx context.Context, q txQuerier, systemName str
 	return out, nil
 }
 
-// healthRoles projects the resolved roles onto the pure rollup's input.
-func healthRoles(rs []resolvedRole) []health.Role {
-	out := make([]health.Role, 0, len(rs))
-	for _, r := range rs {
-		out = append(out, health.Role{
-			Name:     r.Name,
-			Quorum:   r.Quorum,
-			Impact:   r.Impact,
-			Assigned: r.Assigned,
-		})
+// splitHealthRoles partitions a system's resolved roles into the two shapes
+// health.SystemVerdictWith takes (#626): the roles that always count
+// (system_role.alternate_id is NULL) and the roles grouped by the choice and
+// alternate they belong to, each alternate's roles ordered by
+// choice_alternate.position (internal/health.Choice.Active's tie-break).
+// Flattening every role through a single fold, the way the pre-#626
+// healthRoles did, is not merely incomplete once a choice exists: an
+// all-in-one room's satisfied video-bar alternate would still take the
+// system to outage over its component-system alternate's five unstaffed
+// roles, because nothing would tell the fold those five are optional.
+//
+// Building this from a map rather than relying on the query's ORDER BY
+// keeping same-choice rows contiguous is deliberate: the query orders by
+// roles.name (for the unrelated per-role report this same read serves), not
+// by choice or position, so grouping has to happen here regardless of scan
+// order. Choices are then sorted by name and each choice's alternates by
+// position for a deterministic, map-iteration-free result.
+func splitHealthRoles(rs []resolvedRole) (unconditional []health.Role, choices []health.Choice) {
+	type altGroup struct {
+		name  string
+		pos   int
+		roles []health.Role
 	}
-	return out
+	choiceNames := map[string]string{}              // choice id -> name
+	choiceAlts := map[string]map[string]*altGroup{} // choice id -> alternate id -> group
+
+	for _, r := range rs {
+		role := health.Role{Name: r.Name, Quorum: r.Quorum, Impact: r.Impact, Assigned: r.Assigned}
+		if r.ChoiceID == nil {
+			unconditional = append(unconditional, role)
+			continue
+		}
+		cid, aid := *r.ChoiceID, *r.AlternateID
+		choiceNames[cid] = *r.ChoiceName
+		if choiceAlts[cid] == nil {
+			choiceAlts[cid] = map[string]*altGroup{}
+		}
+		g := choiceAlts[cid][aid]
+		if g == nil {
+			pos := 0
+			if r.AlternatePos != nil {
+				pos = *r.AlternatePos
+			}
+			g = &altGroup{name: *r.AlternateName, pos: pos}
+			choiceAlts[cid][aid] = g
+		}
+		g.roles = append(g.roles, role)
+	}
+
+	cids := make([]string, 0, len(choiceNames))
+	for cid := range choiceNames {
+		cids = append(cids, cid)
+	}
+	sort.Slice(cids, func(i, j int) bool { return choiceNames[cids[i]] < choiceNames[cids[j]] })
+
+	for _, cid := range cids {
+		groups := choiceAlts[cid]
+		alts := make([]altGroup, 0, len(groups))
+		for _, g := range groups {
+			alts = append(alts, *g)
+		}
+		sort.Slice(alts, func(i, j int) bool { return alts[i].pos < alts[j].pos })
+		out := health.Choice{Name: choiceNames[cid]}
+		for _, g := range alts {
+			out.Alternates = append(out.Alternates, health.Alternate{Name: g.name, Roles: g.roles})
+		}
+		choices = append(choices, out)
+	}
+	return unconditional, choices
 }
 
 // SystemHealth reports a system's current verdict, the roles that produced it,
@@ -586,7 +663,8 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, since time.Tim
 	if err != nil {
 		return nil, err
 	}
-	rep.Verdict = health.SystemVerdict(healthRoles(roles)).String()
+	unconditional, choices := splitHealthRoles(roles)
+	rep.Verdict = health.SystemVerdictWith(unconditional, choices).String()
 	for i := range roles {
 		row, err := p.explainRole(ctx, p.pool, roles[i])
 		if err != nil {

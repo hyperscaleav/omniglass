@@ -41,6 +41,13 @@ func TestChurnDroppedConstraintsRestored(t *testing.T) {
 		// "unpositioned" is exactly the state the backfill exists to close
 		// out before the floor lands.
 		{"system_role_assignment", "position", "an assignment's ordering position has no meaning when unset"},
+		// role_choice and choice_alternate (20260807150000_role_choices_and_alternates.sql,
+		// #626): new tables, not churn, but the same guard is the cheapest
+		// place to pin that a fresh column recreation never drops these.
+		{"choice_alternate", "choice_id", "an alternate with no choice cannot be grouped by anything"},
+		{"choice_alternate", "position", "the tie-break internal/health.Choice.Active reads has no meaning when unset"},
+		{"role_choice", "owner_kind", "a choice with no declared owner kind cannot resolve its arc"},
+		{"role_choice", "name", "an unnamed choice cannot be addressed"},
 	}
 	for _, c := range notNull {
 		var nullable string

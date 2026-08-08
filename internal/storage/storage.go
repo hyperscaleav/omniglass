@@ -523,6 +523,15 @@ type Gateway interface {
 	SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID string, spec SystemRoleSpec) (*SystemRole, error)
 	DeleteSystemRole(ctx context.Context, actorID, ownerKind, ownerID, name string) error
 	SeedSystemRole(ctx context.Context, ownerKind, ownerID string, spec SystemRoleSpec) error
+	// The choice side of the same tier (#626): a role can join an
+	// exclusive-or group (SystemRoleSpec.AlternateID) instead of
+	// contributing unconditionally. Seed-only for now, same insert-if-absent
+	// lane as SeedSystemRole; DeleteChoice and DeleteAlternate refuse while
+	// any role still names them rather than let alternate_id's ON DELETE
+	// RESTRICT surface as a bare constraint violation.
+	SeedRoleChoice(ctx context.Context, ownerKind, ownerID string, spec RoleChoiceSpec) (map[string]string, error)
+	DeleteChoice(ctx context.Context, actorID, ownerKind, ownerID, name string) error
+	DeleteAlternate(ctx context.Context, actorID, ownerKind, ownerID, choiceName, altName string) error
 
 	// The health tier. An alarm impairs its component wholesale (#626); the
 	// rollup turns each occupant's own verdict into a system and location verdict

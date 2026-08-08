@@ -192,17 +192,18 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 	}
 
 	r, err := scanSystemRole(tx.QueryRow(ctx, fmt.Sprintf(`
-		insert into system_role (owner_kind, %s, name, display_name, quorum, capacity, position_labels, impact)
-		values ($1, %s, $3, $4, $5, $6, $7, $8)
+		insert into system_role (owner_kind, %s, name, display_name, quorum, capacity, position_labels, impact, alternate_id)
+		values ($1, %s, $3, $4, $5, $6, $7, $8, nullif($9, '')::uuid)
 		on conflict (owner_kind, standard_id, system_id, name) do update
 			set display_name    = excluded.display_name,
 			    quorum          = excluded.quorum,
 			    capacity        = coalesce(excluded.capacity, system_role.capacity),
 			    position_labels = excluded.position_labels,
 			    impact          = excluded.impact,
+			    alternate_id    = excluded.alternate_id,
 			    updated_at      = now()
 		returning `+systemRoleCols, col, roleOwnerExpr(ownerKind)),
-		ownerKind, ownerID, spec.Name, spec.DisplayName, quorum, spec.Capacity, positionLabels, impact))
+		ownerKind, ownerID, spec.Name, spec.DisplayName, quorum, spec.Capacity, positionLabels, impact, spec.AlternateID))
 	if err != nil {
 		return nil, mapRoleWriteErr(err)
 	}
@@ -326,11 +327,11 @@ func (p *PG) SeedSystemRole(ctx context.Context, ownerKind, ownerID string, spec
 	positionLabels := normalizePositionLabels(spec.PositionLabels)
 	var id string
 	err = p.pool.QueryRow(ctx, fmt.Sprintf(`
-		insert into system_role (owner_kind, %s, name, display_name, quorum, capacity, position_labels, impact)
-		values ($1, %s, $3, $4, $5, $6, $7, $8)
+		insert into system_role (owner_kind, %s, name, display_name, quorum, capacity, position_labels, impact, alternate_id)
+		values ($1, %s, $3, $4, $5, $6, $7, $8, nullif($9, '')::uuid)
 		on conflict (owner_kind, standard_id, system_id, name) do nothing
 		returning id`, col, roleOwnerExpr(ownerKind)),
-		ownerKind, ownerID, spec.Name, spec.DisplayName, max(spec.Quorum, 1), spec.Capacity, positionLabels, impact).Scan(&id)
+		ownerKind, ownerID, spec.Name, spec.DisplayName, max(spec.Quorum, 1), spec.Capacity, positionLabels, impact, spec.AlternateID).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil // already there, and the operator owns it now
 	}
