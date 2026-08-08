@@ -307,7 +307,7 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
                 const holder = heldElsewhere(c);
                 return (
                   <option value={c.name} disabled={!!holder}>
-                    {label(c)}{holder ? ` — already fills ${holder} here` : ""}
+                    {label(c)}{holder ? ` (already fills ${holder} here)` : ""}
                   </option>
                 );
               }}
