@@ -19,7 +19,10 @@ description: Use when adding or altering an omniglass storage schema element (a 
 - **Three buckets, never conflated** (see CLAUDE.md): schema migrations are pure DDL with
   **no seed rows** (a schema dump/squash drops them); ship-with reference data goes in the
   boot seed phase (idempotent upsert); transforming existing operator data is a one-time
-  backfill migration.
+  backfill migration. A narrow carve-out lets a seeded table's boot phase reconcile-and-delete
+  instead of insert-if-absent, but only for a table with no operator write path and a packed
+  positional ordering an orphan would collide on; see [storage](/architecture/storage/) and
+  ADR-0087 before copying it for a different table.
 
 ## Writing the migration (idempotent)
 

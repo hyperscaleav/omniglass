@@ -2659,7 +2659,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   index, added after a one-time backfill: a plain index is checked per updated tuple, which would
   raise the moment a single-statement swap lands the first row on the other's slot.
   `SwapPositions` defers it for the rest of its transaction before exchanging two occupants in one
-  UPDATE (`POST /systems/{name}/roles/{role}/positions/{n}:swap`); it and `AssignRole` both take
+  UPDATE (`POST /systems/{name}/roles/{role}:swapPositions`); it and `AssignRole` both take
   an advisory lock on the `(system, role)` pair, so two concurrent assigns cannot compute the same
   next-free position. The health rollup gains `short` and `spare`, the occupancy-aware
   counterparts of the roles read's health-blind `understaffed` (a role can read fully staffed
@@ -2730,7 +2730,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   `RoleEditor`'s `buildSpec` sent only quorum, display name, and the typed-slot sets, so the
   PUT's wholesale replace silently reset a role's `impact` to `degraded` on any unrelated edit
   (the server defaults an omitted impact), invisible in the console with no warning; capacity
-  and `position_labels` had the same gap. Every role now carries a **colour of its own**, a
+  and `position_labels` had the same gap. Every **system** now carries a **colour of its own**, a
   hue hashed from its uuid (`system_color.ts`, FNV-1a over the WHOLE string, since a uuidv7's
   leading 48 bits are a shared millisecond timestamp within one devseed run and hashing only a
   prefix would land every seeded system at nearly the same hue), stepping past the five bands
@@ -2739,8 +2739,9 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   health body alongside the roles read for occupancy-aware short/spare arithmetic in place of
   the health-blind understaffed/assigned figures, marks a down occupant in place, and fixes the
   assign picker offering a component already staffing a different role in the same system,
-  which the typed-slot guard would then refuse with a 422 nobody could have anticipated; it now
-  renders disabled, naming the role it already holds. **The by-role occupants drag into a new
+  which the server refuses with a 409 (a component fills at most one role per system) nobody
+  could have anticipated; it now renders disabled, naming the role it already holds. **The
+  by-role occupants drag into a new
   order**, wired through the same draggable/onDragStart/onDragOver/onDrop shape `ColumnMenu`
   already uses (no dnd dependency added), decomposed into the server's only reorder primitive
   (a pairwise position swap) by a new pure `swapPath`. **The by-device lens** (`MembersPanel`)

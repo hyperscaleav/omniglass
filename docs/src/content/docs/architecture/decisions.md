@@ -2952,10 +2952,12 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   (double-staffing a component across roles, a capacity below the currently assigned count: "the
   declaration or assignment request is not invalid on its own, it conflicts with the estate's current
   state"), and **422** when the declaration alone is invalid regardless of other rows (capacity below
-  quorum, an unresolvable typed-slot reference). And a boot-seed carve-out: `role_choice` and
-  `choice_alternate` reconcile to their declared YAML set on **every** boot, deleting a stored
-  alternate that dropped out of the set (refusing instead, with `ChoiceInUseShortfall`, if a role
-  still points at it) rather than leaving it in place. This is a **deliberate departure** from the
+  quorum, an unresolvable typed-slot reference). And a boot-seed carve-out: `choice_alternate`
+  (not `role_choice`, which keeps the ordinary insert-if-absent rule and no set-level reconcile;
+  a choice row itself is never deleted by a reseed) reconciles to its declared YAML set on
+  **every** boot, deleting a stored alternate that dropped out of the set (refusing instead, with
+  `ChoiceInUseShortfall`, if a role still points at it) rather than leaving it in place. This is a
+  **deliberate departure** from the
   platform's usual boot-seed rule (insert-if-absent, `ON CONFLICT DO UPDATE`, an operator's row never
   touched by a reseed): it is safe here only because `choice_alternate` has **no operator write
   path** (nothing but the seed ever writes one) and its **`position` is a packed 1..n sequence**

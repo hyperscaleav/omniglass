@@ -72,7 +72,16 @@ the two in one migration. Three buckets, never conflated:
   for whoever collapses the chain later.
 - **Boot seed phase** (idempotent upsert on every server start, `internal/seed/*.yaml`): ship-with
   reference data, authoritative via `ON CONFLICT DO UPDATE` for a canonical catalog (a release can
-  correct it); operator rows are never touched.
+  correct it); operator rows are never touched. **Narrow carve-out:** a seeded table can additionally
+  reconcile its child rows to the declared set every boot, deleting one that dropped out (refusing
+  instead if something still points at it) rather than leaving it in place, but only where BOTH hold:
+  the table has **no operator write path** (nothing but the seed ever writes a row there) and its rows
+  carry a **packed positional ordering** where a leftover orphan does not sit inert, it collides with
+  the position a renamed or reordered entry now wants. `choice_alternate` is the only table this
+  applies to today
+  ([ADR-0087](/architecture/decisions/#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability)).
+  Absent both preconditions, an operator-writable or unordered table keeps the ordinary
+  insert-if-absent rule above.
 - **One-time data backfills** (dbmate, data-only): transforming existing operator rows to match a new
   constraint, run once, and idempotent on a second run (a repeat changes nothing, proven by a test that
   executes the migration's up-SQL twice).
