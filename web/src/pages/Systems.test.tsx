@@ -12,6 +12,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 import { uuidFor } from "../lib/testids";
 import { hueFor } from "../lib/system_color";
+import { systemHealthKey, type EstateHealth } from "../lib/health";
 
 // The Systems page on the shared TreeList in the create-as-route model: New routes
 // to /systems/create (a draft accordion), Save hands off to /systems/<id> in edit;
@@ -287,6 +288,42 @@ describe("Systems list survives duplicate names across placements (#627)", () =>
     expect(indexOf("leaf-av")).toBeGreaterThan(indexOf("av"));
     expect(indexOf("leaf-av")).toBeLessThan(indexOf("lab"));
     expect(indexOf("leaf-lab")).toBeGreaterThan(indexOf("lab"));
+  });
+});
+
+describe("Systems list health badge (#627 review round 3, regression 3)", () => {
+  afterEach(() => window.history.pushState({}, "", "/"));
+
+  // The list cell and its sort both read systemHealthKey(n.raw.name), while
+  // RolesPanel and MembersPanel invalidate systemHealthKey(<uuid>) after a
+  // role or member write (#627 review finding 1: the detail panels address by
+  // uuid, since a name is scoped to placement, not the whole estate). The
+  // list badge silently stopped refreshing after those writes. Health is
+  // seeded only at the uuid key here, so the badge must read that one, not
+  // the name, to show anything at all.
+  it("reads the health badge from the system's uuid, matching where RolesPanel and MembersPanel invalidate", async () => {
+    const health: EstateHealth = { owner: sys.id, owner_kind: "system", roles: [], systems: [], transitions: [], verdict: "healthy" };
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...SYSTEMS_KEY], [sys]);
+    qc.setQueryData([...LOCATIONS_KEY], []);
+    qc.setQueryData([...COMPONENTS_KEY], []);
+    qc.setQueryData([...STANDARDS_KEY], standards);
+    qc.setQueryData([...ME_KEY], me);
+    qc.setQueryData([...TAGS_KEY], []);
+    qc.setQueryData([...systemHealthKey(sys.id)], health);
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
+    });
+    window.history.pushState({}, "", "/systems");
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="/systems" component={Systems} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    await waitFor(() => expect(screen.getByText("healthy")).toBeTruthy());
   });
 });
 

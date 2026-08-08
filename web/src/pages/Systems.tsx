@@ -538,7 +538,13 @@ export default function Systems() {
       // shares the cache key with the detail panel: opening a row costs nothing
       // extra. Quiet until a verdict lands, so a page of rows never flashes a
       // column of "unknown".
-      if (key === "health") return <HealthBadge system={n.raw.name} quiet />;
+      // Keyed by uuid, matching where RolesPanel and MembersPanel invalidate
+      // after a role or member write (#627 review finding 1: those panels
+      // address the system by its uuid, since the name is scoped to
+      // placement and not reliably unique estate-wide). A name-keyed read
+      // here missed those invalidations and the badge went stale silently
+      // (review round 3, regression 3).
+      if (key === "health") return <HealthBadge system={n.raw.id} quiet />;
       if (key === "standard") return n.standard ? <span class="badge badge-ghost badge-sm">{n.standard}</span> : <span class="text-base-content/40">—</span>;
       if (key === "location") return <span class="text-base-content/70">{n.locationName || "—"}</span>;
       if (key === "components") return <span class="tnum text-base-content/60">{n.raw.member_count}</span>;
@@ -557,7 +563,9 @@ export default function Systems() {
       // filled, so the sort orders exactly what is on screen; a row whose health
       // has not arrived sorts last rather than pretending to be healthy.
       if (key === "health") {
-        const v = verdictOf(qc.getQueryData<EstateHealth>([...systemHealthKey(n.raw.name)])?.verdict);
+        // Same uuid key as the cell above: sorting must order exactly what
+        // the badges on screen show, not a stale name-keyed entry.
+        const v = verdictOf(qc.getQueryData<EstateHealth>([...systemHealthKey(n.raw.id)])?.verdict);
         return v ? -verdictRank(v) : 9;
       }
       if (key === "standard") return n.standard.toLowerCase();
