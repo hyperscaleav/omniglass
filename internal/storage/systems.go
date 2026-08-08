@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -70,6 +71,13 @@ type System struct {
 	// The names the API addresses placement by; the ids above are internal.
 	ParentName   *string
 	LocationName *string
+	// Path, PathSegments, and Renders are the dotted address and its two
+	// display-only compact forms (#627 Task 15), attached by attachSystemPath
+	// after every GET or LIST fetch; see Component's own Path field for the
+	// full reasoning (write paths leave this zero-value).
+	Path         string
+	PathSegments []string
+	Renders      Renders
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
@@ -324,6 +332,24 @@ func scanSystem(row pgx.Row) (*System, error) {
 	return &s, nil
 }
 
+// attachSystemPath fills s.Path/.PathSegments/.Renders (#627 Task 15). A
+// system's address has the identical shape a component's does (its own
+// plane root's location, never a location derived from anything else), but
+// no bare-render abbreviation source: a standard (the system-side
+// counterpart of a product) carries no abbrev column the way component_type
+// does, so RenderBare always gets "" here and falls back to its
+// no-abbrev concatenation.
+func attachSystemPath(ctx context.Context, q querier, s *System) error {
+	segs, err := PathOf(ctx, q, systemTable, s.ID)
+	if err != nil {
+		return err
+	}
+	s.PathSegments = segs
+	s.Path = strings.Join(segs, ".")
+	s.Renders = Renders{Dash: RenderDash(segs), Bare: RenderBare(segs, "")}
+	return nil
+}
+
 // systemConfig drives the generic scoped-CRUD helpers for the system tree.
 //
 // afterDelete records the room's recovery. A location's verdict is the rollup of
@@ -335,6 +361,7 @@ var systemConfig = scopedConfig[System]{
 	table: systemTable, cols: systemCols, resource: "system",
 	scan: scanSystem, idOf: func(s *System) string { return s.ID },
 	notFound: ErrSystemNotFound, forbidden: ErrSystemForbidden, occupied: ErrSystemOccupied,
+	attachPath: attachSystemPath,
 	afterDelete: func(ctx context.Context, p *PG, q txQuerier, before *System) error {
 		if before.LocationID == nil {
 			return nil // placed nowhere: its removal rolls up to nothing

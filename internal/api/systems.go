@@ -22,6 +22,9 @@ type systemBody struct {
 	LocationID    *string           `json:"location_id,omitempty" doc:"The location's id, the canonical handle"`
 	Location      *string           `json:"location,omitempty" doc:"The location's name, for display"`
 	MemberCount   int               `json:"member_count" doc:"How many components are bound into this system"`
+	Path          string            `json:"path,omitempty" doc:"The dotted address (e.g. boi.17c.$sys.av). Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it)."`
+	PathSegments  []string          `json:"path_segments,omitempty" doc:"path split on '.', accessors included, so the round trip through the resolver stays lossless."`
+	Renders       *renderBody       `json:"renders,omitempty" doc:"Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy."`
 	Actions       []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
 	EffectiveTags map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this system (platform, its location, its system tree); for the Tags column."`
 }
@@ -31,6 +34,7 @@ func toSystemBody(s *storage.System) systemBody {
 		ID: s.ID, Name: s.Name, DisplayName: s.DisplayName,
 		Standard: derefStr(s.StandardName), StandardID: derefStr(s.StandardID), ParentID: s.ParentID, Parent: s.ParentName, LocationID: s.LocationID, Location: s.LocationName,
 		MemberCount: s.MemberCount,
+		Path:        s.Path, PathSegments: s.PathSegments, Renders: toRenderBody(s.Path, s.Renders),
 	}
 }
 

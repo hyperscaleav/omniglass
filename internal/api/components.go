@@ -24,6 +24,9 @@ type componentBody struct {
 	ProductID     *string           `json:"product_id,omitempty" doc:"The product (catalog SKU) this component is an instance of, if any; the stable handle that survives a rename."`
 	Product       *string           `json:"product,omitempty" doc:"The product's name, for display; the form a body round-trips."`
 	NameGenerated bool              `json:"name_generated" doc:"Whether the platform picked this name (a server-side generator) rather than an operator typing it."`
+	Path          string            `json:"path,omitempty" doc:"The dotted address (e.g. boi.17c.415a.$comp.display-1): derived from the component's own placement, never from a system it belongs to. Set on a GET or LIST response; empty on a create/update/move/rename/resetName response (refetch the row to see it)."`
+	PathSegments  []string          `json:"path_segments,omitempty" doc:"path split on '.', accessors included, so the round trip through the resolver stays lossless."`
+	Renders       *renderBody       `json:"renders,omitempty" doc:"Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy."`
 	Actions       []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
 	EffectiveTags map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this component; for the Tags column. Provenance is in the effective-tags detail view."`
 }
@@ -33,6 +36,7 @@ func toComponentBody(c *storage.Component) componentBody {
 		ID: c.ID, Name: c.Name, DisplayName: c.DisplayName,
 		ParentID: c.ParentID, Parent: c.ParentName, SystemID: c.PrimarySystemID, System: c.PrimarySystem, SystemCount: c.SystemCount, LocationID: c.LocationID, Location: c.LocationName, ProductID: c.ProductID, Product: c.ProductHandle,
 		NameGenerated: c.NameGenerated,
+		Path:          c.Path, PathSegments: c.PathSegments, Renders: toRenderBody(c.Path, c.Renders),
 	}
 }
 

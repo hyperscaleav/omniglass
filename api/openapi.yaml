@@ -388,12 +388,25 @@ components:
         parent_id:
           description: The parent component's id, the canonical handle
           type: string
+        path:
+          description: "The dotted address (e.g. boi.17c.415a.$comp.display-1): derived from the component's own placement, never from a system it belongs to. Set on a GET or LIST response; empty on a create/update/move/rename/resetName response (refetch the row to see it)."
+          type: string
+        path_segments:
+          description: path split on '.', accessors included, so the round trip through the resolver stays lossless.
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         product:
           description: The product's name, for display; the form a body round-trips.
           type: string
         product_id:
           description: The product (catalog SKU) this component is an instance of, if any; the stable handle that survives a rename.
           type: string
+        renders:
+          $ref: "#/components/schemas/RenderBody"
+          description: "Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy."
         system:
           description: Name of the component's primary system, its default when no system is named. A component may belong to several; read /components/{name}/memberships for all of them.
           type: string
@@ -3081,6 +3094,19 @@ components:
         parent_id:
           description: The parent location's id, the canonical handle
           type: string
+        path:
+          description: The dotted address (e.g. boi.17c.415a); no accessor, since a location's own address IS its location-tree ancestor chain. Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it).
+          type: string
+        path_segments:
+          description: path split on '.'.
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        renders:
+          $ref: "#/components/schemas/RenderBody"
+          description: "Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy."
       required:
         - id
         - name
@@ -4192,6 +4218,19 @@ components:
       required:
         - name
       type: object
+    RenderBody:
+      additionalProperties: false
+      properties:
+        bare:
+          description: The dash render's segments concatenated with no separator, with the final stem-ordinal segment compacted to <abbrev><ordinal> when the owning type registers one (e.g. boi17c216bdsp1). Display only; not accepted by the resolver.
+          type: string
+        dash:
+          description: The path's non-accessor segments joined with '-' (e.g. boi-17c-216b-display-1). Display only; not accepted by the resolver.
+          type: string
+      required:
+        - dash
+        - bare
+      type: object
     ResetPasswordInputBody:
       additionalProperties: false
       properties:
@@ -5083,6 +5122,19 @@ components:
         parent_id:
           description: The parent system's id, the canonical handle
           type: string
+        path:
+          description: The dotted address (e.g. boi.17c.$sys.av). Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it).
+          type: string
+        path_segments:
+          description: path split on '.', accessors included, so the round trip through the resolver stays lossless.
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        renders:
+          $ref: "#/components/schemas/RenderBody"
+          description: "Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy."
         standard:
           description: The standard's handle, for display; omitted for a one-off system
           type: string

@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"fmt"
 	"strings"
 )
@@ -230,4 +231,104 @@ func RejectAddressForm(kind, ref string) error {
 		return nil
 	}
 	return &ErrAddressNotAccepted{Kind: kind, Ref: ref}
+}
+
+// PathOf computes id's own dotted address, accessor included, as the exact
+// inverse of resolvePath (#627 Task 15): parsing the string PathOf returns
+// (dot-joined) and resolving it through resolvePath lands back on id, because
+// both directions agree on the one rule that makes the round trip lossless:
+// an address's Root binds only against a PLANE ROOT's own location_id
+// (resolvePlaneRoot requires parent_id IS NULL), never a descendant's own
+// location_id column. A nested component or system can carry its own
+// location_id (CreateComponent and MoveComponent both allow one; it is a
+// descriptive field, projected on the wire as `location`), but that value
+// plays no part in its address: only walking up to the row with no parent
+// and reading THAT row's location_id reproduces what a forward resolve would
+// accept back.
+//
+// For tbl == locationTable, PathOf returns the location's own ancestor
+// chain, root first, with no accessor (AddressLocation's own shape). For
+// componentTable/systemTable, it returns the location chain the row's own
+// plane-root sits at (empty when that root is unplaced/orphan), the
+// accessor ($comp or $sys), and the row's own ancestor chain within its
+// tree, root first, ending with its own name.
+func PathOf(ctx context.Context, q querier, tbl scopeTable, id string) ([]string, error) {
+	own, err := ancestorNames(ctx, q, tbl, id)
+	if err != nil {
+		return nil, err
+	}
+	if tbl == locationTable {
+		return own, nil
+	}
+	locID, err := planeRootLocationID(ctx, q, tbl, id)
+	if err != nil {
+		return nil, err
+	}
+	var root []string
+	if locID != nil {
+		root, err = ancestorNames(ctx, q, locationTable, *locID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	accessor := accessorComp
+	if tbl == systemTable {
+		accessor = accessorSys
+	}
+	segs := make([]string, 0, len(root)+1+len(own))
+	segs = append(segs, root...)
+	segs = append(segs, accessor)
+	segs = append(segs, own...)
+	return segs, nil
+}
+
+// ancestorNames walks id's own parent_id chain within tbl, from id up to the
+// row whose parent_id is null, returning the chain's names root first (id's
+// own name last). Every one of the three tree tables shares this exact
+// self-referencing shape, so one recursive CTE serves all three: PathOf
+// above runs it once against the target's own tree and, for a component or
+// system, a second time against the location tree its plane root sits in.
+func ancestorNames(ctx context.Context, q querier, tbl scopeTable, id string) ([]string, error) {
+	rows, err := q.Query(ctx, `
+		with recursive anc(id, name, parent_id, depth) as (
+			select id, name, parent_id, 0 from `+string(tbl)+` where id = $1
+			union all
+			select t.id, t.name, t.parent_id, anc.depth + 1
+			from `+string(tbl)+` t join anc on t.id = anc.parent_id
+		) cycle id set is_cycle using path
+		select name from anc order by depth desc`, id)
+	if err != nil {
+		return nil, fmt.Errorf("storage: walk %s ancestor names for %q: %w", tbl, id, err)
+	}
+	defer rows.Close()
+	var names []string
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return nil, fmt.Errorf("storage: scan %s ancestor name for %q: %w", tbl, id, err)
+		}
+		names = append(names, n)
+	}
+	return names, rows.Err()
+}
+
+// planeRootLocationID resolves id's plane root's own location_id: the row
+// reached by walking parent_id up from id to the one row in tbl with no
+// parent, then reading THAT row's location_id. tbl must be componentTable or
+// systemTable (a location has no location_id column of its own; PathOf never
+// calls this for locationTable).
+func planeRootLocationID(ctx context.Context, q querier, tbl scopeTable, id string) (*string, error) {
+	var locID *string
+	err := q.QueryRow(ctx, `
+		with recursive anc(id, parent_id, location_id, depth) as (
+			select id, parent_id, location_id, 0 from `+string(tbl)+` where id = $1
+			union all
+			select t.id, t.parent_id, t.location_id, anc.depth + 1
+			from `+string(tbl)+` t join anc on t.id = anc.parent_id
+		) cycle id set is_cycle using path
+		select location_id from anc order by depth desc limit 1`, id).Scan(&locID)
+	if err != nil {
+		return nil, fmt.Errorf("storage: resolve %s plane-root location for %q: %w", tbl, id, err)
+	}
+	return locID, nil
 }

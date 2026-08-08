@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -65,8 +66,19 @@ type Component struct {
 	// existed before the generator landed; the gateway sets it explicitly on
 	// insert once that generator writes.
 	NameGenerated bool
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	// Path, PathSegments, and Renders are the dotted address and its two
+	// display-only compact forms (#627 Task 15), attached by attachComponentPath
+	// after every GET or LIST fetch (see scopedConfig.attachPath). Zero-value
+	// (empty) on a row this gateway returns from a write path (create, update,
+	// move, rename, resetName): those responses carry Name/NameGenerated fresh,
+	// and the console's own query-invalidation refetch picks up Path moments
+	// later, so leaving it empty here trades one render frame of staleness for
+	// not doubling every write's query count.
+	Path         string
+	PathSegments []string
+	Renders      Renders
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 // ComponentSpec is the create input. ParentName nil makes a root component;
@@ -145,6 +157,37 @@ var componentConfig = scopedConfig[Component]{
 	table: componentTable, cols: componentCols, resource: "component",
 	scan: scanComponent, idOf: func(c *Component) string { return c.ID },
 	notFound: ErrComponentNotFound, forbidden: ErrComponentForbidden, occupied: ErrComponentOccupied,
+	attachPath: attachComponentPath,
+}
+
+// attachComponentPath fills c.Path/.PathSegments/.Renders (#627 Task 15):
+// PathOf's reverse walk for the address, and RenderDash/RenderBare's compact
+// forms. The bare render's abbreviation comes from the component's own
+// product's component_type, resolved through the same inherited-from-parent
+// chain generateNameForProduct walks (resolveTypeFacts): the identical
+// stem-and-abbrev source a generated name itself came from, so a component's
+// bare render always compacts with the type its own name was minted against.
+// A component with no product (unreachable through the API, which requires
+// one, but not through a direct-gateway caller) or whose type resolves no
+// abbrev anywhere in its chain gets "" and RenderBare's own no-abbrev
+// fallback.
+func attachComponentPath(ctx context.Context, q querier, c *Component) error {
+	segs, err := PathOf(ctx, q, componentTable, c.ID)
+	if err != nil {
+		return err
+	}
+	c.PathSegments = segs
+	c.Path = strings.Join(segs, ".")
+	abbrev := ""
+	if c.ProductID != nil {
+		if typeID, err := componentTypeIDForProduct(ctx, q, *c.ProductID); err == nil {
+			if _, _, a, _, err := resolveTypeFacts(ctx, q, typeID); err == nil {
+				abbrev = a
+			}
+		}
+	}
+	c.Renders = Renders{Dash: RenderDash(segs), Bare: RenderBare(segs, abbrev)}
+	return nil
 }
 
 func (p *PG) ListComponents(ctx context.Context, read scope.Set) ([]Component, error) {

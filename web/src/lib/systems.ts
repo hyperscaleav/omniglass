@@ -28,6 +28,12 @@ export type System = {
   // any pointer on the component: membership is what says a component is in a
   // system, and reading it elsewhere is how a fully staffed system reported zero.
   member_count: number;
+  // path/path_segments/renders (#627 Task 15): the dotted address and its two
+  // display-only compact forms, set on a GET or LIST response (empty on a
+  // create/update/move/rename response; a subsequent list refetch fills it).
+  path?: string;
+  path_segments?: string[];
+  renders?: { dash: string; bare: string };
   actions?: string[];
   effective_tags?: Record<string, string>;
 };

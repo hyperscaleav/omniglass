@@ -3728,10 +3728,16 @@ export interface components {
             parent?: string;
             /** @description The parent component's id, the canonical handle */
             parent_id?: string;
+            /** @description The dotted address (e.g. boi.17c.415a.$comp.display-1): derived from the component's own placement, never from a system it belongs to. Set on a GET or LIST response; empty on a create/update/move/rename/resetName response (refetch the row to see it). */
+            path?: string;
+            /** @description path split on '.', accessors included, so the round trip through the resolver stays lossless. */
+            path_segments?: string[] | null;
             /** @description The product's name, for display; the form a body round-trips. */
             product?: string;
             /** @description The product (catalog SKU) this component is an instance of, if any; the stable handle that survives a rename. */
             product_id?: string;
+            /** @description Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy. */
+            renders?: components["schemas"]["RenderBody"];
             /** @description Name of the component's primary system, its default when no system is named. A component may belong to several; read /components/{name}/memberships for all of them. */
             system?: string;
             /**
@@ -5181,6 +5187,12 @@ export interface components {
             parent?: string;
             /** @description The parent location's id, the canonical handle */
             parent_id?: string;
+            /** @description The dotted address (e.g. boi.17c.415a); no accessor, since a location's own address IS its location-tree ancestor chain. Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it). */
+            path?: string;
+            /** @description path split on '.'. */
+            path_segments?: string[] | null;
+            /** @description Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy. */
+            renders?: components["schemas"]["RenderBody"];
         };
         LocationMetricsOutputBody: {
             /**
@@ -5788,6 +5800,12 @@ export interface components {
             /** @description The new name, unique within its placement (lowercase letters, digits, hyphens) */
             name: string;
         };
+        RenderBody: {
+            /** @description The dash render's segments concatenated with no separator, with the final stem-ordinal segment compacted to <abbrev><ordinal> when the owning type registers one (e.g. boi17c216bdsp1). Display only; not accepted by the resolver. */
+            bare: string;
+            /** @description The path's non-accessor segments joined with '-' (e.g. boi-17c-216b-display-1). Display only; not accepted by the resolver. */
+            dash: string;
+        };
         ResetPasswordInputBody: {
             /**
              * Format: uri
@@ -6305,6 +6323,12 @@ export interface components {
             parent?: string;
             /** @description The parent system's id, the canonical handle */
             parent_id?: string;
+            /** @description The dotted address (e.g. boi.17c.$sys.av). Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it). */
+            path?: string;
+            /** @description path split on '.', accessors included, so the round trip through the resolver stays lossless. */
+            path_segments?: string[] | null;
+            /** @description Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy. */
+            renders?: components["schemas"]["RenderBody"];
             /** @description The standard's handle, for display; omitted for a one-off system */
             standard?: string;
             /** @description The standard's uuid; the stable form of standard */

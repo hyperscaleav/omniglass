@@ -14,6 +14,14 @@ export type Location = {
   // locations can now legally share a name under different parents and only
   // the uuid tells them apart).
   parent_id?: string;
+  // path/path_segments/renders (#627 Task 15): the dotted address (no
+  // accessor; a location's own address IS its location-tree ancestor chain)
+  // and its two display-only compact forms, set on a GET or LIST response
+  // (empty on a create/update/move/rename response; a subsequent list
+  // refetch fills it).
+  path?: string;
+  path_segments?: string[];
+  renders?: { dash: string; bare: string };
   actions?: string[];
   effective_tags?: Record<string, string>;
 };

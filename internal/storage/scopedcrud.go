@@ -70,6 +70,15 @@ type scopedConfig[T any] struct {
 	// the transaction so the ripple cannot commit apart from the delete that caused
 	// it. Optional; nil for entities whose removal ripples nowhere.
 	afterDelete func(ctx context.Context, p *PG, q txQuerier, before *T) error
+	// attachPath fills v's Path/PathSegments/Renders from the database (#627
+	// Task 15), after scan, scoped deliberately to the two read entry points
+	// (scopedGet and scopedList below): the wire's "read struct" is the GET
+	// and LIST response, not every internal resolve a create or move runs
+	// along the way (a parent-name lookup mid-create has no reason to also
+	// compute that parent's own full path). Optional; nil for an entity this
+	// task's grammar does not address (none of the three tree entities leave
+	// it nil today).
+	attachPath func(ctx context.Context, q querier, v *T) error
 }
 
 // sameOptional reports whether two optional columns hold the same value, absence
@@ -116,7 +125,17 @@ func scopedList[T any](ctx context.Context, p *PG, cfg scopedConfig[T], read sco
 		}
 		out = append(out, *v)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if cfg.attachPath != nil {
+		for i := range out {
+			if err := cfg.attachPath(ctx, p.pool, &out[i]); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return out, nil
 }
 
 // loadByRef runs the reference lookup shared by every scopedByName variant: a
@@ -582,7 +601,16 @@ func resolveScopedRef[T any](ctx context.Context, q querier, cfg scopedConfig[T]
 // entity-generic helper called once per tree entity with its own matching
 // scope, never a cross-tier reference, so no mismatch can occur here.
 func scopedGet[T any](ctx context.Context, p *PG, cfg scopedConfig[T], name string, read scope.Set) (*T, error) {
-	return scopedByNameInScope(ctx, p.pool, cfg, name, cfg.resource, read)
+	v, err := scopedByNameInScope(ctx, p.pool, cfg, name, cfg.resource, read)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.attachPath != nil {
+		if err := cfg.attachPath(ctx, p.pool, v); err != nil {
+			return nil, err
+		}
+	}
+	return v, nil
 }
 
 // resolveScoped loads an entity by name and enforces the read-then-action scope

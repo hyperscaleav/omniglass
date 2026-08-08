@@ -31,6 +31,13 @@ export type Component = {
   // Whether the platform picked this name (a server-side generator) rather
   // than an operator typing it.
   name_generated?: boolean;
+  // path/path_segments/renders (#627 Task 15): the dotted address and its two
+  // display-only compact forms, set on a GET or LIST response (empty on a
+  // create/update/move/rename/resetName response; a subsequent list refetch
+  // fills it).
+  path?: string;
+  path_segments?: string[];
+  renders?: { dash: string; bare: string };
   actions?: string[];
   effective_tags?: Record<string, string>;
 };
@@ -84,6 +91,16 @@ export async function updateComponent(name: string, body: UpdateComponent): Prom
 // stored references and is worth being able to withhold on its own.
 export async function renameComponent(name: string, to: string): Promise<Component> {
   const { data, error } = await api.POST("/components/{name}:rename", { params: { path: { name } }, body: { name: to } });
+  if (error) throw error;
+  return data as Component;
+}
+
+// resetComponentName hands the pen back to the platform (#627 Task 15):
+// regenerates the name from the component's current type and placement and
+// marks name_generated, whether or not it already was. Gated by
+// component:rename, the same token :rename uses.
+export async function resetComponentName(name: string): Promise<Component> {
+  const { data, error } = await api.POST("/components/{name}:resetName", { params: { path: { name } } });
   if (error) throw error;
   return data as Component;
 }

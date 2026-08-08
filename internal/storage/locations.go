@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -122,8 +123,16 @@ type Location struct {
 	ParentID       *string
 	// The name the API addresses the parent by; ParentID above is internal.
 	ParentName *string
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	// Path, PathSegments, and Renders are the dotted address (no accessor: a
+	// location's own address IS its location-tree ancestor chain) and its two
+	// display-only compact forms (#627 Task 15), attached by
+	// attachLocationPath after every GET or LIST fetch; see Component's own
+	// Path field for the full reasoning (write paths leave this zero-value).
+	Path         string
+	PathSegments []string
+	Renders      Renders
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 // LocationSpec is the create input. ParentName nil makes a root location, which
@@ -368,11 +377,27 @@ func scanLocation(row pgx.Row) (*Location, error) {
 	return &l, nil
 }
 
+// attachLocationPath fills l.Path/.PathSegments/.Renders (#627 Task 15). A
+// location has no accessor and no type-level abbreviation (location_type
+// carries no abbrev column the way component_type does), so RenderBare
+// always gets "" here.
+func attachLocationPath(ctx context.Context, q querier, l *Location) error {
+	segs, err := PathOf(ctx, q, locationTable, l.ID)
+	if err != nil {
+		return err
+	}
+	l.PathSegments = segs
+	l.Path = strings.Join(segs, ".")
+	l.Renders = Renders{Dash: RenderDash(segs), Bare: RenderBare(segs, "")}
+	return nil
+}
+
 // locationConfig drives the generic scoped-CRUD helpers for the location tree.
 var locationConfig = scopedConfig[Location]{
 	table: locationTable, cols: locationCols, resource: "location",
 	scan: scanLocation, idOf: func(l *Location) string { return l.ID },
 	notFound: ErrLocationNotFound, forbidden: ErrLocationForbidden, occupied: ErrLocationOccupied,
+	attachPath: attachLocationPath,
 }
 
 // ListLocations returns the locations in the caller's read scope, ordered by
