@@ -73,7 +73,11 @@ func TestMoveIsItsOwnPermission(t *testing.T) {
 		resource string
 		create   func(c *apiClient, tok, name string)
 		movePath func(name string) string
-		moveBody map[string]any
+		// moveBody is a function of name: component and system clear-to-root
+		// (a fixed body, independent of name), but location has no
+		// clear-to-root capability at all (ADR-0088), so its leg needs an
+		// actual resolvable destination, a second fixture parented off name.
+		moveBody func(name string) map[string]any
 	}{
 		{
 			resource: "component",
@@ -81,7 +85,7 @@ func TestMoveIsItsOwnPermission(t *testing.T) {
 				c.do(tok, http.MethodPost, "/components", map[string]any{"name": name, "product": "generic-device"}, http.StatusCreated)
 			},
 			movePath: func(name string) string { return "/components/" + name + ":move" },
-			moveBody: map[string]any{"parent": ""},
+			moveBody: func(string) map[string]any { return map[string]any{"parent": ""} },
 		},
 		{
 			resource: "system",
@@ -89,7 +93,20 @@ func TestMoveIsItsOwnPermission(t *testing.T) {
 				c.do(tok, http.MethodPost, "/systems", map[string]any{"name": name}, http.StatusCreated)
 			},
 			movePath: func(name string) string { return "/systems/" + name + ":move" },
-			moveBody: map[string]any{"parent": ""},
+			moveBody: func(string) map[string]any { return map[string]any{"parent": ""} },
+		},
+		{
+			resource: "location",
+			create: func(c *apiClient, tok, name string) {
+				// campus is root-only (allowed_parent_types={root}); building is
+				// allowed under campus, so the "before" fixture must be a
+				// building, not another campus, or the move itself 422s on
+				// placement before the permission question is ever reached.
+				c.do(tok, http.MethodPost, "/locations", map[string]any{"name": name + "-dest", "location_type": "campus"}, http.StatusCreated)
+				c.do(tok, http.MethodPost, "/locations", map[string]any{"name": name, "location_type": "building"}, http.StatusCreated)
+			},
+			movePath: func(name string) string { return "/locations/" + name + ":move" },
+			moveBody: func(name string) map[string]any { return map[string]any{"parent": name + "-dest"} },
 		},
 	}
 
@@ -112,18 +129,22 @@ func TestMoveIsItsOwnPermission(t *testing.T) {
 				[]grant{{role: slug + "-mv-mover", scopeKind: "all"}})
 
 			// Both custom roles grant scopeKind "all", so a no-op clear-to-root
-			// on an already-root row isolates the permission-token question
-			// from the scope-guard question TestScopedPrincipalCannotLiftToRoot
-			// covers.
+			// on an already-root row (component, system) isolates the
+			// permission-token question from the scope-guard question
+			// TestScopedPrincipalCannotLiftToRoot covers. Location has no
+			// clear-to-root at all, so its body targets a real destination
+			// instead (see moveBody above); the permission question is the
+			// same either way.
 			name := slug + "-mv-before"
 			r.create(c, ownerTok, name)
+			body := r.moveBody(name)
 
 			// An update grant does not reach :move.
-			if code, body := c.send(updaterTok, http.MethodPost, r.movePath(name), r.moveBody); code != http.StatusForbidden {
-				t.Fatalf("%s:update moved (%d, body %s), want 403: update must not imply move", r.resource, code, body)
+			if code, respBody := c.send(updaterTok, http.MethodPost, r.movePath(name), body); code != http.StatusForbidden {
+				t.Fatalf("%s:update moved (%d, body %s), want 403: update must not imply move", r.resource, code, respBody)
 			}
 			// A move grant does.
-			c.do(moverTok, http.MethodPost, r.movePath(name), r.moveBody, http.StatusOK)
+			c.do(moverTok, http.MethodPost, r.movePath(name), body, http.StatusOK)
 		})
 	}
 }
