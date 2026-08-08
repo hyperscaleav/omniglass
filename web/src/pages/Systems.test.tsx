@@ -47,7 +47,7 @@ function mount(path: string) {
     <QueryClientProvider client={qc}>
       <Router>
         <Route path="/systems" component={Systems} />
-        <Route path="/systems/:name" component={Systems} />
+        <Route path="/systems/:id" component={Systems} />
       </Router>
     </QueryClientProvider>
   ));
@@ -117,6 +117,43 @@ describe("Systems create-as-route", () => {
     mount("/systems/boardroom");
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     expect(screen.getAllByText("Meeting room").length).toBeGreaterThan(0);
+  });
+
+  // #627 Task 15c: routes take :id now. A name-shaped deep link resolves
+  // through TreeList's byAddr fallback and corrects the address bar to the
+  // uuid (replace); a rename afterward must leave that URL alone, since the
+  // id it addresses never changes.
+  it("redirects a name-shaped deep link to the resolved uuid, and a rename leaves the route where it is", async () => {
+    mount("/systems/boardroom");
+    await waitFor(() => expect(window.location.pathname).toBe(`/systems/${sys.id}`));
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    const nameInput = (await screen.findByDisplayValue("boardroom")) as HTMLInputElement;
+    fireEvent.input(nameInput, { target: { value: "exec-boardroom" } });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const { method, url } = req;
+      if (method === "PATCH" && url.includes("/systems/boardroom")) {
+        return new Response(JSON.stringify(sys), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (method === "POST" && url.includes("/systems/boardroom:rename")) {
+        return new Response(JSON.stringify({ ...sys, name: "exec-boardroom" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (method === "GET") {
+        return new Response(JSON.stringify({ systems: [{ ...sys, name: "exec-boardroom" }] }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${method} ${url}`);
+    });
+    fireEvent.click(screen.getByText("Save changes"));
+    await waitFor(() => expect(screen.queryByLabelText("Check name")).toBeNull());
+    expect(window.location.pathname).toBe(`/systems/${sys.id}`);
+  });
+
+  it("renders an explicit not-found state for an address that matches no system, not the old silent list fallback", async () => {
+    mount("/systems/no-such-system");
+    expect(await screen.findByText(/No such system/)).toBeTruthy();
+    expect(screen.getByText(/old address/)).toBeTruthy();
+    expect(screen.queryByText("Boardroom")).toBeNull();
   });
 });
 

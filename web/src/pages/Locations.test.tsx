@@ -57,7 +57,7 @@ function mount(path: string, extraLocations: Location[] = []) {
     <QueryClientProvider client={qc}>
       <Router>
         <Route path="/locations" component={Locations} />
-        <Route path="/locations/:name" component={Locations} />
+        <Route path="/locations/:id" component={Locations} />
       </Router>
     </QueryClientProvider>
   ));
@@ -284,6 +284,50 @@ describe("Locations create-as-route", () => {
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     // No check button until edit begins: the name is a read-only fact.
     expect(screen.queryByLabelText("Check name")).toBeNull();
+  });
+
+  // #627 Task 15c: routes take :id now. A name-shaped deep link (an old
+  // bookmark, or one of this same page's own name-only cross-entity panel
+  // links) resolves through TreeList's byAddr fallback and corrects the
+  // address bar to the uuid (replace, not push); a rename afterward must
+  // leave that URL alone, since the id it addresses never changes.
+  it("redirects a name-shaped deep link to the resolved uuid, and a rename leaves the route where it is", async () => {
+    mount("/locations/hq");
+    await waitFor(() => expect(window.location.pathname).toBe(`/locations/${hq.id}`));
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    const nameInput = (await screen.findByDisplayValue("hq")) as HTMLInputElement;
+    fireEvent.input(nameInput, { target: { value: "headquarters" } });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const { method, url } = req;
+      if (method === "PATCH" && url.includes("/locations/hq")) {
+        return new Response(JSON.stringify(hq), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (method === "POST" && url.includes("/locations/hq:rename")) {
+        return new Response(JSON.stringify({ ...hq, name: "headquarters" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (method === "GET") {
+        // The finally-block invalidation refetches the list; answer with the
+        // renamed row so this is not what fails the test.
+        return new Response(JSON.stringify({ locations: [{ ...hq, name: "headquarters" }, lab, hqB1] }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${method} ${url}`);
+    });
+    fireEvent.click(screen.getByText("Save changes"));
+    await waitFor(() => expect(screen.queryByLabelText("Check name")).toBeNull());
+    // Unchanged: no hand-off navigate to /locations/headquarters, which
+    // would have been a valid URL turned unresolvable by the save that just
+    // succeeded.
+    expect(window.location.pathname).toBe(`/locations/${hq.id}`);
+  });
+
+  it("renders an explicit not-found state for an address that matches no location, not the old silent list fallback", async () => {
+    mount("/locations/no-such-place");
+    expect(await screen.findByText(/No such location/)).toBeTruthy();
+    expect(screen.getByText(/old address/)).toBeTruthy();
+    // Not the pre-15c behavior: the unfiltered list is not what renders.
+    expect(screen.queryByText("HQ")).toBeNull();
   });
 });
 

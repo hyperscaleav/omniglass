@@ -135,7 +135,11 @@ export default function Components() {
         actions: c.actions,
         product: c.product ?? "",
         systemName: c.system_id ? entityLabel(sm.get(c.system_id) ?? { name: c.system ?? "" }) : "",
-        systemAddr: c.system ?? "",
+        // The system facet's own filter value (#627 Task 15c): the uuid, not
+        // the name, so it matches the cross-entity drill from Systems.tsx
+        // (which now emits ?system=<uuid>) and never collides two
+        // same-named systems into one facet value.
+        systemAddr: c.system_id ?? "",
         systemId: c.system_id ?? "",
         systemCount: c.system_count ?? 0,
         locationName: c.location_id ? entityLabel(lm.get(c.location_id) ?? { name: c.location ?? "" }) : "",
@@ -202,8 +206,9 @@ export default function Components() {
       if (isEditing) { setDisplay(n().raw.display_name ?? ""); setName(n().raw.name); setNameCheck(null); }
     }));
     // Consume a pending "open in edit" handoff (from create or the row pencil) once
-    // the node has resolved.
-    createEffect(on(() => n().raw.name, (name) => { if (name && consumePendingEdit(name) && canUpdate()) edit?.begin(); }));
+    // the node has resolved. Keyed on id (#627 Task 15c), stable across a rename,
+    // unlike the name this used to key on.
+    createEffect(on(() => n().id, (id) => { if (id && consumePendingEdit(id) && canUpdate()) edit?.begin(); }));
 
     edit?.bind({
       editable: canUpdate,
@@ -224,8 +229,13 @@ export default function Components() {
           // display name the server had already accepted: the operator saw a total
           // failure for a half-committed save, and Cancel re-seeded the inputs from
           // that stale cache.
+          // No hand-off navigate after a rename (#627 Task 15c): the route
+          // carries the id, which a rename never changes, so there is
+          // nothing here to correct. The old navigate to
+          // /components/<newName> only existed because the URL used to
+          // carry the name; under uuid addressing it would have sent a
+          // just-saved operator from a valid URL to an unresolvable one.
           if (renamed) await renameComponent(n().raw.name, name().trim());
-          if (renamed) navigate(`/components/${encodeURIComponent(name().trim())}`);
         } catch (e) {
           setSaveErr(describeError(e));
           throw e; // keep the slot in edit mode so the operator can retry
@@ -317,7 +327,7 @@ export default function Components() {
               label="System"
               value={sysName() ? (
                 <span class="flex items-baseline gap-1.5">
-                  <button class="link text-sm" onClick={() => navigate(`/systems/${encodeURIComponent(sysName()!)}`)}>{n().systemName}</button>
+                  <button class="link text-sm" onClick={() => navigate(`/systems/${encodeURIComponent(n().systemId)}`)}>{n().systemName}</button>
                   {/* Its primary is only part of the answer when it serves more than
                       one, so the row says so rather than implying exclusivity. */}
                   <Show when={n().systemCount > 1}>
@@ -437,7 +447,11 @@ export default function Components() {
       setFormErr(null);
       const nm = name().trim();
       try {
-        await createComponent({
+        // Bind the create response (#627 Task 15c): under uuid addressing
+        // the locally typed name is not a reliable handle to navigate by
+        // (#627 Task 15d later lets it be blank entirely); the server's own
+        // id always is.
+        const created = await createComponent({
           name: nm,
           display_name: display().trim() || undefined,
           system: system() || undefined,
@@ -446,8 +460,8 @@ export default function Components() {
           product: product(),
         });
         await qc.invalidateQueries({ queryKey: COMPONENTS_KEY });
-        openInEdit(nm);
-        navigate(`/components/${encodeURIComponent(nm)}`);
+        openInEdit(created.id);
+        navigate(`/components/${encodeURIComponent(created.id)}`);
       } catch (er) {
         setFormErr(describeError(er));
         setBusy(false);
@@ -536,7 +550,7 @@ export default function Components() {
   const cfg: ListConfig<CompNode> = {
     ...componentsDescriptor,
     nodes,
-    focus: () => params.name,
+    focus: () => params.id,
     loading: () => components.isLoading,
     error: () => components.error,
     initialChips,
@@ -561,7 +575,7 @@ export default function Components() {
     filterKeys: () => [
       { key: "name", type: "string", hint: "substring", get: (n) => `${n.display} ${n.raw.name}`, values: () => [] },
       { key: "product", type: "string", hint: "exact", get: (n) => n.product, values: (rows) => [...new Set(rows.map((r) => r.product).filter(Boolean))].sort() },
-      { key: "system", type: "string", hint: "exact", get: (n) => n.systemAddr, values: (rows) => [...new Set(rows.map((r) => r.systemAddr).filter(Boolean))].sort(), valueLabel: (v) => (systems.data ?? []).find((s) => s.name === v)?.display_name ?? v },
+      { key: "system", type: "string", hint: "exact", get: (n) => n.systemAddr, values: (rows) => [...new Set(rows.map((r) => r.systemAddr).filter(Boolean))].sort(), valueLabel: (v) => { const s = (systems.data ?? []).find((s) => s.id === v); return s ? entityLabel(s) : v; } },
       { key: "location", type: "string", hint: "exact", get: (n) => n.locationName, values: (rows) => [...new Set(rows.map((r) => r.locationName).filter(Boolean))].sort() },
       ...tagFacets(),
     ],
@@ -577,7 +591,7 @@ export default function Components() {
     onBack: () => navigate("/components"),
     onDelete: (n) => del(n),
     onNew: () => navigate("/components/create"),
-    onEdit: (n) => { openInEdit(n.raw.name); navigate(`/components/${encodeURIComponent(n.raw.name)}`); },
+    onEdit: (n) => { openInEdit(n.id); navigate(`/components/${encodeURIComponent(n.id)}`); },
     renderCreate: () => <ComponentCreate />,
     renderDetail: (n, ctx) => <ComponentDetail node={n} ctx={ctx} />,
     extraBlades: {

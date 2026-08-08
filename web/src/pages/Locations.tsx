@@ -299,7 +299,7 @@ export default function Locations() {
     }));
     // Consume a pending "open in edit" handoff (from create or the row pencil) once
     // the node has resolved.
-    createEffect(on(() => n().raw.name, (name) => { if (name && consumePendingEdit(name) && canUpdate()) edit?.begin(); }));
+    createEffect(on(() => n().id, (id) => { if (id && consumePendingEdit(id) && canUpdate()) edit?.begin(); }));
 
     edit?.bind({
       editable: canUpdate,
@@ -330,8 +330,10 @@ export default function Locations() {
           // display name the server had already accepted: the operator saw a total
           // failure for a half-committed save, and Cancel re-seeded the inputs from
           // that stale cache.
+          // No hand-off navigate after a rename (#627 Task 15c): see
+          // Components.tsx's own save() for why (the route carries the id,
+          // which a rename never changes).
           if (renamed) await renameLocation(n().raw.name, name().trim());
-          if (renamed) navigate(`/locations/${encodeURIComponent(name().trim())}`);
         } catch (e) {
           setSaveErr(describeError(e));
           throw e; // keep the slot in edit mode so the operator can retry
@@ -469,7 +471,12 @@ export default function Locations() {
 
         {/* The rollup: a location has no roles of its own, so its verdict is the
             worst among the systems placed anywhere beneath it, each linked to the
-            detail that can say why. */}
+            detail that can say why.
+
+            onOpenSystem still navigates by name (#627 Task 15c): the health
+            rollup read body carries only system names, no id. See
+            Systems.tsx's own onOpenComponent comment for why this is left
+            as-is (TreeList's byAddr fallback resolves it). */}
         <LocationHealthPanel
           location={n().raw.name}
           onOpenSystem={(name) => navigate(`/systems/${encodeURIComponent(name)}`)}
@@ -531,10 +538,13 @@ export default function Locations() {
       setFormErr(null);
       const nm = name().trim();
       try {
-        await createLocation({ name: nm, location_type: type().trim(), display_name: display().trim() || undefined, parent: parent() || undefined });
+        // Bind the create response (#627 Task 15c): see Components.tsx's
+        // own create() for why the id, not the locally typed name, is what
+        // this hands off to openInEdit and navigate.
+        const created = await createLocation({ name: nm, location_type: type().trim(), display_name: display().trim() || undefined, parent: parent() || undefined });
         await qc.invalidateQueries({ queryKey: LOCATIONS_KEY });
-        openInEdit(nm);
-        navigate(`/locations/${encodeURIComponent(nm)}`);
+        openInEdit(created.id);
+        navigate(`/locations/${encodeURIComponent(created.id)}`);
       } catch (er) {
         setFormErr(describeError(er));
         setBusy(false);
@@ -611,7 +621,7 @@ export default function Locations() {
   const cfg: ListConfig<LocNode> = {
     ...locationsDescriptor,
     nodes,
-    focus: () => params.name,
+    focus: () => params.id,
     loading: () => locations.isLoading,
     error: () => locations.error,
     filterPlaceholder: "Filter by name, type…",
@@ -649,7 +659,7 @@ export default function Locations() {
     onBack: () => navigate("/locations"),
     onDelete: (n) => del(n),
     onNew: () => navigate("/locations/create"),
-    onEdit: (n) => { openInEdit(n.raw.name); navigate(`/locations/${encodeURIComponent(n.raw.name)}`); },
+    onEdit: (n) => { openInEdit(n.id); navigate(`/locations/${encodeURIComponent(n.id)}`); },
     renderCreate: () => <LocationCreate />,
     renderDetail: (n, ctx) => <LocationDetail node={n} ctx={ctx} />,
     extraBlades: { "property-resolution": propertyResolutionBlade },

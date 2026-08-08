@@ -45,7 +45,7 @@ function mount(path: string) {
     <QueryClientProvider client={qc}>
       <Router>
         <Route path="/components" component={Components} />
-        <Route path="/components/:name" component={Components} />
+        <Route path="/components/:id" component={Components} />
       </Router>
     </QueryClientProvider>
   ));
@@ -76,6 +76,38 @@ describe("Components create-as-route", () => {
     const dot = document.querySelector(".og-system-dot") as HTMLElement;
     expect(dot).toBeTruthy();
     expect(dot.style.getPropertyValue("--sys-h")).toBe(String(hueFor(sysId)));
+  });
+
+  // #627 Task 15c: the cross-entity drill from Systems.tsx's own "Components"
+  // button now emits ?system=<uuid>, and this facet must match it: a name
+  // would collide (or miss entirely) once two systems can share one under
+  // different placements (#627 Task 10). Asserts the query-string drill-in
+  // yields the same row set a manual system chip would.
+  it("filters to a system's components from a ?system=<uuid> deep link, matching by id not name", async () => {
+    const sysId = uuidFor("sys-boardroom");
+    const otherSysId = uuidFor("sys-annex");
+    const inSystem: Component = { ...comp, id: uuidFor("c-in"), name: "mic-in", display_name: "In-room Mic", system: "boardroom", system_id: sysId, system_count: 1 };
+    const outOfSystem: Component = { ...comp, id: uuidFor("c-out"), name: "mic-out", display_name: "Annex Mic", system: "annex-room", system_id: otherSysId, system_count: 1 };
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...COMPONENTS_KEY], [inSystem, outOfSystem]);
+    qc.setQueryData([...SYSTEMS_KEY], [
+      { id: sysId, name: "boardroom", member_count: 1 },
+      { id: otherSysId, name: "annex-room", member_count: 1 },
+    ]);
+    qc.setQueryData([...LOCATIONS_KEY], []);
+    qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...ME_KEY], me);
+    qc.setQueryData([...TAGS_KEY], []);
+    window.history.pushState({}, "", `/components?system=${sysId}`);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="/components" component={Components} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    await waitFor(() => expect(screen.getByText("In-room Mic")).toBeTruthy());
+    expect(screen.queryByText("Annex Mic")).toBeNull();
   });
 
   // A root component (no component parent) sitting at a location has no
@@ -150,6 +182,72 @@ describe("Components create-as-route", () => {
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     // No check button until edit begins: the name is a read-only fact.
     expect(screen.queryByLabelText("Check name")).toBeNull();
+  });
+
+  // #627 Task 15c: routes take :id now. A name-shaped deep link (an old
+  // bookmark, or a cross-entity drill site with no id in hand) resolves
+  // through TreeList's byAddr fallback and corrects the address bar to the
+  // uuid (replace); a rename afterward must leave that URL alone, since the
+  // id it addresses never changes.
+  it("redirects a name-shaped deep link to the resolved uuid, and a rename leaves the route where it is", async () => {
+    mount("/components/mic-2");
+    await waitFor(() => expect(window.location.pathname).toBe(`/components/${comp.id}`));
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    const nameInput = (await screen.findByDisplayValue("mic-2")) as HTMLInputElement;
+    fireEvent.input(nameInput, { target: { value: "mic-3" } });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const { method, url } = req;
+      if (method === "PATCH" && url.includes("/components/mic-2")) {
+        return new Response(JSON.stringify(comp), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (method === "POST" && url.includes("/components/mic-2:rename")) {
+        return new Response(JSON.stringify({ ...comp, name: "mic-3" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (method === "GET") {
+        return new Response(JSON.stringify({ components: [{ ...comp, name: "mic-3" }] }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${method} ${url}`);
+    });
+    fireEvent.click(screen.getByText("Save changes"));
+    await waitFor(() => expect(screen.queryByLabelText("Check name")).toBeNull());
+    expect(window.location.pathname).toBe(`/components/${comp.id}`);
+  });
+
+  it("renders an explicit not-found state for an address that matches no component, not the old silent list fallback", async () => {
+    mount("/components/no-such-widget");
+    expect(await screen.findByText(/No such component/)).toBeTruthy();
+    expect(screen.getByText(/old address/)).toBeTruthy();
+    expect(screen.queryByText("Ceiling Mic 2")).toBeNull();
+  });
+
+  // Same name, two different placements (#627 Task 10 legalizes this):
+  // resolving by name is genuinely ambiguous, so the route renders a
+  // disambiguation list rather than guessing which row the operator meant.
+  it("renders a disambiguation list when a name-shaped address matches more than one component", async () => {
+    const twin: Component = { ...comp, id: uuidFor("c-2"), parent_id: undefined };
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...COMPONENTS_KEY], [comp, twin]);
+    qc.setQueryData([...SYSTEMS_KEY], []);
+    qc.setQueryData([...LOCATIONS_KEY], []);
+    qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...ME_KEY], me);
+    qc.setQueryData([...TAGS_KEY], []);
+    window.history.pushState({}, "", "/components/mic-2");
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="/components" component={Components} />
+          <Route path="/components/:id" component={Components} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    expect(await screen.findByText(/More than one component matches/)).toBeTruthy();
+    // Both candidates are offered, not silently one of them.
+    expect(screen.getAllByText("Ceiling Mic 2").length).toBe(2);
+    // No redirect happened: an ambiguous address is not a resolvable one.
+    expect(window.location.pathname).toBe("/components/mic-2");
   });
 
   // Regression for #336: TreeList created its blade controller but never provided it

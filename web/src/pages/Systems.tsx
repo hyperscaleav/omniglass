@@ -180,7 +180,7 @@ export default function Systems() {
     }));
     // Consume a pending "open in edit" handoff (from create or the row pencil) once
     // the node has resolved.
-    createEffect(on(() => n().raw.name, (name) => { if (name && consumePendingEdit(name) && canUpdate()) edit?.begin(); }));
+    createEffect(on(() => n().id, (id) => { if (id && consumePendingEdit(id) && canUpdate()) edit?.begin(); }));
 
     edit?.bind({
       editable: canUpdate,
@@ -205,8 +205,10 @@ export default function Systems() {
           // display name the server had already accepted: the operator saw a total
           // failure for a half-committed save, and Cancel re-seeded the inputs from
           // that stale cache.
+          // No hand-off navigate after a rename (#627 Task 15c): see
+          // Components.tsx's own save() for why (the route carries the id,
+          // which a rename never changes).
           if (renamed) await renameSystem(n().raw.name, name().trim());
-          if (renamed) navigate(`/systems/${encodeURIComponent(name().trim())}`);
         } catch (e) {
           setSaveErr(describeError(e));
           throw e; // keep the slot in edit mode so the operator can retry
@@ -339,7 +341,14 @@ export default function Systems() {
         {/* The verdict and its reconciliation: which roles are impaired, which
             assigned components went down, and which alarms took them down.
             It sits directly above the roles surface it reasons about, so "why is
-            this degraded" and "what are these roles" read as one thought. */}
+            this degraded" and "what are these roles" read as one thought.
+
+            onOpenComponent still navigates by name (#627 Task 15c): the health
+            read body (HealthRoleBody.down) carries only component names, no
+            id, so there is no uuid here to route with. TreeList's own focus
+            effect resolves it through the byAddr fallback (a unique hit
+            redirects the URL to the id, an ambiguous or missing one gets an
+            honest state instead of the old silent list fallback). */}
         <SystemHealthPanel
           system={n().raw.name}
           onOpenComponent={(name) => navigate(`/components/${encodeURIComponent(name)}`)}
@@ -348,7 +357,9 @@ export default function Systems() {
         {/* What is in this system, directly above what each one does. Membership
             is the attachment and a role is what it does, so the two read in that
             order: the room's contents, then the jobs. A member holding no role
-            appears only here, which is the case a staffing-only view would lose. */}
+            appears only here, which is the case a staffing-only view would lose.
+            onOpenComponent: see SystemHealthPanel's own comment above; membership
+            (SystemMemberBody.component) is also name-only on the wire. */}
         <MembersPanel
           system={n().raw.name}
           canUpdate={editing() && canUpdate()}
@@ -382,7 +393,12 @@ export default function Systems() {
                     <Button intent="danger" onClick={() => del(n())}>Delete</Button>
                   </Show>
                   <span class="flex-1" />
-                  <Button icon={ArrowRight} iconTrailing onClick={() => navigate(`/components?system=${encodeURIComponent(n().raw.name)}`)}>Components</Button>
+                  {/* The query-string carries the system's uuid, not its name
+                      (#627 Task 15c): Components.tsx's own system facet
+                      matches on system_id now, since a name is no longer a
+                      reliable cross-entity key once two systems can share
+                      one under different placements. */}
+                  <Button icon={ArrowRight} iconTrailing onClick={() => navigate(`/components?system=${encodeURIComponent(n().raw.id)}`)}>Components</Button>
                   <Show when={edit?.editable()}>
                     <Button intent="action" icon={Pencil} onClick={() => edit!.begin()}>Edit</Button>
                   </Show>
@@ -418,10 +434,13 @@ export default function Systems() {
       setFormErr(null);
       const nm = name().trim();
       try {
-        await createSystem({ name: nm, standard_id: standard() || undefined, display_name: display().trim() || undefined, location: location() || undefined, parent: parent() || undefined });
+        // Bind the create response (#627 Task 15c): see Components.tsx's
+        // own create() for why the id, not the locally typed name, is what
+        // this hands off to openInEdit and navigate.
+        const created = await createSystem({ name: nm, standard_id: standard() || undefined, display_name: display().trim() || undefined, location: location() || undefined, parent: parent() || undefined });
         await qc.invalidateQueries({ queryKey: SYSTEMS_KEY });
-        openInEdit(nm);
-        navigate(`/systems/${encodeURIComponent(nm)}`);
+        openInEdit(created.id);
+        navigate(`/systems/${encodeURIComponent(created.id)}`);
       } catch (er) {
         setFormErr(describeError(er));
         setBusy(false);
@@ -494,7 +513,7 @@ export default function Systems() {
   const cfg: ListConfig<SysNode> = {
     ...systemsDescriptor,
     nodes,
-    focus: () => params.name,
+    focus: () => params.id,
     loading: () => systems.isLoading,
     error: () => systems.error,
     filterPlaceholder: "Filter by name, standard, location…",
@@ -540,7 +559,7 @@ export default function Systems() {
     onBack: () => navigate("/systems"),
     onDelete: (n) => del(n),
     onNew: () => navigate("/systems/create"),
-    onEdit: (n) => { openInEdit(n.raw.name); navigate(`/systems/${encodeURIComponent(n.raw.name)}`); },
+    onEdit: (n) => { openInEdit(n.id); navigate(`/systems/${encodeURIComponent(n.id)}`); },
     renderCreate: () => <SystemCreate />,
     renderDetail: (n, ctx) => <SystemDetail node={n} ctx={ctx} />,
     extraBlades: { "property-resolution": propertyResolutionBlade },
