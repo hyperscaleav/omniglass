@@ -6139,12 +6139,12 @@ export interface components {
              * Format: int64
              * @description One of the two positions to exchange
              */
-            a: number;
+            position: number;
             /**
              * Format: int64
              * @description The other position to exchange with
              */
-            b: number;
+            with: number;
         };
         SystemBody: {
             /**

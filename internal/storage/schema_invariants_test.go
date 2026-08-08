@@ -24,19 +24,23 @@ func TestChurnDroppedConstraintsRestored(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 
-	// A join/contract foreign key with a NULL side is meaningless; each of these
-	// lost its NOT NULL when its column was recreated, while the partner column on
-	// the same table kept it.
-	notNull := []struct{ table, column string }{
-		{"product_property", "product_id"},
-		{"product_property", "property_type_id"},
-		{"standard_property", "property_type_id"},
-		{"location_type_property", "property_type_id"},
+	notNull := []struct{ table, column, why string }{
+		// Each of these lost its NOT NULL when its column was recreated during
+		// the #262/#343 churn, while the partner column on the same table
+		// kept it: a join/contract foreign key with a NULL side is
+		// meaningless.
+		{"product_property", "product_id", "a join/contract foreign key with a NULL side is meaningless"},
+		{"product_property", "property_type_id", "a join/contract foreign key with a NULL side is meaningless"},
+		{"standard_property", "property_type_id", "a join/contract foreign key with a NULL side is meaningless"},
+		{"location_type_property", "property_type_id", "a join/contract foreign key with a NULL side is meaningless"},
 		// The position floor (20260807146000_assignment_position_floor.sql,
 		// #626): every assignment carries its ordering position within its
 		// role, not just those written after the floor landed (the
-		// preceding backfill fills every existing row first).
-		{"system_role_assignment", "position"},
+		// preceding backfill fills every existing row first). Not a foreign
+		// key: an ordering integer with no NULL reading at all, since
+		// "unpositioned" is exactly the state the backfill exists to close
+		// out before the floor lands.
+		{"system_role_assignment", "position", "an assignment's ordering position has no meaning when unset"},
 	}
 	for _, c := range notNull {
 		var nullable string
@@ -46,7 +50,7 @@ func TestChurnDroppedConstraintsRestored(t *testing.T) {
 			t.Fatalf("read %s.%s nullability: %v", c.table, c.column, err)
 		}
 		if nullable != "NO" {
-			t.Errorf("%s.%s is nullable, want NOT NULL (a join/contract foreign key with a NULL side is meaningless)", c.table, c.column)
+			t.Errorf("%s.%s is nullable, want NOT NULL (%s)", c.table, c.column, c.why)
 		}
 	}
 

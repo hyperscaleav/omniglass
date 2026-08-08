@@ -2,6 +2,8 @@ package storage_test
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -258,5 +260,138 @@ func TestUnassignLeavesGapThenRefills(t *testing.T) {
 	}
 	if got := assignedTo(t, roles, "table-mic"); !sameSeq(got, []string{"one", "four", "three"}) {
 		t.Fatalf("after refill = %v, want [one four three] (four took the vacated position 2)", got)
+	}
+}
+
+// TestAssignRefusesAtCapacity proves AssignRole enforces capacity by an
+// explicit count, not merely as a side effect of a position collision:
+// filling a role to its declared capacity refuses the next assign with a
+// message naming the role and the cap, not "that position is already
+// taken". An existing occupant of a full role stays idempotent.
+func TestAssignRefusesAtCapacity(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	typedSlotSystem(t, ctx, gw, all, "capacity-full-sys")
+	cap2 := 2
+	if _, err := gw.SetSystemRole(ctx, "", "system", "capacity-full-sys", storage.SystemRoleSpec{
+		Name: "table-mic", DisplayName: "Table Mic", Quorum: 1, AcceptedTypes: []string{"video-bar"}, Capacity: &cap2,
+	}); err != nil {
+		t.Fatalf("declare role: %v", err)
+	}
+	newBarInto(t, ctx, gw, all, "one")
+	newBarInto(t, ctx, gw, all, "two")
+	newBarInto(t, ctx, gw, all, "three")
+	if err := gw.AssignRole(ctx, "", "capacity-full-sys", "table-mic", "one", all); err != nil {
+		t.Fatalf("assign one: %v", err)
+	}
+	if err := gw.AssignRole(ctx, "", "capacity-full-sys", "table-mic", "two", all); err != nil {
+		t.Fatalf("assign two: %v", err)
+	}
+
+	err = gw.AssignRole(ctx, "", "capacity-full-sys", "table-mic", "three", all)
+	var full *storage.CapacityFullShortfall
+	if !errors.As(err, &full) {
+		t.Fatalf("assign past capacity: err = %v, want CapacityFullShortfall", err)
+	}
+	if full.Role != "Table Mic" || full.System != "capacity-full-sys" || full.Have != 2 || full.Capacity != 2 {
+		t.Fatalf("shortfall = %+v, want Table Mic in capacity-full-sys full at 2 of 2", full)
+	}
+	if !strings.Contains(err.Error(), "Table Mic") || !strings.Contains(err.Error(), "2") {
+		t.Fatalf("shortfall message = %q, want it to name the role and the cap", err.Error())
+	}
+
+	// The role stays idempotent for its existing occupants even while full.
+	if err := gw.AssignRole(ctx, "", "capacity-full-sys", "table-mic", "one", all); err != nil {
+		t.Fatalf("re-assign an existing occupant of a full role: %v, want idempotent success", err)
+	}
+
+	roles, err := gw.EffectiveRoles(ctx, "capacity-full-sys", all)
+	if err != nil {
+		t.Fatalf("effective roles: %v", err)
+	}
+	if got := assignedTo(t, roles, "table-mic"); !sameSeq(got, []string{"one", "two"}) {
+		t.Fatalf("assigned after the refused overfill = %v, want still [one two]", got)
+	}
+}
+
+// TestLoweringCapacityThenAssigningIsRefused drives the exact sequence the
+// review found unenforced: assign three, vacate the middle one (leaving a
+// gap below the position an eventual cap would sit at), lower capacity to
+// something the remaining row count already satisfies, then attempt one
+// more assign. The lowering itself must succeed (two rows fit a cap of
+// two: SetSystemRole's pre-check and AssignRole's now both count
+// assignment rows for the role, the same count, since a component fills a
+// system_role_assignment row at most once per role and every row carries a
+// unique, NOT NULL position, so rows, occupants, and occupied positions are
+// the same number here). The next assign must not silently land in the
+// vacated gap and push the role to three occupants against a declared
+// capacity of two.
+func TestLoweringCapacityThenAssigningIsRefused(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	declareTableMic(t, ctx, gw, all, "capacity-bypass-sys", 1) // no capacity yet
+	for _, name := range []string{"one", "two", "three", "four"} {
+		newBarInto(t, ctx, gw, all, name)
+	}
+	for _, name := range []string{"one", "two", "three"} {
+		if err := gw.AssignRole(ctx, "", "capacity-bypass-sys", "table-mic", name, all); err != nil {
+			t.Fatalf("assign %s: %v", name, err)
+		}
+	}
+	// two held position 2; vacate it, leaving a gap below where the new cap
+	// will sit.
+	if err := gw.UnassignRole(ctx, "", "capacity-bypass-sys", "table-mic", "two", all); err != nil {
+		t.Fatalf("unassign two: %v", err)
+	}
+
+	// Lowering to 2 succeeds: two rows (one, three) fit a cap of two.
+	cap2 := 2
+	if _, err := gw.SetSystemRole(ctx, "", "system", "capacity-bypass-sys", storage.SystemRoleSpec{
+		Name: "table-mic", DisplayName: "Table Mic", Quorum: 1, AcceptedTypes: []string{"video-bar"}, Capacity: &cap2,
+	}); err != nil {
+		t.Fatalf("lower capacity to 2: %v, want success (2 rows fit a cap of 2)", err)
+	}
+
+	// The bypass: without an explicit capacity check, the next assign finds
+	// the vacated position 2 free (it is within the new bound
+	// least(capacity=2, count+1=3)=2) and would insert there, landing at 3
+	// occupants against a declared capacity of 2 with no error.
+	err = gw.AssignRole(ctx, "", "capacity-bypass-sys", "table-mic", "four", all)
+	var full *storage.CapacityFullShortfall
+	if !errors.As(err, &full) {
+		t.Fatalf("assign a fourth component after lowering capacity to 2: err = %v, want CapacityFullShortfall", err)
+	}
+	if full.Have != 2 || full.Capacity != 2 {
+		t.Fatalf("shortfall = %+v, want 2 of 2", full)
+	}
+
+	roles, err := gw.EffectiveRoles(ctx, "capacity-bypass-sys", all)
+	if err != nil {
+		t.Fatalf("effective roles: %v", err)
+	}
+	if got := assignedTo(t, roles, "table-mic"); !sameSeq(got, []string{"one", "three"}) {
+		t.Fatalf("assigned after the refused overfill = %v, want still [one three]", got)
 	}
 }

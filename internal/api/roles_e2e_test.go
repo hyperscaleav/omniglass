@@ -321,7 +321,7 @@ func TestSwapPositionsAndCapacityRefusalsAPI(t *testing.T) {
 	}
 
 	c.do(ownerTok, http.MethodPost, "/systems/swap-api-sys/roles/table-mic:swapPositions",
-		map[string]any{"a": 1, "b": 2}, http.StatusNoContent)
+		map[string]any{"position": 1, "with": 2}, http.StatusNoContent)
 	if got := read().find(t, "table-mic").AssignedTo; got[0] != "alpha" || got[1] != "zeta" {
 		t.Fatalf("assigned_to after swap = %v, want [alpha zeta]", got)
 	}

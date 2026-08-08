@@ -188,8 +188,11 @@ type swapRolePositionsInput struct {
 	Name string `path:"name" doc:"The system's unique name"`
 	Role string `path:"role" doc:"The role name"`
 	Body struct {
-		A int `json:"a" minimum:"1" doc:"One of the two positions to exchange"`
-		B int `json:"b" minimum:"1" doc:"The other position to exchange with"`
+		// Named position/with, not a/b: a and b generate CLI flags --a and
+		// --b, which say nothing about what they take (cligen derives a
+		// flag per body field, so the field name IS the flag name).
+		Position int `json:"position" minimum:"1" doc:"One of the two positions to exchange"`
+		With     int `json:"with" minimum:"1" doc:"The other position to exchange with"`
 	}
 }
 
@@ -347,10 +350,11 @@ func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Summary:       "Exchange two occupants' positions within a role",
 		Description:   "Exchanges the positions of whichever components currently hold positions a and b within this role: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
 	}, "system", "update"), func(ctx context.Context, in *swapRolePositionsInput) (*struct{}, error) {
-		if err := requireSystemInScope(ctx, a, gw, in.Name); err != nil {
-			return nil, err
-		}
-		if err := gw.SwapPositions(ctx, actorID(ctx), in.Name, in.Role, in.Body.A, in.Body.B,
+		// No requireSystemInScope here: unlike set/delete-system-role,
+		// SwapPositions takes a scope argument and resolves it itself
+		// (ownerInScope, the same as AssignRole and UnassignRole), so a
+		// second check ahead of it would only duplicate the gate.
+		if err := gw.SwapPositions(ctx, actorID(ctx), in.Name, in.Role, in.Body.Position, in.Body.With,
 			a.scopeFor(ctx, "system", "update")); err != nil {
 			return nil, mapRoleErr(err)
 		}
@@ -433,6 +437,12 @@ func mapRoleErr(err error) error {
 		return huma.Error409Conflict(fmt.Sprintf(
 			"role %q in system %q is filled by %d components; capacity cannot be lowered to %d",
 			capShort.Role, capShort.System, capShort.Have, capShort.Want))
+	}
+	var capFull *storage.CapacityFullShortfall
+	if errors.As(err, &capFull) {
+		return huma.Error409Conflict(fmt.Sprintf(
+			"role %q in system %q already holds %d of its %d-component capacity",
+			capFull.Role, capFull.System, capFull.Have, capFull.Capacity))
 	}
 	switch {
 	case errors.Is(err, storage.ErrEntityNameIsUUID):

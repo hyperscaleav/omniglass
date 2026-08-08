@@ -5210,30 +5210,30 @@ func generatedCommands() []*cobra.Command {
 			}())
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
-					var fA string
-					var fB string
+					var fPosition string
+					var fWith string
 					cmd := &cobra.Command{
 						Use:     "swapPositions <name> <role>",
 						Short:   "Exchange two occupants' positions within a role",
 						Long:    "Exchanges the positions of whichever components currently hold positions a and b within this role: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
-						Example: "  omniglass system role swapPositions <name> <role> --a a --b b",
+						Example: "  omniglass system role swapPositions <name> <role> --position position --with with",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/systems/%s/roles/%s:swapPositions", url.PathEscape(args[0]), url.PathEscape(args[1]))
 							body := map[string]any{}
-							if cmd.Flags().Changed("a") {
-								body["a"] = jsonOrString(fA)
+							if cmd.Flags().Changed("position") {
+								body["position"] = jsonOrString(fPosition)
 							}
-							if cmd.Flags().Changed("b") {
-								body["b"] = jsonOrString(fB)
+							if cmd.Flags().Changed("with") {
+								body["with"] = jsonOrString(fWith)
 							}
 							return runAPICommand(cmd, "POST", path, body)
 						},
 					}
-					cmd.Flags().StringVar(&fA, "a", "", "One of the two positions to exchange")
-					_ = cmd.MarkFlagRequired("a")
-					cmd.Flags().StringVar(&fB, "b", "", "The other position to exchange with")
-					_ = cmd.MarkFlagRequired("b")
+					cmd.Flags().StringVar(&fPosition, "position", "", "One of the two positions to exchange")
+					_ = cmd.MarkFlagRequired("position")
+					cmd.Flags().StringVar(&fWith, "with", "", "The other position to exchange with")
+					_ = cmd.MarkFlagRequired("with")
 					return cmd
 				}()
 				return cmd

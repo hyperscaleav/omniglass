@@ -181,6 +181,28 @@ func (e *CapacityShortfall) Error() string {
 		e.Role, e.System, e.Have, e.Want)
 }
 
+// CapacityFullShortfall is the assignment refusal when a role already holds
+// as many components as its declared capacity allows. It is checked
+// explicitly, before a position is even computed, rather than left to
+// emerge from a position collision: a collision only reliably happens when
+// positions are contiguous from 1 to capacity, and even then it names a
+// position, not the cap, leaving an operator to go move an occupant that
+// was never the problem. A gap below capacity (an unassign, or a capacity
+// lowered below the row count that created it) lets the position search
+// find a free slot within the gap and silently exceed the cap instead of
+// colliding at all, so the explicit count is the only reliable enforcement.
+type CapacityFullShortfall struct {
+	Role     string
+	System   string
+	Have     int
+	Capacity int
+}
+
+func (e *CapacityFullShortfall) Error() string {
+	return fmt.Sprintf("storage: role %q in system %q already holds %d of its %d-component capacity",
+		e.Role, e.System, e.Have, e.Capacity)
+}
+
 // EffectiveRoles resolves the roles a system needs filled: those its standard
 // declares (inherited) plus those declared directly on it (ad-hoc), each with
 // its typed-slot requirement and current assignments. A one-off system has
@@ -347,6 +369,37 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 		return fmt.Errorf("storage: check existing staffing %s/%s: %w", systemName, componentName, err)
 	default:
 		return &ComponentStaffedShortfall{Component: componentName, HeldRole: heldRole, System: systemName}
+	}
+
+	// Capacity is enforced here explicitly, counting assignment rows for
+	// this (system, role): with a component fully staffed at most once per
+	// system (the constraint above) and its position column unique per
+	// (system, role, position) and NOT NULL, a row, an occupied position,
+	// and a distinct component all count the same thing here, so this is
+	// the same count SetSystemRole's lowering pre-check already makes.
+	// Skipped when the component already holds this exact role, so a full
+	// role's existing occupants stay idempotent.
+	var alreadyHere bool
+	if err := tx.QueryRow(ctx, `select exists (
+		select 1 from system_role_assignment
+		 where system_id = (select id from system where name = $1)
+		   and role_id = $2 and component_id = (select id from component where name = $3))`,
+		systemName, roleID, componentName).Scan(&alreadyHere); err != nil {
+		return fmt.Errorf("storage: check existing assignment %s/%s: %w", systemName, roleID, err)
+	}
+	if !alreadyHere {
+		var capacity *int
+		var have int
+		if err := tx.QueryRow(ctx, `
+			select r.capacity, (
+				select count(*) from system_role_assignment ra
+				 where ra.system_id = (select id from system where name = $1) and ra.role_id = $2
+			) from system_role r where r.id = $2`, systemName, roleID).Scan(&capacity, &have); err != nil {
+			return fmt.Errorf("storage: role capacity check %s/%s: %w", systemName, roleID, err)
+		}
+		if capacity != nil && have >= *capacity {
+			return &CapacityFullShortfall{Role: roleDisplay, System: systemName, Have: have, Capacity: *capacity}
+		}
 	}
 
 	// Staffing a role IS membership, so the binding is created here rather than

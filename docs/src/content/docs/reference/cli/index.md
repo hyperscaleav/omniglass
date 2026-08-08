@@ -4107,13 +4107,13 @@ Exchanges the positions of whichever components currently hold positions a and b
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--a` | string | (none) | One of the two positions to exchange |
-| `--b` | string | (none) | The other position to exchange with |
+| `--position` | string | (none) | One of the two positions to exchange |
+| `--with` | string | (none) | The other position to exchange with |
 
 Example:
 
 ```sh
-omniglass system role swapPositions <name> <role> --a a --b b
+omniglass system role swapPositions <name> <role> --position position --with with
 ```
 
 #### `omniglass system role update`

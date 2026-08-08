@@ -4944,19 +4944,19 @@ components:
           format: uri
           readOnly: true
           type: string
-        a:
+        position:
           description: One of the two positions to exchange
           format: int64
           minimum: 1
           type: integer
-        b:
+        with:
           description: The other position to exchange with
           format: int64
           minimum: 1
           type: integer
       required:
-        - a
-        - b
+        - position
+        - with
       type: object
     SystemBody:
       additionalProperties: false
