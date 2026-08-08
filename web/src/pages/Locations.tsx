@@ -210,7 +210,10 @@ export default function Locations() {
     if (!confirm(`Delete location "${n.raw.name}"?`)) return;
     setErr(null);
     try {
-      await deleteLocation(n.raw.name);
+      // Addressed by uuid (#627 review finding 1): a duplicate-named location
+      // (legal under different parents, #627 Task 10) is otherwise a 409
+      // (ErrAmbiguousName) on a bare-name address.
+      await deleteLocation(n.raw.id);
       await qc.invalidateQueries({ queryKey: LOCATIONS_KEY });
       navigate("/locations");
     } catch (e) {
@@ -308,7 +311,8 @@ export default function Locations() {
         const renamed = name().trim() !== n().raw.name;
         const moved = canMove() && parentName() !== initialParentName();
         try {
-          await updateLocation(n().raw.name, {
+          // Addressed by uuid (#627 review finding 1): see del() above.
+          await updateLocation(n().raw.id, {
             display_name: display() || undefined,
             location_type: type() || undefined,
           });
@@ -319,7 +323,7 @@ export default function Locations() {
           // refusable (a cycle, a placement-type mismatch, or a name collision at
           // the destination the advisory precheck cannot rule out), the same
           // reasoning that already puts rename last below.
-          if (moved) await moveLocation(n().raw.name, parentName());
+          if (moved) await moveLocation(n().raw.id, parentName());
           // The rename is a third call and it goes LAST, because it is the one that
           // can be refused on its own: it needs <resource>:rename, and a duplicate
           // name is a 409 the advisory :checkName precheck cannot rule out. Doing it
@@ -333,7 +337,7 @@ export default function Locations() {
           // No hand-off navigate after a rename (#627 Task 15c): see
           // Components.tsx's own save() for why (the route carries the id,
           // which a rename never changes).
-          if (renamed) await renameLocation(n().raw.name, name().trim());
+          if (renamed) await renameLocation(n().raw.id, name().trim());
         } catch (e) {
           setSaveErr(describeError(e));
           throw e; // keep the slot in edit mode so the operator can retry
@@ -469,7 +473,13 @@ export default function Locations() {
           </div>
         </Show>
 
-        {/* The rollup: a location has no roles of its own, so its verdict is the
+        {/* Every panel below (except onOpenSystem) is addressed by the
+            location's uuid (#627 review finding 1), not its name: two
+            locations can legally share a name under different parents (#627
+            Task 10), and each of these routes dual-accepts uuid-or-name
+            (ADR-0062) but refuses an ambiguous bare name with a 409.
+
+            The rollup: a location has no roles of its own, so its verdict is the
             worst among the systems placed anywhere beneath it, each linked to the
             detail that can say why.
 
@@ -478,7 +488,7 @@ export default function Locations() {
             Systems.tsx's own onOpenComponent comment for why this is left
             as-is (TreeList's byAddr fallback resolves it). */}
         <LocationHealthPanel
-          location={n().raw.name}
+          location={n().raw.id}
           onOpenSystem={(name) => navigate(`/systems/${encodeURIComponent(name)}`)}
         />
 
@@ -486,12 +496,12 @@ export default function Locations() {
             values. The panel batches its writes into the accordion's Save, so a
             property override commits with the location's core facts. */}
         <PropertiesPanel
-          location={n().raw.name}
+          location={n().raw.id}
           edit={edit}
-          onOpen={(property) => ctx.openBlade({ kind: "property-resolution", id: ownerPropertyBladeId({ kind: "location", name: n().raw.name }, property) })}
+          onOpen={(property) => ctx.openBlade({ kind: "property-resolution", id: ownerPropertyBladeId({ kind: "location", name: n().raw.id }, property) })}
         />
 
-        <TagAdder kind="location" name={n().raw.name} canUpdate={editing() && can(me.data, "location", "update")} canCreateKey={can(me.data, "tag", "create")} />
+        <TagAdder kind="location" name={n().raw.id} canUpdate={editing() && can(me.data, "location", "update")} canCreateKey={can(me.data, "tag", "create")} />
 
         <Show when={ctx.full}>
           <div class="flex flex-wrap items-center gap-2 border-t border-base-300 pt-4">

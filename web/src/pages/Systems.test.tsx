@@ -38,10 +38,12 @@ function mount(path: string) {
   qc.setQueryData([...LOCATIONS_KEY], []);
   qc.setQueryData([...COMPONENTS_KEY], []);
   qc.setQueryData([...STANDARDS_KEY], standards);
-  qc.setQueryData([...ownerPropertiesKey("system", "boardroom")], properties);
+  // Keyed by uuid (#627 review finding 1): the detail page's panels now
+  // address by sys.id, not sys.name.
+  qc.setQueryData([...ownerPropertiesKey("system", sys.id)], properties);
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...TAGS_KEY], []);
-  qc.setQueryData([...entityTagsKey("system", "boardroom")], []);
+  qc.setQueryData([...entityTagsKey("system", sys.id)], []);
   window.history.pushState({}, "", path);
   return render(() => (
     <QueryClientProvider client={qc}>
@@ -133,10 +135,10 @@ describe("Systems create-as-route", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const { method, url } = req;
-      if (method === "PATCH" && url.includes("/systems/boardroom")) {
+      if (method === "PATCH" && url.includes(`/systems/${sys.id}`)) {
         return new Response(JSON.stringify(sys), { status: 200, headers: { "Content-Type": "application/json" } });
       }
-      if (method === "POST" && url.includes("/systems/boardroom:rename")) {
+      if (method === "POST" && url.includes(`/systems/${sys.id}:rename`)) {
         return new Response(JSON.stringify({ ...sys, name: "exec-boardroom" }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
       if (method === "GET") {
@@ -154,6 +156,78 @@ describe("Systems create-as-route", () => {
     expect(await screen.findByText(/No such system/)).toBeTruthy();
     expect(screen.getByText(/old address/)).toBeTruthy();
     expect(screen.queryByText("Boardroom")).toBeNull();
+  });
+
+  // Review finding 1 (task-15-review.md #3): two systems sharing a name in
+  // different placements is #627's own legal default outcome (#627 Task 10),
+  // and the URL already carries the uuid, but the detail page's writes must
+  // not fall back to n().raw.name (ErrAmbiguousName, mapped to a 409).
+  it("addresses every write on the detail page by uuid, not by name, so a duplicate-named system stays editable", async () => {
+    const twinA: System = { ...sys, id: uuidFor("s-twin-a"), name: "twin", location: "room-a", location_id: uuidFor("loc-room-a") };
+    const twinB: System = { ...sys, id: uuidFor("s-twin-b"), name: "twin", location: "room-b", location_id: uuidFor("loc-room-b") };
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...SYSTEMS_KEY], [twinA, twinB]);
+    qc.setQueryData([...LOCATIONS_KEY], []);
+    qc.setQueryData([...COMPONENTS_KEY], []);
+    qc.setQueryData([...STANDARDS_KEY], standards);
+    qc.setQueryData([...ownerPropertiesKey("system", twinA.id)], []);
+    qc.setQueryData([...ME_KEY], me);
+    qc.setQueryData([...TAGS_KEY], []);
+    qc.setQueryData([...entityTagsKey("system", twinA.id)], []);
+    window.history.pushState({}, "", `/systems/${twinA.id}`);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="/systems" component={Systems} />
+          <Route path="/systems/:id" component={Systems} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    const nameInput = (await screen.findByDisplayValue("twin")) as HTMLInputElement;
+    fireEvent.input(nameInput, { target: { value: "twin-renamed" } });
+    const seen: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const { method, url } = req;
+      if (method === "PATCH" && url.includes(`/systems/${twinA.id}`)) {
+        seen.push("patch");
+        return new Response(JSON.stringify(twinA), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (method === "POST" && url.includes(`/systems/${twinA.id}:rename`)) {
+        seen.push("rename");
+        return new Response(JSON.stringify({ ...twinA, name: "twin-renamed" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (method === "GET") {
+        return new Response(JSON.stringify({ systems: [twinA, twinB] }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${method} ${url}`);
+    });
+    fireEvent.click(screen.getByText("Save changes"));
+    // Wait for the save to fully resolve (edit mode exits), not just for the
+    // fetch calls to have fired: the accordion's own save() still has an
+    // awaited invalidateQueries after the rename resolves, so checking seen
+    // alone races the view/edit mode switch the Delete button depends on.
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    expect(seen).toContain("patch");
+    expect(seen).toContain("rename");
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const { method, url } = req;
+      if (method === "DELETE" && url.includes(`/systems/${twinA.id}`)) {
+        seen.push("delete");
+        return new Response(null, { status: 204 });
+      }
+      if (method === "GET") {
+        return new Response(JSON.stringify({ systems: [twinB] }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${method} ${url}`);
+    });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    fireEvent.click(screen.getByText("Delete"));
+    await waitFor(() => expect(seen).toContain("delete"));
   });
 });
 
@@ -272,7 +346,9 @@ describe("Systems properties panel", () => {
     await waitFor(() => {
       const put = calls.find((c) => c.method === "PUT");
       expect(put).toBeTruthy();
-      expect(put!.url).toContain("/systems/boardroom/properties/seat_count");
+      // Addressed by uuid (#627 review finding 1), not the name the route
+      // used to carry.
+      expect(put!.url).toContain(`/systems/${sys.id}/properties/seat_count`);
       expect(JSON.parse(put!.body)).toEqual({ value: 8 }); // coerced to its data_type
     });
   });

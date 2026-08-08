@@ -46,12 +46,12 @@ function mount(path: string, extraLocations: Location[] = []) {
   qc.setQueryData([...LOCATION_TYPES_KEY], types);
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...TAGS_KEY], []);
-  qc.setQueryData([...entityTagsKey("location", "hq")], []);
-  qc.setQueryData([...entityTagsKey("location", "hq-b1")], []);
-  for (const l of extraLocations) qc.setQueryData([...entityTagsKey("location", l.name)], []);
+  // Keyed by uuid (#627 review finding 1): the detail page's panels now
+  // address by the location's id, not its name.
+  for (const l of all) qc.setQueryData([...entityTagsKey("location", l.id)], []);
   // Seed every location's effective properties so the detail's panel resolves
   // from cache (the tests that fake fetch refuse any request they did not expect).
-  for (const l of all) qc.setQueryData([...ownerPropertiesKey("location", l.name)], l.name === "hq" ? hqProperties : []);
+  for (const l of all) qc.setQueryData([...ownerPropertiesKey("location", l.id)], l.name === "hq" ? hqProperties : []);
   window.history.pushState({}, "", path);
   return render(() => (
     <QueryClientProvider client={qc}>
@@ -152,12 +152,13 @@ describe("Locations create-as-route", () => {
       const req = input as Request;
       const method = req.method;
       const url = req.url;
-      if (method === "PATCH" && url.includes("/locations/b2")) {
+      if (method === "PATCH" && url.includes(`/locations/${b2.id}`)) {
         return new Response(JSON.stringify(b2), { status: 200, headers: { "Content-Type": "application/json" } });
       }
-      // The move is its own call, POST .../{name}:move, not a PATCH field
-      // (#627): placement left the patch body entirely.
-      if (method === "POST" && url.includes("/locations/b2:move")) {
+      // The move is its own call, POST .../{id}:move, not a PATCH field
+      // (#627): placement left the patch body entirely. Addressed by uuid
+      // (#627 review finding 1), not the name the route used to carry.
+      if (method === "POST" && url.includes(`/locations/${b2.id}:move`)) {
         captured = JSON.parse(await req.clone().text());
         return new Response(JSON.stringify({ ...b2, parent: "hq" }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
@@ -180,10 +181,10 @@ describe("Locations create-as-route", () => {
       const req = input as Request;
       const method = req.method;
       const url = req.url;
-      if (method === "PATCH" && url.includes("/locations/hq-b1")) {
+      if (method === "PATCH" && url.includes(`/locations/${hqB1.id}`)) {
         return new Response(JSON.stringify(hqB1), { status: 200, headers: { "Content-Type": "application/json" } });
       }
-      if (method === "POST" && url.includes("/locations/hq-b1:move")) {
+      if (method === "POST" && url.includes(`/locations/${hqB1.id}:move`)) {
         return new Response(JSON.stringify({ detail: "building may not be placed under campus lab" }), { status: 422, headers: { "Content-Type": "application/json" } });
       }
       throw new Error(`unexpected fetch in this test: ${method} ${url}`);
@@ -301,10 +302,10 @@ describe("Locations create-as-route", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const { method, url } = req;
-      if (method === "PATCH" && url.includes("/locations/hq")) {
+      if (method === "PATCH" && url.includes(`/locations/${hq.id}`)) {
         return new Response(JSON.stringify(hq), { status: 200, headers: { "Content-Type": "application/json" } });
       }
-      if (method === "POST" && url.includes("/locations/hq:rename")) {
+      if (method === "POST" && url.includes(`/locations/${hq.id}:rename`)) {
         return new Response(JSON.stringify({ ...hq, name: "headquarters" }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
       if (method === "GET") {
@@ -328,6 +329,76 @@ describe("Locations create-as-route", () => {
     expect(screen.getByText(/old address/)).toBeTruthy();
     // Not the pre-15c behavior: the unfiltered list is not what renders.
     expect(screen.queryByText("HQ")).toBeNull();
+  });
+
+  // Review finding 1 (task-15-review.md #3): two locations sharing a name
+  // under different parents is #627's own legal default outcome (#627 Task
+  // 10), and the URL already carries the uuid, but the detail page's writes
+  // must not fall back to n().raw.name (ErrAmbiguousName, mapped to a 409).
+  it("addresses every write on the detail page by uuid, not by name, so a duplicate-named location stays editable", async () => {
+    const twinA: Location = { id: uuidFor("l-twin-a"), name: "twin", location_type: "room", parent: "hq-b1", parent_id: hqB1.id, effective_tags: {} };
+    const twinB: Location = { id: uuidFor("l-twin-b"), name: "twin", location_type: "room", parent: "lab", parent_id: lab.id, effective_tags: {} };
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...LOCATIONS_KEY], [hq, lab, hqB1, twinA, twinB]);
+    qc.setQueryData([...LOCATION_TYPES_KEY], types);
+    qc.setQueryData([...ME_KEY], me);
+    qc.setQueryData([...TAGS_KEY], []);
+    qc.setQueryData([...entityTagsKey("location", twinA.id)], []);
+    qc.setQueryData([...ownerPropertiesKey("location", twinA.id)], []);
+    window.history.pushState({}, "", `/locations/${twinA.id}`);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="/locations" component={Locations} />
+          <Route path="/locations/:id" component={Locations} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    const nameInput = (await screen.findByDisplayValue("twin")) as HTMLInputElement;
+    fireEvent.input(nameInput, { target: { value: "twin-renamed" } });
+    const seen: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const { method, url } = req;
+      if (method === "PATCH" && url.includes(`/locations/${twinA.id}`)) {
+        seen.push("patch");
+        return new Response(JSON.stringify(twinA), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (method === "POST" && url.includes(`/locations/${twinA.id}:rename`)) {
+        seen.push("rename");
+        return new Response(JSON.stringify({ ...twinA, name: "twin-renamed" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (method === "GET") {
+        return new Response(JSON.stringify({ locations: [hq, lab, hqB1, twinA, twinB] }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${method} ${url}`);
+    });
+    fireEvent.click(screen.getByText("Save changes"));
+    // Wait for the save to fully resolve (edit mode exits), not just for the
+    // fetch calls to have fired: the accordion's own save() still has an
+    // awaited invalidateQueries after the rename resolves, so checking seen
+    // alone races the view/edit mode switch the Delete button depends on.
+    await waitFor(() => expect(screen.queryByLabelText("Check name")).toBeNull());
+    expect(seen).toContain("patch");
+    expect(seen).toContain("rename");
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const { method, url } = req;
+      if (method === "DELETE" && url.includes(`/locations/${twinA.id}`)) {
+        seen.push("delete");
+        return new Response(null, { status: 204 });
+      }
+      if (method === "GET") {
+        return new Response(JSON.stringify({ locations: [hq, lab, hqB1, twinB] }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${method} ${url}`);
+    });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    fireEvent.click(screen.getByText("Delete"));
+    await waitFor(() => expect(seen).toContain("delete"));
   });
 });
 
@@ -386,7 +457,9 @@ describe("Locations properties panel", () => {
     await waitFor(() => {
       const put = calls.find((c) => c.method === "PUT");
       expect(put).toBeTruthy();
-      expect(put!.url).toContain("/locations/hq/properties/site.timezone");
+      // Addressed by uuid (#627 review finding 1), not the name the route
+      // used to carry.
+      expect(put!.url).toContain(`/locations/${hq.id}/properties/site.timezone`);
       expect(JSON.parse(put!.body)).toEqual({ value: "America/Denver" });
     });
   });

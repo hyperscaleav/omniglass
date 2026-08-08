@@ -105,19 +105,23 @@ describe("ReachabilityPanel", () => {
 // The panel doubles as the component's Interfaces management surface: it shows an
 // "Add interface" header affordance and a per-row "Manage" affordance ONLY when the
 // component detail passes their callbacks (which it gates on interface:create /
-// interface:read). A row maps to its interface id via the seeded interfaces list.
+// interface:read). A row maps to its interface id via the seeded interfaces list,
+// matched by component_id (#627): the console addresses this panel by the
+// component's uuid now (two components can share a name, ADR-0062), so the
+// interfaces list is matched on component_id, not the component name.
+const compId = uuidFor("comp-disp-1");
 const ifaceSeed: Interface[] = [
-  { id: uuidFor("if-1"), name: "disp-1-tcp", interface_type: "tcp", component: "disp-1" },
-  { id: uuidFor("if-2"), name: "disp-1-icmp", interface_type: "icmp", component: "disp-1" },
+  { id: uuidFor("if-1"), name: "disp-1-tcp", interface_type: "tcp", component: "disp-1", component_id: compId },
+  { id: uuidFor("if-2"), name: "disp-1-icmp", interface_type: "icmp", component: "disp-1", component_id: compId },
 ];
 
 function mountManaged(opts: { onAdd?: () => void; onOpenInterface?: (id: string) => void }) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  qc.setQueryData([...REACHABILITY_KEY(seed.component)], seed);
+  qc.setQueryData([...REACHABILITY_KEY(compId)], seed);
   qc.setQueryData([...INTERFACES_KEY], ifaceSeed);
   return render(() => (
     <QueryClientProvider client={qc}>
-      <ReachabilityPanel name={seed.component} onAdd={opts.onAdd} onOpenInterface={opts.onOpenInterface} />
+      <ReachabilityPanel name={compId} onAdd={opts.onAdd} onOpenInterface={opts.onOpenInterface} />
     </QueryClientProvider>
   ));
 }

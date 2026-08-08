@@ -137,7 +137,10 @@ export default function Systems() {
     if (!confirm(`Delete system "${n.raw.name}"?`)) return;
     setErr(null);
     try {
-      await deleteSystem(n.raw.name);
+      // Addressed by uuid (#627 review finding 1): a duplicate-named system
+      // (legal under different placements, #627 Task 10) is otherwise a
+      // 409 (ErrAmbiguousName) on a bare-name address.
+      await deleteSystem(n.raw.id);
       await qc.invalidateQueries({ queryKey: SYSTEMS_KEY });
       navigate("/systems");
     } catch (e) {
@@ -188,7 +191,8 @@ export default function Systems() {
         setSaveErr(null);
         const renamed = name().trim() !== n().raw.name;
         try {
-          await updateSystem(n().raw.name, {
+          // Addressed by uuid (#627 review finding 1): see del() above.
+          await updateSystem(n().raw.id, {
             display_name: display() || undefined,
             // Send the empty string rather than dropping the key: the API reads ""
             // as "clear", which is how the operator converts this system back to a
@@ -208,7 +212,7 @@ export default function Systems() {
           // No hand-off navigate after a rename (#627 Task 15c): see
           // Components.tsx's own save() for why (the route carries the id,
           // which a rename never changes).
-          if (renamed) await renameSystem(n().raw.name, name().trim());
+          if (renamed) await renameSystem(n().raw.id, name().trim());
         } catch (e) {
           setSaveErr(describeError(e));
           throw e; // keep the slot in edit mode so the operator can retry
@@ -338,6 +342,13 @@ export default function Systems() {
         </Show>
 
 
+        {/* Every panel below (except the two onOpenComponent callbacks) is
+            addressed by the system's uuid (#627 review finding 1), not its
+            name: two systems can legally share a name in different
+            placements (#627 Task 10), and each of these routes dual-accepts
+            uuid-or-name (ADR-0062) but refuses an ambiguous bare name with a
+            409. */}
+
         {/* The verdict and its reconciliation: which roles are impaired, which
             assigned components went down, and which alarms took them down.
             It sits directly above the roles surface it reasons about, so "why is
@@ -350,7 +361,7 @@ export default function Systems() {
             redirects the URL to the id, an ambiguous or missing one gets an
             honest state instead of the old silent list fallback). */}
         <SystemHealthPanel
-          system={n().raw.name}
+          system={n().raw.id}
           onOpenComponent={(name) => navigate(`/components/${encodeURIComponent(name)}`)}
         />
 
@@ -361,7 +372,7 @@ export default function Systems() {
             onOpenComponent: see SystemHealthPanel's own comment above; membership
             (SystemMemberBody.component) is also name-only on the wire. */}
         <MembersPanel
-          system={n().raw.name}
+          system={n().raw.id}
           canUpdate={editing() && canUpdate()}
           onOpenComponent={(name) => navigate(`/components/${encodeURIComponent(name)}`)}
         />
@@ -370,18 +381,18 @@ export default function Systems() {
             properties are: what the standard declares plus what the system
             declares of its own. Assignment writes immediately (like tags), so its
             controls appear only in edit mode, which keeps view read-only. */}
-        <RolesPanel system={n().raw.name} canUpdate={editing() && canUpdate()} />
+        <RolesPanel system={n().raw.id} canUpdate={editing() && canUpdate()} />
 
         {/* The standard's contract, resolved against this system's own values.
             The panel batches its writes into the accordion's Save, so a property
             override commits with the system's core facts, not on its own. */}
         <PropertiesPanel
-          system={n().raw.name}
+          system={n().raw.id}
           edit={edit}
-          onOpen={(property) => ctx.openBlade({ kind: "property-resolution", id: ownerPropertyBladeId({ kind: "system", name: n().raw.name }, property) })}
+          onOpen={(property) => ctx.openBlade({ kind: "property-resolution", id: ownerPropertyBladeId({ kind: "system", name: n().raw.id }, property) })}
         />
 
-        <TagAdder kind="system" name={n().raw.name} canUpdate={editing() && canUpdate()} canCreateKey={can(me.data, "tag", "create")} />
+        <TagAdder kind="system" name={n().raw.id} canUpdate={editing() && canUpdate()} canCreateKey={can(me.data, "tag", "create")} />
 
         <Show when={ctx.full}>
           <div class="flex flex-wrap items-center gap-2 border-t border-base-300 pt-4">

@@ -162,7 +162,9 @@ export default function Components() {
     if (!confirm(`Delete component "${n.raw.name}"?`)) return;
     setErr(null);
     try {
-      await deleteComponent(n.raw.name);
+      // Addressed by uuid (#627 review finding 1): see the identity accordion's
+      // save() for why a bare name is not a safe address here.
+      await deleteComponent(n.raw.id);
       await qc.invalidateQueries({ queryKey: COMPONENTS_KEY });
       navigate("/components");
     } catch (e) {
@@ -210,7 +212,7 @@ export default function Components() {
       setResetting(true);
       setSaveErr(null);
       try {
-        const updated = await resetComponentName(n().raw.name);
+        const updated = await resetComponentName(n().raw.id);
         setName(updated.name);
         setNameCheck(null);
         await qc.invalidateQueries({ queryKey: COMPONENTS_KEY });
@@ -236,7 +238,13 @@ export default function Components() {
         setSaveErr(null);
         const renamed = name().trim() !== n().raw.name;
         try {
-          await updateComponent(n().raw.name, {
+          // Addressed by uuid (#627 review finding 1), not by name: two
+          // components can legally share a name in different placements
+          // (#627 Task 10), and the server's dual-accept (ADR-0062) refuses
+          // an ambiguous bare name with a 409, which is exactly what would
+          // happen here for the ordinary case of a room's first component
+          // (every room's first display is named "display-1").
+          await updateComponent(n().raw.id, {
             display_name: display() || undefined,
           });
           // The rename is a second call and it goes LAST, because it is the one that
@@ -255,7 +263,7 @@ export default function Components() {
           // /components/<newName> only existed because the URL used to
           // carry the name; under uuid addressing it would have sent a
           // just-saved operator from a valid URL to an unresolvable one.
-          if (renamed) await renameComponent(n().raw.name, name().trim());
+          if (renamed) await renameComponent(n().raw.id, name().trim());
         } catch (e) {
           setSaveErr(describeError(e));
           throw e; // keep the slot in edit mode so the operator can retry
@@ -417,9 +425,17 @@ export default function Components() {
             </div>
           </div>
         </Show>
+        {/* Every panel below is addressed by the component's uuid (#627 review
+            finding 1), not its name: two components can legally share a name
+            in different placements (#627 Task 10), and every one of these
+            routes dual-accepts uuid-or-name (ADR-0062) but refuses an
+            ambiguous bare name with a 409. Addressing by id is what keeps a
+            duplicate-named component's panels working rather than routinely
+            409ing, since a room's first component is always named
+            "display-1" (#627 Task 14's generator). */}
         <ReachabilityPanel
-          name={n().raw.name}
-          onAdd={can(me.data, "interface", "create") ? () => ctx.openBlade({ kind: "interface-create", id: n().raw.name }) : undefined}
+          name={n().raw.id}
+          onAdd={can(me.data, "interface", "create") ? () => ctx.openBlade({ kind: "interface-create", id: n().raw.id }) : undefined}
           onOpenInterface={can(me.data, "interface", "read") ? (id) => ctx.openBlade({ kind: "interface", id }) : undefined}
         />
         {/* What is wrong with this component, and how badly. This is where estate
@@ -427,24 +443,24 @@ export default function Components() {
             any role it fills stops counting it toward quorum while it stays
             down. Raising and clearing write immediately (like tags), so the
             controls appear only in edit mode, which keeps view read-only. */}
-        <AlarmsPanel component={n().raw.name} canUpdate={editing() && canUpdate()} />
-        <EventsPanel name={n().raw.name} />
-        <LogsPanel name={n().raw.name} />
+        <AlarmsPanel component={n().raw.id} canUpdate={editing() && canUpdate()} />
+        <EventsPanel name={n().raw.id} />
+        <LogsPanel name={n().raw.id} />
         {/* What we want vs what the device reports: the provenance pivot
             (declared/intended/observed) per property, with drift computed on the
             server. Read-only, and the teaching surface for reconciliation. */}
-        <ReconciliationPanel name={n().raw.name} />
+        <ReconciliationPanel name={n().raw.id} />
         {/* Why the tag values are what they are, and for a shared component,
             which system it is being asked about. The list's pills answer what;
             this answers why, which is the only question when one looks wrong. */}
-        <ResolutionPanel component={n().raw.name} />
+        <ResolutionPanel component={n().raw.id} />
         <PropertiesPanel
-          component={n().raw.name}
+          component={n().raw.id}
           edit={edit}
-          onOpen={(property) => ctx.openBlade({ kind: "property-resolution", id: propertyBladeId(n().raw.name, property) })}
+          onOpen={(property) => ctx.openBlade({ kind: "property-resolution", id: propertyBladeId(n().raw.id, property) })}
         />
 
-        <TagAdder kind="component" name={n().raw.name} canUpdate={editing() && canUpdate()} canCreateKey={can(me.data, "tag", "create")} />
+        <TagAdder kind="component" name={n().raw.id} canUpdate={editing() && canUpdate()} canCreateKey={can(me.data, "tag", "create")} />
 
         <Show when={ctx.full}>
           <div class="flex flex-wrap items-center gap-2 border-t border-base-300 pt-4">

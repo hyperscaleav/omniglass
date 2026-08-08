@@ -67,6 +67,9 @@ import {
 const IMPACT_BADGE: Record<string, string> = { outage: "badge-error", degraded: "badge-warning" };
 const impactBadgeClass = (impact: string) => IMPACT_BADGE[impact] ?? "badge-ghost";
 
+// props.system is the owning system's address (#627: the console addresses a
+// system by uuid now, since its name is scoped to placement, not reliably
+// unique; systemRoles/systemHealth dual-accept either, ADR-0062).
 export default function RolesPanel(props: { system: string; canUpdate: boolean }): JSX.Element {
   const qc = useQueryClient();
   const key = () => systemRolesKey(props.system);
@@ -122,12 +125,14 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
   const label = (c: Comp) => c.display_name || c.name;
   const candidates = (role: EffectiveRole): Comp[] => {
     const taken = new Set(role.assigned_to ?? []);
-    // Components whose primary is this system lead. Compared by NAME now that a
-    // component reports its primary system directly, with no uuid lookup.
+    // Components whose primary is this system lead, compared by system_id
+    // (#627: props.system is now the system's own uuid, and a component's
+    // system_id is the stable form of its primary system, unlike system,
+    // which is a name that can collide across placements).
     return [...(components.data ?? [])]
       .filter((c) => !taken.has(c.name))
       .sort((a, b) => {
-        const mine = Number(b.system === props.system) - Number(a.system === props.system);
+        const mine = Number(b.system_id === props.system) - Number(a.system_id === props.system);
         return mine || label(a).localeCompare(label(b));
       });
   };

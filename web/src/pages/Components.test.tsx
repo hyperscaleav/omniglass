@@ -270,7 +270,7 @@ describe("Components create-as-route", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const { method, url } = req;
-      if (method === "POST" && url.includes("/components/mic-2:resetName")) {
+      if (method === "POST" && url.includes(`/components/${comp.id}:resetName`)) {
         capturedMethod = method;
         return new Response(JSON.stringify({ ...comp, name: "ceiling-mic-1", name_generated: true }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
@@ -284,6 +284,111 @@ describe("Components create-as-route", () => {
     // The local draft reflects the server's own regenerated name immediately,
     // not just after a background refetch lands.
     expect(await screen.findByDisplayValue("ceiling-mic-1")).toBeTruthy();
+  });
+
+  // Review finding 1 (task-15-review.md #3): two components sharing a name in
+  // different rooms is #627's own default outcome (the first display in every
+  // room is named "display-1"), and the URL already carries the uuid (#627
+  // Task 15c), but every write on the detail page still addressed the server
+  // by n().raw.name. Against two same-named rows that is genuinely ambiguous
+  // (ErrAmbiguousName, mapped to a 409), so Save, Delete, and Reset all
+  // refused on exactly the row this task's own disambiguation chooser routes
+  // an operator to. This test names the two components identically and
+  // asserts every write (PATCH, :rename, :resetName, DELETE) targets the
+  // path-addressed component's uuid, never the shared name; it fails if any
+  // call site regresses to n().raw.name.
+  it("addresses every write on the detail page by uuid, not by name, so a duplicate-named component stays editable", async () => {
+    const twinA: Component = { ...comp, id: uuidFor("c-twin-a"), name: "twin", location: "room-a", location_id: uuidFor("loc-room-a") };
+    const twinB: Component = { ...comp, id: uuidFor("c-twin-b"), name: "twin", location: "room-b", location_id: uuidFor("loc-room-b") };
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...COMPONENTS_KEY], [twinA, twinB]);
+    qc.setQueryData([...SYSTEMS_KEY], []);
+    qc.setQueryData([...LOCATIONS_KEY], []);
+    qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...ME_KEY], me);
+    qc.setQueryData([...TAGS_KEY], []);
+    qc.setQueryData([...entityTagsKey("component", "twin")], []);
+    // The route already carries twinA's uuid (#627 Task 15c); the ambiguity
+    // is only in what the detail page's own writes address by, not in which
+    // row opens.
+    window.history.pushState({}, "", `/components/${twinA.id}`);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="/components" component={Components} />
+          <Route path="/components/:id" component={Components} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    const nameInput = (await screen.findByDisplayValue("twin")) as HTMLInputElement;
+    fireEvent.input(nameInput, { target: { value: "twin-renamed" } });
+    const seen: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const { method, url } = req;
+      if (method === "PATCH" && url.includes(`/components/${twinA.id}`)) {
+        seen.push("patch");
+        return new Response(JSON.stringify(twinA), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (method === "POST" && url.includes(`/components/${twinA.id}:rename`)) {
+        seen.push("rename");
+        return new Response(JSON.stringify({ ...twinA, name: "twin-renamed" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (method === "GET") {
+        return new Response(JSON.stringify({ components: [twinA, twinB] }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      // Anything addressed by the bare (ambiguous) name "twin" is exactly
+      // the bug: the server would refuse it with ErrAmbiguousName (409).
+      throw new Error(`unexpected fetch in this test: ${method} ${url}`);
+    });
+    fireEvent.click(screen.getByText("Save changes"));
+    // Wait for the save to fully resolve (edit mode exits), not just for the
+    // fetch calls to have fired: the accordion's own save() still has an
+    // awaited invalidateQueries after the rename resolves, so checking seen
+    // alone races the view/edit mode switch the next step depends on.
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    expect(seen).toContain("patch");
+    expect(seen).toContain("rename");
+
+    // Reset: its own immediate act, also uuid-addressed.
+    fireEvent.click(screen.getByText("Edit"));
+    await screen.findByLabelText("Reset to generated name");
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const { method, url } = req;
+      if (method === "POST" && url.includes(`/components/${twinA.id}:resetName`)) {
+        seen.push("reset");
+        return new Response(JSON.stringify({ ...twinA, name: "twin-1", name_generated: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (method === "GET") {
+        return new Response(JSON.stringify({ components: [twinA, twinB] }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${method} ${url}`);
+    });
+    fireEvent.click(screen.getByLabelText("Reset to generated name"));
+    await waitFor(() => expect(seen).toContain("reset"));
+    // Reset does not itself leave edit mode (it is not a Save); Cancel does,
+    // uncovering the view-mode footer Delete lives on.
+    fireEvent.click(screen.getByText("Cancel"));
+
+    // Delete: same requirement.
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const { method, url } = req;
+      if (method === "DELETE" && url.includes(`/components/${twinA.id}`)) {
+        seen.push("delete");
+        return new Response(null, { status: 204 });
+      }
+      if (method === "GET") {
+        return new Response(JSON.stringify({ components: [twinB] }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${method} ${url}`);
+    });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    fireEvent.click(screen.getByText("Delete"));
+    await waitFor(() => expect(seen).toContain("delete"));
   });
 
   // #627 Task 15c: routes take :id now. A name-shaped deep link (an old
@@ -301,10 +406,10 @@ describe("Components create-as-route", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const { method, url } = req;
-      if (method === "PATCH" && url.includes("/components/mic-2")) {
+      if (method === "PATCH" && url.includes(`/components/${comp.id}`)) {
         return new Response(JSON.stringify(comp), { status: 200, headers: { "Content-Type": "application/json" } });
       }
-      if (method === "POST" && url.includes("/components/mic-2:rename")) {
+      if (method === "POST" && url.includes(`/components/${comp.id}:rename`)) {
         return new Response(JSON.stringify({ ...comp, name: "mic-3" }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
       if (method === "GET") {
