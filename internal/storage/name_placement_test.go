@@ -83,8 +83,32 @@ func TestSameNameSameRoomRefused(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "kiosk", LocationName: strptr(room.Name)}, all); err != nil {
 		t.Fatalf("first kiosk: %v", err)
 	}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "kiosk", LocationName: strptr(room.Name)}, all); !errors.Is(err, storage.ErrComponentExists) {
-		t.Fatalf("second kiosk in same room = %v, want ErrComponentExists", err)
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "kiosk", LocationName: strptr(room.Name)}, all); !errors.Is(err, storage.ErrComponentExistsInLocation) {
+		t.Fatalf("second kiosk in same room = %v, want ErrComponentExistsInLocation", err)
+	}
+}
+
+// TestSameNameUnplacedRefused covers the last of the four component/system
+// buckets no other test's assertion is tight enough to pin:
+// component_orphan_name_key and system_orphan_name_key, WHERE parent_id IS
+// NULL AND location_id IS NULL. Two components (or systems) with neither a
+// parent nor a location still collide.
+func TestSameNameUnplacedRefused(t *testing.T) {
+	gw := openGateway(t)
+	ctx := context.Background()
+
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "spare"}, all); err != nil {
+		t.Fatalf("first spare component: %v", err)
+	}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "spare"}, all); !errors.Is(err, storage.ErrComponentExistsUnplaced) {
+		t.Fatalf("second unplaced spare component = %v, want ErrComponentExistsUnplaced", err)
+	}
+
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "spare"}, all); err != nil {
+		t.Fatalf("first spare system: %v", err)
+	}
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "spare"}, all); !errors.Is(err, storage.ErrSystemExistsUnplaced) {
+		t.Fatalf("second unplaced spare system = %v, want ErrSystemExistsUnplaced", err)
 	}
 }
 
@@ -100,8 +124,8 @@ func TestRootLocationNamesGloballyUnique(t *testing.T) {
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "campus-one", LocationType: "campus"}, all); err != nil {
 		t.Fatalf("first root: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "campus-one", LocationType: "campus"}, all); !errors.Is(err, storage.ErrLocationExists) {
-		t.Fatalf("second root with the same name = %v, want ErrLocationExists", err)
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "campus-one", LocationType: "campus"}, all); !errors.Is(err, storage.ErrLocationExistsAtRoot) {
+		t.Fatalf("second root with the same name = %v, want ErrLocationExistsAtRoot", err)
 	}
 }
 
@@ -133,8 +157,8 @@ func TestSubComponentScopesToParent(t *testing.T) {
 	if portA.ID == portB.ID {
 		t.Fatal("the two port-1 components did not actually land on different rows")
 	}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "port-1", ParentName: strptr(rackA.Name)}, all); !errors.Is(err, storage.ErrComponentExists) {
-		t.Fatalf("second port-1 under rack-a (same parent) = %v, want ErrComponentExists", err)
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "port-1", ParentName: strptr(rackA.Name)}, all); !errors.Is(err, storage.ErrComponentExistsUnderParent) {
+		t.Fatalf("second port-1 under rack-a (same parent) = %v, want ErrComponentExistsUnderParent", err)
 	}
 }
 
@@ -182,8 +206,8 @@ func TestSiblingSubsystemsSameParentRefused(t *testing.T) {
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "edge", ParentName: strptr(av.Name)}, all); err != nil {
 		t.Fatalf("first edge under av: %v", err)
 	}
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "edge", ParentName: strptr(av.Name)}, all); !errors.Is(err, storage.ErrSystemExists) {
-		t.Fatalf("second edge under the same parent = %v, want ErrSystemExists", err)
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "edge", ParentName: strptr(av.Name)}, all); !errors.Is(err, storage.ErrSystemExistsUnderParent) {
+		t.Fatalf("second edge under the same parent = %v, want ErrSystemExistsUnderParent", err)
 	}
 }
 

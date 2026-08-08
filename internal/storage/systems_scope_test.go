@@ -102,8 +102,8 @@ func TestSystemScopeCRUD(t *testing.T) {
 	// created unparented at hq (system_location_name_key), and this one names
 	// the same location, so it lands in the identical bucket (#627 scopes name
 	// uniqueness to placement, it does not remove uniqueness within one).
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av", LocationName: strptr("hq")}, all); !errors.Is(err, storage.ErrSystemExists) {
-		t.Errorf("dup name in same location = %v, want ErrSystemExists", err)
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av", LocationName: strptr("hq")}, all); !errors.Is(err, storage.ErrSystemExistsInLocation) {
+		t.Errorf("dup name in same location = %v, want ErrSystemExistsInLocation", err)
 	}
 	// The same name in a DIFFERENT placement bucket is legal: two locations
 	// may each hold their own "av", because the unique index is keyed on

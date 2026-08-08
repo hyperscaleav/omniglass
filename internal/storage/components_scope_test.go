@@ -82,8 +82,8 @@ func TestComponentScopeCRUD(t *testing.T) {
 	// names the same location, so it lands in the identical bucket (#627
 	// scopes name uniqueness to placement, it does not remove uniqueness
 	// within one).
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp", LocationName: strptr("rm-1")}, all); !errors.Is(err, storage.ErrComponentExists) {
-		t.Errorf("dup name in same location = %v, want ErrComponentExists", err)
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp", LocationName: strptr("rm-1")}, all); !errors.Is(err, storage.ErrComponentExistsInLocation) {
+		t.Errorf("dup name in same location = %v, want ErrComponentExistsInLocation", err)
 	}
 	// The same name in a DIFFERENT placement bucket is legal: two rooms may
 	// each hold their own "disp", because the unique index is keyed on

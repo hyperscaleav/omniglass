@@ -80,8 +80,8 @@ func TestRenameComponent(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-sibling", ParentName: strptr(newName)}, all); err != nil {
 		t.Fatalf("sibling for dup-rename case: %v", err)
 	}
-	if _, err := gw.RenameComponent(ctx, "", "disp-child", "disp-sibling", all, all); !errors.Is(err, storage.ErrComponentExists) {
-		t.Fatalf("dup rename err = %v, want ErrComponentExists", err)
+	if _, err := gw.RenameComponent(ctx, "", "disp-child", "disp-sibling", all, all); !errors.Is(err, storage.ErrComponentExistsUnderParent) {
+		t.Fatalf("dup rename err = %v, want ErrComponentExistsUnderParent", err)
 	}
 
 	// Bad slug -> ErrInvalidEntityName (before touching the DB).

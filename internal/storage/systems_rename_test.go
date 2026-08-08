@@ -78,8 +78,8 @@ func TestRenameSystem(t *testing.T) {
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av-sibling", ParentName: strptr(newName)}, all); err != nil {
 		t.Fatalf("sibling for dup-rename case: %v", err)
 	}
-	if _, err := gw.RenameSystem(ctx, "", "av-child", "av-sibling", all, all); !errors.Is(err, storage.ErrSystemExists) {
-		t.Fatalf("dup rename err = %v, want ErrSystemExists", err)
+	if _, err := gw.RenameSystem(ctx, "", "av-child", "av-sibling", all, all); !errors.Is(err, storage.ErrSystemExistsUnderParent) {
+		t.Fatalf("dup rename err = %v, want ErrSystemExistsUnderParent", err)
 	}
 
 	// Bad slug -> ErrInvalidEntityName (before touching the DB).
