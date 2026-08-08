@@ -2793,7 +2793,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   `EffectiveMetrics` resolving their owner inside a CTE rather than a scalar subquery, which never
   raises 21000 at all, it silently joins rows from every same-named owner into one answer, and a
   `CreateSystem`/`UpdateSystem` recompute passing a system's own freshly-written name, with its id
-  already in hand, into the health rollup (`d64b314`). A 30-agent adversarial sweep then found five
+  already in hand, into the health rollup (`d64b314`). A 30-agent adversarial sweep then found six
   more of the same class the first two passes had missed: the node ingest lane discarding a task's own
   component uuid for a re-derived name at four downstream sinks (`cab918e`), the push telemetry route
   authorizing by id then publishing `comp.Name` (`dd92017`), five role-choice writes binding a raw name
