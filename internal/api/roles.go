@@ -307,14 +307,15 @@ func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Summary:     "Declare a role on a system",
 		Description: "Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. accepted_types and pinned_products each replace their set wholesale. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
 	}, "system", "update"), func(ctx context.Context, in *setSystemRoleInput) (*systemRoleOutput, error) {
-		if err := requireSystemInScope(ctx, a, gw, in.Name); err != nil {
+		sysID, err := requireSystemInScope(ctx, a, gw, in.Name)
+		if err != nil {
 			return nil, err
 		}
-		altID, err := resolveAlternateBody(ctx, gw, "system", in.Name, in.Body)
+		altID, err := resolveAlternateBody(ctx, gw, "system", sysID, in.Body)
 		if err != nil {
 			return nil, mapRoleErr(err)
 		}
-		r, err := gw.SetSystemRole(ctx, actorID(ctx), "system", in.Name, roleSpec(in.Role, in.Body, altID))
+		r, err := gw.SetSystemRole(ctx, actorID(ctx), "system", sysID, roleSpec(in.Role, in.Body, altID))
 		if err != nil {
 			return nil, mapRoleErr(err)
 		}
@@ -329,10 +330,11 @@ func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Summary:       "Withdraw a role from a system",
 		Description:   "Removes a role declared on this system, and with it every assignment to it. A role the system does not declare itself is a 404 (a role inherited from its standard is withdrawn on the standard, not here). Gated by system:update; an out-of-scope system is a non-disclosing 404.",
 	}, "system", "update"), func(ctx context.Context, in *systemRolePathInput) (*struct{}, error) {
-		if err := requireSystemInScope(ctx, a, gw, in.Name); err != nil {
+		sysID, err := requireSystemInScope(ctx, a, gw, in.Name)
+		if err != nil {
 			return nil, err
 		}
-		if err := gw.DeleteSystemRole(ctx, actorID(ctx), "system", in.Name, in.Role); err != nil {
+		if err := gw.DeleteSystemRole(ctx, actorID(ctx), "system", sysID, in.Role); err != nil {
 			return nil, mapRoleErr(err)
 		}
 		return nil, nil
@@ -432,22 +434,32 @@ func resolveAlternateBody(ctx context.Context, gw storage.Gateway, ownerKind, ow
 }
 
 // requireSystemInScope resolves the system within the caller's write scope
-// before a declaration lands on it. The declaration methods address their owner
-// by name and take no scope (a standard is not scope-scoped at all), so the
-// system arc gets its ABAC check here, at the only route that can reach it.
-func requireSystemInScope(ctx context.Context, a *authenticator, gw storage.Gateway, name string) error {
-	if _, err := gw.GetSystem(ctx, name, a.scopeFor(ctx, "system", "update")); err != nil {
-		return mapSystemErr(err)
+// before a declaration lands on it, and returns its id. The declaration
+// methods address their owner by name and take no scope (a standard is not
+// scope-scoped at all), so the system arc gets its ABAC check here, at the
+// only route that can reach it. The id is returned rather than discarded so
+// the caller can pass it straight on to the gateway calls that follow,
+// instead of handing back the caller's raw reference for a second,
+// redundant resolve: once names are no longer unique (#627), a second
+// name-based resolve is not just wasted work, it is a second surface that
+// can raise storage.ErrAmbiguousName with no mapping, on a reference the
+// first resolve already proved unambiguous.
+func requireSystemInScope(ctx context.Context, a *authenticator, gw storage.Gateway, name string) (string, error) {
+	sys, err := gw.GetSystem(ctx, name, a.scopeFor(ctx, "system", "update"))
+	if err != nil {
+		return "", mapSystemErr(err)
 	}
-	return nil
+	return sys.ID, nil
 }
 
-// requireComponentInScope is its component-arc twin, used by the alarm routes.
-func requireComponentInScope(ctx context.Context, a *authenticator, gw storage.Gateway, name, action string) error {
-	if _, err := gw.GetComponent(ctx, name, a.scopeFor(ctx, "component", action)); err != nil {
-		return mapComponentErr(err)
+// requireComponentInScope is its component-arc twin, used by the alarm
+// routes, and returns the component's id for the same reason.
+func requireComponentInScope(ctx context.Context, a *authenticator, gw storage.Gateway, name, action string) (string, error) {
+	comp, err := gw.GetComponent(ctx, name, a.scopeFor(ctx, "component", action))
+	if err != nil {
+		return "", mapComponentErr(err)
 	}
-	return nil
+	return comp.ID, nil
 }
 
 // mapRoleErr translates the role sentinels into HTTP status. The one that

@@ -85,10 +85,11 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Summary:     "List a component's alarms",
 		Description: "What is currently wrong with this component, newest first. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
 	}, "component", "read"), func(ctx context.Context, in *listAlarmsInput) (*listAlarmsOutput, error) {
-		if err := requireComponentInScope(ctx, a, gw, in.Name, "read"); err != nil {
+		compID, err := requireComponentInScope(ctx, a, gw, in.Name, "read")
+		if err != nil {
 			return nil, err
 		}
-		alarms, err := gw.ListAlarms(ctx, in.Name, in.IncludeCleared)
+		alarms, err := gw.ListAlarms(ctx, compID, in.IncludeCleared)
 		if err != nil {
 			return nil, mapAlarmErr(err)
 		}
@@ -109,10 +110,11 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Summary:       "Raise an alarm on a component",
 		Description:   "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (a critical alarm), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser (info or warning) alarm degrades the component but leaves it occupying its roles. Gated by component:update; an out-of-scope component is a non-disclosing 404.",
 	}, "component", "update"), func(ctx context.Context, in *raiseAlarmInput) (*alarmOutput, error) {
-		if err := requireComponentInScope(ctx, a, gw, in.Name, "update"); err != nil {
+		compID, err := requireComponentInScope(ctx, a, gw, in.Name, "update")
+		if err != nil {
 			return nil, err
 		}
-		alarm, err := gw.RaiseAlarm(ctx, actorID(ctx), in.Name, storage.AlarmSpec{
+		alarm, err := gw.RaiseAlarm(ctx, actorID(ctx), compID, storage.AlarmSpec{
 			Severity: in.Body.Severity,
 			Message:  in.Body.Message,
 			DedupKey: in.Body.DedupKey,
@@ -131,10 +133,11 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Summary:       "Clear an alarm",
 		Description:   "Marks the alarm cleared and recomputes health in the same transaction, so the recovery is recorded as a transition at the moment it happened. The row is kept: what was wrong and when outlives the fix. Clearing an alarm that is already cleared or does not exist is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.",
 	}, "component", "update"), func(ctx context.Context, in *clearAlarmInput) (*struct{}, error) {
-		if err := requireComponentInScope(ctx, a, gw, in.Name, "update"); err != nil {
+		compID, err := requireComponentInScope(ctx, a, gw, in.Name, "update")
+		if err != nil {
 			return nil, err
 		}
-		if err := gw.ClearAlarm(ctx, actorID(ctx), in.Name, in.ID); err != nil {
+		if err := gw.ClearAlarm(ctx, actorID(ctx), compID, in.ID); err != nil {
 			return nil, mapAlarmErr(err)
 		}
 		return nil, nil
