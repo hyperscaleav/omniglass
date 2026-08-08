@@ -203,6 +203,32 @@ describe("RolesPanel", () => {
     expect(within(mainDisplayRow).getByText("1 of 1 satisfying")).toBeTruthy();
   });
 
+  // Whether an alarm took a component down is a fact about the COMPONENT,
+  // not about whether this role's choice currently answers it: suppressing
+  // short/spare/impact for an inactive role (the fix above) must not also
+  // suppress the down marker on its occupant chips, or the operator loses
+  // the one signal that would tell them the unbuilt alternate has a real
+  // fault, not just an unstaffed slot (task 9 re-review, over-correction of C5).
+  it("still marks a down occupant on a role whose alternate lost its choice", () => {
+    const inactiveWithDownOccupant: EstateHealth = {
+      ...health,
+      roles: health.roles!.map((r) =>
+        r.name === "table-mic"
+          ? { ...r, active: false, choice: "conferencing", alternate: "component-built", down: ["mic-1"], alarms: [{ id: "a-2", severity: "critical", message: "mic failed", component: "mic-1", raised_at: new Date().toISOString() }] }
+          : r,
+      ),
+    };
+    const { getByText } = mount({ health: inactiveWithDownOccupant });
+    const row = roleRow(getByText("Table microphone"));
+    // Still not counted, no short/impact badge (the C5 fix stands).
+    expect(within(row).queryByText("short 1")).toBeNull();
+    expect(within(row).getByText("not counted")).toBeTruthy();
+    // But the occupant is still marked down.
+    const downBadge = within(row).getByTitle("An active alarm has taken this component down");
+    expect(downBadge.textContent).toContain("mic-1");
+    expect(downBadge.textContent).toContain("down");
+  });
+
   it("groups a role declared on the system apart from the ones its standard declares", () => {
     const { getByRole, getByText } = mount();
     const adhoc = getByRole("group", { name: /ad hoc/i });

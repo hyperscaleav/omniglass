@@ -191,7 +191,13 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
   const roleRow = (r: EffectiveRole, first: () => boolean) => {
     const h = () => activeByName().get(r.name);
     const inactiveHealth = () => inactiveByName().get(r.name);
-    const down = () => new Set(h()?.down ?? []);
+    // Whether an alarm took a component down is a fact about the COMPONENT,
+    // not about whether this role's choice is the one currently answering
+    // it, so an inactive role still marks its down occupants: only the
+    // short/spare/impact VERDICT CONTRIBUTION is suppressed above, never the
+    // per-component fact (task 9 re-review: reading down() from the active
+    // map alone over-corrected C5 into hiding it here too).
+    const down = () => new Set(h()?.down ?? inactiveHealth()?.down ?? []);
     // Drag-to-reorder the occupant list: only worth wiring, and only sound to
     // wire, once there is more than one position to reorder, the caller can
     // write, AND the wire's positions array is actually usable (defends a
