@@ -140,9 +140,9 @@ official/custom pattern as the `*_type` registries ([Location Types guide](/guid
   manufacturer-only `component_make`.
 - A **`driver`** (Generic SNMP, Cisco xAPI, ...) names the implementation that gets, emits, or sets a
   product's signals, with an optional **`version`**.
-- A **`capability`** (Microphone, Display, ...) names what a component can do, claimed by a
-  **product** (the default for its instances) and by a **component** (its own facts, layered over the
-  product's); it is what a [system role](#system-roles-the-slots-a-system-needs-filled) requires.
+- The capability registry retired (#626): a product's device-class genus is now `component_type`
+  (below), and what a [system role](#system-roles-the-slots-a-system-needs-filled) requires is a
+  typed-slot guard over it, not a capability set.
 
 See the [Vendors guide](/guides/admin/vendors/) for the operator surface.
 
@@ -177,8 +177,7 @@ retired `vm`, folded into `app`, since nothing forked on it that did not fork th
 required **`component_type_id`** (the genus above it), an optional **`icon`** override (unset inherits
 the `component_type`'s icon; a per-SKU glyph is the exception, not the rule), optional **`vendor_id`**
 and **`driver_id`**, an optional **`parent_product_id`** (a variant points at its base), and the
-`official` boolean. Its capabilities live in the **`product_capability`** join (`product_id`,
-`capability_id`). The vendor, driver, and parent FKs are **`on delete set null`**; the `component_type`
+`official` boolean. The vendor, driver, and parent FKs are **`on delete set null`**; the `component_type`
 FK is **`on delete restrict`** (a type still classifying a product cannot be deleted). Three generic
 products (`generic-device`, `generic-app`, `generic-service`) ship official, each pointed at the
 matching generic `component_type`, so an unmodeled component always has somewhere to point.
@@ -263,10 +262,10 @@ RBAC's `ListRoles` / `UpsertRole`.
 
 Five tables carry it. `system_member` is the **membership** binding a role attaches to, many-valued
 and cascading from both ends; `system_role` is the slot, on the same arc `property` uses
-(one-set CHECK, `unique nulls not distinct` over the arc plus name); `system_role_capability` is
-what the role requires, **conjunctive** (a component must provide **every** listed capability);
-`component_capability` is the component's **own** capability facts, layered over its product's; and
-`system_role_assignment` is who fills the role here.
+(one-set CHECK, `unique nulls not distinct` over the arc plus name); `system_role_type` and
+`system_role_product` are the **typed-slot guard**, the `component_type`s a filling component's
+product must be classified within (self or a descendant) and, optionally, the specific products it
+pins; and `system_role_assignment` is who fills the role here.
 
 <SchemaTable table="system_member" notes={{ is_primary: 'The one membership that carries the system band in the cascade' }} />
 
@@ -278,9 +277,9 @@ what the role requires, **conjunctive** (a component must provide **every** list
   }}
 />
 
-<SchemaTable table="system_role_capability" />
+<SchemaTable table="system_role_type" />
 
-<SchemaTable table="component_capability" notes={{ present: 'The component&#39;s own fact, layered over its product&#39;s claim' }} />
+<SchemaTable table="system_role_product" />
 
 <SchemaTable table="system_role_assignment" notes={{ component_id: 'The filler; on delete restrict so a staffed component cannot vanish' }} />
 
@@ -307,29 +306,24 @@ system-declared ones are ad-hoc, how a one-off system gets roles and a conformin
 its standard. A role carries a **`quorum`** (two ceiling mics is one role with quorum 2), at least
 one.
 
-**A capability is a fact about a component, not only its product.** `component_capability` layers
-over the product's set: `present=true` adds a capability the product does not claim, `present=false`
-suppresses one it does. The resolver **`EffectiveCapabilities(component)`** is:
-
-> the **product's** capabilities, UNION the component's **`present=true`** rows, MINUS its **`present=false`**
-> rows.
-
-A **productless** component resolves to just its own declarations: the platform's single definition
-of "what this component can do".
+**The typed-slot guard is what `AssignRole` checks (#626).** A component fills a slot only when its
+product's `component_type` falls within a type the role's `system_role_type` set names (self or a
+descendant; empty accepts any type), and, if `system_role_product` pins specific products, only when
+its product is one of them.
 
 The read side is **`EffectiveRoles(system)`**: the standard's roles (marked `from_standard`) UNION
-those declared directly, each with its required capabilities, quorum, and fillers **here**, serving
+those declared directly, each with its typed-slot requirement, quorum, and fillers **here**, serving
 **assigned** and **understaffed** (quorum minus assignments, floored at zero) so every surface reads
 the same.
 
-**Assignment is refused when the component cannot fill the role**, with the missing capabilities **named**:
+**Assignment is refused when the component cannot fill the role**, naming both parties:
 
 ```
-component "panel-1" cannot fill role "table-mic": missing microphone, speaker
+component "panel-1" is a display; role "table-mic" wants a video-bar
 ```
 
-A refusal on **modeled** grounds. It is also why capabilities are a **resolved** set: `product` is
-optional, so a product-only guard would lock every productless component out of every role
+A refusal on **modeled** grounds, and it runs **once**, at assignment; afterward an occupant keeps its
+slot as long as its own [health](/architecture/health/) verdict stays healthy
 ([ADR-0049](/architecture/decisions/#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)).
 
 **A role also declares its `impact`**: `outage`, `degraded`, or `none`, what an **impaired** role
@@ -354,7 +348,7 @@ Shipped content is two kinds, never conflated:
   the `event_type`
   and `command_type` registries) is the shared namespace a driver maps onto, identical install to
   install: seeded `official: true` through an **authoritative upsert** (`ON CONFLICT DO UPDATE`),
-  read-only in the API. The classification catalogs (`vendor`, `driver`, `capability`, `product`)
+  read-only in the API. The classification catalogs (`vendor`, `driver`, `component_type`, `product`)
   ride that path today.
 
 **Forking applies to template -> row, never to classifier -> instance**: a system conforms, never
@@ -457,7 +451,7 @@ the requirement can fill the role, validated on assignment. Detailed on
 
 :::note[What is built is the role model above]
 The **built** slot is [`system_role`](#system-roles-the-slots-a-system-needs-filled): declared on a
-standard or a system, requiring a **capability** set, assigned through `system_role_assignment`. Its
+standard or a system, requiring a **typed-slot** match (#626), assigned through `system_role_assignment`. Its
 **`impact`** replaces the `health_role` tag above (`required` / `redundant` / `informational` are
 quorum plus impact, no fourth vocabulary,
 [ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain));

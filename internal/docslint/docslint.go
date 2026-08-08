@@ -241,6 +241,45 @@ var Banned = []BannedTerm{
 		Replacement: "signal lanes (four inbound, one outbound; a command is not a reading)",
 		Origin:      "ADR-0084",
 	},
+
+	// The capability retirement (#626). "Capability" alone is NOT bannable: the
+	// word is ordinary English throughout the corpus in senses that have nothing
+	// to do with the registry (a governed AI capability, a capability-checked
+	// route meaning permission-gated, the capability-wrapping test-tier carve-out
+	// for raw sockets and ICMP, a template's capability manifest, a page's
+	// Design/Partial/Built status per documented capability). Only the retired
+	// registry's own identifiers are named: the five dropped tables, the Go
+	// symbols the health rollup and role assignment used to call, the routes,
+	// and the permission stamp. capability-gated staffing retires with them: an
+	// occupant now satisfies its slot when its component's own verdict is
+	// healthy (internal/health), nothing about what it "provides".
+	{
+		Pattern: regexp.MustCompile(`\b(?:component_capability|product_capability|alarm_capability|system_role_capability)\b`),
+		Replacement: "the typed-slot guard (system_role_type, system_role_product) for assignment; " +
+			"a component's own verdict, from its active alarms, for health",
+		Origin: "#626",
+	},
+	{
+		// The registry table itself and its CRUD surface, scoped to the
+		// code-formatted token so the sentence "a governed capability" stays
+		// legal: only a backticked `capability`/`capabilities`, the registry
+		// phrase, the retired Go symbols, and the permission stamp are named.
+		Pattern: regexp.MustCompile("`capabilit(?:y|ies)`|\\bcapability registr(?:y|ies)\\b|\\bcapability catalogs?\\b|" +
+			"\\bcapability:(?:read|create|update|delete)\\b|" +
+			"\\b(?:EffectiveCapabilities|ComponentCapabilities|CreateCapability|UpdateCapability|DeleteCapability|" +
+			"ListCapabilities|GetCapability|UpsertCapability|CapabilityPatch|SetComponentCapability|ClearComponentCapability)\\b"),
+		Replacement: "the component_type taxonomy (product classification) and the typed-slot guard " +
+			"(system_role_type, system_role_product) for assignment; nothing replaces the registry itself",
+		Origin: "#626",
+	},
+	{
+		// The routes: /capabilities, /capabilities/{id}, and the component-scoped
+		// /components/{name}/capabilities[/{capability}] arc. The leading slash
+		// keeps this from matching prose that happens to contain the bare word.
+		Pattern:     regexp.MustCompile(`/capabilities\b`),
+		Replacement: "no replacement: the routes are gone, not renamed",
+		Origin:      "#626",
+	},
 }
 
 // vocabularyAllowed lists files (relative to DocsRoot) exempt from the

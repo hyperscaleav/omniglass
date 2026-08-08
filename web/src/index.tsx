@@ -36,7 +36,6 @@ import SecretTypes from "./pages/SecretTypes";
 import Standards from "./pages/Standards";
 import Vendors from "./pages/Vendors";
 import Drivers from "./pages/Drivers";
-import Capabilities from "./pages/Capabilities";
 import Products from "./pages/Products";
 import Files from "./pages/Files";
 import Audit from "./pages/Audit";
@@ -114,7 +113,6 @@ render(
             <Route path="/vendors" component={Vendors} />
             <Route path="/products" component={Products} />
             <Route path="/drivers" component={Drivers} />
-            <Route path="/capabilities" component={Capabilities} />
             <Route path="/component-types" component={ComponentTypes} />
             <Route path="/standards" component={Standards} />
             <Route path="/location-types" component={LocationTypes} />

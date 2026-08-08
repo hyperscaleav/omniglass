@@ -13,7 +13,7 @@ import { entityLabel, hasDisplayName, type Labelled } from "../lib/entities";
 // That rule was previously written sixteen times, in four mutually incompatible
 // idioms, one per FlatList page:
 //
-//   - two columns, one per field                   (Vendors, Drivers, Capabilities,
+//   - two columns, one per field                   (Vendors, Drivers,
 //     Products, Standards, Types)
 //   - "Key" and "Label" columns                    (Properties, EventTypes,
 //     CommandTypes, Tags)

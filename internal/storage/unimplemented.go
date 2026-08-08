@@ -438,20 +438,6 @@ func (UnimplementedGateway) UpdateDriver(context.Context, string, string, Driver
 	return nil, nil
 }
 func (UnimplementedGateway) DeleteDriver(context.Context, string, string) error { return nil }
-func (UnimplementedGateway) UpsertCapability(context.Context, Capability) error { return nil }
-func (UnimplementedGateway) ListCapabilities(context.Context) ([]Capability, error) {
-	return nil, nil
-}
-func (UnimplementedGateway) GetCapability(context.Context, string) (*Capability, error) {
-	return nil, nil
-}
-func (UnimplementedGateway) CreateCapability(context.Context, string, Capability) (*Capability, error) {
-	return nil, nil
-}
-func (UnimplementedGateway) UpdateCapability(context.Context, string, string, CapabilityPatch) (*Capability, error) {
-	return nil, nil
-}
-func (UnimplementedGateway) DeleteCapability(context.Context, string, string) error { return nil }
 
 func (UnimplementedGateway) UpsertComponentType(context.Context, ComponentType) error { return nil }
 func (UnimplementedGateway) ListComponentTypes(context.Context) ([]ComponentType, error) {
@@ -684,9 +670,6 @@ func (UnimplementedGateway) DeleteLocationTypeProperty(context.Context, string, 
 func (UnimplementedGateway) EffectiveRoles(context.Context, string, scope.Set) ([]EffectiveRole, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) ComponentCapabilities(context.Context, string) ([]string, error) {
-	return nil, nil
-}
 func (UnimplementedGateway) ListMembers(context.Context, string, scope.Set) ([]Member, error) {
 	return nil, nil
 }
@@ -718,12 +701,6 @@ func (UnimplementedGateway) DeleteSystemRole(context.Context, string, string, st
 	return nil
 }
 func (UnimplementedGateway) SeedSystemRole(context.Context, string, string, SystemRoleSpec) error {
-	return nil
-}
-func (UnimplementedGateway) SetComponentCapability(context.Context, string, string, string, bool) error {
-	return nil
-}
-func (UnimplementedGateway) ClearComponentCapability(context.Context, string, string, string) error {
 	return nil
 }
 func (UnimplementedGateway) RaiseAlarm(context.Context, string, string, AlarmSpec) (*Alarm, error) {

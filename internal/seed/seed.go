@@ -47,9 +47,6 @@ var vendorsYAML []byte
 //go:embed drivers.yaml
 var driversYAML []byte
 
-//go:embed capabilities.yaml
-var capabilitiesYAML []byte
-
 //go:embed component_types.yaml
 var componentTypesYAML []byte
 
@@ -84,14 +81,12 @@ type standardsDoc struct {
 		DisplayName      string `yaml:"display_name"`
 		ParentStandardID string `yaml:"parent_standard_id"`
 		// The roles a conforming system needs filled, inherited live by every
-		// system on this standard. Capabilities is tolerated but no longer
-		// enforced (#626): the typed-slot guard checks AcceptedTypes and
-		// PinnedProducts instead.
+		// system on this standard. The typed-slot guard checks AcceptedTypes
+		// and PinnedProducts; capability retired with the family (#626).
 		Roles []struct {
 			Name           string   `yaml:"name"`
 			DisplayName    string   `yaml:"display_name"`
 			Quorum         int      `yaml:"quorum"`
-			Capabilities   []string `yaml:"capabilities"`
 			AcceptedTypes  []string `yaml:"accepted_types"`
 			PinnedProducts []string `yaml:"pinned_products"`
 		} `yaml:"roles"`
@@ -145,13 +140,6 @@ type driversDoc struct {
 	} `yaml:"drivers"`
 }
 
-type capabilitiesDoc struct {
-	Capabilities []struct {
-		ID          string `yaml:"id"`
-		DisplayName string `yaml:"display_name"`
-	} `yaml:"capabilities"`
-}
-
 type componentTypesDoc struct {
 	ComponentTypes []struct {
 		ID          string   `yaml:"id"`
@@ -166,15 +154,14 @@ type componentTypesDoc struct {
 
 type productsDoc struct {
 	Products []struct {
-		ID              string   `yaml:"id"`
-		DisplayName     string   `yaml:"display_name"`
-		VendorID        string   `yaml:"vendor_id"`
-		DriverID        string   `yaml:"driver_id"`
-		Kind            string   `yaml:"kind"`
-		ComponentType   string   `yaml:"component_type"`
-		Icon            string   `yaml:"icon"`
-		ParentProductID string   `yaml:"parent_product_id"`
-		Capabilities    []string `yaml:"capabilities"`
+		ID              string `yaml:"id"`
+		DisplayName     string `yaml:"display_name"`
+		VendorID        string `yaml:"vendor_id"`
+		DriverID        string `yaml:"driver_id"`
+		Kind            string `yaml:"kind"`
+		ComponentType   string `yaml:"component_type"`
+		Icon            string `yaml:"icon"`
+		ParentProductID string `yaml:"parent_product_id"`
 		// The declared-property contract this product ships. `default` is raw JSON
 		// (quoted in the YAML) so it round-trips into the jsonb column verbatim.
 		Properties []struct {
@@ -233,14 +220,11 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedDrivers(ctx, gw); err != nil {
 		return err
 	}
-	if err := seedCapabilities(ctx, gw); err != nil {
-		return err
-	}
 	if err := seedComponentTypes(ctx, gw); err != nil {
 		return err
 	}
-	// After the capability registry and the component_type taxonomy: a
-	// declared role's requirements point into both.
+	// After the component_type taxonomy: a declared role's typed-slot
+	// requirement points into it.
 	if err := seedStandardRoles(ctx, gw); err != nil {
 		return err
 	}
@@ -426,21 +410,6 @@ func seedDrivers(ctx context.Context, gw storage.Gateway) error {
 	return nil
 }
 
-func seedCapabilities(ctx context.Context, gw storage.Gateway) error {
-	var doc capabilitiesDoc
-	if err := yaml.Unmarshal(capabilitiesYAML, &doc); err != nil {
-		return fmt.Errorf("seed: parse capabilities: %w", err)
-	}
-	for _, c := range doc.Capabilities {
-		if err := gw.UpsertCapability(ctx, storage.Capability{
-			Name: c.ID, Official: true, DisplayName: c.DisplayName,
-		}); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // seedComponentTypes installs the ship-with component_type taxonomy,
 // authoritative on conflict like the other registries. The YAML lists a
 // parent before any child that names it (parent_id), so a single pass works:
@@ -506,7 +475,6 @@ func seedProducts(ctx context.Context, gw storage.Gateway) error {
 			VendorID: nz(p.VendorID), DriverID: nz(p.DriverID),
 			ParentProductID: nz(p.ParentProductID), Kind: kind,
 			ComponentType: p.ComponentType, Icon: nz(p.Icon),
-			Capabilities: p.Capabilities,
 		}); err != nil {
 			return err
 		}
@@ -554,9 +522,8 @@ func seedStandards(ctx context.Context, gw storage.Gateway) error {
 // seedStandardRoles installs the roles the shipped standards declare, on the
 // same seed-if-absent lane as the standards themselves: example content the
 // operator owns once it lands, never reasserted over an edit. Its own step
-// rather than part of seedStandards because a role's accepted types (and any
-// capability, still tolerated) are foreign keys into registries that seed
-// later: the capability registry and the component_type taxonomy.
+// rather than part of seedStandards because a role's accepted types are
+// foreign keys into a registry that seeds later: the component_type taxonomy.
 func seedStandardRoles(ctx context.Context, gw storage.Gateway) error {
 	var doc standardsDoc
 	if err := yaml.Unmarshal(standardsYAML, &doc); err != nil {
@@ -568,7 +535,6 @@ func seedStandardRoles(ctx context.Context, gw storage.Gateway) error {
 				Name:           r.Name,
 				DisplayName:    r.DisplayName,
 				Quorum:         r.Quorum,
-				Capabilities:   r.Capabilities,
 				AcceptedTypes:  r.AcceptedTypes,
 				PinnedProducts: r.PinnedProducts,
 			}); err != nil {

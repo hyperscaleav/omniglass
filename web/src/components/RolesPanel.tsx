@@ -15,9 +15,10 @@ import {
 } from "../lib/system_roles";
 
 // RolesPanel lists the roles a system needs filled, resolved. A ROLE is a slot:
-// a table microphone, a main display. It names the CAPABILITIES a component must
-// all provide to fill it and carries a QUORUM, how many components it wants, so a
-// role reads as "2 wanted, 1 assigned" and is UNDERSTAFFED until it has them.
+// a table microphone, a main display. It names the TYPED-SLOT guard (#626) a
+// filling component's product must clear and carries a QUORUM, how many
+// components it wants, so a role reads as "2 wanted, 1 assigned" and is
+// UNDERSTAFFED until it has them.
 //
 // A role reaches a system two ways, and the panel keeps them apart exactly as the
 // Properties panel keeps contract values apart from off-contract ones, because
@@ -28,10 +29,12 @@ import {
 // conforms to no standard has only those).
 //
 // Assigning is the guarded write, and the refusal is the lesson: the server checks
-// the component's RESOLVED capabilities (its product's, plus what it adds, minus
-// what it suppresses) and refuses with a message naming the gap, which this panel
-// shows verbatim against the role that refused. A generic "something went wrong"
-// would throw away the only thing the operator needs.
+// whether the component's product's type falls within an accepted type (and, if
+// pinned, is one of the named products) and refuses with a message naming both
+// parties, which this panel shows verbatim against the role that refused. A
+// generic "something went wrong" would throw away the only thing the operator
+// needs. The guard runs once, at assignment; after that, an occupant keeps its
+// slot as long as its own health verdict stays healthy.
 //
 // Writes are immediate, like the tag panel, so the panel has no Save of its own;
 // the caller passes canUpdate (the system detail computes it as "in edit mode AND
@@ -58,7 +61,7 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
 
   // The components a role can be offered, by label: those already filling it are
   // dropped, and the ones in this system lead, since that is where an operator
-  // staffs from. Everything else is still offered, because the capability guard
+  // staffs from. Everything else is still offered, because the typed-slot guard
   // (not the placement) is what decides, and its refusal is what teaches.
   const label = (c: Comp) => c.display_name || c.name;
   const candidates = (role: EffectiveRole): Comp[] => {
@@ -81,8 +84,8 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
       await qc.invalidateQueries({ queryKey: key() });
       setPicked(role, "");
     } catch (e) {
-      // The server's 422 names the capabilities the component is missing. That
-      // message IS the answer, so it is shown as sent.
+      // The server's 422 names both parties: what the component is, and what
+      // the role wants. That message IS the answer, so it is shown as sent.
       setErrs(role, describeError(e));
     } finally {
       setBusy(false);
@@ -108,15 +111,25 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
         <span class="tnum shrink-0 text-[11px] text-base-content/50">{staffingLabel(r)}</span>
       </div>
 
-      <div class="flex flex-wrap items-center gap-1.5">
-        <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">requires</span>
-        <Show
-          when={(r.capabilities ?? []).length}
-          fallback={<span class="text-[11px] italic text-base-content/40">nothing: any component can fill it</span>}
-        >
-          <For each={r.capabilities ?? []}>
-            {(c) => <span class="badge badge-ghost badge-sm font-data">{c}</span>}
-          </For>
+      <div class="flex flex-col gap-1">
+        <div class="flex flex-wrap items-center gap-1.5">
+          <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">accepts</span>
+          <Show
+            when={(r.accepted_types ?? []).length}
+            fallback={<span class="text-[11px] italic text-base-content/40">any type</span>}
+          >
+            <For each={r.accepted_types ?? []}>
+              {(c) => <span class="badge badge-ghost badge-sm font-data">{c}</span>}
+            </For>
+          </Show>
+        </div>
+        <Show when={(r.pinned_products ?? []).length}>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">pinned to</span>
+            <For each={r.pinned_products ?? []}>
+              {(c) => <span class="badge badge-ghost badge-sm font-data">{c}</span>}
+            </For>
+          </div>
         </Show>
       </div>
 
@@ -171,7 +184,7 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
         </div>
       </Show>
 
-      {/* The refusal, verbatim: which capabilities the component is missing. */}
+      {/* The refusal, verbatim: what the component is, and what the role wants. */}
       <Show when={errs[r.name]}>
         <div role="alert" class="alert alert-error alert-soft py-1.5 text-xs"><span>{errs[r.name]}</span></div>
       </Show>

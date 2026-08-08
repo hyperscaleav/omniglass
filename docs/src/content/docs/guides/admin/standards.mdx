@@ -101,10 +101,12 @@ The standard's blade carries a **Roles** panel beside its contract. Each role ha
 - a **name** (its address within the standard, e.g. `room-mic`) and a **display name**;
 - a **quorum**, how many components should fill it. Two ceiling mics is **one role with quorum 2**, not
   two roles. The minimum is one, since a role no component need fill is not a role;
-- the **capabilities** it requires, picked from the [capability catalog](/guides/admin/capabilities/).
-  The list is **all of them, not any of them**: a component must provide **every** capability listed to
-  fill the role. Requiring `microphone` and `speaker` means a display cannot fill it no matter what else
-  it does;
+- **accepted types**, the [component types](/architecture/core-entities/#catalog-reference-data-component_type)
+  a filling component's product may be classified under (self or a descendant); empty accepts any
+  type. Optionally **pinned products**, narrowing further to specific products within an accepted
+  type; empty accepts any product of an accepted type. This is the **typed-slot guard**: a role
+  wanting `video-bar` accepts the shipped Cisco Room Bar and any other product classified under it,
+  but not a display;
 - an **impact**, what the room loses when this slot is not being filled properly.
 
 **Impact is the health knob, and it belongs to the slot.** The same broken box matters differently
@@ -127,21 +129,21 @@ assigned survives losing either of them, because one working mic still meets the
 **two** with two assigned is impaired the moment either one fails. Redundancy is not a separate switch, it
 is the gap between what you staffed and what you need.
 
-Declaring is **idempotent**, so saving a role that already exists revises it in place, and the capability
-list **replaces** the previous requirement wholesale (drop one by leaving it out). **Withdrawing** a role
-(with `standard:delete`, from edit mode like every contract control) also removes every assignment conforming systems made to it, so withdraw only
-when the slot itself is gone, not when one room's component changed. Changing a quorum or an impact
-**re-evaluates every conforming system immediately**, so a retune shows up in the estate's health without
-waiting for anything to poll.
+Declaring is **idempotent**, so saving a role that already exists revises it in place, and the accepted
+types and pinned products each **replace** the previous set wholesale (drop one by leaving it out).
+**Withdrawing** a role (with `standard:delete`, from edit mode like every contract control) also removes
+every assignment conforming systems made to it, so withdraw only when the slot itself is gone, not when
+one room's component changed. Changing a quorum or an impact **re-evaluates every conforming system
+immediately**, so a retune shows up in the estate's health without waiting for anything to poll.
 
 Two shipped roles come with **Meeting Room**, and they are the worked example: **Room Microphone**
-(requires `microphone` and `speaker`, quorum **2**) and **Main Display** (requires
-`flat-panel-display`). Like the standards themselves they are **seeded only if absent**, so retuning
-quorum to what your rooms actually run survives the next restart.
+(accepts `video-bar`, quorum **2**) and **Main Display** (accepts `display`). Like the standards
+themselves they are **seeded only if absent**, so retuning quorum to what your rooms actually run
+survives the next restart.
 
 From the CLI: `omniglass standard role list <id>`,
-`omniglass standard role update <id> <role> --display-name <label> --quorum <n> --capabilities <ids>
---impact <outage|degraded|none>`, and `omniglass standard role delete <id> <role>`.
+`omniglass standard role update <id> <role> --display-name <label> --quorum <n> --accepted-types <types>
+--pinned-products <ids> --impact <outage|degraded|none>`, and `omniglass standard role delete <id> <role>`.
 
 ## Staff a system against its standard
 
@@ -165,15 +167,20 @@ with where it came from.
    the system never silently loses a slot.
 
 **A component that cannot fill the role is refused, and told why.** Assigning a display to a role that
-requires `microphone` and `speaker` fails with a message naming exactly what is missing:
+accepts `video-bar` fails with a message naming both parties:
 
 ```
-component "panel-1" cannot fill role "table-mic": missing microphone, speaker
+component "panel-1" is a display; role "Table microphone" wants a video-bar
 ```
 
-That is the whole point of declaring capabilities. Your next move is in the message: either the component
-really does provide them and its [capability declarations](/guides/admin/capabilities/) need fixing, or it
-is the wrong component for the slot.
+Pinning products narrows further: a right-type, wrong-product component is refused by name too:
+
+```
+component "panel-3" is product "other-display"; role "Main Display" wants product samsung-qm55
+```
+
+That is the whole point of the typed-slot guard. Your next move is in the message: either you
+picked the wrong component, or the role's accepted types (or pinned products) need widening.
 
 Roles declared **directly on a system** work identically and are edited from the same panel; use them for
 what one room needs and the blueprint does not. A role inherited from the standard is withdrawn on the

@@ -3,12 +3,11 @@ import { render, fireEvent, waitFor, within } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import AlarmsPanel from "./AlarmsPanel";
 import { componentAlarmsKey, type Alarm } from "../lib/alarms";
-import { CAPABILITIES_KEY, type Capability } from "../lib/capabilities";
-import { uuidFor } from "../lib/testids";
 
-// The alarms panel is where estate health starts: a condition on this component,
-// and the capabilities it takes away. Rows are seeded into the query cache so no
-// server is needed; the raise / clear writes are faked where a test drives one.
+// The alarms panel is where estate health starts: a condition on this component
+// that impairs its own verdict wholesale (#626). Rows are seeded into the query
+// cache so no server is needed; the raise / clear writes are faked where a test
+// drives one.
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
 
 const alarms: Alarm[] = [
@@ -17,9 +16,8 @@ const alarms: Alarm[] = [
     component: "disp-1",
     severity: "warning",
     message: "Lamp hours exceeded",
-  dedup_key: "test.condition",
+    dedup_key: "test.condition",
     raised_at: ago(2 * 3_600_000),
-    capabilities: ["display"],
     active: true,
   },
   {
@@ -27,9 +25,8 @@ const alarms: Alarm[] = [
     component: "disp-1",
     severity: "critical",
     message: "HDMI board failed",
-  dedup_key: "test.condition",
+    dedup_key: "test.condition",
     raised_at: ago(3_600_000),
-    capabilities: ["display", "hdmi-input"],
     active: true,
   },
   {
@@ -37,17 +34,11 @@ const alarms: Alarm[] = [
     component: "disp-1",
     severity: "info",
     message: "Firmware mismatch",
-  dedup_key: "test.condition",
+    dedup_key: "test.condition",
     raised_at: ago(48 * 3_600_000),
     cleared_at: ago(24 * 3_600_000),
-    capabilities: [],
     active: false,
   },
-];
-
-const catalog: Capability[] = [
-  { id: uuidFor("display"), name: "display", display_name: "Display", official: true },
-  { id: uuidFor("hdmi-input"), name: "hdmi-input", display_name: "HDMI input", official: true },
 ];
 
 function json(body: unknown, status = 200, type = "application/json") {
@@ -57,7 +48,6 @@ function json(body: unknown, status = 200, type = "application/json") {
 function mount(opts: { rows?: Alarm[]; canUpdate?: boolean } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...componentAlarmsKey("disp-1")], opts.rows ?? alarms);
-  qc.setQueryData([...CAPABILITIES_KEY], catalog);
   return render(() => (
     <QueryClientProvider client={qc}>
       <AlarmsPanel component="disp-1" canUpdate={opts.canUpdate ?? true} />
@@ -70,12 +60,10 @@ const alarmRow = (label: HTMLElement) => label.closest("div.flex-col") as HTMLEl
 describe("AlarmsPanel", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("lists an active alarm with its severity, message, and what it degrades", () => {
+  it("lists an active alarm with its severity and message", () => {
     const { getByText } = mount();
     const row = alarmRow(getByText("HDMI board failed"));
     expect(within(row).getByText("critical")).toBeTruthy();
-    expect(within(row).getByText("display")).toBeTruthy();
-    expect(within(row).getByText("hdmi-input")).toBeTruthy();
     expect(within(row).getByText(/raised 1h ago/)).toBeTruthy();
   });
 
@@ -98,7 +86,7 @@ describe("AlarmsPanel", () => {
     expect(getByText(/this component has no active alarm/i)).toBeTruthy();
   });
 
-  it("raises an alarm with its severity, message, and the capabilities it degrades", async () => {
+  it("raises an alarm with its severity and message", async () => {
     let post: Request | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
@@ -109,8 +97,6 @@ describe("AlarmsPanel", () => {
     const { getByLabelText, getByText } = mount();
     fireEvent.change(getByLabelText("Alarm severity"), { target: { value: "critical" } });
     fireEvent.input(getByLabelText("Alarm message"), { target: { value: "Fan seized" } });
-    fireEvent.change(getByLabelText("Capability this alarm degrades"), { target: { value: "display" } });
-    fireEvent.click(getByLabelText("Add capability to alarm"));
     fireEvent.click(getByText("Raise alarm"));
 
     await waitFor(() => expect(post).toBeTruthy());
@@ -118,16 +104,7 @@ describe("AlarmsPanel", () => {
     expect(JSON.parse(await post!.text())).toEqual({
       severity: "critical",
       message: "Fan seized",
-      capabilities: ["display"],
     });
-  });
-
-  it("drops a capability from the draft before raising", () => {
-    const { getByLabelText, queryByLabelText } = mount();
-    fireEvent.change(getByLabelText("Capability this alarm degrades"), { target: { value: "display" } });
-    fireEvent.click(getByLabelText("Add capability to alarm"));
-    fireEvent.click(getByLabelText("Do not degrade display"));
-    expect(queryByLabelText("Do not degrade display")).toBeNull();
   });
 
   it("clears an alarm through the component's alarm route", async () => {
@@ -145,13 +122,12 @@ describe("AlarmsPanel", () => {
     expect(del!.url).toContain("/components/disp-1/alarms/a-2");
   });
 
-  // The server refuses an unknown capability with a 422 naming it. That message IS
-  // the answer, so it is shown as sent rather than swallowed.
+  // The server's refusal is shown as sent, never swallowed into a generic line.
   it("surfaces the server's refusal verbatim", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       if (req.method === "POST") {
-        return json({ title: "Unprocessable Entity", status: 422, detail: 'unknown capability "hdmi-input"' }, 422, "application/problem+json");
+        return json({ title: "Unprocessable Entity", status: 422, detail: "severity must be info, warning, or critical" }, 422, "application/problem+json");
       }
       return json({ component: "disp-1", alarms });
     });
@@ -160,7 +136,7 @@ describe("AlarmsPanel", () => {
     fireEvent.click(getByText("Raise alarm"));
 
     const alert = await waitFor(() => getAllByRole("alert")[0]);
-    expect(alert.textContent).toBe('unknown capability "hdmi-input"');
+    expect(alert.textContent).toBe("severity must be info, warning, or critical");
     expect(queryByText("The operation failed.")).toBeNull();
   });
 
@@ -173,10 +149,5 @@ describe("AlarmsPanel", () => {
     expect(queryByLabelText("Alarm message")).toBeNull();
     expect(queryByText("Raise alarm")).toBeNull();
     expect(queryByLabelText("Clear alarm a-2")).toBeNull();
-  });
-
-  it("says an alarm naming no capability reaches no role", () => {
-    const { getByText } = mount({ rows: [{ ...alarms[0], capabilities: [] }] });
-    expect(getByText(/it reaches no role/i)).toBeTruthy();
   });
 });

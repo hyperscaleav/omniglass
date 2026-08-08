@@ -284,43 +284,6 @@
      }
     ]
    },
-   "product_capability": {
-    "columns": [
-     {
-      "name": "id",
-      "type": "uuid",
-      "nullable": false,
-      "default": "uuidv7()",
-      "pk": true
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "product_id",
-      "type": "uuid",
-      "nullable": false,
-      "fk": true,
-      "fk_target": "product.id"
-     },
-     {
-      "name": "capability_id",
-      "type": "uuid",
-      "nullable": false,
-      "fk": true,
-      "fk_target": "capability.id"
-     }
-    ],
-    "uniques": [
-     {
-      "name": "product_capability_product_id_capability_id_key",
-      "definition": "CREATE UNIQUE INDEX product_capability_product_id_capability_id_key ON public.product_capability USING btree (product_id, capability_id)"
-     }
-    ]
-   },
    "product_metric": {
     "columns": [
      {
@@ -1547,55 +1510,6 @@
      }
     ]
    },
-   "component_capability": {
-    "columns": [
-     {
-      "name": "id",
-      "type": "uuid",
-      "nullable": false,
-      "default": "uuidv7()",
-      "pk": true
-     },
-     {
-      "name": "present",
-      "type": "boolean",
-      "nullable": false,
-      "default": "true"
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "updated_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "component_id",
-      "type": "uuid",
-      "nullable": false,
-      "fk": true,
-      "fk_target": "component.id"
-     },
-     {
-      "name": "capability_id",
-      "type": "uuid",
-      "nullable": false,
-      "fk": true,
-      "fk_target": "capability.id"
-     }
-    ],
-    "uniques": [
-     {
-      "name": "component_capability_component_id_capability_id_key",
-      "definition": "CREATE UNIQUE INDEX component_capability_component_id_capability_id_key ON public.component_capability USING btree (component_id, capability_id)"
-     }
-    ]
-   },
    "interface": {
     "columns": [
      {
@@ -2030,51 +1944,6 @@
    }
   },
   "identity": {
-   "capability": {
-    "columns": [
-     {
-      "name": "name",
-      "type": "text",
-      "nullable": false
-     },
-     {
-      "name": "display_name",
-      "type": "text",
-      "nullable": false
-     },
-     {
-      "name": "official",
-      "type": "boolean",
-      "nullable": false,
-      "default": "false"
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "updated_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "id",
-      "type": "uuid",
-      "nullable": false,
-      "default": "uuidv7()",
-      "pk": true
-     }
-    ],
-    "uniques": [
-     {
-      "name": "capability_name_key",
-      "definition": "CREATE UNIQUE INDEX capability_name_key ON public.capability USING btree (name)"
-     }
-    ]
-   },
    "human": {
     "columns": [
      {
@@ -2586,43 +2455,6 @@
      }
     ]
    },
-   "system_role_capability": {
-    "columns": [
-     {
-      "name": "id",
-      "type": "uuid",
-      "nullable": false,
-      "default": "uuidv7()",
-      "pk": true
-     },
-     {
-      "name": "role_id",
-      "type": "uuid",
-      "nullable": false,
-      "fk": true,
-      "fk_target": "system_role.id"
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "capability_id",
-      "type": "uuid",
-      "nullable": false,
-      "fk": true,
-      "fk_target": "capability.id"
-     }
-    ],
-    "uniques": [
-     {
-      "name": "system_role_capability_role_id_capability_id_key",
-      "definition": "CREATE UNIQUE INDEX system_role_capability_role_id_capability_id_key ON public.system_role_capability USING btree (role_id, capability_id)"
-     }
-    ]
-   },
    "system_role_product": {
     "columns": [
      {
@@ -2731,43 +2563,6 @@
      {
       "name": "alarm_open_condition_key",
       "definition": "CREATE UNIQUE INDEX alarm_open_condition_key ON public.alarm USING btree (component_id, dedup_key) WHERE (cleared_at IS NULL)"
-     }
-    ]
-   },
-   "alarm_capability": {
-    "columns": [
-     {
-      "name": "id",
-      "type": "uuid",
-      "nullable": false,
-      "default": "uuidv7()",
-      "pk": true
-     },
-     {
-      "name": "alarm_id",
-      "type": "uuid",
-      "nullable": false,
-      "fk": true,
-      "fk_target": "alarm.id"
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "capability_id",
-      "type": "uuid",
-      "nullable": false,
-      "fk": true,
-      "fk_target": "capability.id"
-     }
-    ],
-    "uniques": [
-     {
-      "name": "alarm_capability_alarm_id_capability_id_key",
-      "definition": "CREATE UNIQUE INDEX alarm_capability_alarm_id_capability_id_key ON public.alarm_capability USING btree (alarm_id, capability_id)"
      }
     ]
    },

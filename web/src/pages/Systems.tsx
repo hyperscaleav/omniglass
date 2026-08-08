@@ -319,7 +319,7 @@ export default function Systems() {
 
 
         {/* The verdict and its reconciliation: which roles are impaired, which
-            required capabilities an alarm took away, and which alarms took them.
+            assigned components went down, and which alarms took them down.
             It sits directly above the roles surface it reasons about, so "why is
             this degraded" and "what are these roles" read as one thought. */}
         <SystemHealthPanel

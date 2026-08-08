@@ -9,7 +9,6 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { PRODUCTS_KEY } from "../lib/products";
 import { VENDORS_KEY } from "../lib/vendors";
 import { DRIVERS_KEY } from "../lib/drivers";
-import { CAPABILITIES_KEY } from "../lib/capabilities";
 import { STANDARDS_KEY } from "../lib/standards";
 import { LOCATION_TYPES_KEY } from "../lib/location_types";
 import { METRICS_KEY } from "../lib/metric_types";
@@ -41,7 +40,6 @@ const PRIMED: [readonly string[], number][] = [
   [PRODUCTS_KEY, 2],
   [VENDORS_KEY, 1],
   [DRIVERS_KEY, 8],
-  [CAPABILITIES_KEY, 3],
   [STANDARDS_KEY, 4],
   [LOCATION_TYPES_KEY, 5],
   [METRICS_KEY, 12],
@@ -83,7 +81,6 @@ describe("CatalogOverview page", () => {
     expect(entry(comp, "Vendors").textContent).toContain("1");
     expect(entry(comp, "Products").textContent).toContain("2");
     expect(entry(comp, "Drivers").textContent).toContain("8");
-    expect(entry(comp, "Capabilities").textContent).toContain("3");
     expect(entry(card("Telemetry")!, "Metrics").textContent).toContain("12");
     expect(entry(card("Systems")!, "Standards").textContent).toContain("4");
     expect(entry(card("Locations")!, "Types").textContent).toContain("5");

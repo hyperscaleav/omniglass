@@ -6,8 +6,9 @@ import { locationHealthKey, systemHealthKey, type EstateHealth } from "../lib/he
 
 // The reconciliation panel is the claim this slice makes: it must answer "why is
 // this degraded" in one view by naming the whole chain, alarm on a component ->
-// degraded capability -> role below quorum -> verdict. Data is seeded into the
-// query cache so no server is needed; the panel is read-only, so nothing is faked.
+// that component going down (#626: wholesale, not per named capability) -> role
+// below quorum -> verdict. Data is seeded into the query cache so no server is
+// needed; the panel is read-only, so nothing is faked.
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
 
 const degraded: EstateHealth = {
@@ -16,8 +17,8 @@ const degraded: EstateHealth = {
   verdict: "outage",
   systems: [],
   roles: [
-    // Impaired by an alarm: a critical fault on disp-2 took the display capability
-    // away, so the role holds 1 of the 2 it needs and takes the system out.
+    // Impaired by an alarm: a critical fault took disp-2 down, so the role
+    // holds 1 of the 2 it needs and takes the system out.
     {
       name: "main-display",
       display_name: "Main display",
@@ -25,8 +26,7 @@ const degraded: EstateHealth = {
       impaired: true,
       quorum: 2,
       satisfying: 1,
-      required: ["display", "hdmi-input"],
-      degraded: ["display"],
+      down: ["disp-2"],
       assigned_to: ["disp-1", "disp-2"],
       alarms: [
         {
@@ -35,7 +35,6 @@ const degraded: EstateHealth = {
           message: "HDMI board failed",
           component: "disp-2",
           raised_at: ago(3 * 3_600_000),
-          capabilities: ["display"],
         },
       ],
     },
@@ -47,8 +46,7 @@ const degraded: EstateHealth = {
       impaired: true,
       quorum: 2,
       satisfying: 0,
-      required: ["microphone"],
-      degraded: [],
+      down: [],
       assigned_to: [],
       alarms: [],
     },
@@ -60,8 +58,7 @@ const degraded: EstateHealth = {
       impaired: false,
       quorum: 1,
       satisfying: 1,
-      required: ["touch-panel"],
-      degraded: [],
+      down: [],
       assigned_to: ["panel-1"],
       alarms: [],
     },
@@ -86,8 +83,7 @@ const healthy: EstateHealth = {
       impaired: false,
       quorum: 1,
       satisfying: 1,
-      required: ["display"],
-      degraded: [],
+      down: [],
       assigned_to: ["disp-9"],
       alarms: [],
     },
@@ -132,30 +128,30 @@ describe("SystemHealthPanel reconciliation", () => {
     expect(within(block).getAllByText("1 of 2 satisfying").length).toBe(2);
   });
 
-  it("names the degraded capability as the link between the alarm and the role", () => {
+  it("names the down component as the link between the alarm and the role", () => {
     const { getByText } = mountSystem(degraded);
     const block = roleBlock(getByText, "main-display");
-    // The chain step, and the requirement chip marked as taken away.
-    expect(within(block).getByText("Capability degraded")).toBeTruthy();
-    expect(within(block).getByText(/^display degraded$/)).toBeTruthy();
-    // The capability the alarm did NOT touch is still listed, unmarked.
-    expect(within(block).getByText("hdmi-input")).toBeTruthy();
+    // The chain step, and the assigned chip marked as down.
+    expect(within(block).getByText("Component down")).toBeTruthy();
+    expect(within(block).getByText(/^disp-2 down$/)).toBeTruthy();
+    // The assigned component the alarm did NOT touch is still listed, unmarked.
+    expect(within(block).getByText("disp-1")).toBeTruthy();
   });
 
-  it("spells the chain out in order: alarm, capability, role, contribution", () => {
+  it("spells the chain out in order: alarm, component down, role, contribution", () => {
     const { getByText } = mountSystem(degraded);
     const block = roleBlock(getByText, "main-display");
     const captions = within(block)
-      .getAllByText(/Alarm on a component|Capability degraded|Role below quorum|Contributes/)
+      .getAllByText(/Alarm on a component|Component down|Role below quorum|Contributes/)
       .map((e) => e.textContent);
-    expect(captions).toEqual(["Alarm on a component", "Capability degraded", "Role below quorum", "Contributes"]);
+    expect(captions).toEqual(["Alarm on a component", "Component down", "Role below quorum", "Contributes"]);
   });
 
   it("states the whole chain as one sentence, naming every link", () => {
     const { getByText } = mountSystem(degraded);
     expect(
       getByText(
-        /A critical alarm on disp-2 degrades display, so Main display satisfies 1 of 2 and contributes outage, which is why this system reads outage\./,
+        /A critical alarm on disp-2, taking disp-2 out of the role, so Main display satisfies 1 of 2 and contributes outage, which is why this system reads outage\./,
       ),
     ).toBeTruthy();
   });
@@ -163,9 +159,9 @@ describe("SystemHealthPanel reconciliation", () => {
   it("separates a short-staffed role from a broken one", () => {
     const { getByText } = mountSystem(degraded);
     const block = roleBlock(getByText, "table-mic");
-    expect(within(block).getByText(/No alarm reaches Table microphone/)).toBeTruthy();
+    expect(within(block).getByText(/No component assigned to Table microphone is down/)).toBeTruthy();
     expect(within(block).getByText(/there are simply fewer of them than the quorum wants/)).toBeTruthy();
-    expect(within(block).queryByText("Capability degraded")).toBeNull();
+    expect(within(block).queryByText("Component down")).toBeNull();
   });
 
   it("orders the impaired roles worst impact first, and names what is holding", () => {
@@ -192,7 +188,7 @@ describe("SystemHealthPanel reconciliation", () => {
     const status = getByRole("status");
     expect(status.textContent).toMatch(/This system is healthy/);
     expect(status.textContent).toMatch(/All 1 role it needs are filled and meet their quorum/);
-    expect(queryByText("Capability degraded")).toBeNull();
+    expect(queryByText("Component down")).toBeNull();
     expect(queryByText("impaired")).toBeNull();
   });
 

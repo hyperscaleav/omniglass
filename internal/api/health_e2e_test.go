@@ -15,12 +15,11 @@ import (
 )
 
 type alarmWire struct {
-	ID           string   `json:"id"`
-	Component    string   `json:"component"`
-	Severity     string   `json:"severity"`
-	Message      string   `json:"message"`
-	Capabilities []string `json:"capabilities"`
-	Active       bool     `json:"active"`
+	ID        string `json:"id"`
+	Component string `json:"component"`
+	Severity  string `json:"severity"`
+	Message   string `json:"message"`
+	Active    bool   `json:"active"`
 }
 
 type healthWire struct {
@@ -33,7 +32,7 @@ type healthWire struct {
 		Quorum     int         `json:"quorum"`
 		Satisfying int         `json:"satisfying"`
 		Impaired   bool        `json:"impaired"`
-		Degraded   []string    `json:"degraded"`
+		Down       []string    `json:"down"`
 		Alarms     []alarmWire `json:"alarms"`
 	} `json:"roles"`
 	Systems []struct {
@@ -47,11 +46,11 @@ type healthWire struct {
 
 // TestHealthAPI drives the alarm and health surfaces over HTTP as an operator
 // would: raise an alarm on a component, watch its system and the location above
-// it go degraded, read WHY (the impaired role, the capability it lost, the alarm
-// that took it), then clear the alarm and watch everything come back. The
-// drill-down from a degraded location to the causing alarm is the point of the
-// slice, so it is driven end to end here rather than asserted at the gateway.
-// Skipped under -short.
+// it go degraded, read WHY (the impaired role, the component the alarm took
+// down, and the alarm itself), then clear the alarm and watch everything come
+// back. The drill-down from a degraded location to the causing alarm is the
+// point of the slice, so it is driven end to end here rather than asserted at
+// the gateway. Skipped under -short.
 func TestHealthAPI(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -85,7 +84,7 @@ func TestHealthAPI(t *testing.T) {
 	}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPut, "/standards/hq-room/roles/table-mic", map[string]any{
 		"display_name": "Table Microphone", "quorum": 1,
-		"capabilities": []string{"microphone", "speaker"}, "impact": "outage",
+		"accepted_types": []string{"video-bar"}, "impact": "outage",
 	}, http.StatusOK)
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{
 		"name": "hq-1", "standard_id": "hq-room", "location": "hq-r1",
@@ -114,11 +113,12 @@ func TestHealthAPI(t *testing.T) {
 		t.Fatalf("roles = %+v, want one table-mic at impact outage, not impaired", sys.Roles)
 	}
 
-	// Raise an alarm that takes away microphone, which the role requires.
+	// Raise a critical alarm on the bar: it impairs the component wholesale
+	// (#626), not a named capability, so bar-1 no longer occupies the slot it
+	// is assigned to.
 	var raised alarmWire
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components/bar-1/alarms", map[string]any{
 		"severity": "critical", "message": "mic array not responding",
-		"capabilities": []string{"microphone"},
 	}, http.StatusCreated), &raised); err != nil {
 		t.Fatalf("decode raised alarm: %v", err)
 	}
@@ -126,8 +126,8 @@ func TestHealthAPI(t *testing.T) {
 		t.Fatalf("raised alarm = %+v, want an active critical", raised)
 	}
 
-	// The role's impact is outage, so the system is an outage even though the
-	// component only lost one capability. What the slot meant is what decides.
+	// The role's impact is outage, so the system is an outage the moment its
+	// one occupant goes down. What the slot meant is what decides.
 	sys = health(ownerTok, "/systems/hq-1/health")
 	if sys.Verdict != "outage" {
 		t.Fatalf("system verdict = %q, want outage (the impaired role's declared impact)", sys.Verdict)
@@ -136,8 +136,8 @@ func TestHealthAPI(t *testing.T) {
 	if !role.Impaired || role.Satisfying != 0 {
 		t.Fatalf("role = %+v, want impaired with nobody satisfying it", role)
 	}
-	if len(role.Degraded) != 1 || role.Degraded[0] != "microphone" {
-		t.Fatalf("degraded = %v, want the required capability the alarm took", role.Degraded)
+	if len(role.Down) != 1 || role.Down[0] != "bar-1" {
+		t.Fatalf("down = %v, want the assigned component the alarm took down", role.Down)
 	}
 	if len(role.Alarms) != 1 || role.Alarms[0].ID != raised.ID {
 		t.Fatalf("alarms = %+v, want the causing alarm named", role.Alarms)
@@ -203,7 +203,7 @@ func TestHealthAPI(t *testing.T) {
 
 	// Request faults are named, not 500s.
 	c.do(ownerTok, http.MethodPost, "/components/bar-1/alarms", map[string]any{
-		"severity": "critical", "capabilities": []string{"telepathy"},
+		"severity": "not-a-severity",
 	}, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodPost, "/components/no-such/alarms", map[string]any{
 		"severity": "info",

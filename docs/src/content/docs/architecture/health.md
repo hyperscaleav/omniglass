@@ -1,6 +1,6 @@
 ---
 title: Health, KPIs, and service levels
-description: "Health as a verdict rolled up from alarms through capabilities and roles, recorded as a transition so the edges are accurate, plus the KPIs every estate should track and SLI / SLO / SLA."
+description: "Health as a verdict rolled up from alarms through occupied slots and roles, recorded as a transition so the edges are accurate, plus the KPIs every estate should track and SLI / SLO / SLA."
 sidebar:
   badge:
     text: Partial
@@ -8,12 +8,13 @@ sidebar:
 ---
 
 Health answers "is this system working right now?" and "since when?". It is a **first-class
-capability**, not a rules-engine byproduct: a deliberate model (an alarm degrades a capability,
-a capability failure impairs a role, an impaired role sinks its system by a declared impact) carried
-on the ordinary sample pipeline: stored, queried, and trended like any other signal.
+model**, not a rules-engine byproduct: a deliberate chain (an alarm impairs a component's own
+verdict, a down component no longer occupies the role it fills, an impaired role sinks its system
+by a declared impact) carried on the ordinary sample pipeline: stored, queried, and trended like any
+other signal.
 
 :::note[Partial]
-Built today: the **`alarm`** table (component-local, with the capabilities it degrades), **`impact`**
+Built today: the **`alarm`** table (component-local, impairing its component wholesale), **`impact`**
 on a `system_role`, the **rollup** from component through system to location, and the **recorded
 transition history**. Two reads serve it (`GET /systems/{name}/health` and
 `GET /locations/{name}/health`) alongside the alarm write surface on a component. The console
@@ -21,32 +22,33 @@ shipped **HealthPanel**, **HealthBadge**, **HealthHistory**, and **AlarmsPanel**
 system, and location details. See [implementation status](/architecture/status/).
 :::
 
-## The chain: capability is the routing key
+## The chain: a component's own verdict is the routing key
 
 Health is a chain, every hop a thing an operator already models:
 
 ```text
 alarm on a component
-  -> degrades named capabilities
-    -> a component no longer satisfies a role that required one
-      -> the role falls below its quorum and is impaired
+  -> the component's own verdict goes down (any active alarm; #626)
+    -> it no longer occupies the roles it is assigned to
+      -> a role falls below its quorum and is impaired
         -> the role contributes its declared impact
           -> the system takes the worst contribution
             -> the location takes the worst of its systems
 ```
 
-- An **[alarm](#the-alarm-what-is-wrong-with-one-component)** is **component-local**; naming the
-  **[capabilities](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)** it
-  degrades is its only route out (an alarm degrading nothing is a note on the device, reaching no
-  system).
-- A component **satisfies** a [system role](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)
-  only when it **provides every** capability the role requires **and none is degraded**.
-- A role with fewer satisfying components than its **quorum** is **impaired**, contributing its
+- An **[alarm](#the-alarm-what-is-wrong-with-one-component)** is **component-local** and impairs its
+  component **wholesale**: any active alarm degrades it, a critical one is an outage. It no longer
+  names what it takes away (#626 retired the capability registry that used to route it).
+- A component **occupies** a [system role](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)
+  it is assigned to only when its own verdict is currently **healthy**. The typed-slot guard
+  (accepted `component_type`s, optionally pinned products) is checked once, at assignment; it plays
+  no further part in health.
+- A role with fewer occupying components than its **quorum** is **impaired**, contributing its
   **impact**; the system takes the **worst** contribution, the location the worst across its
   subtree's systems.
 
-Capability is the only vocabulary shared by the thing that breaks (a component) and the thing that
-cares (a slot in a room): hence the routing key ([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).
+A component's own verdict is the only thing that travels from the box that breaks to the slot that
+cares: hence the routing key ([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain), amended #626).
 
 ## Impact lives on the role
 
@@ -128,24 +130,23 @@ the cause and the verdict commit together or not at all:
 
 | the write | why it can move health |
 |---|---|
-| raise or clear an **alarm** | a capability is taken away or given back |
+| raise or clear an **alarm** | the component's own verdict, and every role it occupies, can flip |
 | **assign** or **unassign** a component | a role reaches or falls below its quorum |
 | **declare** or **withdraw** a role | a system gains or loses a slot it can be short of |
 | change a role's **quorum** or **impact** | the same staffing crosses a different line |
-| add, suppress, or clear a **component capability** | what the component provides is half of satisfying a role |
-| change a component's **product** | the product supplies its default capabilities |
 | **create** a system | its opening verdict gives its history a beginning |
 | change the **standard** a system conforms to | the whole inherited role set is swapped |
 | change a system's **location** | the contribution moves between rollups, so **both** are recomputed |
 | **delete** a system | the location it sat in loses a contributor and may have just improved |
-| change a **product's capabilities** | every component built to it provides a different set, in systems nobody touched |
 
 A standard change moves **every conforming system** at once. The relocation case names the location
 the system **left** explicitly, because its rollup may have just **improved** (a recovery is an edge
-as real as a failure; **deleting** a system is the same shape). The **product** case reaches
-furthest: a catalog edit is a health event across the estate. Deleting a **location** needs no
-trigger: a location holding anything cannot be deleted (`on delete restrict` throughout), so a
-deletable location is empty and already healthy.
+as real as a failure; **deleting** a system is the same shape). A component's **product** (and so its
+`component_type`) governs the typed-slot guard checked once at **assignment**; changing it after the
+fact does not, by itself, move any assigned role's health (#626: the guard is not part of the health
+chain, so this row that used to reach the whole estate on a catalog edit is retired along with it).
+Deleting a **location** needs no trigger: a location holding anything cannot be deleted (`on delete
+restrict` throughout), so a deletable location is empty and already healthy.
 
 A **missing trigger is a hole in the history**: the honest cost of this design, and why the list is
 enumerated, not inferred.
@@ -165,10 +166,10 @@ Two reads, both scope-injected, both a non-disclosing 404 for an owner outside t
 ([API](/architecture/api/#health-the-verdict-and-why)).
 
 **A system's report** is the verdict, every role it needs filled, and for an impaired role the
-causing chain: "the `room-mic` role wants 2 and has 1, because `mic-pod-2` lost `microphone` to a
-critical alarm raised at 14:02" tells the operator where to walk. A role impaired with **no alarm to
-name** (nobody assigned, or the assignments never provided what it requires) names no degraded
-capability, distinguishing **short-staffed** from **broken**.
+causing chain: "the `room-mic` role wants 2 and has 1, because `mic-pod-2` went down on a critical
+alarm raised at 14:02" tells the operator where to walk. A role impaired with **no assigned component
+down** (nobody assigned, or fewer assigned than the quorum wants) names no alarm, distinguishing
+**short-staffed** from **broken**.
 
 **A location's report** is the verdict plus every system beneath it with its own verdict, a map
 rather than a duplicated explanation.
@@ -183,9 +184,10 @@ An alarm is a row on a component with a **`severity`** (`info`, `warning`, or `c
 **keeps the row**; clearing an already-cleared alarm is an explicit miss, not a silent success.
 
 Severity drives the **component's own** verdict (any active alarm makes it `degraded`, a `critical`
-one an `outage`) and **nothing above it**: what reaches a system is the **capability set**, not the
-severity. Severity is how loudly to page somebody, impact is what the room lost. A component's
-verdict records on its own arc, so a component filling no role still carries accurate history.
+one an `outage`) and **nothing above it**: what reaches a role is whether its occupant's verdict is
+`healthy` or not, not the severity that produced it. Severity is how loudly to page somebody, impact
+is what the room lost. A component's verdict records on its own arc, so a component filling no role
+still carries accurate history.
 
 ::::design[Target design (ADR-0050)]
 
@@ -195,11 +197,8 @@ Today an **operator or API caller** writes the alarm. The full model: an
 [`event_rule`](/architecture/alarms-actions/) watches samples, fires an event, and an alarm **opens**
 and stays open while its condition holds, closing on the paired clear event. Health is
 **ack-independent**: acking annotates, never closes, so a broken room never looks healthy. A
-rule-opened alarm names the capabilities it degrades exactly as a hand-raised one does.
-
-:::caution[Open question]
-Whether a rule declares the degraded capability set directly, or derives it from the property it watched.
-:::
+rule-opened alarm impairs its owner's own verdict exactly as a hand-raised one does (#626: it no
+longer names what it takes away; the component is impaired wholesale).
 
 ### Alarms owned by a system or a location
 
@@ -210,8 +209,8 @@ condition only the system cares about (a display on **input 2** is normal for th
 the room); the component stays generic. **SaaS and vendor status**
 ([shared-API collection](/architecture/collection/)) follows the same discipline: a vendor's
 "offline" is an observed signal to author system conditions over, **corroborated**, never a verdict.
-The acyclic discipline holds: an alarm that **feeds** health degrades a capability, the alarm that
-fires **off** the `health` state degrades nothing; health rolls up only, no loop.
+The acyclic discipline holds: an alarm that **feeds** health impairs a component's own verdict, the
+alarm that fires **off** the `health` state impairs nothing; health rolls up only, no loop.
 
 ### `unknown`, and honest coverage
 
@@ -313,7 +312,7 @@ Zabbix bolts services, SLA, and the service tree on as a separate subsystem. Omn
 sample, the history its transitions, the SLI a calc over them, the SLA an alarm.
 
 Related: [core entities](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)
-(the role, the capability, the quorum), [alarms and actions](/architecture/alarms-actions/) (the
+(the role, the typed-slot guard, the quorum), [alarms and actions](/architecture/alarms-actions/) (the
 detection tier), [samples](/architecture/properties/) (the `property` lane and the owner arc), and
 the [Standards](/guides/admin/standards/) and [Work with an entity](/guides/operator/entities/)
 guides for the operator loop.

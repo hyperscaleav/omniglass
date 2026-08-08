@@ -51,9 +51,8 @@ Every task on these pages has two front doors, and they call the same API with t
 - The classifier catalogs shape the estate's entities:
   **[location types](/guides/admin/location-types/)** for locations, **[standards](/guides/admin/standards/)** for
   systems, and **[products](/guides/admin/products/)** for components, with
-  **[vendors](/guides/admin/vendors/)**, **[drivers](/guides/admin/drivers/)**, and
-  **[capabilities](/guides/admin/capabilities/)** the reference registries a product ties
-  together.
+  **[vendors](/guides/admin/vendors/)** and **[drivers](/guides/admin/drivers/)** the reference
+  registries a product ties together.
 
 The model behind all of this is [identity and access](/architecture/identity-access/) and
 [config and credentials](/architecture/variables/); those pages say how it is built, these say

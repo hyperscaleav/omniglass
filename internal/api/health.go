@@ -11,10 +11,10 @@ import (
 
 // The health read: what a system or location's verdict is, WHY, and when it last
 // changed. The why is the point. A bare "degraded" tells an operator nothing they
-// can act on, so a system's report names the impaired role, the required
-// capability an alarm took away, and the alarm that took it; a location's report
-// names the systems beneath it with their verdicts, and the system read explains
-// the rest.
+// can act on, so a system's report names the impaired role, which assigned
+// components are down, and the alarm that took each one down; a location's
+// report names the systems beneath it with their verdicts, and the system read
+// explains the rest.
 //
 // The verdict served is computed from the very evidence served beside it, so the
 // headline and the reason can never disagree. Reading still WRITES nothing: the
@@ -26,25 +26,23 @@ import (
 const healthHistoryWindow = 30 * 24 * time.Hour
 
 type healthAlarmBody struct {
-	ID           string    `json:"id"`
-	Component    string    `json:"component"`
-	Severity     string    `json:"severity"`
-	Message      string    `json:"message"`
-	Capabilities []string  `json:"capabilities"`
-	RaisedAt     time.Time `json:"raised_at"`
+	ID        string    `json:"id"`
+	Component string    `json:"component"`
+	Severity  string    `json:"severity"`
+	Message   string    `json:"message"`
+	RaisedAt  time.Time `json:"raised_at"`
 }
 
 type healthRoleBody struct {
 	Name        string            `json:"name"`
 	DisplayName string            `json:"display_name"`
 	Impact      string            `json:"impact" doc:"What an impaired role means for its system: outage, degraded, or none"`
-	Required    []string          `json:"required" doc:"The capabilities a component must ALL provide to fill this role"`
 	Quorum      int               `json:"quorum"`
-	Satisfying  int               `json:"satisfying" doc:"How many assigned components can currently fill the role"`
+	Satisfying  int               `json:"satisfying" doc:"How many assigned components currently occupy the role (their own verdict is healthy)"`
 	Impaired    bool              `json:"impaired" doc:"True when satisfying is below quorum"`
 	AssignedTo  []string          `json:"assigned_to"`
-	Degraded    []string          `json:"degraded" doc:"The required capabilities an active alarm has taken away; empty when the role is merely short-staffed"`
-	Alarms      []healthAlarmBody `json:"alarms" doc:"The active alarms that degraded them"`
+	Down        []string          `json:"down" doc:"The assigned components whose own verdict is not healthy; empty when the role is merely short-staffed"`
+	Alarms      []healthAlarmBody `json:"alarms" doc:"The active alarms on those down components"`
 }
 
 type healthSystemBody struct {
@@ -93,23 +91,21 @@ func toHealthRoleBody(r *storage.HealthRole) healthRoleBody {
 		Name:        r.Name,
 		DisplayName: r.DisplayName,
 		Impact:      r.Impact,
-		Required:    nonNil(r.Required),
 		Quorum:      r.Quorum,
 		Satisfying:  r.Satisfying,
 		Impaired:    r.Impaired,
 		AssignedTo:  nonNil(r.AssignedTo),
-		Degraded:    nonNil(r.Degraded),
+		Down:        nonNil(r.Down),
 		Alarms:      make([]healthAlarmBody, 0, len(r.Alarms)),
 	}
 	for i := range r.Alarms {
 		a := &r.Alarms[i]
 		body.Alarms = append(body.Alarms, healthAlarmBody{
-			ID:           a.ID,
-			Component:    a.ComponentID,
-			Severity:     a.Severity,
-			Message:      a.Message,
-			Capabilities: nonNil(a.Capabilities),
-			RaisedAt:     a.RaisedAt,
+			ID:        a.ID,
+			Component: a.ComponentID,
+			Severity:  a.Severity,
+			Message:   a.Message,
+			RaisedAt:  a.RaisedAt,
 		})
 	}
 	return body
@@ -131,7 +127,7 @@ func registerHealthRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/systems/{name}/health",
 		Summary:     "Read a system's health",
-		Description: "The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role the required capabilities an alarm has taken away plus the alarms that took them. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+		Description: "The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
 	}, "system", "read"), func(ctx context.Context, in *systemPathInput) (*estateHealthOutput, error) {
 		since := time.Now().UTC().Add(-healthHistoryWindow)
 		rep, err := gw.SystemHealth(ctx, in.Name, since, a.scopeFor(ctx, "system", "read"))
@@ -146,7 +142,7 @@ func registerHealthRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/locations/{name}/health",
 		Summary:     "Read a location's health",
-		Description: "The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, the capability, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.",
+		Description: "The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.",
 	}, "location", "read"), func(ctx context.Context, in *locationPathInput) (*estateHealthOutput, error) {
 		since := time.Now().UTC().Add(-healthHistoryWindow)
 		rep, err := gw.LocationHealth(ctx, in.Name, since, a.scopeFor(ctx, "location", "read"))

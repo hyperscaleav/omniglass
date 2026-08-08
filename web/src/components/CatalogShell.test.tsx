@@ -9,7 +9,6 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { PRODUCTS_KEY } from "../lib/products";
 import { VENDORS_KEY } from "../lib/vendors";
 import { DRIVERS_KEY } from "../lib/drivers";
-import { CAPABILITIES_KEY } from "../lib/capabilities";
 import { STANDARDS_KEY } from "../lib/standards";
 import { LOCATION_TYPES_KEY } from "../lib/location_types";
 import { METRICS_KEY } from "../lib/metric_types";
@@ -43,7 +42,6 @@ const PRIMED: [readonly string[], number][] = [
   [PRODUCTS_KEY, 2],
   [VENDORS_KEY, 1],
   [DRIVERS_KEY, 8],
-  [CAPABILITIES_KEY, 3],
   [STANDARDS_KEY, 4],
   [LOCATION_TYPES_KEY, 5],
   [METRICS_KEY, 12],
@@ -98,7 +96,7 @@ describe("CatalogShell", () => {
       "/catalog",
       "/metrics", "/properties", "/event-types",
       "/command-types", "/rules", "/notifications",
-      "/vendors", "/products", "/drivers", "/capabilities", "/component-types",
+      "/vendors", "/products", "/drivers", "/component-types",
       "/standards",
       "/location-types",
       "/tags",
@@ -161,7 +159,7 @@ describe("CatalogShell", () => {
 
   it("keeps every entry for a *:read floor viewer: nothing on the subrail is off the read floor", () => {
     mount(viewer);
-    expect(hrefs()).toHaveLength(15);
+    expect(hrefs()).toHaveLength(14);
     expect([...nav().querySelectorAll("button[disabled]")]).toHaveLength(3);
   });
 

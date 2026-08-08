@@ -12,21 +12,17 @@ standards:
     # (self or a descendant): the #626 typed-slot guard, and these double as its
     # worked example (the shipped Cisco Room Bar, video-bar, satisfies room-mic;
     # the Samsung QM55, display, satisfies main-display; a room with one bar
-    # reads as understaffed until the second lands). Capabilities stays
-    # alongside it, no longer read by the assignment guard but still what the
-    # health rollup's alarm-impact model checks (an alarm names the capability
-    # it degrades, e.g. "microphone" on a room bar), a separate mechanism #626
-    # does not touch. Seeded if absent, so an operator who retunes them keeps
-    # the edit.
+    # reads as understaffed until the second lands). An occupant satisfies its
+    # slot as long as its own verdict is healthy: an alarm impairs a component
+    # wholesale now, not by named capability (#626). Seeded if absent, so an
+    # operator who retunes them keeps the edit.
     roles:
       - name: room-mic
         display_name: Room Microphone
         quorum: 2
-        capabilities: [microphone, speaker]
         accepted_types: [video-bar]
       - name: main-display
         display_name: Main Display
-        capabilities: [flat-panel-display]
         accepted_types: [display]
   - id: huddle-room
     display_name: Huddle Room

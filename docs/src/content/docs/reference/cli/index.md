@@ -268,99 +268,6 @@ omniglass bootstrap <username> [flags]
 | `--password` | string | (none) | owner password, so the owner can sign in to the console (optional) |
 | `--ttl` | duration | `2160h0m0s` | how long the bootstrap token is valid before it expires (max 365 days) |
 
-## `omniglass capability`
-
-Commands for the capability resource
-
-### `omniglass capability create`
-
-Create a capability
-
-```
-omniglass capability create [flags]
-```
-
-Creates a custom (non-official) capability. Gated by capability:create.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--display-name` | string | (none) | What an operator reads in pickers and lists |
-| `--name` | string | (none) | The globally unique name; renameable |
-
-Example:
-
-```sh
-omniglass capability create --display-name display_name --name name
-```
-
-### `omniglass capability delete`
-
-Delete a capability
-
-```
-omniglass capability delete <id>
-```
-
-Deletes a custom capability, refused if official (422). Gated by capability:delete.
-
-Example:
-
-```sh
-omniglass capability delete <id>
-```
-
-### `omniglass capability get`
-
-Get a capability
-
-```
-omniglass capability get <id>
-```
-
-Fetches a capability by id. Gated by capability:read.
-
-Example:
-
-```sh
-omniglass capability get <id>
-```
-
-### `omniglass capability list`
-
-List capabilities
-
-```
-omniglass capability list
-```
-
-Lists the capability registry, ordered alphabetically by display name. Populates the capability picker on the product form. Gated by capability:read.
-
-Example:
-
-```sh
-omniglass capability list
-```
-
-### `omniglass capability update`
-
-Update a capability
-
-```
-omniglass capability update <id> [flags]
-```
-
-Patches a custom capability's display_name. Official capabilities are read-only (422). Gated by capability:update.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--display-name` | string | (none) | A new operator-facing label |
-
-Example:
-
-```sh
-omniglass capability update <id>
-```
-
 ## `omniglass command-type`
 
 Commands for the command-type resource
@@ -480,11 +387,10 @@ Raise an alarm on a component
 omniglass component alarm create <name> [flags]
 ```
 
-Records a condition on this component and the capabilities it degrades, then recomputes health in the same transaction: any role requiring a degraded capability can no longer be filled by this component, and its system and location verdicts move with it. An unknown capability is a 422. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it. Gated by component:update; an out-of-scope component is a non-disclosing 404.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--capabilities` | string | (none) | The capabilities this condition degrades; a role requiring one of them can no longer be filled by this component |
 | `--dedup-key` | string | (none) | The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate |
 | `--message` | string | (none) | What is wrong, for the operator reading it later |
 | `--severity` | string | (none) | How bad it is; critical puts the component itself in outage |
@@ -519,7 +425,7 @@ List a component's alarms
 omniglass component alarm list <name> [flags]
 ```
 
-What is currently wrong with this component, newest first, each with the capabilities it degrades. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+What is currently wrong with this component, newest first. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -529,62 +435,6 @@ Example:
 
 ```sh
 omniglass component alarm list <name>
-```
-
-### `omniglass component capability`
-
-Commands for the capability resource
-
-#### `omniglass component capability delete`
-
-Clear a capability declaration on a component
-
-```
-omniglass component capability delete <name> <capability>
-```
-
-Removes the component's own fact about the capability, so it falls back to whatever its product declares. Clearing a fact the component never declared is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
-
-Example:
-
-```sh
-omniglass component capability delete <name> <capability>
-```
-
-#### `omniglass component capability list`
-
-List a component's effective capabilities
-
-```
-omniglass component capability list <name>
-```
-
-What this component actually provides: the capabilities its product declares, plus the ones the component adds, minus the ones it suppresses. No longer what role assignment gates (the typed-slot guard checks the component's product's component_type instead, #626); this resolved set still feeds the health rollup's alarm-impact model. Gated by component:read; an out-of-scope component is a non-disclosing 404.
-
-Example:
-
-```sh
-omniglass component capability list <name>
-```
-
-#### `omniglass component capability update`
-
-Declare a capability on a component
-
-```
-omniglass component capability update <name> <capability> [flags]
-```
-
-Records this component's own fact about a capability: present true adds one its product does not claim, present false suppresses one it does. Idempotent. An unknown capability is a 422; an unknown or out-of-scope component is a non-disclosing 404 (the component is resolved in scope first). Gated by component:update.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--present` | string | (none) | True to add the capability, false to suppress one the product declares |
-
-Example:
-
-```sh
-omniglass component capability update <name> <capability> --present present
 ```
 
 ### `omniglass component checkName`
@@ -1619,7 +1469,7 @@ Read a location's health
 omniglass location health list <name>
 ```
 
-The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, the capability, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
 
 Example:
 
@@ -2952,11 +2802,10 @@ Create a product
 omniglass product create [flags]
 ```
 
-Creates a custom (non-official) product, classified under a component_type, and sets its capabilities. kind and component_type are both required; kind refuses vm (retired, folded into app). Gated by product:create.
+Creates a custom (non-official) product, classified under a component_type. kind and component_type are both required; kind refuses vm (retired, folded into app). Gated by product:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--capabilities` | string | (none) | Capability names the product provides (the default set its components inherit) |
 | `--component-type` | string | (none) | The component_type this product is classified under (mic, camera, ...), by name or uuid; every product must belong to one of the tree's nodes. The generics (generic-device, generic-app, generic-service) fit anything not yet modeled more specifically. |
 | `--display-name` | string | (none) | What an operator reads in pickers and lists |
 | `--driver-id` | string | (none) | The driver that talks to it, by handle or uuid |
@@ -2996,7 +2845,7 @@ Get a product
 omniglass product get <id>
 ```
 
-Fetches a product by its name or its uuid, with its capabilities. Either form resolves, so `omniglass product get acme-soundbar` and the uuid are interchangeable. Gated by product:read.
+Fetches a product by its name or its uuid. Either form resolves, so `omniglass product get acme-soundbar` and the uuid are interchangeable. Gated by product:read.
 
 Example:
 
@@ -3012,7 +2861,7 @@ List products
 omniglass product list
 ```
 
-Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, component_type, and capabilities. Gated by product:read.
+Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
 
 Example:
 
@@ -3142,11 +2991,10 @@ Update a product
 omniglass product update <id> [flags]
 ```
 
-Patches a custom product's display_name, vendor, driver, kind, component_type, icon, or parent, and replaces its capabilities when provided. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.
+Patches a custom product's display_name, vendor, driver, kind, component_type, icon, or parent. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--capabilities` | string | (none) | Replaces the capability-name set; omit to leave unchanged |
 | `--component-type` | string | (none) | Reclassifies the product to this component_type, by name or uuid; component_type is required, so this only reclassifies, it never clears |
 | `--display-name` | string | (none) | A new operator-facing label |
 | `--driver-id` | string | (none) | A new driver, by handle or uuid |
@@ -3825,7 +3673,6 @@ Declares a role every conforming system needs filled, or revises it in place (th
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--accepted-types` | string | (none) | The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type |
-| `--capabilities` | string | (none) | Deprecated, no longer enforced: the typed-slot guard (accepted_types, pinned_products) replaces it |
 | `--display-name` | string | (none) | The role's human label; defaults to the role name |
 | `--impact` | string | (none) | What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display |
 | `--pinned-products` | string | (none) | If set, a filling component's product must be one of these; replaces the pinned set wholesale. Omit or empty accepts any product of an accepted type |
@@ -3950,7 +3797,7 @@ Read a system's health
 omniglass system health list <name>
 ```
 
-The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role the required capabilities an alarm has taken away plus the alarms that took them. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 Example:
 
@@ -4259,7 +4106,6 @@ Declares a role directly on this system (how a one-off system gets roles at all,
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--accepted-types` | string | (none) | The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type |
-| `--capabilities` | string | (none) | Deprecated, no longer enforced: the typed-slot guard (accepted_types, pinned_products) replaces it |
 | `--display-name` | string | (none) | The role's human label; defaults to the role name |
 | `--impact` | string | (none) | What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display |
 | `--pinned-products` | string | (none) | If set, a filling component's product must be one of these; replaces the pinned set wholesale. Omit or empty accepts any product of an accepted type |

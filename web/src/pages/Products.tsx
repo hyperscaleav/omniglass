@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
-import BladeField, { EMPTY_VALUE } from "../components/BladeField";
+import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { createIdentity } from "../lib/entities";
@@ -25,7 +25,6 @@ import {
 import { COMPONENT_TYPES_KEY, listComponentTypes, componentTypeByName } from "../lib/component_types";
 import { type Vendor, VENDORS_KEY, listVendors } from "../lib/vendors";
 import { type Driver, DRIVERS_KEY, listDrivers } from "../lib/drivers";
-import { type Capability, CAPABILITIES_KEY, listCapabilities } from "../lib/capabilities";
 import { useMe, can } from "../lib/auth";
 import { registryLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
@@ -38,9 +37,10 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // same as the Types catalog's official rows: the Edit / Delete pair greys. A
 // product carries a kind (device/app/service; vm retired, folded into app,
 // ADR-0086), a required component_type (the device-class genus every product
-// is classified under, ADR-0085, picked from the Types tree), an optional
-// icon override (default: the type's icon), an optional vendor and driver
-// (picked from those registries), and a set of capability names it exposes.
+// is classified under, ADR-0085, picked from the Types tree; also what a
+// system role's typed-slot guard checks, #626), an optional icon override
+// (default: the type's icon), and an optional vendor and driver (picked from
+// those registries).
 
 const PRODUCT_KINDS: ProductKind[] = ["device", "app", "service"];
 
@@ -135,7 +135,6 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
   const [icon, setIcon] = createSignal("");
   const [vendorId, setVendorId] = createSignal("");
   const [driverId, setDriverId] = createSignal("");
-  const [capabilities, setCapabilities] = createSignal<string[]>([]);
 
   createEffect(on(edit.editing, (editing) => {
     if (!editing) return;
@@ -146,7 +145,6 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
     setIcon(r?.icon ?? "");
     setVendorId(r?.vendor ?? "");
     setDriverId(r?.driver ?? "");
-    setCapabilities(r?.capabilities ?? []);
     setErr(null);
   }));
 
@@ -176,7 +174,6 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
         icon: icon(),
         vendor_id: vendorId() || undefined,
         driver_id: driverId() || undefined,
-        capabilities: capabilities(),
       });
       await qc.invalidateQueries({ queryKey: PRODUCTS_KEY });
     } catch (e) {
@@ -233,18 +230,6 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
           <BladeField label="Driver" mono value={() => r().driver ?? ""}>
             <DriverSelect value={driverId()} onChange={setDriverId} />
           </BladeField>
-          <BladeField
-            label="Capabilities"
-            read={
-              <Show when={r().capabilities.length} fallback={<span class="text-base-content/40">{EMPTY_VALUE}</span>}>
-                <div class="flex flex-wrap gap-1.5">
-                  <For each={r().capabilities}>{(c) => <span class="badge badge-ghost badge-sm font-data">{c}</span>}</For>
-                </div>
-              </Show>
-            }
-          >
-            <CapabilitiesPicker value={capabilities()} onChange={setCapabilities} />
-          </BladeField>
           <ProductContractEditor productId={r().name} official={r().official} />
           <ProductContractEditor productId={r().name} official={r().official} lane="metric" />
         </div>
@@ -259,7 +244,7 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
 // component_type (the device-class genus, #614) is required, no default, so
 // every product states its class explicitly rather than reading the silent
 // default that let a mislabeled cloud service pass as correct forever
-// (ADR-0086); vendor, driver, icon override, and capabilities are optional.
+// (ADR-0086); vendor, driver, and icon override are optional.
 export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.Element {
   const qc = useQueryClient();
   const { display, setDisplay, name, setName, nameDerived } = createIdentity();
@@ -268,7 +253,6 @@ export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.E
   const [icon, setIcon] = createSignal("");
   const [vendorId, setVendorId] = createSignal("");
   const [driverId, setDriverId] = createSignal("");
-  const [capabilities, setCapabilities] = createSignal<string[]>([]);
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
 
@@ -292,7 +276,6 @@ export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.E
         icon: icon() || undefined,
         vendor_id: vendorId() || undefined,
         driver_id: driverId() || undefined,
-        capabilities: capabilities().length ? capabilities() : undefined,
       });
       await qc.invalidateQueries({ queryKey: PRODUCTS_KEY });
       p.onCreated(created);
@@ -331,14 +314,6 @@ export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.E
       <FieldRow label="Driver" hint="How its signals are collected. Optional.">
         <DriverSelect value={driverId()} onChange={setDriverId} />
       </FieldRow>
-      {/* Not wrapped in Field: Field's root is a <label>, and a picker of one
-          <label> per checkbox nested inside it is invalid HTML that forwards a
-          click on the heading straight to the first checkbox. */}
-      <div class="flex flex-col gap-1.5">
-        <span class="text-[12px] font-medium text-base-content/70">Capabilities</span>
-        <CapabilitiesPicker value={capabilities()} onChange={setCapabilities} />
-        <span class="text-[11px] text-base-content/40">What the product can do. Optional.</span>
-      </div>
     </form>
   );
 }
@@ -420,32 +395,3 @@ function IconOverrideField(p: { componentType: string; value: string; onChange: 
   );
 }
 
-// CapabilitiesPicker: a checkbox per capability in the registry, the set of
-// capability NAMES a product exposes (product.capabilities carries names, so
-// the picker joins on the name). Mirrors Types.tsx's AllowedParentsPicker.
-// Each option is its own <label> (not nested inside another one), so a click on
-// it only ever toggles that option's own checkbox.
-function CapabilitiesPicker(p: { value: string[]; onChange: (v: string[]) => void }): JSX.Element {
-  const caps = useQuery(() => ({ queryKey: CAPABILITIES_KEY, queryFn: listCapabilities }));
-  const options = createMemo(() =>
-    [...(caps.data ?? [])].sort((a: Capability, b: Capability) => a.display_name.localeCompare(b.display_name)),
-  );
-  function toggle(name: string) {
-    p.onChange(p.value.includes(name) ? p.value.filter((x) => x !== name) : [...p.value, name]);
-  }
-  return (
-    <div class="flex flex-col gap-1.5 rounded-box border border-base-300 p-2.5">
-      <Show when={options().length} fallback={<span class="text-[11px] text-base-content/40">No capabilities in the registry yet.</span>}>
-        <For each={options()}>
-          {(c) => (
-            <label class="flex items-center gap-2 text-sm">
-              <input type="checkbox" class="checkbox checkbox-sm" checked={p.value.includes(c.name)} onChange={() => toggle(c.name)} />
-              <span>{c.display_name}</span>
-              <span class="font-data text-xs text-base-content/40">{c.name}</span>
-            </label>
-          )}
-        </For>
-      </Show>
-    </div>
-  );
-}

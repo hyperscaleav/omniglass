@@ -3,28 +3,34 @@ import { render, fireEvent, waitFor, within } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import RoleEditor from "./RoleEditor";
 import { standardRolesKey, type DeclaredRole } from "../lib/system_roles";
-import { CAPABILITIES_KEY, type Capability } from "../lib/capabilities";
+import { COMPONENT_TYPES_KEY, type ComponentType } from "../lib/component_types";
+import { PRODUCTS_KEY, type Product } from "../lib/products";
 import { ME_KEY, type Me } from "../lib/auth";
 import { BladeEditContext, createEditSlot } from "../lib/blades";
 import { uuidFor } from "../lib/testids";
 
 // The editor curates the roles a standard declares: the slots every conforming
-// system needs filled, each with the capabilities a component must provide and how
-// many components the slot wants. Data is seeded into the query cache so no server
-// is needed; the PUT / DELETE fetches are faked where a test drives them. The
-// mount hosts the editor inside a blade edit slot, as the standard blade does:
-// the controls are edit-state affordances (#621), so the default mount enters
-// edit mode; `editing: false` witnesses the read state.
+// system needs filled, each with the typed-slot guard (#626) a filling
+// component's product must clear and how many components the slot wants. Data
+// is seeded into the query cache so no server is needed; the PUT / DELETE
+// fetches are faked where a test drives them. The mount hosts the editor
+// inside a blade edit slot, as the standard blade does: the controls are
+// edit-state affordances (#621), so the default mount enters edit mode;
+// `editing: false` witnesses the read state.
 const declared: DeclaredRole[] = [
-  { name: "table-mic", display_name: "Table microphone", quorum: 2, capabilities: ["microphone"], accepted_types: [], pinned_products: [], impact: "degraded" },
-  { name: "main-display", display_name: "Main display", quorum: 1, capabilities: ["display", "hdmi-in"], accepted_types: [], pinned_products: [], impact: "outage" },
+  { name: "table-mic", display_name: "Table microphone", quorum: 2, accepted_types: ["video-bar"], pinned_products: [], impact: "degraded" },
+  { name: "main-display", display_name: "Main display", quorum: 1, accepted_types: ["display"], pinned_products: ["samsung-qm55"], impact: "outage" },
 ];
 
-const catalog: Capability[] = [
-  { id: uuidFor("microphone"), name: "microphone", display_name: "Microphone", official: true },
-  { id: uuidFor("speaker"), name: "speaker", display_name: "Speaker", official: true },
-  { id: uuidFor("display"), name: "display", display_name: "Display", official: true },
-  { id: uuidFor("hdmi-in"), name: "hdmi-in", display_name: "HDMI input", official: true },
+const typeCatalog: ComponentType[] = [
+  { id: uuidFor("t-video-bar"), name: "video-bar", display_name: "Video Bar", official: true, default_tags: [] },
+  { id: uuidFor("t-display"), name: "display", display_name: "Display", official: true, default_tags: [] },
+  { id: uuidFor("t-mic"), name: "mic", display_name: "Mic", official: true, default_tags: [] },
+];
+
+const productCatalog: Product[] = [
+  { id: uuidFor("p-qm55"), name: "samsung-qm55", display_name: "Samsung QM55", kind: "device", component_type: "display", component_type_id: uuidFor("t-display"), official: true },
+  { id: uuidFor("p-bar"), name: "cisco-room-bar", display_name: "Cisco Room Bar", kind: "device", component_type: "video-bar", component_type_id: uuidFor("t-video-bar"), official: true },
 ];
 
 const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };
@@ -38,7 +44,8 @@ function json(body: unknown, status = 200) {
 function mount(opts: { me?: Me; official?: boolean; rows?: DeclaredRole[]; editing?: boolean } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...standardRolesKey("meeting-room")], opts.rows ?? declared);
-  qc.setQueryData([...CAPABILITIES_KEY], catalog);
+  qc.setQueryData([...COMPONENT_TYPES_KEY], typeCatalog);
+  qc.setQueryData([...PRODUCTS_KEY], productCatalog);
   qc.setQueryData([...ME_KEY], opts.me ?? owner);
   const edit = createEditSlot();
   if (opts.editing ?? true) edit.begin();
@@ -57,23 +64,23 @@ const roleRow = (name: HTMLElement) => name.closest("div.flex-col") as HTMLEleme
 describe("RoleEditor on a standard", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("lists each declared role with its quorum and the capabilities it requires", () => {
+  it("lists each declared role with its quorum and what it accepts", () => {
     const { getByText } = mount();
     expect(getByText("Declared roles")).toBeTruthy();
     expect(getByText("the standard's roles")).toBeTruthy();
     const row = roleRow(getByText("table-mic"));
     expect(within(row).getByText("Table microphone")).toBeTruthy();
     expect(within(row).getByText("2 wanted")).toBeTruthy();
-    expect(within(row).getByText("microphone")).toBeTruthy();
+    expect(within(row).getByText("video-bar")).toBeTruthy();
   });
 
-  it("declares a role, PUTting its name, label, quorum, and required capabilities", async () => {
+  it("declares a role, PUTting its name, label, quorum, and typed-slot guard", async () => {
     let put: Request | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       if (req.method === "PUT") {
         put = req.clone();
-        return json({ name: "camera", display_name: "Room camera", quorum: 1, capabilities: ["speaker"] });
+        return json({ name: "camera", display_name: "Room camera", quorum: 1, accepted_types: ["video-bar"] });
       }
       return json({ roles: declared });
     });
@@ -84,21 +91,21 @@ describe("RoleEditor on a standard", () => {
     fireEvent.input(getByLabelText("Role name"), { target: { value: "camera" } });
     fireEvent.input(getByLabelText("Name for the new role"), { target: { value: "Room camera" } });
     fireEvent.input(getByLabelText("Quorum for the new role"), { target: { value: "3" } });
-    fireEvent.change(getByLabelText("Capability to require"), { target: { value: "speaker" } });
+    fireEvent.change(getByLabelText("Accept a component type…"), { target: { value: "video-bar" } });
     fireEvent.click(getByLabelText("Declare role"));
 
     await waitFor(() => expect(put).toBeTruthy());
     expect(put!.url).toContain("/standards/meeting-room/roles/camera");
-    expect(await put!.json()).toEqual({ quorum: 3, display_name: "Room camera", capabilities: ["speaker"] });
+    expect(await put!.json()).toEqual({ quorum: 3, display_name: "Room camera", accepted_types: ["video-bar"], pinned_products: [] });
   });
 
-  it("edits a role in place, replacing the required set wholesale", async () => {
+  it("edits a role in place, replacing the typed-slot sets wholesale", async () => {
     let put: Request | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       if (req.method === "PUT") {
         put = req.clone();
-        return json({ name: "main-display", display_name: "Main display", quorum: 2, capabilities: ["display"] });
+        return json({ name: "main-display", display_name: "Main display", quorum: 2, accepted_types: ["display"] });
       }
       return json({ roles: declared });
     });
@@ -108,13 +115,13 @@ describe("RoleEditor on a standard", () => {
     const quorum = getByLabelText("Quorum for main-display") as HTMLInputElement;
     expect(quorum.value).toBe("1"); // seeded from the declaration
     fireEvent.input(quorum, { target: { value: "2" } });
-    // Drop one of the two requirements: the write carries the whole set, not a delta.
-    fireEvent.click(getByLabelText("Stop requiring hdmi-in"));
+    // Drop the pinned product: the write carries the whole set, not a delta.
+    fireEvent.click(getByLabelText("Stop pinning samsung-qm55"));
     fireEvent.click(getByLabelText("Save main-display"));
 
     await waitFor(() => expect(put).toBeTruthy());
     expect(put!.url).toContain("/standards/meeting-room/roles/main-display");
-    expect(await put!.json()).toEqual({ quorum: 2, display_name: "Main display", capabilities: ["display"] });
+    expect(await put!.json()).toEqual({ quorum: 2, display_name: "Main display", accepted_types: ["display"], pinned_products: [] });
   });
 
   it("refuses a quorum that is not a whole number of components, before writing", async () => {

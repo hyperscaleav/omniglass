@@ -7,7 +7,6 @@ import { PRODUCTS_KEY, type Product } from "../lib/products";
 import { COMPONENT_TYPES_KEY, type ComponentType } from "../lib/component_types";
 import { VENDORS_KEY, type Vendor } from "../lib/vendors";
 import { DRIVERS_KEY, type Driver } from "../lib/drivers";
-import { CAPABILITIES_KEY, type Capability } from "../lib/capabilities";
 import { classifierPropertiesKey, type ClassifierProperty } from "../lib/classifier_properties";
 import { classifierMetricsKey } from "../lib/classifier_metrics";
 import { PROPERTIES_KEY, type PropertyRow } from "../lib/properties";
@@ -18,14 +17,14 @@ import { uuidFor } from "../lib/testids";
 // Products is the product catalog on the flat FlatList surface (the model a
 // component is an instance of). An official row is read-only, same
 // invariant as the Types catalog's official rows: no edit pencil, no Delete.
-// Data is seeded into the query cache so no server is needed; the vendor,
-// driver, and capability registries the pickers read are seeded too, so the
-// create form stays network-free.
+// Data is seeded into the query cache so no server is needed; the vendor and
+// driver registries the pickers read are seeded too, so the create form
+// stays network-free.
 // Wire truth (api/products.go): vendor/driver/parent arrive as BOTH the kebab
-// handle (vendor) and the uuid (vendor_id); capabilities is a list of NAMES.
+// handle (vendor) and the uuid (vendor_id).
 const seed: Product[] = [
-  { id: uuidFor("prod-crestron-tsw-1070"), name: "crestron-tsw-1070", display_name: "Crestron TSW-1070", kind: "device", component_type: "touch-panel", component_type_id: uuidFor("ct-touch-panel"), vendor: "crestron", vendor_id: uuidFor("ven-crestron"), driver: "crestron-ct", driver_id: uuidFor("drv-crestron-ct"), capabilities: ["touchscreen"], official: true },
-  { id: uuidFor("prod-acme-panel"), name: "acme-panel", display_name: "Acme Panel", kind: "device", component_type: "display", component_type_id: uuidFor("ct-display"), vendor: "acme-av", vendor_id: uuidFor("ven-acme-av"), capabilities: ["touchscreen"], official: false },
+  { id: uuidFor("prod-crestron-tsw-1070"), name: "crestron-tsw-1070", display_name: "Crestron TSW-1070", kind: "device", component_type: "touch-panel", component_type_id: uuidFor("ct-touch-panel"), vendor: "crestron", vendor_id: uuidFor("ven-crestron"), driver: "crestron-ct", driver_id: uuidFor("drv-crestron-ct"), official: true },
+  { id: uuidFor("prod-acme-panel"), name: "acme-panel", display_name: "Acme Panel", kind: "device", component_type: "display", component_type_id: uuidFor("ct-display"), vendor: "acme-av", vendor_id: uuidFor("ven-acme-av"), official: false },
 ];
 
 // The seeded component_type tree this page's Type picker renders (a slice of
@@ -42,7 +41,6 @@ const vendors: Vendor[] = [
   { id: uuidFor("ven-acme-av"), name: "acme-av", display_name: "Acme AV", kind: "integrator", official: false },
 ];
 const drivers: Driver[] = [{ id: uuidFor("drv-crestron-ct"), name: "crestron-ct", display_name: "Crestron CT", official: true }];
-const capabilities: Capability[] = [{ id: uuidFor("cap-touchscreen"), name: "touchscreen", display_name: "Touchscreen", official: true }];
 
 // The custom product's declared-property contract and the catalog its editor
 // joins each line to; the metric lane mounts beside it, kept inert with empty
@@ -64,7 +62,6 @@ function mount(me: Me = admin) {
   qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
   qc.setQueryData([...VENDORS_KEY], vendors);
   qc.setQueryData([...DRIVERS_KEY], drivers);
-  qc.setQueryData([...CAPABILITIES_KEY], capabilities);
   qc.setQueryData([...PROPERTIES_KEY], propertyCatalog);
   qc.setQueryData([...METRICS_KEY], []);
   qc.setQueryData([...classifierPropertiesKey("product", "acme-panel")], contract);
@@ -118,7 +115,7 @@ describe("Products page", () => {
     expect(within(blade).getByRole("button", { name: /delete/i })).toBeInTheDocument();
   });
 
-  it("editing a custom row exposes the vendor, driver, and capability pickers", async () => {
+  it("editing a custom row exposes the vendor and driver pickers", async () => {
     mount();
     fireEvent.click(screen.getByText("Acme Panel"));
     const blade = await waitFor(() => {
@@ -130,8 +127,6 @@ describe("Products page", () => {
     // vendor + driver selects both offer the seeded registry rows
     expect(within(blade).getByRole("option", { name: "Crestron" })).toBeInTheDocument();
     expect(within(blade).getByRole("option", { name: "Crestron CT" })).toBeInTheDocument();
-    // capability checkbox for the seeded capability
-    expect(within(blade).getByText("Touchscreen")).toBeInTheDocument();
   });
 
   // The blade model (#621): a blade opens read-only, and EVERY mutating control,
@@ -279,8 +274,7 @@ describe("Products icon fallback and override (#614)", () => {
     qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...VENDORS_KEY], vendors);
     qc.setQueryData([...DRIVERS_KEY], drivers);
-    qc.setQueryData([...CAPABILITIES_KEY], capabilities);
-    qc.setQueryData([...PROPERTIES_KEY], propertyCatalog);
+      qc.setQueryData([...PROPERTIES_KEY], propertyCatalog);
     qc.setQueryData([...METRICS_KEY], []);
     qc.setQueryData([...classifierPropertiesKey("product", "acme-panel")], contract);
     qc.setQueryData([...classifierMetricsKey("product", "acme-panel")], []);
@@ -321,9 +315,8 @@ describe("Products addressing honesty (#469)", () => {
   });
 });
 
-// The reference cells and the capability picker join on what the wire carries:
-// vendor/driver cells show the name (not the uuid), and the picker
-// compares capability NAMES (product.capabilities is a list of names).
+// The reference cells join on what the wire carries: vendor/driver cells show
+// the name, never the uuid.
 describe("Products reference honesty (#470)", () => {
   afterEach(() => vi.restoreAllMocks());
 
@@ -335,37 +328,6 @@ describe("Products reference honesty (#470)", () => {
     expect(within(row).getByText("crestron-ct")).toBeInTheDocument();
     // No uuid leaks into the row.
     expect(within(row).queryByText(/00000000-0000-4000/)).toBeNull();
-  });
-
-  it("checks a product's current capabilities in the picker and can remove one", async () => {
-    let sent: unknown;
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const req = input as Request;
-      if (req.method === "PATCH" && req.url.includes("/products/acme-panel")) {
-        sent = JSON.parse(await req.clone().text());
-        return new Response(JSON.stringify({ ...seed[1], capabilities: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
-      }
-      // Post-save invalidation refetch; any list shape satisfies the parsers.
-      return new Response(JSON.stringify({ products: [], vendors: [], drivers: [], capabilities: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
-    });
-
-    mount();
-    fireEvent.click(await screen.findByText("Acme Panel"));
-    const blade = await waitFor(() => {
-      const el = asides()[0];
-      if (!el) throw new Error("no blade yet");
-      return el as HTMLElement;
-    });
-    fireEvent.click(within(blade).getByLabelText("Edit"));
-    // The seeded capability arrives CHECKED (the picker joins on the name the
-    // wire carries), and unchecking it actually removes it from the save body.
-    const box = within(blade).getByLabelText(/Touchscreen/) as HTMLInputElement;
-    expect(box.checked).toBe(true);
-    fireEvent.click(box);
-    expect(box.checked).toBe(false);
-    fireEvent.click(within(blade).getByText("Save"));
-    await waitFor(() => expect(sent).toBeTruthy());
-    expect((sent as { capabilities: string[] }).capabilities).toEqual([]);
   });
 });
 

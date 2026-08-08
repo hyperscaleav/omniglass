@@ -1,8 +1,8 @@
 // Package health computes an estate's health verdict from resolved inputs. The
 // rollup is a pure function on purpose: the subtle cases (quorum boundaries, a
-// role nobody staffed, an alarm that degrades a capability no role wanted) are
-// where this gets quietly wrong, and they are far easier to pin down in a unit
-// test than in SQL. Storage resolves the inputs and records the transitions; the
+// role nobody staffed, a component an alarm has taken down) are where this
+// gets quietly wrong, and they are far easier to pin down in a unit test than
+// in SQL. Storage resolves the inputs and records the transitions; the
 // judgement lives here.
 package health
 
@@ -64,53 +64,39 @@ func ImpactVerdict(impact string) Verdict {
 	}
 }
 
-// Component is a component as the rollup sees it: what it can do, and what an
-// alarm has currently taken away.
+// Component is a component as the rollup sees it: only its own current
+// verdict, from its active alarms. An alarm impairs a component wholesale
+// now (#626): there is no per-capability degradation left to resolve, so a
+// component's condition is the whole of what a slot it occupies can see.
 type Component struct {
-	Name string
-	// Provides is the component's effective capability set (its product's
-	// defaults plus its own additions, minus its suppressions).
-	Provides []string
-	// Degraded is the union of capabilities named by its active alarms.
-	Degraded []string
+	Name    string
+	Verdict Verdict
 }
 
-// Satisfies reports whether the component can fill a role requiring these
-// capabilities: it must provide every one, and none of those may currently be
-// degraded by an alarm. A capability it provides but that is degraded does not
-// count, which is the whole mechanism by which an alarm reaches a system.
-func (c Component) Satisfies(required []string) bool {
-	provides := make(map[string]bool, len(c.Provides))
-	for _, p := range c.Provides {
-		provides[p] = true
-	}
-	degraded := make(map[string]bool, len(c.Degraded))
-	for _, d := range c.Degraded {
-		degraded[d] = true
-	}
-	for _, r := range required {
-		if !provides[r] || degraded[r] {
-			return false
-		}
-	}
-	return true
+// Occupies reports whether this component currently satisfies a slot it
+// fills: a component whose own verdict is not Healthy cannot be counted
+// toward a role's quorum, regardless of which role asked or which alarm is
+// behind it. This is the whole mechanism by which an alarm reaches a system
+// now: impair the component, and every role it occupies loses one occupant.
+func (c Component) Occupies() bool {
+	return c.Verdict == Healthy
 }
 
-// Role is a role as the rollup sees it: what it needs, how many it needs, what
-// its failure means, and who was assigned to it.
+// Role is a role as the rollup sees it: how many occupants it needs, what its
+// failure means, and who was assigned to it.
 type Role struct {
 	Name     string
-	Required []string
 	Quorum   int
 	Impact   string
 	Assigned []Component
 }
 
-// Satisfying counts the assigned components that can currently fill the role.
+// Satisfying counts the assigned components that currently occupy the role
+// (their own verdict is Healthy).
 func (r Role) Satisfying() int {
 	n := 0
 	for _, c := range r.Assigned {
-		if c.Satisfies(r.Required) {
+		if c.Occupies() {
 			n++
 		}
 	}

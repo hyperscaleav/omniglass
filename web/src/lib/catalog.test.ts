@@ -75,7 +75,7 @@ describe("shell route nesting (source-level pin)", () => {
     const block = src.slice(open, close);
     const paths = [
       "/catalog", "/metrics", "/properties", "/event-types", "/command-types",
-      "/vendors", "/products", "/drivers", "/capabilities", "/standards",
+      "/vendors", "/products", "/drivers", "/standards",
       "/location-types", "/secret-types", "/tags",
     ];
     for (const p of paths) expect(block, `${p} escaped the shell block`).toContain(`path="${p}"`);

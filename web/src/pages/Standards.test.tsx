@@ -9,7 +9,8 @@ import { classifierMetricsKey } from "../lib/classifier_metrics";
 import { standardRolesKey, type DeclaredRole } from "../lib/system_roles";
 import { PROPERTIES_KEY, type PropertyRow } from "../lib/properties";
 import { METRICS_KEY } from "../lib/metric_types";
-import { CAPABILITIES_KEY, type Capability } from "../lib/capabilities";
+import { COMPONENT_TYPES_KEY, type ComponentType } from "../lib/component_types";
+import { PRODUCTS_KEY, type Product } from "../lib/products";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
@@ -30,10 +31,11 @@ const catalog: PropertyRow[] = [
 ];
 
 // The roles the custom standard declares (RoleEditor keys the query on the
-// standard's uuid, which is what the page passes it), plus the capability
-// registry its picker reads.
-const roles: DeclaredRole[] = [{ name: "table-mic", display_name: "Table microphone", quorum: 2, capabilities: ["microphone"], accepted_types: [], pinned_products: [], impact: "degraded" }];
-const capabilities: Capability[] = [{ id: uuidFor("cap-microphone"), name: "microphone", display_name: "Microphone", official: true }];
+// standard's uuid, which is what the page passes it), plus the component_type
+// and product registries its typed-slot pickers read (#626).
+const roles: DeclaredRole[] = [{ name: "table-mic", display_name: "Table microphone", quorum: 2, accepted_types: ["video-bar"], pinned_products: [], impact: "degraded" }];
+const componentTypes: ComponentType[] = [{ id: uuidFor("ct-video-bar"), name: "video-bar", display_name: "Video Bar", official: true, default_tags: [] }];
+const products: Product[] = [{ id: uuidFor("prod-cisco-room-bar"), name: "cisco-room-bar", display_name: "Cisco Room Bar", kind: "device", component_type: "video-bar", component_type_id: uuidFor("ct-video-bar"), official: true }];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], grants: [] };
@@ -52,7 +54,8 @@ function mount(me: Me = admin) {
   qc.setQueryData([...classifierMetricsKey("standard", "huddle-space")], []);
   qc.setQueryData([...classifierMetricsKey("standard", "meeting-room")], []);
   // The role panel mounts beside the contract lanes, keyed on the uuid.
-  qc.setQueryData([...CAPABILITIES_KEY], capabilities);
+  qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
+  qc.setQueryData([...PRODUCTS_KEY], products);
   qc.setQueryData([...standardRolesKey(uuidFor("std-huddle-space"))], roles);
   qc.setQueryData([...standardRolesKey(uuidFor("std-meeting-room"))], []);
   qc.setQueryData([...ME_KEY], me);

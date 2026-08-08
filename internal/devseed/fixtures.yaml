@@ -208,9 +208,10 @@ components:
     display_name: Boardroom B Display
     product: samsung-qm55
     location: hq-west-2-boardroom
-  # No product on purpose: it provides no capability, so no role can want it. It
-  # is in the room and accounted for, and nothing more, which is exactly the case
-  # membership exists to carry.
+  # No product on purpose: it classifies as generic-device, a type no role's
+  # accepted_types names, so no role can want it. It is in the room and
+  # accounted for, and nothing more, which is exactly the case membership
+  # exists to carry.
   - name: boardroom-power
     display_name: Boardroom Power Conditioner
     location: hq-west-2-boardroom

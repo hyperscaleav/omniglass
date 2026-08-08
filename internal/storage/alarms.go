@@ -8,13 +8,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// The alarm write side. An alarm is component-local and names the capabilities it
-// degrades, which is the only way it reaches a system: a role requires
-// capabilities, a component provides them, an alarm takes some away, and the
-// rollup notices when what is left no longer meets a role's requirement at quorum.
+// The alarm write side. An alarm is component-local and impairs it wholesale
+// (#626): a component's own verdict is the worst of its active alarms'
+// severities, and the rollup notices when that verdict is no longer Healthy,
+// which is the only way an alarm reaches a system now.
 //
 // Raising and clearing both recompute health in the SAME transaction. That is the
 // slice's load-bearing rule: an alarm and the verdict it caused must never be
@@ -32,32 +31,29 @@ type Alarm struct {
 	// DedupKey names WHICH condition this incident is about (ADR-0075): the
 	// one-open invariant is per (component, dedup_key), enforced by the partial
 	// unique index while the row is open.
-	DedupKey     string
-	RaisedAt     time.Time
-	ClearedAt    *time.Time
-	Capabilities []string
+	DedupKey  string
+	RaisedAt  time.Time
+	ClearedAt *time.Time
 }
 
 // Active reports whether the alarm is still raised.
 func (a Alarm) Active() bool { return a.ClearedAt == nil }
 
-// AlarmSpec is the raise input. Capabilities is what the condition takes away;
-// an alarm naming none is a note on the component that never reaches a system.
+// AlarmSpec is the raise input: a severity, an operator's note on what is
+// wrong, and the condition's dedup identity.
 type AlarmSpec struct {
 	Severity string
 	Message  string
 	// DedupKey is the condition identity (required): a re-raise of the same key
 	// on the same component returns the existing open alarm, never a duplicate.
-	DedupKey     string
-	Capabilities []string
+	DedupKey string
 }
 
-// Alarm sentinels. A bad severity and an unknown capability are request faults
-// (422), not server errors: both are things the caller sent.
+// Alarm sentinels. A bad severity is a request fault (422), not a server error:
+// it is something the caller sent.
 var (
-	ErrAlarmNotFound    = errors.New("storage: alarm not found or already cleared")
-	ErrAlarmSeverity    = errors.New("storage: unknown alarm severity")
-	ErrAlarmRefNotFound = errors.New("storage: alarm references a missing capability")
+	ErrAlarmNotFound = errors.New("storage: alarm not found or already cleared")
+	ErrAlarmSeverity = errors.New("storage: unknown alarm severity")
 )
 
 // alarmSeverities is the severity domain, mirroring the table's CHECK. Validating
@@ -65,22 +61,19 @@ var (
 // violation surfacing as a 500.
 var alarmSeverities = map[string]bool{"info": true, "warning": true, "critical": true}
 
-const alarmCols = `a.id, a.component_id, a.severity, a.message, a.dedup_key, a.raised_at, a.cleared_at,
-	coalesce(array_agg(cap.name order by cap.name)
-	         filter (where cap.name is not null), '{}')`
+const alarmCols = `a.id, a.component_id, a.severity, a.message, a.dedup_key, a.raised_at, a.cleared_at`
 
 func scanAlarm(row pgx.Row) (*Alarm, error) {
 	var a Alarm
 	if err := row.Scan(&a.ID, &a.ComponentID, &a.Severity, &a.Message,
-		&a.DedupKey, &a.RaisedAt, &a.ClearedAt, &a.Capabilities); err != nil {
+		&a.DedupKey, &a.RaisedAt, &a.ClearedAt); err != nil {
 		return nil, err
 	}
 	return &a, nil
 }
 
-// RaiseAlarm records a condition on a component and the capabilities it degrades,
-// then recomputes the health chain in the same transaction. An unknown component
-// is ErrComponentNotFound; an unknown capability is ErrAlarmRefNotFound.
+// RaiseAlarm records a condition on a component, then recomputes the health
+// chain in the same transaction. An unknown component is ErrComponentNotFound.
 func (p *PG) RaiseAlarm(ctx context.Context, actorID, componentName string, spec AlarmSpec) (*Alarm, error) {
 	if !alarmSeverities[spec.Severity] {
 		return nil, ErrAlarmSeverity
@@ -120,11 +113,8 @@ func (p *PG) RaiseAlarm(ctx context.Context, actorID, componentName string, spec
 		existing, gerr := scanAlarm(tx.QueryRow(ctx, `
 			select `+alarmCols+`
 			from alarm a
-			left join alarm_capability ac on ac.alarm_id = a.id
-			left join capability cap on cap.id = ac.capability_id
 			where a.component_id = (select id from component where name = $1)
-			  and a.dedup_key = $2 and a.cleared_at is null
-			group by a.id`, componentName, spec.DedupKey))
+			  and a.dedup_key = $2 and a.cleared_at is null`, componentName, spec.DedupKey))
 		if gerr != nil {
 			return nil, fmt.Errorf("storage: read existing open alarm on %q: %w", componentName, gerr)
 		}
@@ -133,16 +123,6 @@ func (p *PG) RaiseAlarm(ctx context.Context, actorID, componentName string, spec
 	if err != nil {
 		return nil, fmt.Errorf("storage: insert alarm on %q: %w", componentName, err)
 	}
-	if len(spec.Capabilities) > 0 {
-		if _, err := tx.Exec(ctx, `
-			insert into alarm_capability (alarm_id, capability_id)
-			select $1, (select id from capability where name = c or id::text = c)
-			from unnest($2::text[]) c
-			on conflict (alarm_id, capability_id) do nothing`, a.ID, spec.Capabilities); err != nil {
-			return nil, mapAlarmWriteErr(err)
-		}
-	}
-	a.Capabilities = append([]string(nil), spec.Capabilities...)
 
 	if err := writeAuditRes(ctx, tx, actorID, "create", "alarm", a.ID, nil, a); err != nil {
 		return nil, err
@@ -205,10 +185,7 @@ func (p *PG) ListAlarms(ctx context.Context, componentName string, includeCleare
 	rows, err := p.pool.Query(ctx, `
 		select `+alarmCols+`
 		from alarm a
-		left join alarm_capability ac on ac.alarm_id = a.id
-		left join capability cap on cap.id = ac.capability_id
 		where a.component_id = (select id from component where name = $1) and ($2 or a.cleared_at is null)
-		group by a.id
 		order by a.raised_at desc, a.id desc`, componentName, includeCleared)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list alarms %q: %w", componentName, err)
@@ -227,16 +204,12 @@ func (p *PG) ListAlarms(ctx context.Context, componentName string, includeCleare
 }
 
 // activeAlarms is the health report's read: what is currently wrong with a
-// component, with the capabilities each alarm degrades, so the report can name
-// the alarm behind an impaired role.
+// component, so the report can name the alarm behind a down occupant.
 func (p *PG) activeAlarms(ctx context.Context, q txQuerier, componentName string) ([]Alarm, error) {
 	rows, err := q.Query(ctx, `
 		select `+alarmCols+`
 		from alarm a
-		left join alarm_capability ac on ac.alarm_id = a.id
-		left join capability cap on cap.id = ac.capability_id
 		where a.component_id = (select id from component where name = $1) and a.cleared_at is null
-		group by a.id
 		order by a.raised_at desc, a.id desc`, componentName)
 	if err != nil {
 		return nil, fmt.Errorf("storage: active alarms %q: %w", componentName, err)
@@ -252,15 +225,4 @@ func (p *PG) activeAlarms(ctx context.Context, q txQuerier, componentName string
 		out = append(out, *a)
 	}
 	return out, rows.Err()
-}
-
-// mapAlarmWriteErr turns a capability foreign-key violation into the request
-// fault it is. Anything else is a real failure.
-func mapAlarmWriteErr(err error) error {
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && (pgErr.Code == "23503" ||
-		(pgErr.Code == "23502" && pgErr.ColumnName == "capability_id")) {
-		return ErrAlarmRefNotFound
-	}
-	return fmt.Errorf("storage: alarm write: %w", err)
 }

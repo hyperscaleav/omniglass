@@ -30,7 +30,6 @@ func TestChurnDroppedConstraintsRestored(t *testing.T) {
 	notNull := []struct{ table, column string }{
 		{"product_property", "product_id"},
 		{"product_property", "property_type_id"},
-		{"product_capability", "product_id"},
 		{"standard_property", "property_type_id"},
 		{"location_type_property", "property_type_id"},
 	}
@@ -46,9 +45,9 @@ func TestChurnDroppedConstraintsRestored(t *testing.T) {
 		}
 	}
 
-	// Both indexes existed before the churn and were dropped when their column was
+	// This index existed before the churn and was dropped when its column was
 	// recreated; the sibling tables kept theirs.
-	indexes := []string{"property_owner_idx", "product_capability_capability_idx"}
+	indexes := []string{"property_owner_idx"}
 	for _, idx := range indexes {
 		var exists bool
 		if err := conn.QueryRow(ctx,

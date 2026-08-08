@@ -1,22 +1,22 @@
 ---
 title: Products
-description: "The Products catalog: a concrete SKU binding a vendor, a driver, a kind, and the capabilities it provides; a component points at the product it is; official rows read-only, admin-gated custom ones."
+description: "The Products catalog: a concrete SKU binding a vendor, a driver, and a kind, classified under a component_type; a component points at the product it is; official rows read-only, admin-gated custom ones."
 ---
 
 **Catalog, under Components: Products** (`/products`, with `product:read`, covered by every viewer's `*:read` floor)
 is the directory of **products**: the concrete SKUs the estate is built from, on the same
 flat-registry pattern as [Location Types](/guides/admin/location-types/) and [Tags](/guides/admin/tags/). A product is
 a specific model (a **Cisco Room Bar**, a **Samsung QM55**), not an organization and not an installed
-unit. It is where the three leaf catalogs converge: the [vendor](/guides/admin/vendors/) that makes
-it, the [driver](/guides/admin/drivers/) that speaks to it, and the
-[capabilities](/guides/admin/capabilities/) it provides, classified by a **kind**. Each row shows the
+unit. It is where the two leaf catalogs converge: the [vendor](/guides/admin/vendors/) that makes
+it and the [driver](/guides/admin/drivers/) that speaks to it, classified by a **kind** and a
+**component type**. Each row shows the
 **name** (for example `cisco-room-bar`), the **display name**, its
 **vendor**, **driver**, **kind**, and its **origin** (**official** or **custom**). A
 product also carries an `id`, a uuid minted by the database, the internal address the handle resolves
 to ([ADR-0062](/architecture/decisions/)); the handle is what you type and read.
 
 A product is also what a **component** points at: `component.product_id` names the product a component
-**is**, required, so every component always resolves a shape (its vendor, driver, and capability set)
+**is**, required, so every component always resolves a shape (its vendor, driver, and classification)
 and, through its product, a device-class **[component type](/architecture/core-entities/#catalog-reference-data-component_type)**. The
 component-level `component_type` retired in the fields fold; the registry returned differently shaped,
 above the product rather than beside the component, so a component's genus is read through the product
@@ -34,7 +34,12 @@ model.
   the device-class genus (`display`, `dsp`, `mic`, ...) that carries the naming stem a generated
   component name uses, the console glyph, and the hostname abbreviation. Three generic types
   (`generic-device`, `generic-app`, `generic-service`) exist for anything not yet modeled more
-  specifically.
+  specifically. It is also what a
+  [role assignment](/guides/admin/standards/#staff-a-system-against-its-standard) checks: a
+  component fills a slot only when its product's type falls within a type the role accepts (self or
+  a descendant), and, if the role pins specific products, only when its product is one of them. That
+  guard runs once, at assignment; afterward the occupant keeps its slot as long as its own health
+  verdict stays healthy (see [Work with an entity](/guides/operator/entities/#roles-on-a-system)).
 - **Icon** is an optional override on the type's icon: unset, a product's glyph is whatever its type
   resolves to (walking up the type's own tree if the type itself leaves its icon blank); set, the
   override wins. A per-SKU glyph is the exception, not the rule.
@@ -43,23 +48,15 @@ model.
   resolve against the vendor / driver / product catalogs; an unknown reference is refused (422). These
   three are nulled if their target is deleted, not blocked: removing a vendor clears the product's
   vendor pointer rather than blocking the vendor delete.
-- **Capabilities** is the set of things the product provides (a room bar provides **microphone**,
-  **speaker**, **camera**, **codec**), each chosen from the [capability](/guides/admin/capabilities/)
-  catalog. It is a many-to-many set: a product declares as many as it needs, and setting capabilities
-  on an update **replaces** the whole set. An unknown capability id is refused (422). This set is the
-  **default** for the product's components, not the last word: a component
-  [adds or suppresses capabilities](/guides/admin/capabilities/#what-a-component-actually-provides) of
-  its own over it, and the resolved set is what a
-  [role assignment](/guides/admin/standards/#staff-a-system-against-its-standard) is checked against.
 - **Variants** use **parent product**: a specific SKU that inherits from a base product points at it
   with `parent_product_id` (a trim or regional variant of the same model). A product with no parent is
   a base product.
 - **New product** (with `product:create`, an admin permission) opens a create drawer: give it a
   **name** (unique tenant-wide, e.g. `cisco-room-bar`) and a **display name**, pick
-  its **kind** (defaults to device), and, optionally, its **vendor**, **driver**, **parent product**,
-  and **capabilities**.
+  its **kind** (defaults to device) and its **component type**, and, optionally, its **vendor**,
+  **driver**, and **parent product**.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `product:update`) edits the
-  display name, vendor, driver, kind, parent, and capabilities; the **name** is fixed, since a catalog
+  display name, vendor, driver, kind, type, and parent; the **name** is fixed, since a catalog
   row carries no rename. **Delete** (with `product:delete`) removes the row, behind a confirm. A
   verb you lack greys just that button, its hover reason naming the permission
   (`Requires product:update`, `Requires product:delete`); the pair never disappears.
@@ -73,17 +70,17 @@ model.
   rule the [Location Types](/guides/admin/location-types/) registry enforces. Remove or repoint the component first. An
   official row is still refused (422) regardless.
 
-Minting a product is admin-gated, and the product form is where the vendor, driver, and capability
-catalogs are finally consumed, as the pickers that choose a product's vendor and driver and declare its
-capabilities. The same operations are `omniglass product list/get/create/update/delete` from the CLI
+Minting a product is admin-gated, and the product form is where the vendor and driver
+catalogs are finally consumed, as the pickers that choose a product's vendor and driver. The same
+operations are `omniglass product list/get/create/update/delete` from the CLI
 (see the [CLI reference](/reference/cli/)).
 
 ## Declared properties: the product's contract
 
 A product's blade also carries a **Declared properties** panel, the product's **contract**: which
 [properties](/guides/admin/properties/) every instance of the product exposes, and what each one
-defaults to. It is the second half of "the product is the source of a component's shape": capabilities
-say what the product can **do**, the contract says what it **carries**.
+defaults to. It is half of "the product is the source of a component's shape": the type says what
+the product **is**, the contract says what it **carries**.
 
 - **Declare a property** (with `product:update`) picks a name from the property catalog, optionally
   types a **default**, and optionally marks it **required**. The property must already exist in the

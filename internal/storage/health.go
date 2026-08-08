@@ -28,8 +28,9 @@ import (
 // Recompute at the write, inside the caller's transaction. Every mutation that
 // can change health recomputes the affected chain before it commits: raising or
 // clearing an alarm, staffing or unstaffing a role, declaring or withdrawing one,
-// changing a component's capabilities or its product, creating a system, and
-// changing the standard it conforms to or the location it sits in. The
+// creating a system, and changing the standard it conforms to or the location it
+// sits in. A component's own condition is now purely its active alarms (#626),
+// so a product swap or a capability fact no longer belongs to that list. The
 // alternative, RECORDING on read, would stamp every transition at the moment
 // somebody opened a page, which is precisely the inaccuracy the record exists to
 // avoid.
@@ -90,20 +91,21 @@ type HealthReport struct {
 }
 
 // HealthRole is one contributing role, with the causing chain when it is
-// impaired. Degraded and Alarms are what turn a verdict into something an
-// operator can act on: the role, the capability it lost, and the alarm that took
-// it. A satisfied role carries neither.
+// impaired. Down and Alarms are what turn a verdict into something an
+// operator can act on: which assigned components are not occupying their
+// slot, and the alarms that took them down. A satisfied role carries
+// neither, and a role that is merely short-staffed (nobody down, just nobody
+// assigned) carries Down empty too.
 type HealthRole struct {
 	Name        string
 	DisplayName string
 	Impact      string
-	Required    []string
 	Quorum      int
 	Satisfying  int
 	Impaired    bool
 	AssignedTo  []string
-	Degraded    []string // required capabilities an active alarm has taken away
-	Alarms      []Alarm  // the active alarms that degraded them
+	Down        []string // assigned components whose own verdict is not healthy
+	Alarms      []Alarm  // the active alarms on those down components
 }
 
 // HealthSystem is one system under a location, with its recorded verdict. It is
@@ -121,15 +123,13 @@ type HealthTransition struct {
 }
 
 // resolvedRole is a system's role with everything both the verdict and the report
-// need: the declaration, who fills it, and what an alarm has taken from each of
-// them.
+// need: the declaration and who fills it, each with its own current verdict.
 type resolvedRole struct {
 	ID          string
 	Name        string
 	DisplayName string
 	Quorum      int
 	Impact      string
-	Required    []string
 	Assigned    []health.Component
 }
 
@@ -263,36 +263,6 @@ func (p *PG) recomputeMovedSystem(ctx context.Context, q txQuerier, system strin
 	return p.recomputeChain(ctx, q, nil, []string{system}, leftLocations)
 }
 
-// recomputeProductComponents is the trigger shape for a catalog edit: the product
-// changed, so every component built to it may now provide a different capability
-// set, and every system staffed by one of those components may have moved. The
-// components are named and recomputeChain walks the rest of the way up.
-//
-// A product with no components in use recomputes nothing, which is the common
-// case for a catalog edit and costs one query.
-func (p *PG) recomputeProductComponents(ctx context.Context, q txQuerier, productID string) error {
-	rows, err := q.Query(ctx, `select name from component where product_id = (select id from product where `+registryRefCol(productID)+` = $1) order by name`, productID)
-	if err != nil {
-		return fmt.Errorf("storage: components of product %q: %w", productID, err)
-	}
-	defer rows.Close()
-	var names []string
-	for rows.Next() {
-		var n string
-		if err := rows.Scan(&n); err != nil {
-			return fmt.Errorf("storage: scan component of product %q: %w", productID, err)
-		}
-		names = append(names, n)
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("storage: iterate components of product %q: %w", productID, err)
-	}
-	if len(names) == 0 {
-		return nil
-	}
-	return p.recomputeChain(ctx, q, names, nil, nil)
-}
-
 // recordHealth is the transition-only write, and the reason this slice adds no
 // history table of its own. It writes NOTHING when the computed verdict already
 // matches the last one recorded for this owner.
@@ -380,21 +350,17 @@ func (p *PG) activeAlarmSeverities(ctx context.Context, q txQuerier, componentNa
 	return severities, nil
 }
 
-// degradedCapabilities is the union of capabilities named by a component's active
-// alarms: what the component can no longer be trusted to do. It is the single
-// mechanism by which an alarm reaches a system.
-func (p *PG) degradedCapabilities(ctx context.Context, q txQuerier, componentName string) ([]string, error) {
-	var caps []string
-	if err := q.QueryRow(ctx, `
-		select coalesce(array_agg(distinct cap.name), '{}')
-		from alarm a
-		join alarm_capability ac on ac.alarm_id = a.id
-		join capability cap on cap.id = ac.capability_id
-		where a.component_id = (select id from component where name = $1) and a.cleared_at is null`,
-		componentName).Scan(&caps); err != nil {
-		return nil, fmt.Errorf("storage: degraded capabilities %q: %w", componentName, err)
+// componentVerdict resolves one component's own current verdict from its
+// active alarms: not the recorded row (a read must not trust a trigger it did
+// not just run), but the same live computation the recompute makes. It is the
+// only input a slot it occupies takes now: an alarm impairs a component
+// wholesale, not by name capability, so there is nothing else to resolve.
+func (p *PG) componentVerdict(ctx context.Context, q txQuerier, componentName string) (health.Verdict, error) {
+	severities, err := p.activeAlarmSeverities(ctx, q, componentName)
+	if err != nil {
+		return health.Healthy, err
 	}
-	return caps, nil
+	return health.ComponentVerdict(severities), nil
 }
 
 // systemsStaffedBy lists the systems this component fills a role in, the systems
@@ -503,10 +469,9 @@ func (p *PG) locationVerdict(ctx context.Context, q txQuerier, locationName stri
 }
 
 // resolveHealthRoles resolves a system's roles from both arcs (inherited from its
-// standard, declared on the system) with what each assigned component provides
-// and what an alarm has taken away. It is the resolution EffectiveRoles does,
-// carried far enough for the verdict: the required set, the quorum, the impact,
-// and each component's effective minus degraded capabilities.
+// standard, declared on the system) with each assigned component's own current
+// verdict. It is the resolution EffectiveRoles does, carried far enough for the
+// verdict: the quorum, the impact, and who occupies the slot today.
 func (p *PG) resolveHealthRoles(ctx context.Context, q txQuerier, systemName string) ([]resolvedRole, error) {
 	rows, err := q.Query(ctx, `
 		with sys as (
@@ -520,13 +485,10 @@ func (p *PG) resolveHealthRoles(ctx context.Context, q txQuerier, systemName str
 			from sys join system_role r on r.owner_kind = 'system' and r.system_id = sys.id
 		)
 		select roles.id, roles.name, roles.display_name, roles.quorum, roles.impact,
-		       coalesce(array_agg(distinct cap.name) filter (where cap.name is not null), '{}'),
-		       -- NAMES, not ids: the rollup looks each assignee's capabilities and
-		       -- alarms up by name, and the report displays them.
+		       -- NAMES, not ids: the rollup looks each assignee's alarms up by
+		       -- name, and the report displays them.
 		       coalesce(array_agg(distinct ac.name) filter (where ac.name is not null), '{}')
 		from roles
-		left join system_role_capability rc on rc.role_id = roles.id
-		left join capability cap on cap.id = rc.capability_id
 		left join system_role_assignment ra on ra.role_id = roles.id
 		     and ra.system_id = (select id from system where name = $1)
 		left join component ac on ac.id = ra.component_id
@@ -544,7 +506,7 @@ func (p *PG) resolveHealthRoles(ctx context.Context, q txQuerier, systemName str
 	for rows.Next() {
 		var r rawRole
 		if err := rows.Scan(&r.ID, &r.Name, &r.DisplayName, &r.Quorum, &r.Impact,
-			&r.Required, &r.assignedTo); err != nil {
+			&r.assignedTo); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("storage: scan health role %q: %w", systemName, err)
 		}
@@ -556,7 +518,7 @@ func (p *PG) resolveHealthRoles(ctx context.Context, q txQuerier, systemName str
 	}
 	rows.Close()
 
-	// One component can fill several roles in a system, so its capability sets are
+	// One component can fill several roles in a system, so its verdict is
 	// resolved once and reused.
 	resolved := map[string]health.Component{}
 	out := make([]resolvedRole, 0, len(raw))
@@ -566,15 +528,11 @@ func (p *PG) resolveHealthRoles(ctx context.Context, q txQuerier, systemName str
 		for _, name := range r.assignedTo {
 			c, ok := resolved[name]
 			if !ok {
-				provides, err := p.EffectiveCapabilities(ctx, q, name)
+				v, err := p.componentVerdict(ctx, q, name)
 				if err != nil {
 					return nil, err
 				}
-				degraded, err := p.degradedCapabilities(ctx, q, name)
-				if err != nil {
-					return nil, err
-				}
-				c = health.Component{Name: name, Provides: provides, Degraded: degraded}
+				c = health.Component{Name: name, Verdict: v}
 				resolved[name] = c
 			}
 			role.Assigned = append(role.Assigned, c)
@@ -590,7 +548,6 @@ func healthRoles(rs []resolvedRole) []health.Role {
 	for _, r := range rs {
 		out = append(out, health.Role{
 			Name:     r.Name,
-			Required: r.Required,
 			Quorum:   r.Quorum,
 			Impact:   r.Impact,
 			Assigned: r.Assigned,
@@ -638,7 +595,7 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, since time.Tim
 // LocationHealth reports a location's current verdict, the systems beneath it
 // with theirs, and its recorded transitions. The systems are the drill-down: a
 // degraded location names which system is at fault, and the system health read
-// names the role, the capability, and the alarm.
+// names the role, which occupant is down, and the alarm.
 //
 // The verdict is the rollup of exactly those systems, so the headline and the
 // drill-down can never disagree: a location cannot read healthy over a system it
@@ -674,21 +631,20 @@ func systemVerdicts(systems []HealthSystem) []health.Verdict {
 }
 
 // explainRole turns a resolved role into the report row, adding the causing chain
-// when the role is impaired: which required capabilities its components lost, and
-// which active alarms took them. A satisfied role needs no explanation, so it
-// costs no alarm read.
+// when the role is impaired: which assigned components are not occupying their
+// slot (down), and which active alarms took them down. A satisfied role needs
+// no explanation, so it costs no alarm read.
 func (p *PG) explainRole(ctx context.Context, q txQuerier, r resolvedRole) (HealthRole, error) {
-	role := health.Role{Name: r.Name, Required: r.Required, Quorum: r.Quorum, Impact: r.Impact, Assigned: r.Assigned}
+	role := health.Role{Name: r.Name, Quorum: r.Quorum, Impact: r.Impact, Assigned: r.Assigned}
 	row := HealthRole{
 		Name:        r.Name,
 		DisplayName: r.DisplayName,
 		Impact:      r.Impact,
-		Required:    r.Required,
 		Quorum:      r.Quorum,
 		Satisfying:  role.Satisfying(),
 		Impaired:    role.Impaired(),
 		AssignedTo:  make([]string, 0, len(r.Assigned)),
-		Degraded:    []string{},
+		Down:        []string{},
 		Alarms:      []Alarm{},
 	}
 	for _, c := range r.Assigned {
@@ -698,32 +654,19 @@ func (p *PG) explainRole(ctx context.Context, q txQuerier, r resolvedRole) (Heal
 		return row, nil
 	}
 
-	required := newNameSet(r.Required)
-	lost := newNameSet(nil)
 	for _, c := range r.Assigned {
-		for _, d := range c.Degraded {
-			if required.has(d) {
-				lost.add(d)
-			}
+		if c.Occupies() {
+			continue
 		}
-	}
-	row.Degraded = lost.sorted()
-	if len(row.Degraded) == 0 {
-		// The role is short-staffed rather than broken: nobody was assigned, or the
-		// assignments never provided what it requires. There is no alarm to name.
-		return row, nil
-	}
-	for _, c := range r.Assigned {
+		row.Down = append(row.Down, c.Name)
 		alarms, err := p.activeAlarms(ctx, q, c.Name)
 		if err != nil {
 			return row, err
 		}
-		for _, a := range alarms {
-			if namesAny(a.Capabilities, lost) {
-				row.Alarms = append(row.Alarms, a)
-			}
-		}
+		row.Alarms = append(row.Alarms, alarms...)
 	}
+	// The role may be short-staffed rather than broken: nobody was assigned at
+	// all, so nobody is "down" and there is no alarm to name.
 	return row, nil
 }
 
@@ -808,8 +751,6 @@ func (s nameSet) add(names ...string) {
 	}
 }
 
-func (s nameSet) has(name string) bool { return s[name] }
-
 func (s nameSet) sorted() []string {
 	out := make([]string, 0, len(s))
 	for n := range s {
@@ -817,16 +758,6 @@ func (s nameSet) sorted() []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-// namesAny reports whether any of these names is in the set.
-func namesAny(names []string, s nameSet) bool {
-	for _, n := range names {
-		if s.has(n) {
-			return true
-		}
-	}
-	return false
 }
 
 // scanNames drains a single-text-column result into a slice.

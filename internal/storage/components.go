@@ -269,11 +269,12 @@ func (p *PG) componentIsDescendant(ctx context.Context, q querier, targetID, can
 }
 
 // UpdateComponent patches a component by name with the three-way scope split and
-// in-transaction audit. Product, location, and parent are all patchable: a product
-// swap recomputes health (it supplies the component's default capabilities), a
-// relocate and a reparent are structural placement moves that do not, because the
-// health chain runs component -> systems-it-staffs -> locations-over-those-systems
-// and a component's own location and parent sit outside it.
+// in-transaction audit. Product, location, and parent are all patchable, and none
+// of the three moves health any more: a component's own verdict is now purely its
+// active alarms (#626), so a product swap changes only its typed-slot
+// classification for the NEXT assignment, and a relocate or reparent are
+// structural placement moves the health chain (component -> systems-it-staffs ->
+// locations-over-those-systems) never depended on either.
 func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch ComponentPatch, read, action scope.Set) (*Component, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -378,16 +379,9 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 	if err := writeAuditRes(ctx, tx, actorID, "update", "component", after.ID, before, after); err != nil {
 		return nil, err
 	}
-	// The product supplies the component's default capabilities, so swapping it can
-	// make an assignee stop satisfying the role it fills (or start). Detected against
-	// the before-image, and recomputed under the name the row carries after the
-	// patch, which is what every capability and assignment lookup keys on. A
-	// relocate or reparent does not move health (see the doc comment above).
-	if !sameOptional(before.ProductID, after.ProductID) {
-		if err := p.RecomputeHealth(ctx, tx, after.Name); err != nil {
-			return nil, err
-		}
-	}
+	// A product swap no longer moves health (see the doc comment above): a
+	// component's verdict is its own active alarms, unaffected by what it is
+	// classified as. The next AssignRole is where a changed product matters.
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit update component: %w", err)
 	}

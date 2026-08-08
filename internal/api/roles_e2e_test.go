@@ -21,7 +21,6 @@ type effectiveRoleWire struct {
 	Name           string   `json:"name"`
 	DisplayName    string   `json:"display_name"`
 	Quorum         int      `json:"quorum"`
-	Capabilities   []string `json:"capabilities"`
 	AcceptedTypes  []string `json:"accepted_types"`
 	PinnedProducts []string `json:"pinned_products"`
 	FromStandard   bool     `json:"from_standard"`
@@ -51,10 +50,8 @@ func (w systemRolesWire) find(t *testing.T, name string) effectiveRoleWire {
 // declares its own alongside it, a component whose product's component_type
 // falls within an accepted type fills it, and one that does not is refused
 // with a 422 that names both parties in operator vocabulary (the whole point
-// of the typed-slot model: a refusal an operator can act on). Component
-// capability facts (a separate, still-live surface) round-trip independently
-// of the assignment guard. An out-of-scope system is a non-disclosing 404.
-// Skipped under -short.
+// of the typed-slot model: a refusal an operator can act on). An out-of-scope
+// system is a non-disclosing 404. Skipped under -short.
 func TestSystemRolesAPI(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -171,21 +168,6 @@ func TestSystemRolesAPI(t *testing.T) {
 		t.Fatalf("after staffing to quorum: %+v, want two assigned and no shortfall", mic)
 	}
 
-	// Suppressing a capability the product declares takes the component back out
-	// of contention for anything that needs it.
-	c.do(ownerTok, http.MethodPut, "/components/panel-1/capabilities/flat-panel-display",
-		map[string]any{"present": false}, http.StatusNoContent)
-	if caps := readCapabilities(t, c, ownerTok, "panel-1"); len(caps) != 0 {
-		t.Fatalf("suppressed capabilities = %v, want none left", caps)
-	}
-	// Clearing the fact falls back to the product's set; clearing it twice is an
-	// explicit miss.
-	c.do(ownerTok, http.MethodDelete, "/components/panel-1/capabilities/flat-panel-display", nil, http.StatusNoContent)
-	if caps := readCapabilities(t, c, ownerTok, "panel-1"); len(caps) != 1 || caps[0] != "flat-panel-display" {
-		t.Fatalf("cleared capabilities = %v, want the product's set back", caps)
-	}
-	c.do(ownerTok, http.MethodDelete, "/components/panel-1/capabilities/flat-panel-display", nil, http.StatusNotFound)
-
 	// Unassigning leaves the role short again; unassigning twice is an explicit
 	// miss.
 	c.do(ownerTok, http.MethodDelete, "/systems/acme-1/roles/table-mic/assignments/bar-2", nil, http.StatusNoContent)
@@ -194,11 +176,8 @@ func TestSystemRolesAPI(t *testing.T) {
 	}
 	c.do(ownerTok, http.MethodDelete, "/systems/acme-1/roles/table-mic/assignments/bar-2", nil, http.StatusNotFound)
 
-	// A role nobody declared, and a capability the registry does not know, are
-	// request faults rather than 500s.
+	// A role nobody declared is a request fault rather than a 500.
 	c.do(ownerTok, http.MethodPut, "/systems/acme-1/roles/no-such-role/assignments/bar-1", nil, http.StatusNotFound)
-	c.do(ownerTok, http.MethodPut, "/components/bar-1/capabilities/not-a-capability",
-		map[string]any{"present": true}, http.StatusUnprocessableEntity)
 
 	// Withdrawing the ad-hoc role removes it from the resolved read; withdrawing
 	// it twice is an explicit miss.
@@ -231,19 +210,6 @@ func TestSystemRolesAPI(t *testing.T) {
 	viewerTok := setupScopedViewer(t, ctx, dsn, "viewer-other-roles", "viewer", "system", otherID)
 	c.do(viewerTok, http.MethodGet, "/systems/acme-1/roles", nil, http.StatusNotFound)
 	c.do(viewerTok, http.MethodGet, "/systems/other-sys/roles", nil, http.StatusOK)
-}
-
-// readCapabilities decodes a component's resolved capability set.
-func readCapabilities(t *testing.T, c *apiClient, tok, name string) []string {
-	t.Helper()
-	var w struct {
-		Component    string   `json:"component"`
-		Capabilities []string `json:"capabilities"`
-	}
-	if err := json.Unmarshal(c.do(tok, http.MethodGet, "/components/"+name+"/capabilities", nil, http.StatusOK), &w); err != nil {
-		t.Fatalf("decode capabilities: %v", err)
-	}
-	return w.Capabilities
 }
 
 // TestSeededStandardTypedRoles proves the ship-with example lands through the

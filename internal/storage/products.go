@@ -10,14 +10,14 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// Product sentinels. A product references vendor, driver, parent product,
-// component_type, and capability rows; an unknown reference is
-// ErrProductRefNotFound (a request fault the API reports as 422). An
-// out-of-set kind is ErrProductInvalidKind, caught before the write so the DB
-// CHECK never has to. Existence, duplicate, official read-only, and in-use
-// reuse the shared type-registry sentinels.
+// Product sentinels. A product references vendor, driver, parent product, and
+// component_type rows; an unknown reference is ErrProductRefNotFound (a
+// request fault the API reports as 422). An out-of-set kind is
+// ErrProductInvalidKind, caught before the write so the DB CHECK never has
+// to. Existence, duplicate, official read-only, and in-use reuse the shared
+// type-registry sentinels.
 var (
-	ErrProductRefNotFound = errors.New("storage: product references a missing vendor, driver, parent, component_type, or capability")
+	ErrProductRefNotFound = errors.New("storage: product references a missing vendor, driver, parent, or component_type")
 	ErrProductInvalidKind = errors.New("storage: product kind is not one of device, app, service")
 )
 
@@ -47,11 +47,8 @@ func validProductKind(s string) bool {
 // (device/app/service), the component_type it is classified under (the
 // taxonomy above product; mic, camera, wireless-mic...), an optional icon
 // override, and optional pointers at a vendor (who makes it), a driver (what
-// talks to it), and a parent product (a variant it inherits from). A product
-// also provides a set of capabilities (mic, speaker, camera), loaded via the
-// product_capability join and carried as a sorted slice of capability ids.
-// The registry lists alphabetically by display_name; there is no ordering
-// field.
+// talks to it), and a parent product (a variant it inherits from). The
+// registry lists alphabetically by display_name; there is no ordering field.
 type Product struct {
 	// ID is the uuid primary key, Name the renameable name. Its two
 	// references carry both forms for the same reason the estate bodies do: the
@@ -76,19 +73,16 @@ type Product struct {
 	// Icon is a product-level override of the component_type's icon (nullable:
 	// unset inherits the type's, resolved the same way ResolveTypeFacts walks
 	// component_type's own icon column).
-	Icon         *string
-	Official     bool
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	Capabilities []string
+	Icon      *string
+	Official  bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // ProductPatch carries the mutable fields of a product update; a nil field is
-// left unchanged. Capabilities is a full replacement when non-nil (the given
-// set becomes the product's set); nil leaves the current capabilities alone.
-// ComponentType, like Kind, has no clear state: it is a required
-// classification, so a patch either leaves it (nil) or reclassifies it (set),
-// never empties it.
+// left unchanged. ComponentType, like Kind, has no clear state: it is a
+// required classification, so a patch either leaves it (nil) or
+// reclassifies it (set), never empties it.
 type ProductPatch struct {
 	DisplayName     *string
 	VendorID        *string
@@ -97,7 +91,6 @@ type ProductPatch struct {
 	Kind            *string
 	ComponentType   *string
 	Icon            *string
-	Capabilities    *[]string
 }
 
 // The two arcs store uuids, so each is selected beside a scalar subquery for its
@@ -211,18 +204,14 @@ func scanProduct(row pgx.Row) (*Product, error) {
 
 // mapProductWriteErr translates Postgres constraint violations on a product
 // write into the product sentinels: a duplicate id is ErrTypeExists, and an
-// unknown vendor/driver/parent/capability FK is ErrProductRefNotFound. Anything
-// else is wrapped with context.
+// unknown vendor/driver/parent/component_type FK is ErrProductRefNotFound.
+// Anything else is wrapped with context.
 func mapProductWriteErr(err error) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
 		switch pgErr.Code {
 		case "23505": // unique_violation
 			return ErrTypeExists
-		case "23502": // not-null on capability_id: an unknown capability name resolved to null
-			if pgErr.ColumnName == "capability_id" {
-				return ErrProductRefNotFound
-			}
 		case "23503": // foreign_key_violation
 			return ErrProductRefNotFound
 		}
@@ -230,58 +219,10 @@ func mapProductWriteErr(err error) error {
 	return fmt.Errorf("storage: product write: %w", err)
 }
 
-// productCapabilityLoader is the multi-row read surface shared by the pool and a
-// transaction, so a product's capabilities load either standalone or inside a
-// write transaction. (querier only exposes QueryRow, so capability loading needs
-// its own interface.)
-type productCapabilityLoader interface {
-	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-}
-
-// loadProductCapabilities returns a product's capability ids, sorted.
-func loadProductCapabilities(ctx context.Context, q productCapabilityLoader, productID string) ([]string, error) {
-	rows, err := q.Query(ctx, `select cap.name from product_capability pc join capability cap on cap.id = pc.capability_id where pc.product_id = (select id from product where `+registryRefCol(productID)+` = $1) order by cap.name`, productID)
-	if err != nil {
-		return nil, fmt.Errorf("storage: load product capabilities %q: %w", productID, err)
-	}
-	defer rows.Close()
-	caps := []string{}
-	for rows.Next() {
-		var c string
-		if err := rows.Scan(&c); err != nil {
-			return nil, fmt.Errorf("storage: scan product capability: %w", err)
-		}
-		caps = append(caps, c)
-	}
-	return caps, rows.Err()
-}
-
-// replaceProductCapabilities makes a product's capability set exactly caps:
-// delete the current rows, then insert the given ids (deduped). An unknown
-// capability id is ErrProductRefNotFound.
-func replaceProductCapabilities(ctx context.Context, tx pgx.Tx, productRef string, caps []string) error {
-	productID, err := resolveProductRef(ctx, tx, productRef)
-	if err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, `delete from product_capability where product_id = $1`, productID); err != nil {
-		return fmt.Errorf("storage: clear product capabilities %q: %w", productRef, err)
-	}
-	for _, c := range caps {
-		if _, err := tx.Exec(ctx, `
-			insert into product_capability (product_id, capability_id)
-			values ($1, (select id from capability where name = $2 or id::text = $2))
-			on conflict (product_id, capability_id) do nothing`, productID, c); err != nil {
-			return mapProductWriteErr(err)
-		}
-	}
-	return nil
-}
-
-// UpsertProduct installs or updates a product by HANDLE and sets its capability
-// set, the boot-seed phase's write. The seed ships name, not uuids, so
-// the conflict target is the handle: re-seeding `cisco-room-bar` updates that row
-// in place, re-establishes its capabilities, and its id never moves.
+// UpsertProduct installs or updates a product by HANDLE, the boot-seed
+// phase's write. The seed ships name, not uuids, so the conflict target is
+// the handle: re-seeding `cisco-room-bar` updates that row in place, and its
+// id never moves.
 func (p *PG) UpsertProduct(ctx context.Context, m Product) error {
 	if m.Kind == "" {
 		m.Kind = string(ProductDevice)
@@ -319,21 +260,14 @@ func (p *PG) UpsertProduct(ctx context.Context, m Product) error {
 		m.Name, m.DisplayName, m.VendorID, m.DriverID, m.Kind, m.ParentProductID, componentTypeID, m.Icon, m.Official); err != nil {
 		return fmt.Errorf("storage: upsert product %q: %w", m.Name, err)
 	}
-	pid, err := resolveProductRef(ctx, tx, m.Name)
-	if err != nil {
-		return err
-	}
-	if err := replaceProductCapabilities(ctx, tx, pid, m.Capabilities); err != nil {
-		return fmt.Errorf("storage: upsert product %q capabilities: %w", m.ID, err)
-	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("storage: commit upsert product: %w", err)
 	}
 	return nil
 }
 
-// ListProducts returns every product with its capabilities, ordered
-// alphabetically by display_name then id.
+// ListProducts returns every product, ordered alphabetically by display_name
+// then id.
 func (p *PG) ListProducts(ctx context.Context) ([]Product, error) {
 	rows, err := p.pool.Query(ctx, `select `+productCols+` from product order by display_name, name`)
 	if err != nil {
@@ -352,38 +286,10 @@ func (p *PG) ListProducts(ctx context.Context) ([]Product, error) {
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("storage: list products: %w", err)
 	}
-
-	caps, err := p.allProductCapabilities(ctx)
-	if err != nil {
-		return nil, err
-	}
-	for i := range out {
-		out[i].Capabilities = caps[out[i].ID]
-	}
 	return out, nil
 }
 
-// allProductCapabilities returns every product's capability ids keyed by product
-// id, each slice sorted, in one query (avoids an N+1 over the list).
-func (p *PG) allProductCapabilities(ctx context.Context) (map[string][]string, error) {
-	rows, err := p.pool.Query(ctx, `select pc.product_id, cap.name from product_capability pc join capability cap on cap.id = pc.capability_id order by pc.product_id, cap.name`)
-	if err != nil {
-		return nil, fmt.Errorf("storage: list product capabilities: %w", err)
-	}
-	defer rows.Close()
-	m := map[string][]string{}
-	for rows.Next() {
-		var pid, cid string
-		if err := rows.Scan(&pid, &cid); err != nil {
-			return nil, fmt.Errorf("storage: scan product capability: %w", err)
-		}
-		m[pid] = append(m[pid], cid)
-	}
-	return m, rows.Err()
-}
-
-// GetProduct resolves one product with its capabilities by id. An unknown id is
-// ErrTypeNotFound.
+// GetProduct resolves one product by id. An unknown id is ErrTypeNotFound.
 func (p *PG) GetProduct(ctx context.Context, id string) (*Product, error) {
 	m, err := scanProduct(p.pool.QueryRow(ctx, `select `+productCols+` from product where `+registryRefCol(id)+` = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -392,20 +298,14 @@ func (p *PG) GetProduct(ctx context.Context, id string) (*Product, error) {
 	if err != nil {
 		return nil, fmt.Errorf("storage: get product %q: %w", id, err)
 	}
-	caps, err := loadProductCapabilities(ctx, p.pool, id)
-	if err != nil {
-		return nil, err
-	}
-	m.Capabilities = caps
 	return m, nil
 }
 
-// CreateProduct inserts a custom (official=false) product with its capability
-// set and audits it. A duplicate id is ErrTypeExists; an unknown
-// vendor/driver/parent/capability/component_type is ErrProductRefNotFound; an
-// out-of-set kind is ErrProductInvalidKind. An empty kind defaults to device;
-// an empty component_type defaults to the generic instance of the resolved
-// kind (genericComponentTypeForKind).
+// CreateProduct inserts a custom (official=false) product and audits it. A
+// duplicate id is ErrTypeExists; an unknown vendor/driver/parent/component_type
+// is ErrProductRefNotFound; an out-of-set kind is ErrProductInvalidKind. An
+// empty kind defaults to device; an empty component_type defaults to the
+// generic instance of the resolved kind (genericComponentTypeForKind).
 func (p *PG) CreateProduct(ctx context.Context, actorID string, m Product) (*Product, error) {
 	if err := ValidateName("product", m.Name); err != nil {
 		return nil, err
@@ -446,14 +346,6 @@ func (p *PG) CreateProduct(ctx context.Context, actorID string, m Product) (*Pro
 		Scan(&m.ID, &m.CreatedAt, &m.UpdatedAt); err != nil {
 		return nil, mapProductWriteErr(err)
 	}
-	if err := replaceProductCapabilities(ctx, tx, m.ID, m.Capabilities); err != nil {
-		return nil, err
-	}
-	caps, err := loadProductCapabilities(ctx, tx, m.ID)
-	if err != nil {
-		return nil, err
-	}
-	m.Capabilities = caps
 	if err := writeAuditRes(ctx, tx, actorID, "create", "product", m.ID, nil, m); err != nil {
 		return nil, err
 	}
@@ -466,11 +358,10 @@ func (p *PG) CreateProduct(ctx context.Context, actorID string, m Product) (*Pro
 }
 
 // UpdateProduct patches a custom product's display_name, vendor, driver, kind,
-// parent, component_type, or icon (nil fields unchanged), replaces its
-// capability set when Capabilities is non-nil, and audits it. Official rows
-// are read-only (ErrTypeOfficial); an unknown id is ErrTypeNotFound; an
-// unknown reference is ErrProductRefNotFound; an out-of-set kind is
-// ErrProductInvalidKind.
+// parent, component_type, or icon (nil fields unchanged) and audits it.
+// Official rows are read-only (ErrTypeOfficial); an unknown id is
+// ErrTypeNotFound; an unknown reference is ErrProductRefNotFound; an
+// out-of-set kind is ErrProductInvalidKind.
 func (p *PG) UpdateProduct(ctx context.Context, actorID, id string, patch ProductPatch) (*Product, error) {
 	if patch.Kind != nil && !validProductKind(*patch.Kind) {
 		return nil, ErrProductInvalidKind
@@ -526,24 +417,6 @@ func (p *PG) UpdateProduct(ctx context.Context, actorID, id string, patch Produc
 		}
 		return nil, mapProductWriteErr(err)
 	}
-	if patch.Capabilities != nil {
-		if err := replaceProductCapabilities(ctx, tx, id, *patch.Capabilities); err != nil {
-			return nil, err
-		}
-		// A product is a contract, so its capability set is the default every
-		// component built to it provides. Withdrawing one can drop a role below its
-		// quorum in systems nobody touched, which is a real transition in each of
-		// them: an edit here is a health event over there. In the same transaction,
-		// so a component can never provide less than the record says it does.
-		if err := p.recomputeProductComponents(ctx, tx, id); err != nil {
-			return nil, err
-		}
-	}
-	caps, err := loadProductCapabilities(ctx, tx, id)
-	if err != nil {
-		return nil, err
-	}
-	m.Capabilities = caps
 	after, err := productAuditImage(ctx, tx, id)
 	if err != nil {
 		return nil, err
@@ -559,9 +432,8 @@ func (p *PG) UpdateProduct(ctx context.Context, actorID, id string, patch Produc
 	return m, nil
 }
 
-// productAuditImage is registryAuditImage plus the product's capability-name
-// set, which lives in a join table the row image alone would hide: replacing
-// the set is exactly the kind of change the trail exists to show.
+// productAuditImage is registryAuditImage under the product sentinel: an
+// unknown ref reads as ErrTypeNotFound rather than a bare no-rows.
 func productAuditImage(ctx context.Context, tx pgx.Tx, ref string) (map[string]any, error) {
 	img, err := registryAuditImage(ctx, tx, "product", ref)
 	if err != nil {
@@ -570,17 +442,12 @@ func productAuditImage(ctx context.Context, tx pgx.Tx, ref string) (map[string]a
 		}
 		return nil, fmt.Errorf("storage: audit image product %q: %w", ref, err)
 	}
-	caps, err := loadProductCapabilities(ctx, tx, ref)
-	if err != nil {
-		return nil, err
-	}
-	img["capabilities"] = caps
 	return img, nil
 }
 
-// DeleteProduct removes a custom product (its capability rows cascade), refusing
-// an official row (ErrTypeOfficial) or one still referenced by a component
-// (ErrTypeInUse, from the component.product_id ON DELETE RESTRICT FK).
+// DeleteProduct removes a custom product, refusing an official row
+// (ErrTypeOfficial) or one still referenced by a component (ErrTypeInUse,
+// from the component.product_id ON DELETE RESTRICT FK).
 func (p *PG) DeleteProduct(ctx context.Context, actorID, id string) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {

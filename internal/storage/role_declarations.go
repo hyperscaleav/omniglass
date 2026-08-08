@@ -9,14 +9,9 @@ import (
 )
 
 // The declaration side of the role model: who DECLARES a role (a standard, so
-// every conforming system inherits it, or one system ad-hoc) and what a
-// component claims it can do. The resolvers in roles.go read what this writes;
-// nothing here resolves, so the two stay separable.
-
-// ErrComponentCapabilityNotFound is clearing a capability fact the component
-// never declared. Its own sentinel rather than ErrRoleNotFound, because the
-// address that came up empty is a component's capability row, not a role.
-var ErrComponentCapabilityNotFound = errors.New("storage: component capability not declared")
+// every conforming system inherits it, or one system ad-hoc) and the
+// typed-slot requirement it enforces at assignment. The resolvers in roles.go
+// read what this writes; nothing here resolves, so the two stay separable.
 
 // ErrUnknownRoleOwner guards the role owner-arc column mapping. A role owner is
 // a standard or a system and nothing else, so an unrecognized kind is refused
@@ -64,10 +59,11 @@ func scanSystemRole(row pgx.Row) (*SystemRole, error) {
 	return &r, nil
 }
 
-// ListSystemRoles returns the roles one owner declares itself, ordered by name, each
-// with the capabilities it requires. This is the declaration read, not the
-// resolution: a system's list carries only its ad-hoc roles, never the ones it
-// inherits from its standard (EffectiveRoles is what merges the two arcs).
+// ListSystemRoles returns the roles one owner declares itself, ordered by
+// name, each with its typed-slot requirement. This is the declaration read,
+// not the resolution: a system's list carries only its ad-hoc roles, never
+// the ones it inherits from its standard (EffectiveRoles is what merges the
+// two arcs).
 func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]SystemRole, error) {
 	col, err := roleOwnerColumn(ownerKind)
 	if err != nil {
@@ -77,12 +73,9 @@ func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]
 	// needs them qualified by the role alias.
 	q := fmt.Sprintf(`
 		select r.id, r.owner_kind, r.name, r.display_name, r.quorum, r.impact, r.created_at, r.updated_at,
-		       coalesce(array_agg(distinct cap.name order by cap.name) filter (where cap.name is not null), '{}') as caps,
 		       coalesce(array_agg(distinct ct.name order by ct.name) filter (where ct.name is not null), '{}') as types,
 		       coalesce(array_agg(distinct pr.name order by pr.name) filter (where pr.name is not null), '{}') as products
 		from system_role r
-		left join system_role_capability rc on rc.role_id = r.id
-		left join capability cap on cap.id = rc.capability_id
 		left join system_role_type rt on rt.role_id = r.id
 		left join component_type ct on ct.id = rt.component_type_id
 		left join system_role_product rp on rp.role_id = r.id
@@ -101,7 +94,7 @@ func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]
 	for rows.Next() {
 		var r SystemRole
 		if err := rows.Scan(&r.ID, &r.OwnerKind, &r.Name, &r.DisplayName, &r.Quorum, &r.Impact,
-			&r.CreatedAt, &r.UpdatedAt, &r.Capabilities, &r.AcceptedTypes, &r.PinnedProducts); err != nil {
+			&r.CreatedAt, &r.UpdatedAt, &r.AcceptedTypes, &r.PinnedProducts); err != nil {
 			return nil, fmt.Errorf("storage: scan role: %w", err)
 		}
 		r.OwnerID = ownerID
@@ -110,16 +103,16 @@ func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]
 	return out, rows.Err()
 }
 
-// SetSystemRole declares a role on a standard or a system, or revises the declaration
-// in place: the role is addressed by name within its owner arc, so the write is
-// an upsert and the surface's save is idempotent. The required-capability set is
-// replaced wholesale in the same transaction, matching how a product's
-// capability set behaves: what the caller sends is what the role requires
-// afterwards, so a capability can be dropped by omitting it.
+// SetSystemRole declares a role on a standard or a system, or revises the
+// declaration in place: the role is addressed by name within its owner arc,
+// so the write is an upsert and the surface's save is idempotent. The
+// typed-slot requirement (AcceptedTypes, PinnedProducts) is replaced
+// wholesale in the same transaction: what the caller sends is what the role
+// accepts afterwards, so a type can be dropped by omitting it.
 //
 // A quorum below one means one: a role no component need fill is not a role.
-// An owner or capability that does not exist is ErrRoleRefNotFound (a request
-// fault), never a server error.
+// An owner, type, or product that does not exist is ErrRoleRefNotFound (a
+// request fault), never a server error.
 func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID string, spec SystemRoleSpec) (*SystemRole, error) {
 	if err := ValidateName("system_role", spec.Name); err != nil {
 		return nil, err
@@ -174,25 +167,8 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 	}
 	r.OwnerID = ownerID
 
-	// Wholesale replacement: clear what the role required, then install the set
-	// the caller sent, so the declaration is the whole truth after the write.
-	if _, err := tx.Exec(ctx, `delete from system_role_capability where role_id = $1`, r.ID); err != nil {
-		return nil, fmt.Errorf("storage: clear role capabilities %s: %w", r.ID, err)
-	}
-	if len(spec.Capabilities) > 0 {
-		if _, err := tx.Exec(ctx, `
-			insert into system_role_capability (role_id, capability_id)
-			select $1, (select id from capability where name = c or id::text = c)
-			from unnest($2::text[]) c
-			on conflict (role_id, capability_id) do nothing`, r.ID, spec.Capabilities); err != nil {
-			return nil, mapRoleWriteErr(err)
-		}
-	}
-	r.Capabilities = append([]string(nil), spec.Capabilities...)
-
-	// The typed-slot guard's requirement, replaced the same wholesale way: what
-	// the caller sends is what the role accepts (types) and pins (products)
-	// afterwards.
+	// The typed-slot guard's requirement, replaced wholesale: what the caller
+	// sends is what the role accepts (types) and pins (products) afterwards.
 	if _, err := tx.Exec(ctx, `delete from system_role_type where role_id = $1`, r.ID); err != nil {
 		return nil, fmt.Errorf("storage: clear role types %s: %w", r.ID, err)
 	}
@@ -228,10 +204,9 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 	if err := writeAuditRes(ctx, tx, actorID, verb, "system_role", r.ID, before, r); err != nil {
 		return nil, err
 	}
-	// A declaration change moves health without touching a component: a new
-	// required capability, a raised quorum, or a changed impact can impair a role
-	// that was fine a moment ago. A standard's declaration moves every conforming
-	// system at once.
+	// A declaration change moves health without touching a component: a raised
+	// quorum or a changed impact can impair a role that was fine a moment ago.
+	// A standard's declaration moves every conforming system at once.
 	affected, err := p.systemsForRoleOwner(ctx, tx, ownerKind, ownerID)
 	if err != nil {
 		return nil, err
@@ -245,10 +220,10 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 	return r, nil
 }
 
-// DeleteSystemRole withdraws a role from its owner, taking its required capabilities
-// and every assignment to it with it (both cascade). A role the owner does not
-// declare is ErrRoleNotFound, so withdrawing twice is an explicit miss rather
-// than a silent no-op.
+// DeleteSystemRole withdraws a role from its owner, taking its typed-slot
+// requirement and every assignment to it with it (both cascade). A role the
+// owner does not declare is ErrRoleNotFound, so withdrawing twice is an
+// explicit miss rather than a silent no-op.
 func (p *PG) DeleteSystemRole(ctx context.Context, actorID, ownerKind, ownerID, name string) error {
 	col, err := roleOwnerColumn(ownerKind)
 	if err != nil {
@@ -291,83 +266,6 @@ func (p *PG) DeleteSystemRole(ctx context.Context, actorID, ownerKind, ownerID, 
 	return nil
 }
 
-// SetComponentCapability records one capability fact on a component, layered
-// over what its product declares: present adds a capability the product does not
-// claim, absent suppresses one it does. No longer read by role assignment (the
-// typed-slot guard checks the component's product's component_type instead,
-// #626); this fact still feeds the health rollup's alarm-impact model through
-// EffectiveCapabilities, pending its own retirement alongside the capability
-// tables (Task 5).
-//
-// Idempotent (the fact is keyed by component and capability). An unknown
-// component or capability is ErrRoleRefNotFound, a request fault.
-func (p *PG) SetComponentCapability(ctx context.Context, actorID, componentName, capabilityID string, present bool) error {
-	tx, err := p.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("storage: begin set component capability: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	var factID string
-	if err := tx.QueryRow(ctx, `
-		insert into component_capability (component_id, capability_id, present)
-		values ((select id from component where name = $1),
-		        (select id from capability where name = $2 or id::text = $2), $3)
-		on conflict (component_id, capability_id) do update
-			set present    = excluded.present,
-			    updated_at = now()
-		returning id`, componentName, capabilityID, present).Scan(&factID); err != nil {
-		return mapRoleWriteErr(err)
-	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "component_capability", factID, nil,
-		map[string]any{"component": componentName, "capability": capabilityID, "present": present}); err != nil {
-		return err
-	}
-	// What the component provides is half of whether it satisfies a role, so a
-	// capability fact moves the health of every system it staffs.
-	if err := p.RecomputeHealth(ctx, tx, componentName); err != nil {
-		return err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("storage: commit set component capability: %w", err)
-	}
-	return nil
-}
-
-// ClearComponentCapability removes the component's own fact about a capability,
-// so the component falls back to whatever its product declares. Clearing a fact
-// the component never declared is ErrComponentCapabilityNotFound.
-func (p *PG) ClearComponentCapability(ctx context.Context, actorID, componentName, capabilityID string) error {
-	tx, err := p.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("storage: begin clear component capability: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	var factID string
-	if err := tx.QueryRow(ctx, `
-		delete from component_capability
-		where component_id = (select id from component where name = $1)
-		  and capability_id = (select id from capability where name = $2 or id::text = $2)
-		returning id`, componentName, capabilityID).Scan(&factID); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrComponentCapabilityNotFound
-		}
-		return fmt.Errorf("storage: clear component capability %s/%s: %w", componentName, capabilityID, err)
-	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "component_capability", factID, nil, nil); err != nil {
-		return err
-	}
-	// Falling back to the product's set can drop a capability a role required.
-	if err := p.RecomputeHealth(ctx, tx, componentName); err != nil {
-		return err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("storage: commit clear component capability: %w", err)
-	}
-	return nil
-}
-
 // SeedSystemRole installs one declared role for the boot-seed phase: inserted when
 // absent, never reasserted, so an operator who retunes a shipped standard's
 // roles keeps their edit across restarts. Deliberately unaudited, the same lane
@@ -396,15 +294,6 @@ func (p *PG) SeedSystemRole(ctx context.Context, ownerKind, ownerID string, spec
 	}
 	if err != nil {
 		return mapRoleWriteErr(err)
-	}
-	if len(spec.Capabilities) > 0 {
-		if _, err := p.pool.Exec(ctx, `
-			insert into system_role_capability (role_id, capability_id)
-			select $1, (select id from capability where name = c or id::text = c)
-			from unnest($2::text[]) c
-			on conflict (role_id, capability_id) do nothing`, id, spec.Capabilities); err != nil {
-			return mapRoleWriteErr(err)
-		}
 	}
 	if len(spec.AcceptedTypes) > 0 {
 		if _, err := p.pool.Exec(ctx, `

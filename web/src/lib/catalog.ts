@@ -2,7 +2,6 @@ import { PRODUCTS_KEY, listProducts } from "./products";
 import { COMPONENT_TYPES_KEY, listComponentTypes } from "./component_types";
 import { VENDORS_KEY, listVendors } from "./vendors";
 import { DRIVERS_KEY, listDrivers } from "./drivers";
-import { CAPABILITIES_KEY, listCapabilities } from "./capabilities";
 import { STANDARDS_KEY, listStandards } from "./standards";
 import { LOCATION_TYPES_KEY, listLocationTypes } from "./location_types";
 import { METRICS_KEY, listMetricTypes } from "./metric_types";
@@ -81,12 +80,11 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
   },
   {
     header: "Components",
-    copy: "A component points at a product (its shape), a product names its vendor, a driver is how we talk to it, and capabilities say what it can do.",
+    copy: "A component points at a product (its shape), a product names its vendor, a driver is how we talk to it, and a component type is the device-class genus it is classified under.",
     entries: [
       { label: "Vendors", path: "/vendors", gate: ["vendor", "read"], key: VENDORS_KEY, list: listVendors },
       { label: "Products", path: "/products", gate: ["product", "read"], key: PRODUCTS_KEY, list: listProducts },
       { label: "Drivers", path: "/drivers", gate: ["driver", "read"], key: DRIVERS_KEY, list: listDrivers },
-      { label: "Capabilities", path: "/capabilities", gate: ["capability", "read"], key: CAPABILITIES_KEY, list: listCapabilities },
       // "Types": the Components header already says where it lives (mirrors
       // Locations' own Types entry below). The device-class genus registry
       // (ADR-0085): a product is classified under one of its nodes.

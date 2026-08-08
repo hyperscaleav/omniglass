@@ -66,7 +66,6 @@ type factsStandardRole struct {
 	Name           string   `json:"name"`
 	DisplayName    string   `json:"display_name,omitempty"`
 	Quorum         int      `json:"quorum"`
-	Capabilities   []string `json:"capabilities,omitempty"`
 	AcceptedTypes  []string `json:"accepted_types,omitempty"`
 	PinnedProducts []string `json:"pinned_products,omitempty"`
 }
@@ -91,11 +90,6 @@ type factsDriver struct {
 	Version     string `json:"version,omitempty"`
 }
 
-type factsCapability struct {
-	ID          string `json:"id"`
-	DisplayName string `json:"display_name"`
-}
-
 type factsProductProperty struct {
 	Name     string `json:"name"`
 	Default  string `json:"default,omitempty"`
@@ -109,7 +103,6 @@ type factsProduct struct {
 	DriverID        string                 `json:"driver_id,omitempty"`
 	Kind            string                 `json:"kind,omitempty"`
 	ParentProductID string                 `json:"parent_product_id,omitempty"`
-	Capabilities    []string               `json:"capabilities,omitempty"`
 	Properties      []factsProductProperty `json:"properties,omitempty"`
 }
 
@@ -140,7 +133,6 @@ type seedFactsDoc struct {
 	Standards      []factsStandard      `json:"standards"`
 	Vendors        []factsVendor        `json:"vendors"`
 	Drivers        []factsDriver        `json:"drivers"`
-	Capabilities   []factsCapability    `json:"capabilities"`
 	Products       []factsProduct       `json:"products"`
 }
 
@@ -260,7 +252,7 @@ func FactsJSON() ([]byte, error) {
 		for _, r := range s.Roles {
 			fs.Roles = append(fs.Roles, factsStandardRole{
 				Name: r.Name, DisplayName: r.DisplayName, Quorum: r.Quorum,
-				Capabilities: r.Capabilities, AcceptedTypes: r.AcceptedTypes, PinnedProducts: r.PinnedProducts,
+				AcceptedTypes: r.AcceptedTypes, PinnedProducts: r.PinnedProducts,
 			})
 		}
 		doc.Standards = append(doc.Standards, fs)
@@ -282,14 +274,6 @@ func FactsJSON() ([]byte, error) {
 		doc.Drivers = append(doc.Drivers, factsDriver{ID: d.ID, DisplayName: d.DisplayName, Version: d.Version})
 	}
 
-	var cs capabilitiesDoc
-	if err := yaml.Unmarshal(capabilitiesYAML, &cs); err != nil {
-		return nil, fmt.Errorf("seed facts: capabilities: %w", err)
-	}
-	for _, c := range cs.Capabilities {
-		doc.Capabilities = append(doc.Capabilities, factsCapability{ID: c.ID, DisplayName: c.DisplayName})
-	}
-
 	var ps productsDoc
 	if err := yaml.Unmarshal(productsYAML, &ps); err != nil {
 		return nil, fmt.Errorf("seed facts: products: %w", err)
@@ -297,7 +281,7 @@ func FactsJSON() ([]byte, error) {
 	for _, p := range ps.Products {
 		fp := factsProduct{
 			ID: p.ID, DisplayName: p.DisplayName, VendorID: p.VendorID, DriverID: p.DriverID,
-			Kind: p.Kind, ParentProductID: p.ParentProductID, Capabilities: p.Capabilities,
+			Kind: p.Kind, ParentProductID: p.ParentProductID,
 		}
 		for _, pp := range p.Properties {
 			fp.Properties = append(fp.Properties, factsProductProperty{Name: pp.Name, Default: pp.Default, Required: pp.Required})

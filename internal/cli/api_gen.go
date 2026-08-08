@@ -316,117 +316,6 @@ func generatedCommands() []*cobra.Command {
 	}())
 	roots = append(roots, func() *cobra.Command {
 		parent := &cobra.Command{
-			Use:   "capability",
-			Short: "Commands for the capability resource",
-		}
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				var fDisplayName string
-				var fName string
-				cmd := &cobra.Command{
-					Use:     "create",
-					Short:   "Create a capability",
-					Long:    "Creates a custom (non-official) capability. Gated by capability:create.",
-					Example: "  omniglass capability create --display-name display_name --name name",
-					Args:    cobra.ExactArgs(0),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/capabilities")
-						body := map[string]any{}
-						if cmd.Flags().Changed("display-name") {
-							body["display_name"] = fDisplayName
-						}
-						if cmd.Flags().Changed("name") {
-							body["name"] = fName
-						}
-						return runAPICommand(cmd, "POST", path, body)
-					},
-				}
-				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads in pickers and lists")
-				_ = cmd.MarkFlagRequired("display-name")
-				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name; renameable")
-				_ = cmd.MarkFlagRequired("name")
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "delete <id>",
-					Short:   "Delete a capability",
-					Long:    "Deletes a custom capability, refused if official (422). Gated by capability:delete.",
-					Example: "  omniglass capability delete <id>",
-					Args:    cobra.ExactArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/capabilities/%s", url.PathEscape(args[0]))
-						return runAPICommand(cmd, "DELETE", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "get <id>",
-					Short:   "Get a capability",
-					Long:    "Fetches a capability by id. Gated by capability:read.",
-					Example: "  omniglass capability get <id>",
-					Args:    cobra.ExactArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/capabilities/%s", url.PathEscape(args[0]))
-						return runAPICommand(cmd, "GET", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "list",
-					Short:   "List capabilities",
-					Long:    "Lists the capability registry, ordered alphabetically by display name. Populates the capability picker on the product form. Gated by capability:read.",
-					Example: "  omniglass capability list",
-					Args:    cobra.ExactArgs(0),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/capabilities")
-						return runAPICommand(cmd, "GET", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				var fDisplayName string
-				cmd := &cobra.Command{
-					Use:     "update <id>",
-					Short:   "Update a capability",
-					Long:    "Patches a custom capability's display_name. Official capabilities are read-only (422). Gated by capability:update.",
-					Example: "  omniglass capability update <id>",
-					Args:    cobra.ExactArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/capabilities/%s", url.PathEscape(args[0]))
-						body := map[string]any{}
-						if cmd.Flags().Changed("display-name") {
-							body["display_name"] = fDisplayName
-						}
-						return runAPICommand(cmd, "PATCH", path, body)
-					},
-				}
-				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
-				return cmd
-			}()
-			return cmd
-		}())
-		return parent
-	}())
-	roots = append(roots, func() *cobra.Command {
-		parent := &cobra.Command{
 			Use:   "command-type",
 			Short: "Commands for the command-type resource",
 		}
@@ -597,22 +486,18 @@ func generatedCommands() []*cobra.Command {
 			}
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
-					var fCapabilities string
 					var fDedupKey string
 					var fMessage string
 					var fSeverity string
 					cmd := &cobra.Command{
 						Use:     "create <name>",
 						Short:   "Raise an alarm on a component",
-						Long:    "Records a condition on this component and the capabilities it degrades, then recomputes health in the same transaction: any role requiring a degraded capability can no longer be filled by this component, and its system and location verdicts move with it. An unknown capability is a 422. Gated by component:update; an out-of-scope component is a non-disclosing 404.",
+						Long:    "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it. Gated by component:update; an out-of-scope component is a non-disclosing 404.",
 						Example: "  omniglass component alarm create <name> --severity severity",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/components/%s/alarms", url.PathEscape(args[0]))
 							body := map[string]any{}
-							if cmd.Flags().Changed("capabilities") {
-								body["capabilities"] = jsonOrString(fCapabilities)
-							}
 							if cmd.Flags().Changed("dedup-key") {
 								body["dedup_key"] = fDedupKey
 							}
@@ -625,7 +510,6 @@ func generatedCommands() []*cobra.Command {
 							return runAPICommand(cmd, "POST", path, body)
 						},
 					}
-					cmd.Flags().StringVar(&fCapabilities, "capabilities", "", "The capabilities this condition degrades; a role requiring one of them can no longer be filled by this component")
 					cmd.Flags().StringVar(&fDedupKey, "dedup-key", "", "The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate")
 					cmd.Flags().StringVar(&fMessage, "message", "", "What is wrong, for the operator reading it later")
 					cmd.Flags().StringVar(&fSeverity, "severity", "", "How bad it is; critical puts the component itself in outage")
@@ -657,7 +541,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a component's alarms",
-						Long:    "What is currently wrong with this component, newest first, each with the capabilities it degrades. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+						Long:    "What is currently wrong with this component, newest first. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
 						Example: "  omniglass component alarm list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -673,71 +557,6 @@ func generatedCommands() []*cobra.Command {
 						},
 					}
 					cmd.Flags().BoolVar(&qIncludeCleared, "include-cleared", false, "Include cleared alarms, so the list is the history rather than what is wrong now")
-					return cmd
-				}()
-				return cmd
-			}())
-			return parent
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			parent := &cobra.Command{
-				Use:   "capability",
-				Short: "Commands for the capability resource",
-			}
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					cmd := &cobra.Command{
-						Use:     "delete <name> <capability>",
-						Short:   "Clear a capability declaration on a component",
-						Long:    "Removes the component's own fact about the capability, so it falls back to whatever its product declares. Clearing a fact the component never declared is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.",
-						Example: "  omniglass component capability delete <name> <capability>",
-						Args:    cobra.ExactArgs(2),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/components/%s/capabilities/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
-							return runAPICommand(cmd, "DELETE", path, nil)
-						},
-					}
-					return cmd
-				}()
-				return cmd
-			}())
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					cmd := &cobra.Command{
-						Use:     "list <name>",
-						Short:   "List a component's effective capabilities",
-						Long:    "What this component actually provides: the capabilities its product declares, plus the ones the component adds, minus the ones it suppresses. No longer what role assignment gates (the typed-slot guard checks the component's product's component_type instead, #626); this resolved set still feeds the health rollup's alarm-impact model. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
-						Example: "  omniglass component capability list <name>",
-						Args:    cobra.ExactArgs(1),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/components/%s/capabilities", url.PathEscape(args[0]))
-							return runAPICommand(cmd, "GET", path, nil)
-						},
-					}
-					return cmd
-				}()
-				return cmd
-			}())
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					var fPresent string
-					cmd := &cobra.Command{
-						Use:     "update <name> <capability>",
-						Short:   "Declare a capability on a component",
-						Long:    "Records this component's own fact about a capability: present true adds one its product does not claim, present false suppresses one it does. Idempotent. An unknown capability is a 422; an unknown or out-of-scope component is a non-disclosing 404 (the component is resolved in scope first). Gated by component:update.",
-						Example: "  omniglass component capability update <name> <capability> --present present",
-						Args:    cobra.ExactArgs(2),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/components/%s/capabilities/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
-							body := map[string]any{}
-							if cmd.Flags().Changed("present") {
-								body["present"] = jsonOrString(fPresent)
-							}
-							return runAPICommand(cmd, "PUT", path, body)
-						},
-					}
-					cmd.Flags().StringVar(&fPresent, "present", "", "True to add the capability, false to suppress one the product declares")
-					_ = cmd.MarkFlagRequired("present")
 					return cmd
 				}()
 				return cmd
@@ -2100,7 +1919,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Read a location's health",
-						Long:    "The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, the capability, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.",
+						Long:    "The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.",
 						Example: "  omniglass location health list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -3776,7 +3595,6 @@ func generatedCommands() []*cobra.Command {
 		}
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
-				var fCapabilities string
 				var fComponentType string
 				var fDisplayName string
 				var fDriverId string
@@ -3788,15 +3606,12 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a product",
-					Long:    "Creates a custom (non-official) product, classified under a component_type, and sets its capabilities. kind and component_type are both required; kind refuses vm (retired, folded into app). Gated by product:create.",
+					Long:    "Creates a custom (non-official) product, classified under a component_type. kind and component_type are both required; kind refuses vm (retired, folded into app). Gated by product:create.",
 					Example: "  omniglass product create --component-type component_type --display-name display_name --kind kind --name name",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/products")
 						body := map[string]any{}
-						if cmd.Flags().Changed("capabilities") {
-							body["capabilities"] = jsonOrString(fCapabilities)
-						}
 						if cmd.Flags().Changed("component-type") {
 							body["component_type"] = fComponentType
 						}
@@ -3824,7 +3639,6 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fCapabilities, "capabilities", "", "Capability names the product provides (the default set its components inherit)")
 				cmd.Flags().StringVar(&fComponentType, "component-type", "", "The component_type this product is classified under (mic, camera, ...), by name or uuid; every product must belong to one of the tree's nodes. The generics (generic-device, generic-app, generic-service) fit anything not yet modeled more specifically.")
 				_ = cmd.MarkFlagRequired("component-type")
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads in pickers and lists")
@@ -3863,7 +3677,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "get <id>",
 					Short:   "Get a product",
-					Long:    "Fetches a product by its name or its uuid, with its capabilities. Either form resolves, so `omniglass product get acme-soundbar` and the uuid are interchangeable. Gated by product:read.",
+					Long:    "Fetches a product by its name or its uuid. Either form resolves, so `omniglass product get acme-soundbar` and the uuid are interchangeable. Gated by product:read.",
 					Example: "  omniglass product get <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3880,7 +3694,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List products",
-					Long:    "Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, component_type, and capabilities. Gated by product:read.",
+					Long:    "Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.",
 					Example: "  omniglass product list",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4032,7 +3846,6 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
-				var fCapabilities string
 				var fComponentType string
 				var fDisplayName string
 				var fDriverId string
@@ -4043,15 +3856,12 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <id>",
 					Short:   "Update a product",
-					Long:    "Patches a custom product's display_name, vendor, driver, kind, component_type, icon, or parent, and replaces its capabilities when provided. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.",
+					Long:    "Patches a custom product's display_name, vendor, driver, kind, component_type, icon, or parent. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.",
 					Example: "  omniglass product update <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/products/%s", url.PathEscape(args[0]))
 						body := map[string]any{}
-						if cmd.Flags().Changed("capabilities") {
-							body["capabilities"] = jsonOrString(fCapabilities)
-						}
 						if cmd.Flags().Changed("component-type") {
 							body["component_type"] = fComponentType
 						}
@@ -4076,7 +3886,6 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fCapabilities, "capabilities", "", "Replaces the capability-name set; omit to leave unchanged")
 				cmd.Flags().StringVar(&fComponentType, "component-type", "", "Reclassifies the product to this component_type, by name or uuid; component_type is required, so this only reclassifies, it never clears")
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
 				cmd.Flags().StringVar(&fDriverId, "driver-id", "", "A new driver, by handle or uuid")
@@ -4860,7 +4669,6 @@ func generatedCommands() []*cobra.Command {
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
 					var fAcceptedTypes string
-					var fCapabilities string
 					var fDisplayName string
 					var fImpact string
 					var fPinnedProducts string
@@ -4876,9 +4684,6 @@ func generatedCommands() []*cobra.Command {
 							body := map[string]any{}
 							if cmd.Flags().Changed("accepted-types") {
 								body["accepted_types"] = jsonOrString(fAcceptedTypes)
-							}
-							if cmd.Flags().Changed("capabilities") {
-								body["capabilities"] = jsonOrString(fCapabilities)
 							}
 							if cmd.Flags().Changed("display-name") {
 								body["display_name"] = fDisplayName
@@ -4896,7 +4701,6 @@ func generatedCommands() []*cobra.Command {
 						},
 					}
 					cmd.Flags().StringVar(&fAcceptedTypes, "accepted-types", "", "The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type")
-					cmd.Flags().StringVar(&fCapabilities, "capabilities", "", "Deprecated, no longer enforced: the typed-slot guard (accepted_types, pinned_products) replaces it")
 					cmd.Flags().StringVar(&fDisplayName, "display-name", "", "The role's human label; defaults to the role name")
 					cmd.Flags().StringVar(&fImpact, "impact", "", "What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display")
 					cmd.Flags().StringVar(&fPinnedProducts, "pinned-products", "", "If set, a filling component's product must be one of these; replaces the pinned set wholesale. Omit or empty accepts any product of an accepted type")
@@ -5054,7 +4858,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Read a system's health",
-						Long:    "The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role the required capabilities an alarm has taken away plus the alarms that took them. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+						Long:    "The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
 						Example: "  omniglass system health list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -5397,7 +5201,6 @@ func generatedCommands() []*cobra.Command {
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
 					var fAcceptedTypes string
-					var fCapabilities string
 					var fDisplayName string
 					var fImpact string
 					var fPinnedProducts string
@@ -5413,9 +5216,6 @@ func generatedCommands() []*cobra.Command {
 							body := map[string]any{}
 							if cmd.Flags().Changed("accepted-types") {
 								body["accepted_types"] = jsonOrString(fAcceptedTypes)
-							}
-							if cmd.Flags().Changed("capabilities") {
-								body["capabilities"] = jsonOrString(fCapabilities)
 							}
 							if cmd.Flags().Changed("display-name") {
 								body["display_name"] = fDisplayName
@@ -5433,7 +5233,6 @@ func generatedCommands() []*cobra.Command {
 						},
 					}
 					cmd.Flags().StringVar(&fAcceptedTypes, "accepted-types", "", "The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type")
-					cmd.Flags().StringVar(&fCapabilities, "capabilities", "", "Deprecated, no longer enforced: the typed-slot guard (accepted_types, pinned_products) replaces it")
 					cmd.Flags().StringVar(&fDisplayName, "display-name", "", "The role's human label; defaults to the role name")
 					cmd.Flags().StringVar(&fImpact, "impact", "", "What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display")
 					cmd.Flags().StringVar(&fPinnedProducts, "pinned-products", "", "If set, a filling component's product must be one of these; replaces the pinned set wholesale. Omit or empty accepts any product of an accepted type")

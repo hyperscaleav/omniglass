@@ -50,13 +50,6 @@ components:
           type: string
         active:
           type: boolean
-        capabilities:
-          description: The capabilities this alarm degrades; empty means it reaches no role
-          items:
-            type: string
-          type:
-            - array
-            - "null"
         cleared_at:
           description: Null while the alarm is active
           format: date-time
@@ -81,7 +74,6 @@ components:
         - component
         - severity
         - message
-        - capabilities
         - dedup_key
         - raised_at
         - active
@@ -166,32 +158,6 @@ components:
           type: string
       required:
         - image_base64
-      type: object
-    CapabilityBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/CapabilityBody.json
-          format: uri
-          readOnly: true
-          type: string
-        display_name:
-          type: string
-        id:
-          description: The capability's uuid, the stable handle that survives a rename
-          type: string
-        name:
-          description: The name an operator reads and types; renameable
-          type: string
-        official:
-          type: boolean
-      required:
-        - id
-        - name
-        - display_name
-        - official
       type: object
     ChangePasswordInputBody:
       additionalProperties: false
@@ -434,29 +400,6 @@ components:
         - name
         - system_count
       type: object
-    ComponentCapabilitiesOutputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/ComponentCapabilitiesOutputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        capabilities:
-          description: "The resolved set: the product's, plus the component's additions, minus its suppressions"
-          items:
-            type: string
-          type:
-            - array
-            - "null"
-        component:
-          type: string
-      required:
-        - component
-        - capabilities
-      type: object
     ComponentMetricsOutputBody:
       additionalProperties: false
       properties:
@@ -578,30 +521,6 @@ components:
         - display_name
         - default_tags
         - official
-      type: object
-    CreateCapabilityInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/CreateCapabilityInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        display_name:
-          description: What an operator reads in pickers and lists
-          minLength: 1
-          type: string
-        name:
-          description: The globally unique name; renameable
-          maxLength: 100
-          minLength: 1
-          pattern: ^[a-z0-9][a-z0-9-]*$
-          type: string
-      required:
-        - name
-        - display_name
       type: object
     CreateCommandTypeInputBody:
       additionalProperties: false
@@ -1144,13 +1063,6 @@ components:
           format: uri
           readOnly: true
           type: string
-        capabilities:
-          description: Capability names the product provides (the default set its components inherit)
-          items:
-            type: string
-          type:
-            - array
-            - "null"
         component_type:
           description: The component_type this product is classified under (mic, camera, ...), by name or uuid; every product must belong to one of the tree's nodes. The generics (generic-device, generic-app, generic-service) fit anything not yet modeled more specifically.
           minLength: 1
@@ -1596,13 +1508,6 @@ components:
           type:
             - array
             - "null"
-        capabilities:
-          description: "Deprecated, no longer enforced: the typed-slot guard (accepted_types, pinned_products) replaces it"
-          items:
-            type: string
-          type:
-            - array
-            - "null"
         display_name:
           type: string
         from_standard:
@@ -1631,7 +1536,6 @@ components:
         - name
         - display_name
         - quorum
-        - capabilities
         - accepted_types
         - pinned_products
         - impact
@@ -2073,12 +1977,6 @@ components:
     HealthAlarmBody:
       additionalProperties: false
       properties:
-        capabilities:
-          items:
-            type: string
-          type:
-            - array
-            - "null"
         component:
           type: string
         id:
@@ -2095,7 +1993,6 @@ components:
         - component
         - severity
         - message
-        - capabilities
         - raised_at
       type: object
     HealthOutputBody:
@@ -2122,7 +2019,7 @@ components:
       additionalProperties: false
       properties:
         alarms:
-          description: The active alarms that degraded them
+          description: The active alarms on those down components
           items:
             $ref: "#/components/schemas/HealthAlarmBody"
           type:
@@ -2134,15 +2031,15 @@ components:
           type:
             - array
             - "null"
-        degraded:
-          description: The required capabilities an active alarm has taken away; empty when the role is merely short-staffed
+        display_name:
+          type: string
+        down:
+          description: The assigned components whose own verdict is not healthy; empty when the role is merely short-staffed
           items:
             type: string
           type:
             - array
             - "null"
-        display_name:
-          type: string
         impact:
           description: "What an impaired role means for its system: outage, degraded, or none"
           type: string
@@ -2154,27 +2051,19 @@ components:
         quorum:
           format: int64
           type: integer
-        required:
-          description: The capabilities a component must ALL provide to fill this role
-          items:
-            type: string
-          type:
-            - array
-            - "null"
         satisfying:
-          description: How many assigned components can currently fill the role
+          description: How many assigned components currently occupy the role (their own verdict is healthy)
           format: int64
           type: integer
       required:
         - name
         - display_name
         - impact
-        - required
         - quorum
         - satisfying
         - impaired
         - assigned_to
-        - degraded
+        - down
         - alarms
       type: object
     HealthSystemBody:
@@ -2387,25 +2276,6 @@ components:
       required:
         - component
         - alarms
-      type: object
-    ListCapabilitiesOutputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/ListCapabilitiesOutputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        capabilities:
-          items:
-            $ref: "#/components/schemas/CapabilityBody"
-          type:
-            - array
-            - "null"
-      required:
-        - capabilities
       type: object
     ListCommandTypesOutputBody:
       additionalProperties: false
@@ -3654,12 +3524,6 @@ components:
           format: uri
           readOnly: true
           type: string
-        capabilities:
-          items:
-            type: string
-          type:
-            - array
-            - "null"
         component_type:
           description: The component_type this product is classified under (mic, camera, ...); the taxonomy above product
           type: string
@@ -3710,7 +3574,6 @@ components:
         - kind
         - component_type
         - component_type_id
-        - capabilities
         - official
       type: object
     ProductMetricBody:
@@ -3980,13 +3843,6 @@ components:
           format: uri
           readOnly: true
           type: string
-        capabilities:
-          description: The capabilities this condition degrades; a role requiring one of them can no longer be filled by this component
-          items:
-            type: string
-          type:
-            - array
-            - "null"
         dedup_key:
           description: The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate
           type: string
@@ -4527,13 +4383,6 @@ components:
           type:
             - array
             - "null"
-        capabilities:
-          description: "Deprecated, no longer enforced: the typed-slot guard (accepted_types, pinned_products) replaces it"
-          items:
-            type: string
-          type:
-            - array
-            - "null"
         display_name:
           description: The role's human label; defaults to the role name
           type: string
@@ -4764,22 +4613,6 @@ components:
           type: string
       required:
         - image_base64
-      type: object
-    SetComponentCapabilityInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/SetComponentCapabilityInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        present:
-          description: True to add the capability, false to suppress one the product declares
-          type: boolean
-      required:
-        - present
       type: object
     SetComponentPropertyInputBody:
       additionalProperties: false
@@ -5234,13 +5067,6 @@ components:
           type:
             - array
             - "null"
-        capabilities:
-          description: "Deprecated, no longer enforced: the typed-slot guard (accepted_types, pinned_products) replaces it"
-          items:
-            type: string
-          type:
-            - array
-            - "null"
         display_name:
           description: The role's human label
           type: string
@@ -5265,7 +5091,6 @@ components:
         - name
         - display_name
         - quorum
-        - capabilities
         - accepted_types
         - pinned_products
         - impact
@@ -5406,20 +5231,6 @@ components:
       required:
         - theme
         - default_landing
-      type: object
-    UpdateCapabilityInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/UpdateCapabilityInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        display_name:
-          description: A new operator-facing label
-          type: string
       type: object
     UpdateCommandTypeInputBody:
       additionalProperties: false
@@ -5708,11 +5519,6 @@ components:
           format: uri
           readOnly: true
           type: string
-        capabilities:
-          description: Replaces the capability-name set; omit to leave unchanged
-          items:
-            type: string
-          type: array
         component_type:
           description: Reclassifies the product to this component_type, by name or uuid; component_type is required, so this only reclassifies, it never clears
           type: string
@@ -6330,128 +6136,6 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Whether the system has an owner yet
-  /capabilities:
-    get:
-      description: Lists the capability registry, ordered alphabetically by display name. Populates the capability picker on the product form. Gated by capability:read.
-      operationId: list-capabilities
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ListCapabilitiesOutputBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: List capabilities
-      x-omniglass-permission: capability:read
-    post:
-      description: Creates a custom (non-official) capability. Gated by capability:create.
-      operationId: create-capability
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateCapabilityInputBody"
-        required: true
-      responses:
-        "201":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CapabilityBody"
-          description: Created
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Create a capability
-      x-omniglass-permission: capability:create
-  /capabilities/{id}:
-    delete:
-      description: Deletes a custom capability, refused if official (422). Gated by capability:delete.
-      operationId: delete-capability
-      parameters:
-        - description: The capability id
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The capability id
-            type: string
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Delete a capability
-      x-omniglass-permission: capability:delete
-    get:
-      description: Fetches a capability by id. Gated by capability:read.
-      operationId: get-capability
-      parameters:
-        - description: The capability id
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The capability id
-            type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CapabilityBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Get a capability
-      x-omniglass-permission: capability:read
-    patch:
-      description: Patches a custom capability's display_name. Official capabilities are read-only (422). Gated by capability:update.
-      operationId: update-capability
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateCapabilityInputBody"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CapabilityBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Update a capability
-      x-omniglass-permission: capability:update
   /command-types:
     get:
       description: Lists every registered command type (official and custom). Estate-wide reference data. Gated by command_type:read.
@@ -6796,7 +6480,7 @@ paths:
       x-omniglass-permission: component:update
   /components/{name}/alarms:
     get:
-      description: What is currently wrong with this component, newest first, each with the capabilities it degrades. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+      description: What is currently wrong with this component, newest first. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
       operationId: list-component-alarms
       parameters:
         - description: The component's unique name
@@ -6829,7 +6513,7 @@ paths:
       summary: List a component's alarms
       x-omniglass-permission: component:read
     post:
-      description: "Records a condition on this component and the capabilities it degrades, then recomputes health in the same transaction: any role requiring a degraded capability can no longer be filled by this component, and its system and location verdicts move with it. An unknown capability is a 422. Gated by component:update; an out-of-scope component is a non-disclosing 404."
+      description: "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it. Gated by component:update; an out-of-scope component is a non-disclosing 404."
       operationId: raise-component-alarm
       parameters:
         - description: The component's unique name
@@ -6889,98 +6573,6 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Clear an alarm
-      x-omniglass-permission: component:update
-  /components/{name}/capabilities:
-    get:
-      description: "What this component actually provides: the capabilities its product declares, plus the ones the component adds, minus the ones it suppresses. No longer what role assignment gates (the typed-slot guard checks the component's product's component_type instead, #626); this resolved set still feeds the health rollup's alarm-impact model. Gated by component:read; an out-of-scope component is a non-disclosing 404."
-      operationId: list-component-capabilities
-      parameters:
-        - description: The component's unique name
-          in: path
-          name: name
-          required: true
-          schema:
-            description: The component's unique name
-            type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ComponentCapabilitiesOutputBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: List a component's effective capabilities
-      x-omniglass-permission: component:read
-  /components/{name}/capabilities/{capability}:
-    delete:
-      description: Removes the component's own fact about the capability, so it falls back to whatever its product declares. Clearing a fact the component never declared is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
-      operationId: clear-component-capability
-      parameters:
-        - description: The component's unique name
-          in: path
-          name: name
-          required: true
-          schema:
-            description: The component's unique name
-            type: string
-        - description: The capability id
-          in: path
-          name: capability
-          required: true
-          schema:
-            description: The capability id
-            type: string
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Clear a capability declaration on a component
-      x-omniglass-permission: component:update
-    put:
-      description: "Records this component's own fact about a capability: present true adds one its product does not claim, present false suppresses one it does. Idempotent. An unknown capability is a 422; an unknown or out-of-scope component is a non-disclosing 404 (the component is resolved in scope first). Gated by component:update."
-      operationId: set-component-capability
-      parameters:
-        - description: The component's unique name
-          in: path
-          name: name
-          required: true
-          schema:
-            description: The component's unique name
-            type: string
-        - description: The capability id
-          in: path
-          name: capability
-          required: true
-          schema:
-            description: The capability id
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SetComponentCapabilityInputBody"
-        required: true
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Declare a capability on a component
       x-omniglass-permission: component:update
   /components/{name}/commands:issue:
     post:
@@ -8425,7 +8017,7 @@ paths:
       x-omniglass-permission: location:update
   /locations/{name}/health:
     get:
-      description: The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, the capability, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+      description: The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
       operationId: get-location-health
       parameters:
         - description: The location's unique name
@@ -10079,7 +9671,7 @@ paths:
       x-omniglass-permission: principal:set-avatar
   /products:
     get:
-      description: Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, component_type, and capabilities. Gated by product:read.
+      description: Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
       operationId: list-products
       responses:
         "200":
@@ -10097,7 +9689,7 @@ paths:
       summary: List products
       x-omniglass-permission: product:read
     post:
-      description: Creates a custom (non-official) product, classified under a component_type, and sets its capabilities. kind and component_type are both required; kind refuses vm (retired, folded into app). Gated by product:create.
+      description: Creates a custom (non-official) product, classified under a component_type. kind and component_type are both required; kind refuses vm (retired, folded into app). Gated by product:create.
       operationId: create-product
       requestBody:
         content:
@@ -10144,7 +9736,7 @@ paths:
       summary: Delete a product
       x-omniglass-permission: product:delete
     get:
-      description: Fetches a product by its name or its uuid, with its capabilities. Either form resolves, so `omniglass product get acme-soundbar` and the uuid are interchangeable. Gated by product:read.
+      description: Fetches a product by its name or its uuid. Either form resolves, so `omniglass product get acme-soundbar` and the uuid are interchangeable. Gated by product:read.
       operationId: get-product
       parameters:
         - description: The product id
@@ -10170,7 +9762,7 @@ paths:
       summary: Get a product
       x-omniglass-permission: product:read
     patch:
-      description: Patches a custom product's display_name, vendor, driver, kind, component_type, icon, or parent, and replaces its capabilities when provided. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.
+      description: Patches a custom product's display_name, vendor, driver, kind, component_type, icon, or parent. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.
       operationId: update-product
       parameters:
         - in: path
@@ -11354,7 +10946,7 @@ paths:
       x-omniglass-permission: system:update
   /systems/{name}/health:
     get:
-      description: "The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role the required capabilities an alarm has taken away plus the alarms that took them. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404."
+      description: "The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404."
       operationId: get-system-health
       parameters:
         - description: The system's unique name

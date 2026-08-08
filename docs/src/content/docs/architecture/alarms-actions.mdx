@@ -17,8 +17,9 @@ in credentials; the Expr and Go-template machinery in [expressions](/architectur
 :::note[Partial]
 Built today: the **alarm as a held row**, raised on a **component** by a caller, carrying a `severity`
 (`info` / `warning` / `critical`), a message, a `raised_at`, and a nullable `cleared_at` (clearing keeps
-the row), plus the **capabilities it degrades**, which is how it reaches a system's
-[health](/architecture/health/).
+the row). Any active alarm reaches a system through the component's own verdict (any active alarm
+degrades it, a `critical` one is an outage), impairing every [role](/architecture/health/) that
+component occupies while it stays open (#626: an alarm no longer names what it degrades).
 See [implementation status](/architecture/status/).
 :::
 
@@ -71,7 +72,6 @@ event_rule:
   for: 0                                             # fire-side sustain (optional)
   for_clear: 0                                       # clear-side sustain (optional)
   severity: average
-  degrades: [microphone]                             # optional: the capabilities this alarm takes away
 ```
 
 `scope` selects the entities (fan-out, one alarm per match); `sample` is the input;
@@ -84,11 +84,11 @@ without editing it.
 independently: a long `for_clear` over a short `for` holds an incident through a noisy recovery
 without delaying the page.
 
-A rule also declares the **capabilities its alarm degrades** (default none): while open, any
-[system role](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled) requiring
-one loses it. Most rules degrade nothing (advisory). This makes health **alarm-sourced**; **the rule
-does not declare a health verdict**, since how much a lost capability matters is the role's
-**impact** ([health](/architecture/health/)). A rule scoped to whichever arc owns its sample yields
+A rule does not declare a health verdict itself: the alarm it raises impairs its owner's own
+verdict (any active alarm degrades it, a `critical` one is an outage), which impairs every
+[system role](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled) that owner
+occupies while the alarm is open (#626), and how much that matters is the role's **impact**
+([health](/architecture/health/)). A rule scoped to whichever arc owns its sample yields
 **component-level** and **system-level** alarms with one machinery (a system-scoped rule reads
 member data, fires a system-owned alarm).
 :::

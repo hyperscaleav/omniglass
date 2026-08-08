@@ -127,7 +127,6 @@
     "component_type:create,update,delete",
     "vendor:create,update,delete",
     "driver:create,update,delete",
-    "capability:create,update,delete",
     "product:create,update,delete",
     "standard:create,update,delete",
     "tag:*"
@@ -176,9 +175,6 @@
     "driver:create",
     "driver:update",
     "driver:delete",
-    "capability:create",
-    "capability:update",
-    "capability:delete",
     "product:create",
     "product:update",
     "product:delete",
@@ -442,10 +438,6 @@
      "name": "room-mic",
      "display_name": "Room Microphone",
      "quorum": 2,
-     "capabilities": [
-      "microphone",
-      "speaker"
-     ],
      "accepted_types": [
       "video-bar"
      ]
@@ -454,9 +446,6 @@
      "name": "main-display",
      "display_name": "Main Display",
      "quorum": 0,
-     "capabilities": [
-      "flat-panel-display"
-     ],
      "accepted_types": [
       "display"
      ]
@@ -554,36 +543,6 @@
    "version": "1.0.0"
   }
  ],
- "capabilities": [
-  {
-   "id": "microphone",
-   "display_name": "Microphone"
-  },
-  {
-   "id": "speaker",
-   "display_name": "Speaker"
-  },
-  {
-   "id": "display",
-   "display_name": "Display"
-  },
-  {
-   "id": "flat-panel-display",
-   "display_name": "Flat Panel Display"
-  },
-  {
-   "id": "camera",
-   "display_name": "Camera"
-  },
-  {
-   "id": "codec",
-   "display_name": "Codec"
-  },
-  {
-   "id": "touch-panel",
-   "display_name": "Touch Panel"
-  }
- ],
  "products": [
   {
    "id": "cisco-room-bar",
@@ -591,12 +550,6 @@
    "vendor_id": "cisco",
    "driver_id": "cisco-xapi",
    "kind": "device",
-   "capabilities": [
-    "microphone",
-    "speaker",
-    "camera",
-    "codec"
-   ],
    "properties": [
     {
      "name": "serial-number"
@@ -615,9 +568,6 @@
    "display_name": "Samsung QM55",
    "vendor_id": "samsung",
    "kind": "device",
-   "capabilities": [
-    "flat-panel-display"
-   ],
    "properties": [
     {
      "name": "serial-number"
@@ -636,20 +586,14 @@
    "display_name": "Shure MXA920",
    "vendor_id": "shure",
    "driver_id": "snmp-generic",
-   "kind": "device",
-   "capabilities": [
-    "microphone"
-   ]
+   "kind": "device"
   },
   {
    "id": "crestron-tss-1070",
    "display_name": "Crestron TSS-1070",
    "vendor_id": "crestron",
    "driver_id": "crestron-cip",
-   "kind": "device",
-   "capabilities": [
-    "touch-panel"
-   ]
+   "kind": "device"
   },
   {
    "id": "generic-device",

@@ -35,7 +35,6 @@ import LogsPanel from "../components/LogsPanel";
 import { interfaceBlade, interfaceCreateBlade } from "../components/interfaceBlades";
 import PropertiesPanel, { propertyResolutionBlade, propertyBladeId } from "../components/PropertiesPanel";
 import ResolutionPanel from "../components/ResolutionPanel";
-import CapabilitiesPanel from "../components/CapabilitiesPanel";
 import AlarmsPanel from "../components/AlarmsPanel";
 
 // Components: the device inventory, the first page built on the generic TreeList.
@@ -337,11 +336,11 @@ export default function Components() {
           onAdd={can(me.data, "interface", "create") ? () => ctx.openBlade({ kind: "interface-create", id: n().raw.name }) : undefined}
           onOpenInterface={can(me.data, "interface", "read") ? (id) => ctx.openBlade({ kind: "interface", id }) : undefined}
         />
-        {/* What is wrong with this component, and which capabilities that takes
-            away. This is where estate health starts: a role requiring a degraded
-            capability can no longer be filled here. Raising and clearing write
-            immediately (like tags), so the controls appear only in edit mode,
-            which keeps view read-only. */}
+        {/* What is wrong with this component, and how badly. This is where estate
+            health starts: an alarm takes the component's own verdict down, and
+            any role it fills stops counting it toward quorum while it stays
+            down. Raising and clearing write immediately (like tags), so the
+            controls appear only in edit mode, which keeps view read-only. */}
         <AlarmsPanel component={n().raw.name} canUpdate={editing() && canUpdate()} />
         <EventsPanel name={n().raw.name} />
         <LogsPanel name={n().raw.name} />
@@ -357,15 +356,6 @@ export default function Components() {
           component={n().raw.name}
           edit={edit}
           onOpen={(property) => ctx.openBlade({ kind: "property-resolution", id: propertyBladeId(n().raw.name, property) })}
-        />
-
-        {/* What the component provides, which is what a system role checks before
-            it may fill one. Writes are immediate (like tags), so the controls
-            appear only in edit mode, which keeps view read-only. */}
-        <CapabilitiesPanel
-          component={n().raw.name}
-          productId={n().raw.product_id}
-          canUpdate={editing() && canUpdate()}
         />
 
         <TagAdder kind="component" name={n().raw.name} canUpdate={editing() && canUpdate()} canCreateKey={can(me.data, "tag", "create")} />

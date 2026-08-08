@@ -8,16 +8,16 @@ import { type ComponentType, resolveComponentTypeIcon } from "./component_types"
 // (seed-owned) rows are read-only past creation, refused server-side on
 // update/delete. A product carries a kind (device/app/service; vm retired,
 // folded into app, ADR-0086), a required component_type (the device-class
-// genus every product is classified under, ADR-0085), an optional vendor and
-// driver, an optional parent product, and a set of capability names it
-// exposes.
+// genus every product is classified under, ADR-0085; also what a system
+// role's typed-slot guard checks, #626), an optional vendor and driver, and
+// an optional parent product.
 
 export type ProductKind = "device" | "app" | "service";
 
 // References arrive in both forms (api/products.go): vendor/driver/
 // parent_product/component_type are the name an operator reads,
 // vendor_id/driver_id/parent_product_id/component_type_id the uuids they
-// resolve to. capabilities is a list of capability NAMES.
+// resolve to.
 export type Product = {
   id: string;
   name: string;
@@ -31,7 +31,6 @@ export type Product = {
   driver_id?: string;
   parent_product?: string;
   parent_product_id?: string;
-  capabilities: string[];
   official: boolean;
   // A per-SKU override on the component_type's icon; unset inherits it.
   icon?: string;
@@ -66,7 +65,6 @@ export type CreateProduct = {
   vendor_id?: string;
   driver_id?: string;
   parent_product_id?: string;
-  capabilities?: string[];
   // A per-SKU icon override; unset inherits the component_type's icon.
   icon?: string;
 };
@@ -86,7 +84,6 @@ export type UpdateProduct = {
   vendor_id?: string;
   driver_id?: string;
   parent_product_id?: string;
-  capabilities?: string[];
   icon?: string;
 };
 

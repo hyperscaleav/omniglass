@@ -321,12 +321,14 @@ owning entity's own write. The tag vocabulary and an entity's tags read on the v
   resolves `platform`, its system tree, and the location it is placed at. Provenance lives in the
   per-entity effective-tags detail, not the row.
 
-The **component-classification catalogs** ([core entities](/architecture/core-entities/#catalog-reference-data-vendor-driver-capability))
-are flat official-vs-custom registries the `product` layer references, on the same pattern as the
-`*_type` registries. Each is its own resource with one shared CRUD shape: the list routes
-(`GET /vendors`, `/drivers`, `/capabilities`, `/products`, `/standards`) order alphabetically by
+The **component-classification catalogs** ([core entities](/architecture/core-entities/#catalog-reference-data-vendor-driver-component_type))
+are official-vs-custom registries the `product` layer references, on the same pattern as the
+`*_type` registries; `vendor` and `driver` are flat, `component_type` a hierarchy above `product`
+([core entities](/architecture/core-entities/#catalog-reference-data-component_type)). Each is its own
+resource with one shared CRUD shape: the list routes
+(`GET /vendors`, `/drivers`, `/component-types`, `/products`, `/standards`) order alphabetically by
 display name, and each list and per-id `GET` sits on the viewer floor (`vendor:read` / `driver:read` /
-`capability:read` / `product:read` / `standard:read`, which `*:read` carries); `POST` mints a custom
+`component_type:read` / `product:read` / `standard:read`, which `*:read` carries); `POST` mints a custom
 row (201) and `PATCH` updates and `DELETE` removes (204), gated `<resource>:create` /
 `<resource>:update` / `<resource>:delete`, all at the admin tier. An **official** row refuses the write
 (`PATCH` and `DELETE` both 422).
@@ -345,17 +347,16 @@ What each catalog adds over the shared shape (bodies in the [reference](/referen
   scheme, for example `javascript:`).
 - A **driver** (Generic SNMP, Cisco xAPI, ...) names the implementation that gets, emits, or sets a
   product's signals, with an optional `version`.
-- A **capability** (Microphone, Display, ...) names what a component can do: a **product** declares the
-  set its instances provide, a **component** adds to or suppresses that set with
-  [its own facts](#roles-a-system-declares-a-slot-a-component-fills-it), and a **system role** requires
-  a set of them.
+- A **component_type** (Mic, Camera, Wireless Mic, ...) is the device-class genus a product is
+  classified under, a **hierarchy** (a subtype falls within its ancestor's subtree): what a
+  [system role's typed-slot guard](#roles-a-system-declares-a-slot-a-component-fills-it) accepts.
 - A **product** ([core entities](/architecture/core-entities/#catalog-reference-data-product)) is the
   concrete **SKU** that ties the leaf catalogs together and the target of `component.product_id`: a
   vendor, a driver, a `kind` of `device` / `app` / `service` / `vm` (default `device`, a 422
-  otherwise), an optional `parent_product_id` variant, and the capabilities it provides, the `vendor`
-  and `driver` handles reading the referenced registry's current name beside its uuid. On `PATCH`,
-  `capabilities`, when given, **replaces** the whole set; an unknown vendor / driver / parent /
-  capability reference is a 422, and a product still referenced by a component is refused (409).
+  otherwise), a required `component_type`, and an optional `parent_product_id` variant, the `vendor`
+  and `driver` handles reading the referenced registry's current name beside its uuid. An unknown
+  vendor / driver / parent / component_type reference is a 422, and a product still referenced by a
+  component is refused (409).
 - A **standard** ([core entities](/architecture/core-entities/#catalog-reference-data-standard)) is the
   **blueprint a system conforms to** (Huddle Room, Classroom, Auditorium), the system-side counterpart
   of a product. Because it carries its own declared-property contract it is a **Catalog entity, not a
@@ -428,10 +429,11 @@ fills each role today), and **staffing** (assign and unassign). It is **not** th
 [IAM role](/architecture/identity-access/): `/roles` is the RBAC catalog, these routes are the estate model.
 
 A role is addressed **by name within its owner**, so every declaration is a `PUT` that declares or
-revises in place. The body is `{display_name?, quorum?, capabilities?, impact?}`; `capabilities`
-**replaces** the required set wholesale, and `impact` is `outage` / `degraded` / `none` (omitted means
-`degraded`), what an impaired role does to its system's [health](#health-the-verdict-and-why); an
-unknown impact is a 422. Gating follows the owner:
+revises in place. The body is `{display_name?, quorum?, accepted_types?, pinned_products?, impact?}`;
+`accepted_types` and `pinned_products` each **replace** their set wholesale (the typed-slot guard,
+below), and `impact` is `outage` / `degraded` / `none` (omitted means `degraded`), what an impaired role
+does to its system's [health](#health-the-verdict-and-why); an unknown impact is a 422. Gating follows
+the owner:
 
 - `GET /standards/{id}/roles` plus `PUT` / `DELETE /standards/{id}/roles/{role}`, gated `standard:read` /
   `:update` / `:delete`. Withdrawing a role takes every assignment conforming systems made to it (a
@@ -446,43 +448,41 @@ unknown impact is a 422. Gating follows the owner:
 - `PUT /systems/{name}/roles/{role}/assignments/{component}` puts a component in the role (204,
   idempotent); `DELETE` takes it out (204; a component not filling the role is a 404). Both gate on
   `system:update`.
-- `GET /components/{name}/capabilities` returns the **resolved set** (gated `component:read`): what the
-  product declares, plus what the component adds, minus what it suppresses.
-  `PUT /components/{name}/capabilities/{capability}` records one own fact from `{present}` (true adds,
-  false suppresses; 204, idempotent); `DELETE` clears the fact so the component falls back to its
-  product (204; clearing a fact it never declared is a 404). Both writes gate on `component:update`.
 
-Every system and component route resolves its owner **within the caller's scope first**, so an
-out-of-scope system or component is a **non-disclosing 404** on read and write alike, and every write is
+Every system route resolves its owner **within the caller's scope first**, so an
+out-of-scope system is a **non-disclosing 404** on read and write alike, and every write is
 audited in the same transaction.
 
-**The assignment refusal is a 422 that names the gap.** When the component's resolved capabilities do not
-cover every capability the role requires, the assignment is refused with the missing capabilities listed,
-sorted so the same gap always reads the same way:
+**The assignment refusal is a 422 that names both parties.** A component fills a slot only when its
+product's `component_type` falls within a type the role's `accepted_types` names (self or a descendant,
+any type if empty), and, if the role pins products, only when its product is one of them:
 
 ```
-component "panel-1" cannot fill role "table-mic": missing microphone, speaker
+component "panel-1" is a display; role "table-mic" wants a video-bar
 ```
 
 A **semantic** refusal, the 422 case in the [status table](#errors-one-problemjson-envelope), not an
 authorization one: the message tells the operator the next move. Around it: an unknown role is a
-**404**, an unknown standard or capability on a declaration a **422**, and an unknown (or out-of-scope)
-system or component the same non-disclosing **404**.
+**404**, an unknown standard or type or product on a declaration a **422**, and an unknown (or
+out-of-scope) system or component the same non-disclosing **404**. The guard runs once, at assignment;
+afterward an occupant keeps its slot as long as its own [health](#health-the-verdict-and-why) verdict
+stays healthy.
 
 ## Health: the verdict, and why
 
 **[Health](/architecture/health/)** is two shapes on this surface: the **alarm** (what is wrong with one
 component) and the **report** (what that means for a system or a location); an alarm is
-component-local, reaching a room only through the **capabilities** it degrades.
+component-local, reaching a room only through the component's own verdict, which impairs every role
+that component occupies while the alarm is active.
 
 An alarm hangs off its component and rides that component's gating:
 
 - `GET /components/{name}/alarms` lists them newest first (`component:read`), the **active** set by
   default and the whole history with `include_cleared`.
-- `POST /components/{name}/alarms` raises one from `{severity, message?, capabilities?}` (201,
-  `component:update`). `severity` is `info` / `warning` / `critical`; `capabilities` is what the
-  condition **takes away**, and an alarm naming none is a note that reaches no system. An unknown
-  capability or a bad severity is a **422**.
+- `POST /components/{name}/alarms` raises one from `{severity, message?, dedup_key?}` (201,
+  `component:update`). `severity` is `info` / `warning` / `critical`, driving the component's own
+  verdict (any active alarm degrades it, a critical one is an outage); `dedup_key` is the condition
+  identity, defaulting to the message. A bad severity is a **422**.
 - `DELETE /components/{name}/alarms/{id}` clears it (204, `component:update`). The row is **kept**, so
   the record of what was wrong outlives the fix; clearing one already cleared, or another
   component's, is a **404**.
@@ -494,9 +494,9 @@ The reports are one shape over two owners:
 
 - `GET /systems/{name}/health` (`system:read`) returns the verdict (`healthy` / `degraded` /
   `outage`) plus `roles`: every role the system needs filled, where `satisfying` counts the assigned
-  components that can currently fill it, `degraded` names the **required** capabilities an active
-  alarm took away, and `alarms` the alarms that took them. An impaired role with an **empty**
-  `degraded` is **short-staffed**, not broken, a different job for the operator.
+  components currently occupying it (their own verdict is healthy), `down` names the **assigned**
+  components that are not, and `alarms` the active alarms on those. An impaired role with an **empty**
+  `down` is **short-staffed**, not broken, a different job for the operator.
 - `GET /locations/{name}/health` (`location:read`) returns the same envelope with `systems` filled
   instead: every system placed **anywhere** beneath the location, with its verdict, as the drill-down.
 - `transitions` is the **recorded edges** over the last 30 days, oldest first, each `{ts, verdict}`: one

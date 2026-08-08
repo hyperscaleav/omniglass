@@ -1,11 +1,10 @@
 # The official products, seeded idempotently at boot. A product is a concrete
 # SKU that ties the classification catalogs together: a vendor (who makes it), a
-# driver (what talks to it), a kind (device/app/service), the component_type it
-# is classified under (the taxonomy above product; component_types.yaml, seeded
-# first), and the capabilities it provides. vendor_id, driver_id, component_type,
-# and every capability id must resolve against their catalogs. The registry lists
-# alphabetically by display_name. Starter set, operator-extensible later; tune
-# freely.
+# driver (what talks to it), a kind (device/app/service), and the component_type
+# it is classified under (the taxonomy above product; component_types.yaml,
+# seeded first). vendor_id, driver_id, and component_type must resolve against
+# their catalogs. The registry lists alphabetically by display_name. Starter
+# set, operator-extensible later; tune freely.
 #
 # The three generics (generic-device/generic-app/generic-service) are the
 # fallback every unclassified component and product resolves to (the product
@@ -19,7 +18,6 @@ products:
     driver_id: cisco-xapi
     kind: device
     component_type: video-bar
-    capabilities: [microphone, speaker, camera, codec]
     # The declared-property contract: which properties this product declares and
     # their defaults. An operator overrides one on a component; an unset property
     # resolves to the default here.
@@ -33,7 +31,6 @@ products:
     vendor_id: samsung
     kind: device
     component_type: display
-    capabilities: [flat-panel-display]
     properties:
       - name: serial-number
       - name: firmware-version
@@ -45,14 +42,12 @@ products:
     driver_id: snmp-generic
     kind: device
     component_type: ceiling-mic
-    capabilities: [microphone]
   - id: crestron-tss-1070
     display_name: Crestron TSS-1070
     vendor_id: crestron
     driver_id: crestron-cip
     kind: device
     component_type: touch-panel
-    capabilities: [touch-panel]
   - id: generic-device
     display_name: Generic Device
     kind: device

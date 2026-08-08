@@ -56,8 +56,8 @@ type TableIdentity struct {
 // reads it to pick the rule, so the declaration is load-bearing and not a comment.
 var IdentityShapes = map[string]TableIdentity{
 	// Key-bearing. The shape is the whole explanation.
-	"capability": {Shape: ShapeKeyBearing}, "component": {Shape: ShapeKeyBearing},
-	"driver": {Shape: ShapeKeyBearing}, "interface": {Shape: ShapeKeyBearing},
+	"component": {Shape: ShapeKeyBearing},
+	"driver":    {Shape: ShapeKeyBearing}, "interface": {Shape: ShapeKeyBearing},
 	"interface_type": {Shape: ShapeKeyBearing}, "location": {Shape: ShapeKeyBearing},
 	"location_type": {Shape: ShapeKeyBearing}, "node": {Shape: ShapeKeyBearing},
 	"principal_group": {Shape: ShapeKeyBearing}, "product": {Shape: ShapeKeyBearing},
@@ -83,21 +83,21 @@ var IdentityShapes = map[string]TableIdentity{
 	"blob": {ShapeHumanNotAKey, "content-addressed by sha256, for the same reason"},
 
 	// Id only.
-	"alarm": {Shape: ShapeIDOnly}, "alarm_capability": {Shape: ShapeIDOnly},
+	"alarm":     {Shape: ShapeIDOnly},
 	"audit_log": {Shape: ShapeIDOnly}, "command": {Shape: ShapeIDOnly},
-	"component_capability": {Shape: ShapeIDOnly}, "credential": {Shape: ShapeIDOnly},
-	"event": {Shape: ShapeIDOnly}, "impersonation_session": {Shape: ShapeIDOnly},
+	"credential": {Shape: ShapeIDOnly},
+	"event":      {Shape: ShapeIDOnly}, "impersonation_session": {Shape: ShapeIDOnly},
 	"location_type_metric": {Shape: ShapeIDOnly}, "location_type_property": {Shape: ShapeIDOnly},
 	"log_line": {Shape: ShapeIDOnly}, "metric": {Shape: ShapeIDOnly},
 	"node_log":  {Shape: ShapeIDOnly},
 	"principal": {Shape: ShapeIDOnly}, "principal_grant": {Shape: ShapeIDOnly},
-	"principal_group_member": {Shape: ShapeIDOnly}, "product_capability": {Shape: ShapeIDOnly},
-	"product_metric": {Shape: ShapeIDOnly}, "product_property": {Shape: ShapeIDOnly},
+	"principal_group_member": {Shape: ShapeIDOnly},
+	"product_metric":         {Shape: ShapeIDOnly}, "product_property": {Shape: ShapeIDOnly},
 	"property": {Shape: ShapeIDOnly}, "service": {Shape: ShapeIDOnly},
 	"setting_override": {Shape: ShapeIDOnly}, "standard_metric": {Shape: ShapeIDOnly},
 	"standard_property": {Shape: ShapeIDOnly}, "system_member": {Shape: ShapeIDOnly},
-	"system_role_assignment": {Shape: ShapeIDOnly}, "system_role_capability": {Shape: ShapeIDOnly},
-	"system_role_product": {Shape: ShapeIDOnly}, "system_role_type": {Shape: ShapeIDOnly},
+	"system_role_assignment": {Shape: ShapeIDOnly},
+	"system_role_product":    {Shape: ShapeIDOnly}, "system_role_type": {Shape: ShapeIDOnly},
 	"tag_binding": {Shape: ShapeIDOnly},
 }
 

@@ -273,13 +273,6 @@ type Gateway interface {
 	CreateDriver(ctx context.Context, actorID string, d Driver) (*Driver, error)
 	UpdateDriver(ctx context.Context, actorID, id string, patch DriverPatch) (*Driver, error)
 	DeleteDriver(ctx context.Context, actorID, id string) error
-	UpsertCapability(ctx context.Context, c Capability) error
-	ListCapabilities(ctx context.Context) ([]Capability, error)
-	GetCapability(ctx context.Context, id string) (*Capability, error)
-	CreateCapability(ctx context.Context, actorID string, c Capability) (*Capability, error)
-	UpdateCapability(ctx context.Context, actorID, id string, patch CapabilityPatch) (*Capability, error)
-	DeleteCapability(ctx context.Context, actorID, id string) error
-
 	// The component_type registry: the hierarchical taxonomy a product is
 	// classified by (mic, camera, wireless-mic under mic). ResolveTypeFacts
 	// and TypeIsWithin walk the tree in Go; no DB logic.
@@ -513,27 +506,24 @@ type Gateway interface {
 	SetPrimaryMember(ctx context.Context, actorID, systemName, componentName string, write scope.Set) error
 
 	// The role tier: a system's roles resolve from its standard (inherited) and its
-	// own ad-hoc declarations; assignment refuses a component whose resolved
-	// capabilities do not cover what the role requires.
+	// own ad-hoc declarations; assignment refuses a component whose product's
+	// component_type is not one the role's typed-slot guard accepts (#626).
 	EffectiveRoles(ctx context.Context, systemName string, read scope.Set) ([]EffectiveRole, error)
-	ComponentCapabilities(ctx context.Context, componentName string) ([]string, error)
 	AssignRole(ctx context.Context, actorID, systemName, roleName, componentName string, write scope.Set) error
 	UnassignRole(ctx context.Context, actorID, systemName, roleName, componentName string, write scope.Set) error
 	// The declaration side of the same tier: what a standard or a system declares
-	// it needs filled, and the capability facts a component carries on its own.
-	// ownerKind is "standard" or "system"; SeedSystemRole is the boot-seed lane.
+	// it needs filled. ownerKind is "standard" or "system"; SeedSystemRole is the
+	// boot-seed lane.
 	ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]SystemRole, error)
 	SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID string, spec SystemRoleSpec) (*SystemRole, error)
 	DeleteSystemRole(ctx context.Context, actorID, ownerKind, ownerID, name string) error
 	SeedSystemRole(ctx context.Context, ownerKind, ownerID string, spec SystemRoleSpec) error
-	SetComponentCapability(ctx context.Context, actorID, componentName, capabilityID string, present bool) error
-	ClearComponentCapability(ctx context.Context, actorID, componentName, capabilityID string) error
 
-	// The health tier. An alarm degrades named capabilities on a component; the
-	// rollup turns that into a system and location verdict and RECORDS every
-	// change as a transition, so the history is edges and only edges. The
-	// recompute itself is not on this interface: it runs inside the transaction of
-	// the write that triggered it, never as a call of its own.
+	// The health tier. An alarm impairs its component wholesale (#626); the
+	// rollup turns each occupant's own verdict into a system and location verdict
+	// and RECORDS every change as a transition, so the history is edges and only
+	// edges. The recompute itself is not on this interface: it runs inside the
+	// transaction of the write that triggered it, never as a call of its own.
 	RaiseAlarm(ctx context.Context, actorID, componentName string, spec AlarmSpec) (*Alarm, error)
 	ClearAlarm(ctx context.Context, actorID, componentName, alarmID string) error
 	ListAlarms(ctx context.Context, componentName string, includeCleared bool) ([]Alarm, error)

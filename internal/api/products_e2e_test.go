@@ -16,27 +16,25 @@ import (
 
 // productBodyWire is the decoded product wire shape for the e2e assertions.
 type productBodyWire struct {
-	ID              string   `json:"id"`
-	Name            string   `json:"name"`
-	Vendor          string   `json:"vendor"`
-	VendorID        string   `json:"vendor_id"`
-	Driver          string   `json:"driver"`
-	DriverID        string   `json:"driver_id"`
-	Kind            string   `json:"kind"`
-	ComponentType   string   `json:"component_type"`
-	ComponentTypeID string   `json:"component_type_id"`
-	Icon            string   `json:"icon"`
-	Official        bool     `json:"official"`
-	Capabilities    []string `json:"capabilities"`
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	Vendor          string `json:"vendor"`
+	VendorID        string `json:"vendor_id"`
+	Driver          string `json:"driver"`
+	DriverID        string `json:"driver_id"`
+	Kind            string `json:"kind"`
+	ComponentType   string `json:"component_type"`
+	ComponentTypeID string `json:"component_type_id"`
+	Icon            string `json:"icon"`
+	Official        bool   `json:"official"`
 }
 
 // TestProductsAPI drives the product registry over HTTP: a viewer reads the
 // seeded official rows under the product:read floor but cannot create, an admin
-// (owner) creates a custom row with a vendor/driver/kind and capabilities, bad
-// references and a bad kind are 422s, an official row is read-only (422 on patch
-// and delete), capabilities are replaced on patch, and the admin deletes the
-// custom row. Mirrors TestVendorsAPI; product is a flat registry like vendor, so
-// product:* is wired exactly like vendor:*.
+// (owner) creates a custom row with a vendor/driver/kind, bad references and a
+// bad kind are 422s, an official row is read-only (422 on patch and delete), and
+// the admin deletes the custom row. Mirrors TestVendorsAPI; product is a flat
+// registry like vendor, so product:* is wired exactly like vendor:*.
 func TestProductsAPI(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -75,13 +73,11 @@ func TestProductsAPI(t *testing.T) {
 	c.do(viewerTok, http.MethodPost, "/products",
 		map[string]any{"name": "nope", "display_name": "Nope"}, http.StatusForbidden)
 
-	// Admin (owner) creates a custom product with a vendor, driver, kind, and
-	// capabilities.
+	// Admin (owner) creates a custom product with a vendor, driver, and kind.
 	var created productBodyWire
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/products", map[string]any{
 		"name": "acme-bar", "display_name": "Acme Bar",
 		"vendor_id": "cisco", "driver_id": "cisco-xapi", "kind": "device", "component_type": "video-bar",
-		"capabilities": []string{"speaker", "microphone"},
 	}, http.StatusCreated), &created); err != nil {
 		t.Fatalf("decode create: %v", err)
 	}
@@ -99,9 +95,6 @@ func TestProductsAPI(t *testing.T) {
 	if created.ComponentType != "video-bar" || created.ComponentTypeID == "" {
 		t.Fatalf("created component_type = %+v, want video-bar with a resolved id", created)
 	}
-	if strings.Join(created.Capabilities, ",") != "microphone,speaker" {
-		t.Fatalf("created capabilities = %v, want [microphone speaker]", created.Capabilities)
-	}
 
 	// Duplicate id is a 409 (shared mapTypeErr ErrTypeExists branch).
 	c.do(ownerTok, http.MethodPost, "/products",
@@ -115,18 +108,15 @@ func TestProductsAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/products",
 		map[string]any{"id": "bad-kind", "display_name": "Bad", "kind": "gizmo", "component_type": "video-bar"}, http.StatusUnprocessableEntity)
 
-	// The custom row is mutable, and a patch replaces its capabilities.
+	// The custom row is mutable.
 	c.do(ownerTok, http.MethodPatch, "/products/acme-bar",
-		map[string]any{"display_name": "Acme Bar Pro", "kind": "app", "capabilities": []string{"camera", "codec"}}, http.StatusOK)
+		map[string]any{"display_name": "Acme Bar Pro", "kind": "app"}, http.StatusOK)
 	var reread productBodyWire
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/products/acme-bar", nil, http.StatusOK), &reread); err != nil {
 		t.Fatalf("decode get: %v", err)
 	}
 	if reread.Kind != "app" {
 		t.Fatalf("patched kind = %q, want app", reread.Kind)
-	}
-	if strings.Join(reread.Capabilities, ",") != "camera,codec" {
-		t.Fatalf("patched capabilities = %v, want [camera codec]", reread.Capabilities)
 	}
 
 	// A patch that carries an optional reference as "" reads as "not provided"

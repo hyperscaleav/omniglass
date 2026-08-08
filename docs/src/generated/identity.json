@@ -6,10 +6,6 @@
       "shape": "id only"
     },
     {
-      "table": "alarm_capability",
-      "shape": "id only"
-    },
-    {
       "table": "audit_log",
       "shape": "id only"
     },
@@ -17,10 +13,6 @@
       "table": "blob",
       "shape": "human identifier, not a name",
       "reason": "content-addressed by sha256, for the same reason"
-    },
-    {
-      "table": "capability",
-      "shape": "key-bearing"
     },
     {
       "table": "command",
@@ -34,10 +26,6 @@
     {
       "table": "component",
       "shape": "key-bearing"
-    },
-    {
-      "table": "component_capability",
-      "shape": "id only"
     },
     {
       "table": "component_type",
@@ -142,10 +130,6 @@
       "shape": "key-bearing"
     },
     {
-      "table": "product_capability",
-      "shape": "id only"
-    },
-    {
       "table": "product_metric",
       "shape": "id only"
     },
@@ -210,10 +194,6 @@
     },
     {
       "table": "system_role_assignment",
-      "shape": "id only"
-    },
-    {
-      "table": "system_role_capability",
       "shape": "id only"
     },
     {

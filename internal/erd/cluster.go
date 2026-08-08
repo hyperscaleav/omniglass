@@ -9,23 +9,22 @@ var Subsystems = []Cluster{
 	{Name: "identity", Tables: []string{
 		"principal", "human", "service", "principal_grant", "principal_group",
 		"principal_group_member", "impersonation_session",
-		"role", "system_role", "system_role_assignment", "system_role_capability",
+		"role", "system_role", "system_role_assignment",
 		"system_role_type", "system_role_product",
-		"capability",
 	}},
 	{Name: "estate", Tables: []string{
 		"location", "location_type", "location_type_property", "location_type_metric",
 		"system", "system_member",
-		"component", "component_capability",
+		"component",
 		"interface", "interface_type",
 	}},
 	{Name: "catalog", Tables: []string{
-		"vendor", "product", "product_capability", "product_property", "product_metric",
+		"vendor", "product", "product_property", "product_metric",
 		"component_type", "driver", "standard", "standard_property", "standard_metric",
 	}},
 	{Name: "telemetry", Tables: []string{
 		"property_type", "metric_type", "metric", "property",
-		"event_type", "event", "log_line", "alarm", "alarm_capability",
+		"event_type", "event", "log_line", "alarm",
 		"command_type", "command",
 	}},
 	{Name: "collection", Tables: []string{

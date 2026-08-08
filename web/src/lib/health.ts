@@ -7,9 +7,10 @@ import { sortAlarms } from "./alarms";
 //
 // The model, end to end, because every surface here is a view of it:
 //
-//   an ALARM on a component names the CAPABILITIES it degrades
-//   -> a ROLE requires capabilities and carries a QUORUM; when too few assigned
-//      components can still satisfy it, the role is IMPAIRED
+//   an ALARM impairs its COMPONENT's own verdict wholesale (#626: no longer
+//   per named capability)
+//   -> a ROLE carries a QUORUM; when too few assigned components currently
+//      occupy it (their own verdict is healthy), the role is IMPAIRED
 //   -> an impaired role contributes its IMPACT (outage, degraded, or none)
 //   -> a SYSTEM takes the worst contribution among its roles
 //   -> a LOCATION takes the worst verdict among the systems placed beneath it
@@ -94,16 +95,17 @@ export function quorumLabel(r: Pick<HealthRole, "satisfying" | "quorum">): strin
   return `${r.satisfying} of ${r.quorum} satisfying`;
 }
 
-// A CAUSE is one required capability an alarm has taken away, with the alarms that
-// took it. This is the middle link of the chain, and the only one the API does not
-// hand over pre-joined.
-export type Cause = { capability: string; alarms: HealthAlarm[] };
+// A CAUSE is one assigned component that is down, with the alarms that took it
+// down. This is the middle link of the chain, and the only one the API does not
+// hand over pre-joined (HealthRole.alarms is the flat union across every down
+// component in the role).
+export type Cause = { component: string; alarms: HealthAlarm[] };
 
 export function causes(r: HealthRole): Cause[] {
   const alarms = r.alarms ?? [];
-  return (r.degraded ?? []).map((capability) => ({
-    capability,
-    alarms: sortAlarms(alarms.filter((a) => (a.capabilities ?? []).includes(capability))),
+  return (r.down ?? []).map((component) => ({
+    component,
+    alarms: sortAlarms(alarms.filter((a) => a.component === component)),
   }));
 }
 
@@ -121,19 +123,19 @@ export function impactPhrase(impact: string): string {
   return "no change";
 }
 
-// chainSentence is the claim this whole slice makes, in one line: which alarm, on
-// which component, took which capability away, which role that pushed below quorum,
-// and what that contributes to the verdict the operator is looking at. It names
-// every link, because a badge that says "degraded" and nothing else is the thing
+// chainSentence is the claim this whole slice makes, in one line: which alarm
+// took which component down, which role that pushed below quorum, and what
+// that contributes to the verdict the operator is looking at. It names every
+// link, because a badge that says "degraded" and nothing else is the thing
 // operators already have and do not trust.
 export function chainSentence(r: HealthRole, verdict: string): string {
   const role = r.display_name || r.name;
   const alarm = worstAlarm(r);
-  const lost = (r.degraded ?? []).join(", ");
+  const down = (r.down ?? []).join(", ");
   if (!alarm) {
-    return `No alarm reaches ${role}: it satisfies ${r.satisfying} of ${r.quorum} because too few components are assigned, and ${contribution(r, verdict)}.`;
+    return `No component assigned to ${role} is down: it satisfies ${r.satisfying} of ${r.quorum} because too few are assigned, and ${contribution(r, verdict)}.`;
   }
-  const took = lost ? ` degrades ${lost}` : " reaches it";
+  const took = down ? `, taking ${down} out of the role` : "";
   return `A ${alarm.severity} alarm on ${alarm.component}${took}, so ${role} satisfies ${r.satisfying} of ${r.quorum} and ${contribution(r, verdict)}.`;
 }
 

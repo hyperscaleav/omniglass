@@ -10,11 +10,12 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// The alarm surface: what is currently wrong with a component, and the
-// capabilities that condition takes away. Raising and clearing are the two writes
-// that move health from the component end, and each recomputes the rollup in its
-// own transaction, so the alarm and the verdict it caused are never separately
-// visible.
+// The alarm surface: what is currently wrong with a component. Raising and
+// clearing are the two writes that move health from the component end, and
+// each recomputes the rollup in its own transaction, so the alarm and the
+// verdict it caused are never separately visible. An alarm impairs its
+// component wholesale (#626): it no longer names what it takes away, only how
+// bad it is.
 //
 // Alarms hang off the component and ride its gating: component:read to see them,
 // component:update to raise or clear one. Every route resolves the component
@@ -22,32 +23,26 @@ import (
 // non-disclosing 404.
 
 type alarmBody struct {
-	ID           string     `json:"id"`
-	Component    string     `json:"component"`
-	Severity     string     `json:"severity" doc:"info, warning, or critical"`
-	Message      string     `json:"message"`
-	Capabilities []string   `json:"capabilities" doc:"The capabilities this alarm degrades; empty means it reaches no role"`
-	DedupKey     string     `json:"dedup_key" doc:"The condition identity: one open alarm per (component, dedup_key)"`
-	RaisedAt     time.Time  `json:"raised_at"`
-	ClearedAt    *time.Time `json:"cleared_at,omitempty" doc:"Null while the alarm is active"`
-	Active       bool       `json:"active"`
+	ID        string     `json:"id"`
+	Component string     `json:"component"`
+	Severity  string     `json:"severity" doc:"info, warning, or critical"`
+	Message   string     `json:"message"`
+	DedupKey  string     `json:"dedup_key" doc:"The condition identity: one open alarm per (component, dedup_key)"`
+	RaisedAt  time.Time  `json:"raised_at"`
+	ClearedAt *time.Time `json:"cleared_at,omitempty" doc:"Null while the alarm is active"`
+	Active    bool       `json:"active"`
 }
 
 func toAlarmBody(a *storage.Alarm) alarmBody {
-	caps := a.Capabilities
-	if caps == nil {
-		caps = []string{}
-	}
 	return alarmBody{
-		ID:           a.ID,
-		Component:    a.ComponentID,
-		Severity:     a.Severity,
-		Message:      a.Message,
-		Capabilities: caps,
-		DedupKey:     a.DedupKey,
-		RaisedAt:     a.RaisedAt,
-		ClearedAt:    a.ClearedAt,
-		Active:       a.Active(),
+		ID:        a.ID,
+		Component: a.ComponentID,
+		Severity:  a.Severity,
+		Message:   a.Message,
+		DedupKey:  a.DedupKey,
+		RaisedAt:  a.RaisedAt,
+		ClearedAt: a.ClearedAt,
+		Active:    a.Active(),
 	}
 }
 
@@ -66,10 +61,9 @@ type listAlarmsOutput struct {
 type raiseAlarmInput struct {
 	Name string `path:"name" doc:"The component's unique name"`
 	Body struct {
-		Severity     string   `json:"severity" enum:"info,warning,critical" doc:"How bad it is; critical puts the component itself in outage"`
-		Message      string   `json:"message,omitempty" doc:"What is wrong, for the operator reading it later"`
-		Capabilities []string `json:"capabilities,omitempty" doc:"The capabilities this condition degrades; a role requiring one of them can no longer be filled by this component"`
-		DedupKey     string   `json:"dedup_key,omitempty" doc:"The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate"`
+		Severity string `json:"severity" enum:"info,warning,critical" doc:"How bad it is; critical puts the component itself in outage"`
+		Message  string `json:"message,omitempty" doc:"What is wrong, for the operator reading it later"`
+		DedupKey string `json:"dedup_key,omitempty" doc:"The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate"`
 	}
 }
 
@@ -89,7 +83,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/alarms",
 		Summary:     "List a component's alarms",
-		Description: "What is currently wrong with this component, newest first, each with the capabilities it degrades. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+		Description: "What is currently wrong with this component, newest first. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
 	}, "component", "read"), func(ctx context.Context, in *listAlarmsInput) (*listAlarmsOutput, error) {
 		if err := requireComponentInScope(ctx, a, gw, in.Name, "read"); err != nil {
 			return nil, err
@@ -113,16 +107,15 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Path:          "/components/{name}/alarms",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Raise an alarm on a component",
-		Description:   "Records a condition on this component and the capabilities it degrades, then recomputes health in the same transaction: any role requiring a degraded capability can no longer be filled by this component, and its system and location verdicts move with it. An unknown capability is a 422. Gated by component:update; an out-of-scope component is a non-disclosing 404.",
+		Description:   "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it. Gated by component:update; an out-of-scope component is a non-disclosing 404.",
 	}, "component", "update"), func(ctx context.Context, in *raiseAlarmInput) (*alarmOutput, error) {
 		if err := requireComponentInScope(ctx, a, gw, in.Name, "update"); err != nil {
 			return nil, err
 		}
 		alarm, err := gw.RaiseAlarm(ctx, actorID(ctx), in.Name, storage.AlarmSpec{
-			Severity:     in.Body.Severity,
-			Message:      in.Body.Message,
-			DedupKey:     in.Body.DedupKey,
-			Capabilities: in.Body.Capabilities,
+			Severity: in.Body.Severity,
+			Message:  in.Body.Message,
+			DedupKey: in.Body.DedupKey,
 		})
 		if err != nil {
 			return nil, mapAlarmErr(err)
@@ -148,16 +141,14 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	})
 }
 
-// mapAlarmErr translates the alarm sentinels into HTTP status. A bad severity and
-// an unknown capability are both things the caller sent, so both are 422.
+// mapAlarmErr translates the alarm sentinels into HTTP status. A bad severity is
+// something the caller sent, so it is a 422.
 func mapAlarmErr(err error) error {
 	switch {
 	case errors.Is(err, storage.ErrAlarmNotFound):
 		return huma.Error404NotFound("alarm not found")
 	case errors.Is(err, storage.ErrAlarmSeverity):
 		return huma.Error422UnprocessableEntity("severity must be info, warning, or critical")
-	case errors.Is(err, storage.ErrAlarmRefNotFound):
-		return huma.Error422UnprocessableEntity("unknown capability")
 	case errors.Is(err, storage.ErrComponentNotFound):
 		return huma.Error404NotFound("component not found")
 	default:

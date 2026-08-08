@@ -21,8 +21,7 @@ const role = (over: Partial<HealthRole>): HealthRole => ({
   impaired: true,
   quorum: 2,
   satisfying: 1,
-  required: ["display"],
-  degraded: [],
+  down: [],
   assigned_to: [],
   alarms: [],
   ...over,
@@ -92,26 +91,26 @@ describe("quorumLabel and impactPhrase", () => {
   });
 });
 
-// The join the API does not hand over: which alarm took which required capability
-// away. It is the middle link of the chain the panel renders.
+// The join the API does not hand over: which alarm took which down component
+// down. It is the middle link of the chain the panel renders.
 describe("causes", () => {
   const r = role({
-    degraded: ["display", "hdmi-input"],
+    down: ["disp-1", "disp-2"],
     alarms: [
-      { id: "a1", severity: "warning", message: "Lamp hours exceeded", component: "disp-1", raised_at: "2026-07-20T09:00:00Z", capabilities: ["display"] },
-      { id: "a2", severity: "critical", message: "HDMI board failed", component: "disp-2", raised_at: "2026-07-20T10:00:00Z", capabilities: ["display", "hdmi-input"] },
+      { id: "a1", severity: "warning", message: "Lamp hours exceeded", component: "disp-1", raised_at: "2026-07-20T09:00:00Z" },
+      { id: "a2", severity: "critical", message: "HDMI board failed", component: "disp-2", raised_at: "2026-07-20T10:00:00Z" },
     ],
   });
 
-  it("pairs each degraded capability with the alarms that took it, worst first", () => {
+  it("pairs each down component with the alarms on it, worst first", () => {
     const out = causes(r);
-    expect(out.map((c) => c.capability)).toEqual(["display", "hdmi-input"]);
-    expect(out[0].alarms.map((a) => a.id)).toEqual(["a2", "a1"]); // critical leads
+    expect(out.map((c) => c.component)).toEqual(["disp-1", "disp-2"]);
+    expect(out[0].alarms.map((a) => a.id)).toEqual(["a1"]);
     expect(out[1].alarms.map((a) => a.id)).toEqual(["a2"]);
   });
 
-  it("is empty when no alarm reaches the role, so short-staffed reads differently", () => {
-    expect(causes(role({ degraded: [], alarms: [] }))).toEqual([]);
+  it("is empty when no component is down, so short-staffed reads differently", () => {
+    expect(causes(role({ down: [], alarms: [] }))).toEqual([]);
     expect(worstAlarm(role({ alarms: [] }))).toBeNull();
   });
 
@@ -121,34 +120,34 @@ describe("causes", () => {
 });
 
 // The claim the slice makes, in one line. Every link is named: the alarm, the
-// component it is on, the capability it took, the role that fell below quorum, and
-// what that contributes to the verdict on screen.
+// component it is on, the component it took down, the role that fell below
+// quorum, and what that contributes to the verdict on screen.
 describe("chainSentence", () => {
-  it("names the alarm, the component, the capability, the role, and the verdict", () => {
+  it("names the alarm, the component, the role, and the verdict", () => {
     const s = chainSentence(
       role({
-        degraded: ["display"],
-        alarms: [{ id: "a2", severity: "critical", message: "HDMI board failed", component: "disp-2", raised_at: "2026-07-20T10:00:00Z", capabilities: ["display"] }],
+        down: ["disp-2"],
+        alarms: [{ id: "a2", severity: "critical", message: "HDMI board failed", component: "disp-2", raised_at: "2026-07-20T10:00:00Z" }],
       }),
       "outage",
     );
     expect(s).toBe(
-      "A critical alarm on disp-2 degrades display, so Main display satisfies 1 of 2 and contributes outage, which is why this system reads outage.",
+      "A critical alarm on disp-2, taking disp-2 out of the role, so Main display satisfies 1 of 2 and contributes outage, which is why this system reads outage.",
     );
   });
 
   it("refuses to credit a role for a verdict a worse role set", () => {
     const s = chainSentence(
-      role({ impact: "degraded", degraded: ["display"], alarms: [{ id: "a1", severity: "warning", message: "Lamp hours", component: "disp-1", raised_at: "2026-07-20T09:00:00Z", capabilities: ["display"] }] }),
+      role({ impact: "degraded", down: ["disp-1"], alarms: [{ id: "a1", severity: "warning", message: "Lamp hours", component: "disp-1", raised_at: "2026-07-20T09:00:00Z" }] }),
       "outage",
     );
     expect(s).toContain("contributes degraded, though this system reads outage on a worse role");
   });
 
-  it("says short-staffed plainly when no alarm reaches the role", () => {
-    const s = chainSentence(role({ satisfying: 0, impact: "degraded", alarms: [], degraded: [] }), "degraded");
-    expect(s).toContain("No alarm reaches Main display");
-    expect(s).toContain("too few components are assigned");
+  it("says short-staffed plainly when no component is down", () => {
+    const s = chainSentence(role({ satisfying: 0, impact: "degraded", alarms: [], down: [] }), "degraded");
+    expect(s).toContain("No component assigned to Main display is down");
+    expect(s).toContain("too few are assigned");
     expect(s).toContain("this system reads degraded");
   });
 });

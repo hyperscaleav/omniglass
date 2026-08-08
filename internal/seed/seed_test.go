@@ -136,15 +136,15 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	if roleCount != 2 {
 		t.Errorf("meeting-room roles = %d, want 2 (seed not idempotent or incomplete)", roleCount)
 	}
-	var micCaps []string
-	if err := conn.QueryRow(ctx, `select array_agg(cap.name order by cap.name)
-		from system_role r join system_role_capability rc on rc.role_id = r.id
-		join capability cap on cap.id = rc.capability_id
-		where r.standard_id = (select id from standard where name = 'meeting-room') and r.name = 'room-mic'`).Scan(&micCaps); err != nil {
-		t.Fatalf("read room-mic capabilities: %v", err)
+	var micTypes []string
+	if err := conn.QueryRow(ctx, `select array_agg(ct.name order by ct.name)
+		from system_role r join system_role_type rt on rt.role_id = r.id
+		join component_type ct on ct.id = rt.component_type_id
+		where r.standard_id = (select id from standard where name = 'meeting-room') and r.name = 'room-mic'`).Scan(&micTypes); err != nil {
+		t.Fatalf("read room-mic accepted types: %v", err)
 	}
-	if len(micCaps) != 2 || micCaps[0] != "microphone" || micCaps[1] != "speaker" {
-		t.Errorf("room-mic capabilities = %v, want [microphone speaker]", micCaps)
+	if len(micTypes) != 1 || micTypes[0] != "video-bar" {
+		t.Errorf("room-mic accepted types = %v, want [video-bar]", micTypes)
 	}
 	if _, err := conn.Exec(ctx, `update system_role set quorum = 4
 		where standard_id = (select id from standard where name = 'meeting-room') and name = 'room-mic'`); err != nil {

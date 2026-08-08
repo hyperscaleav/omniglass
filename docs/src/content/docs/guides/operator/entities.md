@@ -133,36 +133,29 @@ Each row is one role with **where it came from**, **who fills it**, and **how ma
 - **A component staffing a role cannot be deleted.** Unassign it first. The refusal is deliberate: a
   delete that silently emptied a slot would leave the room quietly wrong.
 
-**An assignment can be refused, and the refusal tells you why.** A role requires a set of
-[capabilities](/guides/admin/capabilities/), and a component must provide **every** one of them.
-Assign one that does not and you get the gap by name (`missing microphone, speaker`), which is either
-a fix on the component's **Capabilities** panel or a sign that it is the wrong component for the slot.
+**An assignment can be refused, and the refusal tells you why.** A role's [accepted types and pinned
+products](/guides/admin/standards/#roles-what-a-conforming-system-needs-filled) are the typed-slot
+guard: assign a component of the wrong type and you get both parties named
+(`component "panel-1" is a display; role "Table microphone" wants a video-bar`), which is either a
+sign you picked the wrong component or that the role needs widening.
 
 Declaring the roles is on the [Standards guide](/guides/admin/standards/#roles-what-a-conforming-system-needs-filled);
 this panel is where they get staffed.
 
-## Capabilities on a component
-
-A **component** carries a **Capabilities** panel: what it actually provides, resolved from its
-[product](/guides/admin/products/) plus what this unit adds and minus what it suppresses. It is the set
-every role assignment is checked against, and it is how a component with **no product** provides
-anything at all. The walkthrough is in the
-[Capabilities guide](/guides/admin/capabilities/#what-a-component-actually-provides).
-
 ## Alarms on a component
 
-An **alarm** says what is wrong with **one component**, and which of its capabilities the problem takes
-away. The component's **Alarms** panel lists the active ones newest first, with a **Recently cleared**
-group beneath them: what is wrong now on top, what was wrong underneath.
+An **alarm** says what is wrong with **one component**. The component's **Alarms** panel lists the
+active ones newest first, with a **Recently cleared** group beneath them: what is wrong now on top,
+what was wrong underneath.
 
-Raising one takes three things:
+Raising one takes two things:
 
 - a **severity**: `info`, `warning`, or `critical`. This is how loudly to treat it, and it sets the
-  **component's own** state (any active alarm makes the component degraded, a critical one an outage);
-- a **message**, for whoever reads it later. Write it for the person who finds this at 8am, not for you;
-- the **capabilities it degrades**. This is the one that matters beyond the device. A component keeps its
-  capabilities on paper, but a degraded one **does not count** toward any role that requires it. An alarm
-  that degrades nothing is a note on the device and reaches no room, which is often exactly right.
+  **component's own** verdict (any active alarm makes the component degraded, a critical one an
+  outage), the whole mechanism by which an alarm reaches a room: while a component is not healthy,
+  it stops occupying every role it fills, regardless of how many other alarms name it or what they
+  say;
+- a **message**, for whoever reads it later. Write it for the person who finds this at 8am, not for you.
 
 **Clearing keeps the row.** The alarm moves to the history with the time it was cleared, so what was wrong
 and when survives the fix. Clearing one twice is a plain miss rather than a silent success.
@@ -171,7 +164,7 @@ Both writes take effect immediately and completely: the room's verdict, the loca
 recorded history all move in the same transaction as the alarm. There is no wait and no refresh cycle.
 
 From the CLI: `omniglass component alarm list <name> [--include-cleared]`,
-`omniglass component alarm create <name> --severity <level> --message <text> --capabilities <ids>`, and
+`omniglass component alarm create <name> --severity <level> --message <text>`, and
 `omniglass component alarm delete <name> <id>`.
 
 ## Health on a system or location
@@ -194,17 +187,16 @@ names the whole chain instead, role by role:
 
 ```text
 alarm on mic-pod-2 (critical, "no audio on channel 1")
-  -> degrades: microphone
-    -> role room-mic requires microphone, and wants 2
-      -> only 1 assigned component can currently fill it
+  -> mic-pod-2 is down (its own verdict, from the alarm)
+    -> role room-mic wants 2, and mic-pod-2 no longer occupies its slot
+      -> only 1 assigned component still occupies it
         -> role impaired, impact degraded
           -> hq-r1 is degraded
 ```
 
 Read it bottom-up when you want the verdict and top-down when you want the fix. A role can also be
-impaired with **no alarm named**, which means it is **short-staffed** rather than broken: nobody is
-assigned, or what is assigned never provided what the role requires. Those are two different jobs, and
-the panel keeps them apart.
+impaired with **no down component named**, which means it is **short-staffed** rather than broken:
+nobody is assigned. Those are two different jobs, and the panel keeps them apart.
 
 **The History strip is the answer to "since when".** It is the same shape as the reachability
 availability strip: one segment per stretch the entity held a verdict, drawn from the **recorded edges**
@@ -220,17 +212,17 @@ Once, in order, on a real room:
 
 1. **Declare the roles with their impact.** On the room's
    [standard](/guides/admin/standards/#roles-what-a-conforming-system-needs-filled), give **Main Display**
-   impact **outage** and **Room Microphone** impact **degraded** with quorum 2. Every conforming room
-   inherits both immediately.
+   impact **outage** and **Room Microphone** impact **degraded** with quorum 2, accepting `video-bar`.
+   Every conforming room inherits both immediately.
 2. **Staff the system.** Assign components to each role from the system's **Roles** panel. A component
-   that cannot fill the role is refused by name (`missing microphone, speaker`), so a wrong assignment
-   never becomes a wrong verdict.
-3. **Raise an alarm.** On one of the mic pods, raise a `critical` alarm degrading `microphone`.
-4. **Watch the room move.** The system goes **degraded** (the `room-mic` role now has one satisfying
-   component against a quorum of 2, and its impact is `degraded`), and the location above it follows. Had
+   of the wrong type is refused by name (`component "panel-1" is a display; role "Room Microphone"
+   wants a video-bar`), so a wrong assignment never becomes a wrong verdict.
+3. **Raise an alarm.** On one of the mic pods, raise a `critical` alarm.
+4. **Watch the room move.** The system goes **degraded** (the `room-mic` role now has one occupant
+   against a quorum of 2, and its impact is `degraded`), and the location above it follows. Had
    the alarm been on the main display instead, the room would be an **outage**, because that role says so.
-5. **Read the Health panel** to find the cause: the impaired role, the capability it lost, and the alarm
-   that took it, with its message and the time it was raised. Walk to the pod.
+5. **Read the Health panel** to find the cause: the impaired role, the component that went down, and the
+   alarm that took it down, with its message and the time it was raised. Walk to the pod.
 6. **Clear the alarm** once it is fixed. The room returns to **healthy** in the same transaction, and the
    alarm row stays in the component's history.
 7. **Read the history afterwards.** The transition strip now shows the exact stretch the room was

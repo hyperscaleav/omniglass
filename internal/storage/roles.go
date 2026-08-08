@@ -16,19 +16,19 @@ import (
 // SystemRole is a slot a system needs filled, declared either on a standard (and
 // inherited by every conforming system) or directly on one system.
 type SystemRole struct {
-	ID           string
-	OwnerKind    string // standard | system
-	OwnerID      string // the standard id or the system name
-	Name         string
-	DisplayName  string
-	Quorum       int
-	Capabilities []string // the capability ids the role requires, all of them
+	ID          string
+	OwnerKind   string // standard | system
+	OwnerID     string // the standard id or the system name
+	Name        string
+	DisplayName string
+	Quorum      int
 	// AcceptedTypes is the component_type names the role's typed-slot guard
 	// accepts (a component's product's component_type_id must fall within one
 	// of these subtrees, self-inclusive); empty means any type. PinnedProducts
 	// optionally narrows further to specific products within an accepted type;
-	// empty means any product of an accepted type. This pair, not Capabilities,
-	// is what AssignRole checks (#626).
+	// empty means any product of an accepted type. This pair is what
+	// AssignRole checks (#626); once assigned, an occupant satisfies the slot
+	// as long as its own verdict is healthy (internal/health).
 	AcceptedTypes  []string
 	PinnedProducts []string
 	// Impact is what an impaired role means for its system: outage, degraded, or
@@ -40,14 +40,12 @@ type SystemRole struct {
 	UpdatedAt time.Time
 }
 
-// SystemRoleSpec is the declaration input. Capabilities, AcceptedTypes, and
-// PinnedProducts each replace their required set wholesale on an update,
-// matching how a product's capability set behaves.
+// SystemRoleSpec is the declaration input. AcceptedTypes and PinnedProducts
+// each replace their set wholesale on an update.
 type SystemRoleSpec struct {
 	Name           string
 	DisplayName    string
 	Quorum         int
-	Capabilities   []string
 	AcceptedTypes  []string
 	PinnedProducts []string
 	Impact         string // outage | degraded | none; empty means degraded
@@ -120,53 +118,11 @@ func (e *ProductPinShortfall) Error() string {
 		e.Component, e.ComponentProduct, e.Role, strings.Join(e.WantProducts, " or "))
 }
 
-// EffectiveCapabilities resolves what a component actually provides: the
-// capabilities its product declares, plus the ones the component adds, minus the
-// ones the component suppresses.
-//
-// No longer what AssignRole checks (the typed-slot guard compares the
-// component's product's component_type instead, #626); this resolved set is
-// now read only by the health rollup's alarm-impact model (an alarm names a
-// capability it degrades, and a role's still-live Capabilities decide which
-// roles that affects), pending its own retirement alongside the capability
-// tables (Task 5). "Productless" is also no longer a real case: every
-// component carries a product (the #614 floor), a bare create resolving to
-// generic-device, so this always has a product's declared set to start from.
-// It aggregates to a single row so it runs on the narrow querier (which carries
-// only QueryRow) and therefore works standalone or inside a recompute's
-// transaction.
-func (p *PG) EffectiveCapabilities(ctx context.Context, q querier, componentName string) ([]string, error) {
-	var caps []string
-	// The set is resolved by capability id and projected as name at the end (a
-	// capability id is a uuid; its handle is what the API and health rules speak).
-	err := q.QueryRow(ctx, `
-		select coalesce(array_agg(cap.name order by cap.name), '{}')
-		from capability cap
-		where cap.id in (
-			select pc.capability_id
-			from component c
-			join product_capability pc on pc.product_id = c.product_id
-			where c.name = $1
-			union
-			select cc.capability_id
-			from component_capability cc
-			where cc.component_id = (select id from component where name = $1) and cc.present
-		)
-		and cap.id not in (
-			select capability_id from component_capability
-			where component_id = (select id from component where name = $1) and not present
-		)`, componentName).Scan(&caps)
-	if err != nil {
-		return nil, fmt.Errorf("storage: effective capabilities %s: %w", componentName, err)
-	}
-	return caps, nil
-}
-
 // EffectiveRoles resolves the roles a system needs filled: those its standard
-// declares (inherited) plus those declared directly on it (ad-hoc), each with its
-// required capabilities and current assignments. A one-off system has only the
-// ad-hoc arm. The system must be within the read scope; out of scope is the
-// non-disclosing ErrSystemNotFound.
+// declares (inherited) plus those declared directly on it (ad-hoc), each with
+// its typed-slot requirement and current assignments. A one-off system has
+// only the ad-hoc arm. The system must be within the read scope; out of scope
+// is the non-disclosing ErrSystemNotFound.
 func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.Set) ([]EffectiveRole, error) {
 	inScope, err := p.ownerInScope(ctx, p.pool, "system", systemName, read)
 	if err != nil {
@@ -190,13 +146,10 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 		)
 		select roles.id, roles.name, roles.display_name, roles.quorum, roles.impact, roles.from_standard,
 		       roles.created_at, roles.updated_at,
-		       coalesce(array_agg(distinct cap.name) filter (where cap.name is not null), '{}') as caps,
 		       coalesce(array_agg(distinct ct.name) filter (where ct.name is not null), '{}') as types,
 		       coalesce(array_agg(distinct pr.name) filter (where pr.name is not null), '{}') as products,
 		       coalesce(array_agg(distinct ac.name) filter (where ac.name is not null), '{}') as assigned
 		from roles
-		left join system_role_capability rc on rc.role_id = roles.id
-		left join capability cap on cap.id = rc.capability_id
 		left join system_role_type rt on rt.role_id = roles.id
 		left join component_type ct on ct.id = rt.component_type_id
 		left join system_role_product rp on rp.role_id = roles.id
@@ -216,7 +169,7 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 	for rows.Next() {
 		var e EffectiveRole
 		if err := rows.Scan(&e.ID, &e.Name, &e.DisplayName, &e.Quorum, &e.Impact, &e.FromStandard,
-			&e.CreatedAt, &e.UpdatedAt, &e.Capabilities, &e.AcceptedTypes, &e.PinnedProducts, &e.AssignedTo); err != nil {
+			&e.CreatedAt, &e.UpdatedAt, &e.AcceptedTypes, &e.PinnedProducts, &e.AssignedTo); err != nil {
 			return nil, fmt.Errorf("storage: scan effective role: %w", err)
 		}
 		out = append(out, e)
@@ -484,17 +437,11 @@ func mapRoleWriteErr(err error) error {
 	}
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && (pgErr.Code == "23503" ||
-		// an unknown capability, component_type, or product name resolves to
-		// null on a not-null arc
-		(pgErr.Code == "23502" && (pgErr.ColumnName == "capability_id" ||
-			pgErr.ColumnName == "component_type_id" || pgErr.ColumnName == "product_id"))) {
+		// an unknown component_type or product name resolves to null on a
+		// not-null arc
+		(pgErr.Code == "23502" && (pgErr.ColumnName == "component_type_id" ||
+			pgErr.ColumnName == "product_id"))) {
 		return ErrRoleRefNotFound
 	}
 	return fmt.Errorf("storage: role write: %w", err)
-}
-
-// ComponentCapabilities is the Gateway-facing EffectiveCapabilities: the same
-// resolved set, on the pool, for callers outside a transaction.
-func (p *PG) ComponentCapabilities(ctx context.Context, componentName string) ([]string, error) {
-	return p.EffectiveCapabilities(ctx, p.pool, componentName)
 }

@@ -29,8 +29,8 @@ per-slice detail (136 entries at this update) is on [implementation status](/arc
   with dual-actor audit; principal groups with grant-by-group; grants with scope operators; and the
   append-only [audit](/architecture/audit/) trail with its admin read surface.
 - **The estate and its catalogs.** The `location` / `system` / `component` trees on the shared
-  scoped-CRUD primitive, `system_member` multi-membership, system roles with the assignment guard,
-  the standard / product / vendor / driver / capability registries, and location types with
+  scoped-CRUD primitive, `system_member` multi-membership, system roles with the typed-slot assignment
+  guard, the standard / product / vendor / driver / component_type registries, and location types with
   `allowed_parent_types` placement rules.
 - **The values cascade.** [Tags](/architecture/tags/), [variables](/architecture/variables/),
   envelope-encrypted secrets, [files](/architecture/files/) over the content-addressed blob store,
@@ -89,8 +89,8 @@ that describes the target:
    [expression engine](/architecture/expressions/) the rules and filters share.
 3. **Detection and verdict.** [Events](/architecture/events/) shipped (their registry, sink, and
    lineage columns), as did [commands](/architecture/commands/) with settlement, and the **verdict half
-   has landed**: an alarm degrades a capability, an impaired role sinks its system by its impact, and
-   the transitions record when it changed. What remains is what **produces** an alarm (the
+   has landed**: an alarm impairs a component's own verdict, an impaired role sinks its system by its
+   impact, and the transitions record when it changed. What remains is what **produces** an alarm (the
    `event_rule` tier), [calculations](/architecture/calculations/), and what **acts** on one
    ([alarms and actions](/architecture/alarms-actions/), the automation tier).
 4. **The machinery underneath.** The [messaging](/architecture/messaging/) subject contract, per-node

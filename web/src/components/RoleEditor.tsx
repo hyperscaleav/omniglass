@@ -2,7 +2,8 @@ import { For, Show, createEffect, createMemo, createSignal, useContext, type JSX
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
 import { Check, Pencil, Plus, Trash, X } from "./icons";
-import { CAPABILITIES_KEY, listCapabilities } from "../lib/capabilities";
+import { COMPONENT_TYPES_KEY, listComponentTypes } from "../lib/component_types";
+import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import {
   deleteStandardRole,
   setStandardRole,
@@ -17,20 +18,21 @@ import { describeError } from "../lib/format";
 
 // RoleEditor is the standard detail-blade panel for curating the ROLES a standard
 // declares: the slots every conforming system needs filled (a table microphone, a
-// main display), each naming the capabilities a component must all provide to fill
-// it and how many the slot wants (its quorum). Systems inherit these live, so a
-// role declared here appears on every conforming system's Roles panel at once, and
-// withdrawing one takes every assignment made to it with it.
+// main display), each naming the TYPED-SLOT guard a filling component's product
+// must clear (#626) and how many the slot wants (its quorum). Systems inherit
+// these live, so a role declared here appears on every conforming system's Roles
+// panel at once, and withdrawing one takes every assignment made to it with it.
 //
 // It is a SIBLING of ContractEditor, not a reuse of it: the two share the shape
 // (declare / edit in place / withdraw, immediate writes, no Save of its own, and
 // an official classifier read-only) but not the row. A contract line picks an
 // existing catalog property by name and carries one typed default plus a required
 // flag; a role's name is operator-invented (no catalog to pick from), and it
-// carries a display name, an integer quorum, and a SET of capabilities rather than
-// a single scalar. Parameterizing ContractEditor over both would have meant
-// swapping its picker, its draft shape, its validation, and its whole row body,
-// which is the component, so the honest move is a sibling that reads the same.
+// carries a display name, an integer quorum, and TWO sets (accepted types,
+// pinned products) rather than a single scalar. Parameterizing ContractEditor
+// over both would have meant swapping its picker, its draft shape, its
+// validation, and its whole row body, which is the component, so the honest
+// move is a sibling that reads the same.
 //
 // Each role is addressed by name, so a write is a PUT (idempotent: an edit revises
 // the role in place) and a withdraw is a DELETE. Writes are immediate, but the
@@ -41,9 +43,9 @@ import { describeError } from "../lib/format";
 // the controls do not.
 
 // The draft a row (or the add row) edits: everything a RoleSpec carries.
-type RoleDraft = { display: string; quorum: string; capabilities: string[] };
+type RoleDraft = { display: string; quorum: string; acceptedTypes: string[]; pinnedProducts: string[] };
 
-const emptyDraft = (): RoleDraft => ({ display: "", quorum: "1", capabilities: [] });
+const emptyDraft = (): RoleDraft => ({ display: "", quorum: "1", acceptedTypes: [], pinnedProducts: [] });
 
 // buildSpec coerces the draft into the write body. A blank quorum reads as one
 // (the server's own default), and a quorum that is not a positive whole number is
@@ -52,7 +54,12 @@ export function buildSpec(draft: RoleDraft): RoleSpec | string {
   const text = draft.quorum.trim();
   const quorum = text === "" ? 1 : Number(text);
   if (!Number.isInteger(quorum) || quorum < 1) return `"${text}" is not a whole number of components.`;
-  return { quorum, display_name: draft.display.trim() || undefined, capabilities: draft.capabilities };
+  return {
+    quorum,
+    display_name: draft.display.trim() || undefined,
+    accepted_types: draft.acceptedTypes,
+    pinned_products: draft.pinnedProducts,
+  };
 }
 
 export default function RoleEditor(props: { id: string; official: boolean }): JSX.Element {
@@ -66,7 +73,8 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
     // list and discard an in-progress edit.
     refetchOnWindowFocus: false,
   }));
-  const catalog = useQuery(() => ({ queryKey: CAPABILITIES_KEY, queryFn: listCapabilities }));
+  const typeCatalog = useQuery(() => ({ queryKey: COMPONENT_TYPES_KEY, queryFn: listComponentTypes }));
+  const productCatalog = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
 
   const rows = createMemo<DeclaredRole[]>(() => [...(q.data ?? [])].sort((a, b) => a.name.localeCompare(b.name)));
 
@@ -106,7 +114,12 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
 
   function openEdit(r: DeclaredRole) {
     setEditing(r.name);
-    setDraft({ display: r.display_name ?? "", quorum: String(r.quorum), capabilities: [...(r.capabilities ?? [])] });
+    setDraft({
+      display: r.display_name ?? "",
+      quorum: String(r.quorum),
+      acceptedTypes: [...(r.accepted_types ?? [])],
+      pinnedProducts: [...(r.pinned_products ?? [])],
+    });
     setErr(null);
   }
 
@@ -160,20 +173,27 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
     }
   }
 
-  // The capability set editor: the picked ids as removable chips, plus a picker
-  // over what is left in the registry. The set replaces the role's requirement
-  // wholesale on save, so this is the whole requirement, not a delta.
-  function CapabilitySet(p: { picked: string[]; label: string; onChange: (next: string[]) => void }): JSX.Element {
+  // A generic picked-set editor: the picked names as removable chips, plus a
+  // picker over what is left in the given catalog. The set replaces the role's
+  // accepted-types or pinned-products set wholesale on save, so this is the
+  // whole set, not a delta.
+  function TokenSet(p: {
+    picked: string[];
+    options: { name: string; display_name: string }[];
+    placeholder: string;
+    emptyLabel: string;
+    removeLabel: (v: string) => string;
+    onChange: (next: string[]) => void;
+  }): JSX.Element {
     const left = createMemo(() =>
-      [...(catalog.data ?? [])]
-        .filter((c) => !p.picked.includes(c.name))
+      [...p.options]
+        .filter((o) => !p.picked.includes(o.name))
         .sort((a, b) => a.display_name.localeCompare(b.display_name)),
     );
     return (
       <div class="flex flex-col gap-1.5">
         <div class="flex flex-wrap items-center gap-1.5">
-          <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">requires</span>
-          <Show when={p.picked.length} fallback={<span class="text-[11px] italic text-base-content/40">nothing yet</span>}>
+          <Show when={p.picked.length} fallback={<span class="text-[11px] italic text-base-content/40">{p.emptyLabel}</span>}>
             <For each={p.picked}>
               {(c) => (
                 <span class="badge badge-outline badge-sm gap-1 font-data">
@@ -181,7 +201,7 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
                   <button
                     type="button"
                     class="ml-0.5 inline-flex opacity-60 hover:opacity-100"
-                    aria-label={`Stop requiring ${c}`}
+                    aria-label={p.removeLabel(c)}
                     onClick={() => p.onChange(p.picked.filter((x) => x !== c))}
                   >
                     <X size={11} />
@@ -194,12 +214,12 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
         <Show when={left().length}>
           <select
             class="select select-bordered select-sm w-full"
-            aria-label={p.label}
+            aria-label={p.placeholder}
             value=""
             onChange={(e) => { const v = e.currentTarget.value; if (v) p.onChange([...p.picked, v]); e.currentTarget.value = ""; }}
           >
-            <option value="">Require a capability…</option>
-            <For each={left()}>{(c) => <option value={c.name}>{c.display_name} ({c.name})</option>}</For>
+            <option value="">{p.placeholder}</option>
+            <For each={left()}>{(o) => <option value={o.name}>{o.display_name} ({o.name})</option>}</For>
           </select>
         </Show>
       </div>
@@ -215,8 +235,9 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
         </span>
       </div>
       <p class="text-[11px] text-base-content/50">
-        A role is a slot every system conforming to this standard needs filled. A component may fill one only if it
-        provides every capability the role requires.
+        A role is a slot every system conforming to this standard needs filled. A component may fill one only if its
+        product's type falls within an accepted type (any type, if none are named), and, if products are pinned, only
+        if its product is one of them.
       </p>
 
       <Show when={err()}>
@@ -256,13 +277,21 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
                 <Show
                   when={canDeclare() && editing() === r.name}
                   fallback={
-                    <div class="flex flex-wrap items-center gap-1.5">
-                      <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">requires</span>
-                      <Show
-                        when={(r.capabilities ?? []).length}
-                        fallback={<span class="text-[11px] italic text-base-content/40">nothing: any component can fill it</span>}
-                      >
-                        <For each={r.capabilities ?? []}>{(c) => <span class="badge badge-ghost badge-sm font-data">{c}</span>}</For>
+                    <div class="flex flex-col gap-1">
+                      <div class="flex flex-wrap items-center gap-1.5">
+                        <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">accepts</span>
+                        <Show
+                          when={(r.accepted_types ?? []).length}
+                          fallback={<span class="text-[11px] italic text-base-content/40">any type</span>}
+                        >
+                          <For each={r.accepted_types ?? []}>{(c) => <span class="badge badge-ghost badge-sm font-data">{c}</span>}</For>
+                        </Show>
+                      </div>
+                      <Show when={(r.pinned_products ?? []).length}>
+                        <div class="flex flex-wrap items-center gap-1.5">
+                          <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">pinned to</span>
+                          <For each={r.pinned_products ?? []}>{(c) => <span class="badge badge-ghost badge-sm font-data">{c}</span>}</For>
+                        </div>
                       </Show>
                     </div>
                   }
@@ -287,10 +316,21 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
                       <Button square size="xs" intent="action" icon={Check} label={`Save ${r.name}`} title="Save" disabled={busy()} onClick={() => saveEdit(r)} />
                       <Button square size="xs" icon={X} label="Cancel role edit" title="Cancel" onClick={() => setEditing(null)} />
                     </div>
-                    <CapabilitySet
-                      picked={draft().capabilities}
-                      label={`Capability to require for ${r.name}`}
-                      onChange={(next) => setDraft({ ...draft(), capabilities: next })}
+                    <TokenSet
+                      picked={draft().acceptedTypes}
+                      options={typeCatalog.data ?? []}
+                      placeholder="Accept a component type…"
+                      emptyLabel="any type"
+                      removeLabel={(c) => `Stop accepting ${c}`}
+                      onChange={(next) => setDraft({ ...draft(), acceptedTypes: next })}
+                    />
+                    <TokenSet
+                      picked={draft().pinnedProducts}
+                      options={productCatalog.data ?? []}
+                      placeholder="Pin a product…"
+                      emptyLabel="any product of an accepted type"
+                      removeLabel={(c) => `Stop pinning ${c}`}
+                      onChange={(next) => setDraft({ ...draft(), pinnedProducts: next })}
                     />
                   </div>
                 </Show>
@@ -329,10 +369,21 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
               <Button square size="xs" intent="action" icon={Plus} label="Declare role" title="Declare" disabled={busy()} onClick={declare} />
               <Button square size="xs" icon={X} label="Cancel role declaration" title="Cancel" onClick={resetAdd} />
             </div>
-            <CapabilitySet
-              picked={addDraft().capabilities}
-              label="Capability to require"
-              onChange={(next) => setAddDraft({ ...addDraft(), capabilities: next })}
+            <TokenSet
+              picked={addDraft().acceptedTypes}
+              options={typeCatalog.data ?? []}
+              placeholder="Accept a component type…"
+              emptyLabel="any type"
+              removeLabel={(c) => `Stop accepting ${c}`}
+              onChange={(next) => setAddDraft({ ...addDraft(), acceptedTypes: next })}
+            />
+            <TokenSet
+              picked={addDraft().pinnedProducts}
+              options={productCatalog.data ?? []}
+              placeholder="Pin a product…"
+              emptyLabel="any product of an accepted type"
+              removeLabel={(c) => `Stop pinning ${c}`}
+              onChange={(next) => setAddDraft({ ...addDraft(), pinnedProducts: next })}
             />
           </Show>
         </div>

@@ -9,9 +9,10 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
 // The panel resolves a system's roles: what its standard declares plus what the
-// system declares of its own, each with the capabilities it requires, its quorum,
-// and who fills it. Rows are seeded into the query cache so no server is needed;
-// the assign / unassign writes are faked where a test drives one.
+// system declares of its own, each with the typed-slot guard (#626) it enforces
+// at assignment, its quorum, and who fills it. Rows are seeded into the query
+// cache so no server is needed; the assign / unassign writes are faked where a
+// test drives one.
 const roles: EffectiveRole[] = [
   // Inherited and short a component: the standard wants two, one is in place.
   {
@@ -19,8 +20,7 @@ const roles: EffectiveRole[] = [
     display_name: "Table microphone",
     quorum: 2,
     impact: "degraded",
-    capabilities: ["microphone", "speaker"],
-    accepted_types: [],
+    accepted_types: ["video-bar"],
     pinned_products: [],
     from_standard: true,
     assigned_to: ["mic-1"],
@@ -33,8 +33,7 @@ const roles: EffectiveRole[] = [
     display_name: "Main display",
     quorum: 1,
     impact: "outage",
-    capabilities: ["display"],
-    accepted_types: [],
+    accepted_types: ["display"],
     pinned_products: [],
     from_standard: true,
     assigned_to: ["disp-1"],
@@ -47,8 +46,7 @@ const roles: EffectiveRole[] = [
     display_name: "Spare panel",
     quorum: 1,
     impact: "none",
-    capabilities: ["touch-panel"],
-    accepted_types: [],
+    accepted_types: ["touch-panel"],
     pinned_products: [],
     from_standard: false,
     assigned_to: [],
@@ -89,12 +87,11 @@ const roleRow = (label: HTMLElement) => label.closest("div.flex-col") as HTMLEle
 describe("RolesPanel", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("shows a role's required capabilities, its staffing, and who fills it", () => {
+  it("shows a role's typed-slot guard, its staffing, and who fills it", () => {
     const { getByText } = mount();
     const row = roleRow(getByText("Table microphone"));
     expect(within(row).getByText("table-mic")).toBeTruthy(); // the address, beside the label
-    expect(within(row).getByText("microphone")).toBeTruthy();
-    expect(within(row).getByText("speaker")).toBeTruthy();
+    expect(within(row).getByText("video-bar")).toBeTruthy();
     expect(within(row).getByText("2 wanted, 1 assigned")).toBeTruthy();
     expect(within(row).getByText("mic-1")).toBeTruthy();
   });
@@ -141,11 +138,11 @@ describe("RolesPanel", () => {
     expect(getByText("Table microphone")).toBeTruthy(); // the panel stays put
   });
 
-  // The refusal is the lesson: a component may fill a role only if it provides
-  // every capability the role requires, and the server's 422 names the gap. The
-  // panel must show that message, not a generic failure, or the operator learns
-  // nothing about why the assignment did not take.
-  it("surfaces the server's refusal, naming the capabilities the component is missing", async () => {
+  // The refusal is the lesson: a component may fill a role only if its product's
+  // type falls within an accepted type, and the server's 422 names both parties.
+  // The panel must show that message, not a generic failure, or the operator
+  // learns nothing about why the assignment did not take.
+  it("surfaces the server's refusal, naming both parties", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       if (req.method === "PUT") {
@@ -153,7 +150,7 @@ describe("RolesPanel", () => {
           {
             title: "Unprocessable Entity",
             status: 422,
-            detail: 'component "panel-1" cannot fill role "table-mic": missing microphone, speaker',
+            detail: 'component "panel-1" is a touch-panel; role "table-mic" wants a video-bar',
           },
           422,
           "application/problem+json",
@@ -169,7 +166,7 @@ describe("RolesPanel", () => {
     // The refusal belongs to the role that refused, and reads as the server sent it.
     const row = roleRow(getByText("Table microphone"));
     const alert = await waitFor(() => within(row).getByRole("alert"));
-    expect(alert.textContent).toBe('component "panel-1" cannot fill role "table-mic": missing microphone, speaker');
+    expect(alert.textContent).toBe('component "panel-1" is a touch-panel; role "table-mic" wants a video-bar');
     expect(queryByText("The operation failed.")).toBeNull(); // never swallowed into a generic line
     expect(within(roleRow(getByText("Main display"))).queryByRole("alert")).toBeNull();
   });

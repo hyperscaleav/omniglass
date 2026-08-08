@@ -288,58 +288,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/capabilities": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List capabilities
-         * @description Lists the capability registry, ordered alphabetically by display name. Populates the capability picker on the product form. Gated by capability:read.
-         */
-        get: operations["list-capabilities"];
-        put?: never;
-        /**
-         * Create a capability
-         * @description Creates a custom (non-official) capability. Gated by capability:create.
-         */
-        post: operations["create-capability"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/capabilities/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get a capability
-         * @description Fetches a capability by id. Gated by capability:read.
-         */
-        get: operations["get-capability"];
-        put?: never;
-        post?: never;
-        /**
-         * Delete a capability
-         * @description Deletes a custom capability, refused if official (422). Gated by capability:delete.
-         */
-        delete: operations["delete-capability"];
-        options?: never;
-        head?: never;
-        /**
-         * Update a capability
-         * @description Patches a custom capability's display_name. Official capabilities are read-only (422). Gated by capability:update.
-         */
-        patch: operations["update-capability"];
-        trace?: never;
-    };
     "/command-types": {
         parameters: {
             query?: never;
@@ -501,13 +449,13 @@ export interface paths {
         };
         /**
          * List a component's alarms
-         * @description What is currently wrong with this component, newest first, each with the capabilities it degrades. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+         * @description What is currently wrong with this component, newest first. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
          */
         get: operations["list-component-alarms"];
         put?: never;
         /**
          * Raise an alarm on a component
-         * @description Records a condition on this component and the capabilities it degrades, then recomputes health in the same transaction: any role requiring a degraded capability can no longer be filled by this component, and its system and location verdicts move with it. An unknown capability is a 422. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+         * @description Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it. Gated by component:update; an out-of-scope component is a non-disclosing 404.
          */
         post: operations["raise-component-alarm"];
         delete?: never;
@@ -531,50 +479,6 @@ export interface paths {
          * @description Marks the alarm cleared and recomputes health in the same transaction, so the recovery is recorded as a transition at the moment it happened. The row is kept: what was wrong and when outlives the fix. Clearing an alarm that is already cleared or does not exist is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
          */
         delete: operations["clear-component-alarm"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/components/{name}/capabilities": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List a component's effective capabilities
-         * @description What this component actually provides: the capabilities its product declares, plus the ones the component adds, minus the ones it suppresses. No longer what role assignment gates (the typed-slot guard checks the component's product's component_type instead, #626); this resolved set still feeds the health rollup's alarm-impact model. Gated by component:read; an out-of-scope component is a non-disclosing 404.
-         */
-        get: operations["list-component-capabilities"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/components/{name}/capabilities/{capability}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Declare a capability on a component
-         * @description Records this component's own fact about a capability: present true adds one its product does not claim, present false suppresses one it does. Idempotent. An unknown capability is a 422; an unknown or out-of-scope component is a non-disclosing 404 (the component is resolved in scope first). Gated by component:update.
-         */
-        put: operations["set-component-capability"];
-        post?: never;
-        /**
-         * Clear a capability declaration on a component
-         * @description Removes the component's own fact about the capability, so it falls back to whatever its product declares. Clearing a fact the component never declared is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
-         */
-        delete: operations["clear-component-capability"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1365,7 +1269,7 @@ export interface paths {
         };
         /**
          * Read a location's health
-         * @description The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, the capability, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+         * @description The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
          */
         get: operations["get-location-health"];
         put?: never;
@@ -2281,13 +2185,13 @@ export interface paths {
         };
         /**
          * List products
-         * @description Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, component_type, and capabilities. Gated by product:read.
+         * @description Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
          */
         get: operations["list-products"];
         put?: never;
         /**
          * Create a product
-         * @description Creates a custom (non-official) product, classified under a component_type, and sets its capabilities. kind and component_type are both required; kind refuses vm (retired, folded into app). Gated by product:create.
+         * @description Creates a custom (non-official) product, classified under a component_type. kind and component_type are both required; kind refuses vm (retired, folded into app). Gated by product:create.
          */
         post: operations["create-product"];
         delete?: never;
@@ -2305,7 +2209,7 @@ export interface paths {
         };
         /**
          * Get a product
-         * @description Fetches a product by its name or its uuid, with its capabilities. Either form resolves, so `omniglass product get acme-soundbar` and the uuid are interchangeable. Gated by product:read.
+         * @description Fetches a product by its name or its uuid. Either form resolves, so `omniglass product get acme-soundbar` and the uuid are interchangeable. Gated by product:read.
          */
         get: operations["get-product"];
         put?: never;
@@ -2319,7 +2223,7 @@ export interface paths {
         head?: never;
         /**
          * Update a product
-         * @description Patches a custom product's display_name, vendor, driver, kind, component_type, icon, or parent, and replaces its capabilities when provided. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.
+         * @description Patches a custom product's display_name, vendor, driver, kind, component_type, icon, or parent. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.
          */
         patch: operations["update-product"];
         trace?: never;
@@ -2921,7 +2825,7 @@ export interface paths {
         };
         /**
          * Read a system's health
-         * @description The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role the required capabilities an alarm has taken away plus the alarms that took them. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+         * @description The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
          */
         get: operations["get-system-health"];
         put?: never;
@@ -3528,8 +3432,6 @@ export interface components {
              */
             readonly $schema?: string;
             active: boolean;
-            /** @description The capabilities this alarm degrades; empty means it reaches no role */
-            capabilities: string[] | null;
             /**
              * Format: date-time
              * @description Null while the alarm is active
@@ -3587,20 +3489,6 @@ export interface components {
             readonly $schema?: string;
             /** @description The profile picture as a base64-encoded 256x256 JPEG */
             image_base64: string;
-        };
-        CapabilityBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/CapabilityBody.json
-             */
-            readonly $schema?: string;
-            display_name: string;
-            /** @description The capability's uuid, the stable handle that survives a rename */
-            id: string;
-            /** @description The name an operator reads and types; renameable */
-            name: string;
-            official: boolean;
         };
         ChangePasswordInputBody: {
             /**
@@ -3748,17 +3636,6 @@ export interface components {
             /** @description The primary system's id, the canonical handle */
             system_id?: string;
         };
-        ComponentCapabilitiesOutputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/ComponentCapabilitiesOutputBody.json
-             */
-            readonly $schema?: string;
-            /** @description The resolved set: the product's, plus the component's additions, minus its suppressions */
-            capabilities: string[] | null;
-            component: string;
-        };
         ComponentMetricsOutputBody: {
             /**
              * Format: uri
@@ -3820,18 +3697,6 @@ export interface components {
             parent_id?: string;
             /** @description The auto-generated component name's prefix; empty inherits the nearest ancestor's */
             stem?: string;
-        };
-        CreateCapabilityInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/CreateCapabilityInputBody.json
-             */
-            readonly $schema?: string;
-            /** @description What an operator reads in pickers and lists */
-            display_name: string;
-            /** @description The globally unique name; renameable */
-            name: string;
         };
         CreateCommandTypeInputBody: {
             /**
@@ -4151,8 +4016,6 @@ export interface components {
              * @example /api/v1/schemas/CreateProductInputBody.json
              */
             readonly $schema?: string;
-            /** @description Capability names the product provides (the default set its components inherit) */
-            capabilities?: string[] | null;
             /** @description The component_type this product is classified under (mic, camera, ...), by name or uuid; every product must belong to one of the tree's nodes. The generics (generic-device, generic-app, generic-service) fit anything not yet modeled more specifically. */
             component_type: string;
             /** @description What an operator reads in pickers and lists */
@@ -4398,8 +4261,6 @@ export interface components {
             assigned: number;
             /** @description The component names filling this role in this system */
             assigned_to: string[] | null;
-            /** @description Deprecated, no longer enforced: the typed-slot guard (accepted_types, pinned_products) replaces it */
-            capabilities: string[] | null;
             display_name: string;
             /** @description True when the role is inherited from the system's standard; false when declared on the system */
             from_standard: boolean;
@@ -4661,7 +4522,6 @@ export interface components {
             name: string;
         };
         HealthAlarmBody: {
-            capabilities: string[] | null;
             component: string;
             id: string;
             message: string;
@@ -4682,12 +4542,12 @@ export interface components {
             status: string;
         };
         HealthRoleBody: {
-            /** @description The active alarms that degraded them */
+            /** @description The active alarms on those down components */
             alarms: components["schemas"]["HealthAlarmBody"][] | null;
             assigned_to: string[] | null;
-            /** @description The required capabilities an active alarm has taken away; empty when the role is merely short-staffed */
-            degraded: string[] | null;
             display_name: string;
+            /** @description The assigned components whose own verdict is not healthy; empty when the role is merely short-staffed */
+            down: string[] | null;
             /** @description What an impaired role means for its system: outage, degraded, or none */
             impact: string;
             /** @description True when satisfying is below quorum */
@@ -4695,11 +4555,9 @@ export interface components {
             name: string;
             /** Format: int64 */
             quorum: number;
-            /** @description The capabilities a component must ALL provide to fill this role */
-            required: string[] | null;
             /**
              * Format: int64
-             * @description How many assigned components can currently fill the role
+             * @description How many assigned components currently occupy the role (their own verdict is healthy)
              */
             satisfying: number;
         };
@@ -4831,15 +4689,6 @@ export interface components {
             readonly $schema?: string;
             alarms: components["schemas"]["AlarmBody"][] | null;
             component: string;
-        };
-        ListCapabilitiesOutputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/ListCapabilitiesOutputBody.json
-             */
-            readonly $schema?: string;
-            capabilities: components["schemas"]["CapabilityBody"][] | null;
         };
         ListCommandTypesOutputBody: {
             /**
@@ -5460,7 +5309,6 @@ export interface components {
              * @example /api/v1/schemas/ProductBody.json
              */
             readonly $schema?: string;
-            capabilities: string[] | null;
             /** @description The component_type this product is classified under (mic, camera, ...); the taxonomy above product */
             component_type: string;
             /** @description The component_type's uuid; the stable form of component_type */
@@ -5645,8 +5493,6 @@ export interface components {
              * @example /api/v1/schemas/RaiseAlarmInputBody.json
              */
             readonly $schema?: string;
-            /** @description The capabilities this condition degrades; a role requiring one of them can no longer be filled by this component */
-            capabilities?: string[] | null;
             /** @description The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate */
             dedup_key?: string;
             /** @description What is wrong, for the operator reading it later */
@@ -5939,8 +5785,6 @@ export interface components {
             readonly $schema?: string;
             /** @description The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type */
             accepted_types?: string[] | null;
-            /** @description Deprecated, no longer enforced: the typed-slot guard (accepted_types, pinned_products) replaces it */
-            capabilities?: string[] | null;
             /** @description The role's human label; defaults to the role name */
             display_name?: string;
             /**
@@ -6054,16 +5898,6 @@ export interface components {
             readonly $schema?: string;
             /** @description The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG */
             image_base64: string;
-        };
-        SetComponentCapabilityInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/SetComponentCapabilityInputBody.json
-             */
-            readonly $schema?: string;
-            /** @description True to add the capability, false to suppress one the product declares */
-            present: boolean;
         };
         SetComponentPropertyInputBody: {
             /**
@@ -6342,8 +6176,6 @@ export interface components {
             readonly $schema?: string;
             /** @description The component_types a filling component's product must be classified within (self or a descendant); empty accepts any type */
             accepted_types: string[] | null;
-            /** @description Deprecated, no longer enforced: the typed-slot guard (accepted_types, pinned_products) replaces it */
-            capabilities: string[] | null;
             /** @description The role's human label */
             display_name: string;
             /** @description What an impaired role means for its system: outage, degraded, or none */
@@ -6429,16 +6261,6 @@ export interface components {
              * @enum {string}
              */
             theme: "omniglass-dark" | "omniglass-light";
-        };
-        UpdateCapabilityInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/UpdateCapabilityInputBody.json
-             */
-            readonly $schema?: string;
-            /** @description A new operator-facing label */
-            display_name?: string;
         };
         UpdateCommandTypeInputBody: {
             /**
@@ -6639,8 +6461,6 @@ export interface components {
              * @example /api/v1/schemas/UpdateProductInputBody.json
              */
             readonly $schema?: string;
-            /** @description Replaces the capability-name set; omit to leave unchanged */
-            capabilities?: string[];
             /** @description Reclassifies the product to this component_type, by name or uuid; component_type is required, so this only reclassifies, it never clears */
             component_type?: string;
             /** @description A new operator-facing label */
@@ -7318,165 +7138,6 @@ export interface operations {
             };
         };
     };
-    "list-capabilities": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ListCapabilitiesOutputBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "create-capability": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateCapabilityInputBody"];
-            };
-        };
-        responses: {
-            /** @description Created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CapabilityBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "get-capability": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The capability id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CapabilityBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "delete-capability": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The capability id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "update-capability": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateCapabilityInputBody"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CapabilityBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
     "list-command-type": {
         parameters: {
             query?: never;
@@ -8003,106 +7664,6 @@ export interface operations {
                 name: string;
                 /** @description The alarm id */
                 id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "list-component-capabilities": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The component's unique name */
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ComponentCapabilitiesOutputBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "set-component-capability": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The component's unique name */
-                name: string;
-                /** @description The capability id */
-                capability: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetComponentCapabilityInputBody"];
-            };
-        };
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "clear-component-capability": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The component's unique name */
-                name: string;
-                /** @description The capability id */
-                capability: string;
             };
             cookie?: never;
         };

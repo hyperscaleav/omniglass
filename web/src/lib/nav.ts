@@ -125,10 +125,9 @@ export function filterNav(items: NavItem[], allow: (tokens: string[]) => boolean
 // not-yet-built page's tracking issue rides here too, shown on its stub
 // through navByPath exactly as a rail entry's would be.
 export const OFF_RAIL: { path: string; label: string; hint: string; resource?: string; perm?: string; issue?: number }[] = [
-  { path: "/products", label: "Products", resource: "product", hint: "A concrete SKU: a vendor's product, its driver, kind, and the capabilities it provides." },
+  { path: "/products", label: "Products", resource: "product", hint: "A concrete SKU: a vendor's product, its driver, kind, and the component type it is classified under." },
   { path: "/vendors", label: "Vendors", resource: "vendor", hint: "The organizations behind products: manufacturers, integrators, developers." },
   { path: "/drivers", label: "Drivers", resource: "driver", hint: "The implementations that get, emit, and set a product's signals." },
-  { path: "/capabilities", label: "Capabilities", resource: "capability", hint: "What a component can do: microphone, display, and the rest." },
   { path: "/component-types", label: "Component types", resource: "component_type", hint: "The device-class genus registry: display, projector, mic, and your own, each carrying the icon, stem, and abbreviation its products inherit." },
   { path: "/standards", label: "Standards", resource: "standard", hint: "The blueprints a system conforms to, each declaring the properties every conforming system exposes." },
   { path: "/location-types", label: "Location types", resource: "location_type", hint: "The place classifier registry: campus, building, floor, room, and your own." },
