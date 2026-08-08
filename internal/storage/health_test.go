@@ -922,6 +922,84 @@ func TestAlarmOnSpareDoesNotShort(t *testing.T) {
 	}
 }
 
+// TestShortAndUnderstaffedDivergeOnCriticalAlarm pins the vocabulary split
+// (#626): the roles read's understaffed (EffectiveRole.Understaffed, quorum
+// minus assignment rows) is health-blind assignment arithmetic, while the
+// health read's short (HealthRole.Short, quorum minus components whose own
+// verdict is not outage) is occupancy-aware. A warning alarm degrades the
+// assignee but it still occupies its slot (Occupies is Verdict != Outage),
+// so the two figures agree; a critical alarm takes the assignee out of its
+// slot without touching the assignment row, so understaffed stays 0 while
+// short moves to 1. Both are correct under their own definition, which is
+// exactly what makes the divergence a feature and not a bug to reconcile.
+func TestShortAndUnderstaffedDivergeOnCriticalAlarm(t *testing.T) {
+	t.Run("a warning alarm does not diverge them", func(t *testing.T) {
+		f := newHealthFixture(t)
+		ctx := context.Background()
+
+		if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
+			Severity: "warning", Message: "mic array a little quiet",
+		}); err != nil {
+			t.Fatalf("raise alarm: %v", err)
+		}
+
+		roles, err := f.gw.EffectiveRoles(ctx, "hq-huddle", f.all)
+		if err != nil {
+			t.Fatalf("effective roles: %v", err)
+		}
+		if len(roles) != 1 || roles[0].Understaffed() != 0 {
+			t.Fatalf("understaffed = %+v, want 0: the assignment row is untouched by a warning", roles)
+		}
+
+		rep, err := f.gw.SystemHealth(ctx, "hq-huddle", time.Time{}, f.all)
+		if err != nil {
+			t.Fatalf("system health: %v", err)
+		}
+		role := rep.Roles[0]
+		if role.Short != 0 || role.Impaired {
+			t.Fatalf("short = %d impaired = %v, want 0/false: a degraded component still occupies its slot", role.Short, role.Impaired)
+		}
+		if roles[0].Understaffed() != role.Short {
+			t.Fatalf("understaffed (%d) and short (%d) must agree when nothing has stopped occupying its slot", roles[0].Understaffed(), role.Short)
+		}
+	})
+
+	t.Run("a critical alarm diverges them", func(t *testing.T) {
+		f := newHealthFixture(t)
+		ctx := context.Background()
+
+		if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
+			Severity: "critical", Message: "mic array not responding",
+		}); err != nil {
+			t.Fatalf("raise alarm: %v", err)
+		}
+
+		roles, err := f.gw.EffectiveRoles(ctx, "hq-huddle", f.all)
+		if err != nil {
+			t.Fatalf("effective roles: %v", err)
+		}
+		if len(roles) != 1 || roles[0].Understaffed() != 0 {
+			t.Fatalf("understaffed = %+v, want 0: the assignment row is untouched, understaffed is health-blind", roles)
+		}
+
+		rep, err := f.gw.SystemHealth(ctx, "hq-huddle", time.Time{}, f.all)
+		if err != nil {
+			t.Fatalf("system health: %v", err)
+		}
+		role := rep.Roles[0]
+		if role.Short != 1 || !role.Impaired {
+			t.Fatalf("short = %d impaired = %v, want 1/true: bar-1 no longer occupies its slot", role.Short, role.Impaired)
+		}
+
+		// Same role, same instant, two answers that are each correct under their
+		// own definition: understaffed says the slot is fully assigned, short
+		// says it is not actually staffed. The divergence itself is the point.
+		if roles[0].Understaffed() == role.Short {
+			t.Fatalf("understaffed (%d) and short (%d) must diverge on a critical alarm", roles[0].Understaffed(), role.Short)
+		}
+	})
+}
+
 // TestRaiseAlarmWithoutCapabilities proves the alarm-raise spec round-trips
 // with no capability concept at all: the field retired with the rest of the
 // family (#626), so a raise names only severity, message, and a dedup key.

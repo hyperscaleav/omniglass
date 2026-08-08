@@ -2605,3 +2605,23 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   and edit surface (a custom type's tree placement is fixed at create; there is no reparent leg yet).
   Reconciling the ADR-0047 denylist entry that banned `component_type` in docs prose (now current
   vocabulary again, in its reintroduced shape) closed out `internal/docslint`'s one carried red.
+- **A role's impact already reached the verdict**
+  ([#626](https://github.com/hyperscaleav/omniglass/issues/626)). The epic's claim that
+  `system_role.impact` was declared but never consumed, so a short role contributed outage
+  regardless, was false against this branch, and this slice ships no code to fix it.
+  `Role.Contributes()` (`internal/health/verdict.go`) has exactly two branches, healthy when
+  satisfied and `ImpactVerdict(r.Impact)` when impaired, and `SystemVerdict` folds it worst-wins
+  into both the recorded outcome and the served one; the chain landed in `5a050e5` (#323), well
+  before this epic was written. The typed-slot rebuild (`feat: capability-gated staffing
+  retires`) changed only what makes a component *occupy* a slot: `Occupies()` now reads the
+  component's own verdict (`Verdict != Outage`) instead of resolving a per-capability
+  satisfaction set, touching neither `ImpactVerdict`, `Contributes`, nor the fold. The one real
+  gap in this area was vocabulary, not behavior: `understaffed` (the roles read,
+  `Quorum - len(AssignedTo)`) is health-blind assignment arithmetic, while `short` and
+  `satisfying` (the health read) are occupancy-aware, so a role whose sole assignee carries a
+  critical alarm can report `understaffed: 0` and `short: 1, impaired: true` at the same
+  instant, both correct under their own definition. Both doc strings (`internal/api/roles.go`,
+  `internal/api/health.go`) and the glossary now say so explicitly, and
+  `TestShortAndUnderstaffedDivergeOnCriticalAlarm` (`internal/storage/health_test.go`) pins that
+  a critical alarm makes the two figures diverge while a warning does not, since `Occupies()` is
+  `Verdict != Outage`. No `fix:` commit: nothing in the chain needed to change.
