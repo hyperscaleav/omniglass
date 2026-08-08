@@ -184,6 +184,9 @@ func (p *PG) DistinctTagValues(ctx context.Context, key string) ([]string, error
 // UpdateTag replaces a key's governance fields (applies_to, propagates); the
 // name is fixed at creation. An all-scope update grant is required (tag:update).
 func (p *PG) UpdateTag(ctx context.Context, actorID, name string, spec TagSpec, action scope.Set) (*Tag, error) {
+	if err := RejectAddressForm("tag", name); err != nil {
+		return nil, err
+	}
 	if !action.All {
 		return nil, ErrTagForbidden
 	}
@@ -224,6 +227,9 @@ func (p *PG) UpdateTag(ctx context.Context, actorID, name string, spec TagSpec, 
 // tag_binding FK is on delete cascade). An all-scope delete grant is required
 // (tag:delete); an unknown key is the non-disclosing ErrTagNotFound.
 func (p *PG) DeleteTag(ctx context.Context, actorID, name string, action scope.Set) error {
+	if err := RejectAddressForm("tag", name); err != nil {
+		return err
+	}
 	if !action.All {
 		return ErrTagForbidden
 	}
@@ -805,6 +811,9 @@ func resolveTagBindingOwner(ctx context.Context, q querier, kind string, name *s
 
 // loadTagByName loads a key row by name, returning ErrTagNotFound if absent.
 func loadTagByName(ctx context.Context, q querier, name string) (*Tag, error) {
+	if err := RejectAddressForm("tag", name); err != nil {
+		return nil, err
+	}
 	t, err := scanTagRow(q.QueryRow(ctx, `select `+tagCols+` from tag where name = $1`, name))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTagNotFound

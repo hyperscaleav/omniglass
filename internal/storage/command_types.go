@@ -105,6 +105,9 @@ func (p *PG) ListCommandTypes(ctx context.Context) ([]CommandType, error) {
 
 // GetCommandType resolves one command type by name.
 func (p *PG) GetCommandType(ctx context.Context, name string) (*CommandType, error) {
+	if err := RejectAddressForm("command_type", name); err != nil {
+		return nil, err
+	}
 	ct, err := scanCommandType(p.pool.QueryRow(ctx, `select `+commandTypeCols+` from command_type where name = $1`, name))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrCommandTypeNotFound
@@ -141,6 +144,9 @@ type CommandTypePatch struct {
 }
 
 func guardCommandTypeMutable(ctx context.Context, q querier, name string) error {
+	if err := RejectAddressForm("command_type", name); err != nil {
+		return err
+	}
 	var official bool
 	err := q.QueryRow(ctx, `select official from command_type where name = $1`, name).Scan(&official)
 	if errors.Is(err, pgx.ErrNoRows) {

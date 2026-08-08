@@ -47,6 +47,9 @@ func scanPropertyType(row pgx.Row) (*PropertyType, error) {
 // GetPropertyType returns one property by name. The registry is estate-wide reference
 // data, so there is no scope injection.
 func (p *PG) GetPropertyType(ctx context.Context, name string) (*PropertyType, error) {
+	if err := RejectAddressForm("property_type", name); err != nil {
+		return nil, err
+	}
 	prop, err := scanPropertyType(p.pool.QueryRow(ctx, `select `+propertyCols+` from property_type where name = $1`, name))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrPropertyTypeNotFound
@@ -60,6 +63,9 @@ func (p *PG) GetPropertyType(ctx context.Context, name string) (*PropertyType, e
 // guardPropertyMutable loads a property's official flag by name: ErrPropertyTypeNotFound
 // if absent, ErrPropertyTypeOfficial if seed-owned. Update and delete call it first.
 func guardPropertyMutable(ctx context.Context, q querier, name string) error {
+	if err := RejectAddressForm("property_type", name); err != nil {
+		return err
+	}
 	var official bool
 	err := q.QueryRow(ctx, `select official from property_type where name = $1`, name).Scan(&official)
 	if errors.Is(err, pgx.ErrNoRows) {

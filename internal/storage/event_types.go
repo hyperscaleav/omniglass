@@ -94,6 +94,9 @@ func (p *PG) ListEventTypes(ctx context.Context) ([]EventType, error) {
 
 // GetEventType resolves one event type by name, ErrEventTypeNotFound when absent.
 func (p *PG) GetEventType(ctx context.Context, name string) (*EventType, error) {
+	if err := RejectAddressForm("event_type", name); err != nil {
+		return nil, err
+	}
 	var et EventType
 	err := p.pool.QueryRow(ctx,
 		`select id, name, coalesce(display_name, ''), description, payload_schema, official from event_type where name = $1`,
@@ -110,6 +113,9 @@ func (p *PG) GetEventType(ctx context.Context, name string) (*EventType, error) 
 // guardEventTypeMutable loads an event type's official flag: ErrEventTypeNotFound if
 // absent, ErrEventTypeOfficial if seed-owned. Update and delete call it first.
 func guardEventTypeMutable(ctx context.Context, q querier, name string) error {
+	if err := RejectAddressForm("event_type", name); err != nil {
+		return err
+	}
 	var official bool
 	err := q.QueryRow(ctx, `select official from event_type where name = $1`, name).Scan(&official)
 	if errors.Is(err, pgx.ErrNoRows) {
