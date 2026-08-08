@@ -12,15 +12,25 @@ export type Component = {
   name: string;
   display_name?: string;
   location?: string;
+  // location_id is the location's uuid, the stable handle the tree builder
+  // keys and resolves on (#627: name uniqueness is scoped to placement, so
+  // two components can now legally share a name and only the uuid tells them
+  // apart).
+  location_id?: string;
   parent?: string;
+  parent_id?: string;
   // The name of the component's primary system, its default when no system is
   // named, and how many it belongs to in total. Derived from membership: a
   // component can be in several, so there is no single pointer to read.
   system?: string;
+  system_id?: string;
   system_count: number;
   product_id?: string;
   // The product's name, the display handle beside the uuid product_id.
   product?: string;
+  // Whether the platform picked this name (a server-side generator) rather
+  // than an operator typing it.
+  name_generated?: boolean;
   actions?: string[];
   effective_tags?: Record<string, string>;
 };
@@ -75,8 +85,13 @@ export async function renameComponent(name: string, to: string): Promise<Compone
 
 export type NameCheck = { valid: boolean; available: boolean; reason?: string };
 
-export async function checkComponentName(name: string): Promise<NameCheck> {
-  const { data, error } = await api.POST("/components:checkName", { body: { name } });
+// checkComponentName checks availability against a placement bucket (#627:
+// name uniqueness is scoped to placement, not the whole estate), the same
+// one CreateComponent resolves into: parent wins over location, and neither
+// means the unplaced/root bucket. A rename check passes the component's OWN
+// current placement, since a rename does not move it.
+export async function checkComponentName(name: string, parent?: string, location?: string): Promise<NameCheck> {
+  const { data, error } = await api.POST("/components:checkName", { body: { name, parent, location } });
   if (error) throw error;
   return data as NameCheck;
 }

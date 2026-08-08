@@ -90,7 +90,10 @@ export default function Components() {
   // product; the generics fit anything not yet modeled more specifically).
   const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
 
-  const sysByName = createMemo(() => new Map((systems.data ?? []).map((s) => [s.name, s] as const)));
+  // Keyed on uuid, not name (#627: name uniqueness is scoped to placement, so
+  // two systems or two locations can legally share a name; a name-keyed map
+  // would silently collapse them to whichever sorted last).
+  const sysById = createMemo(() => new Map((systems.data ?? []).map((s) => [s.id, s] as const)));
   const locById = createMemo(() => new Map((locations.data ?? []).map((l) => [l.id, l] as const)));
 
   // One filter facet per tag key present across the components, derived from
@@ -101,32 +104,41 @@ export default function Components() {
     return tagFilterKeys<CompNode>([...keys].sort(), new Set(["name", "product", "system", "location"]));
   });
 
-  // Build the forest from the flat component list by parent_id. Roots are the
-  // components with no parent (or a parent outside the caller's scope).
+  // Build the forest from the flat component list by parent_id. The
+  // construction-time map is keyed on uuid, not the bare name (#627: name
+  // uniqueness is scoped to placement, so two components can legally share a
+  // name): a name-keyed map would silently drop one component's node and
+  // reparent its children onto the survivor the moment two rooms hold the
+  // same name. node.id itself stays the name for now (the URL/route swap to
+  // uuid addressing is a later slice); keying the MAP on uuid is what keeps
+  // both same-named rows in the rendered tree, correctly parented, even
+  // though opening either one still navigates to the same (ambiguous) name
+  // address until that later slice lands.
   const nodes = createMemo<CompNode[]>(() => {
     const list = components.data ?? [];
-    const byId = new Map<string, CompNode>();
+    const byUuid = new Map<string, CompNode>();
     const lm = locById();
+    const sm = sysById();
     for (const c of list) {
-      byId.set(c.name, {
+      byUuid.set(c.id, {
         id: c.name,
         display: entityLabel(c),
         children: [],
         actions: c.actions,
         product: c.product ?? "",
-        systemName: c.system ? entityLabel(sysByName().get(c.system) ?? { name: c.system }) : "",
+        systemName: c.system_id ? entityLabel(sm.get(c.system_id) ?? { name: c.system ?? "" }) : "",
         systemAddr: c.system ?? "",
-        systemId: c.system ? (sysByName().get(c.system)?.id ?? "") : "",
+        systemId: c.system_id ?? "",
         systemCount: c.system_count ?? 0,
-        locationName: c.location ? entityLabel(lm.get(c.location) ?? { name: c.location }) : "",
+        locationName: c.location_id ? entityLabel(lm.get(c.location_id) ?? { name: c.location ?? "" }) : "",
         tags: c.effective_tags ?? {},
         raw: c,
       });
     }
     const roots: CompNode[] = [];
     for (const c of list) {
-      const node = byId.get(c.name)!;
-      const parent = c.parent ? byId.get(c.parent) : undefined;
+      const node = byUuid.get(c.id)!;
+      const parent = c.parent_id ? byUuid.get(c.parent_id) : undefined;
       if (parent) parent.children.push(node);
       else roots.push(node);
     }
@@ -172,7 +184,7 @@ export default function Components() {
     const [saveErr, setSaveErr] = createSignal<string | null>(null);
     async function runCheck() {
       setChecking(true);
-      try { setNameCheck(await checkComponentName(name().trim())); }
+      try { setNameCheck(await checkComponentName(name().trim(), n().raw.parent, n().raw.location)); }
       catch { setNameCheck(null); }
       finally { setChecking(false); }
     }

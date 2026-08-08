@@ -20,7 +20,7 @@ import { uuidFor } from "../lib/testids";
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 const hq: Location = { id: uuidFor("l-hq"), name: "hq", display_name: "HQ", location_type: "campus", effective_tags: {} };
 const lab: Location = { id: uuidFor("l-lab"), name: "lab", display_name: "Lab", location_type: "campus", effective_tags: {} };
-const hqB1: Location = { id: uuidFor("l-b1"), name: "hq-b1", display_name: "HQ B1", location_type: "building", parent: "hq", effective_tags: {} };
+const hqB1: Location = { id: uuidFor("l-b1"), name: "hq-b1", display_name: "HQ B1", location_type: "building", parent: "hq", parent_id: hq.id, effective_tags: {} };
 // Registry rows carry a uuid id and the name in name (ADR-0062); the
 // server stores and compares the handle everywhere a location references its
 // type, so a fixture with the handle in the id slot would hide a uuid-vs-name
@@ -187,7 +187,7 @@ describe("Locations create-as-route", () => {
     // keyed by name, so passing the location's uuid to the exclusion silently
     // turns it off and offers the node itself (a cycle the server must refuse).
     const area1: Location = { id: uuidFor("l-area1"), name: "area1", display_name: "Area 1", location_type: "area", effective_tags: {} };
-    const area2: Location = { id: uuidFor("l-area2"), name: "area2", display_name: "Area 2", location_type: "area", parent: "area1", effective_tags: {} };
+    const area2: Location = { id: uuidFor("l-area2"), name: "area2", display_name: "Area 2", location_type: "area", parent: "area1", parent_id: area1.id, effective_tags: {} };
     mount("/locations/area1", [area1, area2]);
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
@@ -310,6 +310,70 @@ describe("Locations properties panel", () => {
       expect(put!.url).toContain("/locations/hq/properties/site.timezone");
       expect(JSON.parse(put!.body)).toEqual({ value: "America/Denver" });
     });
+  });
+});
+
+// #627 scopes name uniqueness to placement, not the whole estate: two
+// locations under different parents may now legally share a name. The tree
+// builder used to key its construction-time map on the bare name
+// (byId.set(l.name, ...)), so the second same-named row silently overwrote
+// the first and its children reparented onto the survivor. Keying that map
+// on uuid instead (node.id itself stays the name; only the construction key
+// moved) is what keeps both rows in the rendered tree.
+describe("Locations list survives duplicate names across placements (#627)", () => {
+  afterEach(() => window.history.pushState({}, "", "/"));
+
+  it("renders both same-named locations when they sit under different parents, each keeping its own child", async () => {
+    // Each "room-1" has its OWN child (desk-a / desk-b): a bare row count
+    // could still look right off a double-push artifact (the surviving node
+    // object gets pushed into both parents' children arrays). The
+    // discriminating symptom the amendment actually describes is the CHILD
+    // reparenting onto whichever same-named node won the map: under the old
+    // bug, both desks end up merged onto one surviving "room-1" object and
+    // so both appear TWICE; under the fix, each desk renders exactly once,
+    // under its own parent.
+    const bldgA: Location = { id: uuidFor("l-bldg-a"), name: "bldg-a", location_type: "building", effective_tags: {} };
+    const bldgB: Location = { id: uuidFor("l-bldg-b"), name: "bldg-b", location_type: "building", effective_tags: {} };
+    const roomInA: Location = { id: uuidFor("l-room-a"), name: "room-1", location_type: "room", parent: "bldg-a", parent_id: bldgA.id, effective_tags: {} };
+    const roomInB: Location = { id: uuidFor("l-room-b"), name: "room-1", location_type: "room", parent: "bldg-b", parent_id: bldgB.id, effective_tags: {} };
+    const deskA: Location = { id: uuidFor("l-desk-a"), name: "desk-a", location_type: "area", parent: "room-1", parent_id: roomInA.id, effective_tags: {} };
+    const deskB: Location = { id: uuidFor("l-desk-b"), name: "desk-b", location_type: "area", parent: "room-1", parent_id: roomInB.id, effective_tags: {} };
+
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...LOCATIONS_KEY], [bldgA, bldgB, roomInA, roomInB, deskA, deskB]);
+    qc.setQueryData([...LOCATION_TYPES_KEY], types);
+    qc.setQueryData([...ME_KEY], me);
+    qc.setQueryData([...TAGS_KEY], []);
+    window.history.pushState({}, "", "/locations");
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="/locations" component={Locations} />
+        </Router>
+      </QueryClientProvider>
+    ));
+
+    await waitFor(() => expect(screen.getAllByText("bldg-a").length).toBeGreaterThan(0));
+    // Tree mode starts fully collapsed, so expand everything.
+    fireEvent.click(screen.getByTitle("Expand all"));
+    // Rows are matched by their NAME cell specifically (the first <td>), not
+    // by a bare text search: the "Parent" column also prints a row's parent
+    // NAME as plain text, and desk-a/desk-b's parent is "room-1" too, which
+    // would otherwise double-count as a false match.
+    const rows = () => Array.from(document.querySelectorAll("tbody tr"));
+    const nameCell = (row: Element) => row.querySelector("td")?.textContent ?? "";
+    const rowsNamed = (name: string) => rows().filter((r) => nameCell(r).includes(name));
+    await waitFor(() => expect(rowsNamed("room-1")).toHaveLength(2));
+    expect(rowsNamed("desk-a")).toHaveLength(1);
+    expect(rowsNamed("desk-b")).toHaveLength(1);
+    // desk-a sits under the SAME "room-1" row as bldg-a, desk-b under
+    // bldg-b's: the tree renders depth-first, so desk-a's row falls
+    // strictly between bldg-a's and bldg-b's, and desk-b's falls after
+    // bldg-b's.
+    const indexOf = (name: string) => rows().indexOf(rowsNamed(name)[0]);
+    expect(indexOf("desk-a")).toBeGreaterThan(indexOf("bldg-a"));
+    expect(indexOf("desk-a")).toBeLessThan(indexOf("bldg-b"));
+    expect(indexOf("desk-b")).toBeGreaterThan(indexOf("bldg-b"));
   });
 });
 

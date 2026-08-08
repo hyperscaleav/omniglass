@@ -81,16 +81,23 @@ export default function Locations() {
     return m;
   });
 
+  // The construction-time map is keyed on uuid, not the bare name (#627: name
+  // uniqueness is scoped to placement, so two locations can legally share a
+  // name under different parents): a name-keyed map would silently drop one
+  // location's node and reparent its children onto the survivor. node.id
+  // itself stays the name for now (the URL/route swap to uuid addressing is
+  // a later slice); keying the MAP on uuid is what keeps both same-named
+  // rows in the rendered tree, correctly parented.
   const nodes = createMemo<LocNode[]>(() => {
     const list = locations.data ?? [];
-    const byId = new Map<string, LocNode>();
+    const byUuid = new Map<string, LocNode>();
     for (const l of list) {
-      byId.set(l.name, { id: l.name, display: entityLabel(l), children: [], type: l.location_type, actions: l.actions, tags: l.effective_tags ?? {}, raw: l });
+      byUuid.set(l.id, { id: l.name, display: entityLabel(l), children: [], type: l.location_type, actions: l.actions, tags: l.effective_tags ?? {}, raw: l });
     }
     const roots: LocNode[] = [];
     for (const l of list) {
-      const node = byId.get(l.name)!;
-      const parent = l.parent ? byId.get(l.parent) : undefined;
+      const node = byUuid.get(l.id)!;
+      const parent = l.parent_id ? byUuid.get(l.parent_id) : undefined;
       if (parent) parent.children.push(node);
       else roots.push(node);
     }
@@ -257,7 +264,7 @@ export default function Locations() {
     const [initialParentName, setInitialParentName] = createSignal("");
     async function runCheck() {
       setChecking(true);
-      try { setNameCheck(await checkLocationName(name().trim())); }
+      try { setNameCheck(await checkLocationName(name().trim(), n().raw.parent)); }
       catch { setNameCheck(null); }
       finally { setChecking(false); }
     }

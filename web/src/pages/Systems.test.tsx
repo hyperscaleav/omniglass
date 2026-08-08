@@ -120,6 +120,65 @@ describe("Systems create-as-route", () => {
   });
 });
 
+// #627 scopes name uniqueness to placement, not the whole estate: two systems
+// under different parents may now legally share a name. The tree builder
+// used to key its construction-time map on the bare name (byId.set(s.name,
+// ...)), so the second same-named row silently overwrote the first and its
+// children reparented onto the survivor. Keying that map on uuid instead
+// (node.id itself stays the name; only the construction key moved) is what
+// keeps both rows in the rendered tree.
+describe("Systems list survives duplicate names across placements (#627)", () => {
+  afterEach(() => window.history.pushState({}, "", "/"));
+
+  it("renders both same-named systems when they sit under different parents, each keeping its own child", async () => {
+    // Each "edge" has its OWN child (leaf-av / leaf-lab): a bare row count
+    // could still look right off a double-push artifact (the surviving node
+    // object gets pushed into both parents' children arrays). The
+    // discriminating symptom the amendment actually describes is the CHILD
+    // reparenting onto whichever same-named node won the map: under the old
+    // bug, both leaves end up merged onto one surviving "edge" object and so
+    // both appear TWICE; under the fix, each leaf renders exactly once,
+    // under its own parent.
+    const av: System = { id: uuidFor("s-av"), name: "av", member_count: 0, effective_tags: {} };
+    const lab: System = { id: uuidFor("s-lab"), name: "lab", member_count: 0, effective_tags: {} };
+    const edgeUnderAV: System = { id: uuidFor("s-edge-av"), name: "edge", parent: "av", parent_id: av.id, member_count: 0, effective_tags: {} };
+    const edgeUnderLab: System = { id: uuidFor("s-edge-lab"), name: "edge", parent: "lab", parent_id: lab.id, member_count: 0, effective_tags: {} };
+    const leafAV: System = { id: uuidFor("s-leaf-av"), name: "leaf-av", parent: "edge", parent_id: edgeUnderAV.id, member_count: 0, effective_tags: {} };
+    const leafLab: System = { id: uuidFor("s-leaf-lab"), name: "leaf-lab", parent: "edge", parent_id: edgeUnderLab.id, member_count: 0, effective_tags: {} };
+
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...SYSTEMS_KEY], [av, lab, edgeUnderAV, edgeUnderLab, leafAV, leafLab]);
+    qc.setQueryData([...LOCATIONS_KEY], []);
+    qc.setQueryData([...COMPONENTS_KEY], []);
+    qc.setQueryData([...STANDARDS_KEY], standards);
+    qc.setQueryData([...ME_KEY], me);
+    qc.setQueryData([...TAGS_KEY], []);
+    window.history.pushState({}, "", "/systems");
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="/systems" component={Systems} />
+        </Router>
+      </QueryClientProvider>
+    ));
+
+    await waitFor(() => expect(screen.getAllByText("av").length).toBeGreaterThan(0));
+    // Tree mode starts fully collapsed, so expand everything.
+    fireEvent.click(screen.getByTitle("Expand all"));
+    await waitFor(() => expect(screen.getAllByText("edge")).toHaveLength(2));
+    expect(screen.getAllByText("leaf-av")).toHaveLength(1);
+    expect(screen.getAllByText("leaf-lab")).toHaveLength(1);
+    // leaf-av sits under the SAME "edge" row as av, leaf-lab under lab's: the
+    // tree renders depth-first, so leaf-av's row falls strictly between av's
+    // and lab's, and leaf-lab's falls after lab's.
+    const rows = Array.from(document.querySelectorAll("tbody tr"));
+    const indexOf = (text: string) => rows.indexOf(screen.getByText(text).closest("tr")!);
+    expect(indexOf("leaf-av")).toBeGreaterThan(indexOf("av"));
+    expect(indexOf("leaf-av")).toBeLessThan(indexOf("lab"));
+    expect(indexOf("leaf-lab")).toBeGreaterThan(indexOf("lab"));
+  });
+});
+
 // The Properties panel on the system detail is the shared owner panel, pointed at
 // the system arc: the standard's contract resolved against the system's own values,
 // with anything the system sets that no contract declares grouped off contract.

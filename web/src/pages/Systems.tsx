@@ -89,26 +89,33 @@ export default function Systems() {
     return tagFilterKeys<SysNode>([...keys].sort(), new Set(["name", "standard", "location"]));
   });
 
+  // The construction-time map is keyed on uuid, not the bare name (#627: name
+  // uniqueness is scoped to placement, so two systems can legally share a
+  // name under different parents or locations): a name-keyed map would
+  // silently drop one system's node and reparent its children onto the
+  // survivor. node.id itself stays the name for now (the URL/route swap to
+  // uuid addressing is a later slice); keying the MAP on uuid is what keeps
+  // both same-named rows in the rendered tree, correctly parented.
   const nodes = createMemo<SysNode[]>(() => {
     const list = systems.data ?? [];
     const lm = locById();
-    const byId = new Map<string, SysNode>();
+    const byUuid = new Map<string, SysNode>();
     for (const s of list) {
-      byId.set(s.name, {
+      byUuid.set(s.id, {
         id: s.name,
         display: entityLabel(s),
         children: [],
         actions: s.actions,
         standard: standardLabel(s.standard),
-        locationName: s.location ? entityLabel(lm.get(s.location) ?? { name: s.location }) : "",
+        locationName: s.location_id ? entityLabel(lm.get(s.location_id) ?? { name: s.location ?? "" }) : "",
         tags: s.effective_tags ?? {},
         raw: s,
       });
     }
     const roots: SysNode[] = [];
     for (const s of list) {
-      const node = byId.get(s.name)!;
-      const parent = s.parent ? byId.get(s.parent) : undefined;
+      const node = byUuid.get(s.id)!;
+      const parent = s.parent_id ? byUuid.get(s.parent_id) : undefined;
       if (parent) parent.children.push(node);
       else roots.push(node);
     }
@@ -152,7 +159,7 @@ export default function Systems() {
     const [saveErr, setSaveErr] = createSignal<string | null>(null);
     async function runCheck() {
       setChecking(true);
-      try { setNameCheck(await checkSystemName(name().trim())); }
+      try { setNameCheck(await checkSystemName(name().trim(), n().raw.parent, n().raw.location)); }
       catch { setNameCheck(null); }
       finally { setChecking(false); }
     }

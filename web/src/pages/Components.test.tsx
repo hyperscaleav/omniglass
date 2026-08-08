@@ -55,8 +55,8 @@ describe("Components create-as-route", () => {
   afterEach(() => window.history.pushState({}, "", "/"));
 
   it("wears its system's colour dot on the list row's system column", async () => {
-    const withSystem: Component = { ...comp, system: "boardroom", system_count: 1 };
     const sysId = uuidFor("sys-boardroom");
+    const withSystem: Component = { ...comp, system: "boardroom", system_id: sysId, system_count: 1 };
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
     qc.setQueryData([...COMPONENTS_KEY], [withSystem]);
     qc.setQueryData([...SYSTEMS_KEY], [{ id: sysId, name: "boardroom", member_count: 1 }]);
@@ -135,6 +135,70 @@ describe("Components create-as-route", () => {
     const submit = screen.getByText("Create interface").closest("button")!;
     expect(top.querySelector("footer")!.contains(submit)).toBe(true);
     expect(top.querySelector("form")!.querySelectorAll("button").length).toBe(0);
+  });
+});
+
+// #627 scopes name uniqueness to placement, not the whole estate: two
+// components under different parents may now legally share a name. The tree
+// builder used to key its construction-time map on the bare name
+// (byId.set(c.name, ...)), so the second same-named row silently overwrote
+// the first and its children reparented onto the survivor. Keying that map
+// on uuid instead (node.id itself stays the name; only the construction key
+// moved) is what keeps both rows in the rendered tree.
+describe("Components list survives duplicate names across placements (#627)", () => {
+  afterEach(() => window.history.pushState({}, "", "/"));
+
+  it("renders both same-named components when they sit under different parents, each keeping its own child", async () => {
+    // Each "port-1" has its OWN child (sub-a / sub-b): a name-keyed
+    // construction map does not just drop a row, a bare row count could
+    // still look right off a double-push artifact (the surviving node
+    // object gets pushed into both parents' children arrays). The
+    // discriminating symptom the amendment actually describes is the
+    // CHILD reparenting onto whichever same-named node won the map: under
+    // the old bug, both sub-a and sub-b end up merged onto one surviving
+    // "port-1" object and so both appear TWICE (once under each rack, since
+    // that one surviving object is what got pushed into both racks'
+    // children); under the fix, each sub renders exactly once, under its
+    // own parent.
+    const rackA: Component = { id: uuidFor("c-rack-a"), name: "rack-a", system_count: 0, effective_tags: {} };
+    const rackB: Component = { id: uuidFor("c-rack-b"), name: "rack-b", system_count: 0, effective_tags: {} };
+    const portInA: Component = { id: uuidFor("c-port-a"), name: "port-1", parent: "rack-a", parent_id: rackA.id, system_count: 0, effective_tags: {} };
+    const portInB: Component = { id: uuidFor("c-port-b"), name: "port-1", parent: "rack-b", parent_id: rackB.id, system_count: 0, effective_tags: {} };
+    const subA: Component = { id: uuidFor("c-sub-a"), name: "sub-a", parent: "port-1", parent_id: portInA.id, system_count: 0, effective_tags: {} };
+    const subB: Component = { id: uuidFor("c-sub-b"), name: "sub-b", parent: "port-1", parent_id: portInB.id, system_count: 0, effective_tags: {} };
+
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...COMPONENTS_KEY], [rackA, rackB, portInA, portInB, subA, subB]);
+    qc.setQueryData([...SYSTEMS_KEY], []);
+    qc.setQueryData([...LOCATIONS_KEY], []);
+    qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...ME_KEY], me);
+    qc.setQueryData([...TAGS_KEY], []);
+    window.history.pushState({}, "", "/components");
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="/components" component={Components} />
+        </Router>
+      </QueryClientProvider>
+    ));
+
+    await waitFor(() => expect(screen.getAllByText("rack-a").length).toBeGreaterThan(0));
+    // Tree mode starts fully collapsed, so expand everything.
+    fireEvent.click(screen.getByTitle("Expand all"));
+    await waitFor(() => expect(screen.getAllByText("port-1")).toHaveLength(2));
+    // Each own child renders exactly once, not twice (merged onto a single
+    // surviving "port-1" and pushed out under both racks).
+    expect(screen.getAllByText("sub-a")).toHaveLength(1);
+    expect(screen.getAllByText("sub-b")).toHaveLength(1);
+    // sub-a sits under the SAME "port-1" row as rack-a, sub-b under rack-b's:
+    // the tree renders depth-first, so sub-a's row falls strictly between
+    // rack-a's and rack-b's, and sub-b's falls after rack-b's.
+    const rows = Array.from(document.querySelectorAll("tbody tr"));
+    const indexOf = (text: string) => rows.indexOf(screen.getByText(text).closest("tr")!);
+    expect(indexOf("sub-a")).toBeGreaterThan(indexOf("rack-a"));
+    expect(indexOf("sub-a")).toBeLessThan(indexOf("rack-b"));
+    expect(indexOf("sub-b")).toBeGreaterThan(indexOf("rack-b"));
   });
 });
 

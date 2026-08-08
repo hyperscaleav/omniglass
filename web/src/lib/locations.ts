@@ -9,6 +9,11 @@ export type Location = {
   display_name?: string;
   location_type: string;
   parent?: string;
+  // parent_id is the parent's uuid, the stable handle the tree builder keys
+  // and resolves on (#627: name uniqueness is scoped to placement, so two
+  // locations can now legally share a name under different parents and only
+  // the uuid tells them apart).
+  parent_id?: string;
   actions?: string[];
   effective_tags?: Record<string, string>;
 };
@@ -70,8 +75,12 @@ export async function renameLocation(name: string, to: string): Promise<Location
 
 export type NameCheck = { valid: boolean; available: boolean; reason?: string };
 
-export async function checkLocationName(name: string): Promise<NameCheck> {
-  const { data, error } = await api.POST("/locations:checkName", { body: { name } });
+// checkLocationName checks availability against a placement bucket (#627:
+// name uniqueness is scoped to placement, not the whole estate): under the
+// given parent, or among roots when parent is omitted. A rename check
+// passes the location's OWN current parent, since a rename does not move it.
+export async function checkLocationName(name: string, parent?: string): Promise<NameCheck> {
+  const { data, error } = await api.POST("/locations:checkName", { body: { name, parent } });
   if (error) throw error;
   return data as NameCheck;
 }
