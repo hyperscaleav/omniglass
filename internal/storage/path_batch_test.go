@@ -265,6 +265,12 @@ func countAttach[T any](t *testing.T, pool *pgxpool.Pool, attach func(context.Co
 // queries for twenty rows as for one. The assertion is EQUALITY, not
 // improvement, because a per-row walk with a smaller constant is still the
 // N+1 this change exists to remove.
+//
+// All THREE of the batch queries are held to it, which is why the wide page
+// spans several rooms: the own-chain walk and the plane-root lookup grow
+// with row count, but the third query walks the distinct plane-root
+// LOCATIONS, and a page confined to one room would leave a per-root loop
+// looking exactly as flat as a batch.
 func TestAttachPathsCostIsFlatInPageSize(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -273,22 +279,40 @@ func TestAttachPathsCostIsFlatInPageSize(t *testing.T) {
 	fx := buildBatchPathFixture(t, pool)
 	ctx := context.Background()
 
-	// Twenty more components and systems in the same room, so the wide case
-	// is genuinely wide and every row in it is PLACED (the three-query
-	// branch: own chain, plane roots, the plane roots' location chain).
+	// Twenty more components and systems, every one of them PLACED (the
+	// three-query branch: own chain, plane roots, the plane roots' location
+	// chain), spread across SEVERAL rooms rather than sharing one.
+	//
+	// The spread is the point. Page size is not the only dimension the third
+	// query can grow along: it walks the DISTINCT plane-root locations, so a
+	// page whose rows all sit in one room holds that set at size one and a
+	// per-root loop would look just as flat as a batch. Rooms here grow with
+	// the page, so only a walk that batches them stays at three.
 	const wide = 20
+	const rooms = 5
+	var roomIDs []string
+	for i := range rooms {
+		var id string
+		if err := pool.QueryRow(ctx,
+			`insert into location (name, location_type, parent_id) values ($1, (select location_type from location where id = $2), $2) returning id`,
+			fmt.Sprintf("bulk-room-%d", i), fx.c17).Scan(&id); err != nil {
+			t.Fatalf("insert bulk room %d: %v", i, err)
+		}
+		roomIDs = append(roomIDs, id)
+	}
 	var compIDs, sysIDs []string
 	for i := range wide {
+		room := roomIDs[i%rooms]
 		var id string
 		if err := pool.QueryRow(ctx,
 			`insert into component (name, product_id, location_id) values ($1, $2, $3) returning id`,
-			fmt.Sprintf("bulk-comp-%d", i), fx.productID, fx.r415a).Scan(&id); err != nil {
+			fmt.Sprintf("bulk-comp-%d", i), fx.productID, room).Scan(&id); err != nil {
 			t.Fatalf("insert bulk component %d: %v", i, err)
 		}
 		compIDs = append(compIDs, id)
 		if err := pool.QueryRow(ctx,
 			`insert into system (name, location_id) values ($1, $2) returning id`,
-			fmt.Sprintf("bulk-sys-%d", i), fx.r415a).Scan(&id); err != nil {
+			fmt.Sprintf("bulk-sys-%d", i), room).Scan(&id); err != nil {
 			t.Fatalf("insert bulk system %d: %v", i, err)
 		}
 		sysIDs = append(sysIDs, id)
@@ -298,10 +322,15 @@ func TestAttachPathsCostIsFlatInPageSize(t *testing.T) {
 		var id string
 		if err := pool.QueryRow(ctx,
 			`insert into location (name, location_type, parent_id) values ($1, (select location_type from location where id = $2), $2) returning id`,
-			fmt.Sprintf("bulk-loc-%d", i), fx.r415a).Scan(&id); err != nil {
+			fmt.Sprintf("bulk-loc-%d", i), roomIDs[i%rooms]).Scan(&id); err != nil {
 			t.Fatalf("insert bulk location %d: %v", i, err)
 		}
 		locIDs = append(locIDs, id)
+	}
+	// The wide component and system pages must actually span the rooms, or
+	// the flatness this test claims to measure is not being measured.
+	if len(compIDs) < rooms || len(sysIDs) < rooms {
+		t.Fatalf("wide page of %d components / %d systems cannot span %d rooms", len(compIDs), len(sysIDs), rooms)
 	}
 
 	comps := func(ids []string) []*Component {
