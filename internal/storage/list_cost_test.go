@@ -391,7 +391,7 @@ func TestListRolesCostIsFlatInPageSize(t *testing.T) {
 // grants, the group memberships), so the admin directory reads at 1+3N: four
 // statements for one principal, sixty-one for twenty. That is the exact N+1
 // class this instrument exists to catch, found by pointing it at the paths #650
-// did not name.
+// did not name (#671).
 //
 // It is pinned rather than fixed because fixing it is a behavior change with its
 // own scope (three batched reads keyed by principal id, and a decision about
