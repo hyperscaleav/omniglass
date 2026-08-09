@@ -25,8 +25,10 @@ import type { components } from "../api/schema.gen";
 export type EffectiveRole = components["schemas"]["EffectiveRoleBody"];
 // A role as its OWNER declares it (the standard's line, and the write's echo).
 export type DeclaredRole = components["schemas"]["SystemRoleBody"];
-// The declaration body: accepted_types and pinned_products each replace their
-// set wholesale.
+// The declaration body. Partial by default: what it carries changes, what it
+// omits is left alone. update_mask names the fields the write means to set
+// regardless, which is the only way to clear one (#666); accepted_types and
+// pinned_products still replace their set wholesale when written.
 export type RoleSpec = components["schemas"]["RoleSpecBody"];
 
 // One cache namespace per arc, so a standard and a system that share an address

@@ -34,9 +34,10 @@ import { describeError } from "../lib/format";
 // validation, and its whole row body, which is the component, so the honest
 // move is a sibling that reads the same.
 //
-// Each role is addressed by name, so a write is a PUT (idempotent: an edit revises
-// the role in place) and a withdraw is a DELETE. Writes are immediate, but the
-// blade's edit slot still gates the controls (#621): they render only while the
+// Each role is addressed by name, so a write is a PATCH (idempotent: an edit
+// revises the role in place, and declaring is the same route) and a withdraw is
+// a DELETE. Writes are immediate, but the blade's edit slot still gates the
+// controls (#621): they render only while the
 // hosting blade is in edit mode, and in read mode the declared roles render as
 // facts alone. Declaring needs the standard's :update, withdrawing its :delete,
 // and an official standard's roles are read-only: the list renders,
@@ -58,8 +59,9 @@ type RoleDraft = {
   acceptedTypes: string[];
   pinnedProducts: string[];
   impact: Impact;
-  // Blank means "leave unchanged" (or unbounded on first declare), never zero;
-  // buildSpec omits the field entirely rather than sending a coerced number.
+  // Blank means unbounded, never zero: buildSpec omits the field rather than
+  // sending a coerced number, and the mask it names turns that omission into a
+  // clear (#638), so blanking the box is how an operator lifts a cap.
   capacity: string;
   positionLabels: string[];
 };
@@ -82,11 +84,29 @@ const IMPACT_OPTIONS: { value: Impact; label: string }[] = [
   { value: "none", label: "None" },
 ];
 
+// EDITOR_FIELDS is what this editor owns, and therefore exactly what its save
+// declares in the update mask (#666). Naming them makes the save say what it
+// means in both directions: a field the operator EMPTIED (the last pinned
+// product, a capacity, the labels) is written empty rather than read as
+// "unchanged", and a field the editor has no control for is left off the mask
+// and so cannot be touched at all. alternate is deliberately absent: it has a
+// read (#640) but no control here, and naming it would clear a role's alternate
+// on an unrelated edit, which is the #626 defect this list exists to prevent.
+const EDITOR_FIELDS = [
+  "display_name",
+  "quorum",
+  "capacity",
+  "position_labels",
+  "accepted_types",
+  "pinned_products",
+  "impact",
+] as const;
+
 // buildSpec coerces the draft into the write body. A blank quorum reads as one
 // (the server's own default), and a quorum or capacity that is not a positive
-// whole number is reported rather than sent malformed. The PUT is a wholesale
-// replace, so every field the API accepts must round-trip here or an
-// unrelated edit silently clears it server-side.
+// whole number is reported rather than sent malformed. A blank capacity is a
+// capacity CLEARED, since the mask names the field and the body carries no
+// value for it, which is the one thing the old wholesale PUT could not express.
 export function buildSpec(draft: RoleDraft): RoleSpec | string {
   const text = draft.quorum.trim();
   const quorum = text === "" ? 1 : Number(text);
@@ -98,6 +118,7 @@ export function buildSpec(draft: RoleDraft): RoleSpec | string {
     if (!Number.isInteger(capacity) || capacity < 1) return `"${capText}" is not a whole number of components.`;
   }
   return {
+    update_mask: [...EDITOR_FIELDS],
     quorum,
     display_name: draft.display.trim() || undefined,
     accepted_types: draft.acceptedTypes,
