@@ -147,6 +147,24 @@ func TestRolePatchWithAMaskClearsTheLists(t *testing.T) {
 	}
 }
 
+// TestRolePatchWithAnEmptyMaskWritesNothing pins the one place the wire can
+// silently disagree with the primitive: "omitted" and "present but empty" are
+// different requests, and they survive the JSON decode as a nil slice and an
+// empty one. If a decoder ever collapsed the two, an empty mask would quietly
+// become the implied mask and start writing the body after all.
+func TestRolePatchWithAnEmptyMaskWritesNothing(t *testing.T) {
+	c, tok, path := roleMaskFixture(t)
+
+	c.do(tok, http.MethodPatch, path, map[string]any{
+		"update_mask": []string{}, "display_name": "Ignored", "quorum": 1, "impact": "none",
+	}, http.StatusOK)
+
+	got := readDeclaredRole(t, c, tok, "main-display")
+	if got.DisplayName != "Main Display" || got.Quorum != 2 || got.Impact != "outage" {
+		t.Fatalf("role after an empty mask = %+v, want it exactly as declared: the mask named no fields", got)
+	}
+}
+
 // TestRolePatchWithAStarMaskReplacesEverything proves "*" is the PUT this route
 // used to be: every field the body omits goes back to its default.
 func TestRolePatchWithAStarMaskReplacesEverything(t *testing.T) {
