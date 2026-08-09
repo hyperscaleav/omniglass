@@ -160,6 +160,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0119](#adr-0119-a-table-an-operator-names-carries-a-label-or-declares-why-it-does-not) | 2026-08-14 | Accepted | The identity declaration (`internal/storage/identity_shape.go`) grows the third column of the triad: a table an operator NAMES carries a `label`, or declares in `TableIdentity.NoLabel` why it does not, and a guard checks the claim against the generated schema both ways (a declared label the schema lacks fails; a reason on a table that has the column fails as stale). A table nobody names carries none at all, there being no name for an unset one to fall back to. Written RED it named exactly `tag`, `variable`, `secret` and `interface`, the four key-bearing tables that had gone without one, which is why the declaration is the fix rather than the four columns: the gap existed because the shape said what the identifier was and nothing about the friendly string beside it. All four gain the column (text, nullable, no default, unset is SQL NULL per [ADR-0118](#adr-0118-the-friendly-string-an-operator-reads-is-a-label-and-unset-is-sql-null)), with no backfill and no uniqueness, pattern or reserved words. **`interface` is included** ([D2](https://github.com/hyperscaleav/omniglass/issues/613)) and is the strongest of the four: its name is SERVER-derived from its type, so an interface's only string says which protocol it speaks and nothing about what it is FOR, and the label is settable **at create** rather than only on a following patch, an interface labelled by a following call being unlabelled at the moment it is made. The premise D2 was argued from is corrected here and pinned by a test: a component holds at most ONE interface per protocol today (the unique index is `(component, name)` and the name IS the protocol), so the three-`ssh`-interfaces case is not reachable, and the narrower fact carries the decision on its own, every SSH interface in the estate reading `ssh`. Its declared name exemption in `KeyProvedElsewhere` STAYS: the name really is derived, which is the argument for the label rather than something the label replaces. Four exemptions are declared with reasons: `interface_type` (retires with the `interface.type` FK, [ADR-0073](#adr-0073-a-driver-consumes-transports-and-the-interface-type-table-retires)), `file` (its name is already the label; [#755](https://github.com/hyperscaleav/omniglass/issues/755) may revisit), `service` (`principalIdent` resolves a service principal to `service.name`, which a label may not be) and `blob` (no operator surface of its own). Lists order by the rendered label, `order by label nulls last, name` ([D4](https://github.com/hyperscaleav/omniglass/issues/613)), matching the console's one comparator; the two CASCADE projections keep ordering by name, where the name is the cascade key grouping a winner with the candidates it shadows rather than a display order. `LabelledTables()` makes the declaration the only copy of the list the schema guard and the unset sweep read |
 | [ADR-0120](#adr-0120-the-edit-face-is-a-url-fact) | 2026-08-14 | Accepted | `?edit=1` beside a detail address (or a blade's id param, `?u=<id>&edit=1`) is how the console expresses edit mode: deep links, refresh, and the create/row-pencil handoffs all carry the mode in the URL, behind the same `<resource>:update` the footer Edit is behind, and leaving edit strips the param via history replace. The one-shot in-memory handoffs (`pendingedit`, `openPrincipalInEdit`) are retired for one hook (`web/src/lib/editurl.ts`); the param is a consume-once intent (deriving the mode would re-enter edit in the Cancel gap), a blade honors it only when the URL also names it, and the name-to-uuid redirect keeps its query string. The groups blade keeps its one-shot until it gains an id deep link |
 | [ADR-0121](#adr-0121-the-console-ships-its-own-typefaces) | 2026-08-15 | Accepted | The console serves IBM Plex Sans and JetBrains Mono from its own origin (vendored under `web/public/fonts/`, embedded in the binary, declared by a generated `web/src/fonts.css`) instead of linking a font CDN: rendering correctly stops depending on reaching a third party, which is the deployment this product targets and was also the cause of a docs capture writing fallback-font PNGs the zero-tolerance freshness gate reported as UI drift. Every script the CDN served is vendored (54 files, 1,005,028 bytes) so no operator string renders differently than before; `font-display: block` replaces `swap`; the capture now aborts rather than photograph a fallback render; `DOCS_SHOTS_PROXY` retires |
+| [ADR-0121](#adr-0121-a-commissioning-gap-is-not-a-failure-so-the-verdict-domain-gains-incomplete) | 2026-08-09 | Accepted | The verdict domain gains a fourth value: a role short because its hardware was never installed reads `incomplete` (ranked between healthy and degraded) rather than its declared `impact`, which now describes failure only; `impact: none` stays healthy when empty and a losing alternate's roles contribute nothing. No migration. Amends ADR-0050 |
 
 ## Entries
 
@@ -5875,3 +5876,37 @@ interface create form, since that name is the platform's to mint.
   The screenshots recaptured **byte-identical**, which is the check on the vendoring: the files
   served are the same faces at the same version the browser had been fetching, so this changed no
   pixel of the console.
+### ADR-0121: A commissioning gap is not a failure, so the verdict domain gains `incomplete`
+
+- **Date:** 2026-08-09 | **Status:** Accepted | **Pages:** [health](/architecture/health/),
+  [glossary](/architecture/glossary/)
+- **Decision:** the verdict domain becomes **`healthy` < `incomplete` < `degraded` < `outage`**.
+  A role short of quorum because its assigned hardware is **failing** contributes its declared
+  `impact`, unchanged; a role short because the hardware was **never installed** contributes
+  `incomplete`. A role that is both reads its `impact`, the worse of the two by rank. A role
+  declaring `impact: none` reads `healthy` when empty rather than `incomplete`, because a slot
+  whose failure does not matter has an absence that does not matter either. A role inside a
+  choice whose alternate did not win contributes nothing at all, `incomplete` included. No
+  migration: the enum lives in `internal/health` and the value persists as a string, so the only
+  storage-side change is the `health` property type's seeded `validation.enum`, which is boot-seed
+  reference data. Amends [ADR-0050](#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)'s
+  three-value domain; its transition-only recording, pure-package judgement, and worst-wins rollup
+  stand unrevised.
+- **Context:** the estate canvas ([#630](https://github.com/hyperscaleav/omniglass/issues/630))
+  paints one dot per component across the whole estate, and it was the surface that made the
+  three-value domain untenable. Most of a real estate is mid-commissioning for months, and under
+  the old rule every unstaffed role contributed its declared `impact`, so a half-built site
+  rendered as a wall of red indistinguishable from a site on fire. A colour an operator learns to
+  ignore is worse than no colour. Ranking the new value between `healthy` and `degraded` is what
+  makes it useful in both directions: a gap is visible above a finished room and invisible beneath
+  anything actually broken, so neither reading is drowned by the other. The `impact: none` carve-out
+  came out of the existing suite rather than the design: `TestImpactMapping` and
+  `TestSystemVerdictWorstWins` both asserted that an unstaffed harmless role stays harmless, and
+  they were right, since reporting a gap there would put a permanent `incomplete` on every
+  confidence monitor nobody ever intends to staff, reintroducing the saturation this decision
+  exists to remove. Rejected: a separate non-health field for commissioning state (two axes to
+  roll up, two badges to reconcile, and the estate view would have to render both to answer one
+  question); and reusing `unknown`, which already means "no health has been read" and would
+  conflate never-measured with never-installed.
+- **Tracked under** epic [#630](https://github.com/hyperscaleav/omniglass/issues/630), slice
+  [#631](https://github.com/hyperscaleav/omniglass/issues/631).

@@ -30,7 +30,7 @@ import { entityLabel } from "./entities";
 // impaired list that flatly disagrees with it), so every derivation below
 // filters through activeRoles rather than the raw list.
 
-export type Verdict = "healthy" | "degraded" | "outage";
+export type Verdict = "healthy" | "incomplete" | "degraded" | "outage";
 export type HealthRole = components["schemas"]["HealthRoleBody"];
 export type HealthAlarm = components["schemas"]["HealthAlarmBody"];
 export type HealthSystem = components["schemas"]["HealthSystemBody"];
@@ -71,15 +71,19 @@ export async function locationHealth(name: string): Promise<EstateHealth> {
   return data as EstateHealth;
 }
 
-// verdictOf narrows whatever the API sent to the three states the console knows.
+// verdictOf narrows whatever the API sent to the four states the console knows.
 // Anything else (an unread query, a state a newer server introduces) is null, which
 // the badge renders as unknown rather than guessing.
 export function verdictOf(v: string | null | undefined): Verdict | null {
-  return v === "healthy" || v === "degraded" || v === "outage" ? v : null;
+  return v === "healthy" || v === "incomplete" || v === "degraded" || v === "outage" ? v : null;
 }
 
 // Worst wins, everywhere: a role over its system, a system over its location.
-const RANK: Record<Verdict, number> = { healthy: 0, degraded: 1, outage: 2 };
+// The order is the severity ranking, matching internal/health's Verdict enum
+// exactly. incomplete sits between healthy and degraded: a commissioning gap is
+// worth surfacing above a clean system and worth burying under anything that is
+// actually broken.
+const RANK: Record<Verdict, number> = { healthy: 0, incomplete: 1, degraded: 2, outage: 3 };
 
 export function verdictRank(v: Verdict): number {
   return RANK[v];

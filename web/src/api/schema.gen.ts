@@ -4974,7 +4974,7 @@ export interface components {
             systems: components["schemas"]["HealthSystemBody"][] | null;
             /** @description The recorded edges over the window, oldest first: one entry per change, never a sample */
             transitions: components["schemas"]["HealthTransitionBody"][] | null;
-            /** @description healthy, degraded, or outage: the rollup of the roles or systems served beside it */
+            /** @description healthy, incomplete, degraded, or outage: the rollup of the roles or systems served beside it. incomplete is a commissioning gap, a role short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded */
             verdict: string;
         };
         EventBody: {

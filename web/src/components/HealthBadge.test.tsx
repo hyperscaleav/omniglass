@@ -25,23 +25,40 @@ const health = (verdict: string, owner: string): EstateHealth => ({
 
 describe("HealthBadge", () => {
   it("names each verdict in words, not colour alone", () => {
-    for (const v of ["healthy", "degraded", "outage"]) {
+    for (const v of ["healthy", "incomplete", "degraded", "outage"]) {
       const { getByText, unmount } = mount(() => <HealthBadge verdict={v} />);
       expect(getByText(v)).toBeTruthy();
       unmount();
     }
   });
 
-  it("gives each verdict its own semantic hue, so the three read as distinct states", () => {
+  it("gives each verdict its own semantic hue, so the four read as distinct states", () => {
     const seen = new Set<string>();
-    for (const v of ["healthy", "degraded", "outage"]) {
+    for (const v of ["healthy", "incomplete", "degraded", "outage"]) {
       const { getByText, unmount } = mount(() => <HealthBadge verdict={v} />);
       const cls = getByText(v).className;
-      expect(cls).toMatch(/badge-(success|warning|error)/);
-      seen.add(cls.match(/badge-(success|warning|error)/)![0]);
+      expect(cls).toMatch(/badge-(success|incomplete|warning|error)/);
+      seen.add(cls.match(/badge-(success|incomplete|warning|error)/)![0]);
       unmount();
     }
-    expect(seen.size).toBe(3); // never one accent for "not fine"
+    expect(seen.size).toBe(4); // never one accent for "not fine"
+  });
+
+  // incomplete is a commissioning gap, not a fault, and its glyph has to say so
+  // as loudly as its hue does: a reader in greyscale must not mistake a room
+  // nobody has finished building for a room that is broken.
+  it("gives incomplete its own glyph, distinct from the two failure verdicts", () => {
+    const glyph = (v: string) => {
+      const { getByText, unmount } = mount(() => <HealthBadge verdict={v} />);
+      const svg = getByText(v).parentElement?.querySelector("svg")?.innerHTML ?? "";
+      unmount();
+      return svg;
+    };
+    const incomplete = glyph("incomplete");
+    expect(incomplete).not.toBe("");
+    expect(incomplete).not.toBe(glyph("degraded"));
+    expect(incomplete).not.toBe(glyph("outage"));
+    expect(incomplete).not.toBe(glyph("healthy"));
   });
 
   it("reads a system's verdict from the cache the panel shares", () => {

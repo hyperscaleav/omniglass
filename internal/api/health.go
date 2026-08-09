@@ -85,7 +85,7 @@ type estateHealthOutput struct {
 	Body struct {
 		OwnerKind   string                 `json:"owner_kind"`
 		Owner       string                 `json:"owner"`
-		Verdict     string                 `json:"verdict" doc:"healthy, degraded, or outage: the rollup of the roles or systems served beside it"`
+		Verdict     string                 `json:"verdict" doc:"healthy, incomplete, degraded, or outage: the rollup of the roles or systems served beside it. incomplete is a commissioning gap, a role short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded"`
 		Roles       []healthRoleBody       `json:"roles" doc:"The contributing roles; empty for a location"`
 		Systems     []healthSystemBody     `json:"systems" doc:"The systems beneath a location with their verdicts; empty for a system"`
 		Transitions []healthTransitionBody `json:"transitions" doc:"The recorded edges over the window, oldest first: one entry per change, never a sample"`

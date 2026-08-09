@@ -95,14 +95,36 @@ separate vocabulary.
 
 ## The verdict vocabulary
 
-A verdict is one of three values, ordered so "worst" has a meaning:
+A verdict is one of four values, ordered so "worst" has a meaning:
 
 ```text
-healthy  <  degraded  <  outage
+healthy  <  incomplete  <  degraded  <  outage
 ```
 
 **`outage`, not `down`**: a device is down, a room has an outage, the reasoning that once picked
 `ok` over `up` ([ADR-0003](/architecture/decisions/#adr-0003-health-reads-ok-not-up)).
+
+**`incomplete` is a commissioning gap, not a fault.** A role can be short of quorum two ways, and
+they are not the same event. Its assigned hardware can be **failing**, which is what `impact`
+describes and what an alarm fires for. Or the hardware was **never installed**, which no alarm
+will ever fire for, because nothing exists yet to alarm. A role short for the second reason reads
+`incomplete`.
+
+The distinction earns its place on the estate view. Most of a real estate is mid-commissioning
+for months at a time, and folding an empty slot into `outage` paints the whole canvas red and
+teaches an operator to ignore the colour. Ranked between `healthy` and `degraded`, a gap is
+visible above a finished room and invisible beneath anything actually broken.
+
+Two consequences follow from `impact` describing failure rather than absence:
+
+- A role that is **both** under-installed and partly alarming reads its `impact`, the worse of the
+  two by rank and the one somebody is not already on their way to fix.
+- A role declaring `impact: none` reads `healthy` when empty, not `incomplete`. A slot whose
+  failure does not matter has an absence that does not matter either, and reporting one would
+  leave a permanent gap on every confidence monitor nobody intends to staff.
+
+A role inside a **choice** whose alternate did not win contributes nothing at all, `incomplete`
+included: the build the room was not made to is not outstanding work.
 
 Health is **distinct from severity**: severity is an alarm's alert importance
 ([alarms and actions](/architecture/alarms-actions/)), health an entity's operational state; a
