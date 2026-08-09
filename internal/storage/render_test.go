@@ -85,6 +85,30 @@ func TestRenderBareNoOrdinalTailLeavesSegmentUnchanged(t *testing.T) {
 	}
 }
 
+// The abbrev substitution belongs to the type that minted the name, so it may
+// only fire on that type's own stem. An operator who renames a component takes
+// the pen for good (name_generated clears and never returns except through
+// :resetName), and the name they chose can end in a digit run for reasons of
+// their own: rack-3, booth-2, row-14. Compacting "rack-3" to "dsp3" puts a word
+// on a cable label that appears nowhere in the entity's name.
+func TestRenderBareLeavesAForeignStemAlone(t *testing.T) {
+	got := RenderBare(parseOrFail(t, "boi.$comp.rack-3"), "dsp")
+	want := "boirack3"
+	if got != want {
+		t.Fatalf("RenderBare = %q, want %q", got, want)
+	}
+}
+
+// A stem the caller could not resolve is not a licence to substitute on any
+// trailing digit run: with nothing to match against, the segment stands.
+func TestRenderBareEmptyStemLeavesSegmentUnchanged(t *testing.T) {
+	got := RenderBare(parseOrFail(t, "boi.$comp.display-1"), "dsp")
+	want := "boidisplay-1"
+	if got != want {
+		t.Fatalf("RenderBare = %q, want %q", got, want)
+	}
+}
+
 func TestRenderBareEmptySegments(t *testing.T) {
 	if got := RenderBare(nil, "dsp"); got != "" {
 		t.Fatalf("RenderBare(nil) = %q, want empty", got)
