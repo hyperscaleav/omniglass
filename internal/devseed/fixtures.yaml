@@ -154,6 +154,33 @@ locations:
     type: room
     parent: annex
 
+  # Service Depot: a fourth top of a deliberately DIFFERENT shape. It is a
+  # building at the root with rooms hanging straight off it, no campus above and
+  # no floor between, which the seeded type registry allows and the model has
+  # never required. Three tops shaped campus -> building -> floor -> room taught
+  # a fixed ladder that does not exist, and an estate canvas read against only
+  # that shape would let a fixed-ladder assumption ship green (#630).
+  #
+  # Pinned: the rule renders "Depot", and "Service Depot" is what the site is
+  # called; the qualifying word is not in the name.
+  - key: depot
+    name: depot
+    label: Service Depot
+    type: building
+  # No label: the rule renders "Bay 1", the designation case (ADR-0103), so the
+  # name carries it and the rule titles it.
+  - key: bay-1
+    name: bay-1
+    type: room
+    parent: depot
+  # Bay 2 holds no system on purpose: a leaf nobody has commissioned is the
+  # dashed hole the estate canvas draws, and naming a gap is half of what it
+  # is for.
+  - key: bay-2
+    name: bay-2
+    type: room
+    parent: depot
+
 users:
   # Username convention: a user limited to a region carries that region in its name
   # (viewer-hq, tech-east); an estate-wide user carries none (operator). No `-dev`
@@ -305,6 +332,64 @@ components:
   - key: auditorium-display
     product: samsung-qm55
     location: auditorium
+  - key: auditorium-display-b
+    product: samsung-qm55
+    location: auditorium
+  - key: auditorium-bar
+    product: cisco-room-bar
+    location: auditorium
+  - key: auditorium-bar-b
+    product: cisco-room-bar
+    location: auditorium
+  - key: auditorium-mic
+    product: shure-mxa920
+    location: auditorium
+  - key: auditorium-touch
+    product: crestron-tss-1070
+    location: auditorium
+
+  # The huddle room's bar staffs the video-bar leg of the choice-bearing
+  # huddle-room standard (systems, below); the touch panel is in the room and
+  # accounted for, filling no role.
+  - key: huddle-bar
+    product: cisco-room-bar
+    location: huddle
+  - key: huddle-touch
+    product: crestron-tss-1070
+    location: huddle
+
+  - key: briefing-bar
+    product: cisco-room-bar
+    location: briefing
+  - key: briefing-bar-b
+    product: cisco-room-bar
+    location: briefing
+  - key: briefing-display
+    product: samsung-qm55
+    location: briefing
+
+  - key: bay-1-bar
+    product: cisco-room-bar
+    location: bay-1
+  - key: bay-1-bar-b
+    product: cisco-room-bar
+    location: bay-1
+  - key: bay-1-display
+    product: samsung-qm55
+    location: bay-1
+  - key: bay-1-mic
+    product: shure-mxa920
+    location: bay-1
+
+  # A central recording service, a member of systems in TWO different tops. A
+  # shared box inside one room already had a fixture (the shared bar); this is
+  # the case the estate canvas exists to show, where two bands an operator
+  # would never read together depend on one thing. It draws once as owned in
+  # its primary cluster and as a ghost in the other, so the estate never
+  # counts it twice. No location: it is a service, not a box in a room.
+  - key: recording-service
+    label: Estate Recording Service
+    product: generic-service
 
 # Property values: two overrides the huddle display declares over its product's
 # contract, so the effective-properties panel teaches direct-vs-inherited.
@@ -351,6 +436,46 @@ systems:
     system_type: board
     location: boardroom
 
+  # A huddle room on the choice-bearing standard: it is built all-in-one, so
+  # the component-build alternate stays unstaffed WITHOUT impairing the room
+  # (#626): a losing alternate's roles contribute nothing.
+  - key: huddle-north
+    standard: huddle-room
+    system_type: huddle
+    location: huddle
+
+  # Fully staffed and quiet, until an alarm (below) knocks one of its two
+  # microphones out: a REAL failure beside the commissioning gaps, which is the
+  # contrast the estate canvas exists to draw.
+  - key: auditorium-av
+    standard: meeting-room
+    system_type: meeting
+    location: auditorium
+
+  # Racked, cabled, and not yet commissioned: a system conforming to a standard
+  # with nothing assigned to any role it declares. It reads INCOMPLETE, the
+  # verdict #631 added, and nothing in this seed produced it before. Most of a
+  # real estate looks like this for months, which is the whole reason that
+  # verdict is not outage.
+  - key: media-lab-av
+    standard: meeting-room
+    system_type: meeting
+    location: lab
+
+  # One microphone short of its quorum of two, with the one it has healthy
+  # (assignments, below): short-staffed, not broken, so it reads incomplete.
+  - key: briefing-av
+    standard: meeting-room
+    system_type: meeting
+    location: briefing
+
+  # Fully staffed, and the room its warning-level alarm (below) does NOT
+  # impair: the component degrades and keeps its slot.
+  - key: bay-1-av
+    standard: meeting-room
+    system_type: meeting
+    location: bay-1
+
 # Membership without a job. The shared bar staffs the microphone role in both halves
 # (below, through assignment), but the power conditioner fills no declared role at
 # all: it is in the room, it is accounted for, and no role wants it. A model that
@@ -358,6 +483,17 @@ systems:
 members:
   - system: boardroom-a
     component: power
+  # One service, two tops. No role wants it, so it is membership and nothing
+  # more, which is exactly what the many-valued binding is for.
+  - system: auditorium-av
+    component: recording-service
+  - system: briefing-av
+    component: recording-service
+  # In the room and accounted for, filling no role.
+  - system: huddle-north
+    component: huddle-touch
+  - system: auditorium-av
+    component: auditorium-touch
 
 # Staffing, which creates the membership as a side effect. boardroom-a is fully
 # staffed and reads healthy; boardroom-b is one microphone short of its quorum of
@@ -378,3 +514,65 @@ role_assignments:
   - system: boardroom-b
     role: main-display
     component: panel-b
+
+  # Huddle North, built all-in-one: the video-bar alternate is staffed and the
+  # component build is left alone, so the room reads healthy on one leg.
+  - system: huddle-north
+    role: conf-bar
+    component: huddle-bar
+
+  # The auditorium is fully staffed. The critical alarm (below) takes one of
+  # its two microphones down, so the room drops on a real failure.
+  - system: auditorium-av
+    role: room-mic
+    component: auditorium-bar
+  - system: auditorium-av
+    role: room-mic
+    component: auditorium-bar-b
+  - system: auditorium-av
+    role: main-display
+    component: auditorium-display
+
+  # The briefing room is one microphone short of its quorum of two, with the
+  # one it has healthy: short-staffed, not broken.
+  - system: briefing-av
+    role: room-mic
+    component: briefing-bar
+  - system: briefing-av
+    role: main-display
+    component: briefing-display
+
+  # Bay 1 is fully staffed.
+  - system: bay-1-av
+    role: room-mic
+    component: bay-1-bar
+  - system: bay-1-av
+    role: room-mic
+    component: bay-1-bar-b
+  - system: bay-1-av
+    role: main-display
+    component: bay-1-display
+
+# Something actually wrong, so the estate is not all healthy-and-incomplete. A
+# CRITICAL alarm takes its component's own verdict to outage, which stops it
+# occupying the roles it fills (#626); a lesser one degrades the component while
+# it keeps its slot. Both appear here because the difference is exactly what an
+# operator has to be able to read off a screen.
+#
+# auditorium-bar going down leaves the auditorium's room-mic role holding one of
+# the two it wants, so the room drops to degraded on a REAL failure, beside the
+# briefing room sitting at incomplete on a gap. Same arithmetic, different
+# cause, different colour: that contrast is the estate canvas's whole argument.
+alarms:
+  - component: auditorium-bar
+    severity: critical
+    message: No route to host on the primary interface
+    dedup_key: unreachable
+  # A warning that costs nothing structural: the component reads degraded and
+  # keeps its slot, so the room above it stays healthy. Worth seeding because
+  # "this box is unhappy but the room is fine" is a state operators distrust
+  # until they have seen the platform draw it correctly.
+  - component: bay-1-display
+    severity: warning
+    message: Lamp hours approaching end of life
+    dedup_key: lamp-hours

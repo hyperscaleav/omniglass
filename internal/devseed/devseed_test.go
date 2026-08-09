@@ -195,10 +195,12 @@ func TestFixturesKeepLabelsOnlyWhereTheOverrideIsThePoint(t *testing.T) {
 		t.Fatalf("parse fixtures: %v", err)
 	}
 
-	// The one component with no product: with no classification to read, the
+	// The component with no product: with no classification to read, the
 	// component rule can only render "Generic Device 1", so the operator's own
-	// words are the only thing that says what the box is.
-	wantComponentLabels := map[string]bool{"power": true}
+	// words are the only thing that says what the box is. The recording service
+	// is pinned for the estate-wide fact its generic-service classification
+	// cannot render: "Service 1" says nothing about what depends on it.
+	wantComponentLabels := map[string]bool{"power": true, "recording-service": true}
 	for _, c := range doc.Components {
 		if (c.Label != "") != wantComponentLabels[c.Key] {
 			t.Errorf("component %q label = %q, want set = %v (everything else lets the shipped component rule render)",
@@ -242,6 +244,9 @@ func TestFixturesKeepLabelsOnlyWhereTheOverrideIsThePoint(t *testing.T) {
 	wantLocationLabels := map[string]bool{
 		"hq": true, "west": true, "east": true, "airport": true,
 		"huddle": true, "briefing": true, "hall": true,
+		// depot: the rule renders "Depot"; the qualifying word ("Service
+		// Depot") is what the site is called and is not in the name.
+		"depot": true,
 	}
 	for _, l := range doc.Locations {
 		if (l.Label != "") != wantLocationLabels[l.Key] {
@@ -326,46 +331,66 @@ func TestRunIdempotent(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 
-	// Counts prove idempotency: the second Run added nothing. They are the
-	// assertion that catches a seed which cannot recognise its own
-	// platform-named rows, because that failure doubles the estate rather than
-	// erroring.
+	// Counts prove idempotency: the second Run added nothing. The expected
+	// number is DERIVED from the fixture rather than written here as a literal.
+	// A literal has to be edited every time the example estate grows, which
+	// makes a fixture change look like a test failure and invites bumping the
+	// number without reading why it moved. Derived, it asserts something
+	// stronger anyway: everything the fixture declares landed, and the second
+	// run added none of it twice. It is also the assertion that catches a seed
+	// which cannot recognise its own platform-named rows, because that failure
+	// doubles the estate rather than erroring.
+	fixtures, err := devseed.Fixtures()
+	if err != nil {
+		t.Fatalf("parse fixtures: %v", err)
+	}
 	var locs, humans, grants int
 	if err := conn.QueryRow(ctx, `select count(*) from location`).Scan(&locs); err != nil {
 		t.Fatalf("count locations: %v", err)
 	}
-	if locs != 13 {
-		t.Errorf("locations = %d, want 13 (seed not idempotent or incomplete)", locs)
+	if locs != len(fixtures.Locations) {
+		t.Errorf("locations = %d, want %d (seed not idempotent or incomplete)", locs, len(fixtures.Locations))
 	}
 	var comps, systems int
 	if err := conn.QueryRow(ctx, `select count(*) from component`).Scan(&comps); err != nil {
 		t.Fatalf("count components: %v", err)
 	}
-	if comps != 8 {
-		t.Errorf("components = %d, want 8 (7 fixture devices, all platform-named, plus the operator-named DSP)", comps)
+	if want := len(fixtures.Components) + 1; comps != want {
+		t.Errorf("components = %d, want %d (the fixture devices, all platform-named, plus the operator-named DSP)", comps, want)
 	}
 	if err := conn.QueryRow(ctx, `select count(*) from system`).Scan(&systems); err != nil {
 		t.Fatalf("count systems: %v", err)
 	}
-	if systems != 2 {
-		t.Errorf("systems = %d, want 2 (the two halves of the divisible boardroom)", systems)
+	if systems != len(fixtures.Systems) {
+		t.Errorf("systems = %d, want %d (seed not idempotent or incomplete)", systems, len(fixtures.Systems))
 	}
 	// Membership and staffing are counted too, because they are where a resolver
 	// that zipped the fixture onto the estate in the wrong order shows up: every
 	// name and label would still be right, and the second Run would staff a
-	// second device into a role the first Run already filled.
+	// second device into a role the first Run already filled. The expected
+	// membership count is the distinct (system, component) pairs the fixture
+	// implies: an assignment creates the membership as a side effect, so a
+	// component both listed and staffed in one system is one row, and the
+	// shared bar staffed in both halves is two.
+	pairs := map[string]bool{}
+	for _, m := range fixtures.Members {
+		pairs[m.System+"\x00"+m.Component] = true
+	}
+	for _, ra := range fixtures.RoleAssignments {
+		pairs[ra.System+"\x00"+ra.Component] = true
+	}
 	var members, assignments int
 	if err := conn.QueryRow(ctx, `select count(*) from system_member`).Scan(&members); err != nil {
 		t.Fatalf("count members: %v", err)
 	}
-	if members != 6 {
-		t.Errorf("system members = %d, want 6 (four in the first half including the unstaffed conditioner, two in the second, the shared bar in both)", members)
+	if members != len(pairs) {
+		t.Errorf("system members = %d, want %d (the distinct system-component pairs the fixture implies)", members, len(pairs))
 	}
 	if err := conn.QueryRow(ctx, `select count(*) from system_role_assignment`).Scan(&assignments); err != nil {
 		t.Fatalf("count role assignments: %v", err)
 	}
-	if assignments != 5 {
-		t.Errorf("role assignments = %d, want 5 (the fixture's five, unchanged by the second Run)", assignments)
+	if assignments != len(fixtures.RoleAssignments) {
+		t.Errorf("role assignments = %d, want %d (the fixture's own, unchanged by the second Run)", assignments, len(fixtures.RoleAssignments))
 	}
 
 	// A multi-site estate: three campuses, not one.
@@ -1128,5 +1153,243 @@ func assertGrant(t *testing.T, conn *pgx.Conn, ctx context.Context, username, ro
 	}
 	if gotScopeID == nil || *gotScopeID != wantID {
 		t.Errorf("%s grant scope_id = %v, want %s (%s)", username, gotScopeID, wantID, scopeName)
+	}
+}
+
+// TestFixturesMakeAnEstateWorthLookingAt guards what the estate canvas (#630)
+// needs from the dev estate, which is a different bar from what the earlier
+// fixtures were built to clear. Those existed to teach one thing each (a shared
+// component, a member with no role, the platform-reach lesson) and a handful of
+// rows says all of that. A canvas is judged on whether an operator can read a
+// real estate in it, and a dozen dots in one room cannot answer that either way.
+//
+// These are fixture-shape assertions, deliberately pure: they parse the YAML and
+// reason about it, so the whole guard runs with no Postgres and cannot rot into a
+// slow test nobody runs.
+func TestFixturesMakeAnEstateWorthLookingAt(t *testing.T) {
+	doc, err := devseed.Fixtures()
+	if err != nil {
+		t.Fatalf("parse fixtures: %v", err)
+	}
+
+	parentOf := map[string]string{}
+	typeOf := map[string]string{}
+	for _, l := range doc.Locations {
+		parentOf[l.Key] = l.Parent
+		typeOf[l.Key] = l.Type
+	}
+	depth := func(name string) int {
+		n := 1
+		for parentOf[name] != "" {
+			name = parentOf[name]
+			n++
+		}
+		return n
+	}
+	topOf := func(name string) string {
+		for parentOf[name] != "" {
+			name = parentOf[name]
+		}
+		return name
+	}
+
+	// No two roots alike. The location tree is arbitrary-depth by design and
+	// nothing in the model requires a building or a floor, but a seed whose
+	// every root is campus > building > floor > room quietly teaches the
+	// opposite and lets a fixed-ladder assumption ship green.
+	rootTypes := map[string]bool{}
+	for _, l := range doc.Locations {
+		if l.Parent == "" {
+			rootTypes[l.Type] = true
+		}
+	}
+	if len(rootTypes) < 2 {
+		t.Errorf("every root is the same type %v, so the seed teaches a fixed ladder the model does not have", rootTypes)
+	}
+	depths := map[int]bool{}
+	for name := range parentOf {
+		depths[depth(name)] = true
+	}
+	if len(depths) < 3 {
+		t.Errorf("leaf depths %v, want at least three distinct depths so the canvas is read against an uneven estate", depths)
+	}
+
+	// Enough to paint. A dot grid is the estate zoom's whole claim, and it
+	// cannot be judged on a handful of squares in one room.
+	if len(doc.Systems) < 6 {
+		t.Errorf("systems = %d, want at least 6 spread across the estate", len(doc.Systems))
+	}
+	if len(doc.Components) < 20 {
+		t.Errorf("components = %d, want at least 20 so a cluster reads as a cluster", len(doc.Components))
+	}
+	placed := map[string]bool{}
+	for _, s := range doc.Systems {
+		if s.Location != "" {
+			placed[topOf(s.Location)] = true
+		}
+	}
+	if len(placed) < 3 {
+		t.Errorf("systems occupy %d roots, want at least 3 so the estate zoom has bands to compare", len(placed))
+	}
+
+	// A hole: a leaf nobody has put a system in. The canvas draws these, and
+	// naming a gap is half of what it is for.
+	hasChild := map[string]bool{}
+	for _, l := range doc.Locations {
+		if l.Parent != "" {
+			hasChild[l.Parent] = true
+		}
+	}
+	withSystem := map[string]bool{}
+	for _, s := range doc.Systems {
+		withSystem[s.Location] = true
+	}
+	holes := 0
+	for _, l := range doc.Locations {
+		if !hasChild[l.Key] && !withSystem[l.Key] {
+			holes++
+		}
+	}
+	if holes == 0 {
+		t.Error("no leaf is without a system, so the canvas has no hole to draw")
+	}
+
+	// Every verdict the domain has must appear somewhere, incomplete above all:
+	// it landed in #631 and nothing in the seed produced it, so the colour that
+	// un-saturates a commissioning estate had never been seen on screen.
+	var anyUnstaffed bool
+	for _, s := range doc.Systems {
+		// A system with a standard but no assignment at all cannot satisfy any
+		// role it declares, which is the commissioning gap in its purest form.
+		if s.Standard == "" {
+			continue
+		}
+		any := false
+		for _, a := range doc.RoleAssignments {
+			if a.System == s.Key {
+				any = true
+				break
+			}
+		}
+		if !any {
+			anyUnstaffed = true
+		}
+	}
+	if !anyUnstaffed {
+		t.Error("no system is left entirely unstaffed, so nothing in the seed reads incomplete")
+	}
+
+	// A component shared across two DIFFERENT roots. Sharing inside one room
+	// already had a fixture; the estate zoom's ring-and-ghost rule is about a
+	// box two bands apart depending on each other, which is the case an
+	// operator cannot see any other way.
+	rootsOf := map[string]map[string]bool{}
+	systemRoot := map[string]string{}
+	for _, s := range doc.Systems {
+		systemRoot[s.Key] = topOf(s.Location)
+	}
+	note := func(component, system string) {
+		if rootsOf[component] == nil {
+			rootsOf[component] = map[string]bool{}
+		}
+		rootsOf[component][systemRoot[system]] = true
+	}
+	for _, m := range doc.Members {
+		note(m.Component, m.System)
+	}
+	for _, a := range doc.RoleAssignments {
+		note(a.Component, a.System)
+	}
+	crossRoot := false
+	for _, roots := range rootsOf {
+		if len(roots) > 1 {
+			crossRoot = true
+		}
+	}
+	if !crossRoot {
+		t.Error("no component is shared across two roots, so the estate zoom's ghost rule is never exercised")
+	}
+}
+
+// TestSeededEstateShowsEveryVerdict traces the example estate through the real
+// health rollup rather than trusting the fixture's shape. The fixture guard
+// above proves a system was left unstaffed; only this proves that the platform
+// then reads it as INCOMPLETE, which is the claim the estate canvas is coloured
+// by and is a different fact from "no assignment row exists".
+//
+// It is also the regression that catches a seed drifting into monochrome. The
+// canvas's whole argument is that an operator can tell a commissioning gap from
+// an outage at a glance, and a dev estate where every room reads healthy
+// demonstrates nothing and hides a broken rollup behind a green screen.
+func TestSeededEstateShowsEveryVerdict(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("boot seed: %v", err)
+	}
+	if err := devseed.Run(ctx, gw, ""); err != nil {
+		t.Fatalf("devseed: %v", err)
+	}
+
+	all := scope.Set{All: true}
+	verdictOf := func(system string) string {
+		t.Helper()
+		rep, err := gw.SystemHealth(ctx, system, 0, all)
+		if err != nil {
+			t.Fatalf("system health %s: %v", system, err)
+		}
+		return rep.Verdict
+	}
+
+	// Systems are platform-named, so the fixture key is not an address. Each
+	// interesting room holds exactly one system (the divisible boardroom's two
+	// halves are the exception, and their minted names are pinned by ADR-0101:
+	// "boardroom" for the first, "boardroom-2" for the second), so a system is
+	// resolved to its uuid through the room that holds it.
+	conn2, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn2.Close(ctx)
+	systemIn := func(room string) string {
+		t.Helper()
+		var id string
+		if err := conn2.QueryRow(ctx,
+			`select s.id from system s join location l on s.location_id = l.id where l.name = $1`,
+			room).Scan(&id); err != nil {
+			t.Fatalf("resolve system in room %q: %v", room, err)
+		}
+		return id
+	}
+
+	for _, tc := range []struct{ system, want, why string }{
+		{systemIn("media-lab"), "incomplete", "conforms to a standard with nothing assigned to any role: a commissioning gap, and no alarm will ever fire for it"},
+		{"boardroom-2", "incomplete", "one of the two microphones it wants, and that one is fine: the shortfall is a box nobody installed, not a box that broke"},
+		{systemIn("briefing"), "incomplete", "same shape as the second boardroom half: short a microphone nobody has installed"},
+		{systemIn("auditorium"), "degraded", "fully staffed, but a critical alarm took one of its two microphones down: a real failure, not a gap"},
+		{systemIn("bay-1"), "healthy", "fully staffed and quiet"},
+		{systemIn("huddle"), "healthy", "built all-in-one, so the component-build alternate it never staffed does not impair it"},
+	} {
+		if got := verdictOf(tc.system); got != tc.want {
+			t.Errorf("%s reads %q, want %q: %s", tc.system, got, tc.want, tc.why)
+		}
+	}
+
+	// The estate must not be monochrome: an operator judging the canvas needs
+	// more than one colour on it.
+	seen := map[string]bool{}
+	for _, s := range []string{systemIn("media-lab"), "boardroom", "boardroom-2", systemIn("auditorium"), systemIn("huddle"), systemIn("bay-1"), systemIn("briefing")} {
+		seen[verdictOf(s)] = true
+	}
+	if len(seen) < 3 {
+		t.Errorf("the seeded estate shows %d distinct verdicts (%v), want at least 3 so the canvas is judged against a real spread", len(seen), seen)
 	}
 }
