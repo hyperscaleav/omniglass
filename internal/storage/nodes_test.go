@@ -200,7 +200,21 @@ func TestNodeNameSubjectSafety(t *testing.T) {
 		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: bad, Description: "subject-unsafe"}, all); !errors.Is(err, storage.ErrInvalidNodeName) && !errors.Is(err, storage.ErrInvalidEntityName) {
 			t.Fatalf("create node %q: want ErrInvalidNodeName or ErrInvalidEntityName, got %v", bad, err)
 		}
-		if _, err := gw.GetNode(ctx, bad, all); !errors.Is(err, storage.ErrNodeNotFound) {
+		// "bad.name" is dot-joined, so #627 Task 12's RejectAddressForm now
+		// catches it before the lookup even runs and reports the more specific
+		// ErrAddressNotAccepted ("a node name is a single token") rather than
+		// blending into the generic not-found every other subject-unsafe name
+		// still gets: the row was never written either way, but a caller gets
+		// told WHY only when the ref looked like #627's address grammar.
+		_, err := gw.GetNode(ctx, bad, all)
+		if bad == "bad.name" {
+			var notAccepted *storage.ErrAddressNotAccepted
+			if !errors.As(err, &notAccepted) {
+				t.Fatalf("get node %q after rejected create: want *storage.ErrAddressNotAccepted, got %v", bad, err)
+			}
+			continue
+		}
+		if !errors.Is(err, storage.ErrNodeNotFound) {
 			t.Fatalf("get node %q after rejected create: want ErrNodeNotFound (no row), got %v", bad, err)
 		}
 	}
@@ -208,6 +222,37 @@ func TestNodeNameSubjectSafety(t *testing.T) {
 	// A subject-safe name still succeeds.
 	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-safe", Description: "ok"}, all); err != nil {
 		t.Fatalf("create valid node: %v", err)
+	}
+}
+
+// TestGetNodeRefusesADottedAddress is the storage-layer half of #627 Task
+// 12's 22-registry refusal: a node's name stays a single global kebab token
+// (it rides NATS subjects), so a ref that looks like the tree-entity address
+// grammar (dot-joined, or opening on an accessor) must be the explicit
+// *storage.ErrAddressNotAccepted, naming the kind, never a fall-through
+// ErrNodeNotFound that looks identical to an ordinary unknown node.
+func TestGetNodeRefusesADottedAddress(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	all := scope.Set{All: true}
+
+	for _, ref := range []string{"boi.17c", "$comp.display-1"} {
+		_, err := gw.GetNode(ctx, ref, all)
+		var notAccepted *storage.ErrAddressNotAccepted
+		if !errors.As(err, &notAccepted) {
+			t.Fatalf("GetNode(%q) = %v, want *storage.ErrAddressNotAccepted", ref, err)
+		}
+		if notAccepted.Kind != "node" {
+			t.Errorf("GetNode(%q) Kind = %q, want %q", ref, notAccepted.Kind, "node")
+		}
 	}
 }
 

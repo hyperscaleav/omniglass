@@ -45,7 +45,7 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 	// inbound reference this slice converted.
 	if _, err := gw.CreateProduct(ctx, "", storage.Product{
 		Name: "acme-bar", DisplayName: "Acme Bar", Kind: "device",
-		VendorID: strptr("acme"), Capabilities: []string{"microphone"}}); err != nil {
+		VendorID: strptr("acme")}); err != nil {
 		t.Fatalf("product: %v", err)
 	}
 	if _, err := gw.CreateProduct(ctx, "", storage.Product{
@@ -83,9 +83,6 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 	if got.VendorName == nil || *got.VendorName != "acme-av" {
 		t.Errorf("vendor reads %v, want acme-av: the arc should follow the rename", got.VendorName)
 	}
-	if len(got.Capabilities) != 1 || got.Capabilities[0] != "microphone" {
-		t.Errorf("capabilities = %v, want the set intact through the rename", got.Capabilities)
-	}
 	sub, err := gw.GetProduct(ctx, "acme-bar-mini")
 	if err != nil {
 		t.Fatalf("get sub-product: %v", err)
@@ -108,37 +105,27 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 		t.Errorf("component product reads %v, want acme-soundbar", comp.ProductHandle)
 	}
 
-	// Slice 2: a capability and a standard rename with every reference intact.
-	// The product requires microphone; the standard has a role requiring it and a
-	// property contract; renaming both must leave all of that resolving.
+	// Slice 2: a standard rename with its role's typed-slot requirement intact.
+	// The standard has a role accepting video-bar (the typed-slot guard, #626);
+	// renaming the standard must leave the role, and what it accepts, resolving.
 	if _, err := gw.CreateStandard(ctx, "", storage.Standard{Name: "huddle", DisplayName: "Huddle"}); err != nil {
 		t.Fatalf("standard: %v", err)
 	}
 	if _, err := gw.SetSystemRole(ctx, "", "standard", "huddle", storage.SystemRoleSpec{
-		Name: "mic", DisplayName: "Mic", Quorum: 1, Capabilities: []string{"microphone"}, Impact: "degraded"}); err != nil {
+		Name: "mic", DisplayName: "Mic", Quorum: 1, AcceptedTypes: []string{"video-bar"}, Impact: "degraded"}); err != nil {
 		t.Fatalf("role: %v", err)
-	}
-	if _, err := conn.Exec(ctx, `update capability set name = 'mic-cap' where name = 'microphone'`); err != nil {
-		t.Fatalf("rename capability: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `update standard set name = 'huddle-space' where name = 'huddle'`); err != nil {
 		t.Fatalf("rename standard: %v", err)
 	}
-	// The product's required set still resolves, now reading the capability's new
-	// handle; the role still requires it; the standard is addressable by its new one.
-	after, err := gw.GetProduct(ctx, "acme-soundbar")
-	if err != nil {
-		t.Fatalf("get product after capability rename: %v", err)
-	}
-	if len(after.Capabilities) != 1 || after.Capabilities[0] != "mic-cap" {
-		t.Errorf("product capabilities = %v, want [mic-cap] through the rename", after.Capabilities)
-	}
+	// The standard is addressable by its new handle, and the role still declares
+	// the accepted type it did before the rename.
 	roles, err := gw.ListSystemRoles(ctx, "standard", "huddle-space")
 	if err != nil {
 		t.Fatalf("list roles by the renamed standard: %v", err)
 	}
-	if len(roles) != 1 || len(roles[0].Capabilities) != 1 || roles[0].Capabilities[0] != "mic-cap" {
-		t.Errorf("role requirement = %v, want [mic-cap]", roles)
+	if len(roles) != 1 || len(roles[0].AcceptedTypes) != 1 || roles[0].AcceptedTypes[0] != "video-bar" {
+		t.Errorf("role accepted types = %v, want [video-bar]", roles)
 	}
 
 	// Slice 3: a property rename follows its contract line, a declared value, AND

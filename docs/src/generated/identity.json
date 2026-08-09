@@ -6,10 +6,6 @@
       "shape": "id only"
     },
     {
-      "table": "alarm_capability",
-      "shape": "id only"
-    },
-    {
       "table": "audit_log",
       "shape": "id only"
     },
@@ -19,8 +15,9 @@
       "reason": "content-addressed by sha256, for the same reason"
     },
     {
-      "table": "capability",
-      "shape": "key-bearing"
+      "table": "choice_alternate",
+      "shape": "key-bearing",
+      "proved_elsewhere": "seeded only, no create path on the gateway"
     },
     {
       "table": "command",
@@ -36,8 +33,8 @@
       "shape": "key-bearing"
     },
     {
-      "table": "component_capability",
-      "shape": "id only"
+      "table": "component_type",
+      "shape": "key-bearing"
     },
     {
       "table": "credential",
@@ -138,10 +135,6 @@
       "shape": "key-bearing"
     },
     {
-      "table": "product_capability",
-      "shape": "id only"
-    },
-    {
       "table": "product_metric",
       "shape": "id only"
     },
@@ -160,6 +153,11 @@
     },
     {
       "table": "role",
+      "shape": "key-bearing",
+      "proved_elsewhere": "seeded only, no create path on the gateway"
+    },
+    {
+      "table": "role_choice",
       "shape": "key-bearing",
       "proved_elsewhere": "seeded only, no create path on the gateway"
     },
@@ -209,7 +207,11 @@
       "shape": "id only"
     },
     {
-      "table": "system_role_capability",
+      "table": "system_role_product",
+      "shape": "id only"
+    },
+    {
+      "table": "system_role_type",
       "shape": "id only"
     },
     {

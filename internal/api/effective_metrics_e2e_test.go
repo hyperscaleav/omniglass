@@ -60,7 +60,7 @@ func TestComponentMetricsAPI(t *testing.T) {
 
 	// A custom product declaring one metric with a default, and a component of it.
 	c.do(ownerTok, http.MethodPost, "/products", map[string]any{
-		"name": "acme-dsp", "display_name": "Acme DSP", "kind": "device",
+		"name": "acme-dsp", "display_name": "Acme DSP", "kind": "device", "component_type": "generic-device",
 	}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPut, "/products/acme-dsp/metrics/icmp-rtt-avg",
 		map[string]any{"default_value": 10.5, "required": true}, http.StatusOK)

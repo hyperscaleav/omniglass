@@ -17,7 +17,7 @@ import (
 // component. Settlement is computed and returned, never stored.
 
 type issueCommandInput struct {
-	Name string `path:"name" doc:"The component name"`
+	Name string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
 	Body struct {
 		CommandType string          `json:"command_type" minLength:"1" doc:"The command_type to invoke"`
 		Instance    string          `json:"instance,omitempty" doc:"The series discriminator (e.g. an interface), when the target is instanced"`
@@ -51,12 +51,12 @@ func registerCommandRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		if err != nil {
 			return nil, mapComponentErr(err)
 		}
-		cmd, err := gw.IssueCommand(ctx, actorID(ctx), "component", comp.Name, in.Body.CommandType, in.Body.Instance,
+		cmd, err := gw.IssueCommand(ctx, actorID(ctx), "component", comp.ID, in.Body.CommandType, in.Body.Instance,
 			in.Body.Value, in.Body.Params, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
 			return nil, mapCommandErr(err)
 		}
-		verdict, err := gw.CommandSettlement(ctx, "component", comp.Name, in.Body.CommandType, in.Body.Instance, a.scopeFor(ctx, "component", "read"))
+		verdict, err := gw.CommandSettlement(ctx, "component", comp.ID, in.Body.CommandType, in.Body.Instance, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
 			return nil, mapCommandErr(err)
 		}

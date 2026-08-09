@@ -110,7 +110,12 @@ func (p *PG) SetProperty(ctx context.Context, actorID, ownerKind, ownerID, prope
 	if err := p.guardOwnerScope(ctx, tx, ownerKind, ownerID, write); err != nil {
 		return nil, err
 	}
-	arc, err := p.ownerArcValue(ctx, tx, ownerKind, ownerID)
+	// ownerArcValueInScope, not ownerArcValue: guardOwnerScope already
+	// confirmed the owner within write, but a bare-name re-resolve here is
+	// STILL scope-blind unless it also goes through the scoped variant
+	// (ruling 2, #627) -- the first check passing does not defuse a second,
+	// unscoped resolve of the same reference.
+	arc, err := p.ownerArcValueInScope(ctx, tx, ownerKind, ownerID, write)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +201,9 @@ func (p *PG) ClearProperty(ctx context.Context, actorID, ownerKind, ownerID, pro
 	if err := p.guardOwnerScope(ctx, tx, ownerKind, ownerID, write); err != nil {
 		return err
 	}
-	arc, err := p.ownerArcValue(ctx, tx, ownerKind, ownerID)
+	// ownerArcValueInScope, not ownerArcValue: see SetProperty's comment on
+	// the same shape.
+	arc, err := p.ownerArcValueInScope(ctx, tx, ownerKind, ownerID, write)
 	if err != nil {
 		return err
 	}
@@ -292,6 +299,23 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 	if !inScope {
 		return nil, oc.notFound
 	}
+	// Resolved once here via ownerArcValueInScope, ambiguity-safe within
+	// read (ruling 2, #627): the inst CTEs below used to look the instance
+	// row up by name (`where name = $1`), which is a CTE that can hold more
+	// than one row once a name is no longer unique, not a scalar subquery,
+	// so it never raised SQLSTATE 21000 -- it silently joined properties
+	// from every same-named row into one "effective properties" answer
+	// instead, a worse failure than an error. Binding the resolved id
+	// directly (matched on oc.arcMatch, the same primary-key-equivalent
+	// column ownerArcValueInScope itself resolves against) makes inst
+	// exactly one row again. The scope-blind ownerArcValue would still leak
+	// an out-of-scope row's uuid here even though ownerInScope just passed:
+	// that first check narrowing to scope does not help if this next
+	// statement re-resolves the same bare name scope-blind.
+	arc, err := p.ownerArcValueInScope(ctx, p.pool, ownerKind, ownerID, read)
+	if err != nil {
+		return nil, err
+	}
 
 	// The current declared value per property: the latest series row of each
 	// (property, instance='') declared series on this owner's arc, a tombstone
@@ -312,7 +336,7 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 		// The ad-hoc arm alone when the owner kind has no classifier to inherit
 		// from: everything the instance declares, minus tombstoned series.
 		q = fmt.Sprintf(`
-		with inst as (select %[3]s as arc from %[1]s where name = $1), %[2]s
+		with inst as (select %[3]s as arc from %[1]s where %[3]s = $1), %[2]s
 		select pr.name as property_type_name, pr.id as property_type_id, pr.display_name, pr.data_type, false as required,
 		       null::jsonb as default_value,
 		       d.value as set_value,
@@ -328,7 +352,7 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 	} else {
 		q = fmt.Sprintf(`
 		with inst as (
-			select %[6]s as arc, %[2]s as classifier from %[1]s where name = $1
+			select %[6]s as arc, %[2]s as classifier from %[1]s where %[6]s = $1
 		), %[5]s
 		-- The contract arm: what the instance's classifier declares, resolved
 		-- against the instance's own current declared value.
@@ -361,7 +385,7 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 			oc.instanceTable, oc.classifierCol, oc.contractTable, oc.contractKeyCol, declared, oc.arcMatch)
 	}
 
-	rows, err := p.pool.Query(ctx, q, ownerID)
+	rows, err := p.pool.Query(ctx, q, arc)
 	if err != nil {
 		return nil, fmt.Errorf("storage: effective properties %s/%s: %w", ownerKind, ownerID, err)
 	}
@@ -438,26 +462,88 @@ func (p *PG) ownerArcValue(ctx context.Context, q querier, ownerKind, ownerRef s
 	return ownerRef, nil
 }
 
+// ownerArcValueInScope is ownerArcValue's scope-aware twin: ambiguity is
+// judged within s, not estate-wide (ruling 2, #627). Every caller that has
+// already scope-checked the same (ownerKind, ownerRef) via ownerInScope (or
+// guardOwnerScope, which calls it) must resolve the arc value through THIS,
+// not the scope-blind ownerArcValue: ownerInScope narrowing to scope first
+// does not help if the very next statement re-resolves the same bare name
+// scope-blind, which is exactly how EffectiveProperties, EffectiveMetrics,
+// SetProperty, ClearProperty, IssueCommand, and CommandSettlement each
+// leaked an out-of-scope row's uuid on a name unique to the caller's own
+// scope but ambiguous estate-wide, even after ownerInScope's own fix.
+// Nodes have no scope tree (node_name_key stays a plain global unique
+// constraint, so a bare node name is never ambiguous); this delegates to the
+// scope-blind resolve for that one kind.
+func (p *PG) ownerArcValueInScope(ctx context.Context, q querier, ownerKind, ownerRef string, s scope.Set) (string, error) {
+	switch ownerKind {
+	case "component":
+		c, err := scopedByNameInScope(ctx, q, componentConfig, ownerRef, ownerKind, s)
+		if err != nil {
+			return "", err
+		}
+		return c.ID, nil
+	case "system":
+		sys, err := scopedByNameInScope(ctx, q, systemConfig, ownerRef, ownerKind, s)
+		if err != nil {
+			return "", err
+		}
+		return sys.ID, nil
+	case "location":
+		l, err := scopedByNameInScope(ctx, q, locationConfig, ownerRef, ownerKind, s)
+		if err != nil {
+			return "", err
+		}
+		return l.ID, nil
+	case "node":
+		return p.ownerArcValue(ctx, q, ownerKind, ownerRef)
+	}
+	return "", ErrUnknownOwnerKind
+}
+
+// isOwnerNotFound reports whether err is one of the owner-kind not-found
+// sentinels ownerArcValue can return. Several read paths that build SQL on the
+// owner arc (current_values.go's latestValue, settlement.go's settleCheck and
+// latestMetricValue) fold this back into their old "nothing yet" result: an
+// unknown owner's name used to resolve an inline subquery to no match,
+// silently, and a caller that never had to handle a hard not-found error here
+// must not start seeing one just because the resolution moved from a
+// same-query subquery to an up-front resolve.
+func isOwnerNotFound(err error) bool {
+	return errors.Is(err, ErrComponentNotFound) || errors.Is(err, ErrSystemNotFound) ||
+		errors.Is(err, ErrLocationNotFound) || errors.Is(err, ErrNodeNotFound)
+}
+
+// The three tree kinds resolve through scopedByNameInScope, not
+// scopedByName-then-inScopeTree: architect ruling 2 (#627, "scope decides
+// before ambiguity does") requires ambiguity to be judged inside s, not
+// estate-wide, because ownerInScope's own read scope s is right here to
+// filter with. errAsNotFound preserves the exact external contract (false,
+// nil for "exists but outside s", matching the pre-#627 shape every caller
+// already converts to its own not-found sentinel) while still letting a
+// genuine in-scope collision surface as *ErrAmbiguousName rather than being
+// swallowed into a false negative.
+func errAsNotFound(err, notFound error) (bool, error) {
+	if errors.Is(err, notFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func (p *PG) ownerInScope(ctx context.Context, q querier, ownerKind, ownerID string, s scope.Set) (bool, error) {
 	switch ownerKind {
 	case "component":
-		c, err := scopedByName(ctx, q, componentConfig, ownerID)
-		if err != nil {
-			return false, err
-		}
-		return inScopeTree(ctx, q, componentTable, c.ID, s)
+		_, err := scopedByNameInScope(ctx, q, componentConfig, ownerID, ownerKind, s)
+		return errAsNotFound(err, ErrComponentNotFound)
 	case "system":
-		sys, err := scopedByName(ctx, q, systemConfig, ownerID)
-		if err != nil {
-			return false, err
-		}
-		return inScopeTree(ctx, q, systemTable, sys.ID, s)
+		_, err := scopedByNameInScope(ctx, q, systemConfig, ownerID, ownerKind, s)
+		return errAsNotFound(err, ErrSystemNotFound)
 	case "location":
-		l, err := scopedByName(ctx, q, locationConfig, ownerID)
-		if err != nil {
-			return false, err
-		}
-		return inScopeTree(ctx, q, locationTable, l.ID, s)
+		_, err := scopedByNameInScope(ctx, q, locationConfig, ownerID, ownerKind, s)
+		return errAsNotFound(err, ErrLocationNotFound)
 	case "node":
 		// A node is not a scope tree, so existence is the whole check.
 		var exists bool
@@ -502,22 +588,23 @@ func mapPropertyWriteErr(err error) error {
 	return fmt.Errorf("storage: set property value: %w", err)
 }
 
-// componentIDResolved resolves a component by name to its id and reports whether it
-// falls within the given scope. An absent component is always ErrComponentNotFound
-// (nothing to disclose); an existing but out-of-scope component is returned with
-// inScope=false so each caller picks its own sentinel: the write path forbids, the
-// non-disclosing read path 404s. It runs on any querier so it works standalone or
-// inside a transaction.
+// componentIDResolved resolves a component by name to its id and reports whether
+// it falls within the given scope, judging ambiguity inside s (ruling 2, #627):
+// absent, or present but entirely outside s, is the same (id="", inScope=false,
+// err=nil), matching ownerInScope's shape; a genuine collision within s is
+// *ErrAmbiguousName. It runs on any querier so it works standalone or inside a
+// transaction. Unreached today (no caller); kept consistent with ownerInScope
+// so the next caller does not have to rediscover the scope-blind version's
+// disclosure bug.
 func (p *PG) componentIDResolved(ctx context.Context, q querier, name string, s scope.Set) (id string, inScope bool, err error) {
-	c, err := scopedByName(ctx, q, componentConfig, name)
-	if err != nil {
-		return "", false, err // ErrComponentNotFound when absent
+	c, err := scopedByNameInScope(ctx, q, componentConfig, name, "component", s)
+	if errors.Is(err, ErrComponentNotFound) {
+		return "", false, nil
 	}
-	in, err := inScopeTree(ctx, q, componentTable, c.ID, s)
 	if err != nil {
 		return "", false, err
 	}
-	return c.ID, in, nil
+	return c.ID, true, nil
 }
 
 // copyRaw returns a private copy of a jsonb column, or nil for a SQL NULL, so the

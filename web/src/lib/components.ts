@@ -12,15 +12,32 @@ export type Component = {
   name: string;
   display_name?: string;
   location?: string;
+  // location_id is the location's uuid, the stable handle the tree builder
+  // keys and resolves on (#627: name uniqueness is scoped to placement, so
+  // two components can now legally share a name and only the uuid tells them
+  // apart).
+  location_id?: string;
   parent?: string;
+  parent_id?: string;
   // The name of the component's primary system, its default when no system is
   // named, and how many it belongs to in total. Derived from membership: a
   // component can be in several, so there is no single pointer to read.
   system?: string;
+  system_id?: string;
   system_count: number;
   product_id?: string;
   // The product's name, the display handle beside the uuid product_id.
   product?: string;
+  // Whether the platform picked this name (a server-side generator) rather
+  // than an operator typing it.
+  name_generated?: boolean;
+  // path/path_segments/renders (#627 Task 15): the dotted address and its two
+  // display-only compact forms, set on a GET or LIST response (empty on a
+  // create/update/move/rename/resetName response; a subsequent list refetch
+  // fills it).
+  path?: string;
+  path_segments?: string[];
+  renders?: { dash: string; bare: string };
   actions?: string[];
   effective_tags?: Record<string, string>;
 };
@@ -40,7 +57,12 @@ export async function getComponent(name: string): Promise<Component> {
 }
 
 export type CreateComponent = {
-  name: string;
+  // Optional (#627 Task 14): omit it and the platform mints "<stem>-<n>" from
+  // the classified product's component_type. The console create form still
+  // always sends one today (a later task optionalises the field itself); this
+  // type just follows the API contract, which the CLI and a direct API caller
+  // can already leave blank.
+  name?: string;
   display_name?: string;
   parent?: string;
   system?: string;
@@ -73,10 +95,25 @@ export async function renameComponent(name: string, to: string): Promise<Compone
   return data as Component;
 }
 
+// resetComponentName hands the pen back to the platform (#627 Task 15):
+// regenerates the name from the component's current type and placement and
+// marks name_generated, whether or not it already was. Gated by
+// component:rename, the same token :rename uses.
+export async function resetComponentName(name: string): Promise<Component> {
+  const { data, error } = await api.POST("/components/{name}:resetName", { params: { path: { name } } });
+  if (error) throw error;
+  return data as Component;
+}
+
 export type NameCheck = { valid: boolean; available: boolean; reason?: string };
 
-export async function checkComponentName(name: string): Promise<NameCheck> {
-  const { data, error } = await api.POST("/components:checkName", { body: { name } });
+// checkComponentName checks availability against a placement bucket (#627:
+// name uniqueness is scoped to placement, not the whole estate), the same
+// one CreateComponent resolves into: parent wins over location, and neither
+// means the unplaced/root bucket. A rename check passes the component's OWN
+// current placement, since a rename does not move it.
+export async function checkComponentName(name: string, parent?: string, location?: string): Promise<NameCheck> {
+  const { data, error } = await api.POST("/components:checkName", { body: { name, parent, location } });
   if (error) throw error;
   return data as NameCheck;
 }

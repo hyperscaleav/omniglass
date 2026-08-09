@@ -11,11 +11,17 @@ import {
   systemMembersKey,
   type Member,
 } from "../lib/members";
-import { systemRolesKey } from "../lib/system_roles";
+import { roleByComponent, systemRoles, systemRolesKey } from "../lib/system_roles";
+import { systemHealthKey } from "../lib/health";
 
 // MembersPanel lists the components bound into a system. MEMBERSHIP is the
 // attachment and a ROLE is what it does, so this panel answers "what is in this
-// room" while the Roles panel below answers "what job does each one hold".
+// room" while the Roles panel below answers "what job does each one hold". This
+// is the by-DEVICE lens on that same fact, the pivot of the Roles panel's
+// by-ROLE one: it starts from every member instead of every role, so a member
+// holding no role is not merely representable but the DEFAULT case for a row
+// this panel already renders, no separate endpoint needed (roleByComponent
+// pivots the same systemRoles read the Roles panel already fetches).
 //
 // The two are deliberately not the same list. Every component staffing a role here
 // is a member (assignment creates the binding, so they can never disagree), but a
@@ -44,6 +50,11 @@ export default function MembersPanel(props: {
     refetchOnWindowFocus: false,
   }));
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
+  // The by-role read, pivoted: which role (if any) each member fills here.
+  // No new endpoint (internal/api/roles.go registers only the two arcs and
+  // there is no reverse route); roleByComponent does the pivot in the client.
+  const rolesQ = useQuery(() => ({ queryKey: systemRolesKey(props.system), queryFn: () => systemRoles(props.system), refetchOnWindowFocus: false }));
+  const roleOf = createMemo(() => roleByComponent(rolesQ.data ?? []));
 
   const members = createMemo<Member[]>(() => q.data ?? []);
   const [picked, setPicked] = createSignal("");
@@ -59,13 +70,17 @@ export default function MembersPanel(props: {
     return (components.data ?? []).filter((c) => !held.has(c.name));
   });
 
-  // Both caches move on a write: removing a member cannot change staffing (the
-  // server refuses while a role is held), but adding one changes who the roles
-  // panel can offer.
+  // All three caches move on a write: removing a member cannot change staffing
+  // (the server refuses while a role is held), but adding one changes who the
+  // roles panel can offer, and the health read (whose short/spare/impact are
+  // RolesPanel's primary readout since task 9) is invalidated alongside it so
+  // a change here never leaves those badges looking stale on the sibling
+  // panel (task 9 review, finding C6).
   const refresh = async () => {
     await Promise.all([
       qc.invalidateQueries({ queryKey: key() }),
       qc.invalidateQueries({ queryKey: systemRolesKey(props.system) }),
+      qc.invalidateQueries({ queryKey: systemHealthKey(props.system) }),
     ]);
   };
 
@@ -123,6 +138,15 @@ export default function MembersPanel(props: {
                     </span>
                   </Show>
                 </div>
+                {/* The by-device pivot: what job (if any) this member holds
+                    here. A member holding none is not an omission, it is the
+                    case membership exists to keep accounted for. */}
+                <Show
+                  when={roleOf().get(m.component)}
+                  fallback={<span class="shrink-0 text-[10.5px] italic text-base-content/35">no role</span>}
+                >
+                  {(role) => <span class="badge badge-ghost badge-sm shrink-0">fills {role().display_name || role().name}</span>}
+                </Show>
                 <Show when={props.canUpdate}>
                   <Button
                     intent="quiet"
@@ -151,7 +175,12 @@ export default function MembersPanel(props: {
             onChange={(e) => setPicked(e.currentTarget.value)}
           >
             <option value="">Add a component...</option>
-            <For each={addable()}>{(c) => <option value={c.name}>{c.name}</option>}</For>
+            {/* The uuid, not the name (#627 review, the pre-existing
+                surface): addMember resolves the component estate-wide via
+                scopedByName (internal/api/members.go), which dual-accepts a
+                uuid unambiguously (ADR-0062) but 409s an estate-wide-
+                ambiguous name regardless of this system's own scope. */}
+            <For each={addable()}>{(c) => <option value={c.id}>{c.name}</option>}</For>
           </select>
           <Button
             size="sm"

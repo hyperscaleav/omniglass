@@ -9,6 +9,19 @@ export type Location = {
   display_name?: string;
   location_type: string;
   parent?: string;
+  // parent_id is the parent's uuid, the stable handle the tree builder keys
+  // and resolves on (#627: name uniqueness is scoped to placement, so two
+  // locations can now legally share a name under different parents and only
+  // the uuid tells them apart).
+  parent_id?: string;
+  // path/path_segments/renders (#627 Task 15): the dotted address (no
+  // accessor; a location's own address IS its location-tree ancestor chain)
+  // and its two display-only compact forms, set on a GET or LIST response
+  // (empty on a create/update/move/rename response; a subsequent list
+  // refetch fills it).
+  path?: string;
+  path_segments?: string[];
+  renders?: { dash: string; bare: string };
   actions?: string[];
   effective_tags?: Record<string, string>;
 };
@@ -47,10 +60,6 @@ export async function createLocation(body: CreateLocation): Promise<Location> {
 export type UpdateLocation = {
   display_name?: string;
   location_type?: string;
-  // Re-parents the location (a tree move) to this location name. Omit to leave
-  // the parent unchanged; moving to root (no parent) is not supported this
-  // slice (mirrors storage.LocationPatch.ParentName).
-  parent?: string;
 };
 
 export async function updateLocation(name: string, body: UpdateLocation): Promise<Location> {
@@ -68,10 +77,25 @@ export async function renameLocation(name: string, to: string): Promise<Location
   return data as Location;
 }
 
+// A move (re-parent) is its own call too, not a field on the patch body (#627):
+// the API gates it with `location:move` rather than `location:update`, because a
+// placement change is an authorization act. Moving to root is not supported: the
+// server 422s an omitted or empty parent, so parent is required here, not
+// optional the way the retired UpdateLocation.parent used to be.
+export async function moveLocation(name: string, parent: string): Promise<Location> {
+  const { data, error } = await api.POST("/locations/{name}:move", { params: { path: { name } }, body: { parent } });
+  if (error) throw error;
+  return data as Location;
+}
+
 export type NameCheck = { valid: boolean; available: boolean; reason?: string };
 
-export async function checkLocationName(name: string): Promise<NameCheck> {
-  const { data, error } = await api.POST("/locations:checkName", { body: { name } });
+// checkLocationName checks availability against a placement bucket (#627:
+// name uniqueness is scoped to placement, not the whole estate): under the
+// given parent, or among roots when parent is omitted. A rename check
+// passes the location's OWN current parent, since a rename does not move it.
+export async function checkLocationName(name: string, parent?: string): Promise<NameCheck> {
+  const { data, error } = await api.POST("/locations:checkName", { body: { name, parent } });
   if (error) throw error;
   return data as NameCheck;
 }

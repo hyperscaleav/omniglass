@@ -97,20 +97,37 @@ func (p *PG) InsertMetricSamples(ctx context.Context, evs []MetricSampleWrite) e
 
 // LatestMetric returns the most recent metric row for a component and key, or
 // nil if none. Read helper for the component reachability panel and tests.
-func (p *PG) LatestMetric(ctx context.Context, componentName, key string) (*MetricSample, error) {
+// componentRef is resolved once (name or uuid, ADR-0062) rather than left for
+// the query to re-derive an id from a name a second row might now share (#627).
+// An unknown component folds into the same nil-no-error "nothing yet" result
+// the old inline subquery gave (it resolved to no id, which matched no metric
+// row): this read backs the ingest-side transition guard
+// (bus.dedupeProperties's LatestProperty sibling), where any error leaves a
+// telemetry message unacked for redelivery, so an unrecognized owner must stay
+// silent here rather than start rejecting live ingest traffic that used to be
+// silently accepted as "no prior value". ErrAmbiguousName, which could not
+// have occurred before scoped uniqueness exists, is not folded in: it is new
+// information a caller that reaches this world needs.
+func (p *PG) LatestMetric(ctx context.Context, componentRef, key string) (*MetricSample, error) {
+	c, err := scopedByName(ctx, p.pool, componentConfig, componentRef)
+	if errors.Is(err, ErrComponentNotFound) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
 	var dp MetricSample
-	err := p.pool.QueryRow(ctx, `
+	err = p.pool.QueryRow(ctx, `
 		select ts, owner_kind,
 			(select m.name from metric_type m where m.id = metric.metric_type_id), instance, value, provenance, source
 		from metric
-		where component_id = (select id from component where name = $1)
+		where component_id = $1::uuid
 		  and metric_type_id = (select id from metric_type where name = $2)
 		order by ts desc
-		limit 1`, componentName, key).Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source)
+		limit 1`, c.ID, key).Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	} else if err != nil {
-		return nil, fmt.Errorf("storage: latest metric %s/%s: %w", componentName, key, err)
+		return nil, fmt.Errorf("storage: latest metric %s/%s: %w", componentRef, key, err)
 	}
 	return &dp, nil
 }
@@ -120,20 +137,28 @@ func (p *PG) LatestMetric(ctx context.Context, componentName, key string) (*Metr
 // (tcp-open, icmp-reachable, and their rtt/connect_time companions) are
 // per-interface instance, so the layer signals must resolve one interface's
 // latest value, not the newest across every interface as LatestMetric does.
-func (p *PG) LatestMetricInstance(ctx context.Context, componentName, key, instance string) (*MetricSample, error) {
+func (p *PG) LatestMetricInstance(ctx context.Context, componentRef, key, instance string) (*MetricSample, error) {
+	// See LatestMetric: an unknown component folds into nil-no-error, matching
+	// the old inline subquery's silent no-match.
+	c, err := scopedByName(ctx, p.pool, componentConfig, componentRef)
+	if errors.Is(err, ErrComponentNotFound) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
 	var dp MetricSample
-	err := p.pool.QueryRow(ctx, `
+	err = p.pool.QueryRow(ctx, `
 		select ts, owner_kind,
 			(select m.name from metric_type m where m.id = metric.metric_type_id), instance, value, provenance, source
 		from metric
-		where component_id = (select id from component where name = $1)
+		where component_id = $1::uuid
 		  and metric_type_id = (select id from metric_type where name = $2) and instance = $3
 		order by ts desc
-		limit 1`, componentName, key, instance).Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source)
+		limit 1`, c.ID, key, instance).Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	} else if err != nil {
-		return nil, fmt.Errorf("storage: latest metric %s/%s[%s]: %w", componentName, key, instance, err)
+		return nil, fmt.Errorf("storage: latest metric %s/%s[%s]: %w", componentRef, key, instance, err)
 	}
 	return &dp, nil
 }

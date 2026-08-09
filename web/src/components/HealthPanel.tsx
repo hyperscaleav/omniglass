@@ -5,15 +5,16 @@ import HealthHistory from "./HealthHistory";
 import { ChevronRight } from "./icons";
 import { describeError } from "../lib/format";
 import {
+  activeRoles as activeRolesOf,
   causes,
   chainSentence,
   holdingRoles,
   impactPhrase,
   impairedRoles,
+  inactiveRoles as inactiveRolesOf,
   locationHealth,
   locationHealthKey,
   quorumLabel,
-  roles as rolesOf,
   systemHealth,
   systemHealthKey,
   systems as systemsOf,
@@ -21,6 +22,8 @@ import {
   type Cause,
   type HealthRole,
 } from "../lib/health";
+import { SYSTEMS_KEY, listSystems } from "../lib/systems";
+import { hueFor } from "../lib/system_color";
 
 // The reconciliation panel: the point of the health slice, and the one surface that
 // has to answer "why is this degraded" without sending the operator anywhere else.
@@ -30,14 +33,17 @@ import {
 // reasoning. This panel names the whole chain instead, in the order it actually
 // runs:
 //
-//   an ALARM on a component  ->  the CAPABILITY it degrades  ->  the ROLE that
-//   falls below quorum  ->  what that role CONTRIBUTES  ->  this verdict
+//   an ALARM on a component  ->  the COMPONENT going down (#626: wholesale, not
+//   per named capability)  ->  the ROLE that falls below quorum  ->  what that
+//   role CONTRIBUTES  ->  this verdict
 //
 // Every link is a real API field, joined here and nowhere else: the role's
-// `degraded` list is the capabilities an alarm took away, and the role's `alarms`
-// are the alarms that took them. The verdict itself is never recomputed in the
-// browser; the server sends it and the panel shows its derivation, so the console
-// and the API can never disagree about whether a room is out.
+// `down` list is the assigned components whose own verdict is outage (a
+// merely degraded one still occupies its slot), and the role's `alarms` are
+// the active alarms on those. The verdict itself is
+// never recomputed in the browser; the server sends it and the panel shows its
+// derivation, so the console and the API can never disagree about whether a
+// room is out.
 
 const SEVERITY: Record<string, string> = { critical: "badge-error", warning: "badge-warning", info: "badge-info" };
 const severityBadge = (s: string) => SEVERITY[s] ?? "badge-ghost";
@@ -46,7 +52,7 @@ const IMPACT: Record<string, string> = { outage: "badge-error", degraded: "badge
 const impactBadge = (i: string) => IMPACT[i] ?? "badge-ghost";
 
 // One labelled link of the chain. The caption is what makes the row teach: the
-// operator learns the vocabulary (capability, quorum, impact) by reading their own
+// operator learns the vocabulary (occupies, quorum, impact) by reading their own
 // outage in it.
 function Step(props: { caption: string; children: JSX.Element }) {
   return (
@@ -65,8 +71,8 @@ function Arrow() {
   );
 }
 
-// ChainRow draws one full causal chain: the alarms that took a single required
-// capability away, that capability, the role it pushed below quorum, and what the
+// ChainRow draws one full causal chain: the alarms that took a single assigned
+// component down, that component, the role it pushed below quorum, and what the
 // role contributes to the system.
 function ChainRow(props: { cause: Cause; role: HealthRole; onOpenComponent?: (name: string) => void }) {
   const r = () => props.role;
@@ -75,7 +81,7 @@ function ChainRow(props: { cause: Cause; role: HealthRole; onOpenComponent?: (na
       <Step caption="Alarm on a component">
         <Show
           when={props.cause.alarms.length}
-          fallback={<span class="text-[11.5px] italic text-base-content/45">no alarm names this capability</span>}
+          fallback={<span class="text-[11.5px] italic text-base-content/45">no active alarm names it</span>}
         >
           <For each={props.cause.alarms}>
             {(a) => (
@@ -102,9 +108,9 @@ function ChainRow(props: { cause: Cause; role: HealthRole; onOpenComponent?: (na
         </Show>
       </Step>
       <Arrow />
-      <Step caption="Capability degraded">
-        <span class="badge badge-error badge-soft badge-sm w-fit font-data">{props.cause.capability}</span>
-        <span class="text-[11px] text-base-content/45">the role requires it, this component no longer provides it</span>
+      <Step caption="Component down">
+        <span class="badge badge-error badge-soft badge-sm w-fit font-data">{props.cause.component}</span>
+        <span class="text-[11px] text-base-content/45">its own verdict is outage, so it no longer occupies this slot</span>
       </Step>
       <Arrow />
       <Step caption="Role below quorum">
@@ -121,12 +127,11 @@ function ChainRow(props: { cause: Cause; role: HealthRole; onOpenComponent?: (na
 }
 
 // ImpairedRole is one block of the reconciliation: the role, the one-line claim,
-// then a chain per capability an alarm took away, then what the role requires and
-// who fills it.
+// then a chain per assigned component an alarm took down, then who is assigned.
 function ImpairedRole(props: { role: HealthRole; verdict: string; onOpenComponent?: (name: string) => void }) {
   const r = () => props.role;
   const chains = createMemo(() => causes(r()));
-  const degraded = () => new Set(r().degraded ?? []);
+  const down = () => new Set(r().down ?? []);
   return (
     <div class="flex flex-col gap-2 px-3 py-3">
       <div class="flex flex-wrap items-baseline gap-2">
@@ -155,33 +160,21 @@ function ImpairedRole(props: { role: HealthRole; verdict: string; onOpenComponen
       </Show>
 
       <div class="flex flex-wrap items-center gap-1.5">
-        <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">requires</span>
-        <Show
-          when={(r().required ?? []).length}
-          fallback={<span class="text-[11px] italic text-base-content/40">nothing: any component can fill it</span>}
-        >
-          <For each={r().required ?? []}>
-            {(c) => (
-              <span
-                class={`badge badge-sm font-data ${degraded().has(c) ? "badge-error badge-soft" : "badge-ghost"}`}
-                title={degraded().has(c) ? "An active alarm has taken this away" : "Still provided"}
-              >
-                {c}
-                <Show when={degraded().has(c)}> degraded</Show>
-              </span>
-            )}
-          </For>
-        </Show>
-      </div>
-
-      <div class="flex flex-wrap items-center gap-1.5">
         <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">assigned</span>
         <Show
           when={(r().assigned_to ?? []).length}
           fallback={<span class="text-[11px] italic text-base-content/40">nobody yet</span>}
         >
           <For each={r().assigned_to ?? []}>
-            {(c) => <span class="badge badge-outline badge-sm font-data">{c}</span>}
+            {(c) => (
+              <span
+                class={`badge badge-sm font-data ${down().has(c) ? "badge-error badge-soft" : "badge-outline"}`}
+                title={down().has(c) ? "An active alarm has taken this component down" : "Occupying its slot"}
+              >
+                {c}
+                <Show when={down().has(c)}> down</Show>
+              </span>
+            )}
           </For>
         </Show>
       </div>
@@ -200,7 +193,12 @@ export default function SystemHealthPanel(props: { system: string; onOpenCompone
   const verdict = () => q.data?.verdict ?? "";
   const impaired = createMemo(() => impairedRoles(q.data));
   const holding = createMemo(() => holdingRoles(q.data));
-  const all = createMemo(() => rolesOf(q.data));
+  // ACTIVE roles only: a role whose choice was answered by a different
+  // alternate is neither impaired nor holding for this system, so it must
+  // not inflate either count (see health.ts's own header note on why every
+  // derivation here reads through activeRoles rather than the raw list).
+  const all = createMemo(() => activeRolesOf(q.data));
+  const inactive = createMemo(() => inactiveRolesOf(q.data));
 
   return (
     <div class="flex flex-col gap-2">
@@ -221,8 +219,9 @@ export default function SystemHealthPanel(props: { system: string; onOpenCompone
       <Show when={q.data}>
         {/* The model, stated once, so the blocks below are read as its instances. */}
         <p class="text-[11px] text-base-content/50">
-          An alarm on a component degrades a capability. A role that requires that capability can no longer be filled by
-          that component, and drops below its quorum. The system takes the worst impact among its impaired roles.
+          An alarm degrades a component's own verdict wholesale; a critical one takes it to outage. Only then does a
+          role that component fills stop counting it toward quorum, and can drop below it. The system takes the
+          worst impact among its impaired roles.
         </p>
 
         <Show
@@ -270,6 +269,27 @@ export default function SystemHealthPanel(props: { system: string; onOpenCompone
               </For>
             </div>
           </Show>
+
+          {/* A role can belong to a choice (#626, an exclusive-or group such
+              as an all-in-one alternate versus a component-built one) and
+              still read impaired on its own terms while its ACTIVE flag is
+              false: a different alternate answered the choice, so this
+              role's own figures did not move the verdict above. Named, not
+              hidden, so the console does not silently drop what an unbuilt
+              alternate would still need. */}
+          <Show when={inactive().length}>
+            <div class="flex flex-wrap items-center gap-1.5">
+              <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">not counted</span>
+              <For each={inactive()}>
+                {(r) => (
+                  <span class="badge badge-ghost badge-sm gap-1" title={`${r.display_name || r.name} belongs to ${r.choice}/${r.alternate}, a choice a different alternate answered`}>
+                    {r.display_name || r.name}
+                  </span>
+                )}
+              </For>
+              <span class="text-[10.5px] text-base-content/40">a different alternate answered their choice</span>
+            </div>
+          </Show>
         </Show>
 
         <HealthHistory transitions={transitionsOf(q.data)} verdict={verdict()} />
@@ -288,6 +308,12 @@ export function LocationHealthPanel(props: { location: string; onOpenSystem?: (n
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   }));
+  // The health read serves a system by name only; its colour dot needs the
+  // uuid hueFor hashes, so this cross-references the systems list (already
+  // cached by every page that lists or opens a system, so this is rarely a
+  // fresh fetch in practice).
+  const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
+  const idOf = createMemo(() => new Map((systems.data ?? []).map((s) => [s.name, s.id] as const)));
   const verdict = () => q.data?.verdict ?? "";
   const beneath = createMemo(() => systemsOf(q.data));
   const worst = createMemo(() => beneath().find((s) => s.verdict === verdict()));
@@ -337,6 +363,9 @@ export function LocationHealthPanel(props: { location: string; onOpenSystem?: (n
                   when={props.onOpenSystem}
                   fallback={
                     <div class="flex items-center gap-2.5 px-3 py-2">
+                      <Show when={idOf().get(s.name)}>
+                        {(id) => <span class="og-system-dot shrink-0" style={{ "--sys-h": String(hueFor(id())) }} />}
+                      </Show>
                       <span class="min-w-0 flex-1 truncate font-data text-sm">{s.name}</span>
                       <HealthBadge verdict={s.verdict} />
                     </div>
@@ -347,6 +376,9 @@ export function LocationHealthPanel(props: { location: string; onOpenSystem?: (n
                     class="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-base-content/5"
                     onClick={() => props.onOpenSystem!(s.name)}
                   >
+                    <Show when={idOf().get(s.name)}>
+                      {(id) => <span class="og-system-dot shrink-0" style={{ "--sys-h": String(hueFor(id())) }} />}
+                    </Show>
                     <span class="min-w-0 flex-1 truncate font-data text-sm">{s.name}</span>
                     <HealthBadge verdict={s.verdict} />
                     <ChevronRight size={14} />

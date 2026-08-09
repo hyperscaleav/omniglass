@@ -71,9 +71,11 @@ func TestRenameLocation(t *testing.T) {
 		t.Fatalf("old name should be free after rename: %v", err)
 	}
 
-	// Renaming onto a taken name -> ErrLocationExists (the API's 409).
-	if _, err := gw.RenameLocation(ctx, "", "hq-root-renamed", "hq-root", all, all); !errors.Is(err, storage.ErrLocationExists) {
-		t.Fatalf("dup rename err = %v, want ErrLocationExists", err)
+	// Renaming onto a taken name -> ErrLocationExistsAtRoot (the API's 409):
+	// both hq-root-renamed and the reused hq-root are roots (no parent), so
+	// this collides in location_root_name_key.
+	if _, err := gw.RenameLocation(ctx, "", "hq-root-renamed", "hq-root", all, all); !errors.Is(err, storage.ErrLocationExistsAtRoot) {
+		t.Fatalf("dup rename err = %v, want ErrLocationExistsAtRoot", err)
 	}
 
 	// Bad slug -> ErrInvalidEntityName (before touching the DB).
@@ -97,11 +99,11 @@ func TestRenameLocation(t *testing.T) {
 		t.Fatalf("bad-format create err = %v, want ErrInvalidEntityName", err)
 	}
 
-	// LocationNameTaken is scope-blind existence.
-	if taken, err := gw.LocationNameTaken(ctx, newName); err != nil || !taken {
+	// LocationNameTaken checks the root bucket here: hq-root has no parent.
+	if taken, err := gw.LocationNameTaken(ctx, newName, nil); err != nil || !taken {
 		t.Fatalf("LocationNameTaken(%q) = %v,%v want true,nil", newName, taken, err)
 	}
-	if taken, err := gw.LocationNameTaken(ctx, "nope-not-here"); err != nil || taken {
+	if taken, err := gw.LocationNameTaken(ctx, "nope-not-here", nil); err != nil || taken {
 		t.Fatalf("LocationNameTaken(free) = %v,%v want false,nil", taken, err)
 	}
 

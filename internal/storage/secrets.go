@@ -560,8 +560,15 @@ order by r.name, r.band desc, r.depth asc`
 
 // resolveSecretOwner turns an owner kind + optional name into the owning id,
 // enforcing the create scope: a platform secret needs an all create scope; a
-// scoped one resolves its owner in the matching tree and requires it within the
-// create scope. Returns a nil id for a platform owner.
+// scoped one resolves its owner in the matching tree, within the create scope
+// (resolveScopedRef, ruling 2, #627: ambiguity is judged inside create, not
+// estate-wide, so a name unique to the caller's own create scope resolves even
+// when an unrelated out-of-scope row shares it, and the resulting id is never
+// one the caller could not otherwise reach). An absent owner is
+// ErrSecretOwnerNotFound; one that exists only outside create scope is
+// ErrSecretForbidden, preserved from the pre-#627 two-step resolve rather than
+// collapsed into not-found (the caller supplied this reference itself in the
+// same request). Returns a nil id for a platform owner.
 func (p *PG) resolveSecretOwner(ctx context.Context, q querier, kind string, name *string, create scope.Set) (*string, error) {
 	if kind == "platform" {
 		if !create.All {
@@ -579,13 +586,13 @@ func (p *PG) resolveSecretOwner(ctx context.Context, q querier, kind string, nam
 	switch kind {
 	case "component":
 		var c *Component
-		c, err = scopedByName(ctx, q, componentConfig, *name)
+		c, err = resolveScopedRef(ctx, q, componentConfig, *name, "secret", create)
 		if c != nil {
 			id = c.ID
 		}
 	case "location":
 		var l *Location
-		l, err = scopedByName(ctx, q, locationConfig, *name)
+		l, err = resolveScopedRef(ctx, q, locationConfig, *name, "secret", create)
 		if l != nil {
 			id = l.ID
 		}
@@ -593,18 +600,13 @@ func (p *PG) resolveSecretOwner(ctx context.Context, q querier, kind string, nam
 		return nil, ErrSecretOwnerNotFound
 	}
 	if err != nil {
+		if errors.Is(err, ErrComponentForbidden) || errors.Is(err, ErrLocationForbidden) {
+			return nil, ErrSecretForbidden
+		}
 		if errors.Is(err, ErrComponentNotFound) || errors.Is(err, ErrSystemNotFound) || errors.Is(err, ErrLocationNotFound) {
 			return nil, ErrSecretOwnerNotFound
 		}
 		return nil, err
-	}
-	tbl, _ := scopeKindTable(kind)
-	inScope, err := inScopeTree(ctx, q, tbl, id, create)
-	if err != nil {
-		return nil, err
-	}
-	if !inScope {
-		return nil, ErrSecretForbidden
 	}
 	return &id, nil
 }

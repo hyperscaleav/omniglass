@@ -15,18 +15,22 @@ import (
 // A rename moves the name and never the id, which is why every reference stores the
 // id and why an audit row keys on it.
 //
-// This is the ENTITY name rule: one segment, no dot. The other rule, the keyspace
-// one, is the same character set joined by dots (`icmp-rtt-avg`). They are two rules
-// and ONE validator: storage.ValidateName picks between them from the table's
-// declared identity shape (identity_shape.go), so a call site cannot pick the wrong
-// rule or forget to pick at all.
+// The name rule itself, what it applies to, and why there is exactly one of it now
+// (not two) live in name_rule.go, not here: this file owns the rule's regular
+// expression and the uuid disambiguation, not its rationale restated a second time.
 //
-// An earlier version of this comment said the two rules carried different character
-// sets and that a keyspace key legitimately carried an underscore. Neither was true:
-// the character sets were unified, and no rule here has ever admitted an underscore.
-//
-// The word **segment** means one dot-separated component of a name. A segment is a
-// position in a path; a name is the value at one.
+// The word **segment** means one dot-separated component of a #627 dotted ADDRESS
+// (`boi.17c.$comp.display-1`), never of a name: #586 backfilled the last dotted name
+// (a keyspace catalog key) dot-free before this branch existed, and no name has held
+// one since (name_rule.go). An address is a reference that concatenates several
+// individually-valid single-segment names; it is resolved, never stored. Why
+// the rule below is an allowlist rather than a denylist, and why that is what lets
+// one grammar render as a CLI argument, a REST path, or a NATS subject with no
+// escaping (a DNS label and an email localpart too, for a segment that also fits
+// the 63-octet ceiling and does not end in the hyphen this rule alone permits), is
+// recorded in
+// [ADR-0089](https://docs.omniglass.hyperscaleav.com/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup),
+// not restated here.
 
 // ErrInvalidEntityName is returned when a proposed name does not match the entity
 // name rule. The API maps it to 422.
@@ -40,14 +44,13 @@ var ErrEntityNameIsUUID = errors.New("storage: entity name may not be a uuid")
 
 // entityNameRe is the entity name rule: lowercase letters and digits and hyphens,
 // starting with a letter or digit. Shared by create and rename so both surfaces
-// agree; mirrored client-side for the inline check.
-//
-// The exclusions carry weight beyond tidiness. It rejects `$`, which is what lets
-// the address grammar use `$comp` / `$sys` / `$role` as accessors without reserving
-// any word: a location may still legitimately take the name `sys`, because
-// `boi.17c.sys.$sys.av` cannot be misread. It rejects `.`, which would split one name
-// into two segments. And it rejects `*` and `>`, which are NATS wildcards, so a name
-// can never be mistaken for a subject pattern.
+// agree; mirrored client-side for the inline check. It excludes `$`, `.`, `*`, `>`,
+// `/`, `#`, `%`, and `:`, none of it incidental (ADR-0089): `$` is what lets the
+// address grammar use `$comp` / `$sys` / `$role` as accessors with no word reserved
+// (a location may still legitimately take the name `sys`, since `boi.17c.sys.$sys.av`
+// cannot be misread), `.` is what keeps a name to exactly one address segment, and
+// the rest are wildcards or separators in NATS, MQTT, URL escaping, and the router's
+// own `:verb` convention.
 var entityNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 // uuidRe is the exact canonical uuid shape, which the entity name rule above does NOT

@@ -88,8 +88,11 @@ func registerReachabilityRoutes(api huma.API, a *authenticator, gw storage.Gatew
 		if err != nil {
 			return nil, mapComponentErr(err)
 		}
-		ifaces, err := gw.ListComponentInterfaces(ctx, comp.Name)
+		ifaces, err := gw.ListComponentInterfaces(ctx, comp.ID)
 		if err != nil {
+			if refErr, ok := mapRefErr(err); ok {
+				return nil, refErr
+			}
 			return nil, huma.Error500InternalServerError("read reachability")
 		}
 		since := time.Now().UTC().Add(-reachHistoryWindow)
@@ -97,8 +100,18 @@ func registerReachabilityRoutes(api huma.API, a *authenticator, gw storage.Gatew
 		out.Body.Component = comp.Name
 		out.Body.Interfaces = make([]reachInterfaceBody, 0, len(ifaces))
 		for i := range ifaces {
-			row, err := composeInterface(ctx, gw, comp.Name, ifaces[i], since)
+			row, err := composeInterface(ctx, gw, comp.ID, ifaces[i], since)
 			if err != nil {
+				// mapRefErr first: comp.ID is always a uuid (GetComponent
+				// above already resolved it), so LatestProperty/
+				// LatestMetricInstance/PropertyTransitions inside
+				// composeInterface can never actually be ambiguous today,
+				// but each runs through the same bare-name resolver every
+				// other component route does, and a future caller must not
+				// silently regress to a 500 (ruling 1, #627).
+				if refErr, ok := mapRefErr(err); ok {
+					return nil, refErr
+				}
 				return nil, huma.Error500InternalServerError("read reachability")
 			}
 			out.Body.Interfaces = append(out.Body.Interfaces, row)

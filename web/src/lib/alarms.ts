@@ -4,12 +4,12 @@ import type { components } from "../api/schema.gen";
 // The alarms data layer: thin typed wrappers over the generated client, plus the
 // pure ordering and splitting the panel renders.
 //
-// An ALARM is a condition recorded on a COMPONENT, and the thing that makes it
-// more than a note is the list of CAPABILITIES it degrades. A system role that
-// requires one of those capabilities can no longer be filled by this component, so
-// the role drops below quorum and its impact becomes the system's verdict. That is
-// the whole chain: alarm on a component, capability lost, role below quorum,
-// verdict. An alarm naming no capabilities reaches no role by design.
+// An ALARM is a condition recorded on a COMPONENT, and it impairs that component's
+// own verdict wholesale (#626): any active alarm degrades it, a critical one is an
+// outage. A system role the component fills no longer counts it toward quorum
+// while it is down, so the role can drop below quorum and its impact becomes the
+// system's verdict. That is the whole chain: alarm on a component, component down,
+// role below quorum, verdict.
 //
 // Clearing keeps the row: what was wrong and when it was wrong outlives the fix,
 // which is the point of the recorded history.
@@ -35,9 +35,7 @@ export async function componentAlarms(name: string): Promise<Alarm[]> {
 export type RaiseAlarm = {
   severity: Severity;
   message?: string;
-  // The capabilities this condition takes away. Empty is legal and means the alarm
-  // reaches no role: it is recorded, but no verdict moves.
-  capabilities?: string[];
+  dedup_key?: string;
 };
 
 export async function raiseAlarm(name: string, body: RaiseAlarm): Promise<Alarm> {

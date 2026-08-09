@@ -36,21 +36,6 @@ type auditedRename struct {
 func auditedRenames() []auditedRename {
 	return []auditedRename{
 		{
-			resource: "capability",
-			create: func(ctx context.Context, gw *storage.PG, name string) (string, error) {
-				c, err := gw.CreateCapability(ctx, "", storage.Capability{Name: name, DisplayName: "X"})
-				if err != nil {
-					return "", err
-				}
-				return c.ID, nil
-			},
-			update: func(ctx context.Context, gw *storage.PG, ref string) error {
-				d := "Y"
-				_, err := gw.UpdateCapability(ctx, "", ref, storage.CapabilityPatch{DisplayName: &d})
-				return err
-			},
-		},
-		{
 			resource: "driver",
 			create: func(ctx context.Context, gw *storage.PG, name string) (string, error) {
 				d, err := gw.CreateDriver(ctx, "", storage.Driver{Name: name, DisplayName: "X"})

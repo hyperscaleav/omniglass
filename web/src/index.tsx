@@ -31,11 +31,11 @@ import CatalogShell from "./components/CatalogShell";
 import CatalogOverview from "./pages/CatalogOverview";
 import { CATALOG_STUB_PATHS } from "./lib/catalog";
 import LocationTypes from "./pages/LocationTypes";
+import ComponentTypes from "./pages/ComponentTypes";
 import SecretTypes from "./pages/SecretTypes";
 import Standards from "./pages/Standards";
 import Vendors from "./pages/Vendors";
 import Drivers from "./pages/Drivers";
-import Capabilities from "./pages/Capabilities";
 import Products from "./pages/Products";
 import Files from "./pages/Files";
 import Audit from "./pages/Audit";
@@ -78,14 +78,19 @@ render(
         <Route path="/login" component={Login} />
         <Route path="/" component={ProtectedShell}>
           <Route path="/" component={Home} />
-          {/* Inventory pages on the generic TreeList. The :name route opens the
-              same page focused on one entity (the addressable full-page detail). */}
+          {/* Inventory pages on the generic TreeList. The :id route opens the
+              same page focused on one entity (the addressable full-page detail),
+              addressed by uuid (#627 Task 15c: name uniqueness is scoped to
+              placement, so a name alone is not a reliable route param).
+              TreeList's own focus effect resolves an old name-shaped link
+              (a bookmark, or a cross-entity drill site with no id in hand)
+              through a byAddr fallback. */}
           <Route path="/locations" component={Locations} />
-          <Route path="/locations/:name" component={Locations} />
+          <Route path="/locations/:id" component={Locations} />
           <Route path="/systems" component={Systems} />
-          <Route path="/systems/:name" component={Systems} />
+          <Route path="/systems/:id" component={Systems} />
           <Route path="/components" component={Components} />
-          <Route path="/components/:name" component={Components} />
+          <Route path="/components/:id" component={Components} />
           <Route path="/nodes" component={Nodes} />
           {/* Files are a flat, tenant-wide list addressed by id (names are not
               unique across files); the :id route is the addressable full-page detail. */}
@@ -113,7 +118,7 @@ render(
             <Route path="/vendors" component={Vendors} />
             <Route path="/products" component={Products} />
             <Route path="/drivers" component={Drivers} />
-            <Route path="/capabilities" component={Capabilities} />
+            <Route path="/component-types" component={ComponentTypes} />
             <Route path="/standards" component={Standards} />
             <Route path="/location-types" component={LocationTypes} />
             <Route path="/secret-types" component={SecretTypes} />

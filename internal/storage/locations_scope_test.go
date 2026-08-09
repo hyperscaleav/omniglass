@@ -109,10 +109,11 @@ func TestLocationScopeCRUD(t *testing.T) {
 	if !errors.Is(err, storage.ErrUnknownType) {
 		t.Errorf("create unknown type = %v, want ErrUnknownType", err)
 	}
-	// A duplicate name clashes.
+	// A duplicate root name clashes (location_root_name_key): hq is already a
+	// root, and this create names no parent either.
 	_, err = gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, all)
-	if !errors.Is(err, storage.ErrLocationExists) {
-		t.Errorf("create dup name = %v, want ErrLocationExists", err)
+	if !errors.Is(err, storage.ErrLocationExistsAtRoot) {
+		t.Errorf("create dup name = %v, want ErrLocationExistsAtRoot", err)
 	}
 
 	// The writes left audit rows: 4 creates + 1 update + 1 delete = 6.

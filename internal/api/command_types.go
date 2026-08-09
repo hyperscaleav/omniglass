@@ -182,8 +182,15 @@ func registerCommandTypeRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 	})
 }
 
-// mapCommandTypeErr translates the gateway's command-type sentinels into HTTP status.
+// mapCommandTypeErr translates the gateway's command-type sentinels into HTTP
+// status. mapRefErr runs first: a command type's name stays a single global
+// token (#627 Task 12), so a dotted ref is storage.ErrAddressNotAccepted, a
+// 422 naming the kind, rather than falling through to the plain not-found
+// below.
 func mapCommandTypeErr(err error) error {
+	if refErr, ok := mapRefErr(err); ok {
+		return refErr
+	}
 	switch {
 	case errors.Is(err, storage.ErrCommandTypeNotFound):
 		return huma.Error404NotFound("command type not found")

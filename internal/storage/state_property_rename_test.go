@@ -116,7 +116,7 @@ func TestStateBecomesPropertyMigration(t *testing.T) {
 	// itself (a bool is a bool, not its text projection), and the tombstone's
 	// JSON null is a value, not SQL NULL.
 	mustExec(t, conn, `insert into property_type (name, data_type) values ('rename-prop', 'bool')`)
-	mustExec(t, conn, `insert into component (name) values ('rename-c1')`)
+	mustExec(t, conn, `insert into component (name, product_id) values ('rename-c1', (select id from product where name = 'generic-device'))`)
 	mustExec(t, conn, `
 		insert into property (owner_kind, component_id, property_type_id, instance, provenance, value)
 		values ('component', (select id from component where name = 'rename-c1'),

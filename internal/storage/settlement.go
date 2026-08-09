@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -78,16 +79,29 @@ func terminalStatus(verdict SettlementVerdict, observed *CurrentValue) string {
 // the terminal status with settled_at in the caller's transaction. A pending
 // command stays issued; a command that opened no intended row (a pre-#590
 // fire-and-forget) has nothing to wait on and settles.
+// ownerID is resolved once here, via ownerArcValue (uuid-or-name, ADR-0062;
+// ambiguity-safe for component/system/location, #627), and the resolved arc
+// threaded into latestTargetValue below rather than left for it to re-derive.
+// An unknown owner folds to "nothing to settle" (nil), matching the old inline
+// subquery's silent no-match: settleCheck runs inside IssueCommand and
+// CommandSettlement, neither of which must start hard-erroring on an owner
+// check this function never used to perform.
 func (p *PG) settleCheck(ctx context.Context, q txQuerier, ct *CommandType, ownerKind, ownerID, instance string, now time.Time) error {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {
 		return err
 	}
+	arc, err := p.ownerArcValue(ctx, q, ownerKind, ownerID)
+	if isOwnerNotFound(err) {
+		return nil
+	} else if err != nil {
+		return err
+	}
 	sql := fmt.Sprintf(`select id from command
-		where status = 'issued' and owner_kind = $1 and %s = %s
+		where status = 'issued' and owner_kind = $1 and %s = $2
 		  and command_type_id = $3 and instance = $4
-		order by id`, col, ownerArcExprN(ownerKind, 2))
-	rows, err := q.Query(ctx, sql, ownerKind, ownerID, ct.ID, instance)
+		order by id`, col)
+	rows, err := q.Query(ctx, sql, ownerKind, arc, ct.ID, instance)
 	if err != nil {
 		return fmt.Errorf("storage: settle check %s/%s: %w", ownerID, ct.Name, err)
 	}
@@ -107,7 +121,7 @@ func (p *PG) settleCheck(ctx context.Context, q txQuerier, ct *CommandType, owne
 	if len(ids) == 0 {
 		return nil
 	}
-	observed, err := p.latestTargetValue(ctx, q, ct, ownerKind, ownerID, instance, "observed")
+	observed, err := p.latestTargetValue(ctx, q, ct, ownerKind, arc, instance, "observed")
 	if err != nil {
 		return err
 	}
@@ -168,12 +182,19 @@ func (p *PG) commandIntendedValue(ctx context.Context, q querier, ct *CommandTyp
 
 // latestTargetValue reads the latest series row of a command_type's target for
 // one provenance, on whichever lane the target arc names (nil for no target).
+// ownerID here is always an already-resolved arc (a uuid), never the
+// caller's original possibly-ambiguous reference: settleCheck's own callers
+// (IssueCommand, CommandSettlement) both resolve the owner once, within
+// their own scope, before passing the arc down through settleCheck to here.
+// A uuid resolve is never ambiguous (it is a primary key lookup), so an all
+// scope is passed through rather than threading one more scope parameter
+// down a chain that never needs to narrow twice.
 func (p *PG) latestTargetValue(ctx context.Context, q querier, ct *CommandType, ownerKind, ownerID, instance, provenance string) (*CurrentValue, error) {
 	switch {
 	case ct.TargetMetricType != "":
 		return p.latestMetricValue(ctx, q, ownerKind, ownerID, ct.TargetMetricType, instance, provenance)
 	case ct.TargetPropertyType != "":
-		return p.latestValue(ctx, q, ownerKind, ownerID, ct.TargetPropertyType, instance, provenance)
+		return p.latestValue(ctx, q, ownerKind, ownerID, ct.TargetPropertyType, instance, provenance, scope.Set{All: true})
 	default:
 		return nil, nil
 	}
@@ -181,23 +202,30 @@ func (p *PG) latestTargetValue(ctx context.Context, q querier, ct *CommandType, 
 
 // latestMetricValue is latestValue's numeric-lane twin: the latest metric row by
 // (type, owner, instance, provenance), the double rendered as canonical float
-// text so the settlement comparison is float equality.
+// text so the settlement comparison is float equality. ownerID is resolved
+// once, folding an unknown owner to nil (see latestValue in current_values.go).
 func (p *PG) latestMetricValue(ctx context.Context, q querier, ownerKind, ownerID, key, instance, provenance string) (*CurrentValue, error) {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {
 		return nil, err
 	}
+	arc, err := p.ownerArcValue(ctx, q, ownerKind, ownerID)
+	if isOwnerNotFound(err) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
 	sql := fmt.Sprintf(`select value, ts, provenance from metric
-		where owner_kind = $1 and %s = %s
+		where owner_kind = $1 and %s = $2
 		  and metric_type_id = (select id from metric_type where name = $3)
 		  and instance = $4 and provenance = $5
 		order by ts desc, id desc
-		limit 1`, col, ownerArcExprN(ownerKind, 2))
+		limit 1`, col)
 	var (
 		cv CurrentValue
 		v  float64
 	)
-	err = q.QueryRow(ctx, sql, ownerKind, ownerID, key, instance, provenance).Scan(&v, &cv.TS, &cv.Provenance)
+	err = q.QueryRow(ctx, sql, ownerKind, arc, key, instance, provenance).Scan(&v, &cv.TS, &cv.Provenance)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

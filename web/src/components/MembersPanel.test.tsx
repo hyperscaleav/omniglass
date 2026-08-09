@@ -4,6 +4,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import MembersPanel from "./MembersPanel";
 import { systemMembersKey, type Member } from "../lib/members";
 import { COMPONENTS_KEY, type Component as Comp } from "../lib/components";
+import { systemRolesKey, type EffectiveRole } from "../lib/system_roles";
+import { systemHealthKey } from "../lib/health";
 import { uuidFor } from "../lib/testids";
 
 // The panel answers "what is in this system". Membership is the attachment and a
@@ -27,6 +29,17 @@ const components: Comp[] = [
   { id: uuidFor("c-4"), name: "spare-panel", display_name: "Spare Panel" },
 ] as Comp[];
 
+// The by-role read for the same system: boardroom-a-bar fills a role,
+// shared-bar and boardroom-power fill none, exactly the mix the by-device
+// pivot needs to prove (a role shown, and its absence said plainly).
+const roles: EffectiveRole[] = [
+  {
+    name: "video-bar", display_name: "Video bar", quorum: 1, impact: "outage",
+    accepted_types: [], pinned_products: [], position_labels: [], from_standard: true,
+    assigned_to: ["boardroom-a-bar"], positions: [1], assigned: 1, understaffed: 0,
+  },
+];
+
 // 204 carries no body: the Response constructor rejects one, exactly as the real
 // no-content writes return.
 function json(body: unknown, status = 200) {
@@ -37,15 +50,17 @@ function json(body: unknown, status = 200) {
   });
 }
 
-function mount(opts: { rows?: Member[]; canUpdate?: boolean } = {}) {
+function mount(opts: { rows?: Member[]; canUpdate?: boolean; roles?: EffectiveRole[] } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...systemMembersKey("boardroom-a")], opts.rows ?? members);
   qc.setQueryData([...COMPONENTS_KEY], components);
-  return render(() => (
+  qc.setQueryData([...systemRolesKey("boardroom-a")], opts.roles ?? roles);
+  const result = render(() => (
     <QueryClientProvider client={qc}>
       <MembersPanel system="boardroom-a" canUpdate={opts.canUpdate ?? true} />
     </QueryClientProvider>
   ));
+  return { ...result, qc };
 }
 
 const memberRow = (label: HTMLElement) => label.closest("div.flex-col") as HTMLElement;
@@ -60,6 +75,18 @@ describe("MembersPanel", () => {
     // The power conditioner fills no role anywhere. A staffing-only view would
     // lose it entirely, which is the reason membership is its own relation.
     expect(getByText("boardroom-power")).toBeTruthy();
+  });
+
+  // The by-device pivot (#626 Task 9): what job, if any, each member holds
+  // here, read off the same roles fetch the Roles panel uses (no reverse
+  // route exists, so this pivots the by-role read client-side).
+  it("names the role a member fills, and says plainly when it fills none", () => {
+    const { getByText } = mount();
+    expect(getByText("boardroom-a-bar").parentElement!.parentElement!.textContent).toContain("fills Video bar");
+    const sharedRow = getByText("shared-bar").parentElement!.parentElement!;
+    expect(sharedRow.textContent).toContain("no role");
+    const powerRow = getByText("boardroom-power").parentElement!.parentElement!;
+    expect(powerRow.textContent).toContain("no role");
   });
 
   // The shared device is the case a single pointer could never express, so the
@@ -93,8 +120,12 @@ describe("MembersPanel", () => {
   it("offers only components not already in this system", () => {
     const { getByLabelText } = mount();
     const opts = [...(getByLabelText("Component to add") as HTMLSelectElement).options].map((o) => o.value);
-    expect(opts).toContain("spare-panel");
-    expect(opts).not.toContain("boardroom-a-bar");
+    // Options carry the component's uuid, not its name (#627 review, the
+    // pre-existing surface: adding a member resolves the component
+    // estate-wide via scopedByName, internal/api/members.go, which 409s an
+    // estate-wide-ambiguous name regardless of this system's own scope).
+    expect(opts).toContain(uuidFor("c-4"));
+    expect(opts).not.toContain(uuidFor("c-1"));
   });
 
   // The refusal is the lesson. The server explains that the component still fills
@@ -112,12 +143,31 @@ describe("MembersPanel", () => {
   it("adds a component and refreshes", async () => {
     const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(json({}, 204));
     const { getByLabelText, getByText } = mount();
-    fireEvent.change(getByLabelText("Component to add"), { target: { value: "spare-panel" } });
+    fireEvent.change(getByLabelText("Component to add"), { target: { value: uuidFor("c-4") } });
     fireEvent.click(getByText("Add"));
     await waitFor(() => expect(spy).toHaveBeenCalled());
     // openapi-fetch calls fetch with a Request, not a bare URL string.
     const arg = spy.mock.calls[0]?.[0] as Request | string;
     const url = typeof arg === "string" ? arg : arg.url;
-    expect(url).toContain("/systems/boardroom-a/members/spare-panel");
+    expect(url).toContain(`/systems/boardroom-a/members/${uuidFor("c-4")}`);
+  });
+
+  // The health read (RolesPanel's primary readout since task 9) is
+  // invalidated alongside members and roles, not just the two this panel
+  // itself renders (task 9 review, finding C6): a membership change is
+  // staffing-relevant even though it never writes system_role_assignment
+  // directly.
+  it("invalidates the health key alongside members and roles on a write", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(json({}, 204));
+    const { qc, getByLabelText, getByText } = mount();
+    const spy = vi.spyOn(qc, "invalidateQueries");
+
+    fireEvent.change(getByLabelText("Component to add"), { target: { value: uuidFor("c-4") } });
+    fireEvent.click(getByText("Add"));
+
+    await waitFor(() => {
+      const invalidated = spy.mock.calls.map((c) => JSON.stringify((c[0] as { queryKey: unknown }).queryKey));
+      expect(invalidated).toContain(JSON.stringify(systemHealthKey("boardroom-a")));
+    });
   });
 });

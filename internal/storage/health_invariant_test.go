@@ -144,6 +144,150 @@ func TestHealthRecordsOneRowPerChange(t *testing.T) {
 	f.assertTransitionOnly(t, ctx)
 }
 
+// TestUnbuiltAlternateDoesNotImpair is the choice-bearing fixture the
+// recompute-and-compare invariant needs (#626): before splitHealthRoles
+// existed, every role of every alternate folded as an ordinary role, so an
+// all-in-one room with a satisfied video-bar still read outage over its
+// component-system alternate's five unstaffed, unbuilt roles. This is the
+// RED that caught it, and it stays as the standing regression guard: the
+// no-DB-logic rule leaves this file's recompute-and-compare as the only
+// invariant a future change to the fold has to survive, and it catches
+// nothing about alternates unless a fixture here actually has one.
+func TestUnbuiltAlternateDoesNotImpair(t *testing.T) {
+	f := newHealthFixture(t)
+	ctx := context.Background()
+
+	std := "choice-huddle"
+	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: std, DisplayName: "Choice Huddle"}); err != nil {
+		t.Fatalf("create standard: %v", err)
+	}
+	alts, err := f.gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
+		Name: "conferencing", DisplayName: "Conferencing",
+		Alternates: []storage.AlternateSpec{
+			{Name: "all-in-one", DisplayName: "All-in-one"},
+			{Name: "component-system", DisplayName: "Component System"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("seed choice: %v", err)
+	}
+
+	// All-in-one: one role, a video bar.
+	if _, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
+		Name: "conf-bar", DisplayName: "Conferencing Bar", Quorum: 1, Impact: "outage",
+		AcceptedTypes: []string{"video-bar"}, AlternateID: strp(alts["all-in-one"]),
+	}); err != nil {
+		t.Fatalf("declare all-in-one role: %v", err)
+	}
+	// Component-system: five roles, none of them ever staffed in this test,
+	// the same shape the memo's worked example carries (codec, camera, dsp,
+	// amp, mic).
+	for _, name := range []string{"conf-codec", "conf-camera", "conf-dsp", "conf-amp", "conf-mic"} {
+		if _, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
+			Name: name, DisplayName: name, Quorum: 1, Impact: "outage",
+			AlternateID: strp(alts["component-system"]),
+		}); err != nil {
+			t.Fatalf("declare component-system role %s: %v", name, err)
+		}
+	}
+
+	room := "hq-r1"
+	if _, err := f.gw.CreateSystem(ctx, "", storage.SystemSpec{
+		Name: "choice-room", StandardID: &std, LocationName: &room,
+	}, f.all); err != nil {
+		t.Fatalf("create system: %v", err)
+	}
+	// Before anything is staffed, both alternates are at zero: the choice
+	// contributes its best-satisfied (tied, so position-1) alternate's
+	// impact.
+	f.mustAgreeWithRecord(t, ctx, "choice-room", "outage")
+
+	bar := "cisco-room-bar"
+	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "choice-bar-1", ProductName: &bar}, f.all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	if err := f.gw.AssignRole(ctx, "", "choice-room", "conf-bar", "choice-bar-1", f.all); err != nil {
+		t.Fatalf("assign: %v", err)
+	}
+
+	// The all-in-one alternate is now fully satisfied. The five unbuilt
+	// component-system roles must not read as impairments of a system that
+	// chose the other way: this is the #626 defect the fold exists to close.
+	f.mustAgreeWithRecord(t, ctx, "choice-room", "healthy")
+	f.assertTransitionOnly(t, ctx)
+}
+
+// TestAlternateTieBreaksByPosition is the fix-round regression for the
+// fourth important finding: nothing at the storage tier pinned that
+// choice_alternate.position is what decides a tie, as opposed to whatever
+// order Go's map iteration inside splitHealthRoles happens to produce.
+// internal/health.Choice.Active's tie-break is deterministic (position 1
+// wins, checked with strict >), but splitHealthRoles builds its Alternates
+// slice from a map, so the ONLY thing making that determinism reach a live
+// read is the explicit sort.Slice by position; deleting it leaves the whole
+// suite green until a real tie is reached. Both alternates here are 0 of 1
+// (a genuine tie, the state every choice-bearing system starts in) and carry
+// DIFFERENT impact. b-alt is declared first (position 1, the one that must
+// win) and a-alt second (position 2, the one that must NOT win), but their
+// NAMES sort the opposite way (a-alt before b-alt alphabetically): nothing
+// about the order they were typed in, or their names, coincides with the
+// position that must actually decide the tie, so a latent bug that ordered
+// by declaration order or by name instead of by position would also be
+// caught here, not just a bug that drops the ordering guarantee entirely.
+func TestAlternateTieBreaksByPosition(t *testing.T) {
+	f := newHealthFixture(t)
+	ctx := context.Background()
+
+	std := "tie-break-huddle"
+	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: std, DisplayName: "Tie Break"}); err != nil {
+		t.Fatalf("create standard: %v", err)
+	}
+	alts, err := f.gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
+		Name: "conferencing", DisplayName: "Conferencing",
+		Alternates: []storage.AlternateSpec{
+			{Name: "b-alt", DisplayName: "B Alt"}, // position 1: must win the tie
+			{Name: "a-alt", DisplayName: "A Alt"}, // position 2: sorts first alphabetically, must NOT win
+		},
+	})
+	if err != nil {
+		t.Fatalf("seed choice: %v", err)
+	}
+	if _, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
+		Name: "b-role", DisplayName: "B Role", Quorum: 1, Impact: "degraded", AlternateID: strp(alts["b-alt"]),
+	}); err != nil {
+		t.Fatalf("declare b-role: %v", err)
+	}
+	if _, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
+		Name: "a-role", DisplayName: "A Role", Quorum: 1, Impact: "outage", AlternateID: strp(alts["a-alt"]),
+	}); err != nil {
+		t.Fatalf("declare a-role: %v", err)
+	}
+
+	room := "hq-r1"
+	if _, err := f.gw.CreateSystem(ctx, "", storage.SystemSpec{
+		Name: "tie-room", StandardID: &std, LocationName: &room,
+	}, f.all); err != nil {
+		t.Fatalf("create system: %v", err)
+	}
+
+	// Neither role is ever staffed: both alternates sit at fraction 0,
+	// tied. Position 1 (b-alt, degraded) must win, not position 2 (a-alt,
+	// outage), and it must stay that way across repeated reads: a removed
+	// sort would make this flip depending on Go's map iteration, which
+	// varies from call to call, not just from process to process.
+	for i := 0; i < 8; i++ {
+		rep, err := f.gw.SystemHealth(ctx, "tie-room", time.Time{}, f.all)
+		if err != nil {
+			t.Fatalf("system health read %d: %v", i, err)
+		}
+		if rep.Verdict != "degraded" {
+			t.Fatalf("read %d: verdict = %q, want degraded (position-1 b-alt must win the tie over a-alt's outage)",
+				i, rep.Verdict)
+		}
+	}
+	f.mustAgreeWithRecord(t, ctx, "tie-room", "degraded")
+}
+
 // TestHealthRecordsEveryRealChange is the mirror of the duplicate: a verdict that
 // really moves must always land a row. The two failure modes share a mechanism, a
 // recorded value that does not match what the roles say, so they are asserted
@@ -179,10 +323,10 @@ func TestHealthRecordsEveryRealChange(t *testing.T) {
 	}
 	f.mustAgreeWithRecord(t, ctx, "hq-boardroom", "healthy")
 
-	// An alarm that takes microphone from one bar drops room-mic to one satisfying
-	// component, below its quorum: a real change, so a real row.
+	// A critical alarm takes bar-a down, dropping room-mic to one occupant,
+	// below its quorum: a real change, so a real row.
 	alarm, err := f.gw.RaiseAlarm(ctx, "", "bar-a", storage.AlarmSpec{
-		Severity: "warning", Message: "mic array not responding", Capabilities: []string{"microphone"},
+		Severity: "critical", Message: "mic array not responding",
 	})
 	if err != nil {
 		t.Fatalf("raise alarm: %v", err)
@@ -246,8 +390,7 @@ func (f *healthFixture) pairStandard(t *testing.T, ctx context.Context, id strin
 		t.Fatalf("create standard: %v", err)
 	}
 	if _, err := f.gw.SetSystemRole(ctx, "", "standard", id, storage.SystemRoleSpec{
-		Name: "pair", DisplayName: "Pair", Quorum: 2,
-		Capabilities: []string{"microphone", "speaker"}, Impact: "degraded",
+		Name: "pair", DisplayName: "Pair", Quorum: 2, Impact: "degraded",
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}
@@ -302,15 +445,15 @@ func TestHealthConcurrentWritesRecordOneEdge(t *testing.T) {
 		a, b := system+"-a", system+"-b"
 		f.staffPair(t, ctx, std, system, a, b)
 		rooms = append(rooms, system)
-		// Both alarms take microphone, which the role requires, so each on its own
-		// already drops the role below its quorum of 2: one transition per room,
-		// whichever lands first, and nothing left for the second to record.
+		// Both alarms are critical and take their component down, so each on its
+		// own already drops the role below its quorum of 2: one transition per
+		// room, whichever lands first, and nothing left for the second to
+		// record.
 		for _, c := range []string{a, b} {
 			component := c
 			writes = append(writes, func() error {
 				_, err := f.gw.RaiseAlarm(ctx, "", component, storage.AlarmSpec{
-					Severity: "warning", Message: "mic array not responding",
-					Capabilities: []string{"microphone"},
+					Severity: "critical", Message: "mic array not responding",
 				})
 				return err
 			})
@@ -356,11 +499,12 @@ func TestHealthConcurrentOppositeWritesLeaveNoStaleRecord(t *testing.T) {
 		f.staffPair(t, ctx, std, system, a, b)
 		rooms = append(rooms, system)
 
-		// A standing alarm on one bar puts the room degraded. Clearing it is the write
-		// that says healthy, and an alarm on the other bar is the write that says
-		// degraded: run together, they disagree about what the estate is.
+		// A standing critical alarm on one bar puts the room degraded. Clearing it
+		// is the write that says healthy, and a critical alarm on the other bar is
+		// the write that says degraded: run together, they disagree about what
+		// the estate is.
 		standing, err := f.gw.RaiseAlarm(ctx, "", a, storage.AlarmSpec{
-			Severity: "warning", Message: "mic array not responding", Capabilities: []string{"microphone"},
+			Severity: "critical", Message: "mic array not responding",
 		})
 		if err != nil {
 			t.Fatalf("raise standing alarm: %v", err)
@@ -373,7 +517,7 @@ func TestHealthConcurrentOppositeWritesLeaveNoStaleRecord(t *testing.T) {
 			func() error { return f.gw.ClearAlarm(ctx, "", healed, id) },
 			func() error {
 				_, err := f.gw.RaiseAlarm(ctx, "", alarmed, storage.AlarmSpec{
-					Severity: "warning", Message: "speaker dead", Capabilities: []string{"speaker"},
+					Severity: "critical", Message: "speaker dead",
 				})
 				return err
 			})
@@ -405,62 +549,57 @@ func TestHealthInvariantAcrossEveryTrigger(t *testing.T) {
 
 	std := f.pairStandard(t, ctx, "sweep-standard")
 	f.staffPair(t, ctx, std, "sweep-sys", "sweep-a", "sweep-b")
-	bar, panel := "cisco-room-bar", "samsung-qm55"
-	empty, room2 := "", "hq-r2"
+	room2 := "hq-r2"
+	empty := ""
 	f.mustLocation(t, ctx, "hq-r2", "room", ptrStr("hq-b1"))
 
-	var alarm *storage.Alarm
+	var alarm, spareAlarm *storage.Alarm
 	for _, step := range []struct {
 		what string
 		do   func() error
 	}{
-		{"raise an alarm on a capability the role needs", func() error {
+		{"raise a critical alarm that takes an occupant down", func() error {
 			a, err := f.gw.RaiseAlarm(ctx, "", "sweep-a", storage.AlarmSpec{
-				Severity: "warning", Message: "mic dead", Capabilities: []string{"microphone"}})
+				Severity: "critical", Message: "mic dead"})
 			alarm = a
 			return err
 		}},
-		{"raise a second alarm that decides nothing", func() error {
+		{"raise a second critical alarm that decides nothing (worse-wins over the first)", func() error {
 			_, err := f.gw.RaiseAlarm(ctx, "", "sweep-a", storage.AlarmSpec{
-				Severity: "info", Message: "fan noise", Capabilities: []string{"speaker"}})
+				Severity: "critical", Message: "fan noise"})
 			return err
 		}},
-		{"clear the deciding alarm", func() error { return f.gw.ClearAlarm(ctx, "", "sweep-a", alarm.ID) }},
-		{"suppress a required capability", func() error {
-			return f.gw.SetComponentCapability(ctx, "", "sweep-b", "microphone", false)
+		{"clear the first alarm, leaving the second one still holding it down", func() error {
+			return f.gw.ClearAlarm(ctx, "", "sweep-a", alarm.ID)
 		}},
-		{"restore it", func() error { return f.gw.ClearComponentCapability(ctx, "", "sweep-b", "microphone") }},
+		{"take the spare down too, critically", func() error {
+			a, err := f.gw.RaiseAlarm(ctx, "", "sweep-b", storage.AlarmSpec{
+				Severity: "critical", Message: "spare dead"})
+			spareAlarm = a
+			return err
+		}},
+		{"restore it", func() error { return f.gw.ClearAlarm(ctx, "", "sweep-b", spareAlarm.ID) }},
 		{"unstaff the role", func() error { return f.gw.UnassignRole(ctx, "", "sweep-sys", "pair", "sweep-b", f.all) }},
 		{"staff it again", func() error { return f.gw.AssignRole(ctx, "", "sweep-sys", "pair", "sweep-b", f.all) }},
 		{"raise the quorum on the standard, moving every conforming system", func() error {
 			_, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
-				Name: "pair", DisplayName: "Pair", Quorum: 3,
-				Capabilities: []string{"microphone", "speaker"}, Impact: "outage"})
+				Name: "pair", DisplayName: "Pair", Quorum: 3, Impact: "outage"})
 			return err
 		}},
 		{"lower it back", func() error {
 			_, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
-				Name: "pair", DisplayName: "Pair", Quorum: 2,
-				Capabilities: []string{"microphone", "speaker"}, Impact: "degraded"})
+				Name: "pair", DisplayName: "Pair", Quorum: 2, Impact: "degraded"})
 			return err
 		}},
 		{"declare a second role on the system itself", func() error {
 			_, err := f.gw.SetSystemRole(ctx, "", "system", "sweep-sys", storage.SystemRoleSpec{
 				Name: "screen", DisplayName: "Screen", Quorum: 1,
-				Capabilities: []string{"flat-panel-display"}, Impact: "outage"})
+				AcceptedTypes: []string{"display"}, Impact: "outage"})
 			return err
 		}},
 		{"withdraw it", func() error { return f.gw.DeleteSystemRole(ctx, "", "system", "sweep-sys", "screen") }},
-		{"swap a staffing component's product out from under it", func() error {
-			_, err := f.gw.UpdateComponent(ctx, "", "sweep-a", storage.ComponentPatch{ProductName: &panel}, f.all, f.all)
-			return err
-		}},
-		{"swap it back", func() error {
-			_, err := f.gw.UpdateComponent(ctx, "", "sweep-a", storage.ComponentPatch{ProductName: &bar}, f.all, f.all)
-			return err
-		}},
 		{"relocate the system, which recomputes both ends", func() error {
-			_, err := f.gw.UpdateSystem(ctx, "", "sweep-sys", storage.SystemPatch{LocationName: &room2}, f.all, f.all)
+			_, err := f.gw.MoveSystem(ctx, "", "sweep-sys", storage.SystemMove{LocationName: &room2}, f.all, f.all)
 			return err
 		}},
 		{"convert it to a one-off, dropping the inherited role", func() error {
@@ -484,8 +623,8 @@ func TestHealthInvariantAcrossEveryTrigger(t *testing.T) {
 	}
 
 	// The record still tracks the roles at the end of all that: the never-cleared
-	// second alarm still holds speaker away from one bar, so the role is one short
-	// of its quorum, and the system created at the end has nobody in it at all.
+	// second alarm still holds sweep-a down, so the role is one occupant short of
+	// its quorum, and the system created at the end has nobody in it at all.
 	f.mustAgreeWithRecord(t, ctx, "sweep-sys", "degraded")
 	f.mustAgreeWithRecord(t, ctx, "sweep-sys-2", "degraded")
 }
@@ -504,7 +643,7 @@ func TestHealthRecordsDeleteRipple(t *testing.T) {
 	std := f.pairStandard(t, ctx, "ripple-standard")
 	f.staffPair(t, ctx, std, "ripple-sys", "ripple-a", "ripple-b")
 	if _, err := f.gw.RaiseAlarm(ctx, "", "ripple-a", storage.AlarmSpec{
-		Severity: "warning", Message: "mic dead", Capabilities: []string{"microphone"}}); err != nil {
+		Severity: "critical", Message: "mic dead"}); err != nil {
 		t.Fatalf("raise: %v", err)
 	}
 	if _, v := f.recorded(t, ctx, "location", "hq-r1"); v != "degraded" {
@@ -519,56 +658,6 @@ func TestHealthRecordsDeleteRipple(t *testing.T) {
 		t.Errorf("room after its broken system was deleted = %q, want healthy: "+
 			"the delete improved the location and that edge went unrecorded (series %v)",
 			v, f.healthSeries(t, ctx, "location", "hq-r1"))
-	}
-	f.assertTransitionOnly(t, ctx)
-}
-
-// A product is a contract, so editing one reaches every component built to it.
-// Withdrawing a capability the product promised can drop a role below quorum in
-// systems nobody touched, and that is a real transition in each of them.
-func TestHealthRecordsProductCapabilityRipple(t *testing.T) {
-	f := newHealthFixture(t)
-	ctx := context.Background()
-
-	// The test owns its product: the seeded catalog is official and an official row
-	// refuses edits, which is the whole mechanism under test here.
-	if _, err := f.gw.CreateProduct(ctx, "", storage.Product{
-		Name: "ripple-bar", DisplayName: "Ripple Bar", VendorID: ptrStr("cisco"),
-		Capabilities: []string{"microphone", "speaker"},
-	}); err != nil {
-		t.Fatalf("create product: %v", err)
-	}
-	std := f.pairStandard(t, ctx, "product-standard")
-	room := "hq-r1"
-	if _, err := f.gw.CreateSystem(ctx, "", storage.SystemSpec{
-		Name: "product-sys", StandardID: &std, LocationName: &room}, f.all); err != nil {
-		t.Fatalf("create system: %v", err)
-	}
-	product := "ripple-bar"
-	for _, c := range []string{"product-a", "product-b"} {
-		if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{
-			Name: c, ProductName: &product}, f.all); err != nil {
-			t.Fatalf("create component %s: %v", c, err)
-		}
-		if err := f.gw.AssignRole(ctx, "", "product-sys", "pair", c, f.all); err != nil {
-			t.Fatalf("assign %s: %v", c, err)
-		}
-	}
-	if _, v := f.recorded(t, ctx, "system", "product-sys"); v != "healthy" {
-		t.Fatalf("staffed system = %q, want healthy", v)
-	}
-
-	// Take microphone away from the product both staffing components are built to,
-	// and neither can fill a role that requires it.
-	speakerOnly := []string{"speaker"}
-	if _, err := f.gw.UpdateProduct(ctx, "", "ripple-bar", storage.ProductPatch{
-		Capabilities: &speakerOnly}); err != nil {
-		t.Fatalf("withdraw capability: %v", err)
-	}
-	if _, v := f.recorded(t, ctx, "system", "product-sys"); v != "degraded" {
-		t.Errorf("system after its product lost a required capability = %q, want degraded: "+
-			"the product edit broke the role and that edge went unrecorded (series %v)",
-			v, f.healthSeries(t, ctx, "system", "product-sys"))
 	}
 	f.assertTransitionOnly(t, ctx)
 }

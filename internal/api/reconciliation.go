@@ -46,7 +46,7 @@ func registerReconciliationRoutes(api huma.API, a *authenticator, gw storage.Gat
 		if err != nil {
 			return nil, mapComponentErr(err)
 		}
-		recs, err := gw.Reconciliation(ctx, "component", comp.Name, a.scopeFor(ctx, "component", "read"))
+		recs, err := gw.Reconciliation(ctx, "component", comp.ID, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
 			return nil, huma.Error500InternalServerError("read reconciliation")
 		}

@@ -144,6 +144,9 @@ func (p *PG) CreateNode(ctx context.Context, actorID string, spec NodeSpec, crea
 // node is estate-wide, so the update requires an all scope, like create. An
 // unknown name is ErrNodeNotFound; an unknown location is ErrLocationNotFound.
 func (p *PG) UpdateNode(ctx context.Context, actorID, name string, patch NodePatch, read, action scope.Set) (*Node, error) {
+	if err := RejectAddressForm("node", name); err != nil {
+		return nil, err
+	}
 	if !read.All || !action.All {
 		return nil, ErrNodeForbidden
 	}
@@ -193,6 +196,9 @@ func (p *PG) UpdateNode(ctx context.Context, actorID, name string, patch NodePat
 // the deleter (unaffected by the cascade) and audit_log.resource_id is plain
 // text, not a foreign key, so the deleted node's principal id survives there.
 func (p *PG) DeleteNode(ctx context.Context, actorID, name string, read, action scope.Set) error {
+	if err := RejectAddressForm("node", name); err != nil {
+		return err
+	}
 	if !read.All || !action.All {
 		return ErrNodeForbidden
 	}
@@ -233,6 +239,9 @@ func (p *PG) DeleteNode(ctx context.Context, actorID, name string, read, action 
 // credential, so the previous token stops working. Audited. Requires an all
 // action scope.
 func (p *PG) SetEnrollmentToken(ctx context.Context, actorID, name, tokenHashHex string, action scope.Set) (*Node, error) {
+	if err := RejectAddressForm("node", name); err != nil {
+		return nil, err
+	}
 	if !action.All {
 		return nil, ErrNodeForbidden
 	}
@@ -394,6 +403,9 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 // GetNode reads one node by name. Requires an all read scope (a node is
 // estate-wide reference, not a subtree row); an unknown name is ErrNodeNotFound.
 func (p *PG) GetNode(ctx context.Context, name string, read scope.Set) (*Node, error) {
+	if err := RejectAddressForm("node", name); err != nil {
+		return nil, err
+	}
 	if !read.All {
 		return nil, ErrNodeForbidden
 	}

@@ -9,14 +9,9 @@ import (
 )
 
 // The declaration side of the role model: who DECLARES a role (a standard, so
-// every conforming system inherits it, or one system ad-hoc) and what a
-// component claims it can do. The resolvers in roles.go read what this writes;
-// nothing here resolves, so the two stay separable.
-
-// ErrComponentCapabilityNotFound is clearing a capability fact the component
-// never declared. Its own sentinel rather than ErrRoleNotFound, because the
-// address that came up empty is a component's capability row, not a role.
-var ErrComponentCapabilityNotFound = errors.New("storage: component capability not declared")
+// every conforming system inherits it, or one system ad-hoc) and the
+// typed-slot requirement it enforces at assignment. The resolvers in roles.go
+// read what this writes; nothing here resolves, so the two stay separable.
 
 // ErrUnknownRoleOwner guards the role owner-arc column mapping. A role owner is
 // a standard or a system and nothing else, so an unrecognized kind is refused
@@ -25,23 +20,57 @@ var ErrUnknownRoleOwner = errors.New("storage: unknown role owner_kind")
 
 // OwnerID is not in the column list (it lives in whichever arc column the owner
 // kind selects), so the caller stamps it from the address it queried by, the way
-// property_value's scan does.
-const systemRoleCols = `id, owner_kind, name, display_name, quorum, impact, created_at, updated_at`
+// property_value's scan does. alternate_id is here (unlike the rest of the
+// choice-side identity, which the read side does not surface yet) because
+// SetSystemRole and DeleteSystemRole's before/after images are built from
+// this list: omitting it left the audit trail blind to exactly the field
+// this fix round made deliberately writable, so a role moving between
+// alternates left no evidence.
+const systemRoleCols = `id, owner_kind, name, display_name, quorum, capacity, position_labels, impact, alternate_id, created_at, updated_at`
 
 // roleOwnerColumn maps a role owner kind to its exclusive-arc column. Every
 // identifier it returns is a compile-time constant, never caller input, so
 // interpolating one into a statement is safe.
-// roleOwnerExpr is the SQL for the value system_role's arc stores. A standard is
-// slug-keyed, so its id IS the reference; a system is uuid-keyed, so the name
-// resolves. Keeping this as an expression means the surrounding statements do not
+// roleOwnerExpr is the SQL for the value system_role's arc stores, given
+// whatever roleOwnerArg resolved $2 to. Both arcs accept either form (name or
+// uuid, ADR-0062): a standard's row is a registry entry addressed by handle or
+// uuid directly; a system's is resolved once by roleOwnerArg before this
+// expression ever runs; the `or id::text = $2` arm here is what makes an
+// already-resolved id (or an ownerID that happened to be uuid-shaped) match.
+// Keeping this as an expression means the surrounding statements do not
 // branch on owner kind.
 func roleOwnerExpr(ownerKind string) string {
 	if ownerKind == "system" {
-		return `(select id from system where name = $2)`
+		return `(select id from system where name = $2 or id::text = $2)`
 	}
-	// A standard is addressed by its handle or its uuid, and the column stores
-	// the uuid (ADR-0062).
 	return `(select id from standard where name = $2 or id::text = $2)`
+}
+
+// roleOwnerArg resolves ownerID once for the role-owner arc, ambiguity-safe
+// (#627). For a system owner: a name or uuid that identifies exactly one row
+// resolves to its id, which roleOwnerExpr's `id::text = $2` arm then matches
+// directly, never re-deriving it from a name a second query could land on a
+// different row for. A name that identifies NONE is passed through
+// unresolved, so the write falls through to the existing
+// system_role_owner_arc_check -> ErrRoleRefNotFound path exactly as before
+// (that CHECK, not this function, is what turns an unknown owner into a
+// clean sentinel; forcing an early not-found here would trade a stable
+// sentinel for a different one). A name that identifies two or more is
+// refused outright as ErrAmbiguousName, rather than ever reaching a query
+// that could raise SQLSTATE 21000. A standard owner is untouched: standard
+// names stay globally unique, and roleOwnerExpr already resolves either form
+// for it.
+func (p *PG) roleOwnerArg(ctx context.Context, q querier, ownerKind, ownerID string) (string, error) {
+	if ownerKind != "system" {
+		return ownerID, nil
+	}
+	sys, err := scopedByName(ctx, q, systemConfig, ownerID)
+	if errors.Is(err, ErrSystemNotFound) {
+		return ownerID, nil
+	} else if err != nil {
+		return "", err
+	}
+	return sys.ID, nil
 }
 
 func roleOwnerColumn(ownerKind string) (string, error) {
@@ -57,36 +86,56 @@ func roleOwnerColumn(ownerKind string) (string, error) {
 
 func scanSystemRole(row pgx.Row) (*SystemRole, error) {
 	var r SystemRole
-	if err := row.Scan(&r.ID, &r.OwnerKind, &r.Name, &r.DisplayName, &r.Quorum, &r.Impact,
-		&r.CreatedAt, &r.UpdatedAt); err != nil {
+	if err := row.Scan(&r.ID, &r.OwnerKind, &r.Name, &r.DisplayName, &r.Quorum, &r.Capacity, &r.PositionLabels,
+		&r.Impact, &r.AlternateID, &r.CreatedAt, &r.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &r, nil
 }
 
-// ListSystemRoles returns the roles one owner declares itself, ordered by name, each
-// with the capabilities it requires. This is the declaration read, not the
-// resolution: a system's list carries only its ad-hoc roles, never the ones it
-// inherits from its standard (EffectiveRoles is what merges the two arcs).
+// normalizePositionLabels returns a non-nil slice so an omitted set writes
+// and reads back as an empty text[], not SQL NULL (position_labels is not
+// null). Unlike capacity, a label set always wholesale-replaces: there is no
+// "leave unchanged" reading for a list, the same rule accepted_types and
+// pinned_products already follow.
+func normalizePositionLabels(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
+}
+
+// ListSystemRoles returns the roles one owner declares itself, ordered by
+// name, each with its typed-slot requirement. This is the declaration read,
+// not the resolution: a system's list carries only its ad-hoc roles, never
+// the ones it inherits from its standard (EffectiveRoles is what merges the
+// two arcs).
 func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]SystemRole, error) {
 	col, err := roleOwnerColumn(ownerKind)
+	if err != nil {
+		return nil, err
+	}
+	ownerArg, err := p.roleOwnerArg(ctx, p.pool, ownerKind, ownerID)
 	if err != nil {
 		return nil, err
 	}
 	// The columns are spelled out rather than reusing systemRoleCols: the join
 	// needs them qualified by the role alias.
 	q := fmt.Sprintf(`
-		select r.id, r.owner_kind, r.name, r.display_name, r.quorum, r.impact, r.created_at, r.updated_at,
-		       coalesce(array_agg(cap.name order by cap.name)
-		                filter (where cap.name is not null), '{}') as caps
+		select r.id, r.owner_kind, r.name, r.display_name, r.quorum, r.capacity, r.position_labels, r.impact,
+		       r.created_at, r.updated_at,
+		       coalesce(array_agg(distinct ct.name order by ct.name) filter (where ct.name is not null), '{}') as types,
+		       coalesce(array_agg(distinct pr.name order by pr.name) filter (where pr.name is not null), '{}') as products
 		from system_role r
-		left join system_role_capability rc on rc.role_id = r.id
-		left join capability cap on cap.id = rc.capability_id
+		left join system_role_type rt on rt.role_id = r.id
+		left join component_type ct on ct.id = rt.component_type_id
+		left join system_role_product rp on rp.role_id = r.id
+		left join product pr on pr.id = rp.product_id
 		where r.owner_kind = $1 and r.%s = %s
 		group by r.id
 		order by r.name`, col, roleOwnerExpr(ownerKind))
 
-	rows, err := p.pool.Query(ctx, q, ownerKind, ownerID)
+	rows, err := p.pool.Query(ctx, q, ownerKind, ownerArg)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list roles %s/%s: %w", ownerKind, ownerID, err)
 	}
@@ -95,8 +144,8 @@ func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]
 	out := []SystemRole{}
 	for rows.Next() {
 		var r SystemRole
-		if err := rows.Scan(&r.ID, &r.OwnerKind, &r.Name, &r.DisplayName, &r.Quorum, &r.Impact,
-			&r.CreatedAt, &r.UpdatedAt, &r.Capabilities); err != nil {
+		if err := rows.Scan(&r.ID, &r.OwnerKind, &r.Name, &r.DisplayName, &r.Quorum, &r.Capacity, &r.PositionLabels,
+			&r.Impact, &r.CreatedAt, &r.UpdatedAt, &r.AcceptedTypes, &r.PinnedProducts); err != nil {
 			return nil, fmt.Errorf("storage: scan role: %w", err)
 		}
 		r.OwnerID = ownerID
@@ -105,16 +154,16 @@ func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]
 	return out, rows.Err()
 }
 
-// SetSystemRole declares a role on a standard or a system, or revises the declaration
-// in place: the role is addressed by name within its owner arc, so the write is
-// an upsert and the surface's save is idempotent. The required-capability set is
-// replaced wholesale in the same transaction, matching how a product's
-// capability set behaves: what the caller sends is what the role requires
-// afterwards, so a capability can be dropped by omitting it.
+// SetSystemRole declares a role on a standard or a system, or revises the
+// declaration in place: the role is addressed by name within its owner arc,
+// so the write is an upsert and the surface's save is idempotent. The
+// typed-slot requirement (AcceptedTypes, PinnedProducts) is replaced
+// wholesale in the same transaction: what the caller sends is what the role
+// accepts afterwards, so a type can be dropped by omitting it.
 //
 // A quorum below one means one: a role no component need fill is not a role.
-// An owner or capability that does not exist is ErrRoleRefNotFound (a request
-// fault), never a server error.
+// An owner, type, or product that does not exist is ErrRoleRefNotFound (a
+// request fault), never a server error.
 func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID string, spec SystemRoleSpec) (*SystemRole, error) {
 	if err := ValidateName("system_role", spec.Name); err != nil {
 		return nil, err
@@ -134,17 +183,26 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 	if !roleImpacts[impact] {
 		return nil, ErrRoleImpact
 	}
+	positionLabels := normalizePositionLabels(spec.PositionLabels)
+
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin set role: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// Resolved once, inside this transaction, and reused for both queries
+	// below: see roleOwnerArg.
+	ownerArg, err := p.roleOwnerArg(ctx, tx, ownerKind, ownerID)
+	if err != nil {
+		return nil, err
+	}
+
 	// The before-image decides create vs update and gives the audit its old side.
 	var before any
 	prior, err := scanSystemRole(tx.QueryRow(ctx, fmt.Sprintf(
 		`select `+systemRoleCols+` from system_role where owner_kind = $1 and %s = %s and name = $3`, col, roleOwnerExpr(ownerKind)),
-		ownerKind, ownerID, spec.Name))
+		ownerKind, ownerArg, spec.Name))
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 	case err != nil:
@@ -154,36 +212,87 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 		before = prior
 	}
 
+	// Lowering capacity below what some conforming system already has
+	// assigned refuses naming the worst-exceeding one: a standard-owned role
+	// is staffed independently in every system that conforms to it, so any
+	// one of them can exceed a new, lower cap regardless of what this system
+	// (the one whose edit triggered the check) looks like.
+	if spec.Capacity != nil && prior != nil {
+		var sysName string
+		var have int
+		err := tx.QueryRow(ctx, `
+			select s.name, count(*) from system_role_assignment ra
+			  join system s on s.id = ra.system_id
+			 where ra.role_id = $1
+			 group by s.name having count(*) > $2
+			 order by count(*) desc, s.name limit 1`, prior.ID, *spec.Capacity).Scan(&sysName, &have)
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			// nothing exceeds the new cap
+		case err != nil:
+			return nil, fmt.Errorf("storage: capacity precheck %s: %w", prior.ID, err)
+		default:
+			return nil, &CapacityShortfall{Role: prior.DisplayName, System: sysName, Have: have, Want: *spec.Capacity}
+		}
+	}
+
 	r, err := scanSystemRole(tx.QueryRow(ctx, fmt.Sprintf(`
-		insert into system_role (owner_kind, %s, name, display_name, quorum, impact)
-		values ($1, %s, $3, $4, $5, $6)
+		insert into system_role (owner_kind, %s, name, display_name, quorum, capacity, position_labels, impact, alternate_id)
+		values ($1, %s, $3, $4, $5, $6, $7, $8, nullif($9, '')::uuid)
 		on conflict (owner_kind, standard_id, system_id, name) do update
-			set display_name = excluded.display_name,
-			    quorum       = excluded.quorum,
-			    impact       = excluded.impact,
-			    updated_at   = now()
+			set display_name    = excluded.display_name,
+			    quorum          = excluded.quorum,
+			    capacity        = coalesce(excluded.capacity, system_role.capacity),
+			    position_labels = excluded.position_labels,
+			    impact          = excluded.impact,
+			    -- $9 is bound as *string (roles.go): a nil pointer arrives as
+			    -- SQL NULL and means the caller did not mention this field,
+			    -- so the existing alternate survives (the coalesce below);
+			    -- a non-nil pointer means the caller sent a value, and an
+			    -- empty one is the explicit detach path (nullif turns it
+			    -- into NULL same as the insert branch above). Checking the
+			    -- RAW $9 rather than excluded.alternate_id is load-bearing:
+			    -- both "omitted" and "explicitly detach" produce a NULL
+			    -- excluded.alternate_id after nullif, and only $9 itself
+			    -- still tells them apart.
+			    alternate_id    = case when $9 is null then system_role.alternate_id else nullif($9, '')::uuid end,
+			    updated_at      = now()
 		returning `+systemRoleCols, col, roleOwnerExpr(ownerKind)),
-		ownerKind, ownerID, spec.Name, spec.DisplayName, quorum, impact))
+		ownerKind, ownerArg, spec.Name, spec.DisplayName, quorum, spec.Capacity, positionLabels, impact, spec.AlternateID))
 	if err != nil {
 		return nil, mapRoleWriteErr(err)
 	}
 	r.OwnerID = ownerID
 
-	// Wholesale replacement: clear what the role required, then install the set
-	// the caller sent, so the declaration is the whole truth after the write.
-	if _, err := tx.Exec(ctx, `delete from system_role_capability where role_id = $1`, r.ID); err != nil {
-		return nil, fmt.Errorf("storage: clear role capabilities %s: %w", r.ID, err)
+	// The typed-slot guard's requirement, replaced wholesale: what the caller
+	// sends is what the role accepts (types) and pins (products) afterwards.
+	if _, err := tx.Exec(ctx, `delete from system_role_type where role_id = $1`, r.ID); err != nil {
+		return nil, fmt.Errorf("storage: clear role types %s: %w", r.ID, err)
 	}
-	if len(spec.Capabilities) > 0 {
+	if len(spec.AcceptedTypes) > 0 {
 		if _, err := tx.Exec(ctx, `
-			insert into system_role_capability (role_id, capability_id)
-			select $1, (select id from capability where name = c or id::text = c)
+			insert into system_role_type (role_id, component_type_id)
+			select $1, (select id from component_type where name = c or id::text = c)
 			from unnest($2::text[]) c
-			on conflict (role_id, capability_id) do nothing`, r.ID, spec.Capabilities); err != nil {
+			on conflict (role_id, component_type_id) do nothing`, r.ID, spec.AcceptedTypes); err != nil {
 			return nil, mapRoleWriteErr(err)
 		}
 	}
-	r.Capabilities = append([]string(nil), spec.Capabilities...)
+	r.AcceptedTypes = append([]string(nil), spec.AcceptedTypes...)
+
+	if _, err := tx.Exec(ctx, `delete from system_role_product where role_id = $1`, r.ID); err != nil {
+		return nil, fmt.Errorf("storage: clear role products %s: %w", r.ID, err)
+	}
+	if len(spec.PinnedProducts) > 0 {
+		if _, err := tx.Exec(ctx, `
+			insert into system_role_product (role_id, product_id)
+			select $1, (select id from product where name = c or id::text = c)
+			from unnest($2::text[]) c
+			on conflict (role_id, product_id) do nothing`, r.ID, spec.PinnedProducts); err != nil {
+			return nil, mapRoleWriteErr(err)
+		}
+	}
+	r.PinnedProducts = append([]string(nil), spec.PinnedProducts...)
 
 	verb := "create"
 	if before != nil {
@@ -192,15 +301,21 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 	if err := writeAuditRes(ctx, tx, actorID, verb, "system_role", r.ID, before, r); err != nil {
 		return nil, err
 	}
-	// A declaration change moves health without touching a component: a new
-	// required capability, a raised quorum, or a changed impact can impair a role
-	// that was fine a moment ago. A standard's declaration moves every conforming
-	// system at once.
-	affected, err := p.systemsForRoleOwner(ctx, tx, ownerKind, ownerID)
+	// A declaration change moves health without touching a component: a raised
+	// quorum or a changed impact can impair a role that was fine a moment ago.
+	// A standard's declaration moves every conforming system at once.
+	//
+	// ownerArg, not ownerID: for a system owner it is already resolved (see
+	// roleOwnerArg above), so systemsForRoleOwner's own resolve is a
+	// same-row, id-keyed lookup rather than a second pass over the caller's
+	// original reference. Its result feeds recomputeChain directly (not
+	// recomputeSystems' name-based wrapper), since every ownerRef it returns
+	// already carries an id.
+	affected, err := p.systemsForRoleOwner(ctx, tx, ownerKind, ownerArg)
 	if err != nil {
 		return nil, err
 	}
-	if err := p.recomputeSystems(ctx, tx, affected...); err != nil {
+	if err := p.recomputeChain(ctx, tx, nil, affected, nil); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -209,10 +324,10 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 	return r, nil
 }
 
-// DeleteSystemRole withdraws a role from its owner, taking its required capabilities
-// and every assignment to it with it (both cascade). A role the owner does not
-// declare is ErrRoleNotFound, so withdrawing twice is an explicit miss rather
-// than a silent no-op.
+// DeleteSystemRole withdraws a role from its owner, taking its typed-slot
+// requirement and every assignment to it with it (both cascade). A role the
+// owner does not declare is ErrRoleNotFound, so withdrawing twice is an
+// explicit miss rather than a silent no-op.
 func (p *PG) DeleteSystemRole(ctx context.Context, actorID, ownerKind, ownerID, name string) error {
 	col, err := roleOwnerColumn(ownerKind)
 	if err != nil {
@@ -224,12 +339,18 @@ func (p *PG) DeleteSystemRole(ctx context.Context, actorID, ownerKind, ownerID, 
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// Resolved once (see SetSystemRole / roleOwnerArg).
+	ownerArg, err := p.roleOwnerArg(ctx, tx, ownerKind, ownerID)
+	if err != nil {
+		return err
+	}
+
 	// Delete and capture the before-image in one statement, so the audit records
 	// the withdrawn declaration and a missing row is caught without a second read.
 	before, err := scanSystemRole(tx.QueryRow(ctx, fmt.Sprintf(`
 		delete from system_role
 		where owner_kind = $1 and %s = %s and name = $3
-		returning `+systemRoleCols, col, roleOwnerExpr(ownerKind)), ownerKind, ownerID, name))
+		returning `+systemRoleCols, col, roleOwnerExpr(ownerKind)), ownerKind, ownerArg, name))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrRoleNotFound
 	}
@@ -242,89 +363,16 @@ func (p *PG) DeleteSystemRole(ctx context.Context, actorID, ownerKind, ownerID, 
 	}
 	// Withdrawing a role can only improve a system: the impaired slot it was
 	// contributing is gone. Recompute so the recovery is recorded as an edge.
-	affected, err := p.systemsForRoleOwner(ctx, tx, ownerKind, ownerID)
+	// ownerArg, not ownerID; see SetSystemRole's comment on the same shape.
+	affected, err := p.systemsForRoleOwner(ctx, tx, ownerKind, ownerArg)
 	if err != nil {
 		return err
 	}
-	if err := p.recomputeSystems(ctx, tx, affected...); err != nil {
+	if err := p.recomputeChain(ctx, tx, nil, affected, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("storage: commit delete role: %w", err)
-	}
-	return nil
-}
-
-// SetComponentCapability records one capability fact on a component, layered
-// over what its product declares: present adds a capability the product does not
-// claim, absent suppresses one it does. This is what lets a productless
-// component be staffed while the assignment guard stays strict.
-//
-// Idempotent (the fact is keyed by component and capability). An unknown
-// component or capability is ErrRoleRefNotFound, a request fault.
-func (p *PG) SetComponentCapability(ctx context.Context, actorID, componentName, capabilityID string, present bool) error {
-	tx, err := p.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("storage: begin set component capability: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	var factID string
-	if err := tx.QueryRow(ctx, `
-		insert into component_capability (component_id, capability_id, present)
-		values ((select id from component where name = $1),
-		        (select id from capability where name = $2 or id::text = $2), $3)
-		on conflict (component_id, capability_id) do update
-			set present    = excluded.present,
-			    updated_at = now()
-		returning id`, componentName, capabilityID, present).Scan(&factID); err != nil {
-		return mapRoleWriteErr(err)
-	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "component_capability", factID, nil,
-		map[string]any{"component": componentName, "capability": capabilityID, "present": present}); err != nil {
-		return err
-	}
-	// What the component provides is half of whether it satisfies a role, so a
-	// capability fact moves the health of every system it staffs.
-	if err := p.RecomputeHealth(ctx, tx, componentName); err != nil {
-		return err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("storage: commit set component capability: %w", err)
-	}
-	return nil
-}
-
-// ClearComponentCapability removes the component's own fact about a capability,
-// so the component falls back to whatever its product declares. Clearing a fact
-// the component never declared is ErrComponentCapabilityNotFound.
-func (p *PG) ClearComponentCapability(ctx context.Context, actorID, componentName, capabilityID string) error {
-	tx, err := p.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("storage: begin clear component capability: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	var factID string
-	if err := tx.QueryRow(ctx, `
-		delete from component_capability
-		where component_id = (select id from component where name = $1)
-		  and capability_id = (select id from capability where name = $2 or id::text = $2)
-		returning id`, componentName, capabilityID).Scan(&factID); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrComponentCapabilityNotFound
-		}
-		return fmt.Errorf("storage: clear component capability %s/%s: %w", componentName, capabilityID, err)
-	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "component_capability", factID, nil, nil); err != nil {
-		return err
-	}
-	// Falling back to the product's set can drop a capability a role required.
-	if err := p.RecomputeHealth(ctx, tx, componentName); err != nil {
-		return err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("storage: commit clear component capability: %w", err)
 	}
 	return nil
 }
@@ -345,28 +393,41 @@ func (p *PG) SeedSystemRole(ctx context.Context, ownerKind, ownerID string, spec
 	if !roleImpacts[impact] {
 		return ErrRoleImpact
 	}
+	positionLabels := normalizePositionLabels(spec.PositionLabels)
+	ownerArg, err := p.roleOwnerArg(ctx, p.pool, ownerKind, ownerID)
+	if err != nil {
+		return err
+	}
 	var id string
 	err = p.pool.QueryRow(ctx, fmt.Sprintf(`
-		insert into system_role (owner_kind, %s, name, display_name, quorum, impact)
-		values ($1, %s, $3, $4, $5, $6)
+		insert into system_role (owner_kind, %s, name, display_name, quorum, capacity, position_labels, impact, alternate_id)
+		values ($1, %s, $3, $4, $5, $6, $7, $8, nullif($9, '')::uuid)
 		on conflict (owner_kind, standard_id, system_id, name) do nothing
 		returning id`, col, roleOwnerExpr(ownerKind)),
-		ownerKind, ownerID, spec.Name, spec.DisplayName, max(spec.Quorum, 1), impact).Scan(&id)
+		ownerKind, ownerArg, spec.Name, spec.DisplayName, max(spec.Quorum, 1), spec.Capacity, positionLabels, impact, spec.AlternateID).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil // already there, and the operator owns it now
 	}
 	if err != nil {
 		return mapRoleWriteErr(err)
 	}
-	if len(spec.Capabilities) == 0 {
-		return nil
+	if len(spec.AcceptedTypes) > 0 {
+		if _, err := p.pool.Exec(ctx, `
+			insert into system_role_type (role_id, component_type_id)
+			select $1, (select id from component_type where name = c or id::text = c)
+			from unnest($2::text[]) c
+			on conflict (role_id, component_type_id) do nothing`, id, spec.AcceptedTypes); err != nil {
+			return mapRoleWriteErr(err)
+		}
 	}
-	if _, err := p.pool.Exec(ctx, `
-		insert into system_role_capability (role_id, capability_id)
-		select $1, (select id from capability where name = c or id::text = c)
-		from unnest($2::text[]) c
-		on conflict (role_id, capability_id) do nothing`, id, spec.Capabilities); err != nil {
-		return mapRoleWriteErr(err)
+	if len(spec.PinnedProducts) > 0 {
+		if _, err := p.pool.Exec(ctx, `
+			insert into system_role_product (role_id, product_id)
+			select $1, (select id from product where name = c or id::text = c)
+			from unnest($2::text[]) c
+			on conflict (role_id, product_id) do nothing`, id, spec.PinnedProducts); err != nil {
+			return mapRoleWriteErr(err)
+		}
 	}
 	return nil
 }

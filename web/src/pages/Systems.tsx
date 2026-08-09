@@ -33,6 +33,7 @@ import MembersPanel from "../components/MembersPanel";
 import HealthBadge from "../components/HealthBadge";
 import SystemHealthPanel from "../components/HealthPanel";
 import { systemHealthKey, verdictOf, verdictRank, type EstateHealth } from "../lib/health";
+import { hueFor } from "../lib/system_color";
 
 // Systems: the system inventory on the generic TreeList, the same shell as
 // Locations and Components. Systems form a tree (parent_id) and are placed at a
@@ -77,8 +78,12 @@ export default function Systems() {
   );
   const standardLabel = (handle?: string) =>
     handle ? (standards.data ?? []).find((s) => s.name === handle)?.display_name ?? handle : "";
-  const locationItems = createMemo(() => (locations.data ?? []).map((l) => ({ id: l.name, value: l.name, label: entityLabel(l), parentId: l.parent })));
-  const systemItems = createMemo(() => (systems.data ?? []).map((s) => ({ id: s.name, value: s.name, label: entityLabel(s), parentId: s.parent })));
+  // Keyed AND valued on uuid, not name (#627): two same-named locations or
+  // systems would otherwise render as visually identical, value-identical
+  // options, and posting either would name an ambiguous ref. The API
+  // dual-accepts uuid-or-name (ADR-0062), so posting the uuid is safe.
+  const locationItems = createMemo(() => (locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id })));
+  const systemItems = createMemo(() => (systems.data ?? []).map((s) => ({ id: s.id, value: s.id, label: entityLabel(s), parentId: s.parent_id })));
 
   // One filter facet per tag key present across the systems, derived from their
   // effective tags, so the bar can filter by any tag like any other field.
@@ -88,26 +93,39 @@ export default function Systems() {
     return tagFilterKeys<SysNode>([...keys].sort(), new Set(["name", "standard", "location"]));
   });
 
+  // Keyed AND identified by uuid, not the bare name (#627: name uniqueness
+  // is scoped to placement, so two systems can legally share a name under
+  // different parents or locations). A name-keyed map would silently drop
+  // one system's node and reparent its children onto the survivor; a
+  // name-keyed node.id has the identical collision one layer down, in
+  // TreeList's own index, which is what let a click on one duplicate's row
+  // open the other duplicate's blade. addr carries the name for the
+  // navigate sites that still build a name-shaped URL until the URL swap to
+  // uuid addressing lands; TreeList's focus resolution falls back to it.
   const nodes = createMemo<SysNode[]>(() => {
     const list = systems.data ?? [];
     const lm = locById();
-    const byId = new Map<string, SysNode>();
+    const byUuid = new Map<string, SysNode>();
     for (const s of list) {
-      byId.set(s.name, {
-        id: s.name,
+      byUuid.set(s.id, {
+        id: s.id,
+        addr: s.name,
         display: entityLabel(s),
+        // See Components.tsx's own nodes memo for why this beats the
+        // page's tree-local pathOf walk for a system with no system parent.
+        pathRender: s.renders?.dash,
         children: [],
         actions: s.actions,
         standard: standardLabel(s.standard),
-        locationName: s.location ? entityLabel(lm.get(s.location) ?? { name: s.location }) : "",
+        locationName: s.location_id ? entityLabel(lm.get(s.location_id) ?? { name: s.location ?? "" }) : "",
         tags: s.effective_tags ?? {},
         raw: s,
       });
     }
     const roots: SysNode[] = [];
     for (const s of list) {
-      const node = byId.get(s.name)!;
-      const parent = s.parent ? byId.get(s.parent) : undefined;
+      const node = byUuid.get(s.id)!;
+      const parent = s.parent_id ? byUuid.get(s.parent_id) : undefined;
       if (parent) parent.children.push(node);
       else roots.push(node);
     }
@@ -119,7 +137,10 @@ export default function Systems() {
     if (!confirm(`Delete system "${n.raw.name}"?`)) return;
     setErr(null);
     try {
-      await deleteSystem(n.raw.name);
+      // Addressed by uuid (#627 review finding 1): a duplicate-named system
+      // (legal under different placements, #627 Task 10) is otherwise a
+      // 409 (ErrAmbiguousName) on a bare-name address.
+      await deleteSystem(n.raw.id);
       await qc.invalidateQueries({ queryKey: SYSTEMS_KEY });
       navigate("/systems");
     } catch (e) {
@@ -151,7 +172,7 @@ export default function Systems() {
     const [saveErr, setSaveErr] = createSignal<string | null>(null);
     async function runCheck() {
       setChecking(true);
-      try { setNameCheck(await checkSystemName(name().trim())); }
+      try { setNameCheck(await checkSystemName(name().trim(), n().raw.parent, n().raw.location)); }
       catch { setNameCheck(null); }
       finally { setChecking(false); }
     }
@@ -162,7 +183,7 @@ export default function Systems() {
     }));
     // Consume a pending "open in edit" handoff (from create or the row pencil) once
     // the node has resolved.
-    createEffect(on(() => n().raw.name, (name) => { if (name && consumePendingEdit(name) && canUpdate()) edit?.begin(); }));
+    createEffect(on(() => n().id, (id) => { if (id && consumePendingEdit(id) && canUpdate()) edit?.begin(); }));
 
     edit?.bind({
       editable: canUpdate,
@@ -170,7 +191,8 @@ export default function Systems() {
         setSaveErr(null);
         const renamed = name().trim() !== n().raw.name;
         try {
-          await updateSystem(n().raw.name, {
+          // Addressed by uuid (#627 review finding 1): see del() above.
+          await updateSystem(n().raw.id, {
             display_name: display() || undefined,
             // Send the empty string rather than dropping the key: the API reads ""
             // as "clear", which is how the operator converts this system back to a
@@ -187,8 +209,10 @@ export default function Systems() {
           // display name the server had already accepted: the operator saw a total
           // failure for a half-committed save, and Cancel re-seeded the inputs from
           // that stale cache.
-          if (renamed) await renameSystem(n().raw.name, name().trim());
-          if (renamed) navigate(`/systems/${encodeURIComponent(name().trim())}`);
+          // No hand-off navigate after a rename (#627 Task 15c): see
+          // Components.tsx's own save() for why (the route carries the id,
+          // which a rename never changes).
+          if (renamed) await renameSystem(n().raw.id, name().trim());
         } catch (e) {
           setSaveErr(describeError(e));
           throw e; // keep the slot in edit mode so the operator can retry
@@ -318,21 +342,37 @@ export default function Systems() {
         </Show>
 
 
+        {/* Every panel below (except the two onOpenComponent callbacks) is
+            addressed by the system's uuid (#627 review finding 1), not its
+            name: two systems can legally share a name in different
+            placements (#627 Task 10), and each of these routes dual-accepts
+            uuid-or-name (ADR-0062) but refuses an ambiguous bare name with a
+            409. */}
+
         {/* The verdict and its reconciliation: which roles are impaired, which
-            required capabilities an alarm took away, and which alarms took them.
+            assigned components went down, and which alarms took them down.
             It sits directly above the roles surface it reasons about, so "why is
-            this degraded" and "what are these roles" read as one thought. */}
+            this degraded" and "what are these roles" read as one thought.
+
+            onOpenComponent still navigates by name (#627 Task 15c): the health
+            read body (HealthRoleBody.down) carries only component names, no
+            id, so there is no uuid here to route with. TreeList's own focus
+            effect resolves it through the byAddr fallback (a unique hit
+            redirects the URL to the id, an ambiguous or missing one gets an
+            honest state instead of the old silent list fallback). */}
         <SystemHealthPanel
-          system={n().raw.name}
+          system={n().raw.id}
           onOpenComponent={(name) => navigate(`/components/${encodeURIComponent(name)}`)}
         />
 
         {/* What is in this system, directly above what each one does. Membership
             is the attachment and a role is what it does, so the two read in that
             order: the room's contents, then the jobs. A member holding no role
-            appears only here, which is the case a staffing-only view would lose. */}
+            appears only here, which is the case a staffing-only view would lose.
+            onOpenComponent: see SystemHealthPanel's own comment above; membership
+            (SystemMemberBody.component) is also name-only on the wire. */}
         <MembersPanel
-          system={n().raw.name}
+          system={n().raw.id}
           canUpdate={editing() && canUpdate()}
           onOpenComponent={(name) => navigate(`/components/${encodeURIComponent(name)}`)}
         />
@@ -341,18 +381,18 @@ export default function Systems() {
             properties are: what the standard declares plus what the system
             declares of its own. Assignment writes immediately (like tags), so its
             controls appear only in edit mode, which keeps view read-only. */}
-        <RolesPanel system={n().raw.name} canUpdate={editing() && canUpdate()} />
+        <RolesPanel system={n().raw.id} canUpdate={editing() && canUpdate()} />
 
         {/* The standard's contract, resolved against this system's own values.
             The panel batches its writes into the accordion's Save, so a property
             override commits with the system's core facts, not on its own. */}
         <PropertiesPanel
-          system={n().raw.name}
+          system={n().raw.id}
           edit={edit}
-          onOpen={(property) => ctx.openBlade({ kind: "property-resolution", id: ownerPropertyBladeId({ kind: "system", name: n().raw.name }, property) })}
+          onOpen={(property) => ctx.openBlade({ kind: "property-resolution", id: ownerPropertyBladeId({ kind: "system", name: n().raw.id }, property) })}
         />
 
-        <TagAdder kind="system" name={n().raw.name} canUpdate={editing() && canUpdate()} canCreateKey={can(me.data, "tag", "create")} />
+        <TagAdder kind="system" name={n().raw.id} canUpdate={editing() && canUpdate()} canCreateKey={can(me.data, "tag", "create")} />
 
         <Show when={ctx.full}>
           <div class="flex flex-wrap items-center gap-2 border-t border-base-300 pt-4">
@@ -364,7 +404,12 @@ export default function Systems() {
                     <Button intent="danger" onClick={() => del(n())}>Delete</Button>
                   </Show>
                   <span class="flex-1" />
-                  <Button icon={ArrowRight} iconTrailing onClick={() => navigate(`/components?system=${encodeURIComponent(n().raw.name)}`)}>Components</Button>
+                  {/* The query-string carries the system's uuid, not its name
+                      (#627 Task 15c): Components.tsx's own system facet
+                      matches on system_id now, since a name is no longer a
+                      reliable cross-entity key once two systems can share
+                      one under different placements. */}
+                  <Button icon={ArrowRight} iconTrailing onClick={() => navigate(`/components?system=${encodeURIComponent(n().raw.id)}`)}>Components</Button>
                   <Show when={edit?.editable()}>
                     <Button intent="action" icon={Pencil} onClick={() => edit!.begin()}>Edit</Button>
                   </Show>
@@ -400,10 +445,13 @@ export default function Systems() {
       setFormErr(null);
       const nm = name().trim();
       try {
-        await createSystem({ name: nm, standard_id: standard() || undefined, display_name: display().trim() || undefined, location: location() || undefined, parent: parent() || undefined });
+        // Bind the create response (#627 Task 15c): see Components.tsx's
+        // own create() for why the id, not the locally typed name, is what
+        // this hands off to openInEdit and navigate.
+        const created = await createSystem({ name: nm, standard_id: standard() || undefined, display_name: display().trim() || undefined, location: location() || undefined, parent: parent() || undefined });
         await qc.invalidateQueries({ queryKey: SYSTEMS_KEY });
-        openInEdit(nm);
-        navigate(`/systems/${encodeURIComponent(nm)}`);
+        openInEdit(created.id);
+        navigate(`/systems/${encodeURIComponent(created.id)}`);
       } catch (er) {
         setFormErr(describeError(er));
         setBusy(false);
@@ -476,17 +524,27 @@ export default function Systems() {
   const cfg: ListConfig<SysNode> = {
     ...systemsDescriptor,
     nodes,
-    focus: () => params.name,
+    focus: () => params.id,
     loading: () => systems.isLoading,
     error: () => systems.error,
     filterPlaceholder: "Filter by name, standard, location…",
     nameWeight: () => 500,
+    // Every system wears a colour of its own, derived from its uuid (never a
+    // display name, which is optional), so the same system reads consistently
+    // here, on a component's system column, and in the location health rollup.
+    leadIcon: (n) => <span class="og-system-dot" style={{ "--sys-h": String(hueFor(n.raw.id)) }} title={n.display} />,
     cellFor: (key, n) => {
       // There is no bulk health read, so the badge owns its own query per row and
       // shares the cache key with the detail panel: opening a row costs nothing
       // extra. Quiet until a verdict lands, so a page of rows never flashes a
       // column of "unknown".
-      if (key === "health") return <HealthBadge system={n.raw.name} quiet />;
+      // Keyed by uuid, matching where RolesPanel and MembersPanel invalidate
+      // after a role or member write (#627 review finding 1: those panels
+      // address the system by its uuid, since the name is scoped to
+      // placement and not reliably unique estate-wide). A name-keyed read
+      // here missed those invalidations and the badge went stale silently
+      // (review round 3, regression 3).
+      if (key === "health") return <HealthBadge system={n.raw.id} quiet />;
       if (key === "standard") return n.standard ? <span class="badge badge-ghost badge-sm">{n.standard}</span> : <span class="text-base-content/40">—</span>;
       if (key === "location") return <span class="text-base-content/70">{n.locationName || "—"}</span>;
       if (key === "components") return <span class="tnum text-base-content/60">{n.raw.member_count}</span>;
@@ -505,7 +563,9 @@ export default function Systems() {
       // filled, so the sort orders exactly what is on screen; a row whose health
       // has not arrived sorts last rather than pretending to be healthy.
       if (key === "health") {
-        const v = verdictOf(qc.getQueryData<EstateHealth>([...systemHealthKey(n.raw.name)])?.verdict);
+        // Same uuid key as the cell above: sorting must order exactly what
+        // the badges on screen show, not a stale name-keyed entry.
+        const v = verdictOf(qc.getQueryData<EstateHealth>([...systemHealthKey(n.raw.id)])?.verdict);
         return v ? -verdictRank(v) : 9;
       }
       if (key === "standard") return n.standard.toLowerCase();
@@ -518,7 +578,7 @@ export default function Systems() {
     onBack: () => navigate("/systems"),
     onDelete: (n) => del(n),
     onNew: () => navigate("/systems/create"),
-    onEdit: (n) => { openInEdit(n.raw.name); navigate(`/systems/${encodeURIComponent(n.raw.name)}`); },
+    onEdit: (n) => { openInEdit(n.id); navigate(`/systems/${encodeURIComponent(n.id)}`); },
     renderCreate: () => <SystemCreate />,
     renderDetail: (n, ctx) => <SystemDetail node={n} ctx={ctx} />,
     extraBlades: { "property-resolution": propertyResolutionBlade },

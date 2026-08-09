@@ -43,9 +43,12 @@ SVG.
 direction: right
 
 identity: {
-  capability: {
+  choice_alternate: {
     shape: sql_table
     id: uuid {constraint: primary_key}
+    choice_id: uuid {constraint: foreign_key}
+    owner_kind: text {constraint: foreign_key}
+    owner_ref: uuid {constraint: foreign_key}
   }
   human: {
     shape: sql_table
@@ -81,6 +84,12 @@ identity: {
     shape: sql_table
     id: uuid {constraint: primary_key}
   }
+  role_choice: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+    standard_id: uuid {constraint: foreign_key}
+    system_id: uuid {constraint: foreign_key}
+  }
   service: {
     shape: sql_table
     principal_id: uuid {constraint: primary_key}
@@ -88,6 +97,9 @@ identity: {
   system_role: {
     shape: sql_table
     id: uuid {constraint: primary_key}
+    alternate_id: uuid {constraint: foreign_key}
+    owner_kind: text {constraint: foreign_key}
+    owner_ref: uuid {constraint: foreign_key}
     standard_id: uuid {constraint: foreign_key}
     system_id: uuid {constraint: foreign_key}
   }
@@ -98,11 +110,15 @@ identity: {
     role_id: uuid {constraint: foreign_key}
     system_id: uuid {constraint: foreign_key}
   }
-  system_role_capability: {
+  system_role_product: {
     shape: sql_table
-    id: uuid {constraint: primary_key}
-    capability_id: uuid {constraint: foreign_key}
-    role_id: uuid {constraint: foreign_key}
+    product_id: uuid {constraint: primary_key}
+    role_id: uuid {constraint: primary_key}
+  }
+  system_role_type: {
+    shape: sql_table
+    component_type_id: uuid {constraint: primary_key}
+    role_id: uuid {constraint: primary_key}
   }
 }
 
@@ -113,12 +129,6 @@ estate: {
     location_id: uuid {constraint: foreign_key}
     parent_id: uuid {constraint: foreign_key}
     product_id: uuid {constraint: foreign_key}
-  }
-  component_capability: {
-    shape: sql_table
-    id: uuid {constraint: primary_key}
-    capability_id: uuid {constraint: foreign_key}
-    component_id: uuid {constraint: foreign_key}
   }
   interface: {
     shape: sql_table
@@ -169,6 +179,11 @@ estate: {
 }
 
 catalog: {
+  component_type: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+    parent_id: uuid {constraint: foreign_key}
+  }
   driver: {
     shape: sql_table
     id: uuid {constraint: primary_key}
@@ -176,15 +191,10 @@ catalog: {
   product: {
     shape: sql_table
     id: uuid {constraint: primary_key}
+    component_type_id: uuid {constraint: foreign_key}
     driver_id: uuid {constraint: foreign_key}
     parent_product_id: uuid {constraint: foreign_key}
     vendor_id: uuid {constraint: foreign_key}
-  }
-  product_capability: {
-    shape: sql_table
-    id: uuid {constraint: primary_key}
-    capability_id: uuid {constraint: foreign_key}
-    product_id: uuid {constraint: foreign_key}
   }
   product_metric: {
     shape: sql_table
@@ -226,12 +236,6 @@ telemetry: {
     shape: sql_table
     id: uuid {constraint: primary_key}
     component_id: uuid {constraint: foreign_key}
-  }
-  alarm_capability: {
-    shape: sql_table
-    id: uuid {constraint: primary_key}
-    alarm_id: uuid {constraint: foreign_key}
-    capability_id: uuid {constraint: foreign_key}
   }
   command: {
     shape: sql_table
@@ -386,11 +390,11 @@ audit: {
 
 audit.audit_log.actor_principal_id -> identity.principal.id
 audit.audit_log.real_actor_principal_id -> identity.principal.id
+catalog.component_type.parent_id -> catalog.component_type.id
+catalog.product.component_type_id -> catalog.component_type.id
 catalog.product.driver_id -> catalog.driver.id
 catalog.product.parent_product_id -> catalog.product.id
 catalog.product.vendor_id -> catalog.vendor.id
-catalog.product_capability.capability_id -> identity.capability.id
-catalog.product_capability.product_id -> catalog.product.id
 catalog.product_metric.metric_type_id -> telemetry.metric_type.id
 catalog.product_metric.product_id -> catalog.product.id
 catalog.product_property.product_id -> catalog.product.id
@@ -421,8 +425,6 @@ content.tag_binding.tag_id -> content.tag.id
 estate.component.location_id -> estate.location.id
 estate.component.parent_id -> estate.component.id
 estate.component.product_id -> catalog.product.id
-estate.component_capability.capability_id -> identity.capability.id
-estate.component_capability.component_id -> estate.component.id
 estate.interface.component -> estate.component.id
 estate.interface.node_name -> collection.node.principal_id
 estate.interface.type -> estate.interface_type.id
@@ -437,6 +439,10 @@ estate.system.parent_id -> estate.system.id
 estate.system.standard_id -> catalog.standard.id
 estate.system_member.component_id -> estate.component.id
 estate.system_member.system_id -> estate.system.id
+identity.choice_alternate.choice_id -> identity.role_choice.id
+identity.choice_alternate.choice_id -> identity.role_choice.id
+identity.choice_alternate.owner_kind -> identity.role_choice.owner_kind
+identity.choice_alternate.owner_ref -> identity.role_choice.owner_ref
 identity.human.principal_id -> identity.principal.id
 identity.impersonation_session.real_actor_principal_id -> identity.principal.id
 identity.impersonation_session.target_principal_id -> identity.principal.id
@@ -445,17 +451,22 @@ identity.principal_grant.principal_id -> identity.principal.id
 identity.principal_grant.role_id -> identity.role.id
 identity.principal_group_member.group_id -> identity.principal_group.id
 identity.principal_group_member.principal_id -> identity.principal.id
+identity.role_choice.standard_id -> catalog.standard.id
+identity.role_choice.system_id -> estate.system.id
 identity.service.principal_id -> identity.principal.id
+identity.system_role.alternate_id -> identity.choice_alternate.id
+identity.system_role.owner_kind -> identity.choice_alternate.owner_kind
+identity.system_role.owner_ref -> identity.choice_alternate.owner_ref
 identity.system_role.standard_id -> catalog.standard.id
 identity.system_role.system_id -> estate.system.id
 identity.system_role_assignment.component_id -> estate.component.id
 identity.system_role_assignment.role_id -> identity.system_role.id
 identity.system_role_assignment.system_id -> estate.system.id
-identity.system_role_capability.capability_id -> identity.capability.id
-identity.system_role_capability.role_id -> identity.system_role.id
+identity.system_role_product.product_id -> catalog.product.id
+identity.system_role_product.role_id -> identity.system_role.id
+identity.system_role_type.component_type_id -> catalog.component_type.id
+identity.system_role_type.role_id -> identity.system_role.id
 telemetry.alarm.component_id -> estate.component.id
-telemetry.alarm_capability.alarm_id -> telemetry.alarm.id
-telemetry.alarm_capability.capability_id -> identity.capability.id
 telemetry.command.caused_event_id -> telemetry.event.id
 telemetry.command.command_type_id -> telemetry.command_type.id
 telemetry.command.component_id -> estate.component.id
@@ -493,18 +504,18 @@ telemetry.property.system_id -> estate.system.id
 ## The subsystems
 
 - **identity** - who can act and what they may do: principals (human and
-  service), groups, grants, roles, capabilities, and the impersonation trail.
+  service), groups, grants, roles, the typed-slot system-role guard, and the
+  impersonation trail.
 - **estate** - what is being monitored: locations, systems, components, and the
   interfaces a component exposes.
-- **catalog** - the shared reference library: vendors, products, drivers, and
-  standards, plus the capabilities and properties they define.
+- **catalog** - the shared reference library: vendors, products, drivers,
+  component types, and standards, plus the properties they define.
 - **telemetry** - the five-lane observability model
   ([ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables),
   [ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)):
   the typed registries (`metric_type`, `property_type`, `event_type`,
   `command_type`) over the bare-noun data tables (`metric`, `property`, `event`,
-  `command`, `log_line`) and the alarms raised off them (`alarm`,
-  `alarm_capability`).
+  `command`, `log_line`) and the alarms raised off them (`alarm`).
 - **collection** - where and how telemetry is gathered: the nodes that run probes,
   the tasks they execute, and the `node_log` self-log lane.
 - **config** - the settings, variables, secrets, and credentials that parameterize

@@ -1,5 +1,6 @@
 import { type Accessor, type Component, type JSX, For, Show, createEffect, createMemo, createSignal, untrack } from "solid-js";
 import { Dynamic } from "solid-js/web";
+import { useLocation, useNavigate } from "@solidjs/router";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { facetActive as facetActiveFn, toggleFacet as toggleFacetFn, resolveFilterKeys, type Chip, type FilterKeys } from "../lib/predicate";
@@ -39,6 +40,19 @@ import { type BladeDef, type BladeEdit, type BladeRef, BladesContext, createBlad
 
 export interface ListNode {
   id: string;
+  // addr is a second address for a page whose id is a uuid but whose route
+  // still carries the entity's bare name (#627, until the URL swap to uuid
+  // addressing lands): the focus-by-URL resolution falls back to it when id
+  // does not match. Not guaranteed unique the way id is; omit it entirely on
+  // a page where id already IS the addressable value.
+  addr?: string;
+  // The server's own dash render of this node's dotted path (#627 Task 15:
+  // component/system/location renders.dash), fed straight onto the row
+  // label's ancestor sub-line in list mode. Not derived here: the page's own
+  // pathOf walk covers only THIS page's tree, and cannot cross the
+  // component-tree-to-location-tree boundary a parentless node in a scoped
+  // placement (#627 Task 10) sits across.
+  pathRender?: string;
   display: string;
   // The scope-aware actions the server says the caller may perform on THIS row
   // (create a child, update, delete), from the read-side `actions` field. When
@@ -201,11 +215,38 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   // The signal setter treats a function arg as an updater; N is an object but TS
   // cannot prove it is not callable, so set the focused node through a thunk.
   const showFull = (n: N | null) => setFullPage(() => n);
+  const routerNavigate = useNavigate();
+  const location = useLocation();
 
   // The flattened index (id -> node, child -> parent, the in-order node list, the
   // container ids) and the ancestor path: both are pure, in lib/listmodel.
   const index = createMemo(() => buildIndex(cfg.nodes()));
   const pathOf = (n: N): Crumb[] => pathOfModel(index(), n);
+
+  // focusMiss holds the two states a route's focus id can land in once it is
+  // known NOT to be a live uuid (#627 Task 15c): "miss" when no row's addr
+  // matches either, "ambiguous" when more than one does (addr is not
+  // guaranteed unique the way id is, see listmodel.ts). null the rest of the
+  // time, including while resolved (fullPage is set) or the reserved
+  // "create" literal.
+  type FocusMiss = { kind: "miss" } | { kind: "ambiguous"; matches: N[] };
+  const [focusMiss, setFocusMiss] = createSignal<FocusMiss | null>(null);
+
+  // redirectToId swaps the route's trailing segment for id via history
+  // replace: the operator's back button still lands where they came from,
+  // not on the just-resolved old-address URL. location.pathname is the
+  // FULL browser path, base included ("/web/components/mic-2" in the real
+  // app, which mounts <Router base="/web">), so the reconstructed target is
+  // base-inclusive too. { resolve: false } is required: solid-router's
+  // default resolve treats a leading-"/" `to` as relative to the router's
+  // OWN base and prepends it again, which double-prefixes to
+  // "/web/web/components/<id>" and 404s. resolve:false takes `to` as the
+  // literal path to set, matching what it already is.
+  const redirectToId = (id: string) => {
+    const parts = location.pathname.split("/");
+    parts[parts.length - 1] = encodeURIComponent(id);
+    routerNavigate(parts.join("/"), { replace: true, resolve: false });
+  };
 
   // After a refetch, drop any open blade whose node no longer exists (e.g. it was
   // deleted), and re-resolve the full-page node by id so it shows fresh data. The
@@ -223,15 +264,54 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
 
   // Deep link: when the route carries a focus id, open that node full-page and
   // close any ephemeral blades (the full page is the addressable surface).
+  // Routes take :id now (#627 Task 15c), so the common case is a straight
+  // byId hit. A miss falls back to a name lookup (byAddr): an old bookmark
+  // from before the URL swap, or one of the cross-entity drill sites that
+  // still navigate by name because the panel they read from (health,
+  // membership) carries no id to hand them. A unique name hit replaces the
+  // URL with the resolved id (an old address earns a corrected bookmark, not
+  // a silent read); more than one hit is a genuine ambiguity (addr is not
+  // unique the way id is, #627 Task 10 legalized a shared name across
+  // placements) and gets a disambiguation list instead of picking one
+  // arbitrarily; zero hits is an honest "no such row," never the old
+  // behavior of silently falling through to the unfiltered list.
   createEffect(() => {
     const f = cfg.focus?.();
-    if (!f) {
+    if (!f || f === "create") {
+      // "create" is the reserved literal from /<entity>/create (isCreate()
+      // below renders the draft surface regardless of fullPage/focusMiss);
+      // it must never be looked up as a name; TreeList.tsx's own uuid-shape
+      // guard has no other call site, but this is where a "create"-named
+      // real row would otherwise collide with the route.
       showFull(null);
+      setFocusMiss(null);
       return;
     }
-    const n = index().byId.get(f) ?? null;
-    showFull(n);
-    if (n) blades.close();
+    const byId = index().byId.get(f);
+    if (byId) {
+      showFull(byId);
+      setFocusMiss(null);
+      blades.close();
+      return;
+    }
+    // Not a live id. Wait for the list's first fetch to settle before
+    // judging a miss, so a fresh page load never flashes "not found" while
+    // the query is still in flight.
+    if (cfg.loading?.()) {
+      showFull(null);
+      setFocusMiss(null);
+      return;
+    }
+    showFull(null);
+    const matches = index().all.filter((n) => n.addr === f);
+    if (matches.length === 1) {
+      setFocusMiss(null);
+      redirectToId(matches[0].id);
+    } else if (matches.length > 1) {
+      setFocusMiss({ kind: "ambiguous", matches });
+    } else {
+      setFocusMiss({ kind: "miss" });
+    }
   });
 
   const filtering = createMemo(() => chips().length > 0);
@@ -443,28 +523,42 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
               <span class="inline-flex flex-none items-center">{cfg.leadIcon!(n)}</span>
             </Show>
             <span class="flex min-w-0 flex-col gap-0.5 py-0.5">
-              <Show when={p.row.path && p.row.path.length}>
-                <span class="truncate text-[11px] text-base-content/40">{p.row.path!.map((x) => x.display).join(" › ")}</span>
+              {/* The list-mode ancestor sub-line. pathRender (the server's own
+                  dotted-path dash render, #627 Task 15) wins when present: pathOf's
+                  tree-local walk (p.row.path) cannot cross the component-tree-to-
+                  location-tree boundary, so a component with no component parent
+                  sitting directly in a room has no LOCAL ancestor to show even
+                  though it plainly sits under that room. p.row.path is still the
+                  fallback for a node the server has not (yet) annotated. */}
+              <Show when={p.row.pathRender || (p.row.path && p.row.path.length)}>
+                <span class="truncate text-[11px] text-base-content/40">
+                  {p.row.pathRender ?? p.row.path!.map((x) => x.display).join(" › ")}
+                </span>
               </Show>
-              {/* The label, then the key beneath it. A row's id IS its key (the
-                  kebab name the API and CLI address it by), so an operator can
-                  read what to type without opening the row. It is always shown
-                  rather than revealed on hover: hover does not exist on touch,
-                  is not discoverable, and cannot be selected to copy, and
-                  copying it into a CLI invocation is the point.
+              {/* The label, then the key beneath it. A row's key (n.addr when
+                  set, else n.id) is what the API and CLI address it by, so an
+                  operator can read what to type without opening the row. It
+                  is always shown rather than revealed on hover: hover does
+                  not exist on touch, is not discoverable, and cannot be
+                  selected to copy, and copying it into a CLI invocation is
+                  the point. n.addr, not n.id, because on a page where two
+                  rows can share a name (#627) n.id is the uuid identity, not
+                  the operator-typed address; a page where every id is
+                  already unique and addressable (addr unset) reads the same
+                  as before.
 
-                  When the entity has no display name the label IS the name, so
+                  When the entity has no display name the label IS the key, so
                   it is rendered once, in the data face, which marks it as an
                   identifier rather than a friendly string somebody chose. */}
               <span
                 class="truncate"
-                classList={{ "font-data text-[13px]": n.display === n.id }}
+                classList={{ "font-data text-[13px]": n.display === (n.addr ?? n.id) }}
                 style={{ "font-weight": cfg.nameWeight ? cfg.nameWeight(n) : 500 }}
               >
                 {n.display}
               </span>
-              <Show when={n.display !== n.id}>
-                <span class="truncate font-data text-[11px] text-base-content/40">{n.id}</span>
+              <Show when={n.display !== (n.addr ?? n.id)}>
+                <span class="truncate font-data text-[11px] text-base-content/40">{n.addr ?? n.id}</span>
               </Show>
             </span>
           </span>
@@ -642,6 +736,47 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   // owns a not-yet-saved draft and, on Save, navigates to /<entity>/<newId>.
   const isCreate = () => cfg.focus?.() === "create" && !!cfg.renderCreate;
 
+  // FocusMissView is what a route focus id that resolves to neither a live
+  // uuid nor a unique name renders (#627 Task 15c): a genuine miss ("no such
+  // row", replacing the old silent fall-through to the unfiltered list) or a
+  // disambiguation list when more than one row shares the addressed name.
+  // Each candidate shows its server-rendered path (or, absent that, its
+  // addr/id) beside its label, since the label alone is exactly what made
+  // the two rows ambiguous in the first place.
+  const FocusMissView = (p: { miss: FocusMiss }) => (
+    <section class="fade-in flex max-w-3xl flex-col gap-4">
+      <Button class="flex-none self-start" onClick={back}>{"←"} {cfg.entity.plural}</Button>
+      <Show
+        when={p.miss.kind === "ambiguous"}
+        fallback={
+          <div role="alert" class="alert alert-error alert-soft text-sm">
+            <span>No such {cfg.entity.name}. This link may use an old address.</span>
+          </div>
+        }
+      >
+        <div class="flex flex-col gap-3">
+          <div role="alert" class="alert alert-warning alert-soft text-sm">
+            <span>More than one {cfg.entity.name} matches this address. Choose one:</span>
+          </div>
+          <div class="overflow-hidden rounded-box border border-base-300">
+            <For each={p.miss.kind === "ambiguous" ? p.miss.matches : []}>
+              {(n, i) => (
+                <button
+                  class="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-base-content/5"
+                  classList={{ "border-t border-base-300": i() > 0 }}
+                  onClick={() => openFull(n)}
+                >
+                  <span class="flex-1 truncate text-sm">{n.display}</span>
+                  <span class="truncate font-data text-[11px] text-base-content/40">{n.pathRender ?? n.addr ?? n.id}</span>
+                </button>
+              )}
+            </For>
+          </div>
+        </div>
+      </Show>
+    </section>
+  );
+
   return (
     // The blade controller is shared through context, not just handed to BladeStack:
     // a blade BODY (an interface blade drilling to its component) calls useBlades to
@@ -657,8 +792,12 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
       <Show
         when={isCreate()}
         fallback={
-          <Show when={fullPage()} fallback={<ListBody />}>
-            {(n) => <FullPage node={n()} />}
+          <Show when={focusMiss()} fallback={
+            <Show when={fullPage()} fallback={<ListBody />}>
+              {(n) => <FullPage node={n()} />}
+            </Show>
+          }>
+            {(miss) => <FocusMissView miss={miss()} />}
           </Show>
         }
       >

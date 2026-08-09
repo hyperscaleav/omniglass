@@ -93,43 +93,48 @@ func scanInterface(row pgx.Row) (*Interface, error) {
 	return &it, nil
 }
 
-// componentInScope reports whether an interface/task owning componentName is
+// componentInScope reports whether an interface/task owning componentID is
 // inside a component-tier scope, the cascade both entities share: an all scope
 // always holds; a nil owner (a server-hosted interface with no component) is in
 // scope ONLY for an all scope (there is no component to cascade through, so a
 // component-scoped operator cannot reach it); otherwise the component's row is
-// checked against the scope subtree via inScopeTree on the component table. The
-// set carries component-tier ids (applicableKinds maps interface/task to the
-// component tier), so no id translation is needed beyond name -> component id.
-func componentInScope(ctx context.Context, q querier, componentName *string, set scope.Set) (bool, error) {
+// checked against the scope subtree via inScopeTree on the component table.
+// Takes the id directly, not the name interfaceCols also projects for display
+// (Interface.Component): the two are read off the same interface.component
+// column in one query, so passing the id here needs no lookup at all, and
+// resolving from the name instead would risk landing on a different row
+// sharing it once #627 lands.
+func componentInScope(ctx context.Context, q querier, componentID *string, set scope.Set) (bool, error) {
 	if set.All {
 		return true, nil
 	}
-	if componentName == nil {
+	if componentID == nil {
 		return false, nil
 	}
-	var id string
-	err := q.QueryRow(ctx, `select id from component where name = $1`, *componentName).Scan(&id)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil // component gone: nothing to place it in a rooted scope
-	} else if err != nil {
-		return false, fmt.Errorf("storage: resolve component %q for scope: %w", *componentName, err)
-	}
-	return inScopeTree(ctx, q, componentTable, id, set)
+	return inScopeTree(ctx, q, componentTable, *componentID, set)
 }
 
 // interfaceComponentID resolves an optional component reference (a name or a
-// uuid) to the component id the arc stores. A nil reference stays nil (a
-// server-hosted interface owns no component); an unknown one is the 422 sentinel
-// rather than a NULL that would silently detach the interface.
-func interfaceComponentID(ctx context.Context, q querier, ref *string) (*string, error) {
+// uuid) to the component id the arc stores, within the caller's create scope
+// (resolveScopedRef, ruling 2, #627: ambiguity is judged inside create, not
+// estate-wide, so its one caller no longer needs a separate inScopeTree check
+// afterward, and never learns an out-of-scope component's uuid from a
+// collision). A nil reference stays nil (a server-hosted interface owns no
+// component); an absent one is the 422 not-found sentinel, one that exists
+// only outside create scope is the 403 forbidden sentinel (preserved from the
+// pre-#627 two-step resolve, not collapsed into not-found: the caller supplied
+// this reference itself in the same request).
+func interfaceComponentID(ctx context.Context, q querier, ref *string, create scope.Set) (*string, error) {
 	if ref == nil {
 		return nil, nil
 	}
-	c, err := scopedByName(ctx, q, componentConfig, *ref)
-	if errors.Is(err, ErrComponentNotFound) {
+	c, err := resolveScopedRef(ctx, q, componentConfig, *ref, "interface", create)
+	switch {
+	case errors.Is(err, ErrComponentNotFound):
 		return nil, ErrInterfaceComponentNotFound
-	} else if err != nil {
+	case errors.Is(err, ErrComponentForbidden):
+		return nil, ErrInterfaceForbidden
+	case err != nil:
 		return nil, err
 	}
 	return &c.ID, nil
@@ -224,7 +229,7 @@ func (p *PG) GetInterface(ctx context.Context, id string, read scope.Set) (*Inte
 	if err != nil {
 		return nil, err
 	}
-	in, err := componentInScope(ctx, p.pool, it.Component, read)
+	in, err := componentInScope(ctx, p.pool, it.ComponentID, read)
 	if err != nil {
 		return nil, err
 	}
@@ -247,34 +252,27 @@ func (p *PG) CreateInterface(ctx context.Context, actorID string, spec Interface
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if spec.Component == nil {
-		if !create.All {
-			return nil, ErrInterfaceForbidden
-		}
-	} else {
-		var id string
-		err := tx.QueryRow(ctx, `select id from component where name = $1`, *spec.Component).Scan(&id)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrInterfaceComponentNotFound
-		} else if err != nil {
-			return nil, fmt.Errorf("storage: resolve component %q: %w", *spec.Component, err)
-		}
-		in, err := inScopeTree(ctx, tx, componentTable, id, create)
-		if err != nil {
-			return nil, err
-		}
-		if !in {
-			return nil, ErrInterfaceForbidden
-		}
+	// Resolved once, via interfaceComponentID (uuid-or-name, ADR-0062,
+	// resolved inside create scope per ruling 2, #627), and reused for the
+	// insert's FK value: the old code resolved spec.Component a second time
+	// here, via its own inline `select id from component where name = $1`,
+	// which is exactly the shape that raises SQLSTATE 21000 the moment two
+	// components share a name. No separate inScopeTree check follows:
+	// interfaceComponentID already refused a component outside create scope
+	// (as the component's own not-found sentinel, never surfacing an
+	// out-of-scope uuid), so a resolved non-nil componentID is always
+	// in-scope by construction.
+	componentID, err := interfaceComponentID(ctx, tx, spec.Component, create)
+	if err != nil {
+		return nil, err
+	}
+	if componentID == nil && !create.All {
+		return nil, ErrInterfaceForbidden
 	}
 
 	params := spec.Params
 	if len(params) == 0 {
 		params = []byte("{}")
-	}
-	componentID, err := interfaceComponentID(ctx, tx, spec.Component)
-	if err != nil {
-		return nil, err
 	}
 	nodeID, err := interfaceNodeID(ctx, tx, spec.Node)
 	if err != nil {
@@ -376,14 +374,14 @@ func resolveInterfaceScoped(ctx context.Context, q querier, id string, read, act
 	if err != nil {
 		return nil, err
 	}
-	readable, err := componentInScope(ctx, q, it.Component, read)
+	readable, err := componentInScope(ctx, q, it.ComponentID, read)
 	if err != nil {
 		return nil, err
 	}
 	if !readable {
 		return nil, ErrInterfaceNotFound
 	}
-	actionable, err := componentInScope(ctx, q, it.Component, action)
+	actionable, err := componentInScope(ctx, q, it.ComponentID, action)
 	if err != nil {
 		return nil, err
 	}

@@ -136,15 +136,15 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	if roleCount != 2 {
 		t.Errorf("meeting-room roles = %d, want 2 (seed not idempotent or incomplete)", roleCount)
 	}
-	var micCaps []string
-	if err := conn.QueryRow(ctx, `select array_agg(cap.name order by cap.name)
-		from system_role r join system_role_capability rc on rc.role_id = r.id
-		join capability cap on cap.id = rc.capability_id
-		where r.standard_id = (select id from standard where name = 'meeting-room') and r.name = 'room-mic'`).Scan(&micCaps); err != nil {
-		t.Fatalf("read room-mic capabilities: %v", err)
+	var micTypes []string
+	if err := conn.QueryRow(ctx, `select array_agg(ct.name order by ct.name)
+		from system_role r join system_role_type rt on rt.role_id = r.id
+		join component_type ct on ct.id = rt.component_type_id
+		where r.standard_id = (select id from standard where name = 'meeting-room') and r.name = 'room-mic'`).Scan(&micTypes); err != nil {
+		t.Fatalf("read room-mic accepted types: %v", err)
 	}
-	if len(micCaps) != 2 || micCaps[0] != "microphone" || micCaps[1] != "speaker" {
-		t.Errorf("room-mic capabilities = %v, want [microphone speaker]", micCaps)
+	if len(micTypes) != 1 || micTypes[0] != "video-bar" {
+		t.Errorf("room-mic accepted types = %v, want [video-bar]", micTypes)
 	}
 	if _, err := conn.Exec(ctx, `update system_role set quorum = 4
 		where standard_id = (select id from standard where name = 'meeting-room') and name = 'room-mic'`); err != nil {
@@ -260,5 +260,135 @@ func TestSeedRolesIdempotent(t *testing.T) {
 				break
 			}
 		}
+	}
+}
+
+// TestSeedRoleChoicesIdempotent proves the shipped huddle-room conferencing
+// choice (#626) seeds exactly once (the second Run above must not duplicate
+// the choice, its two alternates, or any of the roles that join them) and
+// that every conferencing role resolves a non-null alternate_id pointing at
+// the alternate its Choice/Alternate fields name in standards.yaml: the
+// failure mode seedStandardRoles running before seedStandardChoices would
+// produce (nothing to resolve against yet) or a name typo between the two
+// blocks would produce (a silently unconditional role instead of a grouped
+// one).
+func TestSeedRoleChoicesIdempotent(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+
+	for i := 0; i < 2; i++ {
+		if err := seed.Run(ctx, gw); err != nil {
+			t.Fatalf("seed run %d: %v", i, err)
+		}
+	}
+
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+
+	var choiceCount int
+	if err := conn.QueryRow(ctx, `
+		select count(*) from role_choice
+		where owner_kind = 'standard' and standard_id = (select id from standard where name = 'huddle-room')
+		  and name = 'conferencing'`).Scan(&choiceCount); err != nil {
+		t.Fatalf("count conferencing choices: %v", err)
+	}
+	if choiceCount != 1 {
+		t.Errorf("conferencing choices under huddle-room = %d, want 1 (seed not idempotent or incomplete)", choiceCount)
+	}
+
+	var altCount int
+	if err := conn.QueryRow(ctx, `
+		select count(*) from choice_alternate ca
+		join role_choice rc on rc.id = ca.choice_id
+		where rc.owner_kind = 'standard' and rc.standard_id = (select id from standard where name = 'huddle-room')
+		  and rc.name = 'conferencing'`).Scan(&altCount); err != nil {
+		t.Fatalf("count conferencing alternates: %v", err)
+	}
+	if altCount != 2 {
+		t.Errorf("conferencing alternates = %d, want 2 (all-in-one, component-system; seed not idempotent or incomplete)", altCount)
+	}
+
+	// Positions land 1..n from standards.yaml's list order, not whatever the
+	// planner happens to return: this is what internal/health.Choice.Active
+	// reads to break a tie, and TestAlternateTieBreaksByPosition pins that
+	// nothing else in the read path orders alternates.
+	wantPos := map[string]int{"all-in-one": 1, "component-system": 2}
+	for altName, want := range wantPos {
+		var pos int
+		if err := conn.QueryRow(ctx, `
+			select ca.position from choice_alternate ca
+			join role_choice rc on rc.id = ca.choice_id
+			where rc.owner_kind = 'standard' and rc.standard_id = (select id from standard where name = 'huddle-room')
+			  and rc.name = 'conferencing' and ca.name = $1`, altName).Scan(&pos); err != nil {
+			t.Fatalf("read %s position: %v", altName, err)
+		}
+		if pos != want {
+			t.Errorf("%s position = %d, want %d", altName, pos, want)
+		}
+	}
+
+	// Every conferencing role resolves a non-null alternate_id, and it
+	// points at the alternate under huddle-room's own choice, not some
+	// other owner's: the composite FK (system_role_alternate_fk) is what
+	// would refuse it otherwise, but this pins that the seed data itself
+	// never relied on that refusal firing.
+	rows, err := conn.Query(ctx, `
+		select sr.name, ca.name from system_role sr
+		join choice_alternate ca on ca.id = sr.alternate_id
+		join role_choice rc on rc.id = ca.choice_id
+		where sr.owner_kind = 'standard' and sr.standard_id = (select id from standard where name = 'huddle-room')
+		  and rc.name = 'conferencing'
+		order by sr.name`)
+	if err != nil {
+		t.Fatalf("query conferencing roles: %v", err)
+	}
+	defer rows.Close()
+	want := map[string]string{
+		"conf-amp": "component-system", "conf-bar": "all-in-one", "conf-camera": "component-system",
+		"conf-codec": "component-system", "conf-dsp": "component-system", "conf-mic": "component-system",
+	}
+	got := map[string]string{}
+	for rows.Next() {
+		var role, alt string
+		if err := rows.Scan(&role, &alt); err != nil {
+			t.Fatalf("scan conferencing role/alternate: %v", err)
+		}
+		got[role] = alt
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate conferencing roles: %v", err)
+	}
+	if len(got) != len(want) {
+		t.Fatalf("conferencing roles resolving an alternate = %v, want %v (a role with no alternate_id is missing here)", got, want)
+	}
+	for role, wantAlt := range want {
+		if got[role] != wantAlt {
+			t.Errorf("%s joins alternate %q, want %q", role, got[role], wantAlt)
+		}
+	}
+
+	// An operator's edit to the choice survives the second seed run, the
+	// same seed-if-absent contract every other shipped declaration keeps.
+	if _, err := conn.Exec(ctx, `update role_choice set display_name = 'Our Conferencing' where name = 'conferencing'`); err != nil {
+		t.Fatalf("edit seeded choice: %v", err)
+	}
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed re-run after edit: %v", err)
+	}
+	var displayName string
+	if err := conn.QueryRow(ctx, `select display_name from role_choice where name = 'conferencing'`).Scan(&displayName); err != nil {
+		t.Fatalf("read edited choice: %v", err)
+	}
+	if displayName != "Our Conferencing" {
+		t.Errorf("choice display_name = %q after re-seed, want the operator's edit to survive", displayName)
 	}
 }

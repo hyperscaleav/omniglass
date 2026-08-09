@@ -85,8 +85,7 @@ describe("resourceLabel", () => {
     expect(resourceLabel(labelEv("principal_grant", { Role: "admin", ScopeKind: "all" }))).toBe("admin");
   });
 
-  it("labels a component capability by its component and a command by its type", () => {
-    expect(resourceLabel(labelEv("component_capability", { component: "disp-1", capability: "u-cap", present: true }))).toBe("disp-1");
+  it("labels a command by its type", () => {
     expect(resourceLabel(labelEv("command", { command_type: "reboot", owner: "u-1" }))).toBe("reboot");
   });
 

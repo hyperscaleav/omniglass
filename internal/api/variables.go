@@ -94,7 +94,7 @@ type resolvedVariableBody struct {
 }
 
 type effectiveVariablesInput struct {
-	Name string `path:"name" doc:"The component's name"`
+	Name string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
 }
 
 type effectiveVariablesOutput struct {
@@ -224,6 +224,9 @@ func registerVariableRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 
 // mapVariableErr translates the gateway's variable sentinels into HTTP status.
 func mapVariableErr(err error) error {
+	if refErr, ok := mapRefErr(err); ok {
+		return refErr
+	}
 	switch {
 	case errors.Is(err, storage.ErrVariableNotFound):
 		return huma.Error404NotFound("variable not found")

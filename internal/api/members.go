@@ -13,8 +13,8 @@ import (
 // membership that answers a question asked without a system in hand; it is a
 // default for context-free callers, not a resolution rule.
 type systemMemberBody struct {
-	System      string `json:"system" doc:"Name of the system"`
-	Component   string `json:"component" doc:"Name of the component"`
+	System      string `json:"system" doc:"Name of the system, or a dotted address (e.g. boi.17c.$sys.av)"`
+	Component   string `json:"component" doc:"Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
 	Primary     bool   `json:"primary" doc:"Whether this membership is the component's default when no system is given"`
 	SystemCount int    `json:"system_count" doc:"How many systems this component belongs to in total; more than one means it is shared"`
 }
@@ -32,16 +32,16 @@ func toSystemMemberBodies(ms []storage.Member) []systemMemberBody {
 }
 
 type systemMembersInput struct {
-	Name string `path:"name" doc:"Name of the system"`
+	Name string `path:"name" doc:"Name of the system, or a dotted address (e.g. boi.17c.$sys.av)"`
 }
 
 type componentMembershipsInput struct {
-	Name string `path:"name" doc:"Name of the component"`
+	Name string `path:"name" doc:"Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
 }
 
 type systemMemberPathInput struct {
-	Name      string `path:"name" doc:"Name of the system"`
-	Component string `path:"component" doc:"Name of the component"`
+	Name      string `path:"name" doc:"Name of the system, or a dotted address (e.g. boi.17c.$sys.av)"`
+	Component string `path:"component" doc:"Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
 }
 
 type listSystemMembersOutput struct {
@@ -145,6 +145,9 @@ func registerMemberRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 }
 
 func mapMemberErr(err error) error {
+	if refErr, ok := mapRefErr(err); ok {
+		return refErr
+	}
 	switch {
 	case errors.Is(err, storage.ErrMemberNotFound):
 		return huma.Error404NotFound("component is not a member of this system")

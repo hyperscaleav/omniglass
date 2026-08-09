@@ -10,7 +10,7 @@ import (
 )
 
 // The type registries and catalogs (location_type, standard, vendor, driver,
-// capability, product) are flat, unscoped reference tables sharing one shape: a
+// component_type, product) are flat, unscoped reference tables sharing one shape: a
 // stable id, an official flag (seed-owned rows), and a display_name. They
 // are not scoped-tree entities, so they use these registry helpers rather than
 // scopedcrud. Operator rows are official=false; seeded rows are official=true and

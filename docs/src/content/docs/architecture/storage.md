@@ -49,12 +49,82 @@ Column schemas live with each owning feature: [samples](/architecture/properties
   kebab name rule to every table whose declared identity shape bears a name, so a call site cannot
   skip validation or invent a second rule
   ([ADR-0076](/architecture/decisions/), [core entities](/architecture/core-entities/)).
-- **No `tenant_id`.** Isolation is per-database; no tenant column anywhere. The registries and catalogs (`metric_type`, `property_type`, `event_type`, `interface_type`, `location_type`, `secret_type`, `vendor`, `driver`, `capability`, `product`, `standard`) carry an **`official` boolean** (the per-registry template / org / official `scope` ladder is future design, [property scope](/architecture/properties/#key-scope-template-org-official)): `official: true` rows are the ship-with canonical set, `official: false` operator- or org-authored. The boolean is **authority, not provenance**: a `standard` and a `location_type` ship `official: false`, installed **only if absent** (example content an estate owns); the canonical catalogs ship `official: true` through an authoritative `ON CONFLICT DO UPDATE`, so a release can correct the shared vocabulary ([the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs)).
+- **No `tenant_id`.** Isolation is per-database; no tenant column anywhere. The registries and catalogs (`metric_type`, `property_type`, `event_type`, `interface_type`, `location_type`, `secret_type`, `vendor`, `driver`, `component_type`, `product`, `standard`) carry an **`official` boolean** (the per-registry template / org / official `scope` ladder is future design, [property scope](/architecture/properties/#key-scope-template-org-official)): `official: true` rows are the ship-with canonical set, `official: false` operator- or org-authored. The boolean is **authority, not provenance**: a `standard` and a `location_type` ship `official: false`, installed **only if absent** (example content an estate owns); the canonical catalogs ship `official: true` through an authoritative `ON CONFLICT DO UPDATE`, so a release can correct the shared vocabulary ([the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs)).
 - **Three storage shapes.** **Ground-truth records**: append-only, immutable, named for what they are ([below](#ground-truth-records)). There is **no `telemetry` table**: samples are published to the JetStream data lane (raw appears only on a `collection.failed` event or a dev raw-mode tap, [samples](/architecture/properties/)), and a schedule fire is an `event` with `origin=scheduled`. **Samples** (`metric` / `property`) are the typed firehose, `log_line` and `node_log` the untyped raw arrival beside them ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events): no registered name, no catalog gate). **Stateful entities and projections** (`alarm`, `action`) hold state directly; everything "current" is a rebuildable read, **views by default**. The model is **not event-sourced**.
 - **Provenance and lineage on every sample**: `provenance` (observed / calculated / intended / declared), `source` (which sensor or path, for observed), and a lineage pointer enforced per provenance by a CHECK ([the lineage CHECK](#the-lineage-check-the-pattern)). A `declared` row is an operator's assertion recorded in the series itself ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)); the metric lane admits the first three provenances today (no declared-metric writer exists, and its CHECK refuses the row).
 - **Ownership is the exclusive-arc**, though not one uniform arc: the sample tables, `event`, and `command` carry `owner_kind` (`component` / `system` / `location` / `node`) plus the matching typed FK and a CHECK (no platform or global arm on a sample); `log_line` is **component-only** (a single NOT NULL `component_id`; a node's self-logs live in `node_log`); `variable`'s arc is `platform` / `component` / `system` / `location` (no node arm; `platform` sets all three FKs null); `alarm` carries **no arc**, a single NOT NULL `component_id`, component-local by design today. Full pattern: [core entities](/architecture/core-entities/#ownership-the-exclusive-arc).
 - **A write struct takes the `Write` suffix; the bare noun is the row**: `MetricSampleWrite` in, `MetricSample` back, likewise `PropertySampleWrite`, `EventWrite`, `LogLineWrite`. A carrier is named for what it carries: hence the wire message is a `TelemetryBatch` ([ADR-0072](/architecture/decisions/#adr-0072-an-envelope-is-not-named-after-its-passengers-and-an-insert-struct-takes-the-write-suffix)).
 - **Keys**: samples and events use a surrogate id plus `ts`; each catalog (`metric_type`, `property_type`, `event_type`, `command_type`) is name-unique with the **`official` boolean** deciding authority, and the three ingest catalogs refuse a name a sibling holds; structural entities carry a unique, renameable `name` over a uuid primary key; a `task` is **content-addressed** (`sha256` over `(interface_id, mode, spec)`); a `node` by its `principal_id`. Every foreign key stores the target's primary key, so a rename is free ([ADR-0056](/architecture/decisions/#adr-0056-every-foreign-key-stores-a-primary-key)).
+- **A `location`, `system`, or `component` name is unique within its placement, not across the estate**
+  ([ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup)):
+  each table trades its old global `UNIQUE (name)` constraint for a set of partial unique indexes, one
+  per placement bucket, plus a plain btree on the bare `name` column for the ambiguity scan every
+  bare-name resolve runs. `component` and `system` both carry three buckets (parent, location, orphan:
+  `component_parent_name_key` / `component_location_name_key` / `component_orphan_name_key` and the
+  matching triple on `system`), since both carry their own `parent_id` and `location_id`. `location`
+  carries only two (`location_parent_name_key` / `location_root_name_key`): it has no `location_id`
+  column of its own, so its two buckets are parented and root
+  (`db/migrations/20260808090000_names_scope_to_placement.sql`). A **dotted address**
+  (`boi.17c.415a.$comp.display-1`) resolves structurally against these same indexes, one deterministic
+  hop per segment, before any scope or ambiguity check runs; see [core entities](/architecture/core-entities/#an-address-a-uuid-or-a-dotted-path)
+  for the grammar and [identity and access](/architecture/identity-access/#a-reference-resolves-within-a-scope)
+  for how scope and ambiguity are then decided against the resolved candidate set.
+
+## Migrations: three buckets, kept separate
+
+A schema change is authored with **dbmate**: pure-DDL migrations under `db/migrations/`, embedded into
+the binary and applied by the `migrate` run mode. Two rules hold everywhere: a migration **runs exactly
+once** (dbmate keys on the timestamp version, not the contents, so it is never edited after it ships,
+only followed by a new one), and DDL is **idempotent** (`IF NOT EXISTS`, a guarded `DO` block for a
+Postgres statement with no `IF NOT EXISTS` form of its own, e.g. a column rename).
+
+A change that both reshapes the schema and needs default rows for the shape to be usable never mixes
+the two in one migration. Three buckets, never conflated:
+
+- **Schema migrations** (`db/migrations/*.sql`, dbmate): pure DDL. No seed rows: a schema dump or a
+  future squash silently drops any row a migration inserted, so a migration that seeds data is a landmine
+  for whoever collapses the chain later.
+- **Boot seed phase** (idempotent upsert on every server start, `internal/seed/*.yaml`): ship-with
+  reference data, authoritative via `ON CONFLICT DO UPDATE` for a canonical catalog (a release can
+  correct it); operator rows are never touched. **Narrow carve-out:** a seeded table can additionally
+  reconcile its child rows to the declared set every boot, deleting one that dropped out (refusing
+  instead if something still points at it) rather than leaving it in place, but only where BOTH hold:
+  the table has **no operator write path** (nothing but the seed ever writes a row there) and its rows
+  carry a **packed positional ordering** where a leftover orphan does not sit inert, it collides with
+  the position a renamed or reordered entry now wants. `choice_alternate` is the only table this
+  applies to today
+  ([ADR-0087](/architecture/decisions/#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability)).
+  Absent both preconditions, an operator-writable or unordered table keeps the ordinary
+  insert-if-absent rule above.
+- **One-time data backfills** (dbmate, data-only): transforming existing operator rows to match a new
+  constraint, run once, and idempotent on a second run (a repeat changes nothing, proven by a test that
+  executes the migration's up-SQL twice).
+
+**Worked example: the product classification floor** (#614). Making `product.component_type_id` and
+`component.product_id` both `NOT NULL` needed all three buckets, landed as three migrations in this
+order, because reversing the order would either fail (a `NOT NULL` added before any row satisfies it)
+or silently orphan existing operator components (a backfill run against a still-optional column has
+nothing forcing it to run at all):
+
+1. **Schema (nullable):** `20260807110000_product_component_type_and_icon.sql` adds
+   `product.component_type_id` (nullable, FK to `component_type`, `on delete restrict`) and
+   `product.icon` (nullable). Pure DDL, safe against any existing row.
+2. **Boot seed, then backfill:** the boot seed ships the `component_type` tree
+   (`internal/seed/component_types.yaml`) and three generic products
+   (`internal/seed/products.yaml`) pointing at the matching generic types, so the chain a backfill
+   needs already exists by the time it runs. `20260807113000_product_type_backfill.sql` is data-only
+   and idempotent (`ON CONFLICT (name) DO NOTHING` for the generics it also inserts defensively, `WHERE
+   component_type_id IS NULL` / `WHERE product_id IS NULL` guards on the updates): it folds
+   `kind='vm'` to `'app'`, points every null `product.component_type_id` at the type matching the
+   product's kind, and points every null `component.product_id` at `generic-device`.
+3. **Schema (floor):** `20260807116000_product_type_floor.sql` sets both columns `NOT NULL` and
+   narrows the `kind` check constraint to `device | app | service`. Pure DDL again, now safe because
+   step 2 already closed every gap it depends on.
+
+Running the chain against a fresh database is the same three steps in the same order: nullable column,
+then the seed and backfill that make every row satisfy the coming constraint, then the constraint
+itself. A fresh database and an upgraded one converge on the identical end state, which is the point of
+keeping the buckets separate rather than reaching for a single migration with an inline `UPDATE`.
 
 ## How the records relate
 

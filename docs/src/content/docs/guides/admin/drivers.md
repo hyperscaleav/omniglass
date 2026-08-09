@@ -16,8 +16,7 @@ an `id`, a uuid minted by the database, the internal address the handle resolves
 A driver is consumed by the [product](/guides/admin/products/) catalog: a `product` references
 its driver through an optional `driver_id` to say which driver reads it, chosen from a driver
 picker on the product's create and edit forms, and three of the shipped official products bind a
-driver this way. It is a leaf catalog beside the vendor and
-[capability](/guides/admin/capabilities/) registries. See
+driver this way. It is a leaf catalog beside the vendor registry. See
 [core entities](/architecture/core-entities/) for where it sits in the estate model.
 
 - **New driver** (with `driver:create`, an admin permission) opens a create drawer: give it a

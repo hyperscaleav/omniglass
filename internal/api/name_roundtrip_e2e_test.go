@@ -91,9 +91,9 @@ func TestPlacementRoundTripsByName(t *testing.T) {
 	mustHave(s, "parent_id", "location_id")
 
 	// Components: the body that started this, parent and location both by name.
-	c.do(tok, http.MethodPost, "/components", map[string]any{"name": "rack", "location": "hq-b1"}, http.StatusCreated)
+	c.do(tok, http.MethodPost, "/components", map[string]any{"name": "rack", "location": "hq-b1", "product": "generic-device"}, http.StatusCreated)
 	comp := c.do(tok, http.MethodPost, "/components",
-		map[string]any{"name": "codec", "parent": "rack", "location": "hq-b1"}, http.StatusCreated)
+		map[string]any{"name": "codec", "parent": "rack", "location": "hq-b1", "product": "generic-device"}, http.StatusCreated)
 	if got, want := field(comp, "parent"), "rack"; got != want {
 		t.Errorf("component parent = %q, want %q", got, want)
 	}
@@ -136,7 +136,7 @@ func TestPathsAcceptEitherForm(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	made := c.do(tok, http.MethodPost, "/components", map[string]any{"name": "codec"}, http.StatusCreated)
+	made := c.do(tok, http.MethodPost, "/components", map[string]any{"name": "codec", "product": "generic-device"}, http.StatusCreated)
 	var m map[string]any
 	if err := json.Unmarshal(made, &m); err != nil {
 		t.Fatalf("decode: %v", err)

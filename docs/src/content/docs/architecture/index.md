@@ -108,17 +108,18 @@ An **[event_rule](/architecture/alarms-actions/)** watches a sample and fires wh
 **[expression](/architecture/expressions/)**, is met, recording an
 **[event](/architecture/events/)**: our assertion that something happened. Pair a fire
 with a clear and the two events open and resolve an **alarm**, the stateful incident, one row per
-occurrence, the thing an operator works and a ticket binds to. An alarm names the **capabilities it
-degrades**, turning a detection into a verdict on the system.
+occurrence, the thing an operator works and a ticket binds to. An alarm impairs its **component's
+own verdict** wholesale, turning a detection into a verdict on the system.
 
 ## Model health
 
 A single alarm is rarely the point. The headline is **[health](/architecture/health/)**: a verdict on
-the **system**, carried as a calculated sample. The chain: an alarm degrades
-a **capability**, so the component that had it no longer **satisfies** the **role** it was filling; a
-role below its **quorum** is impaired and contributes its declared **impact** (outage, degraded, or
-none); the system takes the worst contribution, and a location the worst of its systems. A target
-on that verdict over time is a real uptime **SLA**.
+the **system**, carried as a calculated sample. The chain: a critical alarm takes a component's own
+verdict to outage, so it no longer **occupies** the **role** it was filling (a lesser alarm degrades
+it but leaves it in place); a role below its **quorum** is
+impaired and contributes its declared **impact** (outage, degraded, or none); the system takes the
+worst contribution, and a location the worst of its systems. A target on that verdict over time is a
+real uptime **SLA**.
 
 The other half is "since when". Health is recorded as a **transition**, written by the change that
 caused it rather than by whoever opens a page, so the edges are exact weeks later.
@@ -165,7 +166,7 @@ views: "views → console" { class: node }
 gear -> sample: collect (node + edge parse)
 sample -> event: event_rule
 event -> alarm: fire / clear
-alarm -> health: degrades a capability
+alarm -> health: impairs the component
 alarm -> action: action_rule
 action -> gear: command { style.stroke-dash: 4 }
 declared -- sample: drift { style.stroke-dash: 4 }

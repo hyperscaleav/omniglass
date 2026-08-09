@@ -156,7 +156,7 @@ func TestLocationReparentEnforcement(t *testing.T) {
 
 	// A valid move: hq-b1 (t-building, allowed={root,t-campus}) moves from hq
 	// to lab, both t-campuses.
-	if _, err := gw.UpdateLocation(ctx, "", "hq-b1", storage.LocationPatch{ParentName: strptr("lab")}, all, all); err != nil {
+	if _, err := gw.MoveLocation(ctx, "", "hq-b1", storage.LocationMove{ParentName: strptr("lab")}, all, all); err != nil {
 		t.Fatalf("valid move: %v", err)
 	}
 
@@ -167,7 +167,7 @@ func TestLocationReparentEnforcement(t *testing.T) {
 	// to take precedence (validatePlacement runs before the cycle guard), so
 	// the more specific PlacementError, not ErrLocationCycle, is what the
 	// caller sees.
-	if _, err := gw.UpdateLocation(ctx, "", "hq-b1", storage.LocationPatch{ParentName: strptr("hq-r1")}, all, all); err == nil {
+	if _, err := gw.MoveLocation(ctx, "", "hq-b1", storage.LocationMove{ParentName: strptr("hq-r1")}, all, all); err == nil {
 		t.Fatal("move building under room = nil error, want PlacementError")
 	} else {
 		var placementErr *storage.PlacementError
@@ -186,10 +186,10 @@ func TestLocationReparentEnforcement(t *testing.T) {
 	}
 	mustCreate(t, gw, storage.LocationSpec{Name: "pod-a", LocationType: "pod"}, all)
 	mustCreate(t, gw, storage.LocationSpec{Name: "pod-b", LocationType: "pod", ParentName: strptr("pod-a")}, all)
-	if _, err := gw.UpdateLocation(ctx, "", "pod-a", storage.LocationPatch{ParentName: strptr("pod-b")}, all, all); !errors.Is(err, storage.ErrLocationCycle) {
+	if _, err := gw.MoveLocation(ctx, "", "pod-a", storage.LocationMove{ParentName: strptr("pod-b")}, all, all); !errors.Is(err, storage.ErrLocationCycle) {
 		t.Fatalf("move pod-a under its own child err = %v, want ErrLocationCycle", err)
 	}
-	if _, err := gw.UpdateLocation(ctx, "", "pod-a", storage.LocationPatch{ParentName: strptr("pod-a")}, all, all); !errors.Is(err, storage.ErrLocationCycle) {
+	if _, err := gw.MoveLocation(ctx, "", "pod-a", storage.LocationMove{ParentName: strptr("pod-a")}, all, all); !errors.Is(err, storage.ErrLocationCycle) {
 		t.Fatalf("move pod-a under itself err = %v, want ErrLocationCycle", err)
 	}
 
@@ -208,7 +208,7 @@ func TestLocationReparentEnforcement(t *testing.T) {
 	// A fresh move re-validates: pod-b (still noncompliant) explicitly moved
 	// back under pod-a is now refused, since pod no longer allows "pod" as a
 	// parent type.
-	if _, err := gw.UpdateLocation(ctx, "", "pod-b", storage.LocationPatch{ParentName: strptr("pod-a")}, all, all); !errors.Is(err, storage.ErrPlacementNotAllowed) {
+	if _, err := gw.MoveLocation(ctx, "", "pod-b", storage.LocationMove{ParentName: strptr("pod-a")}, all, all); !errors.Is(err, storage.ErrPlacementNotAllowed) {
 		t.Fatalf("re-move pod-b under pod-a after constraining err = %v, want ErrPlacementNotAllowed", err)
 	}
 }

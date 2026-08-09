@@ -159,6 +159,14 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 // line comes off a component), and the lane derivations hardcode
 // owner_kind=component downstream (widening the sample arms is #422). Refusing
 // here with a named error beats writing either row to the wrong home.
+//
+// o.GetRef() is copied through as-is, dual-accept per ADR-0062 (the push
+// route's own input is documented "by name or id"): the route that publishes
+// this wire message resolves the caller's owner and sends its id
+// (internal/api/telemetry.go), so in practice this is always already a uuid,
+// but nothing here assumes that. Downstream (InsertMetricSamples et al.)
+// resolves either form the same way TaskOwner.ComponentID's node-lane sibling
+// does.
 func apiBinding(ev *ogv1.TelemetryBatch) (ingestBinding, bool) {
 	o := ev.GetOwner()
 	if o == nil || o.GetKind() == "" || o.GetRef() == "" {
@@ -169,7 +177,7 @@ func apiBinding(ev *ogv1.TelemetryBatch) (ingestBinding, bool) {
 			"kind", o.GetKind(), "ref", o.GetRef())
 		return ingestBinding{}, false
 	}
-	owner := storage.TaskOwner{Component: o.GetRef()}
+	owner := storage.TaskOwner{ComponentID: o.GetRef()}
 	return ingestBinding{
 		LogComponent: o.GetRef(),
 		SampleOwner:  &owner,
@@ -444,7 +452,7 @@ func deriveMetrics(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collect
 		}
 		out = append(out, storage.MetricSampleWrite{
 			OwnerKind: "component",
-			OwnerID:   owner.Component,
+			OwnerID:   owner.ComponentID,
 			Key:       dp.GetName(),
 			Instance:  laneInstance(dp.GetInstance(), owner),
 			Value:     dp.GetValue(),
@@ -474,7 +482,7 @@ func deriveProperties(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg coll
 		}
 		out = append(out, storage.PropertySampleWrite{
 			OwnerKind: "component",
-			OwnerID:   owner.Component,
+			OwnerID:   owner.ComponentID,
 			Key:       dp.GetName(),
 			Instance:  laneInstance(dp.GetInstance(), owner),
 			Value:     propertyText(raw),
@@ -514,7 +522,7 @@ func deriveEvents(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collecti
 		}
 		out = append(out, storage.EventWrite{
 			OwnerKind:  "component",
-			OwnerID:    owner.Component,
+			OwnerID:    owner.ComponentID,
 			Key:        dp.GetName(),
 			Instance:   laneInstance(dp.GetInstance(), owner),
 			Origin:     "caught",

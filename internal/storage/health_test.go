@@ -62,16 +62,15 @@ func newHealthFixture(t *testing.T) *healthFixture {
 	}, f.all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
-	// One table mic, quorum 1, an impaired one degrades its system. A second role
-	// nobody can break confirms the rollup is worst-wins, not last-wins.
+	// One table mic, quorum 1, an impaired one degrades its system.
 	if _, err := gw.SetSystemRole(ctx, "", "standard", "health-huddle", storage.SystemRoleSpec{
 		Name: "table-mic", DisplayName: "Table microphone", Quorum: 1,
-		Capabilities: []string{"microphone", "speaker"}, Impact: "degraded",
+		AcceptedTypes: []string{"video-bar"}, Impact: "degraded",
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}
 
-	// cisco-room-bar provides microphone, speaker, camera, codec.
+	// cisco-room-bar classifies as video-bar.
 	bar := "cisco-room-bar"
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, f.all); err != nil {
 		t.Fatalf("create component: %v", err)
@@ -151,21 +150,27 @@ func sameSeq(got, want []string) bool {
 }
 
 // TestHealthTransitionsThroughTheChain is the slice's central proof. An alarm
-// that degrades a capability a role requires must move the component, its system,
-// and every location above it, recording exactly one row each; a SECOND alarm
-// that changes no verdict must record nothing at all; and clearing must move
-// everything back. The second-alarm assertion is the transition-only property,
-// which is what makes the history a record of edges rather than of writes.
+// that takes a component down (its own verdict, no longer per-capability, #626)
+// must move the component, its system, and every location above it, recording
+// exactly one row each; a SECOND alarm that changes no verdict must record
+// nothing at all; and clearing must move everything back. The second-alarm
+// assertion is the transition-only property, which is what makes the history a
+// record of edges rather than of writes.
 func TestHealthTransitionsThroughTheChain(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
 	// Baseline. Staffing the role already recorded a healthy start for everything
 	// in the chain, so the assertions below are on the DELTA an alarm causes.
-	type owner struct{ kind, id string }
+	// The component's own arc reads the alarm severity directly (outage, once
+	// the deciding alarm is critical); everything above it reads the role's
+	// declared impact (degraded), a different axis entirely.
+	type owner struct {
+		kind, id, downWant string
+	}
 	chain := []owner{
-		{"component", "bar-1"}, {"system", "hq-huddle"},
-		{"location", "hq-r1"}, {"location", "hq-b1"}, {"location", "hq"},
+		{"component", "bar-1", "outage"}, {"system", "hq-huddle", "degraded"},
+		{"location", "hq-r1", "degraded"}, {"location", "hq-b1", "degraded"}, {"location", "hq", "degraded"},
 	}
 	before := map[owner]int{}
 	for _, o := range chain {
@@ -176,10 +181,10 @@ func TestHealthTransitionsThroughTheChain(t *testing.T) {
 		before[o] = n
 	}
 
-	// The alarm takes away microphone, which the role requires, so the bar can no
-	// longer fill it and the role drops below quorum.
+	// The critical alarm takes bar-1 down, its only occupant, so the role drops
+	// below quorum.
 	alarm, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "warning", Message: "mic array not responding", Capabilities: []string{"microphone"},
+		Severity: "critical", Message: "mic array not responding",
 	})
 	if err != nil {
 		t.Fatalf("raise alarm: %v", err)
@@ -187,8 +192,8 @@ func TestHealthTransitionsThroughTheChain(t *testing.T) {
 
 	for _, o := range chain {
 		n, v := f.recorded(t, ctx, o.kind, o.id)
-		if v != "degraded" {
-			t.Errorf("after the alarm %s/%s = %q, want degraded", o.kind, o.id, v)
+		if v != o.downWant {
+			t.Errorf("after the alarm %s/%s = %q, want %s", o.kind, o.id, v, o.downWant)
 		}
 		if got := n - before[o]; got != 1 {
 			t.Errorf("%s/%s recorded %d rows for one transition, want exactly 1", o.kind, o.id, got)
@@ -196,11 +201,12 @@ func TestHealthTransitionsThroughTheChain(t *testing.T) {
 		before[o] = n
 	}
 
-	// A SECOND alarm that changes nothing: the component is already degraded, the
-	// role is already below quorum, so no verdict in the chain moves. Nothing may
-	// be written. This is the property the whole recording design exists for.
+	// A SECOND, lesser alarm that changes nothing: the component is already
+	// outage from the first, worse wins so it stays outage, and the role is
+	// already below quorum, so no verdict in the chain moves. Nothing may be
+	// written. This is the property the whole recording design exists for.
 	second, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "warning", Message: "speaker distortion", Capabilities: []string{"speaker"},
+		Severity: "warning", Message: "speaker distortion",
 	})
 	if err != nil {
 		t.Fatalf("raise second alarm: %v", err)
@@ -213,16 +219,16 @@ func TestHealthTransitionsThroughTheChain(t *testing.T) {
 		}
 	}
 
-	// Clearing the second alarm still leaves the first one degrading microphone, so
-	// still nothing moves.
+	// Clearing the second alarm still leaves the first one active, so still
+	// nothing moves.
 	if err := f.gw.ClearAlarm(ctx, "", "bar-1", second.ID); err != nil {
 		t.Fatalf("clear second alarm: %v", err)
 	}
 	for _, o := range chain {
 		n, v := f.recorded(t, ctx, o.kind, o.id)
-		if n != before[o] || v != "degraded" {
-			t.Errorf("%s/%s = %d rows / %q after clearing a non-deciding alarm, want %d / degraded",
-				o.kind, o.id, n, v, before[o])
+		if n != before[o] || v != o.downWant {
+			t.Errorf("%s/%s = %d rows / %q after clearing a non-deciding alarm, want %d / %s",
+				o.kind, o.id, n, v, before[o], o.downWant)
 		}
 	}
 
@@ -246,45 +252,16 @@ func TestHealthTransitionsThroughTheChain(t *testing.T) {
 	}
 }
 
-// TestHealthIgnoresIrrelevantCapability proves the routing: an alarm that
-// degrades a capability no role requires marks the COMPONENT (something is wrong
-// with it) but must not touch the system or its locations. Without this, every
-// alarm anywhere would paint the estate red and the verdict would mean nothing.
-func TestHealthIgnoresIrrelevantCapability(t *testing.T) {
-	f := newHealthFixture(t)
-	ctx := context.Background()
-
-	sysBefore, _ := f.recorded(t, ctx, "system", "hq-huddle")
-	locBefore, _ := f.recorded(t, ctx, "location", "hq")
-
-	// The role requires microphone and speaker; camera is not among them.
-	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "warning", Message: "camera lens fouled", Capabilities: []string{"camera"},
-	}); err != nil {
-		t.Fatalf("raise alarm: %v", err)
-	}
-
-	if _, v := f.recorded(t, ctx, "component", "bar-1"); v != "degraded" {
-		t.Errorf("component = %q, want degraded (an active alarm is still wrong with it)", v)
-	}
-	if n, v := f.recorded(t, ctx, "system", "hq-huddle"); n != sysBefore || v != "healthy" {
-		t.Errorf("system = %d rows / %q, want %d / healthy: no role required camera", n, v, sysBefore)
-	}
-	if n, v := f.recorded(t, ctx, "location", "hq"); n != locBefore || v != "healthy" {
-		t.Errorf("location = %d rows / %q, want %d / healthy", n, v, locBefore)
-	}
-}
-
 // TestHealthReportNamesTheCause is the reconciliation UX in one assertion: a
-// degraded system must say WHICH role is impaired, WHICH required capability it
-// lost, and WHICH alarm took it. A verdict an operator cannot act on is not worth
-// recording.
+// degraded system must say WHICH role is impaired, WHICH assigned component is
+// down, and WHICH alarm took it down. A verdict an operator cannot act on is not
+// worth recording.
 func TestHealthReportNamesTheCause(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
 	alarm, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "critical", Message: "mic array not responding", Capabilities: []string{"microphone"},
+		Severity: "critical", Message: "mic array not responding",
 	})
 	if err != nil {
 		t.Fatalf("raise alarm: %v", err)
@@ -307,8 +284,8 @@ func TestHealthReportNamesTheCause(t *testing.T) {
 	if role.Impact != "degraded" {
 		t.Errorf("role impact = %q, want degraded", role.Impact)
 	}
-	if !hasAll(role.Degraded, "microphone") || len(role.Degraded) != 1 {
-		t.Errorf("degraded = %v, want exactly the required capability the alarm took (microphone)", role.Degraded)
+	if !hasAll(role.Down, "bar-1") || len(role.Down) != 1 {
+		t.Errorf("down = %v, want exactly the assigned component the alarm took down (bar-1)", role.Down)
 	}
 	if len(role.Alarms) != 1 || role.Alarms[0].ID != alarm.ID {
 		t.Fatalf("alarms = %+v, want the one that caused it (%s)", role.Alarms, alarm.ID)
@@ -348,7 +325,7 @@ func TestHealthImpactAndQuorum(t *testing.T) {
 	ctx := context.Background()
 
 	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "warning", Message: "mic dead", Capabilities: []string{"microphone"},
+		Severity: "critical", Message: "mic dead",
 	}); err != nil {
 		t.Fatalf("raise alarm: %v", err)
 	}
@@ -360,7 +337,7 @@ func TestHealthImpactAndQuorum(t *testing.T) {
 	// the slot it was filling is what decides, not the component.
 	if _, err := f.gw.SetSystemRole(ctx, "", "standard", "health-huddle", storage.SystemRoleSpec{
 		Name: "table-mic", DisplayName: "Table microphone", Quorum: 1,
-		Capabilities: []string{"microphone", "speaker"}, Impact: "outage",
+		AcceptedTypes: []string{"video-bar"}, Impact: "outage",
 	}); err != nil {
 		t.Fatalf("re-declare role as outage: %v", err)
 	}
@@ -375,7 +352,7 @@ func TestHealthImpactAndQuorum(t *testing.T) {
 	// matter, so the system reads healthy again.
 	if _, err := f.gw.SetSystemRole(ctx, "", "standard", "health-huddle", storage.SystemRoleSpec{
 		Name: "table-mic", DisplayName: "Table microphone", Quorum: 1,
-		Capabilities: []string{"microphone", "speaker"}, Impact: "none",
+		AcceptedTypes: []string{"video-bar"}, Impact: "none",
 	}); err != nil {
 		t.Fatalf("re-declare role as none: %v", err)
 	}
@@ -384,8 +361,8 @@ func TestHealthImpactAndQuorum(t *testing.T) {
 	}
 	// The component itself is still alarmed: impact governs the system, never the
 	// component's own condition.
-	if _, v := f.recorded(t, ctx, "component", "bar-1"); v != "degraded" {
-		t.Errorf("component = %q, want degraded regardless of the role's impact", v)
+	if _, v := f.recorded(t, ctx, "component", "bar-1"); v != "outage" {
+		t.Errorf("component = %q, want outage regardless of the role's impact", v)
 	}
 
 	// An unknown impact is a named refusal, not a constraint violation.
@@ -421,19 +398,23 @@ func TestHealthMovesOnUnassign(t *testing.T) {
 		t.Fatalf("system after re-staffing = %q, want healthy", v)
 	}
 
-	// Suppressing a required capability on the component is the other removal
-	// shape: it provides less, so it can no longer fill the role.
-	if err := f.gw.SetComponentCapability(ctx, "", "bar-1", "microphone", false); err != nil {
-		t.Fatalf("suppress capability: %v", err)
+	// An alarm is the other removal shape: the component stays assigned, but a
+	// critical one stops it occupying the slot because its own verdict went to
+	// outage.
+	alarm, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
+		Severity: "critical", Message: "mic dead",
+	})
+	if err != nil {
+		t.Fatalf("raise alarm: %v", err)
 	}
 	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "degraded" {
-		t.Fatalf("system after suppressing a required capability = %q, want degraded", v)
+		t.Fatalf("system after the assignee went down = %q, want degraded", v)
 	}
-	if err := f.gw.ClearComponentCapability(ctx, "", "bar-1", "microphone"); err != nil {
-		t.Fatalf("clear capability fact: %v", err)
+	if err := f.gw.ClearAlarm(ctx, "", "bar-1", alarm.ID); err != nil {
+		t.Fatalf("clear alarm: %v", err)
 	}
 	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "healthy" {
-		t.Fatalf("system after falling back to the product's set = %q, want healthy", v)
+		t.Fatalf("system after the assignee recovered = %q, want healthy", v)
 	}
 }
 
@@ -445,13 +426,13 @@ func TestAlarmListingAndRefusals(t *testing.T) {
 	ctx := context.Background()
 
 	a1, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "warning", Message: "one", Capabilities: []string{"microphone"},
+		Severity: "warning", Message: "one",
 	})
 	if err != nil {
 		t.Fatalf("raise: %v", err)
 	}
 	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{Severity: "info", Message: "two"}); err != nil {
-		t.Fatalf("raise capability-less: %v", err)
+		t.Fatalf("raise second: %v", err)
 	}
 	if got, _ := f.gw.ListAlarms(ctx, "bar-1", false); len(got) != 2 {
 		t.Fatalf("active alarms = %d, want 2", len(got))
@@ -475,11 +456,6 @@ func TestAlarmListingAndRefusals(t *testing.T) {
 	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{Severity: "apocalyptic"}); !errors.Is(err, storage.ErrAlarmSeverity) {
 		t.Errorf("bad severity: err = %v, want ErrAlarmSeverity", err)
 	}
-	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "info", Capabilities: []string{"telepathy"},
-	}); !errors.Is(err, storage.ErrAlarmRefNotFound) {
-		t.Errorf("unknown capability: err = %v, want ErrAlarmRefNotFound", err)
-	}
 	// A malformed id must not reach Postgres as a cast error.
 	if err := f.gw.ClearAlarm(ctx, "", "bar-1", "not-a-uuid"); !errors.Is(err, storage.ErrAlarmNotFound) {
 		t.Errorf("malformed alarm id: err = %v, want ErrAlarmNotFound", err)
@@ -496,10 +472,10 @@ func TestAlarmListingAndRefusals(t *testing.T) {
 func pureRoles(rows []storage.HealthRole) []health.Role {
 	out := make([]health.Role, 0, len(rows))
 	for _, r := range rows {
-		role := health.Role{Name: r.Name, Required: r.Required, Quorum: r.Quorum, Impact: r.Impact}
+		role := health.Role{Name: r.Name, Quorum: r.Quorum, Impact: r.Impact}
 		for i := 0; i < r.Satisfying; i++ {
 			role.Assigned = append(role.Assigned, health.Component{
-				Name: fmt.Sprintf("%s-%d", r.Name, i), Provides: r.Required,
+				Name: fmt.Sprintf("%s-%d", r.Name, i), Verdict: health.Healthy,
 			})
 		}
 		out = append(out, role)
@@ -534,7 +510,7 @@ func TestHealthReportOfAFreshSystem(t *testing.T) {
 	}
 	if _, err := f.gw.SetSystemRole(ctx, "", "standard", "health-podium", storage.SystemRoleSpec{
 		Name: "mic", DisplayName: "Microphone", Quorum: 1,
-		Capabilities: []string{"microphone"}, Impact: "outage",
+		AcceptedTypes: []string{"video-bar"}, Impact: "outage",
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}
@@ -621,7 +597,7 @@ func TestHealthMovesOnStandardChange(t *testing.T) {
 		t.Fatalf("create standard: %v", err)
 	}
 	if _, err := f.gw.SetSystemRole(ctx, "", "standard", "health-podium", storage.SystemRoleSpec{
-		Name: "mic", Quorum: 1, Capabilities: []string{"microphone"}, Impact: "outage",
+		Name: "mic", Quorum: 1, AcceptedTypes: []string{"video-bar"}, Impact: "outage",
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}
@@ -672,10 +648,12 @@ func TestHealthMovesOnStandardChange(t *testing.T) {
 	}
 }
 
-// TestHealthMovesOnProductChange proves the product swap is a trigger. The product
-// supplies a component's default capabilities, so changing it can quietly unstaff a
-// role: the assignment is still there, the component simply cannot do the job.
-func TestHealthMovesOnProductChange(t *testing.T) {
+// TestHealthIgnoresProductChange proves a product swap is NOT a health trigger
+// any more (#626): a component's own verdict is purely its active alarms, so
+// reclassifying it, even to a type no role would accept, moves nothing already
+// recorded. The typed-slot guard is enforced at the NEXT AssignRole, not
+// continuously against an existing assignment.
+func TestHealthIgnoresProductChange(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
@@ -684,61 +662,35 @@ func TestHealthMovesOnProductChange(t *testing.T) {
 		t.Fatalf("baseline system = %q, want healthy", v)
 	}
 
-	// samsung-qm55 provides flat-panel-display only, so the bar stops providing the
-	// microphone and speaker the table-mic role requires.
+	// samsung-qm55 classifies as display, not video-bar, but bar-1 is already
+	// assigned and stays assigned: reclassifying it must record nothing.
 	panel := "samsung-qm55"
 	if _, err := f.gw.UpdateComponent(ctx, "", "bar-1", storage.ComponentPatch{ProductName: &panel}, f.all, f.all); err != nil {
 		t.Fatalf("change product: %v", err)
 	}
-	n, v := f.recorded(t, ctx, "system", "hq-huddle")
-	if v != "degraded" {
-		t.Fatalf("system after the assignee lost its capabilities = %q, want degraded", v)
-	}
-	if n-before != 1 {
-		t.Fatalf("recorded %d rows for the product change, want exactly 1", n-before)
+	if n, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "healthy" || n != before {
+		t.Fatalf("system after a product swap = %d rows / %q, want %d / healthy (product no longer moves health)", n, v, before)
 	}
 	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", time.Time{}, f.all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
-	if len(rep.Roles) != 1 || !rep.Roles[0].Impaired || rep.Roles[0].Satisfying != 0 {
-		t.Fatalf("role = %+v, want table-mic impaired with nobody satisfying it", rep.Roles)
-	}
-	if len(rep.Roles[0].Degraded) != 0 {
-		t.Errorf("degraded = %v, want empty: no alarm took anything, the component simply provides less",
-			rep.Roles[0].Degraded)
+	if len(rep.Roles) != 1 || rep.Roles[0].Impaired || rep.Roles[0].Satisfying != 1 {
+		t.Fatalf("role = %+v, want table-mic still satisfied by its unchanged assignment", rep.Roles)
 	}
 	mustAgree(t, rep)
 
-	// Putting the original product back restores the role, which is the same
-	// detection in the other direction.
+	// Reclassifying back is the same no-op in the other direction.
 	bar := "cisco-room-bar"
 	if _, err := f.gw.UpdateComponent(ctx, "", "bar-1", storage.ComponentPatch{ProductName: &bar}, f.all, f.all); err != nil {
 		t.Fatalf("restore product: %v", err)
 	}
-	if got, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "healthy" || got-n != 1 {
-		t.Fatalf("system after restoring the product = %d rows / %q, want %d / healthy", got, v, n+1)
-	}
-	// A patch that names the product the component already has moves nothing, so it
-	// must record nothing.
-	if _, err := f.gw.UpdateComponent(ctx, "", "bar-1", storage.ComponentPatch{ProductName: &bar}, f.all, f.all); err != nil {
-		t.Fatalf("re-set the same product: %v", err)
-	}
-	if got, _ := f.recorded(t, ctx, "system", "hq-huddle"); got != n+1 {
-		t.Errorf("recorded %d rows for a product patch that changed nothing, want %d", got, n+1)
+	if got, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "healthy" || got != before {
+		t.Fatalf("system after restoring the product = %d rows / %q, want %d / healthy", got, v, before)
 	}
 
-	// Clearing the product outright leaves the component with only its own
-	// capability facts, which here is nothing at all: the same trigger, the same
-	// impairment.
-	none := ""
-	if _, err := f.gw.UpdateComponent(ctx, "", "bar-1", storage.ComponentPatch{ProductName: &none}, f.all, f.all); err != nil {
-		t.Fatalf("clear product: %v", err)
-	}
-	if got, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "degraded" || got != n+2 {
-		t.Errorf("system after clearing the product = %d rows / %q, want %d / degraded", got, v, n+2)
-	}
-	// An unknown product is a named refusal, not a constraint violation.
+	// An unknown product is still a named refusal, not a constraint violation:
+	// that guard lives in UpdateComponent itself, unrelated to health.
 	ghost := "no-such-product"
 	if _, err := f.gw.UpdateComponent(ctx, "", "bar-1", storage.ComponentPatch{ProductName: &ghost}, f.all, f.all); !errors.Is(err, storage.ErrProductNotFound) {
 		t.Errorf("unknown product: err = %v, want ErrProductNotFound", err)
@@ -758,7 +710,7 @@ func TestHealthMovesOnRelocation(t *testing.T) {
 	f.mustLocation(t, ctx, "hq-r2", "room", ptrStr("hq-b2"))
 
 	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
-		Severity: "warning", Message: "mic dead", Capabilities: []string{"microphone"},
+		Severity: "critical", Message: "mic dead",
 	}); err != nil {
 		t.Fatalf("raise alarm: %v", err)
 	}
@@ -770,7 +722,7 @@ func TestHealthMovesOnRelocation(t *testing.T) {
 	campus, _ := f.recorded(t, ctx, "location", "hq")
 
 	room := "hq-r2"
-	if _, err := f.gw.UpdateSystem(ctx, "", "hq-huddle", storage.SystemPatch{LocationName: &room}, f.all, f.all); err != nil {
+	if _, err := f.gw.MoveSystem(ctx, "", "hq-huddle", storage.SystemMove{LocationName: &room}, f.all, f.all); err != nil {
 		t.Fatalf("relocate: %v", err)
 	}
 
@@ -831,5 +783,246 @@ func TestHealthReadScope(t *testing.T) {
 	}
 	if _, err := f.gw.SystemHealth(ctx, "no-such-system", time.Time{}, f.all); !errors.Is(err, storage.ErrSystemNotFound) {
 		t.Errorf("unknown system health: err = %v, want ErrSystemNotFound", err)
+	}
+}
+
+// TestAlarmImpairsComponentImpairsSlot is the new chain end to end: alarm ->
+// component verdict -> occupied slot -> impact. table-mic wants quorum 1 and
+// bar-1 is its only occupant, so an alarm on bar-1 (naming no capability: the
+// concept is retired) takes the component down, the role loses its only
+// occupant, and the system's verdict moves to the role's declared impact.
+func TestAlarmImpairsComponentImpairsSlot(t *testing.T) {
+	f := newHealthFixture(t)
+	ctx := context.Background()
+
+	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "healthy" {
+		t.Fatalf("baseline system = %q, want healthy", v)
+	}
+
+	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
+		Severity: "critical", Message: "mic array not responding",
+	}); err != nil {
+		t.Fatalf("raise alarm: %v", err)
+	}
+
+	if _, v := f.recorded(t, ctx, "component", "bar-1"); v != "outage" {
+		t.Errorf("component = %q, want outage: only a critical alarm takes it down (a degraded component still occupies)", v)
+	}
+
+	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", time.Time{}, f.all)
+	if err != nil {
+		t.Fatalf("system health: %v", err)
+	}
+	if len(rep.Roles) != 1 || rep.Roles[0].Name != "table-mic" {
+		t.Fatalf("roles = %+v, want the one table-mic", rep.Roles)
+	}
+	role := rep.Roles[0]
+	if role.Satisfying != 0 {
+		t.Errorf("satisfying = %d, want 0: the alarm impairs the component wholesale, not per capability", role.Satisfying)
+	}
+	if !role.Impaired {
+		t.Errorf("role impaired = %v, want true: quorum 1 with 0 satisfying", role.Impaired)
+	}
+	if rep.Verdict != "degraded" {
+		t.Fatalf("system verdict = %q, want degraded (the role's declared impact)", rep.Verdict)
+	}
+	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "degraded" {
+		t.Errorf("recorded system = %q, want degraded", v)
+	}
+}
+
+// TestDegradedOccupantStillSatisfies pins the boundary #626 and the epic both
+// state verbatim: "an occupant satisfies its slot when its component verdict
+// is not down". Down means outage; a merely degraded component (an info or
+// warning alarm) still occupies the slot it fills, so the role stays
+// satisfied and the system's verdict does not move.
+func TestDegradedOccupantStillSatisfies(t *testing.T) {
+	f := newHealthFixture(t)
+	ctx := context.Background()
+
+	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
+		Severity: "warning", Message: "mic array a little quiet",
+	}); err != nil {
+		t.Fatalf("raise alarm: %v", err)
+	}
+	if _, v := f.recorded(t, ctx, "component", "bar-1"); v != "degraded" {
+		t.Errorf("component = %q, want degraded (a warning alarm)", v)
+	}
+
+	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", time.Time{}, f.all)
+	if err != nil {
+		t.Fatalf("system health: %v", err)
+	}
+	if len(rep.Roles) != 1 {
+		t.Fatalf("roles = %+v, want the one table-mic", rep.Roles)
+	}
+	role := rep.Roles[0]
+	if role.Satisfying != 1 {
+		t.Errorf("satisfying = %d, want 1: a degraded occupant still occupies its slot", role.Satisfying)
+	}
+	if role.Impaired {
+		t.Errorf("role impaired = %v, want false: quorum 1 is still met by the degraded occupant", role.Impaired)
+	}
+	if rep.Verdict != "healthy" {
+		t.Fatalf("system verdict = %q, want healthy: the role never lost its occupant", rep.Verdict)
+	}
+	// A component's own verdict is recorded regardless of whether it fills a
+	// role, but nothing about the system's own recorded arc should move: no
+	// role went from satisfied to impaired, so no new transition is due.
+	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "healthy" {
+		t.Errorf("recorded system = %q, want healthy: nothing may be written for a no-op", v)
+	}
+}
+
+// TestAlarmOnSpareDoesNotShort proves the other half of the arithmetic: a role
+// staffed past its quorum absorbs one down occupant without moving. Two
+// components fill a quorum-1 role; an alarm on one of them takes it down, but
+// the other still occupies the slot, so the role, and the system above it,
+// hold healthy.
+func TestAlarmOnSpareDoesNotShort(t *testing.T) {
+	f := newHealthFixture(t)
+	ctx := context.Background()
+
+	panel := "cisco-room-bar"
+	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-2", ProductName: &panel}, f.all); err != nil {
+		t.Fatalf("create second component: %v", err)
+	}
+	if err := f.gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-2", f.all); err != nil {
+		t.Fatalf("assign spare: %v", err)
+	}
+	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "healthy" {
+		t.Fatalf("baseline system with two occupants = %q, want healthy", v)
+	}
+
+	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
+		Severity: "critical", Message: "mic array not responding",
+	}); err != nil {
+		t.Fatalf("raise alarm: %v", err)
+	}
+	if _, v := f.recorded(t, ctx, "component", "bar-1"); v != "outage" {
+		t.Errorf("component = %q, want outage (a critical alarm)", v)
+	}
+
+	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", time.Time{}, f.all)
+	if err != nil {
+		t.Fatalf("system health: %v", err)
+	}
+	role := rep.Roles[0]
+	if role.Satisfying != 1 {
+		t.Errorf("satisfying = %d, want 1: bar-2 still occupies the slot", role.Satisfying)
+	}
+	if role.Impaired {
+		t.Errorf("role impaired = %v, want false: quorum 1 is still met by the spare", role.Impaired)
+	}
+	if rep.Verdict != "healthy" {
+		t.Fatalf("system verdict = %q, want healthy: the down component is not the only occupant", rep.Verdict)
+	}
+	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "healthy" {
+		t.Errorf("recorded system = %q, want healthy: nothing may be written for a no-op", v)
+	}
+}
+
+// TestShortAndUnderstaffedDivergeOnCriticalAlarm pins the vocabulary split
+// (#626): the roles read's understaffed (EffectiveRole.Understaffed, quorum
+// minus assignment rows) is health-blind assignment arithmetic, while the
+// health read's short (HealthRole.Short, quorum minus components whose own
+// verdict is not outage) is occupancy-aware. A warning alarm degrades the
+// assignee but it still occupies its slot (Occupies is Verdict != Outage),
+// so the two figures agree; a critical alarm takes the assignee out of its
+// slot without touching the assignment row, so understaffed stays 0 while
+// short moves to 1. Both are correct under their own definition, which is
+// exactly what makes the divergence a feature and not a bug to reconcile.
+func TestShortAndUnderstaffedDivergeOnCriticalAlarm(t *testing.T) {
+	t.Run("a warning alarm does not diverge them", func(t *testing.T) {
+		f := newHealthFixture(t)
+		ctx := context.Background()
+
+		if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
+			Severity: "warning", Message: "mic array a little quiet",
+		}); err != nil {
+			t.Fatalf("raise alarm: %v", err)
+		}
+
+		roles, err := f.gw.EffectiveRoles(ctx, "hq-huddle", f.all)
+		if err != nil {
+			t.Fatalf("effective roles: %v", err)
+		}
+		if len(roles) != 1 || roles[0].Understaffed() != 0 {
+			t.Fatalf("understaffed = %+v, want 0: the assignment row is untouched by a warning", roles)
+		}
+
+		rep, err := f.gw.SystemHealth(ctx, "hq-huddle", time.Time{}, f.all)
+		if err != nil {
+			t.Fatalf("system health: %v", err)
+		}
+		role := rep.Roles[0]
+		if role.Short != 0 || role.Impaired {
+			t.Fatalf("short = %d impaired = %v, want 0/false: a degraded component still occupies its slot", role.Short, role.Impaired)
+		}
+		if roles[0].Understaffed() != role.Short {
+			t.Fatalf("understaffed (%d) and short (%d) must agree when nothing has stopped occupying its slot", roles[0].Understaffed(), role.Short)
+		}
+	})
+
+	t.Run("a critical alarm diverges them", func(t *testing.T) {
+		f := newHealthFixture(t)
+		ctx := context.Background()
+
+		if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
+			Severity: "critical", Message: "mic array not responding",
+		}); err != nil {
+			t.Fatalf("raise alarm: %v", err)
+		}
+
+		roles, err := f.gw.EffectiveRoles(ctx, "hq-huddle", f.all)
+		if err != nil {
+			t.Fatalf("effective roles: %v", err)
+		}
+		if len(roles) != 1 || roles[0].Understaffed() != 0 {
+			t.Fatalf("understaffed = %+v, want 0: the assignment row is untouched, understaffed is health-blind", roles)
+		}
+
+		rep, err := f.gw.SystemHealth(ctx, "hq-huddle", time.Time{}, f.all)
+		if err != nil {
+			t.Fatalf("system health: %v", err)
+		}
+		role := rep.Roles[0]
+		if role.Short != 1 || !role.Impaired {
+			t.Fatalf("short = %d impaired = %v, want 1/true: bar-1 no longer occupies its slot", role.Short, role.Impaired)
+		}
+
+		// Same role, same instant, two answers that are each correct under their
+		// own definition: understaffed says the slot is fully assigned, short
+		// says it is not actually staffed. The divergence itself is the point.
+		if roles[0].Understaffed() == role.Short {
+			t.Fatalf("understaffed (%d) and short (%d) must diverge on a critical alarm", roles[0].Understaffed(), role.Short)
+		}
+	})
+}
+
+// TestRaiseAlarmWithoutCapabilities proves the alarm-raise spec round-trips
+// with no capability concept at all: the field retired with the rest of the
+// family (#626), so a raise names only severity, message, and a dedup key.
+func TestRaiseAlarmWithoutCapabilities(t *testing.T) {
+	f := newHealthFixture(t)
+	ctx := context.Background()
+
+	alarm, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
+		Severity: "warning", Message: "mic array not responding", DedupKey: "mic-fault",
+	})
+	if err != nil {
+		t.Fatalf("raise alarm: %v", err)
+	}
+	if alarm.ComponentID != "bar-1" || alarm.Severity != "warning" ||
+		alarm.Message != "mic array not responding" || alarm.DedupKey != "mic-fault" || !alarm.Active() {
+		t.Fatalf("alarm = %+v, want it to round-trip exactly what was raised", alarm)
+	}
+
+	got, err := f.gw.ListAlarms(ctx, "bar-1", false)
+	if err != nil {
+		t.Fatalf("list alarms: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != alarm.ID {
+		t.Fatalf("listed alarms = %+v, want the one just raised", got)
 	}
 }

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -21,6 +22,9 @@ type systemBody struct {
 	LocationID    *string           `json:"location_id,omitempty" doc:"The location's id, the canonical handle"`
 	Location      *string           `json:"location,omitempty" doc:"The location's name, for display"`
 	MemberCount   int               `json:"member_count" doc:"How many components are bound into this system"`
+	Path          string            `json:"path,omitempty" doc:"The dotted address (e.g. boi.17c.$sys.av). Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it)."`
+	PathSegments  []string          `json:"path_segments,omitempty" doc:"path split on '.', accessors included, so the round trip through the resolver stays lossless."`
+	Renders       *renderBody       `json:"renders,omitempty" doc:"Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy."`
 	Actions       []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
 	EffectiveTags map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this system (platform, its location, its system tree); for the Tags column."`
 }
@@ -30,6 +34,7 @@ func toSystemBody(s *storage.System) systemBody {
 		ID: s.ID, Name: s.Name, DisplayName: s.DisplayName,
 		Standard: derefStr(s.StandardName), StandardID: derefStr(s.StandardID), ParentID: s.ParentID, Parent: s.ParentName, LocationID: s.LocationID, Location: s.LocationName,
 		MemberCount: s.MemberCount,
+		Path:        s.Path, PathSegments: s.PathSegments, Renders: toRenderBody(s.Path, s.Renders),
 	}
 }
 
@@ -93,12 +98,12 @@ type standardOutput struct {
 }
 
 type systemPathInput struct {
-	Name string `path:"name" doc:"The system's unique name"`
+	Name string `path:"name" doc:"The system's name, or a dotted address (e.g. boi.17c.$sys.av)"`
 }
 
 type createSystemInput struct {
 	Body struct {
-		Name        string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Globally unique name (the address; lowercase letters, digits, hyphens)"`
+		Name        string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens)"`
 		DisplayName string  `json:"display_name,omitempty" doc:"What an operator reads; the name is the address"`
 		StandardID  string  `json:"standard_id,omitempty" doc:"The standard it conforms to, by handle or uuid; omit for a one-off system"`
 		Parent      *string `json:"parent,omitempty" doc:"Parent system name; omit for a root system"`
@@ -107,44 +112,62 @@ type createSystemInput struct {
 }
 
 // updateSystemInput is the PATCH body. It deliberately carries no name: a rename
-// is the :rename custom method, gated by system:rename.
+// is the :rename custom method, gated by system:rename. It carries no placement
+// either (#627 Task 13): a move is the :move custom method, gated by
+// system:move, because a placement change is an authorization act, not a label
+// edit.
 type updateSystemInput struct {
-	Name string `path:"name"`
+	Name string `path:"name" doc:"The system's name, or a dotted address (e.g. boi.17c.$sys.av)"`
 	Body struct {
 		DisplayName *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
 		StandardID  *string `json:"standard_id,omitempty" doc:"A new standard, by handle or uuid; \"\" clears it (a one-off system)"`
-		// Placement fields, house three-state (omitted unchanged, "" clears, name
-		// sets), passed straight through. Parent is a cycle-guarded, scope-injected
-		// reparent within the system tree.
+	}
+}
+
+// moveSystemInput is the :move body: at least one of Location or Parent is
+// required (422 otherwise). Both follow the house three-state convention:
+// omitted unchanged, "" clears, a name sets. Parent is a cycle-guarded,
+// scope-injected reparent within the system tree.
+type moveSystemInput struct {
+	Name string `path:"name" doc:"The system's name, or a dotted address (e.g. boi.17c.$sys.av)"`
+	Body struct {
 		Location *string `json:"location,omitempty" doc:"Relocates the system to this location name. An empty string clears its placement."`
-		Parent   *string `json:"parent,omitempty" doc:"Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system."`
+		Parent   *string `json:"parent,omitempty" doc:"Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system (requires an all-scoped move grant)."`
 	}
 }
 
 // renameSystemInput is the :rename body. The name rule lives here, in the
 // contract, not only in the prose below it.
 type renameSystemInput struct {
-	Name string `path:"name" doc:"The system's current name, or its uuid"`
+	Name string `path:"name" doc:"The system's current name, a dotted address, or its uuid"`
 	Body struct {
-		Name string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The new globally unique name (lowercase letters, digits, hyphens)"`
+		Name string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The new name, unique within its placement (lowercase letters, digits, hyphens)"`
 	}
 }
 
 // checkNameInput is the request for the collection-level :checkName advisory.
-// Shared across the systems/components/locations name checks; declared once here.
+// Shared across the systems/components/locations name checks; declared once
+// here. Parent and Location mirror the create body's own placement fields
+// (#627: name uniqueness is scoped to placement, not the whole estate), so the
+// availability check runs against the same bucket a create would actually
+// land in. A parent wins over a location, matching CreateComponent's and
+// CreateSystem's own resolution order; the location route ignores Location
+// (it carries no located-at column of its own) and checks only Parent.
 type checkNameInput struct {
 	Body struct {
-		Name string `json:"name" doc:"The proposed name to check"`
+		Name     string  `json:"name" doc:"The proposed name to check"`
+		Parent   *string `json:"parent,omitempty" doc:"The parent (by name or uuid) the entity would be created under, if any; omit for a root/unplaced check"`
+		Location *string `json:"location,omitempty" doc:"The location (by name or uuid) the entity would be placed at, if any and if unparented; ignored by the locations check"`
 	}
 }
 
 // checkNameOutput is the advisory verdict: whether the proposed name is a valid
-// slug and whether it is currently free. Availability is scope-blind to match
-// the global unique constraint. Shared across the three entity name checks.
+// slug and whether it is currently free within the checked placement. Shared
+// across the three entity name checks.
 type checkNameOutput struct {
 	Body struct {
 		Valid     bool   `json:"valid" doc:"Whether the name matches the slug rule"`
-		Available bool   `json:"available" doc:"Whether the name is free (scope-blind, matches the global unique constraint)"`
+		Available bool   `json:"available" doc:"Whether the name is free within the checked placement (parent/location); a name taken elsewhere in the estate is still available here"`
 		Reason    string `json:"reason,omitempty" doc:"Human explanation when not valid or not available"`
 	}
 }
@@ -227,18 +250,44 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodPatch,
 		Path:        "/systems/{name}",
 		Summary:     "Update a system",
-		Description: "Patches a system's display_name, standard, location, or parent. The name is not patchable: renaming is the :rename custom method. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+		Description: "Patches a system's display_name or standard. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard field follows the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system), a name sets. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 	}, "system", "update"), func(ctx context.Context, in *updateSystemInput) (*systemOutput, error) {
 		s, err := gw.UpdateSystem(ctx, actorID(ctx), in.Name, storage.SystemPatch{
 			DisplayName: in.Body.DisplayName,
 			// Deliberately NOT emptyPtrToNil: that collapses an explicit "" into
-			// "omitted", which would make clearing (declassify, unplace, lift-to-root)
-			// impossible. The storage layer reads "" as clear.
-			StandardID:   in.Body.StandardID,
-			LocationName: in.Body.Location,
-			ParentName:   in.Body.Parent,
+			// "omitted", which would make clearing (declassify) impossible. The
+			// storage layer reads "" as clear.
+			StandardID: in.Body.StandardID,
 		}, a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update"))
 		if err != nil {
+			return nil, mapSystemErr(err)
+		}
+		return &systemOutput{Body: toSystemBody(s)}, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "move-system",
+		Method:      http.MethodPost,
+		Path:        "/systems/{name}:move",
+		Summary:     "Move a system",
+		Description: "Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. Gated by system:move; read and move scopes drive the 404 versus 403 split.",
+	}, "system", "move"), func(ctx context.Context, in *moveSystemInput) (*systemOutput, error) {
+		if in.Body.Location == nil && in.Body.Parent == nil {
+			return nil, huma.Error422UnprocessableEntity("move requires at least one of location or parent")
+		}
+		s, err := gw.MoveSystem(ctx, actorID(ctx), in.Name, storage.SystemMove{
+			LocationName: in.Body.Location,
+			ParentName:   in.Body.Parent,
+		}, a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "move"))
+		if err != nil {
+			switch {
+			case errors.Is(err, storage.ErrSystemExistsUnderParent):
+				return nil, huma.Error409Conflict(fmt.Sprintf("a system named %q already exists under %q", systemMoverName(ctx, gw, a, in.Name), derefStr(in.Body.Parent)))
+			case errors.Is(err, storage.ErrSystemExistsInLocation):
+				return nil, huma.Error409Conflict(fmt.Sprintf("a system named %q already exists at %q", systemMoverName(ctx, gw, a, in.Name), derefStr(in.Body.Location)))
+			case errors.Is(err, storage.ErrSystemExistsUnplaced):
+				return nil, huma.Error409Conflict(fmt.Sprintf("an unplaced system named %q already exists", systemMoverName(ctx, gw, a, in.Name)))
+			}
 			return nil, mapSystemErr(err)
 		}
 		return &systemOutput{Body: toSystemBody(s)}, nil
@@ -264,7 +313,7 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodPost,
 		Path:        "/systems:checkName",
 		Summary:     "Check a system name",
-		Description: "Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.",
+		Description: "Reports whether a proposed name is a valid slug and currently free within the given placement (parent wins over location; neither means the root/unplaced bucket). Advisory (Save is still gated by the unique constraint). Gated by system:update.",
 	}, "system", "update"), func(ctx context.Context, in *checkNameInput) (*checkNameOutput, error) {
 		out := &checkNameOutput{}
 		if err := storage.ValidateName("system", in.Body.Name); err != nil {
@@ -279,9 +328,9 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			return out, nil
 		}
 		out.Body.Valid = true
-		taken, err := gw.SystemNameTaken(ctx, in.Body.Name)
+		taken, err := gw.SystemNameTaken(ctx, in.Body.Name, in.Body.Parent, in.Body.Location)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("check system name")
+			return nil, mapSystemErr(err)
 		}
 		out.Body.Available = !taken
 		if taken {
@@ -306,9 +355,21 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	})
 }
 
+// systemMoverName resolves ref back to the system's own name for a 409
+// collision message; see componentMoverName's doc comment for the reasoning.
+func systemMoverName(ctx context.Context, gw storage.Gateway, a *authenticator, ref string) string {
+	if s, err := gw.GetSystem(ctx, ref, a.scopeFor(ctx, "system", "read")); err == nil {
+		return s.Name
+	}
+	return ref
+}
+
 // mapSystemErr translates the gateway's system sentinels into HTTP status,
 // mirroring locations.
 func mapSystemErr(err error) error {
+	if refErr, ok := mapRefErr(err); ok {
+		return refErr
+	}
 	switch {
 	case errors.Is(err, storage.ErrSystemNotFound):
 		return huma.Error404NotFound("system not found")

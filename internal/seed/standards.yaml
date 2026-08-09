@@ -8,21 +8,71 @@ standards:
   - id: meeting-room
     display_name: Meeting Room
     # The roles a conforming system needs filled. A component may fill one only
-    # when it provides EVERY listed capability, so these double as the worked
-    # example of the assignment guard: the shipped Cisco Room Bar satisfies
-    # room-mic, the Samsung QM55 satisfies main-display, and a room with one
-    # bar reads as understaffed until the second lands. Seeded if absent, so an
-    # operator who retunes them keeps the edit.
+    # when its product's component_type falls within one of the accepted types
+    # (self or a descendant): the #626 typed-slot guard, and these double as its
+    # worked example (the shipped Cisco Room Bar, video-bar, satisfies room-mic;
+    # the Samsung QM55, display, satisfies main-display; a room with one bar
+    # reads as understaffed until the second lands). An occupant satisfies its
+    # slot unless its own verdict is outage: an alarm impairs a component
+    # wholesale now, not by named capability, but only a critical one costs
+    # the component its slots (#626). Seeded if absent, so an operator who
+    # retunes them keeps the edit.
     roles:
       - name: room-mic
         display_name: Room Microphone
         quorum: 2
-        capabilities: [microphone, speaker]
+        accepted_types: [video-bar]
       - name: main-display
         display_name: Main Display
-        capabilities: [flat-panel-display]
+        accepted_types: [display]
   - id: huddle-room
     display_name: Huddle Room
+    # A huddle room can be built either of two ways, and only one has to be
+    # true (#626): an all-in-one video bar, or a component build of a codec
+    # driving a separate camera, dsp, amplifier and mic. Staffing either
+    # alternate in full answers the choice; the other alternate's roles stay
+    # unbuilt without impairing the room, which is the worked example
+    # internal/health.Choice.Active and the storage-layer split exist for.
+    choices:
+      - name: conferencing
+        display_name: Conferencing
+        alternates:
+          - name: all-in-one
+            display_name: All-in-one
+          - name: component-system
+            display_name: Component System
+    roles:
+      - name: conf-bar
+        display_name: Conferencing Bar
+        quorum: 1
+        accepted_types: [video-bar]
+        choice: conferencing
+        alternate: all-in-one
+      - name: conf-codec
+        display_name: Codec
+        accepted_types: [codec]
+        choice: conferencing
+        alternate: component-system
+      - name: conf-camera
+        display_name: Camera
+        accepted_types: [camera]
+        choice: conferencing
+        alternate: component-system
+      - name: conf-dsp
+        display_name: DSP
+        accepted_types: [dsp]
+        choice: conferencing
+        alternate: component-system
+      - name: conf-amp
+        display_name: Amplifier
+        accepted_types: [amplifier]
+        choice: conferencing
+        alternate: component-system
+      - name: conf-mic
+        display_name: Microphone
+        accepted_types: [mic]
+        choice: conferencing
+        alternate: component-system
   - id: classroom
     display_name: Classroom
   - id: auditorium

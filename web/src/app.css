@@ -123,6 +123,19 @@
   mask-image: linear-gradient(to right, #000 82%, transparent);
 }
 
+/* a system's identity dot (web/src/lib/system_color.ts hueFor), the same
+   hash-hue-crosses-into-CSS shape as .tag-pill above: only the hue is
+   per-element (--sys-h), reusing .tag-pill's per-theme --tag-l / --tag-c
+   since both need a hash-derived hue that stays legible in both themes.
+   Use as `<span class="og-system-dot" style="--sys-h: <deg>" />`. */
+.og-system-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: oklch(var(--tag-l, .6) var(--tag-c, .14) var(--sys-h, 220));
+}
+
 /* neutral chip, fixed once for the whole app. daisyUI 5's badge-ghost resolves
    to bg-base-200, which on our card surfaces is nearly the surrounding color, so
    a ghost badge reads as background-less. badge-ghost is the app's neutral and

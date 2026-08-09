@@ -18,8 +18,7 @@ by Acme") references its vendor through an optional `vendor_id`, chosen from a v
 the product's create and edit forms, and a component then points at that product. Several shipped
 official products carry a vendor this way. See
 [core entities](/architecture/core-entities/) for where the vendor registry sits in the estate
-model, and [Drivers](/guides/admin/drivers/) and [Capabilities](/guides/admin/capabilities/) for
-the two leaf catalogs beside it.
+model, and [Drivers](/guides/admin/drivers/) for the other leaf catalog beside it.
 
 - **Kind** classifies the organization: a **manufacturer** builds hardware, an **integrator**
   assembles and installs systems, a **developer** ships software. It defaults to **manufacturer**

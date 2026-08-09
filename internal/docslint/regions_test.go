@@ -147,7 +147,7 @@ func TestVocabularyFiresInsideFence(t *testing.T) {
 	if err := os.MkdirAll(sub, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	page := ":::design[#434]\nthe `component_type` registry stores the shape\n:::\n"
+	page := ":::design[#434]\nthe `system_type` registry stores the shape\n:::\n"
 	if err := os.WriteFile(filepath.Join(sub, "sketch.md"), []byte(page), 0o644); err != nil {
 		t.Fatal(err)
 	}

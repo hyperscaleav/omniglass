@@ -21,7 +21,7 @@ roles:
       platform credentials). Inherits Viewer.
     inherits: ["viewer"]
     permissions:
-      - "component:create,update,rename"
+      - "component:create,update,rename,move"
       - "interface:create,update"
       - "secret:read,reveal,create,update"
       - "variable:create,update"
@@ -47,9 +47,9 @@ roles:
       Viewer for the read floor over its subtree.
     inherits: ["viewer"]
     permissions:
-      - "location:create,update,rename"
-      - "system:create,update,rename"
-      - "component:create,update,rename"
+      - "location:create,update,rename,move"
+      - "system:create,update,rename,move"
+      - "component:create,update,rename,move"
       - "secret:read,reveal,create,update"
       - "file:create"
   - id: admin
@@ -65,8 +65,8 @@ roles:
       - "component:delete"
       - "interface:*"
       - "task:*"
-      - "system:create,update,delete,rename"
-      - "location:create,update,delete,rename"
+      - "system:create,update,delete,rename,move"
+      - "location:create,update,delete,rename,move"
       - "principal:*"
       # read (the Users directory) and purge (the irreversible hard delete) are
       # admin-sensitive: three-token permissions that principal:* (two tokens)
@@ -104,9 +104,9 @@ roles:
       - "command_type:*"
       - "command:*"
       - "location_type:create,update,delete"
+      - "component_type:create,update,delete"
       - "vendor:create,update,delete"
       - "driver:create,update,delete"
-      - "capability:create,update,delete"
       - "product:create,update,delete"
       # standard is the system-side counterpart of product (a Catalog entity with
       # its own property contract), so it carries its own permission rather than

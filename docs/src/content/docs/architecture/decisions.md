@@ -81,9 +81,9 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0044](#adr-0044-the-component-classification-catalogs) | 2026-07-20 | Accepted | The `component_make` catalog is generalized into **`vendor`** (a `kind` of manufacturer / integrator / developer), and two new leaf catalogs join it, **`driver`** (id, display_name, version) and **`capability`** (id, display_name), as the component-classification reference data: each a gated CRUD Catalog console page with read-only official seeded rows. `product` + `product_capability` + `component.product` are the next slice. This is PR2 of the estate-model shift toward property / event / command + vendor / product / driver / capability / standard / role / health |
 | [ADR-0045](#adr-0045-the-product-catalog) | 2026-07-20 | Accepted | **`product`** lands as a first-class catalog entity, the concrete SKU that binds a **`vendor`**, a **`driver`**, a **`kind`** (`device` / `app` / `service` / `vm`), and a capability set via the **`product_capability`** join; **`parent_product_id`** models variants, and **`component.product_id`** (`on delete restrict`) points a component at the SKU it is, making the product the source of a component's shape and retiring the `component_type`-as-shape notion. PR3 of the estate-model shift; consumes the vendor / driver / capability catalogs from ADR-0044 |
 | [ADR-0046](#adr-0046-the-event-log-kind-sink) | 2026-07-20 | Accepted; superseded in part by [ADR-0066](#adr-0066-logs-are-a-raw-ingest-lane-not-events) | A **log**-kind observation is no longer dropped at ingest: it lands in a new **`event`** table, the log-kind sink (a past occurrence) beside `metric_datapoint` / `state_datapoint` (a sampled present value). `event` carries the same datapoint owner exclusive-arc and provenance, plus `message` + `attributes`, and the reserved `event_id` FK stubs on the two datapoint tables are closed (`on delete set null`). Scope excludes the `datapoint`->`sample` rename (a later cleanup) and `property_value` / the current-value store (the fold-fields slice). P1 follow-up of the estate-model roadmap |
-| [ADR-0047](#adr-0047-the-fields-fold-product_property-and-property_value) | 2026-07-21 | Accepted | The standalone **fields** feature retires and folds into the estate model: a field was only ever a **property with `declared` provenance**, never a primitive of its own. **`product_property`** is the product's declared-property **contract** (`product_id`, `property_name`, `default_value`, `required`), replacing `field_definition`; **`property_value`** is the value store, carrying the **same owner exclusive-arc** as `metric_datapoint` / `event` plus `instance` and `provenance`, replacing `field_value`. `EffectiveProperties` unions the contract arm (`coalesce(set value, contract default)`) with the off-contract arm, so a productless component still resolves. `field_definition`, `field_value`, `component.component_type`, and the whole `component_type` registry retire. PR5 of the estate-model shift |
+| [ADR-0047](#adr-0047-the-fields-fold-product_property-and-property_value) | 2026-07-21 | Accepted; superseded in part by [ADR-0085](#adr-0085-the-component_type-registry-returns-as-the-device-class-genus) (the `component_type` registry returns, above the product) | The standalone **fields** feature retires and folds into the estate model: a field was only ever a **property with `declared` provenance**, never a primitive of its own. **`product_property`** is the product's declared-property **contract** (`product_id`, `property_name`, `default_value`, `required`), replacing `field_definition`; **`property_value`** is the value store, carrying the **same owner exclusive-arc** as `metric_datapoint` / `event` plus `instance` and `provenance`, replacing `field_value`. `EffectiveProperties` unions the contract arm (`coalesce(set value, contract default)`) with the off-contract arm, so a productless component still resolves. `field_definition`, `field_value`, `component.component_type`, and the whole `component_type` registry retire. PR5 of the estate-model shift |
 | [ADR-0048](#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model) | 2026-07-21 | Accepted | `system_type` is promoted to **`standard`**, the blueprint a system conforms to and the system-side counterpart of `product`: it gains `parent_standard_id` (variants), a declared-property contract, and its own `standard:*` Catalog resource, and `system.standard_id` becomes **optional**. `standard_property` and `location_type_property` join `product_property`, and one **owner-generic** `EffectiveProperties(ownerKind, ownerID)` resolves component, system, location, and node off a single parameterized template. A standard and a location type are created by **forking an in-code template** (one-time, no inheritance), so a shipped row is **operator-owned** (`official: false`, seeded **if absent**), while a system **conforms** to its standard with **live** inheritance; only the canonical catalogs keep the authoritative upsert. PR6 of the estate-model shift |
-| [ADR-0049](#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set) | 2026-07-21 | Accepted | A **`system_role`** is a slot a system needs filled (a table microphone, a main display), declared on a **standard** (inherited live by every conforming system) or on one **system** (ad-hoc) over the same exclusive arc `property_value` uses, requiring a **conjunctive** `role_capability` set and carrying a **`quorum`**. A component's capabilities become a **resolved set** (`EffectiveCapabilities` = its product's, plus its own `component_capability` `present=true` rows, minus its `present=false` ones), because `product` is optional and a strict guard over a product-only fact would lock a productless component out of every role. `AssignRole` **refuses (422) and names the missing capabilities**, joining the location placement constraint as a refusal on modeled grounds that names the parties. **Quorum** ships here (staffing is visible without health); **impact** and the SLI rollup land in PR8. Supersedes the `system_template_member` role-requirement design. PR7 of the estate-model shift |
+| [ADR-0049](#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set) | 2026-07-21 | Superseded by [ADR-0087](#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability) | A **`system_role`** is a slot a system needs filled (a table microphone, a main display), declared on a **standard** (inherited live by every conforming system) or on one **system** (ad-hoc) over the same exclusive arc `property_value` uses, requiring a **conjunctive** `role_capability` set and carrying a **`quorum`**. A component's capabilities become a **resolved set** (`EffectiveCapabilities` = its product's, plus its own `component_capability` `present=true` rows, minus its `present=false` ones), because `product` is optional and a strict guard over a product-only fact would lock a productless component out of every role. `AssignRole` **refuses (422) and names the missing capabilities**, joining the location placement constraint as a refusal on modeled grounds that names the parties. **Quorum** ships here (staffing is visible without health); **impact** and the SLI rollup land in PR8. Supersedes the `system_template_member` role-requirement design. PR7 of the estate-model shift |
 | [ADR-0050](#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain) | 2026-07-21 | Accepted | Health is **recorded as a transition** and **recomputed at the write**, never on read. An **`alarm`** is component-local and names the **capabilities** it degrades; a component satisfies a role only when it provides every required capability and none of them is degraded; a role below its **quorum** is impaired and contributes its **`impact`** (`outage` / `degraded` / `none`); a system takes the worst of its roles, a location the worst of its systems. The verdict domain is **`healthy` / `degraded` / `outage`** and the judgement is a **pure package** (`internal/health`), unit-tested with no database. The recorded carrier is **`state_datapoint`**, already transition-only, so the history is edges and only edges; **compute-on-read** (no history) and **write-through-on-read** (the edge timestamped when somebody looked) are both rejected. A **read never writes**, and it computes the verdict it serves from the same rows it shows, so a report cannot contradict its own evidence. PR8 of the estate-model shift, closing epic [#266](https://github.com/hyperscaleav/omniglass/issues/266) |
 | [ADR-0051](#adr-0051-membership-is-the-attachment-and-a-role-is-what-it-does) | 2026-07-21 | Accepted | Membership is the attachment, and a role is what it does |
 | [ADR-0052](#adr-0052-the-cascade-resolves-through-membership-and-secrets-carry-no-system-band) | 2026-07-21 | Accepted | The cascade resolves through membership, and secrets carry no system band |
@@ -119,6 +119,12 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0082](#adr-0082-the-type-resource-renames-to-location_type) | 2026-08-06 | Accepted | the permission resource type renames to location_type on every surface (route stamps, roles seed, console gates, guard fixtures); the generic word retires from the permission vocabulary |
 | [ADR-0083](#adr-0083-the-catalog-rail-is-sectioned-by-the-estate-noun-each-registry-serves) | 2026-08-06 | Superseded by [ADR-0084](#adr-0084-the-catalog-shell-and-five-signal-lanes) | the Catalog rail is sectioned by the estate noun each registry serves, entries keep the registry's own word (Types where that is all there is), Telemetry holds what gets recorded and Action what the platform does, and the /catalog hub teaches the map with live counts |
 | [ADR-0084](#adr-0084-the-catalog-shell-and-five-signal-lanes) | 2026-08-07 | Accepted | Catalog is one rail entry opening a shell: a grouped subrail (Telemetry, Actions, Components, Systems, Locations, Metadata) navigating to the per-registry pages at canonical URLs, with an Overview landing; the organizing axis is direction (Telemetry is what you receive, Actions what you send or run), the lane collective noun becomes five signal lanes, and secret types loses its nav slot |
+| [ADR-0085](#adr-0085-the-component_type-registry-returns-as-the-device-class-genus) | 2026-08-07 | Accepted; partially reverses [ADR-0047](#adr-0047-the-fields-fold-product_property-and-property_value) | The `component_type` registry returns as a nested taxonomy classifying the product, not the component: it carries the identity facts that span products (naming stem, display name, icon, abbrev, default tags), inheriting down the tree with override at any node |
+| [ADR-0086](#adr-0086-the-product-classification-floor-and-the-kind-split) | 2026-08-07 | Accepted | Every component is required to name a product (the three seeded generics cover anything unmodeled); product.kind narrows to device / app / service, no default, required at create; vm retires, folded into app |
+| [ADR-0087](#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability) | 2026-08-07 | Accepted | The alarm-capability-role chain retires: an alarm impairs its component's own verdict wholesale, an occupant satisfies its role whenever its own verdict is not outage, and the typed-slot guard is the only assignment-time check; records the 409-vs-422 refusal line and the choice/alternate boot-seed reconciliation carve-out. Supersedes ADR-0049, amends ADR-0050 |
+| [ADR-0088](#adr-0088-a-placement-change-is-an-authorization-act-so-a-move-is-its-own-verb) | 2026-08-08 | Accepted | Placement (parent, location) leaves the component/system/location PATCH body and becomes its own `:move` custom method under its own `<resource>:move` permission, closing the gap where clearing parent_id to root via PATCH needed no scope check while creating the same root already required an all-scoped grant; MoveLocation deliberately gains no clear-to-root capability |
+| [ADR-0089](#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup) | 2026-08-08 | Accepted | A uuid is the address the platform generates; a dotted path (location segments, a `$comp`/`$sys`/`$role` accessor, plane-local segments) is a human-typed positional lookup, resolved by an allowlist name rule that renders as a CLI argument, a REST path, or a NATS subject with no escaping; dash and bare renders are display-only and never accepted back. Extends ADR-0062, amends ADR-0076 in justification |
+| [ADR-0090](#adr-0090-a-derived-value-is-a-default-that-tracks-until-touched) | 2026-08-08 | Accepted | A derivable value fills at create, tracks live while the platform holds the pen, freezes on the operator's first edit, and resumes tracking only on an explicit reset; `component.name_generated` ships `DEFAULT false`, not the epic's `DEFAULT true`, so no pre-existing operator-typed name is silently claimed by the platform |
 
 ## Entries
 
@@ -1364,7 +1370,9 @@ below from the project's history. From here it grows one slice at a time.
 
 ### ADR-0047: The fields fold: `product_property` and `property_value`
 
-- **Date:** 2026-07-21 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
+- **Date:** 2026-07-21 | **Status:** Accepted; superseded in part by
+  [ADR-0085](#adr-0085-the-component_type-registry-returns-as-the-device-class-genus) (the
+  `component_type` registry returns, reshaped above the product) | **Pages:** [core entities](/architecture/core-entities/),
   [config, secrets, and variables](/architecture/variables/), [API](/architecture/api/),
   [Properties guide](/guides/admin/properties/), [Products guide](/guides/admin/products/)
 - **Decision:** The standalone **fields** feature is **retired** and folded into the estate model, because a
@@ -1433,6 +1441,13 @@ below from the project's history. From here it grows one slice at a time.
   default)` is the fall-through to a **declaration**, not the bottom rung of a cascade, so
   `product_property.default_value` (and its two siblings) is the shipped instance of the off-axis default
   rather than a tier under `platform`.
+- **Partially reversed by [ADR-0085](#adr-0085-the-component_type-registry-returns-as-the-device-class-genus):**
+  this ADR's retirement of `component.component_type` and the `component_type` registry stands; naming
+  and rendering (a generated component name needs a device-class stem the product's SKU cannot supply)
+  forced the registry's return, deliberately reshaped: **above the product**
+  (`product.component_type_id`), not beside the component and not a second classifier the component
+  itself carries. What this ADR actually decided about **`product_property`** and **`property_value`**
+  is untouched; only the "and the whole `component_type` registry retire" clause is reversed.
 
 ### ADR-0048: The `standard` blueprint and the template-fork seed model
 
@@ -1537,7 +1552,7 @@ below from the project's history. From here it grows one slice at a time.
 
 ### ADR-0049: The system role: capability-gated staffing and the resolved capability set
 
-- **Date:** 2026-07-21 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
+- **Date:** 2026-07-21 | **Status:** Superseded by [ADR-0087](#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability) | **Pages:** [core entities](/architecture/core-entities/),
   [API](/architecture/api/), [glossary](/architecture/glossary/), [templates](/architecture/templates/),
   [health](/architecture/health/), [Standards guide](/guides/admin/standards/),
   [Capabilities guide](/guides/admin/capabilities/), [Work with an entity](/guides/operator/entities/)
@@ -1731,6 +1746,13 @@ below from the project's history. From here it grows one slice at a time.
   estate-model shift toward property / event / command plus vendor / product / driver / capability / standard /
   role / health, and the slice that **closes the epic**: it is the one that consumes what the previous seven
   built.
+- **Amended by [ADR-0087](#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability):**
+  chain item 1 above (capability as the routing key: an alarm names the capabilities it degrades, a component
+  satisfies a role only when it provides every required one) retires with the whole capability registry
+  ([#626](https://github.com/hyperscaleav/omniglass/issues/626)). An alarm now impairs its component's own
+  verdict wholesale, and a role's occupant satisfies it whenever that verdict is not `outage`. Items 2 through
+  5 (the pure judgement package, the transition-only record on `state_datapoint`, recompute-at-the-write, and a
+  report computing what it serves) are unchanged.
 
 ### ADR-0051: Membership is the attachment, and a role is what it does
 
@@ -2169,6 +2191,10 @@ below from the project's history. From here it grows one slice at a time.
   gap, a component response that carried `product_id` without the product's name, is fixed). The
   storage helper collapses too: the per-registry `productRefCol` / `vendorRefCol` and the
   `registryHandles` set fold into one `registryRefCol(ref)`, since every registry now behaves the same.
+- **Extended by [ADR-0089](#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup):**
+  this decision's dual-accept clause already said a reference "resolves whichever form it is given";
+  ADR-0089 makes a third form, a dotted path, a real one for `location`, `system`, and `component`,
+  resolved structurally to a uuid before the ordinary name-or-id lookup runs.
 
 ### ADR-0063: The telemetry model is typed registries over bare-noun data tables
 
@@ -2621,6 +2647,14 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   using the name can detect the move by diffing the id it holds. The cost is real and accepted: an external
   reference held as a name breaks on rename, and nothing on the server can repair it. Alias and redirect
   machinery is deliberately not built yet; it is the first thing to reach for if that cost shows up.
+- **Amended by [ADR-0089](#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup)** in
+  justification, not shape: `:rename` stays exactly this custom method, gains a second job as the
+  operator's pen-taking act ([ADR-0090](#adr-0090-a-derived-value-is-a-default-that-tracks-until-touched)),
+  and the accepted cost above is repaired rather than removed. Once the uuid is the address, an
+  external reference held as a name no longer breaks on rename in the way this entry describes: an
+  integration holding the id survives every rename, and one holding a dotted path is a positional
+  lookup honestly reporting whatever occupies that position now. What remains, and stands on its own,
+  is the permission split this entry already named.
 
 ### ADR-0077: A group name obeys the entity name rule, tightening a pattern the code had excused
 
@@ -2850,3 +2884,419 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   produced the direction axis also queued the schema phase (system_blueprint, location contract
   removal, secret_type retirement, the four-class taxonomy), deliberately sequenced ahead of the
   #379 migration collapse and deferred from this decision.
+
+### ADR-0085: The `component_type` registry returns as the device-class genus
+
+- **Date:** 2026-08-07 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
+  [storage](/architecture/storage/), [Products guide](/guides/admin/products/)
+- **Decision:** The **`component_type`** registry returns: a seeded-plus-custom device-class taxonomy
+  (`display`, `projector`, `screen`, `presentation-switcher`, `video-bar`, `dsp`, `amplifier`, `mic`,
+  `camera`, `codec`, `control-processor`, `touch-panel`, ...) that **nests by `parent_id`** (`mic` over
+  `wireless-mic`, `ceiling-mic`, `boundary-mic`), on the same official-and-custom pattern as the other
+  classification catalogs, operator-graftable at any node. It classifies the **product**
+  (`product.component_type_id`, required), so a component inherits its type through the product it is;
+  it is not a second classifier on the component. The row carries exactly the identity facts that
+  genuinely span products, **inheriting down the tree with override at any node**: `name`, the naming
+  **stem** (a subtype names components by its inherited stem unless it overrides), `display_name`,
+  `icon` (the console glyph, replacing the too-coarse derivation from `product.kind`), `abbrev` (the
+  two-to-three character hostname stem), and default tags. The seed discipline: a subtype exists only
+  where a standard's slot would name it; a fact like panel technology stays on the product. It is
+  **not** a shape-definer: contracts, declared properties, and drivers stay on the product. The
+  division of labour: the type says what a component **is** (one, via its product); the role says what
+  a system **needs** (a typed slot, a separate decision the roles epic owns); the capability axis is
+  untouched by this decision.
+- **Context:** ADR-0047 retired the component-level `component_type` when the fields folded into the
+  product contract, and this partially reverses it, deliberately differently shaped: above the product
+  rather than beside the component. What forced the return was naming and rendering. A generated
+  component name needs a stem in the device-class vocabulary (`display-1`, the `fp1` hostname
+  convention), and the platform had no table that speaks it: the role is positional
+  (`display-front` says where it sits), the product is a SKU (`qm55`), `product.kind` is three values
+  wide, and capabilities are many-valued. Every identity fact the console kept reaching for (icon,
+  abbreviation, base tags, name stem) turned out to live at the same missing level, which is the tell
+  that the level is real. The economics confirm it: a thousand components, a few dozen products, a
+  couple dozen types; each identity fact is authored once at the level it spans.
+- **Tracked under** epic [#614](https://github.com/hyperscaleav/omniglass/issues/614).
+
+### ADR-0086: The product classification floor, and the kind split
+
+- **Date:** 2026-08-07 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
+  [storage](/architecture/storage/), [Products guide](/guides/admin/products/)
+- **Decision:** Every **component** is required to name a **product**: `component.product_id` is
+  `NOT NULL`. Three seeded generics (`generic-device`, `generic-app`, `generic-service`, each pointed
+  at the matching generic `component_type`) cover anything not yet modeled as a real SKU, so the floor
+  is total from the first migrated database onward: no component ever exists with no kind, no declared
+  contract, and no driver path. **`product.kind`** narrows to `device | app | service`, drops its
+  column default, and is required at create: an operator states a product's class explicitly rather
+  than reading a silent fallback to `device` that let a mislabeled cloud service pass as correct
+  forever. **`vm` retires**, folded into `app`, because nothing forks on a virtual machine that does
+  not fork the same way on any other app: a virtual appliance is a different SKU, not a different kind.
+  The three that remain are the who-owns-what split: `device` (the box is yours), `app` (the runtime is
+  yours), `service` (only the account is yours).
+- **Context:** ADR-0049's own Context named the optional product as the forcing function behind
+  capability-gated staffing's resolved-capability layering: a role could not check a product's
+  capabilities directly because a component might not have one. Making product required closes that
+  gap at the root rather than compensating for it one layer up, and does the same for the naming
+  epic ([ADR-0085](#adr-0085-the-component_type-registry-returns-as-the-device-class-genus)): a
+  generated component name needs a `component_type`, which needs a product, so "product required" is
+  what makes the naming generator total rather than a fallback-to-hand-authoring special case. The
+  `vm` retirement follows the same audit that found the kind default silently absorbing a mistake: a
+  fixed four-value enum with a default reads as validated when it is merely unset, and the fourth value
+  had no code path that branched on it the other three did not already cover.
+- **Tracked under** epic [#614](https://github.com/hyperscaleav/omniglass/issues/614).
+
+### ADR-0087: Capability-gated staffing retires; an alarm impairs its component, not a named capability
+
+- **Date:** 2026-08-07 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
+  [health](/architecture/health/), [API](/architecture/api/)
+- **Decision:** The **alarm -> alarm_capability -> degraded-capabilities -> role** chain
+  [ADR-0049](#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set) and
+  [ADR-0050](#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)
+  built retires. The replacement is three calls shorter: an **alarm impairs its component's own
+  verdict wholesale**, no longer routed through a named capability; a role's occupant **satisfies**
+  it whenever the occupant's own verdict is not `outage` (`Occupies()` is `Verdict != Outage`, so a
+  merely degraded occupant still occupies its slot, since severity is how loudly to page somebody,
+  not a second staffing threshold); and the **typed-slot guard** (`system_role_type`,
+  `system_role_product`: a filling component's product must be classified within an accepted
+  `component_type`, and, if pinned, be one of the named products) is now the **only** assignment-time
+  check and plays no further part in health. `impact`, `quorum`, the worst-wins fold, and health as a
+  recorded transition recomputed at the write are all unchanged; only the routing key changed, from a
+  capability set to a component's own verdict.
+
+  Two refusal rulings that fell out of the same rebuild, generalized here because nothing else names
+  them: a role-write refusal is **409** when it depends on rows other than the one being written
+  (double-staffing a component across roles, a capacity below the currently assigned count: "the
+  declaration or assignment request is not invalid on its own, it conflicts with the estate's current
+  state"), and **422** when the declaration alone is invalid regardless of other rows (capacity below
+  quorum, an unresolvable typed-slot reference). And a boot-seed carve-out: `choice_alternate`
+  (not `role_choice`, which keeps the ordinary insert-if-absent rule and no set-level reconcile;
+  a choice row itself is never deleted by a reseed) reconciles to its declared YAML set on
+  **every** boot, deleting a stored alternate that dropped out of the set (refusing instead, with
+  `ChoiceInUseShortfall`, if a role still points at it) rather than leaving it in place. This is a
+  **deliberate departure** from the
+  platform's usual boot-seed rule (insert-if-absent, `ON CONFLICT DO UPDATE`, an operator's row never
+  touched by a reseed): it is safe here only because `choice_alternate` has **no operator write
+  path** (nothing but the seed ever writes one) and its **`position` is a packed 1..n sequence**
+  within a choice, where a leftover orphan does not sit inert, it **collides** with the position a
+  renamed or reordered entry now wants. It is a narrow exception for a position-ordered seeded child
+  of a table nothing else writes, not a precedent: a seeded entity with an operator write path, or
+  without a packed ordering an orphan can collide on, keeps the ordinary insert-if-absent rule.
+- **Context:** Task 5 of the identity-model epic ([#626](https://github.com/hyperscaleav/omniglass/issues/626))
+  shipped the retirement (`ca78bd3`, `dbfa284`) without filing this entry at the time; it is recorded
+  now, against the gap, by Task 9 of the same epic. The forcing function was the typed-slot guard the
+  prior slice had just landed (`c006c62`): once a component fills a role because its **product**
+  classifies within an accepted **`component_type`**, gating the same assignment on a **second**,
+  independent capability set was two guards asking the same question in different vocabularies, and
+  the capability registry (`capability`, `alarm_capability`, `component_capability`,
+  `product_capability`, `system_role_capability`, five tables) added a maintenance surface, an
+  editing UI, and a resolved-set computation (`EffectiveCapabilities`) that nothing left standing
+  needed. Health's own reasoning for routing through capability
+  ([ADR-0050](#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain),
+  "capability is the only vocabulary shared by the thing that breaks and the thing that cares") no
+  longer holds once assignment routes through type instead: the component **itself**, not a named
+  fact about it, is what a role now cares whether is up. The 409/422 line and the boot-seed carve-out
+  are recorded here rather than left as implicit code comments because both are the kind of local call
+  a later slice reads out of context and either contradicts by accident or copies somewhere it does
+  not fit; the boot-seed carve-out in particular must not be read as license to delete a shipped row
+  for any other seeded entity, which is why its two preconditions are stated explicitly.
+- **Supersedes:** [ADR-0049](#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)
+  in full: `role_capability`, `component_capability`, and `EffectiveCapabilities` are gone, not
+  merely superseded in wording, and the typed-slot guard is what a role now requires. **Amends**
+  [ADR-0050](#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain):
+  its chain item 1 (capability as the routing key) retires; items 2 through 5 (the pure judgement
+  package, the transition-only record, recompute-at-the-write, and a report computing what it
+  serves) are undisturbed and this entry changes nothing about them.
+- **Tracked under** epic [#626](https://github.com/hyperscaleav/omniglass/issues/626).
+
+### ADR-0088: A placement change is an authorization act, so a move is its own verb
+
+- **Date:** 2026-08-08 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
+  [API](/architecture/api/), [identity and access](/architecture/identity-access/)
+- **Decision:** `parent` and `location` leave the `PATCH` body of `component`, `system`, and `location`
+  entirely (both the API input structs and the storage `Patch` structs) and become a new `POST
+  /<collection>/{ref}:move` custom method, carrying `{location?, parent?}` on component and system
+  (at least one required, 422 otherwise) and `{parent}` only on location. `:move` is gated by a new,
+  single-word permission token, `<resource>:move`, distinct from `<resource>:update` the same way
+  `:rename` is distinct from it, seeded in `internal/seed/roles.yaml` beside `rename` in the same
+  slice its route lands (Operator and Deploy get `component:move`; Deploy also gets `system:move` and
+  `location:move`; Administrator's `system`/`location` grants gain `move`). `:move` writes a DISTINCT
+  audit verb, `move`, not the generic `update` a PATCH wrote (a loosely worded "the move is
+  auditable" acceptance criterion was already satisfied by the old row, whose JSON happened to
+  contain `parent_id`, without forcing anything). `:move` never calls `RecomputeHealth`: a component's
+  or a system's own reparent never has, and a component's relocate never has either (a component's
+  verdict is purely its own active alarms, unaffected by placement). The one exception, stated so it
+  is not mistaken for an oversight: a **system's relocate** (its `location` field, not `parent`)
+  keeps recomputing health at both the location it left and the one it arrived at, exactly as
+  `UpdateSystem`'s combined patch already did (`TestHealthMovesOnRelocation` is the load-bearing
+  proof); the health rollup runs system -> location, and a system's own location is a direct input to
+  that rollup the way a component's placement no longer is post-#626, so "a placement move never
+  recomputes health" holds for every reparent and every component relocate but not for this one field.
+  This is a correctness statement, not a coverage claim: a **second**, known-and-tracked gap sits
+  beside it. `locationVerdict` also rolls up recursively through the location tree (a system's
+  location resolves upward to every ancestor, and a location's own verdict folds every system in its
+  subtree downward), so a location with placed descendants that moves to a new parent leaves both the
+  old and new ancestors' recorded verdicts stale, exactly the shape a system relocate closes but
+  nothing closes for a location move. This is not new here: `UpdateLocation`'s old reparent branch
+  never recomputed health either, so `MoveLocation` carries the gap forward rather than introducing or
+  closing it, per the same "`:move` does not add new recompute calls" ruling. Tracked as
+  [#642](https://github.com/hyperscaleav/omniglass/issues/642), not fixed in this task.
+- **Decision (the gap this closes):** `UpdateComponent`'s and `UpdateSystem`'s old reparent branches
+  guarded a rejected reparent only on the non-empty case (`if patch.ParentName != nil &&
+  *patch.ParentName != ""`); an explicit empty string skipped the guard entirely and set `parent_id`
+  to `NULL` with no scope check at all, while `CreateComponent`/`CreateSystem` already refused a root
+  placement (`create.All` required) to a caller without an all-scoped grant. A component- or
+  system-scoped (not all-scoped) principal, who could already write anything inside its own subtree,
+  could clear a row's parent and walk it out of every subtree scope it had ever been placed under,
+  with no check the create path itself would have refused. `MoveComponent` and `MoveSystem` now
+  require `action.All` on the same branch, closing it; `TestScopedPrincipalCannotLiftToRoot` and its
+  system twin are written from scratch, since every existing lift-to-root test ran with the all scope
+  and none would have caught the gap or would turn red from the fix.
+
+  The argument is written on `parent_id`, not `location_id`, because it is the true, checkable one:
+  component and system scope is **own-tier only** today (a component's scope tree is its own
+  ancestor chain, unrelated to a location's), so a `location_id` clear cannot lift a row out of a
+  scope that never covered it in the first place, and the cross-tier cascade that would make a
+  location-scope argument meaningful is a tracked later slice ([#10](https://github.com/hyperscaleav/omniglass/issues/10)).
+  The durable framing that also covers that latent hole once it lands: a placement change is an
+  authorization act, whatever tier it crosses, not merely a field write that happens to touch two
+  more columns than a rename touches one.
+- **Decision (the deliberate asymmetry):** `MoveLocation` does **not** gain a clear-to-root capability.
+  `UpdateLocation`'s reparent branch never had one either (an explicit empty `ParentName` resolved
+  nothing and was already a 422, `ErrParentNotFound`, before this split), so there was no gap to
+  close there, and adding clear-to-root now would be a new product capability nobody asked for, not a
+  security fix riding along with this task. The asymmetry with component and system, which DO gain a
+  guarded clear-to-root, is intentional and stated here so a future reader does not read it as a
+  missed spot.
+- **Decision (the transaction split):** `MoveComponent` and `MoveSystem` are separate gateway
+  functions with their own transaction and their own audit row, not a shared statement with
+  `UpdateComponent`/`UpdateSystem`. `UpdateComponent`'s old UPDATE carried a three-state `CASE`
+  across four columns (`display_name`, `product_id`, `location_id`, `parent_id`) in one statement;
+  splitting placement out splits that statement, so an operator gesture that used to change both a
+  label and a placement in one PATCH now costs two requests and writes two audit rows if the caller
+  wants both. This is the same tradeoff `RenameComponent`/`RenameSystem`/`RenameLocation` already
+  established for name-plus-other-field edits (ADR-0076), chosen deliberately here for the same
+  reason rename earned its own act: a placement change is an authorization act, not a label edit, so
+  it deserves its own grant and its own audit trail entry rather than riding along with whatever else
+  a PATCH happened to touch.
+- **Context:** Task 13 of the identity-model epic ([#627](https://github.com/hyperscaleav/omniglass/issues/627)).
+  The two storage placement test files (`components_placement_test.go`, `systems_placement_test.go`)
+  and the placement end-to-end tests moved to the new verb rather than being deleted; the compiler
+  found every storage caller once the `Patch` struct fields were removed, the HTTP end-to-end callers
+  (`map[string]any` bodies, resolved only at request time) did not, and were found by re-reading every
+  `PATCH .../parent` and `PATCH .../location` call site by hand. `location:checkName` is unaffected:
+  it is the advisory placement-availability precheck, unrelated to `:move`, and was not touched.
+- **Tracked under** epic [#627](https://github.com/hyperscaleav/omniglass/issues/627).
+
+### ADR-0089: A uuid is the address, a dotted path is a positional lookup
+
+- **Date:** 2026-08-08 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
+  [storage](/architecture/storage/), [identity and access](/architecture/identity-access/),
+  [API](/architecture/api/), [glossary](/architecture/glossary/)
+- **Decision:** An entity has two resolvable references, different guarantees, both legitimate and
+  labelled as such. The **uuid is the address**: immutable, surviving rename and move, the only
+  reference the platform itself ever generates or persists. The **dotted path is a positional
+  lookup**: human-typed, resolving to whatever occupies that position now (`boi.17c.415a.$comp.display-1`
+  after a panel swap resolves to the replacement, which is the point of a positional reference, not a
+  defect of one). The containment rule: a reference the platform **generates** is always a uuid; a
+  reference a human **types** may be a uuid, a bare name, or a dotted path. The console persists and
+  addresses every read and write by `n().raw.id` (`web/src/pages/Components.tsx`, `Systems.tsx`,
+  `Locations.tsx`), so a stale path can only ever exist where an operator typed one, into a CLI, a
+  runbook, or a hand-built request. Because a platform-owned name recomputes at every `:move`
+  ([ADR-0090](#adr-0090-a-derived-value-is-a-default-that-tracks-until-touched)), a path built
+  entirely from platform-owned segments cannot itself go stale between the read that produced it and
+  the write that consumes it; only an operator-owned segment can drift, and only because an operator
+  chose to rename it.
+
+  **This does not reopen [ADR-0079](#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)'s
+  one-name-rule collapse (#586).** That decision killed a NAME that could itself contain a dot
+  (`icmp.rtt-avg`, a keyspace catalog key); today every name, keyspace or entity, is exactly one kebab
+  segment, no dots, at most 100 characters, on the one rule `storage.ValidateName` applies everywhere
+  (`internal/storage/name_rule.go`). What this decision adds is a **reference**, syntactically distinct
+  from a name, that concatenates several individually-valid single-segment names with `.` and a
+  `$accessor` (`$comp`, `$sys`, `$role`) into one positional path. `icmp.rtt-avg` was the last name a
+  table's `name` column held with a dot in it, backfilled dot-free by #586 itself
+  (`icmp.rtt-avg` to `icmp-rtt-avg`); no name column has held one since, and this epic adds none: a
+  dotted value is never stored, only resolved.
+
+  **The allowlist is the load-bearing fact.** The entity name rule, `^[a-z0-9][a-z0-9-]*$`
+  (`internal/storage/name.go`), is an allowlist, not a denylist of characters someone remembered to
+  exclude. A name can never contain a separator or wildcard from any protocol, chosen or not yet
+  chosen: `.` (path segments), `$` (accessors), `*` and `>` (NATS), `/` and `#` (MQTT), `%` (URL
+  escaping), or `:` (reserved by the router for a custom method's verb suffix, `POST
+  /components/{ref}:rename`: a name admitting `:` would make `rm215a:rename` ambiguous between the
+  entity `rm215a:rename` and the entity `rm215a` with the `:rename` verb, so the allowlist excludes it
+  for the same reason it excludes everything else on this list). That single property is what lets one
+  grammar render as a CLI argument, a REST path segment, or a NATS subject with no escaping anywhere,
+  and lets most segments render as a DNS label or an email localpart, since the character set alone is
+  a subset of both: what the allowlist does **not** guarantee is a segment's fit under DNS's own
+  63-octet label ceiling (the 100-character entity limit is wider) or DNS's ban on a trailing hyphen
+  (`^[a-z0-9][a-z0-9-]*$` legally admits `abc-`); both are a render-time concern for whichever segment
+  eventually feeds a hostname, not a naming rule this decision enforces. An allowlist still composes
+  across every namespace it has not met yet, where a denylist has to be re-audited for each new one.
+
+  **A percent-encoded slash arrives already decoded.** The HTTP handler decodes a path parameter
+  before the address parser ever sees it (verified against the router, not assumed, before Task 12
+  built on it), so a caller cannot smuggle an extra path level past `ParseAddress` by encoding a `/` or
+  a `.`. Every segment, in the location root, the plane tail, and the role name alike, passes the
+  entity name rule inside `ParseAddress` itself (`internal/storage/path.go:74-77`) before any of it
+  reaches a query: validation is structural, not a property of what happens to already be in the
+  database.
+
+  **A dash render and a bare render are display-only, and neither is a form the resolver ever treats
+  as a path.** `RenderDash` (`boi-17c-216b-display-1`) strips the accessor; `RenderBare`
+  (`boi17c216bfp1`) further compacts the final segment to the component type's `abbrev` plus its
+  ordinal and drops every separator, hyphens included (`internal/storage/render.go`). Both exist for
+  labelling only (a cable tag, an asset sticker, a compact row sub-line): accessor-stripping is lossy
+  for the dash form and stem-compaction is lossier still for the bare form, so neither round-trips
+  through `ParseAddress`/`resolvePath`. Both also still satisfy the entity name rule on their own
+  (letters, digits, and hyphens, no dot or `$`), so a dash or bare string handed back to the resolver
+  is not refused as malformed: `ParseAddress` reports it is not an address at all and it falls through
+  to the ordinary bare-name path, almost always matching no row, an unremarkable 404 rather than a
+  distinguishable error.
+
+- **Decision (six edges, recorded rather than hidden):** the read path (`scopedByNameInScope`,
+  `refPolicyHide`) and the write path (`resolveScopedRef`, `refPolicyForbid`) share one primitive,
+  `resolveRef` (`internal/storage/scopedcrud.go:521-546`), but they do not share every guarantee, and
+  the gaps below are shipped as stated limits, not silently left for the next reader to discover.
+
+  1. **`resolveRef`'s write-path policy proves "writable here," not "readable here."**
+     `resolveScopedRef` (`scopedcrud.go:633-649`) narrows candidates by the caller's create- or
+     action-scope, not its read scope. A resolved reference is one the caller may place a binding
+     against, which is a narrower claim than the scope ruling's own wording ("scope decides before
+     ambiguity does") suggests on its own.
+  2. **A bare-name `forbidden` is a name-existence oracle.** A name matching at least one row, none of
+     them in the caller's action scope, is `cfg.forbidden` (403), not the read path's non-disclosing
+     404 (`scopedcrud.go:469-475`). A caller can learn a name exists somewhere in the estate from the
+     status code alone. This predates the epic and is tested (`interfaces_scope_test.go:82`), and it
+     is now asymmetric with the read path this branch tightened (`scopedByNameInScope` folds the same
+     two cases into one 404), by design: several routes' contracts already depend on the 403/404 split
+     a caller supplied its own reference into, which is not the new disclosure a read's uuid would be.
+  3. **An ambiguous `?system=` on a component's tags read is a new, narrower oracle, preferred over
+     what it replaced.** `ResolveTags` (`internal/storage/tags.go:449-459`) now 409s a `component:read`
+     caller whose `forSystem` filter matches more than one system, redacting candidates
+     (`withoutCandidates`). A caller with no `system:read` grant learns two systems share that name.
+     This is a deliberate improvement: the alternative silently seeded the tag cascade from whichever
+     system a bare-name lookup happened to resolve to, returning a wrong answer with no signal at all.
+  4. **The `$role` accessor parses but resolves nowhere.** `AddressRole`
+     (`internal/storage/path.go:35-42`) is syntactically real: `boi.17c.$sys.av.$role.primary-dsp`
+     parses to a well-formed `Address`. `addressKindTable` (`scopedcrud.go:247-263`) has no table for
+     it, so `resolvePath` reports the same `ErrPathNotFound` it would for any other plane mismatch, a
+     non-disclosing 404 that does not distinguish "role addressing is not built" from "this role does
+     not exist." Reserving the grammar ahead of its resolution is a stated decision here, not a gap
+     found later: the day a system-role read exists, it inherits a grammar it never has to renegotiate.
+  5. **The boot-seed reconcile-and-delete carve-out is a separate pattern, cross-referenced, not
+     restated.** `choice_alternate`'s every-boot reconciliation
+     ([ADR-0087](#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability),
+     [storage](/architecture/storage/#migrations-three-buckets-kept-separate)) is about which seeded
+     rows a reboot may remove, not about how a reference resolves or who holds the pen on a value; it
+     shares no mechanism with this decision or with [ADR-0090](#adr-0090-a-derived-value-is-a-default-that-tracks-until-touched)
+     and is named here only so a reader does not conflate the two governance patterns.
+  6. **The tier guard inside `resolveRef` is forward insurance, not proof.** `resolveRef` panics if the
+     caller's scope was resolved for a resource that does not `Cover` the config being checked
+     (`scopedcrud.go:521-524`). Every one of the 29 non-test call sites of `scopedByNameInScope` and
+     `resolveScopedRef` today passes a `resource` label already derived from the same config it is
+     checked against, so the guard **cannot fire on any
+     input the current code produces**, and a green suite running with it live proves nothing beyond
+     that (`scopedcrud.go:507-517`, in the code, says so explicitly). It is insurance for the next call
+     site that copies a pattern without updating the label. It also inherits a blind spot from
+     `scope.Covers`: for `secret`, `variable`, `field`, and `telemetry`, every tier is admissible, so
+     the guard tells a right family from a wrong one but not a right tier from a wrong one within that
+     family, exactly the shape a real cross-tier regression took in this epic's own review before a
+     scoped test, not this guard, caught it.
+
+- **Extends [ADR-0062](#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle):** that
+  decision's dual-accept clause already said a reference "resolves whichever form it is given"; this
+  decision makes the third form literal rather than aspirational. `loadByRef`
+  (`internal/storage/scopedcrud.go:158-202`) tries a uuid, then a parsed dotted address, then a bare
+  name, in that order, for every scoped tree entity.
+- **Amends [ADR-0076](#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)**
+  in justification, not shape: `:rename` stays exactly the gated custom method ADR-0076 built, and it
+  earns a second job under [ADR-0090](#adr-0090-a-derived-value-is-a-default-that-tracks-until-touched):
+  it is now precisely the boundary where an operator takes the pen from the platform's name-tracking.
+  What changes is why the ceremony still earns its keep. ADR-0076 accepted "an external reference held
+  as a name breaks on rename, and nothing on the server can repair it" as the renameable identifier's
+  cost. Once the uuid is the address that argument is repaired: an integration holding the id survives
+  every rename, and one holding a path is a positional lookup honestly reporting whatever occupies that
+  position now, not a broken link. What remains, and is sufficient on its own, is the permission split
+  (an operator trusted to edit `display_name` is not thereby trusted to rewrite the identifier
+  colleagues type) and the pen-taking act itself.
+- **Context:** every estate name was globally unique before this epic, so operators hand-encoded the
+  building into every name and the encoding went stale on every move, twice per room (location and
+  system). ADR-0076 already made the id the durable reference and the name the renameable display key;
+  this decision (identity-model epic [#627](https://github.com/hyperscaleav/omniglass/issues/627),
+  Tasks 10 through 12 and 15) makes the id literally an address a caller composes, types, and resolves,
+  and gives a human a second, positional way to reach the same row without inventing a third identity
+  field. The path grammar was reserved, syntax-only, in `internal/storage/name.go` since ADR-0076;
+  Task 10 made every internal owner-resolve id-based ahead of the placement-scoped uniqueness DDL
+  (Task 11, `db/migrations/20260808090000_names_scope_to_placement.sql`), Task 12 built the parser and resolver
+  (`internal/storage/path.go`, `resolvePath`), and Task 15 put the resolved path, its segments, and
+  both renders on the wire and pointed the console at uuids exclusively. Task 13's `:move` verb
+  ([ADR-0088](#adr-0088-a-placement-change-is-an-authorization-act-so-a-move-is-its-own-verb)) and
+  Task 14's name generation ([ADR-0090](#adr-0090-a-derived-value-is-a-default-that-tracks-until-touched))
+  are what make a platform-owned segment of a path trustworthy rather than merely typeable.
+- **Tracked under** epic [#627](https://github.com/hyperscaleav/omniglass/issues/627).
+
+### ADR-0090: A derived value is a default that tracks until touched
+
+- **Date:** 2026-08-08 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
+  [storage](/architecture/storage/)
+- **Decision:** when the platform can compute a value an operator would otherwise type, it follows one
+  rule with four binding clauses, and none of the four make the value a constraint: a derived value can
+  prefill a field but it can never cause a write elsewhere to be refused.
+
+  1. **The platform fills.** A component's `name` is minted at create when an operator leaves it
+     blank: `<component_type stem>-<n>`, the ordinal the smallest positive integer no sibling matching
+     that stem already claims in the same placement scope, a sibling on a different stem never blocking
+     it (`generateComponentName`, `internal/storage/namegen.go:129-168`).
+  2. **A platform-owned value tracks its facts.** While `component.name_generated = true`, the name
+     recomputes inside the same transaction as whatever changed its inputs: a `:move` to a new
+     placement (`internal/storage/components.go:632-655`) or an ordinary product `PATCH` that
+     reclassifies the component to a new type (`components.go:470-496`). Both ride the causing write's
+     own audit event, old and new name in its payload; a platform-driven recompute is never itself a
+     `:rename`.
+  3. **The operator owns it on first touch.** `:rename` (`components.go:706-727`) clears
+     `name_generated` to `false` unconditionally, whether or not the row was already operator-owned,
+     and from that write the platform never recomputes the name again no matter how the facts move
+     afterward.
+  4. **The operator can hand it back.** `:resetName` (`components.go:744-774`, gated by the same
+     `component:rename` token `:rename` uses, since both change the identifier) regenerates the name
+     from the component's **current** type and placement and sets `name_generated = true` again,
+     whether or not it already was.
+
+  The contrapositive is the other half of the rule: a value the platform must own unconditionally (a
+  health verdict, a resolved effective-tags set) is computed on every read, never stored as a default
+  an operator could edit into a lie. The boundary between the two is whether the operator is allowed to
+  disagree with the platform's answer.
+
+- **Decision (the migration default deviates from the epic's own wording):**
+  `component.name_generated boolean not null default false`
+  (`db/migrations/20260808090000_names_scope_to_placement.sql:39-46`) ships `DEFAULT false`, not the
+  `DEFAULT true` the epic issue specified. This is deliberate: every component row that exists before
+  this column lands was operator-typed under the pre-#627 model, where no generator existed to have
+  picked a name for it. `DEFAULT true` would hand the platform a pen it never earned over real,
+  pre-existing operator data and let the very first `:move` against one of those rows silently rename
+  it. The gateway writes the flag explicitly on every insert from Task 14 onward, `true` on a generated
+  create and `false` on an operator-typed one; the column default describes only a row this migration
+  found already sitting in the table, never a row created after it.
+
+- **Context:** the same shape resolved independently twice on this branch before it was named as
+  one principle, which is what promotes it from a per-feature habit to a rule to check new work
+  against. A component's name (Task 14) is the built case above. `createIdentity`
+  (`web/src/lib/entities.ts`) already ran clauses 2 and 3 client-side for a catalog entity, deriving a
+  slug from a display name live and freezing it on first edit, before this decision gave the
+  server-side pattern a name. The product classification floor
+  ([ADR-0086](#adr-0086-the-product-classification-floor-and-the-kind-split)) is the contrapositive's
+  own evidence: a silent schema default on `product.kind` let a mislabeled cloud service read as
+  correct forever, exactly the failure clause 1's explicit fill and clause 3's no-silent-default guard
+  against, which is why `kind` is required at create rather than defaulted. A system's own
+  `location_id` (`internal/storage/systems.go`) is a live counterexample to clause 2, worth naming
+  because a reader could otherwise assume every platform-computable field tracks live: it is authored
+  at create and changed only through `:move` ([ADR-0088](#adr-0088-a-placement-change-is-an-authorization-act-so-a-move-is-its-own-verb)),
+  never derived from `system_member` rows, so clause 2's live tracking is confirmed here as a per-field
+  policy choice this decision's own build makes differently for a system's placement and a component's
+  name, not a mandate every derived field must take. The boot-seed reconcile-and-delete carve-out
+  (`choice_alternate`,
+  [ADR-0087](#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability),
+  [storage](/architecture/storage/#migrations-three-buckets-kept-separate)) is a related but distinct
+  pattern, about which seeded rows a reboot may remove rather than who holds the pen on an
+  operator-facing value; it is cross-referenced here, not restated.
+- **Tracked under** epic [#627](https://github.com/hyperscaleav/omniglass/issues/627).

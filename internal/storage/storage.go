@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/blob"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
@@ -217,7 +218,11 @@ type Gateway interface {
 	// Its own function, not a patch field, because a rename breaks the references
 	// an operator stored outside this system; the API gates it on location:rename.
 	RenameLocation(ctx context.Context, actorID, name, newName string, read, action scope.Set) (*Location, error)
-	LocationNameTaken(ctx context.Context, name string) (bool, error)
+	// MoveLocation re-parents the location, scoped exactly as the update is. Its
+	// own function, not a patch field (#627 Task 13), because a placement change
+	// is an authorization act; the API gates it on location:move.
+	MoveLocation(ctx context.Context, actorID, name string, move LocationMove, read, action scope.Set) (*Location, error)
+	LocationNameTaken(ctx context.Context, name string, parentRef *string) (bool, error)
 	DeleteLocation(ctx context.Context, actorID, name string, read, action scope.Set) error
 
 	// The system tier: the standard catalog (the blueprint a system conforms to,
@@ -237,7 +242,11 @@ type Gateway interface {
 	// own function, not a patch field, because a rename breaks the references an
 	// operator stored outside this system; the API gates it on system:rename.
 	RenameSystem(ctx context.Context, actorID, name, newName string, read, action scope.Set) (*System, error)
-	SystemNameTaken(ctx context.Context, name string) (bool, error)
+	// MoveSystem relocates and/or re-parents the system, scoped exactly as the
+	// update is. Its own function, not a patch field (#627 Task 13), because a
+	// placement change is an authorization act; the API gates it on system:move.
+	MoveSystem(ctx context.Context, actorID, name string, move SystemMove, read, action scope.Set) (*System, error)
+	SystemNameTaken(ctx context.Context, name string, parentRef, locationRef *string) (bool, error)
 	DeleteSystem(ctx context.Context, actorID, name string, read, action scope.Set) error
 
 	// The component tier: a type registry and scoped CRUD, on the same helpers.
@@ -253,7 +262,19 @@ type Gateway interface {
 	// Its own function, not a patch field, because a rename breaks the references
 	// an operator stored outside this system; the API gates it on component:rename.
 	RenameComponent(ctx context.Context, actorID, name, newName string, read, action scope.Set) (*Component, error)
-	ComponentNameTaken(ctx context.Context, name string) (bool, error)
+	// MoveComponent relocates and/or re-parents the component, scoped exactly as
+	// the update is. Its own function, not a patch field (#627 Task 13), because
+	// a placement change is an authorization act; the API gates it on
+	// component:move.
+	MoveComponent(ctx context.Context, actorID, name string, move ComponentMove, read, action scope.Set) (*Component, error)
+	// ResetComponentName hands the pen back to the platform (#627 Task 14): it
+	// regenerates the component's name from its current type and placement,
+	// the same <stem>-<n> rule CreateComponent applies when no name is given,
+	// and marks it name_generated again, whether or not it already was. The
+	// API gates it on component:rename, the existing token whose blast radius
+	// (changing the name) this is exactly.
+	ResetComponentName(ctx context.Context, actorID, name string, read, action scope.Set) (*Component, error)
+	ComponentNameTaken(ctx context.Context, name string, parentRef, locationRef *string) (bool, error)
 	DeleteComponent(ctx context.Context, actorID, name string, read, action scope.Set) error
 
 	// The component_make registry: a flat manufacturer registry (Cisco,
@@ -272,12 +293,19 @@ type Gateway interface {
 	CreateDriver(ctx context.Context, actorID string, d Driver) (*Driver, error)
 	UpdateDriver(ctx context.Context, actorID, id string, patch DriverPatch) (*Driver, error)
 	DeleteDriver(ctx context.Context, actorID, id string) error
-	UpsertCapability(ctx context.Context, c Capability) error
-	ListCapabilities(ctx context.Context) ([]Capability, error)
-	GetCapability(ctx context.Context, id string) (*Capability, error)
-	CreateCapability(ctx context.Context, actorID string, c Capability) (*Capability, error)
-	UpdateCapability(ctx context.Context, actorID, id string, patch CapabilityPatch) (*Capability, error)
-	DeleteCapability(ctx context.Context, actorID, id string) error
+
+	// The component_type registry: the hierarchical taxonomy a product is
+	// classified by (mic, camera, wireless-mic under mic). ResolveTypeFacts
+	// and TypeIsWithin walk the tree in Go; no DB logic.
+	UpsertComponentType(ctx context.Context, ct ComponentType) error
+	ListComponentTypes(ctx context.Context) ([]ComponentType, error)
+	GetComponentType(ctx context.Context, ref string) (*ComponentType, error)
+	CreateComponentType(ctx context.Context, actorID string, ct ComponentType) (*ComponentType, error)
+	UpdateComponentType(ctx context.Context, actorID, ref string, patch ComponentTypePatch) (*ComponentType, error)
+	DeleteComponentType(ctx context.Context, actorID, ref string) error
+	ResolveTypeFacts(ctx context.Context, id uuid.UUID) (stem, icon, abbrev string, tags []string, err error)
+	TypeIsWithin(ctx context.Context, id, ancestor uuid.UUID) (bool, error)
+
 	UpsertProduct(ctx context.Context, m Product) error
 	ListProducts(ctx context.Context) ([]Product, error)
 	GetProduct(ctx context.Context, id string) (*Product, error)
@@ -499,27 +527,43 @@ type Gateway interface {
 	SetPrimaryMember(ctx context.Context, actorID, systemName, componentName string, write scope.Set) error
 
 	// The role tier: a system's roles resolve from its standard (inherited) and its
-	// own ad-hoc declarations; assignment refuses a component whose resolved
-	// capabilities do not cover what the role requires.
+	// own ad-hoc declarations; assignment refuses a component whose product's
+	// component_type is not one the role's typed-slot guard accepts (#626).
 	EffectiveRoles(ctx context.Context, systemName string, read scope.Set) ([]EffectiveRole, error)
-	ComponentCapabilities(ctx context.Context, componentName string) ([]string, error)
 	AssignRole(ctx context.Context, actorID, systemName, roleName, componentName string, write scope.Set) error
 	UnassignRole(ctx context.Context, actorID, systemName, roleName, componentName string, write scope.Set) error
+	// SwapPositions exchanges two occupants' positions within a role: an
+	// ordering change only, so it takes no read counterpart of its own
+	// (EffectiveRoles already reports the ordered result).
+	SwapPositions(ctx context.Context, actorID, systemName, roleName string, a, b int, write scope.Set) error
 	// The declaration side of the same tier: what a standard or a system declares
-	// it needs filled, and the capability facts a component carries on its own.
-	// ownerKind is "standard" or "system"; SeedSystemRole is the boot-seed lane.
+	// it needs filled. ownerKind is "standard" or "system"; SeedSystemRole is the
+	// boot-seed lane.
 	ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]SystemRole, error)
 	SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID string, spec SystemRoleSpec) (*SystemRole, error)
 	DeleteSystemRole(ctx context.Context, actorID, ownerKind, ownerID, name string) error
 	SeedSystemRole(ctx context.Context, ownerKind, ownerID string, spec SystemRoleSpec) error
-	SetComponentCapability(ctx context.Context, actorID, componentName, capabilityID string, present bool) error
-	ClearComponentCapability(ctx context.Context, actorID, componentName, capabilityID string) error
+	// The choice side of the same tier (#626): a role can join an
+	// exclusive-or group (SystemRoleSpec.AlternateID) instead of
+	// contributing unconditionally. Seed-only lane for the choices
+	// themselves (same insert-if-absent shape as SeedSystemRole);
+	// ResolveAlternate turns the operator-facing "choice/alternate" wire
+	// reference into the id SystemRoleSpec.AlternateID expects, so the API
+	// layer can populate it deliberately instead of leaving it permanently
+	// unreachable through every route that declares a role. DeleteChoice and
+	// DeleteAlternate refuse while any role still names them rather than let
+	// alternate_id's ON DELETE RESTRICT surface as a bare constraint
+	// violation.
+	SeedRoleChoice(ctx context.Context, ownerKind, ownerID string, spec RoleChoiceSpec) (map[string]string, error)
+	ResolveAlternate(ctx context.Context, ownerKind, ownerID, ref string) (string, error)
+	DeleteChoice(ctx context.Context, actorID, ownerKind, ownerID, name string) error
+	DeleteAlternate(ctx context.Context, actorID, ownerKind, ownerID, choiceName, altName string) error
 
-	// The health tier. An alarm degrades named capabilities on a component; the
-	// rollup turns that into a system and location verdict and RECORDS every
-	// change as a transition, so the history is edges and only edges. The
-	// recompute itself is not on this interface: it runs inside the transaction of
-	// the write that triggered it, never as a call of its own.
+	// The health tier. An alarm impairs its component wholesale (#626); the
+	// rollup turns each occupant's own verdict into a system and location verdict
+	// and RECORDS every change as a transition, so the history is edges and only
+	// edges. The recompute itself is not on this interface: it runs inside the
+	// transaction of the write that triggered it, never as a call of its own.
 	RaiseAlarm(ctx context.Context, actorID, componentName string, spec AlarmSpec) (*Alarm, error)
 	ClearAlarm(ctx context.Context, actorID, componentName, alarmID string) error
 	ListAlarms(ctx context.Context, componentName string, includeCleared bool) ([]Alarm, error)

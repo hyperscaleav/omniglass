@@ -129,6 +129,38 @@ func Resolve(grants []Grant, idx rbac.RoleIndex, resource, action string) Set {
 	return set
 }
 
+// Covers reports whether a scope RESOLVED for resource (Resolve's own
+// resource argument, e.g. what a.scopeFor(ctx, "component", "read") was
+// called with) can be checked against a target tree tier (a storage
+// scopedConfig's own resource label: "component", "system", or "location").
+// It is the query-time twin of Resolve's own applicableKinds. Most resources
+// are scoped to exactly one tier, so Covers is only ever true for resource ==
+// target there; secret, variable, field, and telemetry are owned on the
+// exclusive arc, so a grant at ANY of the three tree tiers can confer them,
+// and the one resolved Set is checked against whichever tier the owner
+// actually sits at. A caller that resolves a scope for one tier and checks it
+// against a tier Covers says no for is comparing incompatible id spaces:
+// inScopeTree walks the target's own ancestor chain, so the ids can never
+// match, and the caller would be silently denied (or, on a write/advisory
+// path, would leak a candidate estate-wide) instead of being loudly caught.
+// See resolveRef in internal/storage/scopedcrud.go, the caller of this.
+//
+// Blind spot: for the four-tier family (secret, variable, field, telemetry),
+// Covers admits ANY of location/system/component paired with that resource,
+// with no way to tell whether the specific pairing a call site passed is the
+// one the owner actually sits at. A resolveRef call site that named the
+// right FAMILY (say "variable") but the wrong TIER within it (checking a
+// variable-family scope against componentConfig when the owner it actually
+// meant was a system) would pass Covers cleanly: this is exactly Critical
+// A's shape, just inside the one family this guard cannot discriminate
+// within. resolveVariableOwner and resolveSecretOwner are safe today only
+// because each switch arm passes the config that matches the ownerKind it is
+// already inside (the same self-evident construction scopedGet/resolveScoped
+// rely on for the single-tier resources), not because Covers checked it.
+func Covers(resource, target string) bool {
+	return applicableKinds(resource)[target]
+}
+
 // applicableKinds returns the scope kinds that can contain a resource: "all"
 // always, plus the resource's own tier. The cross-tier cascade (a location scope
 // also covering its systems and components) is a later slice; today each estate

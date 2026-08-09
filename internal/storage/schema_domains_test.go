@@ -27,7 +27,7 @@ func TestSampleProvenanceDomains(t *testing.T) {
 	// A minimal owner and a key per sink to satisfy the FKs: the metric sink keys
 	// on metric_type, the property sink on property_type (the #587 lanes).
 	var compID, mtID, ptID string
-	if err := conn.QueryRow(ctx, `insert into component (name) values ('c1') returning id`).Scan(&compID); err != nil {
+	if err := conn.QueryRow(ctx, `insert into component (name, product_id) values ('c1', (select id from product where name = 'generic-device')) returning id`).Scan(&compID); err != nil {
 		t.Fatalf("component: %v", err)
 	}
 	if err := conn.QueryRow(ctx, `

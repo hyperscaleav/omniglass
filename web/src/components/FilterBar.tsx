@@ -79,8 +79,12 @@ export default function FilterBar<T>(props: {
     const m = rest.match(GLYPH_RE);
     const frag = (m ? rest.slice(m[0].length) : rest).trim().toLowerCase();
     const all = spec.values ? spec.values(props.rows) : [];
+    // Match a value against its own label too (review finding 4,
+    // task-15-review.md #4): a facet whose values are opaque (a uuid,
+    // #627's own system_id) is otherwise unfindable by typing the name an
+    // operator actually reads, since only the raw value was ever matched.
     const valSugs: Suggestion[] = all
-      .filter((v) => v.toLowerCase().includes(frag))
+      .filter((v) => v.toLowerCase().includes(frag) || (spec.valueLabel?.(v) ?? "").toLowerCase().includes(frag))
       .map((v) => ({ kind: "value", value: v, hint: spec.valueLabel ? spec.valueLabel(v) : "" }));
     if (m) return valSugs;
     const opSugs: Suggestion[] = opsFor(spec.type, spec.presence)
@@ -190,7 +194,18 @@ export default function FilterBar<T>(props: {
                 {chipGlyph(c.op)}
               </button>
               <Show when={c.values.length}>
-                <button class="font-data font-medium" onClick={() => reEdit(i())}>{c.values.join("|")}</button>
+                {/* The label, not the raw value (review finding 4,
+                    task-15-review.md #4): a facet whose value is opaque (a
+                    uuid, #627's own system_id) would otherwise paint that
+                    uuid in the chip, which is exactly what this task exists
+                    to stop showing operators. keyOf(c.key)?.valueLabel maps
+                    it back to what an operator reads; a facet with no
+                    valueLabel (the ordinary case, an already-readable
+                    string) renders unchanged. c.values itself stays the raw
+                    data the predicate matches on. */}
+                <button class="font-data font-medium" onClick={() => reEdit(i())}>
+                  {c.values.map((v) => keyOf(c.key)?.valueLabel?.(v) ?? v).join("|")}
+                </button>
               </Show>
               <button class="ml-px inline-flex text-base-content/40" aria-label="remove" onClick={() => props.onChips(props.chips.filter((_, j) => j !== i()))}>
                 <X size={13} />
@@ -241,9 +256,16 @@ export default function FilterBar<T>(props: {
                         <Show when={s.kind === "op"}>
                           <span class="w-4 text-center font-data text-primary">{(s as { glyph: string }).glyph}</span>
                         </Show>
-                        {s.kind === "value" ? s.value : s.label}
+                        {/* A value option leads with its label when one exists
+                            (review finding 4, task-15-review.md #4: a facet whose
+                            values are opaque, #627's own system_id, must not show
+                            the uuid as the option an operator reads and picks by),
+                            falling back to the raw value when there is none. */}
+                        {s.kind === "value" ? (s.hint || s.value) : s.label}
                       </span>
-                      <span class="text-xs text-base-content/40">{s.kind === "key" ? s.hint : s.kind === "op" ? "operator" : s.hint}</span>
+                      <span class="text-xs text-base-content/40">
+                        {s.kind === "key" ? s.hint : s.kind === "op" ? "operator" : s.hint ? s.value : ""}
+                      </span>
                     </button>
                   </li>
                 )}

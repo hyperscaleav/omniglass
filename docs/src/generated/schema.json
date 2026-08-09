@@ -70,6 +70,80 @@
    }
   },
   "catalog": {
+   "component_type": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "gen_random_uuid()",
+      "pk": true
+     },
+     {
+      "name": "name",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "display_name",
+      "type": "text",
+      "nullable": false,
+      "default": "''::text"
+     },
+     {
+      "name": "stem",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "icon",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "abbrev",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "default_tags",
+      "type": "ARRAY",
+      "nullable": false,
+      "default": "'{}'::text[]"
+     },
+     {
+      "name": "official",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+     },
+     {
+      "name": "parent_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "component_type.id"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "component_type_name_key",
+      "definition": "CREATE UNIQUE INDEX component_type_name_key ON public.component_type USING btree (name)"
+     }
+    ]
+   },
    "driver": {
     "columns": [
      {
@@ -136,8 +210,7 @@
      {
       "name": "kind",
       "type": "text",
-      "nullable": false,
-      "default": "'device'::text"
+      "nullable": false
      },
      {
       "name": "official",
@@ -184,55 +257,30 @@
       "nullable": true,
       "fk": true,
       "fk_target": "driver.id"
+     },
+     {
+      "name": "component_type_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "component_type.id"
+     },
+     {
+      "name": "icon",
+      "type": "text",
+      "nullable": true
      }
     ],
     "checks": [
      {
       "name": "product_kind_check",
-      "expr": "CHECK ((kind = ANY (ARRAY['device'::text, 'app'::text, 'service'::text, 'vm'::text])))"
+      "expr": "CHECK ((kind = ANY (ARRAY['device'::text, 'app'::text, 'service'::text])))"
      }
     ],
     "uniques": [
      {
       "name": "product_name_key",
       "definition": "CREATE UNIQUE INDEX product_name_key ON public.product USING btree (name)"
-     }
-    ]
-   },
-   "product_capability": {
-    "columns": [
-     {
-      "name": "id",
-      "type": "uuid",
-      "nullable": false,
-      "default": "uuidv7()",
-      "pk": true
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "product_id",
-      "type": "uuid",
-      "nullable": false,
-      "fk": true,
-      "fk_target": "product.id"
-     },
-     {
-      "name": "capability_id",
-      "type": "uuid",
-      "nullable": false,
-      "fk": true,
-      "fk_target": "capability.id"
-     }
-    ],
-    "uniques": [
-     {
-      "name": "product_capability_product_id_capability_id_key",
-      "definition": "CREATE UNIQUE INDEX product_capability_product_id_capability_id_key ON public.product_capability USING btree (product_id, capability_id)"
      }
     ]
    },
@@ -1450,64 +1498,29 @@
      {
       "name": "product_id",
       "type": "uuid",
-      "nullable": true,
+      "nullable": false,
       "fk": true,
       "fk_target": "product.id"
-     }
-    ],
-    "uniques": [
-     {
-      "name": "component_name_key",
-      "definition": "CREATE UNIQUE INDEX component_name_key ON public.component USING btree (name)"
-     }
-    ]
-   },
-   "component_capability": {
-    "columns": [
-     {
-      "name": "id",
-      "type": "uuid",
-      "nullable": false,
-      "default": "uuidv7()",
-      "pk": true
      },
      {
-      "name": "present",
+      "name": "name_generated",
       "type": "boolean",
       "nullable": false,
-      "default": "true"
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "updated_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "component_id",
-      "type": "uuid",
-      "nullable": false,
-      "fk": true,
-      "fk_target": "component.id"
-     },
-     {
-      "name": "capability_id",
-      "type": "uuid",
-      "nullable": false,
-      "fk": true,
-      "fk_target": "capability.id"
+      "default": "false"
      }
     ],
     "uniques": [
      {
-      "name": "component_capability_component_id_capability_id_key",
-      "definition": "CREATE UNIQUE INDEX component_capability_component_id_capability_id_key ON public.component_capability USING btree (component_id, capability_id)"
+      "name": "component_location_name_key",
+      "definition": "CREATE UNIQUE INDEX component_location_name_key ON public.component USING btree (location_id, name) WHERE ((parent_id IS NULL) AND (location_id IS NOT NULL))"
+     },
+     {
+      "name": "component_orphan_name_key",
+      "definition": "CREATE UNIQUE INDEX component_orphan_name_key ON public.component USING btree (name) WHERE ((parent_id IS NULL) AND (location_id IS NULL))"
+     },
+     {
+      "name": "component_parent_name_key",
+      "definition": "CREATE UNIQUE INDEX component_parent_name_key ON public.component USING btree (parent_id, name) WHERE (parent_id IS NOT NULL)"
      }
     ]
    },
@@ -1666,8 +1679,12 @@
     ],
     "uniques": [
      {
-      "name": "location_name_key",
-      "definition": "CREATE UNIQUE INDEX location_name_key ON public.location USING btree (name)"
+      "name": "location_parent_name_key",
+      "definition": "CREATE UNIQUE INDEX location_parent_name_key ON public.location USING btree (parent_id, name) WHERE (parent_id IS NOT NULL)"
+     },
+     {
+      "name": "location_root_name_key",
+      "definition": "CREATE UNIQUE INDEX location_root_name_key ON public.location USING btree (name) WHERE (parent_id IS NULL)"
      }
     ]
    },
@@ -1885,8 +1902,16 @@
     ],
     "uniques": [
      {
-      "name": "system_name_key",
-      "definition": "CREATE UNIQUE INDEX system_name_key ON public.system USING btree (name)"
+      "name": "system_location_name_key",
+      "definition": "CREATE UNIQUE INDEX system_location_name_key ON public.system USING btree (location_id, name) WHERE ((parent_id IS NULL) AND (location_id IS NOT NULL))"
+     },
+     {
+      "name": "system_orphan_name_key",
+      "definition": "CREATE UNIQUE INDEX system_orphan_name_key ON public.system USING btree (name) WHERE ((parent_id IS NULL) AND (location_id IS NULL))"
+     },
+     {
+      "name": "system_parent_name_key",
+      "definition": "CREATE UNIQUE INDEX system_parent_name_key ON public.system USING btree (parent_id, name) WHERE (parent_id IS NOT NULL)"
      }
     ]
    },
@@ -1945,8 +1970,46 @@
    }
   },
   "identity": {
-   "capability": {
+   "choice_alternate": {
     "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "choice_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "role_choice.id"
+     },
+     {
+      "name": "owner_kind",
+      "type": "text",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "role_choice.owner_kind"
+     },
+     {
+      "name": "standard_id",
+      "type": "uuid",
+      "nullable": true
+     },
+     {
+      "name": "system_id",
+      "type": "uuid",
+      "nullable": true
+     },
+     {
+      "name": "owner_ref",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "role_choice.owner_ref"
+     },
      {
       "name": "name",
       "type": "text",
@@ -1955,38 +2018,27 @@
      {
       "name": "display_name",
       "type": "text",
+      "nullable": false,
+      "default": "''::text"
+     },
+     {
+      "name": "position",
+      "type": "integer",
       "nullable": false
-     },
-     {
-      "name": "official",
-      "type": "boolean",
-      "nullable": false,
-      "default": "false"
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "updated_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "id",
-      "type": "uuid",
-      "nullable": false,
-      "default": "uuidv7()",
-      "pk": true
      }
     ],
     "uniques": [
      {
-      "name": "capability_name_key",
-      "definition": "CREATE UNIQUE INDEX capability_name_key ON public.capability USING btree (name)"
+      "name": "choice_alternate_name_key",
+      "definition": "CREATE UNIQUE INDEX choice_alternate_name_key ON public.choice_alternate USING btree (choice_id, name)"
+     },
+     {
+      "name": "choice_alternate_owner_key",
+      "definition": "CREATE UNIQUE INDEX choice_alternate_owner_key ON public.choice_alternate USING btree (id, owner_kind, owner_ref)"
+     },
+     {
+      "name": "choice_alternate_position_key",
+      "definition": "CREATE UNIQUE INDEX choice_alternate_position_key ON public.choice_alternate USING btree (choice_id, \"position\")"
      }
     ]
    },
@@ -2356,6 +2408,84 @@
      }
     ]
    },
+   "role_choice": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "owner_kind",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "standard_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "standard.id"
+     },
+     {
+      "name": "system_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "system.id"
+     },
+     {
+      "name": "owner_ref",
+      "type": "uuid",
+      "nullable": true
+     },
+     {
+      "name": "name",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "display_name",
+      "type": "text",
+      "nullable": false,
+      "default": "''::text"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ],
+    "checks": [
+     {
+      "name": "role_choice_owner_arc_check",
+      "expr": "CHECK ((((owner_kind = 'standard'::text) AND (standard_id IS NOT NULL) AND (system_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (standard_id IS NULL))))"
+     },
+     {
+      "name": "role_choice_owner_kind_check",
+      "expr": "CHECK ((owner_kind = ANY (ARRAY['standard'::text, 'system'::text])))"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "role_choice_name_key",
+      "definition": "CREATE UNIQUE INDEX role_choice_name_key ON public.role_choice USING btree (owner_kind, owner_ref, name)"
+     },
+     {
+      "name": "role_choice_owner_key",
+      "definition": "CREATE UNIQUE INDEX role_choice_owner_key ON public.role_choice USING btree (id, owner_kind, owner_ref)"
+     }
+    ]
+   },
    "service": {
     "columns": [
      {
@@ -2385,7 +2515,9 @@
      {
       "name": "owner_kind",
       "type": "text",
-      "nullable": false
+      "nullable": false,
+      "fk": true,
+      "fk_target": "choice_alternate.owner_kind"
      },
      {
       "name": "name",
@@ -2434,12 +2566,45 @@
       "nullable": true,
       "fk": true,
       "fk_target": "standard.id"
+     },
+     {
+      "name": "capacity",
+      "type": "integer",
+      "nullable": true
+     },
+     {
+      "name": "position_labels",
+      "type": "ARRAY",
+      "nullable": false,
+      "default": "'{}'::text[]"
+     },
+     {
+      "name": "alternate_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "choice_alternate.id"
+     },
+     {
+      "name": "owner_ref",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "choice_alternate.owner_ref"
      }
     ],
     "checks": [
      {
+      "name": "system_role_capacity_check",
+      "expr": "CHECK (((capacity IS NULL) OR (capacity \u003e= quorum)))"
+     },
+     {
       "name": "system_role_impact_check",
       "expr": "CHECK ((impact = ANY (ARRAY['outage'::text, 'degraded'::text, 'none'::text])))"
+     },
+     {
+      "name": "system_role_owner_arc_check",
+      "expr": "CHECK ((((owner_kind = 'standard'::text) AND (standard_id IS NOT NULL) AND (system_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (standard_id IS NULL))))"
      },
      {
       "name": "system_role_owner_kind_check",
@@ -2492,49 +2657,71 @@
       "nullable": false,
       "fk": true,
       "fk_target": "system.id"
+     },
+     {
+      "name": "position",
+      "type": "integer",
+      "nullable": false
+     }
+    ],
+    "checks": [
+     {
+      "name": "system_role_assignment_position_check",
+      "expr": "CHECK ((\"position\" \u003e= 1))"
      }
     ],
     "uniques": [
+     {
+      "name": "system_role_assignment_component_key",
+      "definition": "CREATE UNIQUE INDEX system_role_assignment_component_key ON public.system_role_assignment USING btree (system_id, component_id)"
+     },
+     {
+      "name": "system_role_assignment_position_key",
+      "definition": "CREATE UNIQUE INDEX system_role_assignment_position_key ON public.system_role_assignment USING btree (system_id, role_id, \"position\")"
+     },
      {
       "name": "system_role_assignment_system_id_role_id_component_id_key",
       "definition": "CREATE UNIQUE INDEX system_role_assignment_system_id_role_id_component_id_key ON public.system_role_assignment USING btree (system_id, role_id, component_id)"
      }
     ]
    },
-   "system_role_capability": {
+   "system_role_product": {
     "columns": [
-     {
-      "name": "id",
-      "type": "uuid",
-      "nullable": false,
-      "default": "uuidv7()",
-      "pk": true
-     },
      {
       "name": "role_id",
       "type": "uuid",
       "nullable": false,
+      "pk": true,
       "fk": true,
       "fk_target": "system_role.id"
      },
      {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "capability_id",
+      "name": "product_id",
       "type": "uuid",
       "nullable": false,
+      "pk": true,
       "fk": true,
-      "fk_target": "capability.id"
+      "fk_target": "product.id"
      }
-    ],
-    "uniques": [
+    ]
+   },
+   "system_role_type": {
+    "columns": [
      {
-      "name": "system_role_capability_role_id_capability_id_key",
-      "definition": "CREATE UNIQUE INDEX system_role_capability_role_id_capability_id_key ON public.system_role_capability USING btree (role_id, capability_id)"
+      "name": "role_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "system_role.id"
+     },
+     {
+      "name": "component_type_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "component_type.id"
      }
     ]
    }
@@ -2606,43 +2793,6 @@
      {
       "name": "alarm_open_condition_key",
       "definition": "CREATE UNIQUE INDEX alarm_open_condition_key ON public.alarm USING btree (component_id, dedup_key) WHERE (cleared_at IS NULL)"
-     }
-    ]
-   },
-   "alarm_capability": {
-    "columns": [
-     {
-      "name": "id",
-      "type": "uuid",
-      "nullable": false,
-      "default": "uuidv7()",
-      "pk": true
-     },
-     {
-      "name": "alarm_id",
-      "type": "uuid",
-      "nullable": false,
-      "fk": true,
-      "fk_target": "alarm.id"
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "capability_id",
-      "type": "uuid",
-      "nullable": false,
-      "fk": true,
-      "fk_target": "capability.id"
-     }
-    ],
-    "uniques": [
-     {
-      "name": "alarm_capability_alarm_id_capability_id_key",
-      "definition": "CREATE UNIQUE INDEX alarm_capability_alarm_id_capability_id_key ON public.alarm_capability USING btree (alarm_id, capability_id)"
      }
     ]
    },

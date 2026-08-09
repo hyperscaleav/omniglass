@@ -288,8 +288,8 @@ most-specific-wins down the cascade.
 
 ## Component classification catalogs
 
-The [component-classification catalog](/architecture/core-entities/#catalog-reference-data-vendor-driver-capability)
-commands cover the `vendor`, `driver`, and `capability` registries: flat, official-vs-custom catalogs on
+The [component-classification catalog](/architecture/core-entities/#catalog-reference-data-vendor-driver-component_type)
+commands cover the `vendor` and `driver` registries: flat, official-vs-custom catalogs on
 the same pattern as the `type` registries. Each resource's `:read` sits on the viewer floor; the three
 writes (`:create`, `:update`, `:delete`) are admin-gated.
 
@@ -306,46 +306,42 @@ omniglass vendor delete barco                                       # refused (4
 ```
 
 A **driver** names the implementation that gets, emits, or sets a product's signals, with an optional
-`--version`. A **capability** names what a component can do:
+`--version`:
 
 ```sh
 omniglass driver list                                               # the driver registry
 omniglass driver create --name barco-snmp --display-name "Barco SNMP" --version 1.0.0
 omniglass driver update barco-snmp --version 1.1.0
 omniglass driver delete barco-snmp                                  # refused (422) if official
-
-omniglass capability list                                           # the capability registry
-omniglass capability create --name projector --display-name Projector
-omniglass capability delete projector                               # refused (422) if official
 ```
 
-An **official** row, for example the `crestron` vendor or the `microphone` capability, is
-read-only: `update` and `delete` both 422. A vendor's `website` is validated to an `http`/`https` scheme
-on write; any other scheme (for example `javascript:`) is a 422.
+An **official** row, for example the `crestron` vendor, is read-only: `update` and `delete` both
+422. A vendor's `website` is validated to an `http`/`https` scheme on write; any other scheme (for
+example `javascript:`) is a 422.
 
 ## Products
 
 The [product](/architecture/core-entities/#catalog-reference-data-product) commands cover the product
-registry: the concrete **SKU** that ties the vendor, driver, and capability catalogs together, and the
-thing a `component` points at. `product:read` sits on the viewer floor; the three writes
-(`product:create`, `product:update`, `product:delete`) are admin-gated.
+registry: the concrete **SKU** that ties the vendor and driver catalogs together, classified under a
+**component_type**, and the thing a `component` points at. `product:read` sits on the viewer floor; the
+three writes (`product:create`, `product:update`, `product:delete`) are admin-gated.
 
-A product names its **kind** (`device`, `app`, `service`, or `vm`, default `device`), optionally its
-**vendor**, **driver**, and a **parent product** it is a variant of, and the **capabilities** it
-provides (a JSON array of capability ids):
+A product names its **kind** (`device`, `app`, `service`, or `vm`, default `device`), the
+**component_type** it is classified under, and optionally its **vendor**, **driver**, and a
+**parent product** it is a variant of:
 
 ```sh
 omniglass product list                                              # the product registry
 omniglass product create --name barco-ub12 --display-name "Barco UB12" --kind device \
-  --vendor-id barco --driver-id barco-snmp --capabilities '["projector"]'
+  --component-type projector --vendor-id barco --driver-id barco-snmp
 omniglass product get barco-ub12
-omniglass product update barco-ub12 --capabilities '["projector","speaker"]'  # replaces the whole set
+omniglass product update barco-ub12 --display-name "Barco UB12 Pro"
 omniglass product delete barco-ub12                                 # 422 if official, 409 if a component points at it
 ```
 
 An **official** product, for example `cisco-room-bar`, is read-only: `update` and `delete`
 both 422. A product still referenced by a **component** (`component.product_id`) cannot be deleted (409);
-an unknown vendor, driver, parent, or capability id is a 422.
+an unknown vendor, driver, parent, or component_type id is a 422.
 
 ## Standards
 

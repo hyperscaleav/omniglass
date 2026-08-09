@@ -147,7 +147,7 @@ func TestPropertyValueStoreRetired(t *testing.T) {
 
 	// The series takes a declared row, with no lineage.
 	mustExec(t, conn, `insert into property_type (name, data_type) values ('retire-prop', 'string')`)
-	mustExec(t, conn, `insert into component (name) values ('retire-c1')`)
+	mustExec(t, conn, `insert into component (name, product_id) values ('retire-c1', (select id from product where name = 'generic-device'))`)
 	mustExec(t, conn, `
 		insert into property (owner_kind, component_id, property_type_id, instance, provenance, value)
 		values ('component', (select id from component where name = 'retire-c1'),

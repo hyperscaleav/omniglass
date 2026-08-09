@@ -162,3 +162,40 @@ describe("Secrets create lands on the new row (#471)", () => {
     expect(within(blade).getByText("door_code")).toBeInTheDocument();
   });
 });
+
+// #627 scopes name uniqueness to placement: two locations (or components) may
+// legally share a name. The create form's owner picker used to key its
+// TreeSelect items on the bare name, so two same-named candidates rendered as
+// identical, value-indistinguishable options and the posted owner was an
+// ambiguous bare name a scoped write would now 409 on.
+describe("Secrets create owner picker survives duplicate names (#627)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("offers two same-named location owners as distinct, independently selectable options", async () => {
+    const annexA = { id: uuidFor("loc-annex-a"), name: "annex", location_type: "campus" };
+    const annexB = { id: uuidFor("loc-annex-b"), name: "annex", location_type: "campus" };
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...SECRETS_KEY], []);
+    qc.setQueryData([...SECRET_TYPES_KEY], types);
+    qc.setQueryData([...LOCATIONS_KEY], [annexA, annexB]);
+    qc.setQueryData([...SYSTEMS_KEY], []);
+    qc.setQueryData([...COMPONENTS_KEY], []);
+    qc.setQueryData([...ME_KEY], owner);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Secrets />
+      </QueryClientProvider>
+    ));
+    fireEvent.click(screen.getByRole("button", { name: /new secret/i }));
+    fireEvent.change(screen.getByLabelText("Scope"), { target: { value: "location" } });
+    const ownerSelect = (await screen.findByLabelText("Location")) as HTMLSelectElement;
+    const values = Array.from(ownerSelect.options).map((o) => o.value);
+    expect(values).toContain(annexA.id);
+    expect(values).toContain(annexB.id);
+
+    fireEvent.change(ownerSelect, { target: { value: annexA.id } });
+    expect(ownerSelect.value).toBe(annexA.id);
+    fireEvent.change(ownerSelect, { target: { value: annexB.id } });
+    expect(ownerSelect.value).toBe(annexB.id);
+  });
+});

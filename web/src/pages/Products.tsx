@@ -1,15 +1,17 @@
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
+import { Dynamic } from "solid-js/web";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
-import BladeField, { EMPTY_VALUE } from "../components/BladeField";
+import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { createIdentity } from "../lib/entities";
 import { useFormActions } from "../lib/formactions";
 import ProductContractEditor from "../components/ProductContractEditor";
-import { Plus } from "../components/icons";
+import ComponentTypeSelect from "../components/ComponentTypeSelect";
+import { Plus, resolveIcon } from "../components/icons";
 import {
   type Product,
   type ProductKind,
@@ -18,10 +20,11 @@ import {
   createProduct,
   updateProduct,
   deleteProduct,
+  resolveProductIcon,
 } from "../lib/products";
+import { COMPONENT_TYPES_KEY, listComponentTypes, componentTypeByName } from "../lib/component_types";
 import { type Vendor, VENDORS_KEY, listVendors } from "../lib/vendors";
 import { type Driver, DRIVERS_KEY, listDrivers } from "../lib/drivers";
-import { type Capability, CAPABILITIES_KEY, listCapabilities } from "../lib/capabilities";
 import { useMe, can } from "../lib/auth";
 import { registryLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
@@ -32,10 +35,14 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // its kebab name (ADR-0062: the uuid is identity, the name is what an operator
 // reads and types); official rows are read-only,
 // same as the Types catalog's official rows: the Edit / Delete pair greys. A
-// product carries a kind (device/app/service/vm), an optional vendor and driver
-// (picked from those registries), and a set of capability names it exposes.
+// product carries a kind (device/app/service; vm retired, folded into app,
+// ADR-0086), a required component_type (the device-class genus every product
+// is classified under, ADR-0085, picked from the Types tree; also what a
+// system role's typed-slot guard checks, #626), an optional icon override
+// (default: the type's icon), and an optional vendor and driver (picked from
+// those registries).
 
-const PRODUCT_KINDS: ProductKind[] = ["device", "app", "service", "vm"];
+const PRODUCT_KINDS: ProductKind[] = ["device", "app", "service"];
 
 function officialBadge(official: boolean): JSX.Element {
   return official
@@ -124,18 +131,20 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
   const [err, setErr] = createSignal<string | null>(null);
   const [displayName, setDisplayName] = createSignal("");
   const [kind, setKind] = createSignal<ProductKind>("device");
+  const [componentType, setComponentType] = createSignal("");
+  const [icon, setIcon] = createSignal("");
   const [vendorId, setVendorId] = createSignal("");
   const [driverId, setDriverId] = createSignal("");
-  const [capabilities, setCapabilities] = createSignal<string[]>([]);
 
   createEffect(on(edit.editing, (editing) => {
     if (!editing) return;
     const r = row();
     setDisplayName(r?.display_name ?? "");
     setKind(r?.kind ?? "device");
+    setComponentType(r?.component_type ?? "");
+    setIcon(r?.icon ?? "");
     setVendorId(r?.vendor ?? "");
     setDriverId(r?.driver ?? "");
-    setCapabilities(r?.capabilities ?? []);
     setErr(null);
   }));
 
@@ -161,9 +170,10 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
       await updateProduct(r.name, {
         display_name: displayName(),
         kind: kind(),
+        component_type: componentType(),
+        icon: icon(),
         vendor_id: vendorId() || undefined,
         driver_id: driverId() || undefined,
-        capabilities: capabilities(),
       });
       await qc.invalidateQueries({ queryKey: PRODUCTS_KEY });
     } catch (e) {
@@ -205,23 +215,20 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
               <For each={PRODUCT_KINDS}>{(k) => <option value={k}>{k}</option>}</For>
             </select>
           </BladeField>
+          <BladeField label="Type" mono value={() => r().component_type}>
+            <TypeSelect value={componentType()} onChange={setComponentType} />
+          </BladeField>
+          <BladeField
+            label="Icon"
+            read={<IconPreview componentType={r().component_type} value={r().icon} />}
+          >
+            <IconOverrideField componentType={componentType()} value={icon()} onChange={setIcon} />
+          </BladeField>
           <BladeField label="Vendor" mono value={() => r().vendor ?? ""}>
             <VendorSelect value={vendorId()} onChange={setVendorId} />
           </BladeField>
           <BladeField label="Driver" mono value={() => r().driver ?? ""}>
             <DriverSelect value={driverId()} onChange={setDriverId} />
-          </BladeField>
-          <BladeField
-            label="Capabilities"
-            read={
-              <Show when={r().capabilities.length} fallback={<span class="text-base-content/40">{EMPTY_VALUE}</span>}>
-                <div class="flex flex-wrap gap-1.5">
-                  <For each={r().capabilities}>{(c) => <span class="badge badge-ghost badge-sm font-data">{c}</span>}</For>
-                </div>
-              </Show>
-            }
-          >
-            <CapabilitiesPicker value={capabilities()} onChange={setCapabilities} />
           </BladeField>
           <ProductContractEditor productId={r().name} official={r().official} />
           <ProductContractEditor productId={r().name} official={r().official} lane="metric" />
@@ -234,14 +241,18 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
 // CreateProductForm: the display name leads and the kebab name (the
 // operator-facing address; the uuid is the database's to mint) derives from it
 // until the operator edits it by hand (lib/entities). Kind defaults to device;
-// vendor, driver, and capabilities are optional.
+// component_type (the device-class genus, #614) is required, no default, so
+// every product states its class explicitly rather than reading the silent
+// default that let a mislabeled cloud service pass as correct forever
+// (ADR-0086); vendor, driver, and icon override are optional.
 export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.Element {
   const qc = useQueryClient();
   const { display, setDisplay, name, setName, nameDerived } = createIdentity();
   const [kind, setKind] = createSignal<ProductKind>("device");
+  const [componentType, setComponentType] = createSignal("");
+  const [icon, setIcon] = createSignal("");
   const [vendorId, setVendorId] = createSignal("");
   const [driverId, setDriverId] = createSignal("");
-  const [capabilities, setCapabilities] = createSignal<string[]>([]);
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
 
@@ -250,7 +261,7 @@ export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.E
     submitIcon: Plus,
     submit: () => void submit(),
     busy,
-    disabled: () => !name().trim() || !display().trim(),
+    disabled: () => !name().trim() || !display().trim() || !componentType(),
   });
 
   async function submit() {
@@ -261,9 +272,10 @@ export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.E
         name: name().trim(),
         display_name: display().trim(),
         kind: kind(),
+        component_type: componentType(),
+        icon: icon() || undefined,
         vendor_id: vendorId() || undefined,
         driver_id: driverId() || undefined,
-        capabilities: capabilities().length ? capabilities() : undefined,
       });
       await qc.invalidateQueries({ queryKey: PRODUCTS_KEY });
       p.onCreated(created);
@@ -290,20 +302,18 @@ export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.E
           <For each={PRODUCT_KINDS}>{(k) => <option value={k}>{k}</option>}</For>
         </select>
       </FieldRow>
+      <FieldRow label="Type" hint="The device-class genus this SKU is classified under. Required.">
+        <TypeSelect value={componentType()} onChange={setComponentType} />
+      </FieldRow>
+      <FieldRow label="Icon" hint="A per-SKU override. Leave blank to use the type's icon.">
+        <IconOverrideField componentType={componentType()} value={icon()} onChange={setIcon} />
+      </FieldRow>
       <FieldRow label="Vendor" hint="Who makes it. Optional.">
         <VendorSelect value={vendorId()} onChange={setVendorId} />
       </FieldRow>
       <FieldRow label="Driver" hint="How its signals are collected. Optional.">
         <DriverSelect value={driverId()} onChange={setDriverId} />
       </FieldRow>
-      {/* Not wrapped in Field: Field's root is a <label>, and a picker of one
-          <label> per checkbox nested inside it is invalid HTML that forwards a
-          click on the heading straight to the first checkbox. */}
-      <div class="flex flex-col gap-1.5">
-        <span class="text-[12px] font-medium text-base-content/70">Capabilities</span>
-        <CapabilitiesPicker value={capabilities()} onChange={setCapabilities} />
-        <span class="text-[11px] text-base-content/40">What the product can do. Optional.</span>
-      </div>
     </form>
   );
 }
@@ -339,32 +349,49 @@ function DriverSelect(p: { value: string; onChange: (v: string) => void }): JSX.
   );
 }
 
-// CapabilitiesPicker: a checkbox per capability in the registry, the set of
-// capability NAMES a product exposes (product.capabilities carries names, so
-// the picker joins on the name). Mirrors Types.tsx's AllowedParentsPicker.
-// Each option is its own <label> (not nested inside another one), so a click on
-// it only ever toggles that option's own checkbox.
-function CapabilitiesPicker(p: { value: string[]; onChange: (v: string[]) => void }): JSX.Element {
-  const caps = useQuery(() => ({ queryKey: CAPABILITIES_KEY, queryFn: listCapabilities }));
-  const options = createMemo(() =>
-    [...(caps.data ?? [])].sort((a: Capability, b: Capability) => a.display_name.localeCompare(b.display_name)),
-  );
-  function toggle(name: string) {
-    p.onChange(p.value.includes(name) ? p.value.filter((x) => x !== name) : [...p.value, name]);
-  }
+// TypeSelect: the component_type classification picker, over the full seeded
+// tree (ComponentTypeSelect), no "None" option since component_type is
+// required (#614 makes the classification floor total).
+function TypeSelect(p: { value: string; onChange: (v: string) => void }): JSX.Element {
+  const types = useQuery(() => ({ queryKey: COMPONENT_TYPES_KEY, queryFn: listComponentTypes }));
+  return <ComponentTypeSelect types={types.data ?? []} value={p.value} onChange={p.onChange} />;
+}
+
+// IconPreview: the read-mode glyph beside the icon key text, resolved the
+// product's way (its own override, else the classified type's icon,
+// #614/ADR-0085): "the icon lives on the type, products may override".
+function IconPreview(p: { componentType: string; value?: string }): JSX.Element {
+  const types = useQuery(() => ({ queryKey: COMPONENT_TYPES_KEY, queryFn: listComponentTypes }));
+  const byName = createMemo(() => componentTypeByName(types.data ?? []));
+  const resolved = createMemo(() => resolveProductIcon({ icon: p.value, component_type: p.componentType }, byName()));
   return (
-    <div class="flex flex-col gap-1.5 rounded-box border border-base-300 p-2.5">
-      <Show when={options().length} fallback={<span class="text-[11px] text-base-content/40">No capabilities in the registry yet.</span>}>
-        <For each={options()}>
-          {(c) => (
-            <label class="flex items-center gap-2 text-sm">
-              <input type="checkbox" class="checkbox checkbox-sm" checked={p.value.includes(c.name)} onChange={() => toggle(c.name)} />
-              <span>{c.display_name}</span>
-              <span class="font-data text-xs text-base-content/40">{c.name}</span>
-            </label>
-          )}
-        </For>
-      </Show>
-    </div>
+    <span class="flex items-center gap-2">
+      <span class="flex items-center justify-center rounded-box border border-base-300 p-1.5">
+        <Dynamic component={resolveIcon(resolved())} size={14} />
+      </span>
+      <span class="font-data text-xs text-base-content/60">{p.value || resolved()}</span>
+    </span>
   );
 }
+
+// IconOverrideField: the edit-mode counterpart, a bare text input (mirrors
+// LocationTypes' Icon field). Its placeholder is the classified type's own
+// icon, so a blank field visibly reads as "inherit the type's icon", not as
+// an unset one; a live glyph preview stays on the read side (IconPreview),
+// deliberately not duplicated here, since a wrapping element around the
+// input would swallow its own accessible-label association (FieldRow labels
+// the FIRST resolved element, and that must be the input itself).
+function IconOverrideField(p: { componentType: string; value: string; onChange: (v: string) => void }): JSX.Element {
+  const types = useQuery(() => ({ queryKey: COMPONENT_TYPES_KEY, queryFn: listComponentTypes }));
+  const byName = createMemo(() => componentTypeByName(types.data ?? []));
+  const typeIcon = createMemo(() => resolveProductIcon({ component_type: p.componentType }, byName()));
+  return (
+    <input
+      class="input input-bordered w-full font-data"
+      value={p.value}
+      placeholder={typeIcon()}
+      onInput={(e) => p.onChange(e.currentTarget.value)}
+    />
+  );
+}
+

@@ -162,6 +162,9 @@ func registerInterfaceRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 }
 
 func mapInterfaceErr(err error) error {
+	if refErr, ok := mapRefErr(err); ok {
+		return refErr
+	}
 	switch {
 	case errors.Is(err, storage.ErrInterfaceNotFound):
 		return huma.Error404NotFound("interface not found")

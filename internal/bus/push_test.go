@@ -16,13 +16,13 @@ func testRegistry(t *testing.T) collection.Registry {
 
 // pushOwner is what apiBinding produces: a component, and no interface labels.
 func pushOwner() storage.TaskOwner {
-	return storage.TaskOwner{Component: "boardroom-a-bar"}
+	return storage.TaskOwner{ComponentID: "boardroom-a-bar"}
 }
 
 // nodeOwner is what ResolveTaskOwner produces: the interface supplies the instance
 // discriminator and the source.
 func nodeOwner() storage.TaskOwner {
-	return storage.TaskOwner{Component: "disp-1", InterfaceName: "api", InterfaceType: "icmp"}
+	return storage.TaskOwner{ComponentID: "disp-1", InterfaceName: "api", InterfaceType: "icmp"}
 }
 
 // The trust model in one place: a batch's owner is believed because of the SUBJECT
@@ -65,7 +65,7 @@ func TestAPIBindingOwnsBothLanesOfTheBatch(t *testing.T) {
 	if bind.LogComponent != "boardroom-a-bar" || bind.LogNode != "" {
 		t.Fatalf("log destination = component %q / node %q, want component boardroom-a-bar only", bind.LogComponent, bind.LogNode)
 	}
-	if bind.SampleOwner == nil || bind.SampleOwner.Component != "boardroom-a-bar" {
+	if bind.SampleOwner == nil || bind.SampleOwner.ComponentID != "boardroom-a-bar" {
 		t.Fatalf("sample owner = %+v, want component boardroom-a-bar", bind.SampleOwner)
 	}
 	// A push has no interface, so the interface-derived fallbacks must be empty and

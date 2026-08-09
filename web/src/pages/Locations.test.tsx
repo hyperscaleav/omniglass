@@ -20,7 +20,7 @@ import { uuidFor } from "../lib/testids";
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 const hq: Location = { id: uuidFor("l-hq"), name: "hq", display_name: "HQ", location_type: "campus", effective_tags: {} };
 const lab: Location = { id: uuidFor("l-lab"), name: "lab", display_name: "Lab", location_type: "campus", effective_tags: {} };
-const hqB1: Location = { id: uuidFor("l-b1"), name: "hq-b1", display_name: "HQ B1", location_type: "building", parent: "hq", effective_tags: {} };
+const hqB1: Location = { id: uuidFor("l-b1"), name: "hq-b1", display_name: "HQ B1", location_type: "building", parent: "hq", parent_id: hq.id, effective_tags: {} };
 // Registry rows carry a uuid id and the name in name (ADR-0062); the
 // server stores and compares the handle everywhere a location references its
 // type, so a fixture with the handle in the id slot would hide a uuid-vs-name
@@ -46,18 +46,18 @@ function mount(path: string, extraLocations: Location[] = []) {
   qc.setQueryData([...LOCATION_TYPES_KEY], types);
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...TAGS_KEY], []);
-  qc.setQueryData([...entityTagsKey("location", "hq")], []);
-  qc.setQueryData([...entityTagsKey("location", "hq-b1")], []);
-  for (const l of extraLocations) qc.setQueryData([...entityTagsKey("location", l.name)], []);
+  // Keyed by uuid (#627 review finding 1): the detail page's panels now
+  // address by the location's id, not its name.
+  for (const l of all) qc.setQueryData([...entityTagsKey("location", l.id)], []);
   // Seed every location's effective properties so the detail's panel resolves
   // from cache (the tests that fake fetch refuse any request they did not expect).
-  for (const l of all) qc.setQueryData([...ownerPropertiesKey("location", l.name)], l.name === "hq" ? hqProperties : []);
+  for (const l of all) qc.setQueryData([...ownerPropertiesKey("location", l.id)], l.name === "hq" ? hqProperties : []);
   window.history.pushState({}, "", path);
   return render(() => (
     <QueryClientProvider client={qc}>
       <Router>
         <Route path="/locations" component={Locations} />
-        <Route path="/locations/:name" component={Locations} />
+        <Route path="/locations/:id" component={Locations} />
       </Router>
     </QueryClientProvider>
   ));
@@ -122,9 +122,11 @@ describe("Locations create-as-route", () => {
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     const select = (await screen.findByLabelText("Parent")) as HTMLSelectElement;
-    expect(select.value).toBe("hq");
-    fireEvent.change(select, { target: { value: "lab" } });
-    expect(select.value).toBe("lab");
+    // The picker is keyed and valued on uuid, not name (#627), so its value
+    // seeds from the current parent's id, not "hq".
+    expect(select.value).toBe(hq.id);
+    fireEvent.change(select, { target: { value: lab.id } });
+    expect(select.value).toBe(lab.id);
   });
 
   it("offers a real non-root parent for a currently-root location and sends the move on save", async () => {
@@ -142,14 +144,21 @@ describe("Locations create-as-route", () => {
     const optionLabels = Array.from(select.options).map((o) => o.textContent?.trim());
     expect(optionLabels).toContain("HQ");
     expect(optionLabels).toContain("Root (current)");
-    fireEvent.change(select, { target: { value: "hq" } });
-    expect(select.value).toBe("hq");
+    // The picker is keyed and valued on uuid, not name (#627).
+    fireEvent.change(select, { target: { value: hq.id } });
+    expect(select.value).toBe(hq.id);
     let captured: unknown;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const method = req.method;
       const url = req.url;
-      if (method === "PATCH" && url.includes("/locations/b2")) {
+      if (method === "PATCH" && url.includes(`/locations/${b2.id}`)) {
+        return new Response(JSON.stringify(b2), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      // The move is its own call, POST .../{id}:move, not a PATCH field
+      // (#627): placement left the patch body entirely. Addressed by uuid
+      // (#627 review finding 1), not the name the route used to carry.
+      if (method === "POST" && url.includes(`/locations/${b2.id}:move`)) {
         captured = JSON.parse(await req.clone().text());
         return new Response(JSON.stringify({ ...b2, parent: "hq" }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
@@ -157,7 +166,9 @@ describe("Locations create-as-route", () => {
     });
     fireEvent.click(screen.getByText("Save changes"));
     await waitFor(() => expect(captured).toBeTruthy());
-    expect((captured as { parent?: string }).parent).toBe("hq");
+    // Posted as the uuid (the API dual-accepts uuid-or-name, ADR-0062), not
+    // the name the picker used to send.
+    expect((captured as { parent?: string }).parent).toBe(hq.id);
   });
 
   it("saving a rejected move surfaces the 422 through the existing inline alert and stays in edit mode", async () => {
@@ -170,7 +181,10 @@ describe("Locations create-as-route", () => {
       const req = input as Request;
       const method = req.method;
       const url = req.url;
-      if (method === "PATCH" && url.includes("/locations/hq-b1")) {
+      if (method === "PATCH" && url.includes(`/locations/${hqB1.id}`)) {
+        return new Response(JSON.stringify(hqB1), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (method === "POST" && url.includes(`/locations/${hqB1.id}:move`)) {
         return new Response(JSON.stringify({ detail: "building may not be placed under campus lab" }), { status: 422, headers: { "Content-Type": "application/json" } });
       }
       throw new Error(`unexpected fetch in this test: ${method} ${url}`);
@@ -181,13 +195,14 @@ describe("Locations create-as-route", () => {
     expect(screen.getByLabelText("Parent")).toBeTruthy();
   });
 
-  it("excludes the node's own subtree by the name the candidates are keyed on, not the uuid (#466)", async () => {
+  it("excludes the node's own subtree, keyed and excluded by uuid (#466, #627)", async () => {
     // area is unconstrained, so the candidate pool is every location; only
     // subtree exclusion can keep area1 and its child out. The candidates are
-    // keyed by name, so passing the location's uuid to the exclusion silently
-    // turns it off and offers the node itself (a cycle the server must refuse).
+    // now keyed by uuid, not name (#627: two locations can share a name), and
+    // excludeSubtreeOf passes the location's uuid to match, so the exclusion
+    // still keeps the node and its own subtree out.
     const area1: Location = { id: uuidFor("l-area1"), name: "area1", display_name: "Area 1", location_type: "area", effective_tags: {} };
-    const area2: Location = { id: uuidFor("l-area2"), name: "area2", display_name: "Area 2", location_type: "area", parent: "area1", effective_tags: {} };
+    const area2: Location = { id: uuidFor("l-area2"), name: "area2", display_name: "Area 2", location_type: "area", parent: "area1", parent_id: area1.id, effective_tags: {} };
     mount("/locations/area1", [area1, area2]);
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
@@ -196,6 +211,27 @@ describe("Locations create-as-route", () => {
     expect(optionLabels).toContain("HQ");
     expect(optionLabels.some((l) => l?.includes("Area 1"))).toBe(false);
     expect(optionLabels.some((l) => l?.includes("Area 2"))).toBe(false);
+  });
+
+  it("offers two same-named parent candidates as distinct, independently selectable options (#627)", async () => {
+    // Two roots named "annex" (legal after #627): a name-keyed picker would
+    // have collapsed them into one value-identical option, so choosing
+    // "annex" could never say which one was meant, and posting it would name
+    // an ambiguous ref the API refuses. Keyed by uuid, both render and each
+    // is selectable on its own.
+    const annexA: Location = { id: uuidFor("l-annex-a"), name: "annex", display_name: "Annex", location_type: "campus", effective_tags: {} };
+    const annexB: Location = { id: uuidFor("l-annex-b"), name: "annex", display_name: "Annex", location_type: "campus", effective_tags: {} };
+    mount("/locations/hq-b1", [annexA, annexB]);
+    await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    const select = (await screen.findByLabelText("Parent")) as HTMLSelectElement;
+    const values = Array.from(select.options).map((o) => o.value);
+    expect(values).toContain(annexA.id);
+    expect(values).toContain(annexB.id);
+    fireEvent.change(select, { target: { value: annexB.id } });
+    expect(select.value).toBe(annexB.id);
+    fireEvent.change(select, { target: { value: annexA.id } });
+    expect(select.value).toBe(annexA.id);
   });
 
   it("posts the location_type handle, never the uuid, on create (#466)", async () => {
@@ -249,6 +285,120 @@ describe("Locations create-as-route", () => {
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     // No check button until edit begins: the name is a read-only fact.
     expect(screen.queryByLabelText("Check name")).toBeNull();
+  });
+
+  // #627 Task 15c: routes take :id now. A name-shaped deep link (an old
+  // bookmark, or one of this same page's own name-only cross-entity panel
+  // links) resolves through TreeList's byAddr fallback and corrects the
+  // address bar to the uuid (replace, not push); a rename afterward must
+  // leave that URL alone, since the id it addresses never changes.
+  it("redirects a name-shaped deep link to the resolved uuid, and a rename leaves the route where it is", async () => {
+    mount("/locations/hq");
+    await waitFor(() => expect(window.location.pathname).toBe(`/locations/${hq.id}`));
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    const nameInput = (await screen.findByDisplayValue("hq")) as HTMLInputElement;
+    fireEvent.input(nameInput, { target: { value: "headquarters" } });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const { method, url } = req;
+      if (method === "PATCH" && url.includes(`/locations/${hq.id}`)) {
+        return new Response(JSON.stringify(hq), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (method === "POST" && url.includes(`/locations/${hq.id}:rename`)) {
+        return new Response(JSON.stringify({ ...hq, name: "headquarters" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (method === "GET") {
+        // The finally-block invalidation refetches the list; answer with the
+        // renamed row so this is not what fails the test.
+        return new Response(JSON.stringify({ locations: [{ ...hq, name: "headquarters" }, lab, hqB1] }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${method} ${url}`);
+    });
+    fireEvent.click(screen.getByText("Save changes"));
+    await waitFor(() => expect(screen.queryByLabelText("Check name")).toBeNull());
+    // Unchanged: no hand-off navigate to /locations/headquarters, which
+    // would have been a valid URL turned unresolvable by the save that just
+    // succeeded.
+    expect(window.location.pathname).toBe(`/locations/${hq.id}`);
+  });
+
+  it("renders an explicit not-found state for an address that matches no location, not the old silent list fallback", async () => {
+    mount("/locations/no-such-place");
+    expect(await screen.findByText(/No such location/)).toBeTruthy();
+    expect(screen.getByText(/old address/)).toBeTruthy();
+    // Not the pre-15c behavior: the unfiltered list is not what renders.
+    expect(screen.queryByText("HQ")).toBeNull();
+  });
+
+  // Review finding 1 (task-15-review.md #3): two locations sharing a name
+  // under different parents is #627's own legal default outcome (#627 Task
+  // 10), and the URL already carries the uuid, but the detail page's writes
+  // must not fall back to n().raw.name (ErrAmbiguousName, mapped to a 409).
+  it("addresses every write on the detail page by uuid, not by name, so a duplicate-named location stays editable", async () => {
+    const twinA: Location = { id: uuidFor("l-twin-a"), name: "twin", location_type: "room", parent: "hq-b1", parent_id: hqB1.id, effective_tags: {} };
+    const twinB: Location = { id: uuidFor("l-twin-b"), name: "twin", location_type: "room", parent: "lab", parent_id: lab.id, effective_tags: {} };
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...LOCATIONS_KEY], [hq, lab, hqB1, twinA, twinB]);
+    qc.setQueryData([...LOCATION_TYPES_KEY], types);
+    qc.setQueryData([...ME_KEY], me);
+    qc.setQueryData([...TAGS_KEY], []);
+    qc.setQueryData([...entityTagsKey("location", twinA.id)], []);
+    qc.setQueryData([...ownerPropertiesKey("location", twinA.id)], []);
+    window.history.pushState({}, "", `/locations/${twinA.id}`);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="/locations" component={Locations} />
+          <Route path="/locations/:id" component={Locations} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    const nameInput = (await screen.findByDisplayValue("twin")) as HTMLInputElement;
+    fireEvent.input(nameInput, { target: { value: "twin-renamed" } });
+    const seen: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const { method, url } = req;
+      if (method === "PATCH" && url.includes(`/locations/${twinA.id}`)) {
+        seen.push("patch");
+        return new Response(JSON.stringify(twinA), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (method === "POST" && url.includes(`/locations/${twinA.id}:rename`)) {
+        seen.push("rename");
+        return new Response(JSON.stringify({ ...twinA, name: "twin-renamed" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (method === "GET") {
+        return new Response(JSON.stringify({ locations: [hq, lab, hqB1, twinA, twinB] }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${method} ${url}`);
+    });
+    fireEvent.click(screen.getByText("Save changes"));
+    // Wait for the save to fully resolve (edit mode exits), not just for the
+    // fetch calls to have fired: the accordion's own save() still has an
+    // awaited invalidateQueries after the rename resolves, so checking seen
+    // alone races the view/edit mode switch the Delete button depends on.
+    await waitFor(() => expect(screen.queryByLabelText("Check name")).toBeNull());
+    expect(seen).toContain("patch");
+    expect(seen).toContain("rename");
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const { method, url } = req;
+      if (method === "DELETE" && url.includes(`/locations/${twinA.id}`)) {
+        seen.push("delete");
+        return new Response(null, { status: 204 });
+      }
+      if (method === "GET") {
+        return new Response(JSON.stringify({ locations: [hq, lab, hqB1, twinB] }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${method} ${url}`);
+    });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    fireEvent.click(screen.getByText("Delete"));
+    await waitFor(() => expect(seen).toContain("delete"));
   });
 });
 
@@ -307,9 +457,75 @@ describe("Locations properties panel", () => {
     await waitFor(() => {
       const put = calls.find((c) => c.method === "PUT");
       expect(put).toBeTruthy();
-      expect(put!.url).toContain("/locations/hq/properties/site.timezone");
+      // Addressed by uuid (#627 review finding 1), not the name the route
+      // used to carry.
+      expect(put!.url).toContain(`/locations/${hq.id}/properties/site.timezone`);
       expect(JSON.parse(put!.body)).toEqual({ value: "America/Denver" });
     });
+  });
+});
+
+// #627 scopes name uniqueness to placement, not the whole estate: two
+// locations under different parents may now legally share a name. The tree
+// builder used to key its construction-time map on the bare name
+// (byId.set(l.name, ...)), so the second same-named row silently overwrote
+// the first and its children reparented onto the survivor. Keying that map
+// on uuid instead (node.id itself stays the name; only the construction key
+// moved) is what keeps both rows in the rendered tree.
+describe("Locations list survives duplicate names across placements (#627)", () => {
+  afterEach(() => window.history.pushState({}, "", "/"));
+
+  it("renders both same-named locations when they sit under different parents, each keeping its own child", async () => {
+    // Each "room-1" has its OWN child (desk-a / desk-b): a bare row count
+    // could still look right off a double-push artifact (the surviving node
+    // object gets pushed into both parents' children arrays). The
+    // discriminating symptom the amendment actually describes is the CHILD
+    // reparenting onto whichever same-named node won the map: under the old
+    // bug, both desks end up merged onto one surviving "room-1" object and
+    // so both appear TWICE; under the fix, each desk renders exactly once,
+    // under its own parent.
+    const bldgA: Location = { id: uuidFor("l-bldg-a"), name: "bldg-a", location_type: "building", effective_tags: {} };
+    const bldgB: Location = { id: uuidFor("l-bldg-b"), name: "bldg-b", location_type: "building", effective_tags: {} };
+    const roomInA: Location = { id: uuidFor("l-room-a"), name: "room-1", location_type: "room", parent: "bldg-a", parent_id: bldgA.id, effective_tags: {} };
+    const roomInB: Location = { id: uuidFor("l-room-b"), name: "room-1", location_type: "room", parent: "bldg-b", parent_id: bldgB.id, effective_tags: {} };
+    const deskA: Location = { id: uuidFor("l-desk-a"), name: "desk-a", location_type: "area", parent: "room-1", parent_id: roomInA.id, effective_tags: {} };
+    const deskB: Location = { id: uuidFor("l-desk-b"), name: "desk-b", location_type: "area", parent: "room-1", parent_id: roomInB.id, effective_tags: {} };
+
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...LOCATIONS_KEY], [bldgA, bldgB, roomInA, roomInB, deskA, deskB]);
+    qc.setQueryData([...LOCATION_TYPES_KEY], types);
+    qc.setQueryData([...ME_KEY], me);
+    qc.setQueryData([...TAGS_KEY], []);
+    window.history.pushState({}, "", "/locations");
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="/locations" component={Locations} />
+        </Router>
+      </QueryClientProvider>
+    ));
+
+    await waitFor(() => expect(screen.getAllByText("bldg-a").length).toBeGreaterThan(0));
+    // Tree mode starts fully collapsed, so expand everything.
+    fireEvent.click(screen.getByTitle("Expand all"));
+    // Rows are matched by their NAME cell specifically (the first <td>), not
+    // by a bare text search: the "Parent" column also prints a row's parent
+    // NAME as plain text, and desk-a/desk-b's parent is "room-1" too, which
+    // would otherwise double-count as a false match.
+    const rows = () => Array.from(document.querySelectorAll("tbody tr"));
+    const nameCell = (row: Element) => row.querySelector("td")?.textContent ?? "";
+    const rowsNamed = (name: string) => rows().filter((r) => nameCell(r).includes(name));
+    await waitFor(() => expect(rowsNamed("room-1")).toHaveLength(2));
+    expect(rowsNamed("desk-a")).toHaveLength(1);
+    expect(rowsNamed("desk-b")).toHaveLength(1);
+    // desk-a sits under the SAME "room-1" row as bldg-a, desk-b under
+    // bldg-b's: the tree renders depth-first, so desk-a's row falls
+    // strictly between bldg-a's and bldg-b's, and desk-b's falls after
+    // bldg-b's.
+    const indexOf = (name: string) => rows().indexOf(rowsNamed(name)[0]);
+    expect(indexOf("desk-a")).toBeGreaterThan(indexOf("bldg-a"));
+    expect(indexOf("desk-a")).toBeLessThan(indexOf("bldg-b"));
+    expect(indexOf("desk-b")).toBeGreaterThan(indexOf("bldg-b"));
   });
 });
 

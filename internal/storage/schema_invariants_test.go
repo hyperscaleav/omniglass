@@ -24,15 +24,30 @@ func TestChurnDroppedConstraintsRestored(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 
-	// A join/contract foreign key with a NULL side is meaningless; each of these
-	// lost its NOT NULL when its column was recreated, while the partner column on
-	// the same table kept it.
-	notNull := []struct{ table, column string }{
-		{"product_property", "product_id"},
-		{"product_property", "property_type_id"},
-		{"product_capability", "product_id"},
-		{"standard_property", "property_type_id"},
-		{"location_type_property", "property_type_id"},
+	notNull := []struct{ table, column, why string }{
+		// Each of these lost its NOT NULL when its column was recreated during
+		// the #262/#343 churn, while the partner column on the same table
+		// kept it: a join/contract foreign key with a NULL side is
+		// meaningless.
+		{"product_property", "product_id", "a join/contract foreign key with a NULL side is meaningless"},
+		{"product_property", "property_type_id", "a join/contract foreign key with a NULL side is meaningless"},
+		{"standard_property", "property_type_id", "a join/contract foreign key with a NULL side is meaningless"},
+		{"location_type_property", "property_type_id", "a join/contract foreign key with a NULL side is meaningless"},
+		// The position floor (20260807146000_assignment_position_floor.sql,
+		// #626): every assignment carries its ordering position within its
+		// role, not just those written after the floor landed (the
+		// preceding backfill fills every existing row first). Not a foreign
+		// key: an ordering integer with no NULL reading at all, since
+		// "unpositioned" is exactly the state the backfill exists to close
+		// out before the floor lands.
+		{"system_role_assignment", "position", "an assignment's ordering position has no meaning when unset"},
+		// role_choice and choice_alternate (20260807150000_role_choices_and_alternates.sql,
+		// #626): new tables, not churn, but the same guard is the cheapest
+		// place to pin that a fresh column recreation never drops these.
+		{"choice_alternate", "choice_id", "an alternate with no choice cannot be grouped by anything"},
+		{"choice_alternate", "position", "the tie-break internal/health.Choice.Active reads has no meaning when unset"},
+		{"role_choice", "owner_kind", "a choice with no declared owner kind cannot resolve its arc"},
+		{"role_choice", "name", "an unnamed choice cannot be addressed"},
 	}
 	for _, c := range notNull {
 		var nullable string
@@ -42,13 +57,19 @@ func TestChurnDroppedConstraintsRestored(t *testing.T) {
 			t.Fatalf("read %s.%s nullability: %v", c.table, c.column, err)
 		}
 		if nullable != "NO" {
-			t.Errorf("%s.%s is nullable, want NOT NULL (a join/contract foreign key with a NULL side is meaningless)", c.table, c.column)
+			t.Errorf("%s.%s is nullable, want NOT NULL (%s)", c.table, c.column, c.why)
 		}
 	}
 
-	// Both indexes existed before the churn and were dropped when their column was
-	// recreated; the sibling tables kept theirs.
-	indexes := []string{"property_owner_idx", "product_capability_capability_idx"}
+	// This index existed before the churn and was dropped when its column was
+	// recreated; the sibling tables kept theirs. The three *_name_idx entries
+	// are a different cause, same symptom: #627's migration drops
+	// component_name_key/system_name_key/location_name_key (each a UNIQUE
+	// constraint, which was also the only index on that bare name column) and
+	// replaces them with partial uniques that all lead with the FK column, so
+	// none of them can serve `where name = $1` (the ambiguity scan in
+	// scopedByName, and the *NameTaken advisories) without a plain btree back.
+	indexes := []string{"property_owner_idx", "component_name_idx", "system_name_idx", "location_name_idx"}
 	for _, idx := range indexes {
 		var exists bool
 		if err := conn.QueryRow(ctx,

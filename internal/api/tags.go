@@ -108,8 +108,8 @@ type entityTagsOutput struct {
 }
 
 type effectiveTagsInput struct {
-	Name   string `path:"name" doc:"The component's name"`
-	System string `query:"system" doc:"Resolve against this system, which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand."`
+	Name   string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
+	System string `query:"system" doc:"Resolve against this system, name or uuid (ADR-0062), which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand."`
 }
 
 type effectiveTagsOutput struct {
@@ -263,7 +263,7 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/effective-tags",
 		Summary:     "Effective tags for a component",
-		Description: "Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.",
+		Description: "Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.",
 	}, "component", "read"), func(ctx context.Context, in *effectiveTagsInput) (*effectiveTagsOutput, error) {
 		comp, err := gw.GetComponent(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
@@ -290,7 +290,7 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 // entityRemoveTagInput carries the name and the key to remove. The entity kind
 // is fixed by the route the closure registers.
 type entitySetTagInput struct {
-	Name string `path:"name" doc:"The entity's name"`
+	Name string `path:"name" doc:"The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token."`
 	Body struct {
 		Key   string `json:"key" minLength:"1" doc:"The tag key (must exist and apply to this kind)"`
 		Value string `json:"value" minLength:"1" doc:"The bound value"`
@@ -298,14 +298,14 @@ type entitySetTagInput struct {
 }
 
 type entityRemoveTagInput struct {
-	Name string `path:"name" doc:"The entity's name"`
+	Name string `path:"name" doc:"The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token."`
 	Body struct {
 		Key string `json:"key" minLength:"1" doc:"The tag key to remove"`
 	}
 }
 
 type entityNameInput struct {
-	Name string `path:"name" doc:"The entity's name"`
+	Name string `path:"name" doc:"The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token."`
 }
 
 // registerEntityTagRoutes registers the list, set, and remove binding routes for
@@ -381,6 +381,9 @@ func propagatesOr(p *bool) bool {
 // component sentinels leak through the binding paths (owner resolution), so they
 // are mapped here too.
 func mapTagErr(err error) error {
+	if refErr, ok := mapRefErr(err); ok {
+		return refErr
+	}
 	switch {
 	case errors.Is(err, storage.ErrTagNotFound):
 		return huma.Error404NotFound("tag key not found")

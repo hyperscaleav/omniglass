@@ -56,8 +56,8 @@ type TableIdentity struct {
 // reads it to pick the rule, so the declaration is load-bearing and not a comment.
 var IdentityShapes = map[string]TableIdentity{
 	// Key-bearing. The shape is the whole explanation.
-	"capability": {Shape: ShapeKeyBearing}, "component": {Shape: ShapeKeyBearing},
-	"driver": {Shape: ShapeKeyBearing}, "interface": {Shape: ShapeKeyBearing},
+	"component": {Shape: ShapeKeyBearing},
+	"driver":    {Shape: ShapeKeyBearing}, "interface": {Shape: ShapeKeyBearing},
 	"interface_type": {Shape: ShapeKeyBearing}, "location": {Shape: ShapeKeyBearing},
 	"location_type": {Shape: ShapeKeyBearing}, "node": {Shape: ShapeKeyBearing},
 	"principal_group": {Shape: ShapeKeyBearing}, "product": {Shape: ShapeKeyBearing},
@@ -65,7 +65,12 @@ var IdentityShapes = map[string]TableIdentity{
 	"secret_type": {Shape: ShapeKeyBearing}, "standard": {Shape: ShapeKeyBearing},
 	"system": {Shape: ShapeKeyBearing}, "system_role": {Shape: ShapeKeyBearing},
 	"tag": {Shape: ShapeKeyBearing}, "variable": {Shape: ShapeKeyBearing},
-	"vendor": {Shape: ShapeKeyBearing},
+	"vendor": {Shape: ShapeKeyBearing}, "component_type": {Shape: ShapeKeyBearing},
+	// role_choice is named the same way system_role is: within its owner
+	// arc (owner_kind, standard_id, system_id). choice_alternate is named
+	// within its choice (choice_id, name), one level narrower, the same
+	// relationship component_type's root/child split already has.
+	"role_choice": {Shape: ShapeKeyBearing}, "choice_alternate": {Shape: ShapeKeyBearing},
 
 	// Keyspace: a name, on the other rule.
 	"property_type": {ShapeKeyspace, "serial-number, a signal name referenced from drivers and templates"},
@@ -83,20 +88,21 @@ var IdentityShapes = map[string]TableIdentity{
 	"blob": {ShapeHumanNotAKey, "content-addressed by sha256, for the same reason"},
 
 	// Id only.
-	"alarm": {Shape: ShapeIDOnly}, "alarm_capability": {Shape: ShapeIDOnly},
+	"alarm":     {Shape: ShapeIDOnly},
 	"audit_log": {Shape: ShapeIDOnly}, "command": {Shape: ShapeIDOnly},
-	"component_capability": {Shape: ShapeIDOnly}, "credential": {Shape: ShapeIDOnly},
-	"event": {Shape: ShapeIDOnly}, "impersonation_session": {Shape: ShapeIDOnly},
+	"credential": {Shape: ShapeIDOnly},
+	"event":      {Shape: ShapeIDOnly}, "impersonation_session": {Shape: ShapeIDOnly},
 	"location_type_metric": {Shape: ShapeIDOnly}, "location_type_property": {Shape: ShapeIDOnly},
 	"log_line": {Shape: ShapeIDOnly}, "metric": {Shape: ShapeIDOnly},
 	"node_log":  {Shape: ShapeIDOnly},
 	"principal": {Shape: ShapeIDOnly}, "principal_grant": {Shape: ShapeIDOnly},
-	"principal_group_member": {Shape: ShapeIDOnly}, "product_capability": {Shape: ShapeIDOnly},
-	"product_metric": {Shape: ShapeIDOnly}, "product_property": {Shape: ShapeIDOnly},
+	"principal_group_member": {Shape: ShapeIDOnly},
+	"product_metric":         {Shape: ShapeIDOnly}, "product_property": {Shape: ShapeIDOnly},
 	"property": {Shape: ShapeIDOnly}, "service": {Shape: ShapeIDOnly},
 	"setting_override": {Shape: ShapeIDOnly}, "standard_metric": {Shape: ShapeIDOnly},
 	"standard_property": {Shape: ShapeIDOnly}, "system_member": {Shape: ShapeIDOnly},
-	"system_role_assignment": {Shape: ShapeIDOnly}, "system_role_capability": {Shape: ShapeIDOnly},
+	"system_role_assignment": {Shape: ShapeIDOnly},
+	"system_role_product":    {Shape: ShapeIDOnly}, "system_role_type": {Shape: ShapeIDOnly},
 	"tag_binding": {Shape: ShapeIDOnly},
 }
 
@@ -104,9 +110,11 @@ var IdentityShapes = map[string]TableIdentity{
 // with the reason it cannot be reached that way. Classification without proof is a
 // claim and not a guard, so the excuse is written down rather than inferred.
 var KeyProvedElsewhere = map[string]string{
-	"interface_type": "seeded only, no create path on the gateway",
-	"role":           "seeded only, no create path on the gateway",
-	"secret_type":    "seeded only, no create path on the gateway",
+	"interface_type":   "seeded only, no create path on the gateway",
+	"role":             "seeded only, no create path on the gateway",
+	"secret_type":      "seeded only, no create path on the gateway",
+	"role_choice":      "seeded only, no create path on the gateway",
+	"choice_alternate": "seeded only, no create path on the gateway",
 	"interface": "the name is server-derived, not operator-typed: InterfaceSpec carries no Name " +
 		"and the column is set from spec.Type, an already-validated interface_type name",
 }

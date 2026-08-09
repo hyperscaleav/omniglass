@@ -242,6 +242,9 @@ func validNodeName(name string) bool {
 }
 
 func mapNodeErr(err error) error {
+	if refErr, ok := mapRefErr(err); ok {
+		return refErr
+	}
 	switch {
 	case errors.Is(err, storage.ErrNodeNotFound):
 		return huma.Error404NotFound("node not found")

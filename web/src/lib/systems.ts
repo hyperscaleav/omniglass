@@ -17,11 +17,23 @@ export type System = {
   standard?: string;
   standard_id?: string;
   location?: string;
+  // location_id and parent_id are the placement's uuids, the stable handles
+  // the tree builder keys and resolves on (#627: name uniqueness is scoped
+  // to placement, so two systems can now legally share a name and only the
+  // uuid tells them apart).
+  location_id?: string;
   parent?: string;
+  parent_id?: string;
   // How many components are bound into this system, from membership rather than
   // any pointer on the component: membership is what says a component is in a
   // system, and reading it elsewhere is how a fully staffed system reported zero.
   member_count: number;
+  // path/path_segments/renders (#627 Task 15): the dotted address and its two
+  // display-only compact forms, set on a GET or LIST response (empty on a
+  // create/update/move/rename response; a subsequent list refetch fills it).
+  path?: string;
+  path_segments?: string[];
+  renders?: { dash: string; bare: string };
   actions?: string[];
   effective_tags?: Record<string, string>;
 };
@@ -77,8 +89,13 @@ export async function renameSystem(name: string, to: string): Promise<System> {
 
 export type NameCheck = { valid: boolean; available: boolean; reason?: string };
 
-export async function checkSystemName(name: string): Promise<NameCheck> {
-  const { data, error } = await api.POST("/systems:checkName", { body: { name } });
+// checkSystemName checks availability against a placement bucket (#627: name
+// uniqueness is scoped to placement, not the whole estate), the same one
+// CreateSystem resolves into: parent wins over location, and neither means
+// the unplaced/root bucket. A rename check passes the system's OWN current
+// placement, since a rename does not move it.
+export async function checkSystemName(name: string, parent?: string, location?: string): Promise<NameCheck> {
+  const { data, error } = await api.POST("/systems:checkName", { body: { name, parent, location } });
   if (error) throw error;
   return data as NameCheck;
 }

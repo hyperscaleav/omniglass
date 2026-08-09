@@ -2584,3 +2584,338 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   route guard would only bounce, and it is now judged per caller like every other surface. The
   pathless soon slots (the Templates reservations) are no destination and stay out; secret
   types keeps its standing ruling of no nav slot.
+- **Every component is an instance of a product**
+  ([#614](https://github.com/hyperscaleav/omniglass/issues/614)). The `component_type` registry
+  returns as a tree, above the product rather than beside the component: a seeded-plus-custom
+  device-class genus (`display`, `mic`, `dsp`, ...) nesting by `parent_id`, carrying the identity
+  facts a generated name and a console glyph need (naming stem, icon, abbrev, default tags), each
+  inheriting down the tree with override at any node ([ADR-0085](/architecture/decisions/#adr-0085-the-component_type-registry-returns-as-the-device-class-genus),
+  a partial reversal of [ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)).
+  `product.component_type_id` and `component.product_id` both land `NOT NULL`, closed in three
+  ordered migrations (a nullable schema step, the boot seed plus a one-time backfill pointing every
+  existing row at a matching generic, then the `NOT NULL` floor), so no component ever exists
+  unclassified; three generic products (`generic-device`, `generic-app`, `generic-service`) cover
+  anything not yet modeled more specifically. `product.kind` narrows to `device | app | service`,
+  loses its silent default (required at create instead), and retires `vm`, folded into `app`
+  ([ADR-0086](/architecture/decisions/#adr-0086-the-product-classification-floor-and-the-kind-split)).
+  The console: the Products form gains a required Type picker over the seeded tree and an optional
+  per-SKU icon override (unset resolves the type's own, walking its ancestor chain), the Components
+  create form makes Product required with the three generics offered alongside every real SKU, and a
+  new Types admin page (Catalog > Components) lists the registry in tree order with a minimal create
+  and edit surface (a custom type's tree placement is fixed at create; there is no reparent leg yet).
+  Reconciling the ADR-0047 denylist entry that banned `component_type` in docs prose (now current
+  vocabulary again, in its reintroduced shape) closed out `internal/docslint`'s one carried red.
+- **A role is a typed slot** ([#626](https://github.com/hyperscaleav/omniglass/issues/626),
+  `c006c62`). The role assignment guard swaps its capability comparison for a typed-slot one: a
+  component fills a role only when its product's `component_type` falls within the subtree of a
+  type the role accepts (any type, if none are declared), and, if the role pins specific
+  products, only when its product is one of them. Two new join tables,
+  `system_role_type` and `system_role_product`, carry the accepted set and the pin; the refusal
+  names both parties in operator vocabulary rather than a bare capability gap. The capability
+  registry itself and the health rollup's alarm-impact reading are untouched here, staged for
+  retirement in the next slice.
+- **Capability-gated staffing retires** ([#626](https://github.com/hyperscaleav/omniglass/issues/626),
+  `ca78bd3`, `dbfa284`). The `alarm -> alarm_capability -> degradedCapabilities -> role` chain is
+  gone, replaced end to end: an active alarm impairs its component's own verdict wholesale, and a
+  role counts an occupant as satisfying it only from that verdict, not from a per-named
+  capability. Five tables drop (`capability`, `alarm_capability`, `component_capability`,
+  `product_capability`, `system_role_capability`) along with everything wired to them: the
+  `/capabilities` API and its console pages, `EffectiveCapabilities`, the component-capability
+  routes, and the seeded capability registry. The typed-slot guard from the prior slice becomes
+  the only assignment check; it plays no further part in health. A same-slice review round found
+  `Occupies()` had landed as `Verdict == Healthy`, a stricter threshold than intended that let
+  even an info alarm remove a component from every role it filled; `dbfa284` loosened it to the
+  spec, `Verdict != Outage` (a merely degraded occupant still occupies, since severity is how
+  loudly to page somebody, not a second staffing threshold), and raised every test and doc
+  example that had used a warning-severity alarm as its "take this occupant down" trigger to
+  critical, the true down case. Recorded as [ADR-0087](/architecture/decisions/#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability),
+  which supersedes [ADR-0049](/architecture/decisions/#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)
+  and amends [ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain),
+  filed against this slice rather than at the time, a gap this entry closes.
+- **A role says how many it will take** ([#626](https://github.com/hyperscaleav/omniglass/issues/626),
+  `4925a7d`). Roles gain `capacity` (an optional upper bound above quorum) and `position_labels`
+  (per-slot names); both are wholesale-declaration columns, but only `capacity` preserves on an
+  edit that omits it: the storage upsert reads `coalesce(excluded.capacity, system_role.capacity)`,
+  so a nil `*int` (the API caller left the field out) keeps whatever cap is already declared, a
+  server-side guarantee rather than a rule every caller has to remember to uphold. `position_labels`
+  carries no such coalesce, replacing wholesale like `quorum`, `accepted_types`, and `impact` (its
+  own doc string: omit or empty clears labelling), the same defect `impact` already carried before
+  this task's console fix (see below). A component may fill at most one
+  role per system: the migration raises and names the offending pairs before adding the
+  enforcing index rather than aborting mid-upgrade on an unnamed constraint violation, and
+  `AssignRole` pre-checks inside its transaction so the refusal names both the component and the
+  role it already holds (409: it depends on what else is currently assigned). Lowering a
+  standard-owned role's capacity below what any one conforming system has assigned is refused the
+  same way, since each conforming system stages independently. `mapRoleWriteErr` now
+  discriminates by constraint name instead of collapsing every `23505` into "a role with this
+  name is already declared here": a double-staffing race, a capacity-below-quorum CHECK, and a
+  genuine name collision now report distinctly, and the refusal status follows whether the
+  problem depends on other rows (409) or the declaration alone (422), recorded in
+  [ADR-0087](/architecture/decisions/#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability).
+- **A position is a slot you can address** ([#626](https://github.com/hyperscaleav/omniglass/issues/626),
+  `dfda3ab`, `4c6012e`). An assignment carries a 1-based position within its role, ordered by
+  creation and never renumbered on its own: unassigning leaves a gap, and the next assignment
+  refills the lowest free slot rather than growing past capacity. Both resolved reads
+  (`EffectiveRoles` and the health rollup) report a role's occupants in position order via a
+  correlated subquery rather than a `GROUP BY` plus `DISTINCT`, since the roles query already
+  joins types and products and a naive distinct ordering would have hidden that cartesian product
+  instead of just losing order. Position uniqueness is a deferrable constraint, not a unique
+  index, added after a one-time backfill: a plain index is checked per updated tuple, which would
+  raise the moment a single-statement swap lands the first row on the other's slot.
+  `SwapPositions` defers it for the rest of its transaction before exchanging two occupants in one
+  UPDATE (`POST /systems/{name}/roles/{role}:swapPositions`); it and `AssignRole` both take
+  an advisory lock on the `(system, role)` pair, so two concurrent assigns cannot compute the same
+  next-free position. The health rollup gains `short` and `spare`, the occupancy-aware
+  counterparts of the roles read's health-blind `understaffed` (a role can read fully staffed
+  there and still short here, if what it has is down). A same-slice follow-up (`4c6012e`) found
+  capacity enforcement had been emergent from the position collision, mislabeling the refusal
+  once positions were contiguous and silently overfilling past the declared cap once a gap
+  existed below it; added an explicit pre-check (`CapacityFullShortfall`, 409) beside the
+  existing double-staffing one, skipped when the component already holds the role so a full
+  role's existing occupants stay idempotent, and renamed the swap body fields from `{a, b}` to
+  `{position, with}` (the former generated unusable CLI flags).
+- **A standard states alternates** ([#626](https://github.com/hyperscaleav/omniglass/issues/626),
+  `1f1de87`, `9817058`, `29810a5`). A role can join an exclusive-or group instead of contributing
+  to its system unconditionally: `role_choice` is the group, `choice_alternate` one way to
+  satisfy it, `system_role.alternate_id` how a role joins one. The pure fold
+  (`internal/health.Alternate` / `Choice` / `SystemVerdictWith`) picks each choice's
+  best-satisfied alternate by declaration position and folds only its roles, so an all-in-one
+  room's satisfied video bar no longer takes the system down over its component-built
+  alternate's five unbuilt roles. `alternate_id` is `ON DELETE RESTRICT`, never `SET NULL`:
+  deleting an alternate would otherwise silently promote every attached role from conditional to
+  mandatory, the same trade already made when a plain `ON DELETE SET NULL` was rejected at schema
+  level; `DeleteChoice`/`DeleteAlternate` refuse instead, naming the roles still attached. A
+  composite ownership FK closes the cross-arc hole where a role could join a foreign owner's
+  alternate, and a same-slice repair closes `system_role`'s own missing owner-arc CHECK (an
+  unknown standard or system name used to resolve to NULL and succeed silently, creating an
+  ownerless role a second typo would then update; `role_choice` would have inherited the same
+  hole). Two review rounds followed. `9817058` found `SetSystemRole` wholesale-replacing
+  `alternate_id` on every write with no route ever populating it, so any PUT through the existing
+  role routes, including the console's own save, silently detached a role from its alternate; the
+  health report also carried the choice-aware verdict beside an ungrouped role list, so a
+  satisfied choice's unbuilt alternate read as ordinary impaired roles with nothing marking them
+  as not why, closed by `choice`, `alternate` and `active` on `HealthRole`. `29810a5` found the
+  boot-seed reconciliation incomplete: it converged declared alternates onto their positions but
+  never touched a stored row whose name had dropped out of the declared set, so a rename or a
+  drop against an already-seeded database still collided on `choice_alternate_position_key` and
+  aborted server boot. The seed now reconciles the stored alternate set to the declared one every
+  boot, existing rows included, **deleting** any alternate no longer declared unless a role still
+  points at it, in which case the whole call refuses with `ChoiceInUseShortfall` rather than let
+  the FK's RESTRICT surface as a bare constraint violation or silently detach a role: refusing to
+  boot beats silently detaching a role, the same trade the `ON DELETE RESTRICT` call above already
+  made. This is a narrow carve-out from the boot-seed doctrine's usual insert-if-absent rule,
+  safe here only because `choice_alternate` has no operator write path and its positions are a
+  packed sequence where an orphan actively collides; recorded in
+  [ADR-0087](/architecture/decisions/#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability).
+- **A role's impact already reached the verdict**
+  ([#626](https://github.com/hyperscaleav/omniglass/issues/626)). The epic's claim that
+  `system_role.impact` was declared but never consumed, so a short role contributed outage
+  regardless, was false against this branch, and this slice ships no code to fix it.
+  `Role.Contributes()` (`internal/health/verdict.go`) has exactly two branches, healthy when
+  satisfied and `ImpactVerdict(r.Impact)` when impaired, and `SystemVerdict` folds it worst-wins
+  into both the recorded outcome and the served one; the chain landed in `5a050e5` (#323), well
+  before this epic was written. Task 5's rebuild changed only what makes a component *occupy*
+  a slot, across two commits: `feat: capability-gated staffing retires` (`ca78bd3`) first read
+  `Occupies()` as `Verdict == Healthy`, a stricter threshold that let even an info alarm remove
+  a component from every role it filled, then its own review-round fix, `fix: a degraded
+  occupant still satisfies its role` (`dbfa284`), loosened it to the intended `Verdict !=
+  Outage`. Neither commit touched `ImpactVerdict`, `Contributes`, or the fold. The one real
+  gap in this area was vocabulary, not behavior: `understaffed` (the roles read,
+  `Quorum - len(AssignedTo)`) is health-blind assignment arithmetic, while `short` and
+  `satisfying` (the health read) are occupancy-aware, so a role whose sole assignee carries a
+  critical alarm can report `understaffed: 0` and `short: 1, impaired: true` at the same
+  instant, both correct under their own definition. Both doc strings (`internal/api/roles.go`,
+  `internal/api/health.go`) and the glossary now say so explicitly, and
+  `TestShortAndUnderstaffedDivergeOnCriticalAlarm` (`internal/storage/health_test.go`) pins that
+  a critical alarm makes the two figures diverge while a warning does not, since `Occupies()` is
+  `Verdict != Outage`. No `fix:` commit: nothing in the chain needed to change.
+- **The console reads a system two ways** ([#626](https://github.com/hyperscaleav/omniglass/issues/626),
+  the epic's last task). A predating bug shipped first as its own commit:
+  `RoleEditor`'s `buildSpec` sent only quorum, display name, and the typed-slot sets, so the
+  PUT's wholesale replace silently reset a role's `impact` to `degraded` on any unrelated edit
+  (the server defaults an omitted impact), invisible in the console with no warning; capacity
+  and `position_labels` had the same gap. Every **system** now carries a **colour of its own**, a
+  hue hashed from its uuid (`system_color.ts`, FNV-1a over the WHOLE string, since a uuidv7's
+  leading 48 bits are a shared millisecond timestamp within one devseed run and hashing only a
+  prefix would land every seeded system at nearly the same hue), stepping past the five bands
+  the theme's semantic tokens already claim, rendered through a `.og-system-dot` swatch reusing
+  `.tag-pill`'s per-theme lightness and chroma. **The by-role lens** (`RolesPanel`) reads the
+  health body alongside the roles read for occupancy-aware short/spare arithmetic in place of
+  the health-blind understaffed/assigned figures, marks a down occupant in place, and fixes the
+  assign picker offering a component already staffing a different role in the same system,
+  which the server refuses with a 409 (a component fills at most one role per system) nobody
+  could have anticipated; it now renders disabled, naming the role it already holds. **The
+  by-role occupants drag into a new
+  order**, wired through the same draggable/onDragStart/onDragOver/onDrop shape `ColumnMenu`
+  already uses (no dnd dependency added), decomposed into the server's only reorder primitive
+  (a pairwise position swap) by a new pure `swapPath`. **The by-device lens** (`MembersPanel`)
+  names the role, if any, each member fills, pivoted client-side from the same roles fetch
+  (`roleByComponent`; no reverse route exists). A standing bug closed alongside: `HealthPanel`
+  rendered a role impaired without consulting its `active` flag, so a role belonging to a
+  choice's losing alternate (#626) showed as an ordinary impairment beside a healthy status
+  banner, flatly contradicting it on the seeded huddle-room shape; both derivations now read
+  through a new `activeRoles`, with the excluded roles named under their own heading rather than
+  dropped. Records [ADR-0087](/architecture/decisions/#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability),
+  which supersedes [ADR-0049](/architecture/decisions/#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)
+  and amends [ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain),
+  and backfills five build-log entries the epic had carried without one.
+- **The console reads a system two ways, review round.** A review pass on the slice above found
+  twelve confirmed defects, all fixed. `EffectiveRoleBody` gains `positions`: index-for-index with
+  `assigned_to`, each entry's own 1-based position, since drag-to-reorder cannot address a specific
+  occupant's slot by assuming index `i` sits at position `i + 1` once an unassign has left a gap
+  (#626, never compacted); `swapPath` (the drag decomposition) reads real positions instead. The
+  system-colour hue bands were HSL degrees guarding an OKLCH-rendered dot, leaving three of five
+  semantic tokens open (about 28% of systems wore a status-coloured dot); recomputed in OKLCH, with
+  the fixed-step escape (which clustered on `--color-primary`) replaced by a golden-angle step. Two
+  committed D2 diagrams were stale against schema this epic's own earlier tasks changed
+  (`data-model-0.svg` still drew the five dropped capability tables and omitted every table this
+  epic added) or hand-patched without their generated geometry (`index-1.svg`'s corrected label
+  text shipped without the mask and position a d2 SVG computes from it, so the edge line struck
+  through the relabelled word); both regenerated. `RolesPanel` reintroduced the exact
+  active-flag contradiction the slice above had just fixed on `HealthPanel` one panel over, and
+  went one step further, discarding cache invalidation on a failed write (leaving a partial
+  multi-swap reorder undetectable) and never invalidating the health read at all on any write
+  (freezing its own short/spare/impact badges, now its primary readout, at their pre-write values).
+  `api.md`'s roles section, silent on `capacity`, `position_labels`, `positions`, and
+  `:swapPositions`, and still calling every assignment refusal "a 422" when a component
+  double-staffing another role or a role at capacity are both 409, is corrected to state the same
+  409-versus-422 rule ADR-0087 does. `storage.md`'s three-buckets section is where ADR-0087's
+  boot-seed carve-out belongs and had never landed; added there (and mirrored in `CLAUDE.md` and
+  the `storage-schema-change` skill) rather than existing only in the ADR and this file.
+- **Every gateway read that could resolve a name twice now resolves it once and binds the uuid**
+  ([#627](https://github.com/hyperscaleav/omniglass/issues/627) Task 10, ahead of the placement-scoped
+  uniqueness DDL below). A first pass (`840066a`) converted roughly 40 inline scalar name subqueries
+  gateway-wide to resolve a reference once via `scopedByName` and bind the resulting uuid. A controller
+  trace rejected that pass's own deferral of the collection ingest write path: `current_values.go`,
+  `settlement.go`, and `property_samples.go` still resolved a component, system, or location by an
+  inline name subquery on the hot path, which the moment two rows shared a name would raise SQLSTATE
+  21000 or silently fail a CHECK constraint; the same fix round also found `EffectiveProperties` and
+  `EffectiveMetrics` resolving their owner inside a CTE rather than a scalar subquery, which never
+  raises 21000 at all, it silently joins rows from every same-named owner into one answer, and a
+  `CreateSystem`/`UpdateSystem` recompute passing a system's own freshly-written name, with its id
+  already in hand, into the health rollup (`d64b314`). A 30-agent adversarial sweep then found six
+  more of the same class the first two passes had missed: the node ingest lane discarding a task's own
+  component uuid for a re-derived name at four downstream sinks (`cab918e`), the push telemetry route
+  authorizing by id then publishing `comp.Name` (`dd92017`), five role-choice writes binding a raw name
+  into a scalar subquery (`47864bc`), a standard-owned role recompute re-deriving conforming systems'
+  ids from names and raising an unmapped `ErrAmbiguousName` that rolled back the whole write rather
+  than failing usefully (`4707bcb`), the command and reconciliation routes re-deriving an id from a
+  name the gateway had just resolved moments earlier (`63b715e`), and effective tags' own `?system=`
+  filter repeating the CTE silent-union shape in its `seed_sys` clause (`7802b32`). A later,
+  independent hunt, told to ignore all prior analysis, wrote a scanner over every SQL string literal in
+  the tree and verified closure rather than finding anything new: only four production sites still
+  resolve by bare-name scalar subquery, all four verified safe (the three `*NameTaken` advisories, and
+  `roleOwnerExpr`'s standard branch, whose caller pre-resolves the id). No caller-observable behaviour
+  changed throughout: every existing fixture used globally-distinct names, so the whole suite stayed
+  green, and the new duplicate-name tests (`b84a398`, `d889bbc`, `839d4d1`) are the only regression net
+  this class of bug now has. Filed [#641](https://github.com/hyperscaleav/omniglass/issues/641):
+  effective tags' `?system=` filter still resolves outside the caller's own read scope, narrowed by the
+  uuid bind but not closed, deliberately left for a later slice since this task's own contract was to
+  change no observable behaviour.
+- **A location, system, or component name is unique within its placement, not the whole estate**
+  ([#627](https://github.com/hyperscaleav/omniglass/issues/627) Task 11, `f132a80`, `87207b7`,
+  [ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup)).
+  Each of the three tables trades its global `UNIQUE (name)` constraint for a set of partial unique
+  indexes, one per placement bucket, plus a plain btree for the ambiguity scan a bare-name resolve now
+  has to run. `component` and `system` each carry three buckets (parented, located-but-unparented,
+  orphan/root); `location`, which carries no `location_id` column of its own, carries two (parented,
+  root). A bare name matching more than one row in the caller's scope is a `409` naming the candidates. A review round (fix round 1: `f55daa2`,
+  `829dc6e`, `9e3c017`, `0e4aea0`, `c097dd6`, the last also rekeying the console's tree builders
+  (Components, Systems, Locations, the placement pickers) off the now-ambiguous name onto uuid) closed
+  its own findings but introduced two new criticals in doing so: a cross-tier scope check that denied
+  every non-all-scoped caller on a write carrying a location or system binding, and a scoped
+  `component:read` caller's effective-tags system band silently vanishing, neither caught by a fresh
+  full test run because no existing test covered a scoped non-all principal on a write path carrying a
+  cross-tier binding. The next round fixed both by a byte-identical revert to the pre-task baseline
+  rather than a new authorization posture, with two tests genuinely red against the introducing round
+  closing the coverage hole that had let them ship (`ba8a9e6`). The same round converged three
+  near-identical scope-resolution functions (`scopedByName` / `scopedByNameInScope` /
+  `resolveScopedRef`) into one, `resolveRef`, with a policy axis for the read-versus-write disclosure
+  split, on the ruling that the converged primitive, checking its caller-supplied scope against the
+  resource it was actually resolved for, would have caught both criticals at the first scoped test
+  rather than after (`1cf8d74`, `9de2fe7`). A forward-insurance tier guard landed on the same
+  primitive, documented as unable to fire on any input the current code produces (`48db30f`). Six
+  known edges this convergence ships with, stated rather than hidden, are recorded in
+  [ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup).
+- **A dotted address resolves to a uuid, beside the existing uuid-or-name dual accept**
+  ([#627](https://github.com/hyperscaleav/omniglass/issues/627) Task 12, `72147c1`, `87e170d`,
+  `3773fe1`, `e09e7b0`). `boi.17c.415a.$comp.display-1` parses to a location-tree walk plus a plane
+  switch (`$comp` / `$sys`, `$role` reserved but unresolved) plus a plane-local descent, every segment
+  validated against the entity name rule before it reaches a query; a percent-encoded slash arrives at
+  the handler already decoded, closing the smuggling path a preflight probe had found. A registry
+  whose names are a single global token (`node`, `tag`, the lane types) refuses a dotted ref up front
+  rather than 404ing silently (`ec12bf2`). A review pass found the resolved address's not-found case
+  reaching a create's body-reference field as the wrong status (a `404` naming the entity being
+  `PATCH`ed rather than the missing reference); fixed by folding it to the entity's own sentinel one
+  hop upstream of the generic path-param mapper, closing the same defect shape at every other
+  body-reference site for free (`a71a549`). The route census was hand-derived twice and wrong both
+  times before the third count (82 operations, 57 tree-addressable, 25 single-token) was verified
+  against the registration functions rather than a literal-string grep: the tag-binding routes are
+  built by string concatenation, invisible to grep, the second time on this branch a route-builder
+  helper defeated a coverage sweep the same way.
+  [ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup)
+  records the address grammar and its known edges; this slice is what makes it real.
+- **A placement change is its own gated act, `:move`, not a `PATCH` field**
+  ([#627](https://github.com/hyperscaleav/omniglass/issues/627) Task 13, `b4449f3`,
+  [ADR-0088](/architecture/decisions/#adr-0088-a-placement-change-is-an-authorization-act-so-a-move-is-its-own-verb)).
+  `parent` and `location` leave the component, system, and location `PATCH` bodies entirely, a
+  **wire-breaking** change the rolled-up PR title carries a `BREAKING CHANGE:` footer for. `:move`
+  writes its own audit verb rather than the generic `update`, recomputes a platform-owned generated
+  name at both ends of a component or system move, and closes a real gap the split surfaced: the old
+  `PATCH`'s reparent branch only guarded a non-empty parent, so an explicit empty string cleared
+  `parent_id` to root with no scope check at all, letting a scope-limited principal walk a row out of
+  every subtree their grant ever covered; `MoveComponent` / `MoveSystem` now require the same
+  all-scoped grant creating a root already needed. `MoveLocation` deliberately gains no matching
+  clear-to-root capability, since none existed before this split either. A review pass found the
+  console still `PATCH`ing `parent` through the now-`additionalProperties:false` body, `422`ing an
+  entire location save over an unrelated field; fixed with tests that assert HTTP method and path and
+  throw on any unexpected request, the shape that would have caught the original bug where three tests
+  mocking `fetch` at the body level had not (`1382567`). Filed
+  [#642](https://github.com/hyperscaleav/omniglass/issues/642): a location move leaves both the old and
+  new ancestor chains' recorded health verdicts stale, a pre-existing gap this split carries forward
+  rather than introduces or closes.
+- **A component's name can generate itself from its type**
+  ([#627](https://github.com/hyperscaleav/omniglass/issues/627) Task 14, `3a571f1`,
+  [ADR-0090](/architecture/decisions/#adr-0090-a-derived-value-is-a-default-that-tracks-until-touched)).
+  Left blank on create, the platform mints `<stem>-<n>` from the resolved `component_type` chain and
+  the next free ordinal among siblings sharing that stem in the placement scope, serialized by a
+  transaction-scoped advisory lock keyed on stem plus scope rather than a `23505` retry. `name_generated` tracks who holds the pen: true on a
+  generated create, false forever once `:rename` touches it, true again only through the new
+  `:resetName` (gated by the same `component:rename` token `:rename` uses). A `:move` or a product
+  reclassify recomputes a still-platform-owned name in the same transaction as the write that changed
+  its inputs; an operator-typed name is never touched by either. A review pass found the generator
+  trusted an unvalidated `component_type.stem` (an operator could mint a dotted or spaced stem that
+  would either split under the address grammar above or violate the entity name rule outright), fixed
+  by validating a stem at `component_type` write time with the same rule as a name (`77febe5`); a
+  second pass found the malformed-stem fix had left the **absent** case open, an empty resolved stem
+  minting the entity name `-1`, fixed by refusing an empty stem in the generator itself, requiring a
+  stem on a root `component_type` (which has no ancestor to inherit one from), and validating the
+  generated name as an enforced postcondition rather than an asserted comment (`49b84f6`).
+- **A component, system, or location's resolved path, its renders, and the console's own addressing
+  all move to uuid** ([#627](https://github.com/hyperscaleav/omniglass/issues/627) Task 15, `c381060`,
+  `cc8918b`, `280f95f`, `cb164ad`). A `GET` / `LIST` response now carries `path`, `path_segments`, and
+  two display-only `renders` (`dash`, the accessor stripped; `bare`, the final segment further
+  compacted to the component's `component_type.abbrev`), computed by walking the entity's own
+  placement, never a system it happens to belong to; a `LIST` skips the extra queries the bare render's
+  abbrev needs, since no console surface reads it there. The console's URL, every panel, and every
+  write on a component, system, and location detail page now address by `id`, ending the bare-name
+  addressing this epic exists to retire, with a disambiguation chooser offered when a search matches
+  more than one same-named row. A review pass found the chooser pointed at a dead end: every panel on
+  the detail page it opened still addressed by name, so the exact case the epic legalizes, two
+  same-named components in different rooms, landed an operator on a page where every write `409`d
+  (`bfdd7c8`); traced and fixed panel by panel to the wire. A second review pass found three more
+  swapped-value consumers the edit sites had not been traced past (a raw uuid painted in a field
+  labelled "Component", a reachability-panel cache key still built from the old name, a systems-list
+  health badge still keyed on name against panels now invalidating by uuid), the fourth time on this
+  branch that enumerating consumers from the edit site rather than the value's type and usage missed a
+  real one (`2330954`, `01e4693`). Fixing the assign and add pickers to submit a uuid, above, closed
+  staffing but left an asymmetry open on the way out: unassigning a role or removing a member still
+  addressed the component by name through `UnassignRole` / `resolveMembershipEnds`, both resolving
+  estate-wide via `scopedByName`, so an operator could staff a role or add a member with a
+  duplicate-named component and then not undo it. A new `loadByRefWithin` primitive resolves within the
+  relation actually being edited (this role's occupants, this system's members) instead of the whole
+  estate, closing the gap with no wire change (`5a97266`, closing
+  [#645](https://github.com/hyperscaleav/omniglass/issues/645)). `render_test.go`'s ten cases were
+  found to exercise a test-local reimplementation of the segment shape rather than `PathOf` itself, the
+  fourth occurrence on this branch of a test built on a reimplementation of the thing it is meant to
+  catch; rewritten to assert against real fixture rows (`79c2ccb`).

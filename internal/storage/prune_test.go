@@ -30,7 +30,7 @@ func TestPruneSamples(t *testing.T) {
 
 	// A minimal estate: one component, one type per lane. Rows are inserted with
 	// explicit timestamps so age is exact, not racy.
-	mustExec(t, conn, `insert into component (name) values ('prune-c1')`)
+	mustExec(t, conn, `insert into component (name, product_id) values ('prune-c1', (select id from product where name = 'generic-device'))`)
 	mustExec(t, conn, `insert into property_type (name, data_type) values ('prune-power', 'string')`)
 	mustExec(t, conn, `insert into metric_type (name, data_type) values ('prune-rtt', 'float')`)
 

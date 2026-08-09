@@ -268,99 +268,6 @@ omniglass bootstrap <username> [flags]
 | `--password` | string | (none) | owner password, so the owner can sign in to the console (optional) |
 | `--ttl` | duration | `2160h0m0s` | how long the bootstrap token is valid before it expires (max 365 days) |
 
-## `omniglass capability`
-
-Commands for the capability resource
-
-### `omniglass capability create`
-
-Create a capability
-
-```
-omniglass capability create [flags]
-```
-
-Creates a custom (non-official) capability. Gated by capability:create.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--display-name` | string | (none) | What an operator reads in pickers and lists |
-| `--name` | string | (none) | The globally unique name; renameable |
-
-Example:
-
-```sh
-omniglass capability create --display-name display_name --name name
-```
-
-### `omniglass capability delete`
-
-Delete a capability
-
-```
-omniglass capability delete <id>
-```
-
-Deletes a custom capability, refused if official (422). Gated by capability:delete.
-
-Example:
-
-```sh
-omniglass capability delete <id>
-```
-
-### `omniglass capability get`
-
-Get a capability
-
-```
-omniglass capability get <id>
-```
-
-Fetches a capability by id. Gated by capability:read.
-
-Example:
-
-```sh
-omniglass capability get <id>
-```
-
-### `omniglass capability list`
-
-List capabilities
-
-```
-omniglass capability list
-```
-
-Lists the capability registry, ordered alphabetically by display name. Populates the capability picker on the product form. Gated by capability:read.
-
-Example:
-
-```sh
-omniglass capability list
-```
-
-### `omniglass capability update`
-
-Update a capability
-
-```
-omniglass capability update <id> [flags]
-```
-
-Patches a custom capability's display_name. Official capabilities are read-only (422). Gated by capability:update.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--display-name` | string | (none) | A new operator-facing label |
-
-Example:
-
-```sh
-omniglass capability update <id>
-```
-
 ## `omniglass command-type`
 
 Commands for the command-type resource
@@ -480,11 +387,10 @@ Raise an alarm on a component
 omniglass component alarm create <name> [flags]
 ```
 
-Records a condition on this component and the capabilities it degrades, then recomputes health in the same transaction: any role requiring a degraded capability can no longer be filled by this component, and its system and location verdicts move with it. An unknown capability is a 422. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (a critical alarm), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser (info or warning) alarm degrades the component but leaves it occupying its roles. Gated by component:update; an out-of-scope component is a non-disclosing 404.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--capabilities` | string | (none) | The capabilities this condition degrades; a role requiring one of them can no longer be filled by this component |
 | `--dedup-key` | string | (none) | The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate |
 | `--message` | string | (none) | What is wrong, for the operator reading it later |
 | `--severity` | string | (none) | How bad it is; critical puts the component itself in outage |
@@ -519,7 +425,7 @@ List a component's alarms
 omniglass component alarm list <name> [flags]
 ```
 
-What is currently wrong with this component, newest first, each with the capabilities it degrades. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+What is currently wrong with this component, newest first. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -531,62 +437,6 @@ Example:
 omniglass component alarm list <name>
 ```
 
-### `omniglass component capability`
-
-Commands for the capability resource
-
-#### `omniglass component capability delete`
-
-Clear a capability declaration on a component
-
-```
-omniglass component capability delete <name> <capability>
-```
-
-Removes the component's own fact about the capability, so it falls back to whatever its product declares. Clearing a fact the component never declared is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
-
-Example:
-
-```sh
-omniglass component capability delete <name> <capability>
-```
-
-#### `omniglass component capability list`
-
-List a component's effective capabilities
-
-```
-omniglass component capability list <name>
-```
-
-What this component actually provides: the capabilities its product declares, plus the ones the component adds, minus the ones it suppresses. This is the set the role-assignment guard checks, so a productless component that declares its own can still be staffed. Gated by component:read; an out-of-scope component is a non-disclosing 404.
-
-Example:
-
-```sh
-omniglass component capability list <name>
-```
-
-#### `omniglass component capability update`
-
-Declare a capability on a component
-
-```
-omniglass component capability update <name> <capability> [flags]
-```
-
-Records this component's own fact about a capability: present true adds one its product does not claim, present false suppresses one it does. Idempotent. An unknown capability is a 422; an unknown or out-of-scope component is a non-disclosing 404 (the component is resolved in scope first). Gated by component:update.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--present` | string | (none) | True to add the capability, false to suppress one the product declares |
-
-Example:
-
-```sh
-omniglass component capability update <name> <capability> --present present
-```
-
 ### `omniglass component checkName`
 
 Check a component name
@@ -595,11 +445,13 @@ Check a component name
 omniglass component checkName [flags]
 ```
 
-Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.
+Reports whether a proposed name is a valid slug and currently free within the given placement (parent wins over location; neither means the unplaced/root bucket). Advisory (Save is still gated by the unique constraint). Gated by component:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--location` | string | (none) | The location (by name or uuid) the entity would be placed at, if any and if unparented; ignored by the locations check |
 | `--name` | string | (none) | The proposed name to check |
+| `--parent` | string | (none) | The parent (by name or uuid) the entity would be created under, if any; omit for a root/unplaced check |
 
 Example:
 
@@ -642,21 +494,21 @@ Create a component
 omniglass component create [flags]
 ```
 
-Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location. Gated by component:create.
+Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) | What an operator reads; the name is the address |
 | `--location` | string | (none) | Location name this component is placed at |
-| `--name` | string | (none) | Globally unique name (the address; lowercase letters, digits, hyphens) |
+| `--name` | string | (none) | Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the product's type. |
 | `--parent` | string | (none) | Parent component name; omit for a root component |
-| `--product` | string | (none) | Product id (catalog SKU) this component is an instance of |
+| `--product` | string | (none) | Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled. |
 | `--system` | string | (none) | Primary system name this component belongs to |
 
 Example:
 
 ```sh
-omniglass component create --name name
+omniglass component create
 ```
 
 ### `omniglass component delete`
@@ -707,11 +559,11 @@ Effective tags for a component
 omniglass component effective-tag list <name> [flags]
 ```
 
-Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.
+Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--system` | string | (none) | Resolve against this system, which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand. |
+| `--system` | string | (none) | Resolve against this system, name or uuid (ADR-0062), which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand. |
 
 Example:
 
@@ -867,6 +719,27 @@ Example:
 omniglass component metric list <name>
 ```
 
+### `omniglass component move`
+
+Move a component
+
+```
+omniglass component move <name> [flags]
+```
+
+Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own verdict is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--location` | string | (none) | Relocates the component to this location name. An empty string clears its placement. |
+| `--parent` | string | (none) | Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component (requires an all-scoped move grant). |
+
+Example:
+
+```sh
+omniglass component move <name>
+```
+
 ### `omniglass component property`
 
 Commands for the property resource
@@ -995,12 +868,28 @@ Moves the component's name, the address an operator types and every external ref
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | string | (none) | The new globally unique name (lowercase letters, digits, hyphens) |
+| `--name` | string | (none) | The new name, unique within its placement (lowercase letters, digits, hyphens) |
 
 Example:
 
 ```sh
 omniglass component rename <name> --name name
+```
+
+### `omniglass component resetName`
+
+Regenerate a component's name
+
+```
+omniglass component resetName <name>
+```
+
+Hands the pen back to the platform: regenerates the name from the component's current type and placement (the same "<stem>-<n>" rule a nameless create applies) and marks it name_generated, whether or not it already was. Gated by component:rename, the same token :rename uses: it changes the name, exactly that permission's blast radius.
+
+Example:
+
+```sh
+omniglass component resetName <name>
 ```
 
 ### `omniglass component setTag`
@@ -1032,19 +921,103 @@ Update a component
 omniglass component update <name> [flags]
 ```
 
-Patches a component's display_name, product, location, or parent. The name is not patchable: renaming is the :rename custom method. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+Patches a component's display_name or product. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. Gated by component:update; read and update scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) | A new operator-facing label |
-| `--location` | string | (none) | Relocates the component to this location name. An empty string clears its placement. |
-| `--parent` | string | (none) | Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component. |
-| `--product` | string | (none) | Re-classifies the component to this product (catalog SKU). An empty string clears it. Explicitly-set property values persist; the new product's contract defaults follow. |
+| `--product` | string | (none) | Re-classifies the component to this product (catalog SKU), by name or uuid. Required once set: an empty string is refused (422), not a clear. Explicitly-set property values persist; the new product's contract defaults follow. |
 
 Example:
 
 ```sh
 omniglass component update <name>
+```
+
+## `omniglass component-type`
+
+Commands for the component-type resource
+
+### `omniglass component-type create`
+
+Create a component type
+
+```
+omniglass component-type create [flags]
+```
+
+Creates a custom (non-official) component_type, optionally under a parent. Gated by component_type:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--abbrev` | string | (none) | A compact form of display_name; omit to inherit the parent's |
+| `--default-tags` | string | (none) | Tags every instance of this type starts with |
+| `--display-name` | string | (none) | What an operator reads in pickers and lists |
+| `--icon` | string | (none) | A glyph key; omit to inherit the parent's |
+| `--name` | string | (none) | The globally unique name |
+| `--parent-id` | string | (none) | The parent component_type, by name or uuid; omit for a root type |
+| `--stem` | string | (none) | The auto-generated component name's prefix; omit to inherit the parent's. Lowercase letters, digits, and hyphens. |
+
+Example:
+
+```sh
+omniglass component-type create --display-name display_name --name name
+```
+
+### `omniglass component-type delete`
+
+Delete a component type
+
+```
+omniglass component-type delete <id>
+```
+
+Deletes a custom component_type, refused if official (422) or still a parent of another component_type (409). Gated by component_type:delete.
+
+Example:
+
+```sh
+omniglass component-type delete <id>
+```
+
+### `omniglass component-type list`
+
+List component types
+
+```
+omniglass component-type list
+```
+
+Lists the component_type registry (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by display name. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.
+
+Example:
+
+```sh
+omniglass component-type list
+```
+
+### `omniglass component-type update`
+
+Update a component type
+
+```
+omniglass component-type update <id> [flags]
+```
+
+Patches a custom component_type's display_name, stem, icon, abbrev, or default_tags. Official types are read-only (422). Gated by component_type:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--abbrev` | string | (none) | A new compact form |
+| `--default-tags` | string | (none) | Replaces the default-tag set; omit to leave unchanged |
+| `--display-name` | string | (none) | A new operator-facing label |
+| `--icon` | string | (none) | A new glyph key |
+| `--stem` | string | (none) | A new name prefix. Lowercase letters, digits, and hyphens. |
+
+Example:
+
+```sh
+omniglass component-type update <id>
 ```
 
 ## `omniglass driver`
@@ -1454,11 +1427,13 @@ Check a location name
 omniglass location checkName [flags]
 ```
 
-Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.
+Reports whether a proposed name is a valid slug and currently free within the given placement (under the given parent, or among roots when no parent is given). Advisory (Save is still gated by the unique constraint). Gated by location:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--location` | string | (none) | The location (by name or uuid) the entity would be placed at, if any and if unparented; ignored by the locations check |
 | `--name` | string | (none) | The proposed name to check |
+| `--parent` | string | (none) | The parent (by name or uuid) the entity would be created under, if any; omit for a root/unplaced check |
 
 Example:
 
@@ -1480,7 +1455,7 @@ Creates a location, optionally under a parent (a root needs an all-scoped grant)
 |---|---|---|---|
 | `--display-name` | string | (none) | What an operator reads; the name is the address |
 | `--location-type` | string | (none) | The location_type, by name or uuid (campus, building, ...) |
-| `--name` | string | (none) | Globally unique name (the address; lowercase letters, digits, hyphens) |
+| `--name` | string | (none) | Name, unique within its placement (the address; lowercase letters, digits, hyphens) |
 | `--parent` | string | (none) | Parent location name; omit for a root location |
 
 Example:
@@ -1533,7 +1508,7 @@ Read a location's health
 omniglass location health list <name>
 ```
 
-The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, the capability, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
 
 Example:
 
@@ -1591,6 +1566,26 @@ Example:
 
 ```sh
 omniglass location metric list <name>
+```
+
+### `omniglass location move`
+
+Move a location
+
+```
+omniglass location move <name> [flags]
+```
+
+Re-parents a location (a tree move): parent is required (422 if omitted), cycle-guarded, and placement-validated against the resolved location_type. Moving to root is not supported (422): MoveLocation gains no clear-to-root capability locations have never had. A separate act from update, and a separately grantable one (location:move), because a placement change is an authorization act, not a label edit. Recorded under its own audit verb, move, distinct from update. Does not recompute health. A taken name at the destination is a 409. Gated by location:move; the read and move scopes drive the 404 versus 403 split.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--parent` | string | (none) | Re-parents the location (a tree move) to this location name; cycle-guarded and placement-validated. Moving to root is not supported. |
+
+Example:
+
+```sh
+omniglass location move <name>
 ```
 
 ### `omniglass location property`
@@ -1681,7 +1676,7 @@ Moves the location's name, the address an operator types and every external refe
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | string | (none) | The new globally unique name (lowercase letters, digits, hyphens) |
+| `--name` | string | (none) | The new name, unique within its placement (lowercase letters, digits, hyphens) |
 
 Example:
 
@@ -1718,13 +1713,12 @@ Update a location
 omniglass location update <name> [flags]
 ```
 
-Patches a location's display_name, location_type, or parent (a move). The name is not patchable: renaming is the :rename custom method. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
+Patches a location's display_name or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) | A new operator-facing label |
 | `--location-type` | string | (none) | Re-types the location: a location_type, by name or uuid |
-| `--parent` | string | (none) | Re-parents the location (a tree move) to this location name, cycle-guarded and placement-validated. Moving to root is not supported via update this slice. |
 
 Example:
 
@@ -2866,14 +2860,15 @@ Create a product
 omniglass product create [flags]
 ```
 
-Creates a custom (non-official) product and sets its capabilities. Gated by product:create.
+Creates a custom (non-official) product, classified under a component_type. kind and component_type are both required; kind refuses vm (retired, folded into app). Gated by product:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--capabilities` | string | (none) | Capability names the product provides (the default set its components inherit) |
+| `--component-type` | string | (none) | The component_type this product is classified under (mic, camera, ...), by name or uuid; every product must belong to one of the tree's nodes. The generics (generic-device, generic-app, generic-service) fit anything not yet modeled more specifically. |
 | `--display-name` | string | (none) | What an operator reads in pickers and lists |
 | `--driver-id` | string | (none) | The driver that talks to it, by handle or uuid |
-| `--kind` | string | (none) | What class of thing the product is |
+| `--icon` | string | (none) | A product-level icon override; unset inherits the component_type's icon |
+| `--kind` | string | (none) | What class of thing the product is. vm is retired (folded into app); required, no default, so every product states its class explicitly. |
 | `--name` | string | (none) | The globally unique name; renameable |
 | `--parent-product-id` | string | (none) | The parent product, by handle or uuid |
 | `--vendor-id` | string | (none) | The vendor, by handle or uuid |
@@ -2881,7 +2876,7 @@ Creates a custom (non-official) product and sets its capabilities. Gated by prod
 Example:
 
 ```sh
-omniglass product create --display-name display_name --name name
+omniglass product create --component-type component_type --display-name display_name --kind kind --name name
 ```
 
 ### `omniglass product delete`
@@ -2908,7 +2903,7 @@ Get a product
 omniglass product get <id>
 ```
 
-Fetches a product by its name or its uuid, with its capabilities. Either form resolves, so `omniglass product get acme-soundbar` and the uuid are interchangeable. Gated by product:read.
+Fetches a product by its name or its uuid. Either form resolves, so `omniglass product get acme-soundbar` and the uuid are interchangeable. Gated by product:read.
 
 Example:
 
@@ -2924,7 +2919,7 @@ List products
 omniglass product list
 ```
 
-Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, and capabilities. Gated by product:read.
+Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
 
 Example:
 
@@ -3054,13 +3049,14 @@ Update a product
 omniglass product update <id> [flags]
 ```
 
-Patches a custom product's display_name, vendor, driver, kind, or parent, and replaces its capabilities when provided. Official products are read-only (422). Gated by product:update.
+Patches a custom product's display_name, vendor, driver, kind, component_type, icon, or parent. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--capabilities` | string | (none) | Replaces the capability-name set; omit to leave unchanged |
+| `--component-type` | string | (none) | Reclassifies the product to this component_type, by name or uuid; component_type is required, so this only reclassifies, it never clears |
 | `--display-name` | string | (none) | A new operator-facing label |
 | `--driver-id` | string | (none) | A new driver, by handle or uuid |
+| `--icon` | string | (none) | A new icon override |
 | `--kind` | string | (none) | A new product class |
 | `--parent-product-id` | string | (none) | A new parent product, by handle or uuid |
 | `--vendor-id` | string | (none) | A new vendor, by handle or uuid |
@@ -3714,7 +3710,7 @@ List a standard's declared roles
 omniglass standard role list <id>
 ```
 
-Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the capabilities a component must provide to fill it. Gated by standard:read.
+Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. Gated by standard:read.
 
 Example:
 
@@ -3730,13 +3726,17 @@ Declare a role on a standard
 omniglass standard role update <id> <role> [flags]
 ```
 
-Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent). The capability list replaces the required set wholesale. An unknown standard or capability is a 422. Gated by standard:update.
+Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent). accepted_types and pinned_products each replace their set wholesale. An unknown standard, type, or product is a 422. Gated by standard:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--capabilities` | string | (none) | The capabilities a component must ALL provide; replaces the required set wholesale |
+| `--accepted-types` | string | (none) | The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type |
+| `--alternate` | string | (none) | The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626). Omit to leave whatever is already declared unchanged; an empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422 |
+| `--capacity` | string | (none) | The most components the role will accept; must be at least quorum. Omit to leave whatever is already declared unchanged (or unbounded on first declare); there is no way to explicitly clear a capacity back to unbounded once set |
 | `--display-name` | string | (none) | The role's human label; defaults to the role name |
 | `--impact` | string | (none) | What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display |
+| `--pinned-products` | string | (none) | If set, a filling component's product must be one of these; replaces the pinned set wholesale. Omit or empty accepts any product of an accepted type |
+| `--position-labels` | string | (none) | Human labels for each position within the role, by index; replaces the label set wholesale. Omit or empty clears labelling |
 | `--quorum` | string | (none) | How many components must fill the role; omit for one |
 
 Example:
@@ -3778,11 +3778,13 @@ Check a system name
 omniglass system checkName [flags]
 ```
 
-Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.
+Reports whether a proposed name is a valid slug and currently free within the given placement (parent wins over location; neither means the root/unplaced bucket). Advisory (Save is still gated by the unique constraint). Gated by system:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--location` | string | (none) | The location (by name or uuid) the entity would be placed at, if any and if unparented; ignored by the locations check |
 | `--name` | string | (none) | The proposed name to check |
+| `--parent` | string | (none) | The parent (by name or uuid) the entity would be created under, if any; omit for a root/unplaced check |
 
 Example:
 
@@ -3804,7 +3806,7 @@ Creates a system, optionally under a parent (a root needs an all-scoped grant) a
 |---|---|---|---|
 | `--display-name` | string | (none) | What an operator reads; the name is the address |
 | `--location` | string | (none) | Location name this system is placed at |
-| `--name` | string | (none) | Globally unique name (the address; lowercase letters, digits, hyphens) |
+| `--name` | string | (none) | Name, unique within its placement (the address; lowercase letters, digits, hyphens) |
 | `--parent` | string | (none) | Parent system name; omit for a root system |
 | `--standard-id` | string | (none) | The standard it conforms to, by handle or uuid; omit for a one-off system |
 
@@ -3858,7 +3860,7 @@ Read a system's health
 omniglass system health list <name>
 ```
 
-The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role the required capabilities an alarm has taken away plus the alarms that took them. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. A role that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this role's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 Example:
 
@@ -3986,6 +3988,27 @@ Example:
 omniglass system metric list <name>
 ```
 
+### `omniglass system move`
+
+Move a system
+
+```
+omniglass system move <name> [flags]
+```
+
+Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. Gated by system:move; read and move scopes drive the 404 versus 403 split.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--location` | string | (none) | Relocates the system to this location name. An empty string clears its placement. |
+| `--parent` | string | (none) | Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system (requires an all-scoped move grant). |
+
+Example:
+
+```sh
+omniglass system move <name>
+```
+
 ### `omniglass system property`
 
 Commands for the property resource
@@ -4074,7 +4097,7 @@ Moves the system's name, the address an operator types and every external refere
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | string | (none) | The new globally unique name (lowercase letters, digits, hyphens) |
+| `--name` | string | (none) | The new name, unique within its placement (lowercase letters, digits, hyphens) |
 
 Example:
 
@@ -4114,7 +4137,7 @@ Assign a component to a role
 omniglass system role assignment update <name> <role> <component>
 ```
 
-Puts this component in the role for this system. Refused with a 422 naming the missing capabilities when the component does not provide everything the role requires (its product's capabilities, plus what it adds, minus what it suppresses). Idempotent. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+Puts this component in the role for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the role accepts, or (if the role pins products) its product not one of them. A role with no accepted types takes any type. Idempotent. Gated by system:update; an out-of-scope system is a non-disclosing 404.
 
 Example:
 
@@ -4146,12 +4169,33 @@ List a system's effective roles
 omniglass system role list <name>
 ```
 
-Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the capabilities it requires, the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the types it accepts (and products it pins, if any), the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 Example:
 
 ```sh
 omniglass system role list <name>
+```
+
+#### `omniglass system role swapPositions`
+
+Exchange two occupants' positions within a role
+
+```
+omniglass system role swapPositions <name> <role> [flags]
+```
+
+Exchanges the positions of whichever components currently hold position and with within this role: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--position` | string | (none) | One of the two positions to exchange |
+| `--with` | string | (none) | The other position to exchange with |
+
+Example:
+
+```sh
+omniglass system role swapPositions <name> <role> --position position --with with
 ```
 
 #### `omniglass system role update`
@@ -4162,13 +4206,17 @@ Declare a role on a system
 omniglass system role update <name> <role> [flags]
 ```
 
-Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. The capability list replaces the required set wholesale. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. accepted_types and pinned_products each replace their set wholesale. Gated by system:update; an out-of-scope system is a non-disclosing 404.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--capabilities` | string | (none) | The capabilities a component must ALL provide; replaces the required set wholesale |
+| `--accepted-types` | string | (none) | The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type |
+| `--alternate` | string | (none) | The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626). Omit to leave whatever is already declared unchanged; an empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422 |
+| `--capacity` | string | (none) | The most components the role will accept; must be at least quorum. Omit to leave whatever is already declared unchanged (or unbounded on first declare); there is no way to explicitly clear a capacity back to unbounded once set |
 | `--display-name` | string | (none) | The role's human label; defaults to the role name |
 | `--impact` | string | (none) | What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display |
+| `--pinned-products` | string | (none) | If set, a filling component's product must be one of these; replaces the pinned set wholesale. Omit or empty accepts any product of an accepted type |
+| `--position-labels` | string | (none) | Human labels for each position within the role, by index; replaces the label set wholesale. Omit or empty clears labelling |
 | `--quorum` | string | (none) | How many components must fill the role; omit for one |
 
 Example:
@@ -4206,13 +4254,11 @@ Update a system
 omniglass system update <name> [flags]
 ```
 
-Patches a system's display_name, standard, location, or parent. The name is not patchable: renaming is the :rename custom method. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+Patches a system's display_name or standard. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard field follows the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system), a name sets. Gated by system:update; read and update scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) | A new operator-facing label |
-| `--location` | string | (none) | Relocates the system to this location name. An empty string clears its placement. |
-| `--parent` | string | (none) | Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system. |
 | `--standard-id` | string | (none) | A new standard, by handle or uuid; "" clears it (a one-off system) |
 
 Example:

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 )
 
@@ -179,7 +180,10 @@ func (UnimplementedGateway) UpdateLocation(context.Context, string, string, Loca
 func (UnimplementedGateway) RenameLocation(context.Context, string, string, string, scope.Set, scope.Set) (*Location, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) LocationNameTaken(context.Context, string) (bool, error) {
+func (UnimplementedGateway) MoveLocation(context.Context, string, string, LocationMove, scope.Set, scope.Set) (*Location, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) LocationNameTaken(context.Context, string, *string) (bool, error) {
 	return false, nil
 }
 func (UnimplementedGateway) DeleteLocation(context.Context, string, string, scope.Set, scope.Set) error {
@@ -215,7 +219,10 @@ func (UnimplementedGateway) UpdateSystem(context.Context, string, string, System
 func (UnimplementedGateway) RenameSystem(context.Context, string, string, string, scope.Set, scope.Set) (*System, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) SystemNameTaken(context.Context, string) (bool, error) {
+func (UnimplementedGateway) MoveSystem(context.Context, string, string, SystemMove, scope.Set, scope.Set) (*System, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) SystemNameTaken(context.Context, string, *string, *string) (bool, error) {
 	return false, nil
 }
 func (UnimplementedGateway) DeleteSystem(context.Context, string, string, scope.Set, scope.Set) error {
@@ -239,7 +246,13 @@ func (UnimplementedGateway) UpdateComponent(context.Context, string, string, Com
 func (UnimplementedGateway) RenameComponent(context.Context, string, string, string, scope.Set, scope.Set) (*Component, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) ComponentNameTaken(context.Context, string) (bool, error) {
+func (UnimplementedGateway) MoveComponent(context.Context, string, string, ComponentMove, scope.Set, scope.Set) (*Component, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ResetComponentName(context.Context, string, string, scope.Set, scope.Set) (*Component, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ComponentNameTaken(context.Context, string, *string, *string) (bool, error) {
 	return false, nil
 }
 func (UnimplementedGateway) DeleteComponent(context.Context, string, string, scope.Set, scope.Set) error {
@@ -437,22 +450,30 @@ func (UnimplementedGateway) UpdateDriver(context.Context, string, string, Driver
 	return nil, nil
 }
 func (UnimplementedGateway) DeleteDriver(context.Context, string, string) error { return nil }
-func (UnimplementedGateway) UpsertCapability(context.Context, Capability) error { return nil }
-func (UnimplementedGateway) ListCapabilities(context.Context) ([]Capability, error) {
+
+func (UnimplementedGateway) UpsertComponentType(context.Context, ComponentType) error { return nil }
+func (UnimplementedGateway) ListComponentTypes(context.Context) ([]ComponentType, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) GetCapability(context.Context, string) (*Capability, error) {
+func (UnimplementedGateway) GetComponentType(context.Context, string) (*ComponentType, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) CreateCapability(context.Context, string, Capability) (*Capability, error) {
+func (UnimplementedGateway) CreateComponentType(context.Context, string, ComponentType) (*ComponentType, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpdateCapability(context.Context, string, string, CapabilityPatch) (*Capability, error) {
+func (UnimplementedGateway) UpdateComponentType(context.Context, string, string, ComponentTypePatch) (*ComponentType, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) DeleteCapability(context.Context, string, string) error { return nil }
-func (UnimplementedGateway) UpsertProduct(context.Context, Product) error           { return nil }
-func (UnimplementedGateway) ListProducts(context.Context) ([]Product, error)        { return nil, nil }
+func (UnimplementedGateway) DeleteComponentType(context.Context, string, string) error { return nil }
+func (UnimplementedGateway) ResolveTypeFacts(context.Context, uuid.UUID) (string, string, string, []string, error) {
+	return "", "", "", nil, nil
+}
+func (UnimplementedGateway) TypeIsWithin(context.Context, uuid.UUID, uuid.UUID) (bool, error) {
+	return false, nil
+}
+
+func (UnimplementedGateway) UpsertProduct(context.Context, Product) error    { return nil }
+func (UnimplementedGateway) ListProducts(context.Context) ([]Product, error) { return nil, nil }
 func (UnimplementedGateway) GetProduct(context.Context, string) (*Product, error) {
 	return nil, nil
 }
@@ -661,9 +682,6 @@ func (UnimplementedGateway) DeleteLocationTypeProperty(context.Context, string, 
 func (UnimplementedGateway) EffectiveRoles(context.Context, string, scope.Set) ([]EffectiveRole, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) ComponentCapabilities(context.Context, string) ([]string, error) {
-	return nil, nil
-}
 func (UnimplementedGateway) ListMembers(context.Context, string, scope.Set) ([]Member, error) {
 	return nil, nil
 }
@@ -685,6 +703,9 @@ func (UnimplementedGateway) AssignRole(context.Context, string, string, string, 
 func (UnimplementedGateway) UnassignRole(context.Context, string, string, string, string, scope.Set) error {
 	return nil
 }
+func (UnimplementedGateway) SwapPositions(context.Context, string, string, string, int, int, scope.Set) error {
+	return nil
+}
 func (UnimplementedGateway) ListSystemRoles(context.Context, string, string) ([]SystemRole, error) {
 	return nil, nil
 }
@@ -697,10 +718,16 @@ func (UnimplementedGateway) DeleteSystemRole(context.Context, string, string, st
 func (UnimplementedGateway) SeedSystemRole(context.Context, string, string, SystemRoleSpec) error {
 	return nil
 }
-func (UnimplementedGateway) SetComponentCapability(context.Context, string, string, string, bool) error {
+func (UnimplementedGateway) SeedRoleChoice(context.Context, string, string, RoleChoiceSpec) (map[string]string, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ResolveAlternate(context.Context, string, string, string) (string, error) {
+	return "", nil
+}
+func (UnimplementedGateway) DeleteChoice(context.Context, string, string, string, string) error {
 	return nil
 }
-func (UnimplementedGateway) ClearComponentCapability(context.Context, string, string, string) error {
+func (UnimplementedGateway) DeleteAlternate(context.Context, string, string, string, string, string) error {
 	return nil
 }
 func (UnimplementedGateway) RaiseAlarm(context.Context, string, string, AlarmSpec) (*Alarm, error) {

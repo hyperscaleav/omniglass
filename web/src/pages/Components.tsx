@@ -1,4 +1,4 @@
-import { createIdentity, entityLabel } from "../lib/entities";
+import { entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
@@ -13,16 +13,17 @@ import {
   COMPONENTS_KEY,
   listComponents,
   createComponent,
-  updateComponent, renameComponent,
+  updateComponent, renameComponent, resetComponentName,
   checkComponentName,
   deleteComponent,
 } from "../lib/components";
 import { SYSTEMS_KEY, listSystems } from "../lib/systems";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
+import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { openInEdit, consumePendingEdit } from "../lib/pendingedit";
-import { ChevronRight, Pencil, Plus, Save, Search, X } from "../components/icons";
+import { ChevronRight, Pencil, Plus, RotateCcw, Save, Search, X } from "../components/icons";
 import Button from "../components/Button";
 import TagPills from "../components/TagPills";
 import { tagFilterKeys } from "../lib/predicate";
@@ -34,8 +35,8 @@ import LogsPanel from "../components/LogsPanel";
 import { interfaceBlade, interfaceCreateBlade } from "../components/interfaceBlades";
 import PropertiesPanel, { propertyResolutionBlade, propertyBladeId } from "../components/PropertiesPanel";
 import ResolutionPanel from "../components/ResolutionPanel";
-import CapabilitiesPanel from "../components/CapabilitiesPanel";
 import AlarmsPanel from "../components/AlarmsPanel";
+import { hueFor } from "../lib/system_color";
 
 // Components: the device inventory, the first page built on the generic TreeList.
 // Components form a tree (parent_id) and each is bound to a primary system and a
@@ -52,6 +53,7 @@ type CompNode = ListNode & {
   product: string;
   systemName: string;
   systemAddr: string;
+  systemId: string;
   systemCount: number;
   locationName: string;
   tags: Record<string, string>;
@@ -83,8 +85,15 @@ export default function Components() {
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
   const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
+  // The product catalog for the create form's required Product picker (#614:
+  // component.product_id is NOT NULL, so every component is an instance of a
+  // product; the generics fit anything not yet modeled more specifically).
+  const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
 
-  const sysByName = createMemo(() => new Map((systems.data ?? []).map((s) => [s.name, s] as const)));
+  // Keyed on uuid, not name (#627: name uniqueness is scoped to placement, so
+  // two systems or two locations can legally share a name; a name-keyed map
+  // would silently collapse them to whichever sorted last).
+  const sysById = createMemo(() => new Map((systems.data ?? []).map((s) => [s.id, s] as const)));
   const locById = createMemo(() => new Map((locations.data ?? []).map((l) => [l.id, l] as const)));
 
   // One filter facet per tag key present across the components, derived from
@@ -95,31 +104,53 @@ export default function Components() {
     return tagFilterKeys<CompNode>([...keys].sort(), new Set(["name", "product", "system", "location"]));
   });
 
-  // Build the forest from the flat component list by parent_id. Roots are the
-  // components with no parent (or a parent outside the caller's scope).
+  // Build the forest from the flat component list by parent_id, keyed AND
+  // identified by uuid, not the bare name (#627: name uniqueness is scoped
+  // to placement, so two components can legally share a name). A name-keyed
+  // map would silently drop one component's node and reparent its children
+  // onto the survivor the moment two rooms hold the same name; a name-keyed
+  // node.id has the identical collision one layer down, in TreeList's own
+  // index (buildIndex keys byId on node.id too), which is what let a click on
+  // one duplicate's row open the other duplicate's blade. addr carries the
+  // name for the three navigate sites that still build a name-shaped URL
+  // (rename/create hand-off, the edit pencil) until the URL swap to uuid
+  // addressing lands; TreeList's focus resolution falls back to it.
   const nodes = createMemo<CompNode[]>(() => {
     const list = components.data ?? [];
-    const byId = new Map<string, CompNode>();
+    const byUuid = new Map<string, CompNode>();
     const lm = locById();
+    const sm = sysById();
     for (const c of list) {
-      byId.set(c.name, {
-        id: c.name,
+      byUuid.set(c.id, {
+        id: c.id,
+        addr: c.name,
         display: entityLabel(c),
+        // The server's own dash render of this component's dotted path
+        // (#627 Task 15): the list-mode ancestor sub-line falls back to it
+        // for a component with no component parent, which the page's own
+        // tree-local pathOf walk cannot reach across into the location
+        // tree.
+        pathRender: c.renders?.dash,
         children: [],
         actions: c.actions,
         product: c.product ?? "",
-        systemName: c.system ? entityLabel(sysByName().get(c.system) ?? { name: c.system }) : "",
-        systemAddr: c.system ?? "",
+        systemName: c.system_id ? entityLabel(sm.get(c.system_id) ?? { name: c.system ?? "" }) : "",
+        // The system facet's own filter value (#627 Task 15c): the uuid, not
+        // the name, so it matches the cross-entity drill from Systems.tsx
+        // (which now emits ?system=<uuid>) and never collides two
+        // same-named systems into one facet value.
+        systemAddr: c.system_id ?? "",
+        systemId: c.system_id ?? "",
         systemCount: c.system_count ?? 0,
-        locationName: c.location ? entityLabel(lm.get(c.location) ?? { name: c.location }) : "",
+        locationName: c.location_id ? entityLabel(lm.get(c.location_id) ?? { name: c.location ?? "" }) : "",
         tags: c.effective_tags ?? {},
         raw: c,
       });
     }
     const roots: CompNode[] = [];
     for (const c of list) {
-      const node = byId.get(c.name)!;
-      const parent = c.parent ? byId.get(c.parent) : undefined;
+      const node = byUuid.get(c.id)!;
+      const parent = c.parent_id ? byUuid.get(c.parent_id) : undefined;
       if (parent) parent.children.push(node);
       else roots.push(node);
     }
@@ -131,7 +162,9 @@ export default function Components() {
     if (!confirm(`Delete component "${n.raw.name}"?`)) return;
     setErr(null);
     try {
-      await deleteComponent(n.raw.name);
+      // Addressed by uuid (#627 review finding 1): see the identity accordion's
+      // save() for why a bare name is not a safe address here.
+      await deleteComponent(n.raw.id);
       await qc.invalidateQueries({ queryKey: COMPONENTS_KEY });
       navigate("/components");
     } catch (e) {
@@ -157,17 +190,44 @@ export default function Components() {
     const path = () => ctx.pathOf(n());
     const sysName = () => n().raw.system;
     const canUpdate = () => can(me.data, "component", "update");
+    // :resetName is gated by component:rename at the API (the same token
+    // :rename uses, since both change the name), a strictly narrower grant
+    // than the component:update that opens edit mode (review minor,
+    // task-15-review.md). Without this the button rendered for anyone who
+    // could open edit mode at all, not just an operator who could actually
+    // use it.
+    const canRename = () => can(me.data, "component", "rename");
 
     const [display, setDisplay] = createSignal(n().raw.display_name ?? "");
     const [name, setName] = createSignal(n().raw.name);
     const [nameCheck, setNameCheck] = createSignal<NameCheck | null>(null);
     const [checking, setChecking] = createSignal(false);
     const [saveErr, setSaveErr] = createSignal<string | null>(null);
+    const [resetting, setResetting] = createSignal(false);
     async function runCheck() {
       setChecking(true);
-      try { setNameCheck(await checkComponentName(name().trim())); }
+      try { setNameCheck(await checkComponentName(name().trim(), n().raw.parent, n().raw.location)); }
       catch { setNameCheck(null); }
       finally { setChecking(false); }
+    }
+    // Hands the pen back to the platform (#627 Task 15d): its own immediate
+    // act, like Delete, not folded into the accordion's Save, because it is
+    // unrelated to whatever the operator is mid-editing in the name field.
+    // Re-seeds the local draft from the server's own regenerated name so the
+    // input reflects it without waiting for a background refetch to land.
+    async function resetName() {
+      setResetting(true);
+      setSaveErr(null);
+      try {
+        const updated = await resetComponentName(n().raw.id);
+        setName(updated.name);
+        setNameCheck(null);
+        await qc.invalidateQueries({ queryKey: COMPONENTS_KEY });
+      } catch (e) {
+        setSaveErr(describeError(e));
+      } finally {
+        setResetting(false);
+      }
     }
     // Seed the inputs from the node each time edit begins (this also reverts a Cancel,
     // since Cancel exits edit and the next begin re-seeds).
@@ -175,8 +235,9 @@ export default function Components() {
       if (isEditing) { setDisplay(n().raw.display_name ?? ""); setName(n().raw.name); setNameCheck(null); }
     }));
     // Consume a pending "open in edit" handoff (from create or the row pencil) once
-    // the node has resolved.
-    createEffect(on(() => n().raw.name, (name) => { if (name && consumePendingEdit(name) && canUpdate()) edit?.begin(); }));
+    // the node has resolved. Keyed on id (#627 Task 15c), stable across a rename,
+    // unlike the name this used to key on.
+    createEffect(on(() => n().id, (id) => { if (id && consumePendingEdit(id) && canUpdate()) edit?.begin(); }));
 
     edit?.bind({
       editable: canUpdate,
@@ -184,7 +245,13 @@ export default function Components() {
         setSaveErr(null);
         const renamed = name().trim() !== n().raw.name;
         try {
-          await updateComponent(n().raw.name, {
+          // Addressed by uuid (#627 review finding 1), not by name: two
+          // components can legally share a name in different placements
+          // (#627 Task 10), and the server's dual-accept (ADR-0062) refuses
+          // an ambiguous bare name with a 409, which is exactly what would
+          // happen here for the ordinary case of a room's first component
+          // (every room's first display is named "display-1").
+          await updateComponent(n().raw.id, {
             display_name: display() || undefined,
           });
           // The rename is a second call and it goes LAST, because it is the one that
@@ -197,8 +264,13 @@ export default function Components() {
           // display name the server had already accepted: the operator saw a total
           // failure for a half-committed save, and Cancel re-seeded the inputs from
           // that stale cache.
-          if (renamed) await renameComponent(n().raw.name, name().trim());
-          if (renamed) navigate(`/components/${encodeURIComponent(name().trim())}`);
+          // No hand-off navigate after a rename (#627 Task 15c): the route
+          // carries the id, which a rename never changes, so there is
+          // nothing here to correct. The old navigate to
+          // /components/<newName> only existed because the URL used to
+          // carry the name; under uuid addressing it would have sent a
+          // just-saved operator from a valid URL to an unresolvable one.
+          if (renamed) await renameComponent(n().raw.id, name().trim());
         } catch (e) {
           setSaveErr(describeError(e));
           throw e; // keep the slot in edit mode so the operator can retry
@@ -236,7 +308,22 @@ export default function Components() {
             when={editing()}
             fallback={
               <div class="grid grid-cols-2 gap-5">
-                <KVStacked bind="name" value={<span class="font-data text-sm">{n().raw.name}</span>} />
+                <KVStacked
+                  bind="name"
+                  value={
+                    <span class="flex items-center gap-1.5">
+                      <span class="font-data text-sm">{n().raw.name}</span>
+                      {/* The pen-ownership tracking chip (#627 Task 15d): a
+                          name the platform picked, not one an operator typed.
+                          :rename clears this forever; :resetName is the only
+                          way back, which is why the affordance to get here
+                          lives beside the name in edit mode, not here. */}
+                      <Show when={n().raw.name_generated}>
+                        <span class="badge badge-ghost badge-xs" title="The platform generated this name from the component's type. Renaming it hands the pen to you for good; :resetName is the only way back.">Generated</span>
+                      </Show>
+                    </span>
+                  }
+                />
                 <KVStacked label="ID" value={<span class="font-data text-xs text-base-content/50">{n().raw.id}</span>} />
               </div>
             }
@@ -266,7 +353,30 @@ export default function Components() {
                       disabled={checking() || !name().trim() || name().trim() === n().raw.name}
                       onClick={() => void runCheck()}
                     />
+                    {/* :resetName (#627 Task 15d): hands the pen back to the
+                        platform, regenerating from the component's current
+                        type and placement, whether or not the name is
+                        already platform-owned (the API's own contract). Its
+                        own immediate act, not folded into Save. Gated on
+                        component:rename (review minor, task-15-review.md):
+                        the API's own gate, narrower than the component:update
+                        that opens edit mode at all. */}
+                    <Show when={canRename()}>
+                      <Button
+                        square
+                        size="md"
+                        icon={RotateCcw}
+                        label="Reset to generated name"
+                        title="Regenerate this name from the component's type"
+                        class="join-item"
+                        disabled={resetting()}
+                        onClick={() => void resetName()}
+                      />
+                    </Show>
                   </div>
+                  <Show when={n().raw.name_generated}>
+                    <span class="text-[11px] text-base-content/50">The platform generated this name; renaming it hands you the pen for good.</span>
+                  </Show>
                   <Show when={nameCheck()}>
                     {(c) => (
                       <span
@@ -290,7 +400,7 @@ export default function Components() {
               label="System"
               value={sysName() ? (
                 <span class="flex items-baseline gap-1.5">
-                  <button class="link text-sm" onClick={() => navigate(`/systems/${encodeURIComponent(sysName()!)}`)}>{n().systemName}</button>
+                  <button class="link text-sm" onClick={() => navigate(`/systems/${encodeURIComponent(n().systemId)}`)}>{n().systemName}</button>
                   {/* Its primary is only part of the answer when it serves more than
                       one, so the row says so rather than implying exclusivity. */}
                   <Show when={n().systemCount > 1}>
@@ -327,43 +437,42 @@ export default function Components() {
             </div>
           </div>
         </Show>
+        {/* Every panel below is addressed by the component's uuid (#627 review
+            finding 1), not its name: two components can legally share a name
+            in different placements (#627 Task 10), and every one of these
+            routes dual-accepts uuid-or-name (ADR-0062) but refuses an
+            ambiguous bare name with a 409. Addressing by id is what keeps a
+            duplicate-named component's panels working rather than routinely
+            409ing, since a room's first component is always named
+            "display-1" (#627 Task 14's generator). */}
         <ReachabilityPanel
-          name={n().raw.name}
-          onAdd={can(me.data, "interface", "create") ? () => ctx.openBlade({ kind: "interface-create", id: n().raw.name }) : undefined}
+          name={n().raw.id}
+          onAdd={can(me.data, "interface", "create") ? () => ctx.openBlade({ kind: "interface-create", id: n().raw.id }) : undefined}
           onOpenInterface={can(me.data, "interface", "read") ? (id) => ctx.openBlade({ kind: "interface", id }) : undefined}
         />
-        {/* What is wrong with this component, and which capabilities that takes
-            away. This is where estate health starts: a role requiring a degraded
-            capability can no longer be filled here. Raising and clearing write
-            immediately (like tags), so the controls appear only in edit mode,
-            which keeps view read-only. */}
-        <AlarmsPanel component={n().raw.name} canUpdate={editing() && canUpdate()} />
-        <EventsPanel name={n().raw.name} />
-        <LogsPanel name={n().raw.name} />
+        {/* What is wrong with this component, and how badly. This is where estate
+            health starts: an alarm takes the component's own verdict down, and
+            any role it fills stops counting it toward quorum while it stays
+            down. Raising and clearing write immediately (like tags), so the
+            controls appear only in edit mode, which keeps view read-only. */}
+        <AlarmsPanel component={n().raw.id} canUpdate={editing() && canUpdate()} />
+        <EventsPanel name={n().raw.id} />
+        <LogsPanel name={n().raw.id} />
         {/* What we want vs what the device reports: the provenance pivot
             (declared/intended/observed) per property, with drift computed on the
             server. Read-only, and the teaching surface for reconciliation. */}
-        <ReconciliationPanel name={n().raw.name} />
+        <ReconciliationPanel name={n().raw.id} />
         {/* Why the tag values are what they are, and for a shared component,
             which system it is being asked about. The list's pills answer what;
             this answers why, which is the only question when one looks wrong. */}
-        <ResolutionPanel component={n().raw.name} />
+        <ResolutionPanel component={n().raw.id} />
         <PropertiesPanel
-          component={n().raw.name}
+          component={n().raw.id}
           edit={edit}
-          onOpen={(property) => ctx.openBlade({ kind: "property-resolution", id: propertyBladeId(n().raw.name, property) })}
+          onOpen={(property) => ctx.openBlade({ kind: "property-resolution", id: propertyBladeId(n().raw.id, property) })}
         />
 
-        {/* What the component provides, which is what a system role checks before
-            it may fill one. Writes are immediate (like tags), so the controls
-            appear only in edit mode, which keeps view read-only. */}
-        <CapabilitiesPanel
-          component={n().raw.name}
-          productId={n().raw.product_id}
-          canUpdate={editing() && canUpdate()}
-        />
-
-        <TagAdder kind="component" name={n().raw.name} canUpdate={editing() && canUpdate()} canCreateKey={can(me.data, "tag", "create")} />
+        <TagAdder kind="component" name={n().raw.id} canUpdate={editing() && canUpdate()} canCreateKey={can(me.data, "tag", "create")} />
 
         <Show when={ctx.full}>
           <div class="flex flex-wrap items-center gap-2 border-t border-base-300 pt-4">
@@ -396,14 +505,29 @@ export default function Components() {
   // component exists. Create commits the row and hands off to /components/<name> in
   // edit mode.
   function ComponentCreate(): JSX.Element {
-    // Display name leads and the key follows it, stopping the moment the
-    // operator edits the key by hand (lib/entities).
-    const { display, setDisplay, name, setName, nameDerived } = createIdentity();
+    // Independent fields, NOT createIdentity's derive-from-display coupling
+    // (#627 Task 15d): a blank name here means "the platform generates one
+    // from the product's component_type" (the same "<stem>-<n>" rule
+    // :resetName applies), so auto-filling it from whatever the operator
+    // types as a display name would silently claim the pen on their behalf
+    // the moment they typed a label. createIdentity's derive path stays in
+    // use on the FlatList catalog pages, whose names have no generator and
+    // stay globally unique.
+    const [display, setDisplay] = createSignal("");
+    const [name, setName] = createSignal("");
     const [system, setSystem] = createSignal("");
     const [location, setLocation] = createSignal("");
     const [parent, setParent] = createSignal("");
+    const [product, setProduct] = createSignal("");
     const [busy, setBusy] = createSignal(false);
     const [formErr, setFormErr] = createSignal<string | null>(null);
+
+    // Sorted by display name, generics included: the fallback choice for
+    // anything not yet modeled as a real SKU sits in the same list as every
+    // named product, not behind a separate affordance.
+    const productOptions = createMemo(() =>
+      [...(products.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name)),
+    );
 
     async function create(e: Event) {
       e.preventDefault();
@@ -411,16 +535,24 @@ export default function Components() {
       setFormErr(null);
       const nm = name().trim();
       try {
-        await createComponent({
-          name: nm,
+        // Bind the create response (#627 Task 15c): under uuid addressing
+        // the locally typed name is not a reliable handle to navigate by,
+        // and now (#627 Task 15d) it may be empty entirely; the server's
+        // own id always resolves. An empty name omits the field rather than
+        // posting "", which the API would refuse against the entity name
+        // pattern: omitted is "generate one," not "generate a name of
+        // nothing."
+        const created = await createComponent({
+          name: nm || undefined,
           display_name: display().trim() || undefined,
           system: system() || undefined,
           location: location() || undefined,
           parent: parent() || undefined,
+          product: product(),
         });
         await qc.invalidateQueries({ queryKey: COMPONENTS_KEY });
-        openInEdit(nm);
-        navigate(`/components/${encodeURIComponent(nm)}`);
+        openInEdit(created.id);
+        navigate(`/components/${encodeURIComponent(created.id)}`);
       } catch (er) {
         setFormErr(describeError(er));
         setBusy(false);
@@ -448,9 +580,9 @@ export default function Components() {
             </FieldRow>
             <FieldRow
               bind="name"
-              hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."}
+              hint="Optional. Leave blank and the platform generates one from the product's type (e.g. display-1)."
             >
-              <input class="input input-bordered w-full font-data" value={name()} placeholder="mic-2" onInput={(e) => setName(e.currentTarget.value)} />
+              <input class="input input-bordered w-full font-data" value={name()} placeholder="mic-2 (optional)" onInput={(e) => setName(e.currentTarget.value)} />
             </FieldRow>
           </div>
         </div>
@@ -459,24 +591,42 @@ export default function Components() {
           <span class="eyebrow">Placement</span>
           <div class="grid grid-cols-2 gap-3">
             <FieldRow label="System">
-              <TreeSelect items={(systems.data ?? []).map((s) => ({ id: s.id, value: s.name, label: entityLabel(s), parentId: s.parent }))} value={system()} onChange={setSystem} rootLabel="None" />
+              {/* Keyed AND valued on uuid, not name (#627): a name-keyed
+                  parentId already mismatched id's uuid space before this
+                  (nothing ever matched, so the picker silently flattened to
+                  depth 0), and a name VALUE is now also potentially
+                  ambiguous. The API dual-accepts uuid-or-name (ADR-0062), so
+                  posting the uuid is safe. */}
+              <TreeSelect items={(systems.data ?? []).map((s) => ({ id: s.id, value: s.id, label: entityLabel(s), parentId: s.parent_id }))} value={system()} onChange={setSystem} rootLabel="None" />
             </FieldRow>
             <FieldRow label="Location">
-              <TreeSelect items={(locations.data ?? []).map((l) => ({ id: l.id, value: l.name, label: entityLabel(l), parentId: l.parent }))} value={location()} onChange={setLocation} rootLabel="None" />
+              <TreeSelect items={(locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id }))} value={location()} onChange={setLocation} rootLabel="None" />
             </FieldRow>
           </div>
           <FieldRow
             label="Parent component"
             hint="Omit for a root component."
           >
-            <TreeSelect items={(components.data ?? []).map((c) => ({ id: c.id, value: c.name, label: entityLabel(c), parentId: c.parent }))} value={parent()} onChange={setParent} rootLabel="Root (no parent)" />
+            <TreeSelect items={(components.data ?? []).map((c) => ({ id: c.id, value: c.id, label: entityLabel(c), parentId: c.parent_id }))} value={parent()} onChange={setParent} rootLabel="Root (no parent)" />
+          </FieldRow>
+          <FieldRow
+            label="Product"
+            hint="What this component is an instance of. Required; use a generic until a real product is modeled."
+          >
+            <select class="select select-bordered w-full" value={product()} onChange={(e) => setProduct(e.currentTarget.value)}>
+              <option value="" disabled>Choose a product…</option>
+              <For each={productOptions()}>{(p) => <option value={p.name}>{p.display_name}</option>}</For>
+            </select>
           </FieldRow>
         </div>
 
         <div class="flex items-center gap-2 border-t border-base-300 pt-4">
           <Button icon={X} onClick={() => navigate("/components")}>Cancel</Button>
           <span class="flex-1" />
-          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !name().trim()}>Create component</Button>
+          {/* No !name().trim() gate (#627 Task 15d): the name is optional now,
+              the whole point of the affordance. Product stays required (the
+              #614 classification floor, and the generator's own stem source). */}
+          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !product()}>Create component</Button>
         </div>
 
         <div class="flex flex-col gap-1 opacity-50">
@@ -494,7 +644,7 @@ export default function Components() {
   const cfg: ListConfig<CompNode> = {
     ...componentsDescriptor,
     nodes,
-    focus: () => params.name,
+    focus: () => params.id,
     loading: () => components.isLoading,
     error: () => components.error,
     initialChips,
@@ -502,7 +652,16 @@ export default function Components() {
     nameWeight: () => 500,
     cellFor: (key, n) => {
       if (key === "product") return n.product ? <span class="badge badge-ghost badge-sm font-data">{n.product}</span> : <span class="text-base-content/40">—</span>;
-      if (key === "system") return <span class="text-base-content/70">{n.systemName || "—"}{n.systemCount > 1 ? ` +${n.systemCount - 1}` : ""}</span>;
+      if (key === "system")
+        return (
+          <span class="inline-flex items-center gap-1.5 text-base-content/70">
+            <Show when={n.systemId}>
+              <span class="og-system-dot shrink-0" style={{ "--sys-h": String(hueFor(n.systemId)) }} />
+            </Show>
+            {n.systemName || "—"}
+            {n.systemCount > 1 ? ` +${n.systemCount - 1}` : ""}
+          </span>
+        );
       if (key === "location") return <span class="text-base-content/70">{n.locationName || "—"}</span>;
       if (key === "tags") return <TagPills tags={n.tags} />;
       return null;
@@ -510,7 +669,7 @@ export default function Components() {
     filterKeys: () => [
       { key: "name", type: "string", hint: "substring", get: (n) => `${n.display} ${n.raw.name}`, values: () => [] },
       { key: "product", type: "string", hint: "exact", get: (n) => n.product, values: (rows) => [...new Set(rows.map((r) => r.product).filter(Boolean))].sort() },
-      { key: "system", type: "string", hint: "exact", get: (n) => n.systemAddr, values: (rows) => [...new Set(rows.map((r) => r.systemAddr).filter(Boolean))].sort(), valueLabel: (v) => (systems.data ?? []).find((s) => s.name === v)?.display_name ?? v },
+      { key: "system", type: "string", hint: "exact", get: (n) => n.systemAddr, values: (rows) => [...new Set(rows.map((r) => r.systemAddr).filter(Boolean))].sort(), valueLabel: (v) => { const s = (systems.data ?? []).find((s) => s.id === v); return s ? entityLabel(s) : v; } },
       { key: "location", type: "string", hint: "exact", get: (n) => n.locationName, values: (rows) => [...new Set(rows.map((r) => r.locationName).filter(Boolean))].sort() },
       ...tagFacets(),
     ],
@@ -526,7 +685,7 @@ export default function Components() {
     onBack: () => navigate("/components"),
     onDelete: (n) => del(n),
     onNew: () => navigate("/components/create"),
-    onEdit: (n) => { openInEdit(n.raw.name); navigate(`/components/${encodeURIComponent(n.raw.name)}`); },
+    onEdit: (n) => { openInEdit(n.id); navigate(`/components/${encodeURIComponent(n.id)}`); },
     renderCreate: () => <ComponentCreate />,
     renderDetail: (n, ctx) => <ComponentDetail node={n} ctx={ctx} />,
     extraBlades: {

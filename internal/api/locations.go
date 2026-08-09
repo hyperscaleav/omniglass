@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -19,6 +20,9 @@ type locationBody struct {
 	LocationTypeID string            `json:"location_type_id" doc:"The location_type's uuid, the stable form of location_type"`
 	ParentID       *string           `json:"parent_id,omitempty" doc:"The parent location's id, the canonical handle"`
 	Parent         *string           `json:"parent,omitempty" doc:"The parent location's name, for display; absent for a site root"`
+	Path           string            `json:"path,omitempty" doc:"The dotted address (e.g. boi.17c.415a); no accessor, since a location's own address IS its location-tree ancestor chain. Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it)."`
+	PathSegments   []string          `json:"path_segments,omitempty" doc:"path split on '.'."`
+	Renders        *renderBody       `json:"renders,omitempty" doc:"Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy."`
 	Actions        []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
 	EffectiveTags  map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this location (platform and its location tree); for the Tags column."`
 }
@@ -27,6 +31,7 @@ func toLocationBody(l *storage.Location) locationBody {
 	return locationBody{
 		ID: l.ID, Name: l.Name, DisplayName: l.DisplayName,
 		LocationType: l.LocationType, LocationTypeID: l.LocationTypeID, ParentID: l.ParentID, Parent: l.ParentName,
+		Path: l.Path, PathSegments: l.PathSegments, Renders: toRenderBody(l.Path, l.Renders),
 	}
 }
 
@@ -88,12 +93,12 @@ type locationOutput struct {
 }
 
 type locationPathInput struct {
-	Name string `path:"name" doc:"The location's unique name"`
+	Name string `path:"name" doc:"The location's name, or a dotted address (e.g. boi.17c.415a)"`
 }
 
 type createLocationInput struct {
 	Body struct {
-		Name         string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Globally unique name (the address; lowercase letters, digits, hyphens)"`
+		Name         string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens)"`
 		DisplayName  string  `json:"display_name,omitempty" doc:"What an operator reads; the name is the address"`
 		LocationType string  `json:"location_type" minLength:"1" doc:"The location_type, by name or uuid (campus, building, ...)"`
 		Parent       *string `json:"parent,omitempty" doc:"Parent location name; omit for a root location"`
@@ -101,22 +106,37 @@ type createLocationInput struct {
 }
 
 // updateLocationInput is the PATCH body. It deliberately carries no name: a rename
-// is the :rename custom method, gated by location:rename.
+// is the :rename custom method, gated by location:rename. It carries no parent
+// either (#627 Task 13): a move is the :move custom method, gated by
+// location:move, because a placement change is an authorization act, not a
+// label edit.
 type updateLocationInput struct {
-	Name string `path:"name"`
+	Name string `path:"name" doc:"The location's name, or a dotted address (e.g. boi.17c.415a)"`
 	Body struct {
 		DisplayName  *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
 		LocationType *string `json:"location_type,omitempty" doc:"Re-types the location: a location_type, by name or uuid"`
-		Parent       *string `json:"parent,omitempty" doc:"Re-parents the location (a tree move) to this location name, cycle-guarded and placement-validated. Moving to root is not supported via update this slice."`
+	}
+}
+
+// moveLocationInput is the :move body: Parent is required (422 if omitted),
+// since it is the only field a location's move carries. Re-parents the
+// location (a tree move), cycle-guarded and placement-validated. Moving to
+// root is not supported: MoveLocation gains no clear-to-root capability
+// locations have never had (see the ADR for why this asymmetry with
+// component/system is deliberate).
+type moveLocationInput struct {
+	Name string `path:"name" doc:"The location's name, or a dotted address (e.g. boi.17c.415a)"`
+	Body struct {
+		Parent *string `json:"parent,omitempty" doc:"Re-parents the location (a tree move) to this location name; cycle-guarded and placement-validated. Moving to root is not supported."`
 	}
 }
 
 // renameLocationInput is the :rename body. The name rule lives here, in the
 // contract, not only in the prose below it.
 type renameLocationInput struct {
-	Name string `path:"name" doc:"The location's current name, or its uuid"`
+	Name string `path:"name" doc:"The location's current name, a dotted address, or its uuid"`
 	Body struct {
-		Name string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The new globally unique name (lowercase letters, digits, hyphens)"`
+		Name string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The new name, unique within its placement (lowercase letters, digits, hyphens)"`
 	}
 }
 
@@ -275,14 +295,38 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPatch,
 		Path:        "/locations/{name}",
 		Summary:     "Update a location",
-		Description: "Patches a location's display_name, location_type, or parent (a move). The name is not patchable: renaming is the :rename custom method. Gated by location:update; the read and update scopes drive the 404 versus 403 split.",
+		Description: "Patches a location's display_name or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Gated by location:update; the read and update scopes drive the 404 versus 403 split.",
 	}, "location", "update"), func(ctx context.Context, in *updateLocationInput) (*locationOutput, error) {
 		l, err := gw.UpdateLocation(ctx, actorID(ctx), in.Name, storage.LocationPatch{
 			DisplayName:  in.Body.DisplayName,
 			LocationType: in.Body.LocationType,
-			ParentName:   in.Body.Parent,
 		}, a.scopeFor(ctx, "location", "read"), a.scopeFor(ctx, "location", "update"))
 		if err != nil {
+			return nil, mapLocationErr(err)
+		}
+		return &locationOutput{Body: toLocationBody(l)}, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "move-location",
+		Method:      http.MethodPost,
+		Path:        "/locations/{name}:move",
+		Summary:     "Move a location",
+		Description: "Re-parents a location (a tree move): parent is required (422 if omitted), cycle-guarded, and placement-validated against the resolved location_type. Moving to root is not supported (422): MoveLocation gains no clear-to-root capability locations have never had. A separate act from update, and a separately grantable one (location:move), because a placement change is an authorization act, not a label edit. Recorded under its own audit verb, move, distinct from update. Does not recompute health. A taken name at the destination is a 409. Gated by location:move; the read and move scopes drive the 404 versus 403 split.",
+	}, "location", "move"), func(ctx context.Context, in *moveLocationInput) (*locationOutput, error) {
+		if in.Body.Parent == nil {
+			return nil, huma.Error422UnprocessableEntity("move requires parent")
+		}
+		l, err := gw.MoveLocation(ctx, actorID(ctx), in.Name, storage.LocationMove{
+			ParentName: in.Body.Parent,
+		}, a.scopeFor(ctx, "location", "read"), a.scopeFor(ctx, "location", "move"))
+		if err != nil {
+			switch {
+			case errors.Is(err, storage.ErrLocationExistsUnderParent):
+				return nil, huma.Error409Conflict(fmt.Sprintf("a location named %q already exists under %q", locationMoverName(ctx, gw, a, in.Name), derefStr(in.Body.Parent)))
+			case errors.Is(err, storage.ErrLocationExistsAtRoot):
+				return nil, huma.Error409Conflict(fmt.Sprintf("a root location named %q already exists", locationMoverName(ctx, gw, a, in.Name)))
+			}
 			return nil, mapLocationErr(err)
 		}
 		return &locationOutput{Body: toLocationBody(l)}, nil
@@ -308,7 +352,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPost,
 		Path:        "/locations:checkName",
 		Summary:     "Check a location name",
-		Description: "Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.",
+		Description: "Reports whether a proposed name is a valid slug and currently free within the given placement (under the given parent, or among roots when no parent is given). Advisory (Save is still gated by the unique constraint). Gated by location:update.",
 	}, "location", "update"), func(ctx context.Context, in *checkNameInput) (*checkNameOutput, error) {
 		out := &checkNameOutput{}
 		if err := storage.ValidateName("location", in.Body.Name); err != nil {
@@ -323,9 +367,9 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 			return out, nil
 		}
 		out.Body.Valid = true
-		taken, err := gw.LocationNameTaken(ctx, in.Body.Name)
+		taken, err := gw.LocationNameTaken(ctx, in.Body.Name, in.Body.Parent)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("check location name")
+			return nil, mapLocationErr(err)
 		}
 		out.Body.Available = !taken
 		if taken {
@@ -359,11 +403,23 @@ func actorID(ctx context.Context) string {
 	return ""
 }
 
+// locationMoverName resolves ref back to the location's own name for a 409
+// collision message; see componentMoverName's doc comment for the reasoning.
+func locationMoverName(ctx context.Context, gw storage.Gateway, a *authenticator, ref string) string {
+	if l, err := gw.GetLocation(ctx, ref, a.scopeFor(ctx, "location", "read")); err == nil {
+		return l.Name
+	}
+	return ref
+}
+
 // mapLocationErr translates the gateway's location sentinels into HTTP status:
 // the non-disclosing 404, the readable-not-actionable 403, occupancy and
 // name-clash 409, and the request faults 422. A placement violation carries
 // the offending child and parent type names in its message.
 func mapLocationErr(err error) error {
+	if refErr, ok := mapRefErr(err); ok {
+		return refErr
+	}
 	var placementErr *storage.PlacementError
 	if errors.As(err, &placementErr) {
 		return huma.Error422UnprocessableEntity(placementErr.Error())

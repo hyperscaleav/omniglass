@@ -22,7 +22,7 @@ func newCommandFixture(t *testing.T, conn *pgx.Conn) commandFixture {
 	t.Helper()
 	ctx := context.Background()
 	var f commandFixture
-	if err := conn.QueryRow(ctx, `insert into component (name) values ('c1') returning id`).Scan(&f.compID); err != nil {
+	if err := conn.QueryRow(ctx, `insert into component (name, product_id) values ('c1', (select id from product where name = 'generic-device')) returning id`).Scan(&f.compID); err != nil {
 		t.Fatalf("component: %v", err)
 	}
 	if err := conn.QueryRow(ctx,

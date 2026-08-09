@@ -3,11 +3,15 @@ import { render, within } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import SystemHealthPanel, { LocationHealthPanel } from "./HealthPanel";
 import { locationHealthKey, systemHealthKey, type EstateHealth } from "../lib/health";
+import { SYSTEMS_KEY, type System } from "../lib/systems";
+import { hueFor } from "../lib/system_color";
+import { uuidFor } from "../lib/testids";
 
 // The reconciliation panel is the claim this slice makes: it must answer "why is
 // this degraded" in one view by naming the whole chain, alarm on a component ->
-// degraded capability -> role below quorum -> verdict. Data is seeded into the
-// query cache so no server is needed; the panel is read-only, so nothing is faked.
+// that component going down (#626: wholesale, not per named capability) -> role
+// below quorum -> verdict. Data is seeded into the query cache so no server is
+// needed; the panel is read-only, so nothing is faked.
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
 
 const degraded: EstateHealth = {
@@ -16,17 +20,19 @@ const degraded: EstateHealth = {
   verdict: "outage",
   systems: [],
   roles: [
-    // Impaired by an alarm: a critical fault on disp-2 took the display capability
-    // away, so the role holds 1 of the 2 it needs and takes the system out.
+    // Impaired by an alarm: a critical fault took disp-2 down, so the role
+    // holds 1 of the 2 it needs and takes the system out.
     {
       name: "main-display",
       display_name: "Main display",
       impact: "outage",
       impaired: true,
+      active: true,
       quorum: 2,
       satisfying: 1,
-      required: ["display", "hdmi-input"],
-      degraded: ["display"],
+      short: 1,
+      spare: 0,
+      down: ["disp-2"],
       assigned_to: ["disp-1", "disp-2"],
       alarms: [
         {
@@ -35,7 +41,6 @@ const degraded: EstateHealth = {
           message: "HDMI board failed",
           component: "disp-2",
           raised_at: ago(3 * 3_600_000),
-          capabilities: ["display"],
         },
       ],
     },
@@ -45,10 +50,12 @@ const degraded: EstateHealth = {
       display_name: "Table microphone",
       impact: "degraded",
       impaired: true,
+      active: true,
       quorum: 2,
       satisfying: 0,
-      required: ["microphone"],
-      degraded: [],
+      short: 2,
+      spare: 0,
+      down: [],
       assigned_to: [],
       alarms: [],
     },
@@ -58,10 +65,12 @@ const degraded: EstateHealth = {
       display_name: "Touch panel",
       impact: "degraded",
       impaired: false,
+      active: true,
       quorum: 1,
       satisfying: 1,
-      required: ["touch-panel"],
-      degraded: [],
+      short: 0,
+      spare: 0,
+      down: [],
       assigned_to: ["panel-1"],
       alarms: [],
     },
@@ -84,10 +93,12 @@ const healthy: EstateHealth = {
       display_name: "Main display",
       impact: "outage",
       impaired: false,
+      active: true,
       quorum: 1,
       satisfying: 1,
-      required: ["display"],
-      degraded: [],
+      short: 0,
+      spare: 0,
+      down: [],
       assigned_to: ["disp-9"],
       alarms: [],
     },
@@ -132,30 +143,30 @@ describe("SystemHealthPanel reconciliation", () => {
     expect(within(block).getAllByText("1 of 2 satisfying").length).toBe(2);
   });
 
-  it("names the degraded capability as the link between the alarm and the role", () => {
+  it("names the down component as the link between the alarm and the role", () => {
     const { getByText } = mountSystem(degraded);
     const block = roleBlock(getByText, "main-display");
-    // The chain step, and the requirement chip marked as taken away.
-    expect(within(block).getByText("Capability degraded")).toBeTruthy();
-    expect(within(block).getByText(/^display degraded$/)).toBeTruthy();
-    // The capability the alarm did NOT touch is still listed, unmarked.
-    expect(within(block).getByText("hdmi-input")).toBeTruthy();
+    // The chain step, and the assigned chip marked as down.
+    expect(within(block).getByText("Component down")).toBeTruthy();
+    expect(within(block).getByText(/^disp-2 down$/)).toBeTruthy();
+    // The assigned component the alarm did NOT touch is still listed, unmarked.
+    expect(within(block).getByText("disp-1")).toBeTruthy();
   });
 
-  it("spells the chain out in order: alarm, capability, role, contribution", () => {
+  it("spells the chain out in order: alarm, component down, role, contribution", () => {
     const { getByText } = mountSystem(degraded);
     const block = roleBlock(getByText, "main-display");
     const captions = within(block)
-      .getAllByText(/Alarm on a component|Capability degraded|Role below quorum|Contributes/)
+      .getAllByText(/Alarm on a component|Component down|Role below quorum|Contributes/)
       .map((e) => e.textContent);
-    expect(captions).toEqual(["Alarm on a component", "Capability degraded", "Role below quorum", "Contributes"]);
+    expect(captions).toEqual(["Alarm on a component", "Component down", "Role below quorum", "Contributes"]);
   });
 
   it("states the whole chain as one sentence, naming every link", () => {
     const { getByText } = mountSystem(degraded);
     expect(
       getByText(
-        /A critical alarm on disp-2 degrades display, so Main display satisfies 1 of 2 and contributes outage, which is why this system reads outage\./,
+        /A critical alarm on disp-2 takes it out of the role, so Main display satisfies 1 of 2 and contributes outage, which is why this system reads outage\./,
       ),
     ).toBeTruthy();
   });
@@ -163,9 +174,9 @@ describe("SystemHealthPanel reconciliation", () => {
   it("separates a short-staffed role from a broken one", () => {
     const { getByText } = mountSystem(degraded);
     const block = roleBlock(getByText, "table-mic");
-    expect(within(block).getByText(/No alarm reaches Table microphone/)).toBeTruthy();
+    expect(within(block).getByText(/No component assigned to Table microphone is down/)).toBeTruthy();
     expect(within(block).getByText(/there are simply fewer of them than the quorum wants/)).toBeTruthy();
-    expect(within(block).queryByText("Capability degraded")).toBeNull();
+    expect(within(block).queryByText("Component down")).toBeNull();
   });
 
   it("orders the impaired roles worst impact first, and names what is holding", () => {
@@ -192,13 +203,58 @@ describe("SystemHealthPanel reconciliation", () => {
     const status = getByRole("status");
     expect(status.textContent).toMatch(/This system is healthy/);
     expect(status.textContent).toMatch(/All 1 role it needs are filled and meet their quorum/);
-    expect(queryByText("Capability degraded")).toBeNull();
+    expect(queryByText("Component down")).toBeNull();
     expect(queryByText("impaired")).toBeNull();
   });
 
   it("says there is nothing to reconcile when the system declares no roles", () => {
     const { getByText } = mountSystem({ ...healthy, owner: "bare", roles: [] });
     expect(getByText(/This system declares no roles/)).toBeTruthy();
+  });
+
+  // The seeded huddle-room shape: a satisfied all-in-one alternate beside an
+  // unbuilt component-built one. Rendering the component-built alternate's
+  // roles as ordinary impairments would show "healthy" at the top and an
+  // "impaired" list underneath, flatly contradicting each other; active is
+  // what the console must consult to avoid that (#626 Task 9).
+  const huddleRoom: EstateHealth = {
+    owner: "huddle-room",
+    owner_kind: "system",
+    verdict: "healthy",
+    systems: [],
+    roles: [
+      {
+        name: "video-bar", display_name: "Video bar", impact: "outage", impaired: false, active: true,
+        quorum: 1, satisfying: 1, short: 0, spare: 0, down: [], assigned_to: ["bar-1"], alarms: [],
+        choice: "conferencing", alternate: "all-in-one",
+      },
+      {
+        name: "codec", display_name: "Codec", impact: "outage", impaired: true, active: false,
+        quorum: 1, satisfying: 0, short: 1, spare: 0, down: [], assigned_to: [], alarms: [],
+        choice: "conferencing", alternate: "component-built",
+      },
+      {
+        name: "camera", display_name: "Camera", impact: "outage", impaired: true, active: false,
+        quorum: 1, satisfying: 0, short: 1, spare: 0, down: [], assigned_to: [], alarms: [],
+        choice: "conferencing", alternate: "component-built",
+      },
+    ],
+    transitions: [],
+  };
+
+  it("does not render a losing alternate's impaired roles as why the system reads what it does", () => {
+    const { getByRole, queryByText } = mountSystem(huddleRoom);
+    // Healthy, and it says so plainly: the active alternate (video-bar) is
+    // satisfied, so nothing counts as impaired.
+    const status = getByRole("status");
+    expect(status.textContent).toMatch(/This system is healthy/);
+    expect(status.textContent).toMatch(/All 1 role it needs are filled/);
+    expect(queryByText("impaired")).toBeNull();
+    // The losing alternate's roles are not silently dropped either: named
+    // under their own heading, not folded into "impaired".
+    expect(queryByText("Codec")).toBeTruthy();
+    expect(queryByText("Camera")).toBeTruthy();
+    expect(queryByText(/a different alternate answered their choice/)).toBeTruthy();
   });
 });
 
@@ -236,9 +292,15 @@ const location: EstateHealth = {
   transitions: [{ ts: ago(2 * 3_600_000), verdict: "outage" }],
 };
 
+const locationSystems: System[] = [
+  { id: uuidFor("sys-boardroom"), name: "boardroom", member_count: 1 },
+  { id: uuidFor("sys-huddle"), name: "huddle", member_count: 1 },
+];
+
 function mountLocation(onOpenSystem?: (name: string) => void) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...locationHealthKey(location.owner)], location);
+  qc.setQueryData([...SYSTEMS_KEY], locationSystems);
   return render(() => (
     <QueryClientProvider client={qc}>
       <LocationHealthPanel location={location.owner} onOpenSystem={onOpenSystem} />
@@ -258,6 +320,13 @@ describe("LocationHealthPanel", () => {
     expect(within(row).getByText("outage")).toBeTruthy();
     const ok = getByText("huddle").parentElement as HTMLElement;
     expect(within(ok).getByText("healthy")).toBeTruthy();
+  });
+
+  it("wears each system's own colour dot beside its name", () => {
+    mountLocation();
+    const dots = document.querySelectorAll(".og-system-dot");
+    expect(dots.length).toBe(2);
+    expect((dots[0] as HTMLElement).style.getPropertyValue("--sys-h")).toBe(String(hueFor(locationSystems[0].id)));
   });
 
   it("drills into the system that can say why", () => {

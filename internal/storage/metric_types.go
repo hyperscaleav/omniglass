@@ -106,6 +106,9 @@ func (p *PG) ListMetricTypes(ctx context.Context) ([]MetricType, error) {
 // GetMetricType returns one metric type by name. The registry is estate-wide
 // reference data, so there is no scope injection.
 func (p *PG) GetMetricType(ctx context.Context, name string) (*MetricType, error) {
+	if err := RejectAddressForm("metric_type", name); err != nil {
+		return nil, err
+	}
 	mt, err := scanMetricType(p.pool.QueryRow(ctx, `select `+metricTypeCols+` from metric_type where name = $1`, name))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrMetricTypeNotFound
@@ -120,6 +123,9 @@ func (p *PG) GetMetricType(ctx context.Context, name string) (*MetricType, error
 // ErrMetricTypeNotFound if absent, ErrMetricTypeOfficial if seed-owned. Update and
 // delete call it first.
 func guardMetricTypeMutable(ctx context.Context, q querier, name string) error {
+	if err := RejectAddressForm("metric_type", name); err != nil {
+		return err
+	}
 	var official bool
 	err := q.QueryRow(ctx, `select official from metric_type where name = $1`, name).Scan(&official)
 	if errors.Is(err, pgx.ErrNoRows) {

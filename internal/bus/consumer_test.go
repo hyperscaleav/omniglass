@@ -23,7 +23,7 @@ func TestDeriveMetrics(t *testing.T) {
 		{Name: "tcp-open"},
 		{Name: "tcp-connect-time"},
 	}, []storage.PropertyType{{Name: "video-input", DataType: "string"}}, nil)
-	owner := storage.TaskOwner{Component: "disp-1", InterfaceName: "disp-1-tcp", InterfaceType: "tcp"}
+	owner := storage.TaskOwner{ComponentID: "disp-1", InterfaceName: "disp-1-tcp", InterfaceType: "tcp"}
 	ev := &ogv1.TelemetryBatch{
 		TaskId: "t1",
 		NodeId: "node-a",
@@ -61,7 +61,7 @@ func TestDeriveProperties(t *testing.T) {
 			{Name: "interface-reachable", DataType: "string", Validation: []byte(`{"enum":["up","down"]}`)},
 			{Name: "serial-number", DataType: "string"},
 		}, nil)
-	owner := storage.TaskOwner{Component: "disp-1", InterfaceName: "disp-1-tcp", InterfaceType: "tcp"}
+	owner := storage.TaskOwner{ComponentID: "disp-1", InterfaceName: "disp-1-tcp", InterfaceType: "tcp"}
 	ev := &ogv1.TelemetryBatch{Properties: []*ogv1.PropertySample{
 		{Name: "interface-reachable", ValueJson: `"up"`},
 		{Name: "interface-reachable", ValueJson: `"sideways"`}, // violates the enum: dropped
@@ -97,7 +97,7 @@ func TestDeriveEvents(t *testing.T) {
 			{Name: "call-started", PayloadSchema: []byte(`{"type":"object","properties":{"participants":{"type":"integer"}},"required":["participants"]}`)},
 			{Name: "note"},
 		})
-	owner := storage.TaskOwner{Component: "disp-1", InterfaceName: "disp-1-tcp", InterfaceType: "tcp"}
+	owner := storage.TaskOwner{ComponentID: "disp-1", InterfaceName: "disp-1-tcp", InterfaceType: "tcp"}
 	ev := &ogv1.TelemetryBatch{Events: []*ogv1.EventSample{
 		{Name: "call-started", Message: "call started", Payload: []byte(`{"participants":4}`)},
 		{Name: "call-started", Payload: []byte(`{"other":1}`)}, // schema violation: dropped
@@ -130,7 +130,7 @@ func TestSampleTimeRule(t *testing.T) {
 		[]storage.MetricType{{Name: "tcp-open"}},
 		[]storage.PropertyType{{Name: "serial-number", DataType: "string"}},
 		[]storage.EventType{{Name: "note"}})
-	owner := storage.TaskOwner{Component: "disp-1"}
+	owner := storage.TaskOwner{ComponentID: "disp-1"}
 	sampleTS := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	batchTS := time.Date(2026, 6, 7, 8, 9, 10, 0, time.UTC)
 

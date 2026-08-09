@@ -14,6 +14,10 @@ export type Interface = {
   interface_type: string;
   interface_type_id?: string;
   component?: string;
+  // component_id is the owning component's uuid, the stable handle
+  // (component names are scoped to placement, #627 Task 10, so a name
+  // comparison across an unrelated component list is not reliably unique).
+  component_id?: string;
   node?: string;
   params?: InterfaceParams;
 };

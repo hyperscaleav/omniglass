@@ -416,7 +416,47 @@ The capability check is **necessary not sufficient** (it only rejects), the `can
   - **IAM subjects** (`principal`, `role`, `principal_grant`, and a principal's **login credential** create/delete): the action must appear in a grant whose `scope_kind` is `all`; a scoped grant confers **no** IAM capability. Typically `owner @ all` / `admin @ all`. (A **credential variable** is different: entity-scoped, so its `secret:read` decrypt and rotation are ordinary scoped actions, [config and credentials](/architecture/variables/).)
   - **Data registries** (`property_type`, `tag`, `unit`, `event_type`, `severity_level`, source): a distinct **`<registry>:create` curator capability** (`property_type:create`, `tag:create`, `event_type:create`; the rest take the same shape when they land). No owner entity, so `scope_kind` is irrelevant, and a curator role mints entries **without** IAM admin. A minted entry carries its own `scope` (an org-scoped entry shadows an official one, the [namespace-shadow pattern](/architecture/properties/#key-scope-template-org-official)); `official`-scoped entries are reserved to `owner` and the boot seed.
   - **Type registries** (`location_type`, `secret_type`): each speaks its own permission word, never a shared generic one. The **`location_type`** registry carries its own resource with the full verb set (`location_type:read`, `:create`, `:update`, `:delete`); the read rides `viewer`'s `*:read` floor, the writes go to `admin`, and the **property contract** (`/location-types/{id}/properties`) hangs off the same resource (`location_type:update` declares, `location_type:delete` withdraws). The **`secret_type`** registry is read-only reference data behind **`secret:read`** (a sensitive resource **off** the viewer floor, so whoever may read secrets may read their shapes, and nobody else); it has no write routes. A type row carries no namespace-shadow `scope`: an `official` row is read-only (create/update/delete 422), an operator row is editable, and deleting a `location_type` still referenced by a location is refused (409, a Gateway pre-count with the parent foreign key as backstop). The **shipped location types seed as `official: false`** ([the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs)); the shipped secret types are seed-owned and `official: true`.
-  - **Catalog entities** (`vendor`, `driver`, `capability`, `product`, **`standard`**): each its **own** resource with the full verb set (`product:read` / `:create` / `:update` / `:delete`, `standard:read` / ..., and so on), because each declares more than a label. A **component** carries no type (its shape comes from its `product`, delete-guarded by the `component.product_id` restrict FK); a **system** conforms to a `standard`, which is why `standard` graduated out of the `type` registry ([ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)). Each catalog's property contract rides its owner's permission (`product:update`, `standard:update`).
+  - **Catalog entities** (`vendor`, `driver`, `component_type`, `product`, **`standard`**): each its **own** resource with the full verb set (`product:read` / `:create` / `:update` / `:delete`, `standard:read` / ..., and so on), because each declares more than a label. A **component** carries no type (its shape comes from its `product`, delete-guarded by the `component.product_id` restrict FK); a **system** conforms to a `standard`, which is why `standard` graduated out of the `type` registry ([ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)). Each catalog's property contract rides its owner's permission (`product:update`, `standard:update`).
+
+### A reference resolves within a scope
+
+A caller may address a `location`, `system`, or `component` by uuid, bare name, or dotted address
+([ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup)),
+and every form goes through one primitive, `resolveRef`, before the ordinary `canDo` decision above
+ever runs: **scope decides before ambiguity does**. A bare name is narrowed to the caller's scope
+first, then judged ambiguous only within that narrowed set, which is what lets an operator scoped to
+one room use `display-1` without being refused because an unrelated room they cannot even read holds a
+same-named row; an `ErrAmbiguousName`'s candidate list can therefore never name a uuid the caller could
+not otherwise read. A dotted address skips this step entirely on its own: the placement-scoped unique
+indexes it walks admit at most one row per hop, so there is no ambiguity to decide, only the same scope
+check every other reference gets once it resolves to a uuid.
+
+The primitive carries one policy axis, not one behaviour, and the two policies do not make the same
+promise:
+
+- **The read path** (`scopedGet`/`scopedByNameInScope`) folds every failure into one non-disclosing
+  404: absent, out of scope, and ambiguous-only-outside-scope are indistinguishable from outside the
+  caller's grant, matching the read/act asymmetry above.
+- **The write path** (`resolveScopedRef`, used to resolve a create's or an action's placement or owner
+  reference) keeps the **notFound-versus-forbidden split** a write already makes elsewhere: absent
+  anywhere is 404, present only outside the given scope is 403, because the caller supplied this
+  reference itself in the same request, not the new disclosure a read's own uuid would be. Its
+  guarantee is narrower than it can sound: a resolved reference is one the caller may **write** a
+  binding against, not one the caller may **read**, and a bare-name 403 is a name-existence oracle by
+  construction (a caller learns a name exists somewhere in the estate from the status code alone, with
+  no candidates disclosed), predating this epic and tested (`interfaces_scope_test.go:82`), now
+  asymmetric with the read path's single 404 by design, not by omission.
+
+A guard inside the same primitive panics if the caller's scope was resolved for a resource that does
+not cover the config being checked against, catching a tier mismatch (a component-tier scope compared
+against a system's own table, say) as a caller bug rather than a silently wrong answer. It is **forward
+insurance, not proof**: every call site today derives its resource label from the same config it is
+checked against, so the guard cannot fire on any input the current code produces, and it inherits a
+blind spot from the scope-covers check itself, unable to tell a right *tier* from a wrong one within
+the `secret` / `variable` / `field` / `telemetry` family, only a right family from a wrong one. The full
+accounting of what this primitive does and does not guarantee is
+[ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup)'s
+own list, not repeated here.
 
 Both layers operate **within one database**. Tenant isolation is **per-deployment**: a tenant is one database plus one **NATS account** plus one deployment, so per-database isolation (storage) and per-account isolation (messaging) are the same boundary; there is no `tenant_id` column anywhere and no RLS backstop.
 

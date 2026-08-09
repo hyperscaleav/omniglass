@@ -150,6 +150,9 @@ function InterfaceRow(p: { iface: ReachInterface; manageId?: string; onManage?: 
 }
 
 export default function ReachabilityPanel(p: {
+  // The owning component's address (#627: the console addresses a component
+  // by uuid now, since its name is scoped to placement and not reliably
+  // unique; getReachability dual-accepts either, ADR-0062).
   name: string;
   // Present -> the panel header shows "Add interface", opening a create surface for
   // this component (the caller gates on interface:create).
@@ -162,11 +165,13 @@ export default function ReachabilityPanel(p: {
   const ifaces = createMemo(() => q.data?.interfaces ?? []);
   // Only load the interface list when the caller can open interface details; map an
   // interface's name (the reachability row key) to its surrogate id so a row can
-  // open its detail blade.
+  // open its detail blade. Matched by component_id, not the component name
+  // (#627): p.name is now the component's own uuid, and two components can
+  // legally share a name, so a name match could pull in a sibling's rows.
   const interfaces = useQuery(() => ({ queryKey: INTERFACES_KEY, queryFn: () => listInterfaces(), enabled: !!p.onOpenInterface }));
   const idByName = createMemo(() => {
     const m = new Map<string, string>();
-    for (const it of interfaces.data ?? []) if (it.component === p.name) m.set(it.name, it.id);
+    for (const it of interfaces.data ?? []) if (it.component_id === p.name) m.set(it.name, it.id);
     return m;
   });
   return (

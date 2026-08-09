@@ -6,30 +6,49 @@
 import { buildPredicate, type Chip, type FilterKey } from "./predicate";
 
 // The minimal node shape these functions need: an id, a display label, and a
-// forest of the same shape. Pages pass their own richer node type.
-export type TreeLike<N> = { id: string; display: string; children: N[] };
+// forest of the same shape. Pages pass their own richer node type. addr is an
+// optional second address (#627): a page whose id is a uuid but whose route
+// still carries the entity's bare name (until the URL swap to uuid addressing
+// lands) sets addr to that name, so a deep link or a not-yet-migrated
+// navigate site can still resolve. Unlike id, addr is not guaranteed unique
+// (that is the whole reason id moved to uuid): byAddr keeps only the
+// last-written node per addr, the same single-arbitrary-pick a name-keyed
+// index always gave, not a new ambiguity.
+// pathRender is the server's own dotted-path dash render (#627 Task 15,
+// storage.PathOf/RenderDash on the Go side: component/system/location's
+// `renders.dash` field), fed straight onto the row rather than recomputed
+// from the page's own tree. pathOf below walks parentOf, which is built from
+// THIS forest alone, so it cannot cross the component-tree-to-location-tree
+// boundary: a component with no component parent sitting directly in a room
+// has no ancestor in the component forest at all, even though it plainly
+// sits under that room (#627 Task 10 is exactly what makes that placement
+// legal). pathRender carries the answer pathOf structurally cannot reach.
+export type TreeLike<N> = { id: string; display: string; children: N[]; addr?: string; pathRender?: string };
 
 export type Crumb = { id: string; display: string };
-export type Row<N> = { n: N; depth: number; path: Crumb[] | null };
+export type Row<N> = { n: N; depth: number; path: Crumb[] | null; pathRender?: string };
 export type SortState = { key: string; dir: 1 | -1 } | null;
 export type ListIndex<N> = {
   byId: Map<string, N>;
+  byAddr: Map<string, N>;
   parentOf: Map<string, N>;
   all: N[];
   containerIds: Set<string>;
 };
 
-// buildIndex flattens the forest depth-first: id -> node, child -> parent, the
-// in-order node list (also the default flat order), and the ids that have
-// children (for expand/collapse-all).
+// buildIndex flattens the forest depth-first: id -> node, addr -> node
+// (where set), child -> parent, the in-order node list (also the default
+// flat order), and the ids that have children (for expand/collapse-all).
 export function buildIndex<N extends TreeLike<N>>(roots: N[]): ListIndex<N> {
   const byId = new Map<string, N>();
+  const byAddr = new Map<string, N>();
   const parentOf = new Map<string, N>();
   const all: N[] = [];
   const containerIds = new Set<string>();
   const walk = (list: N[], parent: N | null) => {
     for (const n of list) {
       byId.set(n.id, n);
+      if (n.addr) byAddr.set(n.addr, n);
       all.push(n);
       if (parent) parentOf.set(n.id, parent);
       if (n.children.length) {
@@ -39,7 +58,7 @@ export function buildIndex<N extends TreeLike<N>>(roots: N[]): ListIndex<N> {
     }
   };
   walk(roots, null);
-  return { byId, parentOf, all, containerIds };
+  return { byId, byAddr, parentOf, all, containerIds };
 }
 
 // pathOf returns a node's ancestors, root first (the breadcrumb).
@@ -74,7 +93,7 @@ export function flattenRows<N extends TreeLike<N>>(
       return r * s.dir;
     });
   }
-  return list.map((n) => ({ n, depth: 0, path: pathOf(index, n) }));
+  return list.map((n) => ({ n, depth: 0, path: pathOf(index, n), pathRender: n.pathRender }));
 }
 
 // treeRows walks the forest, descending only into expanded containers.

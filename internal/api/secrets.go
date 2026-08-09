@@ -141,7 +141,7 @@ type resolvedSecretBody struct {
 }
 
 type effectiveSecretsInput struct {
-	Name string `path:"name" doc:"The component's name"`
+	Name string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
 }
 
 type effectiveSecretsOutput struct {
@@ -325,6 +325,9 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 // mapSecretErr translates the gateway's secret sentinels into HTTP status.
 func mapSecretErr(err error) error {
+	if refErr, ok := mapRefErr(err); ok {
+		return refErr
+	}
 	switch {
 	case errors.Is(err, storage.ErrSecretNotFound):
 		return huma.Error404NotFound("secret not found")

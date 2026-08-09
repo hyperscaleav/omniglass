@@ -54,6 +54,17 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 	if !inScope {
 		return nil, oc.notFound
 	}
+	// Resolved once here via ownerArcValueInScope (see EffectiveProperties,
+	// the property-lane twin this mirrors exactly): the inst CTEs below
+	// used to look the instance row up by name, a CTE that can hold more
+	// than one row once a name is no longer unique (#627), silently joining
+	// samples from every same-named row into one answer rather than raising
+	// an error. The scope-blind ownerArcValue would still leak an
+	// out-of-scope row's uuid here even though ownerInScope just passed.
+	arc, err := p.ownerArcValueInScope(ctx, p.pool, ownerKind, ownerID, read)
+	if err != nil {
+		return nil, err
+	}
 
 	// The current sample per metric: the latest series row on this owner's arc,
 	// rendered to jsonb so the coalesce against the contract default stays in
@@ -74,7 +85,7 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 		// The ad-hoc arm alone when the owner kind has no classifier to inherit
 		// from: every series the instance's arc holds.
 		q = fmt.Sprintf(`
-		with inst as (select %[3]s as arc from %[1]s where name = $1), %[2]s
+		with inst as (select %[3]s as arc from %[1]s where %[3]s = $1), %[2]s
 		select mt.name as metric_type_name, mt.id as metric_type_id, mt.display_name, mt.data_type, false as required,
 		       null::jsonb as default_value,
 		       s.value as sample_value,
@@ -88,7 +99,7 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 	} else {
 		q = fmt.Sprintf(`
 		with inst as (
-			select %[6]s as arc, %[2]s as classifier from %[1]s where name = $1
+			select %[6]s as arc, %[2]s as classifier from %[1]s where %[6]s = $1
 		), %[5]s
 		-- The contract arm: what the instance's classifier declares, resolved
 		-- against the series' latest sample.
@@ -119,7 +130,7 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 			oc.instanceTable, oc.classifierCol, oc.metricContractTable, oc.contractKeyCol, sampled, oc.arcMatch)
 	}
 
-	rows, err := p.pool.Query(ctx, q, ownerID)
+	rows, err := p.pool.Query(ctx, q, arc)
 	if err != nil {
 		return nil, fmt.Errorf("storage: effective metrics %s/%s: %w", ownerKind, ownerID, err)
 	}

@@ -46,12 +46,12 @@ type systemPropertyBody struct {
 
 // systemPropertyPathInput addresses one property on one system.
 type systemPropertyPathInput struct {
-	Name     string `path:"name" doc:"The system's unique name"`
+	Name     string `path:"name" doc:"The system's name, or a dotted address (e.g. boi.17c.$sys.av)"`
 	Property string `path:"property" doc:"The property name"`
 }
 
 type setSystemPropertyInput struct {
-	Name     string `path:"name" doc:"The system's unique name"`
+	Name     string `path:"name" doc:"The system's name, or a dotted address (e.g. boi.17c.$sys.av)"`
 	Property string `path:"property" doc:"The property name"`
 	Body     struct {
 		Value any `json:"value" doc:"The value to declare, shape given by the property's data_type"`

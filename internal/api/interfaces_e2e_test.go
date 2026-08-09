@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
@@ -95,6 +96,63 @@ func TestInterfaceAPI(t *testing.T) {
 		if it.Component != nil && *it.Component == "comp-a" {
 			t.Fatalf("operator@B leaked comp-a interface %q", it.Name)
 		}
+	}
+}
+
+// TestInterfaceCreateWithAmbiguousComponentIs409 closes I1's other half:
+// interfaceComponentID resolves the create body's "component" field through
+// resolveScopedRef (ruling 2, #627), and on more than one in-scope match that
+// returns storage.ErrAmbiguousName untranslated (the switch in
+// interfaceComponentID only recognizes ErrComponentNotFound and
+// ErrComponentForbidden; anything else passes through as-is). Before
+// mapInterfaceErr grew its mapRefErr check, that fell through to the
+// handler's own default, an unmapped 500, for a state #627 makes routine (two
+// same-named components in different placement buckets), not exceptional.
+// Skipped under -short.
+func TestInterfaceCreateWithAmbiguousComponentIs409(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatalf("mint owner: %v", err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	all := scope.Set{All: true}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "holder"}, all); err != nil {
+		t.Fatalf("create holder: %v", err)
+	}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-cmp"}, all); err != nil {
+		t.Fatalf("create root dup-cmp: %v", err)
+	}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-cmp", ParentName: ptr("holder")}, all); err != nil {
+		t.Fatalf("create nested dup-cmp: %v", err)
+	}
+
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	status, body := c.send(ownerTok, http.MethodPost, "/interfaces", map[string]any{"interface_type": "tcp", "component": "dup-cmp"})
+	if status != http.StatusConflict {
+		t.Fatalf("create interface with ambiguous component status = %d, want 409\nbody: %s", status, body)
+	}
+	if !strings.Contains(string(body), "dup-cmp") {
+		t.Fatalf("409 body = %s, want it to name the ambiguous reference", body)
 	}
 }
 

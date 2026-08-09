@@ -1,0 +1,106 @@
+# The component_type taxonomy: the hierarchical registry a product is
+# classified by (partially reverses ADR-0047's retirement of the flat
+# component_type registry, recorded as such: the reintroduced shape sits above
+# product, not beside component). Official (ON CONFLICT DO UPDATE,
+# authoritative), unlike location_types.yaml's seed-if-absent example content.
+#
+# Litmus test for a subtype: it exists only where a standard's slot would name
+# it (a huddle-room standard's mic slot wants "wireless-mic" or "ceiling-mic",
+# not just "mic"). Every root carries its own stem (the auto-generated
+# component name's prefix), abbrev (a compact form), and icon; a child leaves
+# a field blank to inherit the parent's, and sets one only to override it.
+# Order matters: a child's parent_id must name an id that appears earlier in
+# this list.
+component_types:
+  - id: display
+    display_name: Display
+    stem: display
+    abbrev: fp
+    icon: monitor
+  - id: interactive-display
+    display_name: Interactive Display
+    parent_id: display
+  - id: projector
+    display_name: Projector
+    stem: projector
+    abbrev: proj
+    icon: projector
+  - id: screen
+    display_name: Screen
+    stem: screen
+    abbrev: scr
+    icon: tv
+  - id: presentation-switcher
+    display_name: Presentation Switcher
+    stem: switcher
+    abbrev: sw
+    icon: shuffle
+  - id: video-bar
+    display_name: Video Bar
+    stem: videobar
+    abbrev: vb
+    icon: video
+  - id: dsp
+    display_name: DSP
+    stem: dsp
+    abbrev: dsp
+    icon: cpu
+  - id: amplifier
+    display_name: Amplifier
+    stem: amp
+    abbrev: amp
+    icon: speaker
+  - id: mic
+    display_name: Microphone
+    stem: mic
+    abbrev: mic
+    icon: mic
+  - id: wireless-mic
+    display_name: Wireless Microphone
+    parent_id: mic
+  - id: ceiling-mic
+    display_name: Ceiling Microphone
+    parent_id: mic
+  - id: boundary-mic
+    display_name: Boundary Microphone
+    parent_id: mic
+  - id: camera
+    display_name: Camera
+    stem: camera
+    abbrev: cam
+    icon: camera
+  - id: codec
+    display_name: Codec
+    stem: codec
+    abbrev: cdc
+    icon: video
+  - id: control-processor
+    display_name: Control Processor
+    stem: processor
+    abbrev: cp
+    icon: cpu
+  - id: touch-panel
+    display_name: Touch Panel
+    stem: panel
+    abbrev: tp
+    icon: touchpad
+  - id: dante-card
+    display_name: Dante Card
+    stem: dante
+    abbrev: dc
+    icon: network
+  - id: generic-device
+    display_name: Generic Device
+    stem: device
+    abbrev: dev
+    icon: box
+  - id: generic-app
+    display_name: Generic App
+    stem: app
+    abbrev: app
+    icon: app-window
+  - id: generic-service
+    display_name: Generic Service
+    stem: service
+    abbrev: svc
+    icon: server

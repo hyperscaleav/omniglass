@@ -37,7 +37,10 @@ type scopedEntity struct {
 var scopedEntities = []scopedEntity{
 	{resource: "location", base: "/locations", typeField: "location_type", typeValue: "campus"},
 	{resource: "system", base: "/systems", typeField: "standard_id", typeValue: "meeting-room"},
-	{resource: "component", base: "/components"},
+	// component has no type field, but the same mechanism supplies its required
+	// product (the classification floor: every component is an instance of a
+	// product), so the matrix's generic create body works unchanged.
+	{resource: "component", base: "/components", typeField: "product", typeValue: "generic-device"},
 }
 
 func (e scopedEntity) createBody(name, parent string) map[string]any {

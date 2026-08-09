@@ -65,7 +65,7 @@ export function accountableLabel(e: AuditEvent): string {
 // Some resources carry their operator-facing handle under a resource-specific
 // key rather than a name field: a tag binding is read by its tag key, a
 // property by its property type, an assignment or grant by its role, an alarm
-// or capability fact by the component it sits on, a command by its type.
+// by the component it sits on, a command by its type.
 // Casing follows the writer (Go structs marshal field names, map projections
 // lowercase).
 const RESOURCE_LABEL_KEYS: Record<string, string[]> = {
@@ -74,7 +74,6 @@ const RESOURCE_LABEL_KEYS: Record<string, string[]> = {
   alarm: ["component", "Component"],
   command: ["command_type"],
   system_role_assignment: ["role"],
-  component_capability: ["component"],
   principal_grant: ["Role", "role"],
 };
 

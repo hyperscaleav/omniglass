@@ -67,12 +67,12 @@ func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key str
 			_, err := gw.CreateDriver(ctx, "", storage.Driver{Name: s, DisplayName: "X"})
 			return err
 		},
-		"capability": func(s string) error {
-			_, err := gw.CreateCapability(ctx, "", storage.Capability{Name: s, DisplayName: "X"})
-			return err
-		},
 		"product": func(s string) error {
 			_, err := gw.CreateProduct(ctx, "", storage.Product{Name: s, DisplayName: "X"})
+			return err
+		},
+		"component_type": func(s string) error {
+			_, err := gw.CreateComponentType(ctx, "", storage.ComponentType{Name: s, DisplayName: "X"})
 			return err
 		},
 		// A role's key arrives as a bare {role} path param on PUT

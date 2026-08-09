@@ -13,79 +13,11 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// TestEffectiveCapabilities proves the resolved set a component provides: its
-// product's capabilities, plus what the component adds, minus what it suppresses.
-// The productless case is the one that matters most, because it is what lets a
-// component without a product still be staffed under the strict assignment guard.
-func TestEffectiveCapabilities(t *testing.T) {
-	if testing.Short() {
-		t.Skip("integration test needs Postgres")
-	}
-	ctx := context.Background()
-	dsn := storagetest.NewDSN(t)
-	gw, err := storage.NewPG(ctx, dsn)
-	if err != nil {
-		t.Fatalf("open gateway: %v", err)
-	}
-	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-	all := scope.Set{All: true}
-	conn, err := pgx.Connect(ctx, dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	defer conn.Close(ctx)
-
-	// cisco-room-bar declares microphone, speaker, camera, codec.
-	bar := "cisco-room-bar"
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, all); err != nil {
-		t.Fatalf("create component: %v", err)
-	}
-	got, err := gw.EffectiveCapabilities(ctx, conn, "bar-1")
-	if err != nil {
-		t.Fatalf("effective capabilities: %v", err)
-	}
-	if !hasAll(got, "microphone", "speaker", "camera", "codec") {
-		t.Fatalf("product capabilities = %v, want the room bar's four", got)
-	}
-
-	// The component adds one its product does not claim, and suppresses one it does.
-	if _, err := conn.Exec(ctx, `insert into component_capability (component_id, capability_id, present)
-		select id, (select id from capability where name = 'touch-panel'), true from component where name = 'bar-1'
-		union all
-		select id, (select id from capability where name = 'camera'), false from component where name = 'bar-1'`); err != nil {
-		t.Fatalf("declare component capabilities: %v", err)
-	}
-	got, _ = gw.EffectiveCapabilities(ctx, conn, "bar-1")
-	if !hasAll(got, "touch-panel") {
-		t.Fatalf("added capability missing: %v", got)
-	}
-	if hasAll(got, "camera") {
-		t.Fatalf("suppressed capability still present: %v", got)
-	}
-
-	// A productless component provides exactly what it declares, and nothing else.
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "loose-mic"}, all); err != nil {
-		t.Fatalf("create productless: %v", err)
-	}
-	if got, _ = gw.EffectiveCapabilities(ctx, conn, "loose-mic"); len(got) != 0 {
-		t.Fatalf("productless with no declarations = %v, want empty", got)
-	}
-	if _, err := conn.Exec(ctx, `insert into component_capability (component_id, capability_id)
-		select id, (select id from capability where name = 'microphone') from component where name = 'loose-mic'`); err != nil {
-		t.Fatalf("declare on productless: %v", err)
-	}
-	if got, _ = gw.EffectiveCapabilities(ctx, conn, "loose-mic"); !hasAll(got, "microphone") || len(got) != 1 {
-		t.Fatalf("productless capabilities = %v, want exactly [microphone]", got)
-	}
-}
-
 // TestEffectiveRolesAndAssignment proves roles resolve from both arcs (inherited
 // from the standard, ad-hoc on the system), that staffing is visible, and that the
-// assignment guard refuses a component that does not provide what the role needs,
-// naming the gap.
+// typed-slot guard refuses a component whose product's component_type is not
+// within an accepted type's subtree, naming both what the component is and what
+// the role wants.
 func TestEffectiveRolesAndAssignment(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -109,7 +41,7 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 
 	// The test owns its own standard rather than piggybacking on a seeded one, so
 	// what the boot seed happens to declare cannot change what this asserts. It
-	// wants a table mic (microphone + speaker, quorum 2); the system itself also
+	// wants a table mic (a video-bar, quorum 2); the system itself also
 	// declares an ad-hoc display role.
 	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "test-huddle", DisplayName: "Test Huddle"}); err != nil {
 		t.Fatalf("create standard: %v", err)
@@ -128,9 +60,9 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 	// Scoped to the role id this test just created: matching on name alone would
 	// reach across owners and constrain what any other standard may declare.
 	if _, err := conn.Exec(ctx, `
-		insert into system_role_capability (role_id, capability_id)
-		select $1, (select id from capability where name = c) from unnest(array['microphone','speaker']) c`, micRole); err != nil {
-		t.Fatalf("require capabilities: %v", err)
+		insert into system_role_type (role_id, component_type_id)
+		select $1, id from component_type where name = 'video-bar'`, micRole); err != nil {
+		t.Fatalf("require accepted type: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `
 		insert into system_role (owner_kind, system_id, name, display_name)
@@ -156,7 +88,7 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 		t.Fatalf("wall-display should be ad-hoc, got FromStandard=true")
 	}
 
-	// A room bar provides microphone and speaker, so it can fill the mic role.
+	// A room bar is classified video-bar, so it fills the table-mic slot.
 	bar := "cisco-room-bar"
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, all); err != nil {
 		t.Fatalf("create bar: %v", err)
@@ -183,35 +115,27 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 		}
 	}
 
-	// A display provides neither microphone nor speaker: refused, and the refusal
-	// names exactly what is missing so the operator can act on it.
+	// A display is not within the video-bar subtree: refused, and the refusal
+	// names both what the component is and what the role wants.
 	qm := "samsung-qm55"
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-1", ProductName: &qm}, all); err != nil {
 		t.Fatalf("create panel: %v", err)
 	}
 	err = gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "panel-1", all)
-	var short *storage.CapabilityShortfall
+	var short *storage.TypeShortfall
 	if !errors.As(err, &short) {
-		t.Fatalf("assign a non-satisfying component: err = %v, want CapabilityShortfall", err)
+		t.Fatalf("assign a non-satisfying component: err = %v, want TypeShortfall", err)
 	}
-	if !hasAll(short.Missing, "microphone", "speaker") {
-		t.Fatalf("shortfall missing = %v, want both microphone and speaker named", short.Missing)
+	if short.Component != "panel-1" || short.ComponentType != "display" || short.Role != "Table microphone" || !hasAll(short.WantTypes, "video-bar") {
+		t.Fatalf("shortfall = %+v, want panel-1/display refused against role Table microphone wanting video-bar", short)
 	}
 
-	// The decision this whole capability model exists for: a PRODUCTLESS component
-	// that declares its own capabilities can be staffed, so strict refusal does not
-	// lock out a component just because it has no product.
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "loose-mic"}, all); err != nil {
-		t.Fatalf("create productless: %v", err)
+	// A second video-bar reaches quorum.
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-2", ProductName: &bar}, all); err != nil {
+		t.Fatalf("create second bar: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into component_capability (component_id, capability_id)
-		select id, (select id from capability where name = 'microphone') from component where name = 'loose-mic'
-		union all
-		select id, (select id from capability where name = 'speaker') from component where name = 'loose-mic'`); err != nil {
-		t.Fatalf("declare capabilities: %v", err)
-	}
-	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "loose-mic", all); err != nil {
-		t.Fatalf("assign a productless component that declares what the role needs: %v", err)
+	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-2", all); err != nil {
+		t.Fatalf("assign a second satisfying component: %v", err)
 	}
 	roles, _ = gw.EffectiveRoles(ctx, "hq-huddle", all)
 	for _, r := range roles {
@@ -221,10 +145,10 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 	}
 
 	// Unassign removes it; unassigning again is an explicit miss.
-	if err := gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "loose-mic", all); err != nil {
+	if err := gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "bar-2", all); err != nil {
 		t.Fatalf("unassign: %v", err)
 	}
-	if err := gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "loose-mic", all); !errors.Is(err, storage.ErrAssignmentMissing) {
+	if err := gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "bar-2", all); !errors.Is(err, storage.ErrAssignmentMissing) {
 		t.Fatalf("unassign twice: err = %v, want ErrAssignmentMissing", err)
 	}
 
@@ -249,10 +173,10 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 		t.Fatalf("delete an unassigned component: %v", err)
 	}
 
-	// A component that does not exist is a not-found, NOT a capability shortfall.
-	// An absent component resolves to an empty capability set, so without an
-	// existence check the operator gets "missing microphone, speaker" for what is
-	// really a typo.
+	// A component that does not exist is a not-found, NOT a type shortfall. An
+	// absent component has no product to classify, so without an existence
+	// check the operator gets a confusing type refusal for what is really a
+	// typo.
 	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "no-such-component", all); !errors.Is(err, storage.ErrComponentNotFound) {
 		t.Fatalf("assign an unknown component: err = %v, want ErrComponentNotFound", err)
 	}
@@ -268,6 +192,352 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 	}
 	if got, _ := gw.EffectiveRoles(ctx, "one-off", all); len(got) != 0 {
 		t.Fatalf("one-off system roles = %+v, want none (it conforms to no standard)", got)
+	}
+}
+
+// typedSlotSystem creates a fresh standalone system for a typed-slot guard
+// test, isolated from whatever the boot seed happens to declare.
+func typedSlotSystem(t *testing.T, ctx context.Context, gw storage.Gateway, all scope.Set, name string) {
+	t.Helper()
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: name}, all); err != nil {
+		t.Fatalf("create system %s: %v", name, err)
+	}
+}
+
+// TestAssignRefusesWrongType proves the #626 guard's headline refusal: a
+// component classified outside every type a role accepts is refused with a
+// 422-shaped error naming both parties in operator vocabulary, exactly the
+// touch-panel-into-a-display-slot example from the task brief.
+func TestAssignRefusesWrongType(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	typedSlotSystem(t, ctx, gw, all, "wrong-type-sys")
+
+	if _, err := gw.SetSystemRole(ctx, "", "system", "wrong-type-sys", storage.SystemRoleSpec{
+		Name: "display-left", DisplayName: "Display (Left)", AcceptedTypes: []string{"display"},
+	}); err != nil {
+		t.Fatalf("declare role: %v", err)
+	}
+
+	crestron := "crestron-tss-1070" // component_type: touch-panel
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-1", ProductName: &crestron}, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+
+	err = gw.AssignRole(ctx, "", "wrong-type-sys", "display-left", "panel-1", all)
+	var short *storage.TypeShortfall
+	if !errors.As(err, &short) {
+		t.Fatalf("assign a wrong-type component: err = %v, want TypeShortfall", err)
+	}
+	if short.Component != "panel-1" || short.ComponentType != "touch-panel" ||
+		short.Role != "Display (Left)" || !hasAll(short.WantTypes, "display") {
+		t.Fatalf("shortfall = %+v, want panel-1/touch-panel refused against role Display (Left) wanting display", short)
+	}
+}
+
+// TestAssignAcceptsSubtype proves the guard walks the component_type subtree:
+// a role that accepts "display" also accepts "interactive-display", one of
+// its declared children, without the role naming the subtype itself.
+func TestAssignAcceptsSubtype(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	typedSlotSystem(t, ctx, gw, all, "subtype-sys")
+
+	if _, err := gw.SetSystemRole(ctx, "", "system", "subtype-sys", storage.SystemRoleSpec{
+		Name: "display-left", DisplayName: "Display (Left)", AcceptedTypes: []string{"display"},
+	}); err != nil {
+		t.Fatalf("declare role: %v", err)
+	}
+
+	if _, err := gw.CreateProduct(ctx, "", storage.Product{
+		Name: "test-interactive-display", DisplayName: "Test Interactive Display",
+		ComponentType: "interactive-display", Kind: "device",
+	}); err != nil {
+		t.Fatalf("create subtype product: %v", err)
+	}
+	sub := "test-interactive-display"
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-2", ProductName: &sub}, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+
+	if err := gw.AssignRole(ctx, "", "subtype-sys", "display-left", "panel-2", all); err != nil {
+		t.Fatalf("assign a subtype component: %v, want success (interactive-display is within display's subtree)", err)
+	}
+}
+
+// TestAssignProductPin proves the second half of the guard: when a role pins
+// specific products, a component of an otherwise-accepted type but a
+// different product is refused naming the pinned products, and the pinned
+// product itself is accepted.
+func TestAssignProductPin(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	typedSlotSystem(t, ctx, gw, all, "pin-sys")
+
+	if _, err := gw.SetSystemRole(ctx, "", "system", "pin-sys", storage.SystemRoleSpec{
+		Name: "main-display", DisplayName: "Main Display",
+		AcceptedTypes: []string{"display"}, PinnedProducts: []string{"samsung-qm55"},
+	}); err != nil {
+		t.Fatalf("declare role: %v", err)
+	}
+
+	if _, err := gw.CreateProduct(ctx, "", storage.Product{
+		Name: "other-display", DisplayName: "Other Display", ComponentType: "display", Kind: "device",
+	}); err != nil {
+		t.Fatalf("create other display product: %v", err)
+	}
+	other := "other-display"
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-3", ProductName: &other}, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+
+	err = gw.AssignRole(ctx, "", "pin-sys", "main-display", "panel-3", all)
+	var pinShort *storage.ProductPinShortfall
+	if !errors.As(err, &pinShort) {
+		t.Fatalf("assign right type, wrong product: err = %v, want ProductPinShortfall", err)
+	}
+	if pinShort.Component != "panel-3" || pinShort.ComponentProduct != "other-display" ||
+		pinShort.Role != "Main Display" || !hasAll(pinShort.WantProducts, "samsung-qm55") {
+		t.Fatalf("shortfall = %+v, want panel-3/other-display refused against role Main Display wanting samsung-qm55", pinShort)
+	}
+
+	qm := "samsung-qm55"
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "qm-2", ProductName: &qm}, all); err != nil {
+		t.Fatalf("create pinned-product component: %v", err)
+	}
+	if err := gw.AssignRole(ctx, "", "pin-sys", "main-display", "qm-2", all); err != nil {
+		t.Fatalf("assign the pinned product: %v, want success", err)
+	}
+}
+
+// TestSecondRoleSameComponentRefused proves the #626 one-role-per-component
+// rule: a component already filling one role in a system is refused when
+// assigned to a second, and the refusal names both the component and the
+// role it already holds, not just the status.
+func TestSecondRoleSameComponentRefused(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	typedSlotSystem(t, ctx, gw, all, "double-staff-sys")
+
+	if _, err := gw.SetSystemRole(ctx, "", "system", "double-staff-sys", storage.SystemRoleSpec{
+		Name: "main-display", DisplayName: "Main Display",
+	}); err != nil {
+		t.Fatalf("declare main-display: %v", err)
+	}
+	if _, err := gw.SetSystemRole(ctx, "", "system", "double-staff-sys", storage.SystemRoleSpec{
+		Name: "confidence-monitor", DisplayName: "Confidence Monitor",
+	}); err != nil {
+		t.Fatalf("declare confidence-monitor: %v", err)
+	}
+
+	bar := "cisco-room-bar"
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	if err := gw.AssignRole(ctx, "", "double-staff-sys", "main-display", "bar-1", all); err != nil {
+		t.Fatalf("assign to first role: %v", err)
+	}
+
+	err = gw.AssignRole(ctx, "", "double-staff-sys", "confidence-monitor", "bar-1", all)
+	var staffed *storage.ComponentStaffedShortfall
+	if !errors.As(err, &staffed) {
+		t.Fatalf("assign a second role to the same component: err = %v, want ComponentStaffedShortfall", err)
+	}
+	if staffed.Component != "bar-1" || staffed.HeldRole != "Main Display" || staffed.System != "double-staff-sys" {
+		t.Fatalf("shortfall = %+v, want bar-1 refused because it already fills Main Display in double-staff-sys", staffed)
+	}
+	if !strings.Contains(err.Error(), "bar-1") || !strings.Contains(err.Error(), "Main Display") {
+		t.Fatalf("shortfall message = %q, want it to name both bar-1 and Main Display", err.Error())
+	}
+
+	// Re-assigning to the SAME role it already holds stays idempotent: the
+	// exclusion is role_id <> the target role, not "already staffed at all".
+	if err := gw.AssignRole(ctx, "", "double-staff-sys", "main-display", "bar-1", all); err != nil {
+		t.Fatalf("re-assign to the role it already holds: %v, want idempotent success", err)
+	}
+}
+
+// TestCapacitySurvivesUnrelatedEdit proves capacity reaches all six write
+// sites (#626): a declared capacity must not be silently cleared by a later
+// edit that only touches an unrelated field, the same live defect impact
+// carries today (Task 9 fixes that one; this test guards capacity from
+// inheriting it).
+func TestCapacitySurvivesUnrelatedEdit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	typedSlotSystem(t, ctx, gw, all, "capacity-persist-sys")
+
+	cap3 := 3
+	if _, err := gw.SetSystemRole(ctx, "", "system", "capacity-persist-sys", storage.SystemRoleSpec{
+		Name: "main-display", DisplayName: "Main Display", Capacity: &cap3,
+	}); err != nil {
+		t.Fatalf("declare with capacity: %v", err)
+	}
+
+	r, err := gw.SetSystemRole(ctx, "", "system", "capacity-persist-sys", storage.SystemRoleSpec{
+		Name: "main-display", DisplayName: "Main Display (renamed)",
+	})
+	if err != nil {
+		t.Fatalf("edit display_name only: %v", err)
+	}
+	if r.Capacity == nil || *r.Capacity != 3 {
+		t.Fatalf("capacity after an unrelated edit = %v, want it to survive at 3", r.Capacity)
+	}
+	if r.DisplayName != "Main Display (renamed)" {
+		t.Fatalf("display_name = %q, want the edit to take", r.DisplayName)
+	}
+}
+
+// TestCapacityBelowQuorumRefused proves the declaration-alone refusal (422):
+// a capacity below the role's own quorum can never be satisfied by any
+// staffing, so it is refused at declare time rather than left to confuse an
+// operator staffing to quorum later.
+func TestCapacityBelowQuorumRefused(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	typedSlotSystem(t, ctx, gw, all, "capacity-quorum-sys")
+
+	badCap := 1
+	_, err = gw.SetSystemRole(ctx, "", "system", "capacity-quorum-sys", storage.SystemRoleSpec{
+		Name: "main-display", DisplayName: "Main Display", Quorum: 2, Capacity: &badCap,
+	})
+	if !errors.Is(err, storage.ErrCapacityBelowQuorum) {
+		t.Fatalf("declare capacity below quorum: err = %v, want ErrCapacityBelowQuorum", err)
+	}
+}
+
+// TestLoweringCapacityBelowCountRefusedAcrossInheritingSystems proves the
+// other-rows refusal (409): a standard-owned role is staffed independently
+// in every conforming system, so lowering its capacity must be refused if
+// ANY conforming system exceeds the new cap, even when the system that
+// triggered the edit would itself be fine.
+func TestLoweringCapacityBelowCountRefusedAcrossInheritingSystems(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+
+	std := "pair-cap-standard"
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, DisplayName: "Pair Cap"}); err != nil {
+		t.Fatalf("create standard: %v", err)
+	}
+	if _, err := gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
+		Name: "table-mic", DisplayName: "Table Mic", AcceptedTypes: []string{"video-bar"},
+	}); err != nil {
+		t.Fatalf("declare standard role: %v", err)
+	}
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "cap-sys-a", StandardID: &std}, all); err != nil {
+		t.Fatalf("create system a: %v", err)
+	}
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "cap-sys-b", StandardID: &std}, all); err != nil {
+		t.Fatalf("create system b: %v", err)
+	}
+
+	bar := "cisco-room-bar"
+	newBar := func(name string) {
+		t.Helper()
+		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: name, ProductName: &bar}, all); err != nil {
+			t.Fatalf("create component %s: %v", name, err)
+		}
+	}
+
+	// System A stays under any cap we will try; system B does not.
+	newBar("a-bar-1")
+	if err := gw.AssignRole(ctx, "", "cap-sys-a", "table-mic", "a-bar-1", all); err != nil {
+		t.Fatalf("assign a-bar-1: %v", err)
+	}
+	for _, name := range []string{"b-bar-1", "b-bar-2", "b-bar-3"} {
+		newBar(name)
+		if err := gw.AssignRole(ctx, "", "cap-sys-b", "table-mic", name, all); err != nil {
+			t.Fatalf("assign %s: %v", name, err)
+		}
+	}
+
+	cap2 := 2
+	_, err = gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
+		Name: "table-mic", DisplayName: "Table Mic", AcceptedTypes: []string{"video-bar"}, Capacity: &cap2,
+	})
+	var short *storage.CapacityShortfall
+	if !errors.As(err, &short) {
+		t.Fatalf("lower capacity below the assigned count in one conforming system: err = %v, want CapacityShortfall", err)
+	}
+	if short.System != "cap-sys-b" || short.Have != 3 || short.Want != 2 {
+		t.Fatalf("shortfall = %+v, want cap-sys-b with 3 exceeding a new cap of 2", short)
 	}
 }
 

@@ -16,7 +16,7 @@ import {
   LOCATIONS_KEY,
   listLocations,
   createLocation,
-  updateLocation, renameLocation,
+  updateLocation, renameLocation, moveLocation,
   checkLocationName,
   deleteLocation,
 } from "../lib/locations";
@@ -81,16 +81,29 @@ export default function Locations() {
     return m;
   });
 
+  // Keyed AND identified by uuid, not the bare name (#627: name uniqueness is
+  // scoped to placement, so two locations can legally share a name under
+  // different parents). A name-keyed map would silently drop one location's
+  // node and reparent its children onto the survivor; a name-keyed node.id
+  // has the identical collision one layer down, in TreeList's own index,
+  // which is what let a click on one duplicate's row open the other
+  // duplicate's blade. addr carries the name for the navigate sites that
+  // still build a name-shaped URL until the URL swap to uuid addressing
+  // lands; TreeList's focus resolution falls back to it.
   const nodes = createMemo<LocNode[]>(() => {
     const list = locations.data ?? [];
-    const byId = new Map<string, LocNode>();
+    const byUuid = new Map<string, LocNode>();
     for (const l of list) {
-      byId.set(l.name, { id: l.name, display: entityLabel(l), children: [], type: l.location_type, actions: l.actions, tags: l.effective_tags ?? {}, raw: l });
+      // pathRender: the server's own dash render of this location's dotted
+      // path (#627 Task 15); a location's own tree never crosses a plane
+      // boundary the way component/system can, but it is wired through for
+      // the same reason (one server-authoritative render, not two).
+      byUuid.set(l.id, { id: l.id, addr: l.name, display: entityLabel(l), pathRender: l.renders?.dash, children: [], type: l.location_type, actions: l.actions, tags: l.effective_tags ?? {}, raw: l });
     }
     const roots: LocNode[] = [];
     for (const l of list) {
-      const node = byId.get(l.name)!;
-      const parent = l.parent ? byId.get(l.parent) : undefined;
+      const node = byUuid.get(l.id)!;
+      const parent = l.parent_id ? byUuid.get(l.parent_id) : undefined;
       if (parent) parent.children.push(node);
       else roots.push(node);
     }
@@ -197,7 +210,10 @@ export default function Locations() {
     if (!confirm(`Delete location "${n.raw.name}"?`)) return;
     setErr(null);
     try {
-      await deleteLocation(n.raw.name);
+      // Addressed by uuid (#627 review finding 1): a duplicate-named location
+      // (legal under different parents, #627 Task 10) is otherwise a 409
+      // (ErrAmbiguousName) on a bare-name address.
+      await deleteLocation(n.raw.id);
       await qc.invalidateQueries({ queryKey: LOCATIONS_KEY });
       navigate("/locations");
     } catch (e) {
@@ -222,6 +238,11 @@ export default function Locations() {
     const path = () => ctx.pathOf(n());
     const kids = () => n().children;
     const canUpdate = () => can(me.data, "location", "update");
+    // Placement (the Parent picker) is gated on its own permission (#627): a
+    // reparent is :move, not the PATCH update gate, so an operator holding
+    // location:update but not location:move can still edit the label and type
+    // but sees the parent as read-only, same as the non-editing view.
+    const canMove = () => can(me.data, "location", "move");
 
     // The reparent picker's candidate list, narrowed to the location's own
     // (stored, not live-edited) type's allowed_parent_types; empty means
@@ -232,10 +253,15 @@ export default function Locations() {
     // final, possibly-also-patched type) and surfaces through saveErr below,
     // exactly like every other placement violation this slice.
     const allowedParentTypes = () => locationTypes.data?.find((t) => t.name === n().raw.location_type)?.allowed_parent_types ?? [];
+    // Keyed AND valued on uuid, not name (#627): two same-named locations
+    // would otherwise render as value-identical options (an operator could
+    // not tell, or choose between, them), and the self-exclusion guard below
+    // needs a key that is actually unique to work at all. The API
+    // dual-accepts uuid-or-name (ADR-0062), so posting the uuid is safe.
     const parentCandidates = createMemo(() => {
       const allowed = allowedParentTypes();
       const pool = allowed.length === 0 ? (locations.data ?? []) : (locations.data ?? []).filter((l) => allowed.includes(l.location_type));
-      return pool.map((l) => ({ id: l.name, value: l.name, label: entityLabel(l), parentId: l.parent, rank: TYPE_RANK[l.location_type] ?? 9 }));
+      return pool.map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id, rank: TYPE_RANK[l.location_type] ?? 9 }));
     });
     const parentTypeLabel = (nm: string) => (nm === ROOT_PLACEMENT ? "Root" : locationTypes.data?.find((t) => t.name === nm)?.display_name ?? nm);
     const parentHint = () =>
@@ -257,7 +283,7 @@ export default function Locations() {
     const [initialParentName, setInitialParentName] = createSignal("");
     async function runCheck() {
       setChecking(true);
-      try { setNameCheck(await checkLocationName(name().trim())); }
+      try { setNameCheck(await checkLocationName(name().trim(), n().raw.parent)); }
       catch { setNameCheck(null); }
       finally { setChecking(false); }
     }
@@ -269,28 +295,36 @@ export default function Locations() {
         setType(n().raw.location_type ?? "");
         setName(n().raw.name);
         setNameCheck(null);
-        const seed = parent()?.raw.name ?? "";
+        const seed = parent()?.raw.id ?? "";
         setParentName(seed);
         setInitialParentName(seed);
       }
     }));
     // Consume a pending "open in edit" handoff (from create or the row pencil) once
     // the node has resolved.
-    createEffect(on(() => n().raw.name, (name) => { if (name && consumePendingEdit(name) && canUpdate()) edit?.begin(); }));
+    createEffect(on(() => n().id, (id) => { if (id && consumePendingEdit(id) && canUpdate()) edit?.begin(); }));
 
     edit?.bind({
       editable: canUpdate,
       save: async () => {
         setSaveErr(null);
         const renamed = name().trim() !== n().raw.name;
+        const moved = canMove() && parentName() !== initialParentName();
         try {
-          const movedParent = parentName() !== initialParentName() ? parentName() : undefined;
-          await updateLocation(n().raw.name, {
+          // Addressed by uuid (#627 review finding 1): see del() above.
+          await updateLocation(n().raw.id, {
             display_name: display() || undefined,
             location_type: type() || undefined,
-            ...(movedParent ? { parent: movedParent } : {}),
           });
-          // The rename is a second call and it goes LAST, because it is the one that
+          // The move is a second call, not a PATCH field (#627): placement left the
+          // patch body entirely, since a reparent is its own authorization act
+          // (location:move, distinct from location:update) and its own audit verb.
+          // It goes after the base patch and before the rename, separately
+          // refusable (a cycle, a placement-type mismatch, or a name collision at
+          // the destination the advisory precheck cannot rule out), the same
+          // reasoning that already puts rename last below.
+          if (moved) await moveLocation(n().raw.id, parentName());
+          // The rename is a third call and it goes LAST, because it is the one that
           // can be refused on its own: it needs <resource>:rename, and a duplicate
           // name is a 409 the advisory :checkName precheck cannot rule out. Doing it
           // last means a refusal leaves the other edits saved and the name unchanged.
@@ -300,8 +334,10 @@ export default function Locations() {
           // display name the server had already accepted: the operator saw a total
           // failure for a half-committed save, and Cancel re-seeded the inputs from
           // that stale cache.
-          if (renamed) await renameLocation(n().raw.name, name().trim());
-          if (renamed) navigate(`/locations/${encodeURIComponent(name().trim())}`);
+          // No hand-off navigate after a rename (#627 Task 15c): see
+          // Components.tsx's own save() for why (the route carries the id,
+          // which a rename never changes).
+          if (renamed) await renameLocation(n().raw.id, name().trim());
         } catch (e) {
           setSaveErr(describeError(e));
           throw e; // keep the slot in edit mode so the operator can retry
@@ -394,7 +430,7 @@ export default function Locations() {
           <span class="eyebrow">Placement</span>
           <div class="grid grid-cols-2 gap-5">
             <Show
-              when={editing()}
+              when={editing() && canMove()}
               fallback={
                 <KVStacked
                   label="Parent"
@@ -407,7 +443,7 @@ export default function Locations() {
                   items={parentCandidates()}
                   value={parentName()}
                   onChange={setParentName}
-                  excludeSubtreeOf={n().raw.name}
+                  excludeSubtreeOf={n().raw.id}
                   rootLabel={parent() ? undefined : "Root (current)"}
                 />
               </FieldRow>
@@ -437,11 +473,22 @@ export default function Locations() {
           </div>
         </Show>
 
-        {/* The rollup: a location has no roles of its own, so its verdict is the
+        {/* Every panel below (except onOpenSystem) is addressed by the
+            location's uuid (#627 review finding 1), not its name: two
+            locations can legally share a name under different parents (#627
+            Task 10), and each of these routes dual-accepts uuid-or-name
+            (ADR-0062) but refuses an ambiguous bare name with a 409.
+
+            The rollup: a location has no roles of its own, so its verdict is the
             worst among the systems placed anywhere beneath it, each linked to the
-            detail that can say why. */}
+            detail that can say why.
+
+            onOpenSystem still navigates by name (#627 Task 15c): the health
+            rollup read body carries only system names, no id. See
+            Systems.tsx's own onOpenComponent comment for why this is left
+            as-is (TreeList's byAddr fallback resolves it). */}
         <LocationHealthPanel
-          location={n().raw.name}
+          location={n().raw.id}
           onOpenSystem={(name) => navigate(`/systems/${encodeURIComponent(name)}`)}
         />
 
@@ -449,12 +496,12 @@ export default function Locations() {
             values. The panel batches its writes into the accordion's Save, so a
             property override commits with the location's core facts. */}
         <PropertiesPanel
-          location={n().raw.name}
+          location={n().raw.id}
           edit={edit}
-          onOpen={(property) => ctx.openBlade({ kind: "property-resolution", id: ownerPropertyBladeId({ kind: "location", name: n().raw.name }, property) })}
+          onOpen={(property) => ctx.openBlade({ kind: "property-resolution", id: ownerPropertyBladeId({ kind: "location", name: n().raw.id }, property) })}
         />
 
-        <TagAdder kind="location" name={n().raw.name} canUpdate={editing() && can(me.data, "location", "update")} canCreateKey={can(me.data, "tag", "create")} />
+        <TagAdder kind="location" name={n().raw.id} canUpdate={editing() && can(me.data, "location", "update")} canCreateKey={can(me.data, "tag", "create")} />
 
         <Show when={ctx.full}>
           <div class="flex flex-wrap items-center gap-2 border-t border-base-300 pt-4">
@@ -501,10 +548,13 @@ export default function Locations() {
       setFormErr(null);
       const nm = name().trim();
       try {
-        await createLocation({ name: nm, location_type: type().trim(), display_name: display().trim() || undefined, parent: parent() || undefined });
+        // Bind the create response (#627 Task 15c): see Components.tsx's
+        // own create() for why the id, not the locally typed name, is what
+        // this hands off to openInEdit and navigate.
+        const created = await createLocation({ name: nm, location_type: type().trim(), display_name: display().trim() || undefined, parent: parent() || undefined });
         await qc.invalidateQueries({ queryKey: LOCATIONS_KEY });
-        openInEdit(nm);
-        navigate(`/locations/${encodeURIComponent(nm)}`);
+        openInEdit(created.id);
+        navigate(`/locations/${encodeURIComponent(created.id)}`);
       } catch (er) {
         setFormErr(describeError(er));
         setBusy(false);
@@ -552,8 +602,10 @@ export default function Locations() {
           <span class="eyebrow">Placement</span>
           <div class="grid grid-cols-2 gap-3">
             <FieldRow label="Parent">
+              {/* Keyed AND valued on uuid, not name (#627): see
+                  parentCandidates above for why. */}
               <TreeSelect
-                items={(locations.data ?? []).map((l) => ({ id: l.name, value: l.name, label: entityLabel(l), parentId: l.parent, rank: TYPE_RANK[l.location_type] ?? 9 }))}
+                items={(locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id, rank: TYPE_RANK[l.location_type] ?? 9 }))}
                 value={parent()}
                 onChange={setParent}
                 rootLabel="Root (no parent)"
@@ -579,7 +631,7 @@ export default function Locations() {
   const cfg: ListConfig<LocNode> = {
     ...locationsDescriptor,
     nodes,
-    focus: () => params.name,
+    focus: () => params.id,
     loading: () => locations.isLoading,
     error: () => locations.error,
     filterPlaceholder: "Filter by name, type…",
@@ -617,7 +669,7 @@ export default function Locations() {
     onBack: () => navigate("/locations"),
     onDelete: (n) => del(n),
     onNew: () => navigate("/locations/create"),
-    onEdit: (n) => { openInEdit(n.raw.name); navigate(`/locations/${encodeURIComponent(n.raw.name)}`); },
+    onEdit: (n) => { openInEdit(n.id); navigate(`/locations/${encodeURIComponent(n.id)}`); },
     renderCreate: () => <LocationCreate />,
     renderDetail: (n, ctx) => <LocationDetail node={n} ctx={ctx} />,
     extraBlades: { "property-resolution": propertyResolutionBlade },

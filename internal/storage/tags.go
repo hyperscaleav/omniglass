@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/tag"
 	"github.com/jackc/pgx/v5"
@@ -183,6 +184,9 @@ func (p *PG) DistinctTagValues(ctx context.Context, key string) ([]string, error
 // UpdateTag replaces a key's governance fields (applies_to, propagates); the
 // name is fixed at creation. An all-scope update grant is required (tag:update).
 func (p *PG) UpdateTag(ctx context.Context, actorID, name string, spec TagSpec, action scope.Set) (*Tag, error) {
+	if err := RejectAddressForm("tag", name); err != nil {
+		return nil, err
+	}
 	if !action.All {
 		return nil, ErrTagForbidden
 	}
@@ -223,6 +227,9 @@ func (p *PG) UpdateTag(ctx context.Context, actorID, name string, spec TagSpec, 
 // tag_binding FK is on delete cascade). An all-scope delete grant is required
 // (tag:delete); an unknown key is the non-disclosing ErrTagNotFound.
 func (p *PG) DeleteTag(ctx context.Context, actorID, name string, action scope.Set) error {
+	if err := RejectAddressForm("tag", name); err != nil {
+		return err
+	}
 	if !action.All {
 		return ErrTagForbidden
 	}
@@ -413,7 +420,44 @@ func (p *PG) ResolveTags(ctx context.Context, componentID, forSystem string, rea
 	if !in {
 		return nil, ErrComponentNotFound
 	}
-	rows, err := p.pool.Query(ctx, resolveTagsSQL, componentID, forSystem)
+	// forSystem is resolved once here (uuid-or-name, ADR-0062), scope-blind
+	// (scopedByName, not scopedByNameInScope): read above is resolved for
+	// "component" (this route is gated on component:read alone, no
+	// system:read grant is required or checked), and read's ids are
+	// component-tree ids, not system-tree ones, so checking them against the
+	// system table's own ancestor chain can never match a real row. Threading
+	// it through denied the system band for every non-all caller regardless
+	// of the truth (a tier-mismatch defect a review caught), not just a
+	// genuinely out-of-scope one. forSystem previewing a system's cascade
+	// contribution is not itself a disclosure of that system's own data: the
+	// caller only ever gets back tag VALUES flowing onto a component they
+	// already proved read access to, the same posture as a *NameTaken
+	// advisory, which is why an ambiguous forSystem redacts Candidates below
+	// rather than trying to filter by a scope that cannot apply here.
+	//
+	// This still closes the CTE-side leak the scope check was added for:
+	// resolving once here, rather than leaving seed_sys to match forSystem by
+	// name over possibly more than one row (#627), means an ambiguous name is
+	// refused up front instead of silently seeding the cascade from every
+	// same-named system and unioning both systems' bindings into one answer.
+	// A system reference that resolves to none at all (absent, or ambiguous)
+	// binds uuid.Nil, a well-formed id no real row can ever have: seed_sys
+	// then matches nothing, preserving the existing "named a system with no
+	// binding here" silent-empty-band behavior (the doc comment on
+	// ResolveTags) rather than a new hard error, and distinctly from ""
+	// (which selects the primary membership instead).
+	systemArg := forSystem
+	if forSystem != "" {
+		sys, err := scopedByName(ctx, p.pool, systemConfig, forSystem)
+		if errors.Is(err, ErrSystemNotFound) {
+			systemArg = uuid.Nil.String()
+		} else if err != nil {
+			return nil, withoutCandidates(err)
+		} else {
+			systemArg = sys.ID
+		}
+	}
+	rows, err := p.pool.Query(ctx, resolveTagsSQL, componentID, systemArg)
 	if err != nil {
 		return nil, fmt.Errorf("storage: resolve tags: %w", err)
 	}
@@ -448,19 +492,23 @@ with recursive
 target as (
     select id, name, location_id from component where id = $1
 ),
--- The system band is seeded from MEMBERSHIP. Given a system ($2), it resolves
--- against that one, and only if the component is actually a member: naming a
--- system it has no binding to must not lend it configuration. Given none, it
--- falls back to the component's PRIMARY membership, which is what makes the
--- default a convenience for callers with no system in hand rather than the rule.
--- The chain stays single-valued because the rank below has no tiebreaker after
--- depth, so two seeds at the same band would resolve nondeterministically.
+-- The system band is seeded from MEMBERSHIP. Given a system ($2, already
+-- resolved to its id by ResolveTags: never matched by name here, since this
+-- is a CTE and not a scalar subquery, so an ambiguous name would not raise
+-- SQLSTATE 21000, it would silently seed from every same-named system), it
+-- resolves against that one, and only if the component is actually a member:
+-- naming a system it has no binding to must not lend it configuration. Given
+-- none (empty string), it falls back to the component's PRIMARY membership,
+-- which is what makes the default a convenience for callers with no system in
+-- hand rather than the rule. The chain stays single-valued because the rank
+-- below has no tiebreaker after depth, so two seeds at the same band would
+-- resolve nondeterministically.
 seed_sys as (
     select s.id
     from system s
     join system_member m on m.system_id = s.id
     join target t on t.id = m.component_id
-    where case when $2::text = '' then m.is_primary else s.name = $2::text end
+    where case when $2::text = '' then m.is_primary else s.id = $2::uuid end
 ),
 comp_chain(id, depth) as (
     select id, 0 from component where id = $1
@@ -746,6 +794,14 @@ func resolveTagBindingOwner(ctx context.Context, q querier, kind string, name *s
 	case "node":
 		// A node is estate-wide (not a scope tree), so tagging it needs an all
 		// scope on both legs, like a global owner; the owner id is its principal_id.
+		// RejectAddressForm first, same as GetNode/UpdateNode/DeleteNode/
+		// SetEnrollmentToken: a node's name stays a single token, and this arm's
+		// raw `where name = $1` had no guard of its own, unlike GetNode et al,
+		// so a dotted ref reached the query and simply missed (task-12-review.md
+		// finding 3).
+		if err := RejectAddressForm("node", *name); err != nil {
+			return nil, "", err
+		}
 		if !read.All || !action.All {
 			return nil, "", ErrNodeForbidden
 		}
@@ -763,6 +819,9 @@ func resolveTagBindingOwner(ctx context.Context, q querier, kind string, name *s
 
 // loadTagByName loads a key row by name, returning ErrTagNotFound if absent.
 func loadTagByName(ctx context.Context, q querier, name string) (*Tag, error) {
+	if err := RejectAddressForm("tag", name); err != nil {
+		return nil, err
+	}
 	t, err := scanTagRow(q.QueryRow(ctx, `select `+tagCols+` from tag where name = $1`, name))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTagNotFound

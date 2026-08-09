@@ -59,7 +59,10 @@ sits beside it on the forms that offer one; where it does not, the header **x** 
   **name** is the identifier the API, the CLI, and the URL carry (`hq-boardroom-dsp`, lowercase
   letters, digits, and hyphens, changeable later, see Edit), and the `id` is a uuid the platform mints
   and keeps internally. The name fills itself in from the display name until you edit it, so most of
-  the time you type one field and check the other. The classifier is the entity's shape: a component
+  the time you type one field and check the other. **On a component, name is optional**: leave it
+  blank and the platform mints one from the component's type and the next free number in its room
+  (`display-1`, `display-2`, ...), a **Generated** badge marking it as the platform's to keep current.
+  The classifier is the entity's shape: a component
   picks its [product](/guides/admin/products/), a system the
   [standard](/guides/admin/standards/) it conforms to, a location its
   [type](/guides/admin/location-types/). On a component and a system the classifier is **optional**, so a
@@ -83,20 +86,37 @@ sits beside it on the forms that offer one; where it does not, the header **x** 
   read-only in the console and moves from the API or the CLI. Renaming changes the entity's URL, so
   bookmarks, runbooks, and integration config holding the old name stop resolving. Nothing inside
   Omniglass breaks: every reference holds the entity's `id`, so its tags, grants, alarms, and
-  recorded history follow the rename, and the audit trail stays attributable across it.
-- A **location**'s edit mode also makes its **Parent** editable: the Placement section swaps its
-  read-only fact for a picker narrowed to the location type's allowed parents (or, when
-  unconstrained, every location), excluding the location's own subtree. Moving back to root is
-  not offered; a move a stale picker still lets through is refused the same way as create, inline,
-  naming both types.
-- A **component** and a **system** are just as mobile: edit re-opens their **Placement** (location
-  and parent) and, for a component, its **Product**. Nothing here is fixed at create. A component
-  can move rooms, re-parent under a different component, or be re-classified onto a different
-  product; a system can move location or re-parent. Re-classifying a component keeps every property
-  value you set by hand and lets the new product's contract defaults take over the rest, so a swap
-  never silently loses your data. Clearing a field is a first-class move: an empty location unplaces
-  it, an empty parent lifts it to a root, an empty product makes it a one-off. A re-parent that would
-  put an entity under itself or one of its own children is refused.
+  recorded history follow the rename, and the audit trail stays attributable across it. **Renaming a
+  Generated component's name hands you the pen for good**: the platform stops tracking it, even
+  through a later move or a product swap. A reset icon beside the name field (gated the same as
+  rename) hands it back, regenerating from the component's current type and room and marking it
+  Generated again.
+- **Moving is a separate act from an update too, and separately granted**, the same split renaming
+  draws. Placement (Parent on a component, a system, or a location; Location on a component or a
+  system) is not a field on the regular edit save: it is its own call, `<resource>:move` rather than
+  `<resource>:update`. An operator holding update but not move can still edit the label, type, or
+  product, but the placement fields stay read-only. Where the console offers a live picker, **Save**
+  patches the other fields first and sends the move second, so a refused move (a cycle, a
+  placement-type mismatch, or a taken name at the destination, naming both parties) leaves the rest of
+  the edit in place rather than undoing it.
+- A **location**'s edit mode makes its **Parent** editable, the console's one live placement picker
+  today (with the move permission): the Placement section swaps its read-only fact for a picker
+  narrowed to the location type's allowed parents (or, when unconstrained, every location), excluding
+  the location's own subtree. Moving back to root is not offered here, and the platform has no
+  clear-to-root capability for a location at all, not even from the API or CLI.
+- A **component**'s and a **system**'s Placement (System, Location, Parent, and, for a component,
+  Product) is **read-only in the console today**, in view and in edit alike: you set them at create
+  and re-home an entity through the API or CLI (`omniglass component move`, `omniglass system move`).
+  Both are movable via `:move` the same way a location's Parent is (an empty location unplaces a
+  component or a system; clearing parent to lift an entity to a root needs an all-scoped grant, the
+  same authorization creating a root entity already requires, since a scope-limited operator clearing
+  parent would otherwise walk an entity out of every subtree their own grant was ever limited to; a
+  re-parent that would put an entity under itself or one of its own children is refused); the console
+  just has no picker for either yet. From the CLI, an entity's `<name>` argument takes a uuid, a bare
+  name, or its full **dotted address** (`boi.17c.415a.$comp.display-1`), the location path down to a
+  `$comp`/`$sys` accessor and the entity's own place from there. **Quote it**: an unquoted `$comp`
+  disappears before the shell ever sends the request, so `omniglass component get
+  'boi.17c.415a.$comp.display-1'` (single quotes), never bare.
 - **Delete** removes it, with a confirm. These actions appear only if your grants allow them.
 
 ## Properties on the detail
@@ -133,36 +153,29 @@ Each row is one role with **where it came from**, **who fills it**, and **how ma
 - **A component staffing a role cannot be deleted.** Unassign it first. The refusal is deliberate: a
   delete that silently emptied a slot would leave the room quietly wrong.
 
-**An assignment can be refused, and the refusal tells you why.** A role requires a set of
-[capabilities](/guides/admin/capabilities/), and a component must provide **every** one of them.
-Assign one that does not and you get the gap by name (`missing microphone, speaker`), which is either
-a fix on the component's **Capabilities** panel or a sign that it is the wrong component for the slot.
+**An assignment can be refused, and the refusal tells you why.** A role's [accepted types and pinned
+products](/guides/admin/standards/#roles-what-a-conforming-system-needs-filled) are the typed-slot
+guard: assign a component of the wrong type and you get both parties named
+(`component "panel-1" is a display; role "Table microphone" wants a video-bar`), which is either a
+sign you picked the wrong component or that the role needs widening.
 
 Declaring the roles is on the [Standards guide](/guides/admin/standards/#roles-what-a-conforming-system-needs-filled);
 this panel is where they get staffed.
 
-## Capabilities on a component
-
-A **component** carries a **Capabilities** panel: what it actually provides, resolved from its
-[product](/guides/admin/products/) plus what this unit adds and minus what it suppresses. It is the set
-every role assignment is checked against, and it is how a component with **no product** provides
-anything at all. The walkthrough is in the
-[Capabilities guide](/guides/admin/capabilities/#what-a-component-actually-provides).
-
 ## Alarms on a component
 
-An **alarm** says what is wrong with **one component**, and which of its capabilities the problem takes
-away. The component's **Alarms** panel lists the active ones newest first, with a **Recently cleared**
-group beneath them: what is wrong now on top, what was wrong underneath.
+An **alarm** says what is wrong with **one component**. The component's **Alarms** panel lists the
+active ones newest first, with a **Recently cleared** group beneath them: what is wrong now on top,
+what was wrong underneath.
 
-Raising one takes three things:
+Raising one takes two things:
 
 - a **severity**: `info`, `warning`, or `critical`. This is how loudly to treat it, and it sets the
-  **component's own** state (any active alarm makes the component degraded, a critical one an outage);
-- a **message**, for whoever reads it later. Write it for the person who finds this at 8am, not for you;
-- the **capabilities it degrades**. This is the one that matters beyond the device. A component keeps its
-  capabilities on paper, but a degraded one **does not count** toward any role that requires it. An alarm
-  that degrades nothing is a note on the device and reaches no room, which is often exactly right.
+  **component's own** verdict (any active alarm makes the component degraded, a critical one an
+  outage). Only an **outage** stops a component occupying a role it fills: an info or warning
+  alarm still degrades it, but the component keeps its slot, so a quiet issue does not short-staff
+  a room on its own;
+- a **message**, for whoever reads it later. Write it for the person who finds this at 8am, not for you.
 
 **Clearing keeps the row.** The alarm moves to the history with the time it was cleared, so what was wrong
 and when survives the fix. Clearing one twice is a plain miss rather than a silent success.
@@ -171,7 +184,7 @@ Both writes take effect immediately and completely: the room's verdict, the loca
 recorded history all move in the same transaction as the alarm. There is no wait and no refresh cycle.
 
 From the CLI: `omniglass component alarm list <name> [--include-cleared]`,
-`omniglass component alarm create <name> --severity <level> --message <text> --capabilities <ids>`, and
+`omniglass component alarm create <name> --severity <level> --message <text>`, and
 `omniglass component alarm delete <name> <id>`.
 
 ## Health on a system or location
@@ -194,17 +207,16 @@ names the whole chain instead, role by role:
 
 ```text
 alarm on mic-pod-2 (critical, "no audio on channel 1")
-  -> degrades: microphone
-    -> role room-mic requires microphone, and wants 2
-      -> only 1 assigned component can currently fill it
+  -> mic-pod-2 is down (its own verdict, from the alarm)
+    -> role room-mic wants 2, and mic-pod-2 no longer occupies its slot
+      -> only 1 assigned component still occupies it
         -> role impaired, impact degraded
           -> hq-r1 is degraded
 ```
 
 Read it bottom-up when you want the verdict and top-down when you want the fix. A role can also be
-impaired with **no alarm named**, which means it is **short-staffed** rather than broken: nobody is
-assigned, or what is assigned never provided what the role requires. Those are two different jobs, and
-the panel keeps them apart.
+impaired with **no down component named**, which means it is **short-staffed** rather than broken:
+nobody is assigned. Those are two different jobs, and the panel keeps them apart.
 
 **The History strip is the answer to "since when".** It is the same shape as the reachability
 availability strip: one segment per stretch the entity held a verdict, drawn from the **recorded edges**
@@ -220,17 +232,17 @@ Once, in order, on a real room:
 
 1. **Declare the roles with their impact.** On the room's
    [standard](/guides/admin/standards/#roles-what-a-conforming-system-needs-filled), give **Main Display**
-   impact **outage** and **Room Microphone** impact **degraded** with quorum 2. Every conforming room
-   inherits both immediately.
+   impact **outage** and **Room Microphone** impact **degraded** with quorum 2, accepting `video-bar`.
+   Every conforming room inherits both immediately.
 2. **Staff the system.** Assign components to each role from the system's **Roles** panel. A component
-   that cannot fill the role is refused by name (`missing microphone, speaker`), so a wrong assignment
-   never becomes a wrong verdict.
-3. **Raise an alarm.** On one of the mic pods, raise a `critical` alarm degrading `microphone`.
-4. **Watch the room move.** The system goes **degraded** (the `room-mic` role now has one satisfying
-   component against a quorum of 2, and its impact is `degraded`), and the location above it follows. Had
+   of the wrong type is refused by name (`component "panel-1" is a display; role "Room Microphone"
+   wants a video-bar`), so a wrong assignment never becomes a wrong verdict.
+3. **Raise an alarm.** On one of the mic pods, raise a `critical` alarm.
+4. **Watch the room move.** The system goes **degraded** (the `room-mic` role now has one occupant
+   against a quorum of 2, and its impact is `degraded`), and the location above it follows. Had
    the alarm been on the main display instead, the room would be an **outage**, because that role says so.
-5. **Read the Health panel** to find the cause: the impaired role, the capability it lost, and the alarm
-   that took it, with its message and the time it was raised. Walk to the pod.
+5. **Read the Health panel** to find the cause: the impaired role, the component that went down, and the
+   alarm that took it down, with its message and the time it was raised. Walk to the pod.
 6. **Clear the alarm** once it is fixed. The room returns to **healthy** in the same transaction, and the
    alarm row stays in the component's history.
 7. **Read the history afterwards.** The transition strip now shows the exact stretch the room was

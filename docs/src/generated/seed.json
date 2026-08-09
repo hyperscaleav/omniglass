@@ -20,7 +20,7 @@
     "viewer"
    ],
    "declared": [
-    "component:create,update,rename",
+    "component:create,update,rename,move",
     "interface:create,update",
     "secret:read,reveal,create,update",
     "variable:create,update",
@@ -36,6 +36,7 @@
     "component:create",
     "component:update",
     "component:rename",
+    "component:move",
     "interface:create",
     "interface:update",
     "secret:read",
@@ -67,9 +68,9 @@
     "viewer"
    ],
    "declared": [
-    "location:create,update,rename",
-    "system:create,update,rename",
-    "component:create,update,rename",
+    "location:create,update,rename,move",
+    "system:create,update,rename,move",
+    "component:create,update,rename,move",
     "secret:read,reveal,create,update",
     "file:create"
    ],
@@ -77,12 +78,15 @@
     "location:create",
     "location:update",
     "location:rename",
+    "location:move",
     "system:create",
     "system:update",
     "system:rename",
+    "system:move",
     "component:create",
     "component:update",
     "component:rename",
+    "component:move",
     "secret:read",
     "secret:reveal",
     "secret:create",
@@ -102,8 +106,8 @@
     "component:delete",
     "interface:*",
     "task:*",
-    "system:create,update,delete,rename",
-    "location:create,update,delete,rename",
+    "system:create,update,delete,rename,move",
+    "location:create,update,delete,rename,move",
     "principal:*",
     "principal:read:admin",
     "principal:purge:admin",
@@ -124,9 +128,9 @@
     "command_type:*",
     "command:*",
     "location_type:create,update,delete",
+    "component_type:create,update,delete",
     "vendor:create,update,delete",
     "driver:create,update,delete",
-    "capability:create,update,delete",
     "product:create,update,delete",
     "standard:create,update,delete",
     "tag:*"
@@ -139,10 +143,12 @@
     "system:update",
     "system:delete",
     "system:rename",
+    "system:move",
     "location:create",
     "location:update",
     "location:delete",
     "location:rename",
+    "location:move",
     "principal:*",
     "principal:read:admin",
     "principal:purge:admin",
@@ -166,15 +172,15 @@
     "location_type:create",
     "location_type:update",
     "location_type:delete",
+    "component_type:create",
+    "component_type:update",
+    "component_type:delete",
     "vendor:create",
     "vendor:update",
     "vendor:delete",
     "driver:create",
     "driver:update",
     "driver:delete",
-    "capability:create",
-    "capability:update",
-    "capability:delete",
     "product:create",
     "product:update",
     "product:delete",
@@ -185,6 +191,7 @@
     "component:create",
     "component:update",
     "component:rename",
+    "component:move",
     "interface:create",
     "interface:update",
     "secret:read",
@@ -438,24 +445,73 @@
      "name": "room-mic",
      "display_name": "Room Microphone",
      "quorum": 2,
-     "capabilities": [
-      "microphone",
-      "speaker"
+     "accepted_types": [
+      "video-bar"
      ]
     },
     {
      "name": "main-display",
      "display_name": "Main Display",
      "quorum": 0,
-     "capabilities": [
-      "flat-panel-display"
+     "accepted_types": [
+      "display"
      ]
     }
    ]
   },
   {
    "id": "huddle-room",
-   "display_name": "Huddle Room"
+   "display_name": "Huddle Room",
+   "roles": [
+    {
+     "name": "conf-bar",
+     "display_name": "Conferencing Bar",
+     "quorum": 1,
+     "accepted_types": [
+      "video-bar"
+     ]
+    },
+    {
+     "name": "conf-codec",
+     "display_name": "Codec",
+     "quorum": 0,
+     "accepted_types": [
+      "codec"
+     ]
+    },
+    {
+     "name": "conf-camera",
+     "display_name": "Camera",
+     "quorum": 0,
+     "accepted_types": [
+      "camera"
+     ]
+    },
+    {
+     "name": "conf-dsp",
+     "display_name": "DSP",
+     "quorum": 0,
+     "accepted_types": [
+      "dsp"
+     ]
+    },
+    {
+     "name": "conf-amp",
+     "display_name": "Amplifier",
+     "quorum": 0,
+     "accepted_types": [
+      "amplifier"
+     ]
+    },
+    {
+     "name": "conf-mic",
+     "display_name": "Microphone",
+     "quorum": 0,
+     "accepted_types": [
+      "mic"
+     ]
+    }
+   ]
   },
   {
    "id": "classroom",
@@ -544,36 +600,6 @@
    "version": "1.0.0"
   }
  ],
- "capabilities": [
-  {
-   "id": "microphone",
-   "display_name": "Microphone"
-  },
-  {
-   "id": "speaker",
-   "display_name": "Speaker"
-  },
-  {
-   "id": "display",
-   "display_name": "Display"
-  },
-  {
-   "id": "flat-panel-display",
-   "display_name": "Flat Panel Display"
-  },
-  {
-   "id": "camera",
-   "display_name": "Camera"
-  },
-  {
-   "id": "codec",
-   "display_name": "Codec"
-  },
-  {
-   "id": "touch-panel",
-   "display_name": "Touch Panel"
-  }
- ],
  "products": [
   {
    "id": "cisco-room-bar",
@@ -581,12 +607,6 @@
    "vendor_id": "cisco",
    "driver_id": "cisco-xapi",
    "kind": "device",
-   "capabilities": [
-    "microphone",
-    "speaker",
-    "camera",
-    "codec"
-   ],
    "properties": [
     {
      "name": "serial-number"
@@ -605,9 +625,6 @@
    "display_name": "Samsung QM55",
    "vendor_id": "samsung",
    "kind": "device",
-   "capabilities": [
-    "flat-panel-display"
-   ],
    "properties": [
     {
      "name": "serial-number"
@@ -626,20 +643,29 @@
    "display_name": "Shure MXA920",
    "vendor_id": "shure",
    "driver_id": "snmp-generic",
-   "kind": "device",
-   "capabilities": [
-    "microphone"
-   ]
+   "kind": "device"
   },
   {
    "id": "crestron-tss-1070",
    "display_name": "Crestron TSS-1070",
    "vendor_id": "crestron",
    "driver_id": "crestron-cip",
-   "kind": "device",
-   "capabilities": [
-    "touch-panel"
-   ]
+   "kind": "device"
+  },
+  {
+   "id": "generic-device",
+   "display_name": "Generic Device",
+   "kind": "device"
+  },
+  {
+   "id": "generic-app",
+   "display_name": "Generic App",
+   "kind": "app"
+  },
+  {
+   "id": "generic-service",
+   "display_name": "Generic Service",
+   "kind": "service"
   }
  ]
 }

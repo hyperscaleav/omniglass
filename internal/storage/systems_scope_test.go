@@ -28,8 +28,13 @@ func TestSystemScopeCRUD(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	// A location to place a system at (exercises location_id resolution).
+	// A location to place a system at (exercises location_id resolution). hq2
+	// is a second placement, so the same-name-different-bucket case below has
+	// somewhere legal to land.
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, all); err != nil {
+		t.Fatalf("seed location: %v", err)
+	}
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq2", LocationType: "campus"}, all); err != nil {
 		t.Fatalf("seed location: %v", err)
 	}
 
@@ -93,8 +98,18 @@ func TestSystemScopeCRUD(t *testing.T) {
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "weird", StandardID: strptr("galaxy")}, all); !errors.Is(err, storage.ErrUnknownStandard) {
 		t.Errorf("unknown standard = %v, want ErrUnknownStandard", err)
 	}
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av"}, all); !errors.Is(err, storage.ErrSystemExists) {
-		t.Errorf("dup name = %v, want ErrSystemExists", err)
+	// A duplicate name in the SAME placement bucket still collides: av was
+	// created unparented at hq (system_location_name_key), and this one names
+	// the same location, so it lands in the identical bucket (#627 scopes name
+	// uniqueness to placement, it does not remove uniqueness within one).
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av", LocationName: strptr("hq")}, all); !errors.Is(err, storage.ErrSystemExistsInLocation) {
+		t.Errorf("dup name in same location = %v, want ErrSystemExistsInLocation", err)
+	}
+	// The same name in a DIFFERENT placement bucket is legal: two locations
+	// may each hold their own "av", because the unique index is keyed on
+	// (location_id, name), not name alone.
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av", LocationName: strptr("hq2")}, all); err != nil {
+		t.Errorf("dup name in different location = %v, want ok", err)
 	}
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "bad-loc", LocationName: strptr("nope")}, all); !errors.Is(err, storage.ErrLocationNotFound) {
 		t.Errorf("unknown location = %v, want ErrLocationNotFound", err)
@@ -104,7 +119,7 @@ func TestSystemScopeCRUD(t *testing.T) {
 		t.Errorf("create under out-of-scope parent = %v, want ErrSystemForbidden", err)
 	}
 
-	// Audit rows for systems: 4 create + 1 update + 1 delete = 6.
+	// Audit rows for systems: 5 create + 1 update + 1 delete = 7.
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		t.Fatalf("audit connect: %v", err)
@@ -114,8 +129,8 @@ func TestSystemScopeCRUD(t *testing.T) {
 	if err := conn.QueryRow(ctx, `select count(*) from audit_log where resource = 'system'`).Scan(&n); err != nil {
 		t.Fatalf("count audit: %v", err)
 	}
-	if n != 6 {
-		t.Errorf("system audit rows = %d, want 6", n)
+	if n != 7 {
+		t.Errorf("system audit rows = %d, want 7", n)
 	}
 }
 

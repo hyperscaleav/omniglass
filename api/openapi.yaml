@@ -50,13 +50,6 @@ components:
           type: string
         active:
           type: boolean
-        capabilities:
-          description: The capabilities this alarm degrades; empty means it reaches no role
-          items:
-            type: string
-          type:
-            - array
-            - "null"
         cleared_at:
           description: Null while the alarm is active
           format: date-time
@@ -81,7 +74,6 @@ components:
         - component
         - severity
         - message
-        - capabilities
         - dedup_key
         - raised_at
         - active
@@ -167,32 +159,6 @@ components:
       required:
         - image_base64
       type: object
-    CapabilityBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/CapabilityBody.json
-          format: uri
-          readOnly: true
-          type: string
-        display_name:
-          type: string
-        id:
-          description: The capability's uuid, the stable handle that survives a rename
-          type: string
-        name:
-          description: The name an operator reads and types; renameable
-          type: string
-        official:
-          type: boolean
-      required:
-        - id
-        - name
-        - display_name
-        - official
-      type: object
     ChangePasswordInputBody:
       additionalProperties: false
       properties:
@@ -225,8 +191,14 @@ components:
           format: uri
           readOnly: true
           type: string
+        location:
+          description: The location (by name or uuid) the entity would be placed at, if any and if unparented; ignored by the locations check
+          type: string
         name:
           description: The proposed name to check
+          type: string
+        parent:
+          description: The parent (by name or uuid) the entity would be created under, if any; omit for a root/unplaced check
           type: string
       required:
         - name
@@ -242,7 +214,7 @@ components:
           readOnly: true
           type: string
         available:
-          description: Whether the name is free (scope-blind, matches the global unique constraint)
+          description: Whether the name is free within the checked placement (parent/location); a name taken elsewhere in the estate is still available here
           type: boolean
         reason:
           description: Human explanation when not valid or not available
@@ -407,18 +379,34 @@ components:
           type: string
         name:
           type: string
+        name_generated:
+          description: Whether the platform picked this name (a server-side generator) rather than an operator typing it.
+          type: boolean
         parent:
           description: The parent component's name, for display; absent for a root component
           type: string
         parent_id:
           description: The parent component's id, the canonical handle
           type: string
+        path:
+          description: "The dotted address (e.g. boi.17c.415a.$comp.display-1): derived from the component's own placement, never from a system it belongs to. Set on a GET or LIST response; empty on a create/update/move/rename/resetName response (refetch the row to see it)."
+          type: string
+        path_segments:
+          description: path split on '.', accessors included, so the round trip through the resolver stays lossless.
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         product:
           description: The product's name, for display; the form a body round-trips.
           type: string
         product_id:
           description: The product (catalog SKU) this component is an instance of, if any; the stable handle that survives a rename.
           type: string
+        renders:
+          $ref: "#/components/schemas/RenderBody"
+          description: "Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy."
         system:
           description: Name of the component's primary system, its default when no system is named. A component may belong to several; read /components/{name}/memberships for all of them.
           type: string
@@ -433,29 +421,7 @@ components:
         - id
         - name
         - system_count
-      type: object
-    ComponentCapabilitiesOutputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/ComponentCapabilitiesOutputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        capabilities:
-          description: "The resolved set: the product's, plus the component's additions, minus its suppressions"
-          items:
-            type: string
-          type:
-            - array
-            - "null"
-        component:
-          type: string
-      required:
-        - component
-        - capabilities
+        - name_generated
       type: object
     ComponentMetricsOutputBody:
       additionalProperties: false
@@ -530,29 +496,54 @@ components:
         - value
         - value_id
       type: object
-    CreateCapabilityInputBody:
+    ComponentTypeBody:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
           examples:
-            - /api/v1/schemas/CreateCapabilityInputBody.json
+            - /api/v1/schemas/ComponentTypeBody.json
           format: uri
           readOnly: true
           type: string
+        abbrev:
+          description: A compact form of display_name; empty inherits the nearest ancestor's
+          type: string
+        default_tags:
+          description: Tags every instance of this type (or a descendant that does not override) starts with
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         display_name:
-          description: What an operator reads in pickers and lists
-          minLength: 1
+          type: string
+        icon:
+          description: A glyph key; empty inherits the nearest ancestor's
+          type: string
+        id:
+          description: The component_type's uuid, the stable handle that survives a rename
           type: string
         name:
-          description: The globally unique name; renameable
-          maxLength: 100
-          minLength: 1
-          pattern: ^[a-z0-9][a-z0-9-]*$
+          description: The name an operator reads and types; renameable
+          type: string
+        official:
+          type: boolean
+        parent:
+          description: The parent component_type's name, for display; absent for a root type
+          type: string
+        parent_id:
+          description: The parent component_type's id, the canonical handle; absent for a root type
+          type: string
+        stem:
+          description: The auto-generated component name's prefix; empty inherits the nearest ancestor's
           type: string
       required:
+        - id
         - name
         - display_name
+        - default_tags
+        - official
       type: object
     CreateCommandTypeInputBody:
       additionalProperties: false
@@ -606,7 +597,7 @@ components:
           description: Location name this component is placed at
           type: string
         name:
-          description: Globally unique name (the address; lowercase letters, digits, hyphens)
+          description: Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the product's type.
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
@@ -615,13 +606,57 @@ components:
           description: Parent component name; omit for a root component
           type: string
         product:
-          description: Product id (catalog SKU) this component is an instance of
+          description: "Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled."
           type: string
         system:
           description: Primary system name this component belongs to
           type: string
+      type: object
+    CreateComponentTypeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateComponentTypeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        abbrev:
+          description: A compact form of display_name; omit to inherit the parent's
+          type: string
+        default_tags:
+          description: Tags every instance of this type starts with
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        display_name:
+          description: What an operator reads in pickers and lists
+          minLength: 1
+          type: string
+        icon:
+          description: A glyph key; omit to inherit the parent's
+          type: string
+        name:
+          description: The globally unique name
+          maxLength: 100
+          minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
+        parent_id:
+          description: The parent component_type, by name or uuid; omit for a root type
+          type: string
+        stem:
+          description: The auto-generated component name's prefix; omit to inherit the parent's. Lowercase letters, digits, and hyphens.
+          maxLength: 100
+          minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
       required:
         - name
+        - display_name
       type: object
     CreateDriverInputBody:
       additionalProperties: false
@@ -846,7 +881,7 @@ components:
           minLength: 1
           type: string
         name:
-          description: Globally unique name (the address; lowercase letters, digits, hyphens)
+          description: Name, unique within its placement (the address; lowercase letters, digits, hyphens)
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
@@ -1052,13 +1087,10 @@ components:
           format: uri
           readOnly: true
           type: string
-        capabilities:
-          description: Capability names the product provides (the default set its components inherit)
-          items:
-            type: string
-          type:
-            - array
-            - "null"
+        component_type:
+          description: The component_type this product is classified under (mic, camera, ...), by name or uuid; every product must belong to one of the tree's nodes. The generics (generic-device, generic-app, generic-service) fit anything not yet modeled more specifically.
+          minLength: 1
+          type: string
         display_name:
           description: What an operator reads in pickers and lists
           minLength: 1
@@ -1066,14 +1098,15 @@ components:
         driver_id:
           description: The driver that talks to it, by handle or uuid
           type: string
+        icon:
+          description: A product-level icon override; unset inherits the component_type's icon
+          type: string
         kind:
-          default: device
-          description: What class of thing the product is
+          description: What class of thing the product is. vm is retired (folded into app); required, no default, so every product states its class explicitly.
           enum:
             - device
             - app
             - service
-            - vm
           type: string
         name:
           description: The globally unique name; renameable
@@ -1090,6 +1123,8 @@ components:
       required:
         - name
         - display_name
+        - kind
+        - component_type
       type: object
     CreatePropertyInputBody:
       additionalProperties: false
@@ -1212,7 +1247,7 @@ components:
           description: Location name this system is placed at
           type: string
         name:
-          description: Globally unique name (the address; lowercase letters, digits, hyphens)
+          description: Name, unique within its placement (the address; lowercase letters, digits, hyphens)
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
@@ -1479,6 +1514,13 @@ components:
     EffectiveRoleBody:
       additionalProperties: false
       properties:
+        accepted_types:
+          description: The component_types a filling component's product must be classified within (self or a descendant); empty accepts any type
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         assigned:
           description: How many components fill the role
           format: int64
@@ -1490,13 +1532,10 @@ components:
           type:
             - array
             - "null"
-        capabilities:
-          description: The capabilities a component must ALL provide to fill it
-          items:
-            type: string
-          type:
-            - array
-            - "null"
+        capacity:
+          description: The most components the role will accept; null means no upper bound beyond quorum
+          format: int64
+          type: integer
         display_name:
           type: string
         from_standard:
@@ -1507,21 +1546,46 @@ components:
           type: string
         name:
           type: string
+        pinned_products:
+          description: If set, a filling component's product must be one of these; empty accepts any product of an accepted type
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        position_labels:
+          description: Human labels for each position within the role, by index; empty when unlabeled
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        positions:
+          description: AssignedTo's own 1-based position, index for index; not necessarily i+1, since an unassign leaves a gap rather than compacting
+          items:
+            format: int64
+            type: integer
+          type:
+            - array
+            - "null"
         quorum:
           format: int64
           type: integer
         understaffed:
-          description: How many more the role wants before quorum; zero when staffed
+          description: How many more assignment rows the role wants before quorum, health-blind; zero when enough are assigned regardless of their own condition. See the health read's short for the occupancy-aware figure
           format: int64
           type: integer
       required:
         - name
         - display_name
         - quorum
-        - capabilities
+        - position_labels
+        - accepted_types
+        - pinned_products
         - impact
         - from_standard
         - assigned_to
+        - positions
         - assigned
         - understaffed
       type: object
@@ -1958,12 +2022,6 @@ components:
     HealthAlarmBody:
       additionalProperties: false
       properties:
-        capabilities:
-          items:
-            type: string
-          type:
-            - array
-            - "null"
         component:
           type: string
         id:
@@ -1980,7 +2038,6 @@ components:
         - component
         - severity
         - message
-        - capabilities
         - raised_at
       type: object
     HealthOutputBody:
@@ -2006,28 +2063,37 @@ components:
     HealthRoleBody:
       additionalProperties: false
       properties:
+        active:
+          description: True for an unconditional role, or a role whose alternate is the one currently answering its choice. False means this role's own impaired/short/spare figures did not contribute to the system's verdict
+          type: boolean
         alarms:
-          description: The active alarms that degraded them
+          description: The active alarms on those down components
           items:
             $ref: "#/components/schemas/HealthAlarmBody"
           type:
             - array
             - "null"
+        alternate:
+          description: The alternate within choice this role belongs to; absent when the role is unconditional
+          type: string
         assigned_to:
           items:
             type: string
           type:
             - array
             - "null"
-        degraded:
-          description: The required capabilities an active alarm has taken away; empty when the role is merely short-staffed
+        choice:
+          description: The choice this role belongs to; absent when the role is unconditional
+          type: string
+        display_name:
+          type: string
+        down:
+          description: The assigned components whose own verdict is outage; empty when the role is merely short-staffed or only degraded
           items:
             type: string
           type:
             - array
             - "null"
-        display_name:
-          type: string
         impact:
           description: "What an impaired role means for its system: outage, degraded, or none"
           type: string
@@ -2039,28 +2105,31 @@ components:
         quorum:
           format: int64
           type: integer
-        required:
-          description: The capabilities a component must ALL provide to fill this role
-          items:
-            type: string
-          type:
-            - array
-            - "null"
         satisfying:
-          description: How many assigned components can currently fill the role
+          description: How many assigned components currently occupy the role (their own verdict is not outage; a degraded component still occupies)
+          format: int64
+          type: integer
+        short:
+          description: How many more occupants the role needs to reach quorum, counting only those currently occupying (own verdict not outage); zero once it does. Diverges from the roles read's understaffed when an assigned component is down
+          format: int64
+          type: integer
+        spare:
+          description: How many occupants the role has beyond quorum; zero at or below quorum
           format: int64
           type: integer
       required:
         - name
         - display_name
         - impact
-        - required
         - quorum
         - satisfying
+        - short
+        - spare
         - impaired
         - assigned_to
-        - degraded
+        - down
         - alarms
+        - active
       type: object
     HealthSystemBody:
       additionalProperties: false
@@ -2273,25 +2342,6 @@ components:
         - component
         - alarms
       type: object
-    ListCapabilitiesOutputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/ListCapabilitiesOutputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        capabilities:
-          items:
-            $ref: "#/components/schemas/CapabilityBody"
-          type:
-            - array
-            - "null"
-      required:
-        - capabilities
-      type: object
     ListCommandTypesOutputBody:
       additionalProperties: false
       properties:
@@ -2332,6 +2382,25 @@ components:
       required:
         - component
         - memberships
+      type: object
+    ListComponentTypesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListComponentTypesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        component_types:
+          items:
+            $ref: "#/components/schemas/ComponentTypeBody"
+          type:
+            - array
+            - "null"
+      required:
+        - component_types
       type: object
     ListComponentsOutputBody:
       additionalProperties: false
@@ -3025,6 +3094,19 @@ components:
         parent_id:
           description: The parent location's id, the canonical handle
           type: string
+        path:
+          description: The dotted address (e.g. boi.17c.415a); no accessor, since a location's own address IS its location-tree ancestor chain. Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it).
+          type: string
+        path_segments:
+          description: path split on '.'.
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        renders:
+          $ref: "#/components/schemas/RenderBody"
+          description: "Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy."
       required:
         - id
         - name
@@ -3351,6 +3433,54 @@ components:
         - data_type
         - official
       type: object
+    MoveComponentInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/MoveComponentInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        location:
+          description: Relocates the component to this location name. An empty string clears its placement.
+          type: string
+        parent:
+          description: Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component (requires an all-scoped move grant).
+          type: string
+      type: object
+    MoveLocationInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/MoveLocationInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        parent:
+          description: Re-parents the location (a tree move) to this location name; cycle-guarded and placement-validated. Moving to root is not supported.
+          type: string
+      type: object
+    MoveSystemInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/MoveSystemInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        location:
+          description: Relocates the system to this location name. An empty string clears its placement.
+          type: string
+        parent:
+          description: Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system (requires an all-scoped move grant).
+          type: string
+      type: object
     NodeBody:
       additionalProperties: false
       properties:
@@ -3520,12 +3650,12 @@ components:
           format: uri
           readOnly: true
           type: string
-        capabilities:
-          items:
-            type: string
-          type:
-            - array
-            - "null"
+        component_type:
+          description: The component_type this product is classified under (mic, camera, ...); the taxonomy above product
+          type: string
+        component_type_id:
+          description: The component_type's uuid; the stable form of component_type
+          type: string
         display_name:
           type: string
         driver:
@@ -3533,6 +3663,9 @@ components:
           type: string
         driver_id:
           description: The driver's uuid; the stable form of driver
+          type: string
+        icon:
+          description: A product-level icon override; unset inherits the component_type's icon
           type: string
         id:
           description: The product's uuid, the stable handle that survives a rename
@@ -3542,7 +3675,6 @@ components:
             - device
             - app
             - service
-            - vm
           type: string
         name:
           description: The name an operator reads and types; renameable
@@ -3566,7 +3698,8 @@ components:
         - name
         - display_name
         - kind
-        - capabilities
+        - component_type
+        - component_type_id
         - official
       type: object
     ProductMetricBody:
@@ -3836,13 +3969,6 @@ components:
           format: uri
           readOnly: true
           type: string
-        capabilities:
-          description: The capabilities this condition degrades; a role requiring one of them can no longer be filled by this component
-          items:
-            type: string
-          type:
-            - array
-            - "null"
         dedup_key:
           description: The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate
           type: string
@@ -4027,7 +4153,7 @@ components:
           readOnly: true
           type: string
         name:
-          description: The new globally unique name (lowercase letters, digits, hyphens)
+          description: The new name, unique within its placement (lowercase letters, digits, hyphens)
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
@@ -4065,7 +4191,7 @@ components:
           readOnly: true
           type: string
         name:
-          description: The new globally unique name (lowercase letters, digits, hyphens)
+          description: The new name, unique within its placement (lowercase letters, digits, hyphens)
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
@@ -4084,13 +4210,26 @@ components:
           readOnly: true
           type: string
         name:
-          description: The new globally unique name (lowercase letters, digits, hyphens)
+          description: The new name, unique within its placement (lowercase letters, digits, hyphens)
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
       required:
         - name
+      type: object
+    RenderBody:
+      additionalProperties: false
+      properties:
+        bare:
+          description: The dash render's segments concatenated with no separator, with the final stem-ordinal segment compacted to <abbrev><ordinal> when the owning type registers one (e.g. boi17c216bdsp1). On a LIST row the substitution is skipped (segments concatenated as-is) to avoid a per-row abbrev resolution; a GET always compacts it. Display only either way; not accepted by the resolver.
+          type: string
+        dash:
+          description: The path's non-accessor segments joined with '-' (e.g. boi-17c-216b-display-1). Display only; not accepted by the resolver.
+          type: string
+      required:
+        - dash
+        - bare
       type: object
     ResetPasswordInputBody:
       additionalProperties: false
@@ -4376,13 +4515,21 @@ components:
           format: uri
           readOnly: true
           type: string
-        capabilities:
-          description: The capabilities a component must ALL provide; replaces the required set wholesale
+        accepted_types:
+          description: The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type
           items:
             type: string
           type:
             - array
             - "null"
+        alternate:
+          description: The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626). Omit to leave whatever is already declared unchanged; an empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422
+          type: string
+        capacity:
+          description: The most components the role will accept; must be at least quorum. Omit to leave whatever is already declared unchanged (or unbounded on first declare); there is no way to explicitly clear a capacity back to unbounded once set
+          format: int64
+          minimum: 1
+          type: integer
         display_name:
           description: The role's human label; defaults to the role name
           type: string
@@ -4393,6 +4540,20 @@ components:
             - degraded
             - none
           type: string
+        pinned_products:
+          description: If set, a filling component's product must be one of these; replaces the pinned set wholesale. Omit or empty accepts any product of an accepted type
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        position_labels:
+          description: Human labels for each position within the role, by index; replaces the label set wholesale. Omit or empty clears labelling
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         quorum:
           description: How many components must fill the role; omit for one
           format: int64
@@ -4606,22 +4767,6 @@ components:
           type: string
       required:
         - image_base64
-      type: object
-    SetComponentCapabilityInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/SetComponentCapabilityInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        present:
-          description: True to add the capability, false to suppress one the product declares
-          type: boolean
-      required:
-        - present
       type: object
     SetComponentPropertyInputBody:
       additionalProperties: false
@@ -4909,6 +5054,30 @@ components:
       required:
         - label
       type: object
+    SwapRolePositionsInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SwapRolePositionsInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        position:
+          description: One of the two positions to exchange
+          format: int64
+          minimum: 1
+          type: integer
+        with:
+          description: The other position to exchange with
+          format: int64
+          minimum: 1
+          type: integer
+      required:
+        - position
+        - with
+      type: object
     SystemBody:
       additionalProperties: false
       properties:
@@ -4953,6 +5122,19 @@ components:
         parent_id:
           description: The parent system's id, the canonical handle
           type: string
+        path:
+          description: The dotted address (e.g. boi.17c.$sys.av). Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it).
+          type: string
+        path_segments:
+          description: path split on '.', accessors included, so the round trip through the resolver stays lossless.
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        renders:
+          $ref: "#/components/schemas/RenderBody"
+          description: "Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy."
         standard:
           description: The standard's handle, for display; omitted for a one-off system
           type: string
@@ -4968,13 +5150,13 @@ components:
       additionalProperties: false
       properties:
         component:
-          description: Name of the component
+          description: Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           type: string
         primary:
           description: Whether this membership is the component's default when no system is given
           type: boolean
         system:
-          description: Name of the system
+          description: Name of the system, or a dotted address (e.g. boi.17c.$sys.av)
           type: string
         system_count:
           description: How many systems this component belongs to in total; more than one means it is shared
@@ -5069,13 +5251,17 @@ components:
           format: uri
           readOnly: true
           type: string
-        capabilities:
-          description: The capabilities a component must ALL provide to fill it
+        accepted_types:
+          description: The component_types a filling component's product must be classified within (self or a descendant); empty accepts any type
           items:
             type: string
           type:
             - array
             - "null"
+        capacity:
+          description: The most components the role will accept; null means no upper bound beyond quorum
+          format: int64
+          type: integer
         display_name:
           description: The role's human label
           type: string
@@ -5085,6 +5271,20 @@ components:
         name:
           description: The role's name within its owner (the address)
           type: string
+        pinned_products:
+          description: If set, a filling component's product must be one of these; empty accepts any product of an accepted type
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        position_labels:
+          description: Human labels for each position within the role, by index; empty when unlabeled
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         quorum:
           description: How many components must fill the role
           format: int64
@@ -5093,7 +5293,9 @@ components:
         - name
         - display_name
         - quorum
-        - capabilities
+        - position_labels
+        - accepted_types
+        - pinned_products
         - impact
       type: object
     TagBindingBody:
@@ -5233,20 +5435,6 @@ components:
         - theme
         - default_landing
       type: object
-    UpdateCapabilityInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/UpdateCapabilityInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        display_name:
-          description: A new operator-facing label
-          type: string
-      type: object
     UpdateCommandTypeInputBody:
       additionalProperties: false
       properties:
@@ -5289,14 +5477,39 @@ components:
         display_name:
           description: A new operator-facing label
           type: string
-        location:
-          description: Relocates the component to this location name. An empty string clears its placement.
-          type: string
-        parent:
-          description: Re-parents the component within the component tree to this component name; cycle-guarded and scope-injected. An empty string makes it a root component.
-          type: string
         product:
-          description: Re-classifies the component to this product (catalog SKU). An empty string clears it. Explicitly-set property values persist; the new product's contract defaults follow.
+          description: "Re-classifies the component to this product (catalog SKU), by name or uuid. Required once set: an empty string is refused (422), not a clear. Explicitly-set property values persist; the new product's contract defaults follow."
+          type: string
+      type: object
+    UpdateComponentTypeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateComponentTypeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        abbrev:
+          description: A new compact form
+          type: string
+        default_tags:
+          description: Replaces the default-tag set; omit to leave unchanged
+          items:
+            type: string
+          type: array
+        display_name:
+          description: A new operator-facing label
+          type: string
+        icon:
+          description: A new glyph key
+          type: string
+        stem:
+          description: A new name prefix. Lowercase letters, digits, and hyphens.
+          maxLength: 100
+          minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
       type: object
     UpdateDriverInputBody:
@@ -5385,9 +5598,6 @@ components:
           type: string
         location_type:
           description: "Re-types the location: a location_type, by name or uuid"
-          type: string
-        parent:
-          description: Re-parents the location (a tree move) to this location name, cycle-guarded and placement-validated. Moving to root is not supported via update this slice.
           type: string
       type: object
     UpdateLocationTypeInputBody:
@@ -5506,16 +5716,17 @@ components:
           format: uri
           readOnly: true
           type: string
-        capabilities:
-          description: Replaces the capability-name set; omit to leave unchanged
-          items:
-            type: string
-          type: array
+        component_type:
+          description: Reclassifies the product to this component_type, by name or uuid; component_type is required, so this only reclassifies, it never clears
+          type: string
         display_name:
           description: A new operator-facing label
           type: string
         driver_id:
           description: A new driver, by handle or uuid
+          type: string
+        icon:
+          description: A new icon override
           type: string
         kind:
           description: A new product class
@@ -5523,7 +5734,6 @@ components:
             - device
             - app
             - service
-            - vm
           type: string
         parent_product_id:
           description: A new parent product, by handle or uuid
@@ -5598,12 +5808,6 @@ components:
           type: string
         display_name:
           description: A new operator-facing label
-          type: string
-        location:
-          description: Relocates the system to this location name. An empty string clears its placement.
-          type: string
-        parent:
-          description: Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system.
           type: string
         standard_id:
           description: A new standard, by handle or uuid; "" clears it (a one-off system)
@@ -6123,128 +6327,6 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Whether the system has an owner yet
-  /capabilities:
-    get:
-      description: Lists the capability registry, ordered alphabetically by display name. Populates the capability picker on the product form. Gated by capability:read.
-      operationId: list-capabilities
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ListCapabilitiesOutputBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: List capabilities
-      x-omniglass-permission: capability:read
-    post:
-      description: Creates a custom (non-official) capability. Gated by capability:create.
-      operationId: create-capability
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateCapabilityInputBody"
-        required: true
-      responses:
-        "201":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CapabilityBody"
-          description: Created
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Create a capability
-      x-omniglass-permission: capability:create
-  /capabilities/{id}:
-    delete:
-      description: Deletes a custom capability, refused if official (422). Gated by capability:delete.
-      operationId: delete-capability
-      parameters:
-        - description: The capability id
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The capability id
-            type: string
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Delete a capability
-      x-omniglass-permission: capability:delete
-    get:
-      description: Fetches a capability by id. Gated by capability:read.
-      operationId: get-capability
-      parameters:
-        - description: The capability id
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The capability id
-            type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CapabilityBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Get a capability
-      x-omniglass-permission: capability:read
-    patch:
-      description: Patches a custom capability's display_name. Official capabilities are read-only (422). Gated by capability:update.
-      operationId: update-capability
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateCapabilityInputBody"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CapabilityBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Update a capability
-      x-omniglass-permission: capability:update
   /command-types:
     get:
       description: Lists every registered command type (official and custom). Estate-wide reference data. Gated by command_type:read.
@@ -6369,6 +6451,102 @@ paths:
           description: Error
       summary: Update a command type
       x-omniglass-permission: command_type:update
+  /component-types:
+    get:
+      description: "Lists the component_type registry (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by display name. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read."
+      operationId: list-component-types
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListComponentTypesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List component types
+      x-omniglass-permission: component_type:read
+    post:
+      description: Creates a custom (non-official) component_type, optionally under a parent. Gated by component_type:create.
+      operationId: create-component-type
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateComponentTypeInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentTypeBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a component type
+      x-omniglass-permission: component_type:create
+  /component-types/{id}:
+    delete:
+      description: Deletes a custom component_type, refused if official (422) or still a parent of another component_type (409). Gated by component_type:delete.
+      operationId: delete-component-type
+      parameters:
+        - description: The component_type id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The component_type id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a component type
+      x-omniglass-permission: component_type:delete
+    patch:
+      description: Patches a custom component_type's display_name, stem, icon, abbrev, or default_tags. Official types are read-only (422). Gated by component_type:update.
+      operationId: update-component-type
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateComponentTypeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentTypeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a component type
+      x-omniglass-permission: component_type:update
   /components:
     get:
       description: Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.
@@ -6389,7 +6567,7 @@ paths:
       summary: List components in scope
       x-omniglass-permission: component:read
     post:
-      description: Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location. Gated by component:create.
+      description: Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create.
       operationId: create-component
       requestBody:
         content:
@@ -6417,12 +6595,12 @@ paths:
       description: Deletes a component, refused (409) while it still has child components or is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
       operationId: delete-component
       parameters:
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "204":
@@ -6439,12 +6617,12 @@ paths:
       description: Fetches a component by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by component:read.
       operationId: get-component
       parameters:
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "200":
@@ -6462,13 +6640,15 @@ paths:
       summary: Get a component
       x-omniglass-permission: component:read
     patch:
-      description: "Patches a component's display_name, product, location, or parent. The name is not patchable: renaming is the :rename custom method. Placement and classification fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears, a name sets. A reparent is cycle-guarded and scope-injected. Gated by component:update; read and update scopes drive the 404 versus 403 split."
+      description: "Patches a component's display_name or product. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. Gated by component:update; read and update scopes drive the 404 versus 403 split."
       operationId: update-component
       parameters:
-        - in: path
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
+          in: path
           name: name
           required: true
           schema:
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       requestBody:
         content:
@@ -6493,15 +6673,15 @@ paths:
       x-omniglass-permission: component:update
   /components/{name}/alarms:
     get:
-      description: What is currently wrong with this component, newest first, each with the capabilities it degrades. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+      description: What is currently wrong with this component, newest first. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
       operationId: list-component-alarms
       parameters:
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
         - description: Include cleared alarms, so the list is the history rather than what is wrong now
           explode: false
@@ -6526,15 +6706,15 @@ paths:
       summary: List a component's alarms
       x-omniglass-permission: component:read
     post:
-      description: "Records a condition on this component and the capabilities it degrades, then recomputes health in the same transaction: any role requiring a degraded capability can no longer be filled by this component, and its system and location verdicts move with it. An unknown capability is a 422. Gated by component:update; an out-of-scope component is a non-disclosing 404."
+      description: "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (a critical alarm), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser (info or warning) alarm degrades the component but leaves it occupying its roles. Gated by component:update; an out-of-scope component is a non-disclosing 404."
       operationId: raise-component-alarm
       parameters:
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       requestBody:
         content:
@@ -6562,12 +6742,12 @@ paths:
       description: "Marks the alarm cleared and recomputes health in the same transaction, so the recovery is recorded as a transition at the moment it happened. The row is kept: what was wrong and when outlives the fix. Clearing an alarm that is already cleared or does not exist is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404."
       operationId: clear-component-alarm
       parameters:
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
         - description: The alarm id
           in: path
@@ -6587,109 +6767,17 @@ paths:
           description: Error
       summary: Clear an alarm
       x-omniglass-permission: component:update
-  /components/{name}/capabilities:
-    get:
-      description: "What this component actually provides: the capabilities its product declares, plus the ones the component adds, minus the ones it suppresses. This is the set the role-assignment guard checks, so a productless component that declares its own can still be staffed. Gated by component:read; an out-of-scope component is a non-disclosing 404."
-      operationId: list-component-capabilities
-      parameters:
-        - description: The component's unique name
-          in: path
-          name: name
-          required: true
-          schema:
-            description: The component's unique name
-            type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ComponentCapabilitiesOutputBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: List a component's effective capabilities
-      x-omniglass-permission: component:read
-  /components/{name}/capabilities/{capability}:
-    delete:
-      description: Removes the component's own fact about the capability, so it falls back to whatever its product declares. Clearing a fact the component never declared is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
-      operationId: clear-component-capability
-      parameters:
-        - description: The component's unique name
-          in: path
-          name: name
-          required: true
-          schema:
-            description: The component's unique name
-            type: string
-        - description: The capability id
-          in: path
-          name: capability
-          required: true
-          schema:
-            description: The capability id
-            type: string
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Clear a capability declaration on a component
-      x-omniglass-permission: component:update
-    put:
-      description: "Records this component's own fact about a capability: present true adds one its product does not claim, present false suppresses one it does. Idempotent. An unknown capability is a 422; an unknown or out-of-scope component is a non-disclosing 404 (the component is resolved in scope first). Gated by component:update."
-      operationId: set-component-capability
-      parameters:
-        - description: The component's unique name
-          in: path
-          name: name
-          required: true
-          schema:
-            description: The component's unique name
-            type: string
-        - description: The capability id
-          in: path
-          name: capability
-          required: true
-          schema:
-            description: The capability id
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SetComponentCapabilityInputBody"
-        required: true
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Declare a capability on a component
-      x-omniglass-permission: component:update
   /components/{name}/commands:issue:
     post:
       description: Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Returns the computed settlement verdict. Gated by command:issue; an out-of-scope component is a non-disclosing 404.
       operationId: issue-component-command
       parameters:
-        - description: The component name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       requestBody:
         content:
@@ -6717,12 +6805,12 @@ paths:
       description: "Resolves the secrets that cascade onto a component (platform -> location -> component), with the winner and the shadowed candidates it overrode. There is NO system band: a secret is device-facing, and the room a component happens to serve is the wrong owner for a credential the device itself answers with. Fields are masked, as in the directory; plaintext is only ever the audited reveal. Gated by secret:read, which the viewer floor does not carry, and admin-sensitive secrets appear only to the admin tier."
       operationId: effective-secrets
       parameters:
-        - description: The component's name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "200":
@@ -6741,22 +6829,22 @@ paths:
       x-omniglass-permission: secret:read
   /components/{name}/effective-tags:
     get:
-      description: "Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope."
+      description: "Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope."
       operationId: effective-tags
       parameters:
-        - description: The component's name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
-        - description: Resolve against this system, which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand.
+        - description: Resolve against this system, name or uuid (ADR-0062), which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand.
           explode: false
           in: query
           name: system
           schema:
-            description: Resolve against this system, which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand.
+            description: Resolve against this system, name or uuid (ADR-0062), which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand.
             type: string
       responses:
         "200":
@@ -6778,12 +6866,12 @@ paths:
       description: "Resolves the variables that cascade onto a component (platform -> location -> system -> component): names union, values override most-specific-wins, with the winner and the shadowed candidates it overrode. The system band comes from the component's PRIMARY membership; resolving against a named system is not offered here yet, unlike effective-tags. Gated by variable:read; the component must be in the caller's component read scope."
       operationId: effective-variables
       parameters:
-        - description: The component's name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "200":
@@ -6805,12 +6893,12 @@ paths:
       description: Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
       operationId: list-component-events
       parameters:
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "200":
@@ -6832,12 +6920,12 @@ paths:
       description: Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
       operationId: list-component-logs
       parameters:
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "200":
@@ -6859,12 +6947,12 @@ paths:
       description: "The systems this component is bound into, ordered by name. A component may belong to several: a rack DSP serving three rooms is a member of all three, and each of them depends on it. Exactly one membership may be marked primary, the default for a question asked without a system in hand. Gated by component:read; an out-of-scope component is a non-disclosing 404."
       operationId: list-component-memberships
       parameters:
-        - description: Name of the component
+        - description: Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: Name of the component
+            description: Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "200":
@@ -6886,12 +6974,12 @@ paths:
       description: Every metric the component's product declares, resolved to the series' latest observed or calculated sample or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.
       operationId: list-component-metrics
       parameters:
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "200":
@@ -6913,12 +7001,12 @@ paths:
       description: Every property the component's product declares, resolved to the component's own value or the contract default (is_set marks the override), plus any property set directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.
       operationId: list-component-properties
       parameters:
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "200":
@@ -6940,12 +7028,12 @@ paths:
       description: Removes the component's declared value, so the property falls back to the product contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the component never set is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
       operationId: clear-component-property
       parameters:
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
         - description: The property name
           in: path
@@ -6969,12 +7057,12 @@ paths:
       description: "Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by component:update; an out-of-scope component is a non-disclosing 404."
       operationId: set-component-property
       parameters:
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
         - description: The property name
           in: path
@@ -7009,12 +7097,12 @@ paths:
       description: Composes, per interface, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
       operationId: get-component-reachability
       parameters:
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "200":
@@ -7036,12 +7124,12 @@ paths:
       description: Pivots, per declared property, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is), with config-drift computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.
       operationId: get-component-reconciliation
       parameters:
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: name
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "200":
@@ -7063,12 +7151,12 @@ paths:
       description: Lists the tags bound directly on a component (not the resolved cascade). Gated by component:read.
       operationId: list-component-tags
       parameters:
-        - description: The entity's name
+        - description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
           in: path
           name: name
           required: true
           schema:
-            description: The entity's name
+            description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
             type: string
       responses:
         "200":
@@ -7085,17 +7173,50 @@ paths:
           description: Error
       summary: List tags on a component
       x-omniglass-permission: component:read
+  /components/{name}:move:
+    post:
+      description: "Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own verdict is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split."
+      operationId: move-component
+      parameters:
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveComponentInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Move a component
+      x-omniglass-permission: component:move
   /components/{name}:removeTag:
     post:
       description: Removes a key's value from a component. Gated by component:update.
       operationId: remove-component-tag
       parameters:
-        - description: The entity's name
+        - description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
           in: path
           name: name
           required: true
           schema:
-            description: The entity's name
+            description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
             type: string
       requestBody:
         content:
@@ -7119,12 +7240,12 @@ paths:
       description: Moves the component's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by component:rename; read and rename scopes drive the 404 versus 403 split.
       operationId: rename-component
       parameters:
-        - description: The component's current name, or its uuid
+        - description: The component's current name, a dotted address, or its uuid
           in: path
           name: name
           required: true
           schema:
-            description: The component's current name, or its uuid
+            description: The component's current name, a dotted address, or its uuid
             type: string
       requestBody:
         content:
@@ -7147,17 +7268,44 @@ paths:
           description: Error
       summary: Rename a component
       x-omniglass-permission: component:rename
+  /components/{name}:resetName:
+    post:
+      description: "Hands the pen back to the platform: regenerates the name from the component's current type and placement (the same \"<stem>-<n>\" rule a nameless create applies) and marks it name_generated, whether or not it already was. Gated by component:rename, the same token :rename uses: it changes the name, exactly that permission's blast radius."
+      operationId: reset-component-name
+      parameters:
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Regenerate a component's name
+      x-omniglass-permission: component:rename
   /components/{name}:setTag:
     post:
       description: Binds a value for a key on a component. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by component:update.
       operationId: set-component-tag
       parameters:
-        - description: The entity's name
+        - description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
           in: path
           name: name
           required: true
           schema:
-            description: The entity's name
+            description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
             type: string
       requestBody:
         content:
@@ -7182,7 +7330,7 @@ paths:
       x-omniglass-permission: component:update
   /components:checkName:
     post:
-      description: Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by component:update.
+      description: Reports whether a proposed name is a valid slug and currently free within the given placement (parent wins over location; neither means the unplaced/root bucket). Advisory (Save is still gated by the unique constraint). Gated by component:update.
       operationId: check-component-name
       requestBody:
         content:
@@ -8046,12 +8194,12 @@ paths:
       description: Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
       operationId: delete-location
       parameters:
-        - description: The location's unique name
+        - description: The location's name, or a dotted address (e.g. boi.17c.415a)
           in: path
           name: name
           required: true
           schema:
-            description: The location's unique name
+            description: The location's name, or a dotted address (e.g. boi.17c.415a)
             type: string
       responses:
         "204":
@@ -8068,12 +8216,12 @@ paths:
       description: Fetches a location by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by location:read.
       operationId: get-location
       parameters:
-        - description: The location's unique name
+        - description: The location's name, or a dotted address (e.g. boi.17c.415a)
           in: path
           name: name
           required: true
           schema:
-            description: The location's unique name
+            description: The location's name, or a dotted address (e.g. boi.17c.415a)
             type: string
       responses:
         "200":
@@ -8091,13 +8239,15 @@ paths:
       summary: Get a location
       x-omniglass-permission: location:read
     patch:
-      description: "Patches a location's display_name, location_type, or parent (a move). The name is not patchable: renaming is the :rename custom method. Gated by location:update; the read and update scopes drive the 404 versus 403 split."
+      description: "Patches a location's display_name or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Gated by location:update; the read and update scopes drive the 404 versus 403 split."
       operationId: update-location
       parameters:
-        - in: path
+        - description: The location's name, or a dotted address (e.g. boi.17c.415a)
+          in: path
           name: name
           required: true
           schema:
+            description: The location's name, or a dotted address (e.g. boi.17c.415a)
             type: string
       requestBody:
         content:
@@ -8122,15 +8272,15 @@ paths:
       x-omniglass-permission: location:update
   /locations/{name}/health:
     get:
-      description: The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, the capability, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+      description: The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
       operationId: get-location-health
       parameters:
-        - description: The location's unique name
+        - description: The location's name, or a dotted address (e.g. boi.17c.415a)
           in: path
           name: name
           required: true
           schema:
-            description: The location's unique name
+            description: The location's name, or a dotted address (e.g. boi.17c.415a)
             type: string
       responses:
         "200":
@@ -8152,12 +8302,12 @@ paths:
       description: Every metric the location's type declares, resolved to the series' latest observed or calculated sample or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.
       operationId: list-location-metrics
       parameters:
-        - description: The location's unique name
+        - description: The location's name, or a dotted address (e.g. boi.17c.415a)
           in: path
           name: name
           required: true
           schema:
-            description: The location's unique name
+            description: The location's name, or a dotted address (e.g. boi.17c.415a)
             type: string
       responses:
         "200":
@@ -8179,12 +8329,12 @@ paths:
       description: Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.
       operationId: list-location-properties
       parameters:
-        - description: The location's unique name
+        - description: The location's name, or a dotted address (e.g. boi.17c.415a)
           in: path
           name: name
           required: true
           schema:
-            description: The location's unique name
+            description: The location's name, or a dotted address (e.g. boi.17c.415a)
             type: string
       responses:
         "200":
@@ -8206,12 +8356,12 @@ paths:
       description: Removes the location's declared value, so the property falls back to the location type contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the location never set is a 404. Gated by location:update; an out-of-scope location is a non-disclosing 404.
       operationId: clear-location-property
       parameters:
-        - description: The location's unique name
+        - description: The location's name, or a dotted address (e.g. boi.17c.415a)
           in: path
           name: name
           required: true
           schema:
-            description: The location's unique name
+            description: The location's name, or a dotted address (e.g. boi.17c.415a)
             type: string
         - description: The property name
           in: path
@@ -8235,12 +8385,12 @@ paths:
       description: "Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by location:update; an out-of-scope location is a non-disclosing 404."
       operationId: set-location-property
       parameters:
-        - description: The location's unique name
+        - description: The location's name, or a dotted address (e.g. boi.17c.415a)
           in: path
           name: name
           required: true
           schema:
-            description: The location's unique name
+            description: The location's name, or a dotted address (e.g. boi.17c.415a)
             type: string
         - description: The property name
           in: path
@@ -8275,12 +8425,12 @@ paths:
       description: Lists the tags bound directly on a location (not the resolved cascade). Gated by location:read.
       operationId: list-location-tags
       parameters:
-        - description: The entity's name
+        - description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
           in: path
           name: name
           required: true
           schema:
-            description: The entity's name
+            description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
             type: string
       responses:
         "200":
@@ -8297,17 +8447,50 @@ paths:
           description: Error
       summary: List tags on a location
       x-omniglass-permission: location:read
+  /locations/{name}:move:
+    post:
+      description: "Re-parents a location (a tree move): parent is required (422 if omitted), cycle-guarded, and placement-validated against the resolved location_type. Moving to root is not supported (422): MoveLocation gains no clear-to-root capability locations have never had. A separate act from update, and a separately grantable one (location:move), because a placement change is an authorization act, not a label edit. Recorded under its own audit verb, move, distinct from update. Does not recompute health. A taken name at the destination is a 409. Gated by location:move; the read and move scopes drive the 404 versus 403 split."
+      operationId: move-location
+      parameters:
+        - description: The location's name, or a dotted address (e.g. boi.17c.415a)
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The location's name, or a dotted address (e.g. boi.17c.415a)
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveLocationInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Move a location
+      x-omniglass-permission: location:move
   /locations/{name}:removeTag:
     post:
       description: Removes a key's value from a location. Gated by location:update.
       operationId: remove-location-tag
       parameters:
-        - description: The entity's name
+        - description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
           in: path
           name: name
           required: true
           schema:
-            description: The entity's name
+            description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
             type: string
       requestBody:
         content:
@@ -8331,12 +8514,12 @@ paths:
       description: Moves the location's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by location:rename; the read and rename scopes drive the 404 versus 403 split.
       operationId: rename-location
       parameters:
-        - description: The location's current name, or its uuid
+        - description: The location's current name, a dotted address, or its uuid
           in: path
           name: name
           required: true
           schema:
-            description: The location's current name, or its uuid
+            description: The location's current name, a dotted address, or its uuid
             type: string
       requestBody:
         content:
@@ -8364,12 +8547,12 @@ paths:
       description: Binds a value for a key on a location. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by location:update.
       operationId: set-location-tag
       parameters:
-        - description: The entity's name
+        - description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
           in: path
           name: name
           required: true
           schema:
-            description: The entity's name
+            description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
             type: string
       requestBody:
         content:
@@ -8394,7 +8577,7 @@ paths:
       x-omniglass-permission: location:update
   /locations:checkName:
     post:
-      description: Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by location:update.
+      description: Reports whether a proposed name is a valid slug and currently free within the given placement (under the given parent, or among roots when no parent is given). Advisory (Save is still gated by the unique constraint). Gated by location:update.
       operationId: check-location-name
       requestBody:
         content:
@@ -8722,12 +8905,12 @@ paths:
       description: Lists the tags bound directly on a node (not the resolved cascade). Gated by node:read.
       operationId: list-node-tags
       parameters:
-        - description: The entity's name
+        - description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
           in: path
           name: name
           required: true
           schema:
-            description: The entity's name
+            description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
             type: string
       responses:
         "200":
@@ -8749,12 +8932,12 @@ paths:
       description: Removes a key's value from a node. Gated by node:update.
       operationId: remove-node-tag
       parameters:
-        - description: The entity's name
+        - description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
           in: path
           name: name
           required: true
           schema:
-            description: The entity's name
+            description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
             type: string
       requestBody:
         content:
@@ -8778,12 +8961,12 @@ paths:
       description: Binds a value for a key on a node. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by node:update.
       operationId: set-node-tag
       parameters:
-        - description: The entity's name
+        - description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
           in: path
           name: name
           required: true
           schema:
-            description: The entity's name
+            description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
             type: string
       requestBody:
         content:
@@ -9776,7 +9959,7 @@ paths:
       x-omniglass-permission: principal:set-avatar
   /products:
     get:
-      description: Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, and capabilities. Gated by product:read.
+      description: Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
       operationId: list-products
       responses:
         "200":
@@ -9794,7 +9977,7 @@ paths:
       summary: List products
       x-omniglass-permission: product:read
     post:
-      description: Creates a custom (non-official) product and sets its capabilities. Gated by product:create.
+      description: Creates a custom (non-official) product, classified under a component_type. kind and component_type are both required; kind refuses vm (retired, folded into app). Gated by product:create.
       operationId: create-product
       requestBody:
         content:
@@ -9841,7 +10024,7 @@ paths:
       summary: Delete a product
       x-omniglass-permission: product:delete
     get:
-      description: Fetches a product by its name or its uuid, with its capabilities. Either form resolves, so `omniglass product get acme-soundbar` and the uuid are interchangeable. Gated by product:read.
+      description: Fetches a product by its name or its uuid. Either form resolves, so `omniglass product get acme-soundbar` and the uuid are interchangeable. Gated by product:read.
       operationId: get-product
       parameters:
         - description: The product id
@@ -9867,7 +10050,7 @@ paths:
       summary: Get a product
       x-omniglass-permission: product:read
     patch:
-      description: Patches a custom product's display_name, vendor, driver, kind, or parent, and replaces its capabilities when provided. Official products are read-only (422). Gated by product:update.
+      description: Patches a custom product's display_name, vendor, driver, kind, component_type, icon, or parent. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.
       operationId: update-product
       parameters:
         - in: path
@@ -10833,7 +11016,7 @@ paths:
       x-omniglass-permission: standard:update
   /standards/{id}/roles:
     get:
-      description: Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the capabilities a component must provide to fill it. Gated by standard:read.
+      description: Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. Gated by standard:read.
       operationId: list-standard-roles
       parameters:
         - description: The standard id
@@ -10889,7 +11072,7 @@ paths:
       summary: Withdraw a role from a standard
       x-omniglass-permission: standard:delete
     put:
-      description: Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent). The capability list replaces the required set wholesale. An unknown standard or capability is a 422. Gated by standard:update.
+      description: Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent). accepted_types and pinned_products each replace their set wholesale. An unknown standard, type, or product is a 422. Gated by standard:update.
       operationId: set-standard-role
       parameters:
         - description: The standard id
@@ -10975,12 +11158,12 @@ paths:
       description: Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
       operationId: delete-system
       parameters:
-        - description: The system's unique name
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: The system's unique name
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
       responses:
         "204":
@@ -10997,12 +11180,12 @@ paths:
       description: Fetches a system by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by system:read.
       operationId: get-system
       parameters:
-        - description: The system's unique name
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: The system's unique name
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
       responses:
         "200":
@@ -11020,13 +11203,15 @@ paths:
       summary: Get a system
       x-omniglass-permission: system:read
     patch:
-      description: "Patches a system's display_name, standard, location, or parent. The name is not patchable: renaming is the :rename custom method. The classification and placement fields follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off, an unplaced system, a root system), a name sets. A reparent is cycle-guarded and scope-injected. Gated by system:update; read and update scopes drive the 404 versus 403 split."
+      description: "Patches a system's display_name or standard. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard field follows the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system), a name sets. Gated by system:update; read and update scopes drive the 404 versus 403 split."
       operationId: update-system
       parameters:
-        - in: path
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
+          in: path
           name: name
           required: true
           schema:
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
       requestBody:
         content:
@@ -11051,15 +11236,15 @@ paths:
       x-omniglass-permission: system:update
   /systems/{name}/health:
     get:
-      description: "The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role the required capabilities an alarm has taken away plus the alarms that took them. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404."
+      description: "The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. A role that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this role's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404."
       operationId: get-system-health
       parameters:
-        - description: The system's unique name
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: The system's unique name
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
       responses:
         "200":
@@ -11081,12 +11266,12 @@ paths:
       description: "The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Gated by system:read; an out-of-scope system is a non-disclosing 404."
       operationId: list-system-members
       parameters:
-        - description: Name of the system
+        - description: Name of the system, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: Name of the system
+            description: Name of the system, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
       responses:
         "200":
@@ -11108,19 +11293,19 @@ paths:
       description: "Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404."
       operationId: remove-system-member
       parameters:
-        - description: Name of the system
+        - description: Name of the system, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: Name of the system
+            description: Name of the system, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
-        - description: Name of the component
+        - description: Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: component
           required: true
           schema:
-            description: Name of the component
+            description: Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "204":
@@ -11137,19 +11322,19 @@ paths:
       description: Binds this component into the system. Idempotent. A component's first membership becomes its primary with nobody asking, so a component in exactly one system never has to think about the concept; a later membership does not take that default away. Gated by system:update; an out-of-scope system is a non-disclosing 404.
       operationId: add-system-member
       parameters:
-        - description: Name of the system
+        - description: Name of the system, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: Name of the system
+            description: Name of the system, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
-        - description: Name of the component
+        - description: Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: component
           required: true
           schema:
-            description: Name of the component
+            description: Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "204":
@@ -11167,19 +11352,19 @@ paths:
       description: Moves the component's default to this membership. The default answers questions asked without a system in hand; it does not decide anything that names a system explicitly. A component that was not a member here is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
       operationId: set-primary-member
       parameters:
-        - description: Name of the system
+        - description: Name of the system, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: Name of the system
+            description: Name of the system, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
-        - description: Name of the component
+        - description: Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: component
           required: true
           schema:
-            description: Name of the component
+            description: Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "204":
@@ -11197,12 +11382,12 @@ paths:
       description: Every metric the system's standard declares, resolved to the series' latest observed or calculated sample or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.
       operationId: list-system-metrics
       parameters:
-        - description: The system's unique name
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: The system's unique name
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
       responses:
         "200":
@@ -11224,12 +11409,12 @@ paths:
       description: Every property the system's standard declares, resolved to the system's own value or the contract default (is_set marks the override), plus any property set directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.
       operationId: list-system-properties
       parameters:
-        - description: The system's unique name
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: The system's unique name
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
       responses:
         "200":
@@ -11251,12 +11436,12 @@ paths:
       description: Removes the system's declared value, so the property falls back to the standard contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the system never set is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
       operationId: clear-system-property
       parameters:
-        - description: The system's unique name
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: The system's unique name
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
         - description: The property name
           in: path
@@ -11280,12 +11465,12 @@ paths:
       description: "Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by system:update; an out-of-scope system is a non-disclosing 404."
       operationId: set-system-property
       parameters:
-        - description: The system's unique name
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: The system's unique name
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
         - description: The property name
           in: path
@@ -11317,15 +11502,15 @@ paths:
       x-omniglass-permission: system:update
   /systems/{name}/roles:
     get:
-      description: "Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the capabilities it requires, the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404."
+      description: "Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the types it accepts (and products it pins, if any), the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404."
       operationId: list-system-roles
       parameters:
-        - description: The system's unique name
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: The system's unique name
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
       responses:
         "200":
@@ -11347,12 +11532,12 @@ paths:
       description: Removes a role declared on this system, and with it every assignment to it. A role the system does not declare itself is a 404 (a role inherited from its standard is withdrawn on the standard, not here). Gated by system:update; an out-of-scope system is a non-disclosing 404.
       operationId: delete-system-role
       parameters:
-        - description: The system's unique name
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: The system's unique name
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
         - description: The role name
           in: path
@@ -11373,15 +11558,15 @@ paths:
       summary: Withdraw a role from a system
       x-omniglass-permission: system:update
     put:
-      description: Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. The capability list replaces the required set wholesale. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+      description: Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. accepted_types and pinned_products each replace their set wholesale. Gated by system:update; an out-of-scope system is a non-disclosing 404.
       operationId: set-system-role
       parameters:
-        - description: The system's unique name
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: The system's unique name
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
         - description: The role name
           in: path
@@ -11416,12 +11601,12 @@ paths:
       description: Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
       operationId: unassign-system-role
       parameters:
-        - description: The system's unique name
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: The system's unique name
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
         - description: The role name
           in: path
@@ -11430,12 +11615,12 @@ paths:
           schema:
             description: The role name
             type: string
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: component
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "204":
@@ -11449,15 +11634,15 @@ paths:
       summary: Unassign a component from a role
       x-omniglass-permission: system:update
     put:
-      description: Puts this component in the role for this system. Refused with a 422 naming the missing capabilities when the component does not provide everything the role requires (its product's capabilities, plus what it adds, minus what it suppresses). Idempotent. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+      description: "Puts this component in the role for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the role accepts, or (if the role pins products) its product not one of them. A role with no accepted types takes any type. Idempotent. Gated by system:update; an out-of-scope system is a non-disclosing 404."
       operationId: assign-system-role
       parameters:
-        - description: The system's unique name
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
           in: path
           name: name
           required: true
           schema:
-            description: The system's unique name
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
             type: string
         - description: The role name
           in: path
@@ -11466,12 +11651,12 @@ paths:
           schema:
             description: The role name
             type: string
-        - description: The component's unique name
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           in: path
           name: component
           required: true
           schema:
-            description: The component's unique name
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
       responses:
         "204":
@@ -11484,17 +11669,53 @@ paths:
           description: Error
       summary: Assign a component to a role
       x-omniglass-permission: system:update
+  /systems/{name}/roles/{role}:swapPositions:
+    post:
+      description: "Exchanges the positions of whichever components currently hold position and with within this role: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404."
+      operationId: swap-role-positions
+      parameters:
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
+            type: string
+        - description: The role name
+          in: path
+          name: role
+          required: true
+          schema:
+            description: The role name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SwapRolePositionsInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Exchange two occupants' positions within a role
+      x-omniglass-permission: system:update
   /systems/{name}:listTags:
     get:
       description: Lists the tags bound directly on a system (not the resolved cascade). Gated by system:read.
       operationId: list-system-tags
       parameters:
-        - description: The entity's name
+        - description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
           in: path
           name: name
           required: true
           schema:
-            description: The entity's name
+            description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
             type: string
       responses:
         "200":
@@ -11511,17 +11732,50 @@ paths:
           description: Error
       summary: List tags on a system
       x-omniglass-permission: system:read
+  /systems/{name}:move:
+    post:
+      description: "Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. Gated by system:move; read and move scopes drive the 404 versus 403 split."
+      operationId: move-system
+      parameters:
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveSystemInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Move a system
+      x-omniglass-permission: system:move
   /systems/{name}:removeTag:
     post:
       description: Removes a key's value from a system. Gated by system:update.
       operationId: remove-system-tag
       parameters:
-        - description: The entity's name
+        - description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
           in: path
           name: name
           required: true
           schema:
-            description: The entity's name
+            description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
             type: string
       requestBody:
         content:
@@ -11545,12 +11799,12 @@ paths:
       description: Moves the system's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by system:rename; read and rename scopes drive the 404 versus 403 split.
       operationId: rename-system
       parameters:
-        - description: The system's current name, or its uuid
+        - description: The system's current name, a dotted address, or its uuid
           in: path
           name: name
           required: true
           schema:
-            description: The system's current name, or its uuid
+            description: The system's current name, a dotted address, or its uuid
             type: string
       requestBody:
         content:
@@ -11578,12 +11832,12 @@ paths:
       description: Binds a value for a key on a system. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by system:update.
       operationId: set-system-tag
       parameters:
-        - description: The entity's name
+        - description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
           in: path
           name: name
           required: true
           schema:
-            description: The entity's name
+            description: The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token.
             type: string
       requestBody:
         content:
@@ -11608,7 +11862,7 @@ paths:
       x-omniglass-permission: system:update
   /systems:checkName:
     post:
-      description: Reports whether a proposed name is a valid slug and currently free. Advisory (Save is still gated by the unique constraint). Availability is scope-blind to match the global unique constraint. Gated by system:update.
+      description: Reports whether a proposed name is a valid slug and currently free within the given placement (parent wins over location; neither means the root/unplaced bucket). Advisory (Save is still gated by the unique constraint). Gated by system:update.
       operationId: check-system-name
       requestBody:
         content:

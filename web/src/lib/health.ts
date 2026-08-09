@@ -7,16 +7,27 @@ import { sortAlarms } from "./alarms";
 //
 // The model, end to end, because every surface here is a view of it:
 //
-//   an ALARM on a component names the CAPABILITIES it degrades
-//   -> a ROLE requires capabilities and carries a QUORUM; when too few assigned
-//      components can still satisfy it, the role is IMPAIRED
+//   an ALARM impairs its COMPONENT's own verdict wholesale (#626: no longer
+//   per named capability)
+//   -> a ROLE carries a QUORUM; when too few assigned components currently
+//      occupy it (their own verdict is not outage; degraded still occupies),
+//      the role is IMPAIRED
 //   -> an impaired role contributes its IMPACT (outage, degraded, or none)
-//   -> a SYSTEM takes the worst contribution among its roles
+//      UNLESS it belongs to a CHOICE (#626: an exclusive-or group, such as an
+//      all-in-one alternate versus a component-built one) whose best-satisfied
+//      alternate is a different one; the role's own ACTIVE flag says so, and
+//      its impaired/short/spare figures are then read-only trivia, not part
+//      of why the system is what it is
+//   -> a SYSTEM takes the worst contribution among its ACTIVE roles
 //   -> a LOCATION takes the worst verdict among the systems placed beneath it
 //
 // The verdict is never computed here: the server sends it, and the console shows
 // the chain that produced it. Recomputing it in the browser is exactly how a
-// console starts disagreeing with the API it reads.
+// console starts disagreeing with the API it reads. The same discipline applies
+// to ACTIVE: rendering a role's impaired figure without checking it first is
+// exactly the contradiction the field exists to prevent (a badge over an
+// impaired list that flatly disagrees with it), so every derivation below
+// filters through activeRoles rather than the raw list.
 
 export type Verdict = "healthy" | "degraded" | "outage";
 export type HealthRole = components["schemas"]["HealthRoleBody"];
@@ -69,19 +80,39 @@ export const roles = (h: EstateHealth | undefined): HealthRole[] => h?.roles ?? 
 export const systems = (h: EstateHealth | undefined): HealthSystem[] => h?.systems ?? [];
 export const transitions = (h: EstateHealth | undefined): HealthTransition[] => h?.transitions ?? [];
 
+// activeRoles is every role whose own figures actually counted toward the
+// verdict: unconditional roles (no choice) plus the role of whichever
+// alternate answered its choice. A role whose alternate LOST reads active
+// false; it can still be impaired on its own terms, but rendering that
+// impairment as part of "why this system reads what it does" is exactly the
+// contradiction active exists to catch, so every other derivation here reads
+// through this rather than the raw roles list.
+export function activeRoles(h: EstateHealth | undefined): HealthRole[] {
+  return roles(h).filter((r) => r.active);
+}
+
+// inactiveRoles is the complement: roles belonging to a choice's alternate
+// that lost. Surfaced separately (not silently dropped) so an operator can
+// still see what the unbuilt alternate would need, without it reading as a
+// current impairment.
+export function inactiveRoles(h: EstateHealth | undefined): HealthRole[] {
+  return roles(h).filter((r) => !r.active);
+}
+
 // The roles that explain the verdict, worst impact first, so the reconciliation
 // panel leads with the role that took the system down rather than the one that
 // merely dented it.
 export function impairedRoles(h: EstateHealth | undefined): HealthRole[] {
-  return roles(h)
+  return activeRoles(h)
     .filter((r) => r.impaired)
     .sort((a, b) => impactRank(a.impact) - impactRank(b.impact) || (a.display_name || a.name).localeCompare(b.display_name || b.name));
 }
 
 // The roles that are holding: named too, because "which roles are fine" is half of
-// why a system is only degraded and not out.
+// why a system is only degraded and not out. An inactive role is neither
+// impaired nor holding here: it is not in play, so it belongs to neither list.
 export function holdingRoles(h: EstateHealth | undefined): HealthRole[] {
-  return roles(h).filter((r) => !r.impaired);
+  return activeRoles(h).filter((r) => !r.impaired);
 }
 
 function impactRank(impact: string): number {
@@ -94,16 +125,17 @@ export function quorumLabel(r: Pick<HealthRole, "satisfying" | "quorum">): strin
   return `${r.satisfying} of ${r.quorum} satisfying`;
 }
 
-// A CAUSE is one required capability an alarm has taken away, with the alarms that
-// took it. This is the middle link of the chain, and the only one the API does not
-// hand over pre-joined.
-export type Cause = { capability: string; alarms: HealthAlarm[] };
+// A CAUSE is one assigned component that is down, with the alarms that took it
+// down. This is the middle link of the chain, and the only one the API does not
+// hand over pre-joined (HealthRole.alarms is the flat union across every down
+// component in the role).
+export type Cause = { component: string; alarms: HealthAlarm[] };
 
 export function causes(r: HealthRole): Cause[] {
   const alarms = r.alarms ?? [];
-  return (r.degraded ?? []).map((capability) => ({
-    capability,
-    alarms: sortAlarms(alarms.filter((a) => (a.capabilities ?? []).includes(capability))),
+  return (r.down ?? []).map((component) => ({
+    component,
+    alarms: sortAlarms(alarms.filter((a) => a.component === component)),
   }));
 }
 
@@ -121,19 +153,19 @@ export function impactPhrase(impact: string): string {
   return "no change";
 }
 
-// chainSentence is the claim this whole slice makes, in one line: which alarm, on
-// which component, took which capability away, which role that pushed below quorum,
-// and what that contributes to the verdict the operator is looking at. It names
-// every link, because a badge that says "degraded" and nothing else is the thing
+// chainSentence is the claim this whole slice makes, in one line: which alarm
+// took which component down, which role that pushed below quorum, and what
+// that contributes to the verdict the operator is looking at. It names every
+// link, because a badge that says "degraded" and nothing else is the thing
 // operators already have and do not trust.
 export function chainSentence(r: HealthRole, verdict: string): string {
   const role = r.display_name || r.name;
   const alarm = worstAlarm(r);
-  const lost = (r.degraded ?? []).join(", ");
+  const down = (r.down ?? []).join(", ");
   if (!alarm) {
-    return `No alarm reaches ${role}: it satisfies ${r.satisfying} of ${r.quorum} because too few components are assigned, and ${contribution(r, verdict)}.`;
+    return `No component assigned to ${role} is down: it satisfies ${r.satisfying} of ${r.quorum} because too few are assigned, and ${contribution(r, verdict)}.`;
   }
-  const took = lost ? ` degrades ${lost}` : " reaches it";
+  const took = down ? " takes it out of the role" : "";
   return `A ${alarm.severity} alarm on ${alarm.component}${took}, so ${role} satisfies ${r.satisfying} of ${r.quorum} and ${contribution(r, verdict)}.`;
 }
 

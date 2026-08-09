@@ -103,11 +103,15 @@ var Banned = []BannedTerm{
 	// The estate-model wave. Each of these was retired by an ADR that shipped
 	// without its denylist entry, which is why the terms survived in the docs
 	// long enough for the 2026-07-30 audit to find them.
-	{
-		Pattern:     regexp.MustCompile(`\bcomponent_type\b`),
-		Replacement: "product (the shape a component points at)",
-		Origin:      "ADR-0047",
-	},
+	//
+	// component_type is NOT here. ADR-0047 retired it (a flat classifier beside
+	// component); ADR-0085 partially reverses that, returning it as a nested
+	// registry above product, so the identifier is current vocabulary again,
+	// deliberately in a different shape. A denylist entry cannot express
+	// "banned, except in its own reintroduced meaning", so the fix is removal,
+	// not an exemption; the term's dead sense (component.component_type, the
+	// flat table) survives only in the historical ADR-0047 prose, which the
+	// retirement-marker exemption below already protects.
 	{
 		Pattern:     regexp.MustCompile(`\bsystem_type\b`),
 		Replacement: "standard",
@@ -236,6 +240,45 @@ var Banned = []BannedTerm{
 		Pattern:     regexp.MustCompile(`(?i)\btelemetry lanes\b`),
 		Replacement: "signal lanes (four inbound, one outbound; a command is not a reading)",
 		Origin:      "ADR-0084",
+	},
+
+	// The capability retirement (#626). "Capability" alone is NOT bannable: the
+	// word is ordinary English throughout the corpus in senses that have nothing
+	// to do with the registry (a governed AI capability, a capability-checked
+	// route meaning permission-gated, the capability-wrapping test-tier carve-out
+	// for raw sockets and ICMP, a template's capability manifest, a page's
+	// Design/Partial/Built status per documented capability). Only the retired
+	// registry's own identifiers are named: the five dropped tables, the Go
+	// symbols the health rollup and role assignment used to call, the routes,
+	// and the permission stamp. capability-gated staffing retires with them: an
+	// occupant now satisfies its slot when its component's own verdict is
+	// healthy (internal/health), nothing about what it "provides".
+	{
+		Pattern: regexp.MustCompile(`\b(?:component_capability|product_capability|alarm_capability|system_role_capability)\b`),
+		Replacement: "the typed-slot guard (system_role_type, system_role_product) for assignment; " +
+			"a component's own verdict, from its active alarms, for health",
+		Origin: "#626",
+	},
+	{
+		// The registry table itself and its CRUD surface, scoped to the
+		// code-formatted token so the sentence "a governed capability" stays
+		// legal: only a backticked `capability`/`capabilities`, the registry
+		// phrase, the retired Go symbols, and the permission stamp are named.
+		Pattern: regexp.MustCompile("`capabilit(?:y|ies)`|\\bcapability registr(?:y|ies)\\b|\\bcapability catalogs?\\b|" +
+			"\\bcapability:(?:read|create|update|delete)\\b|" +
+			"\\b(?:EffectiveCapabilities|ComponentCapabilities|CreateCapability|UpdateCapability|DeleteCapability|" +
+			"ListCapabilities|GetCapability|UpsertCapability|CapabilityPatch|SetComponentCapability|ClearComponentCapability)\\b"),
+		Replacement: "the component_type taxonomy (product classification) and the typed-slot guard " +
+			"(system_role_type, system_role_product) for assignment; nothing replaces the registry itself",
+		Origin: "#626",
+	},
+	{
+		// The routes: /capabilities, /capabilities/{id}, and the component-scoped
+		// /components/{name}/capabilities[/{capability}] arc. The leading slash
+		// keeps this from matching prose that happens to contain the bare word.
+		Pattern:     regexp.MustCompile(`/capabilities\b`),
+		Replacement: "no replacement: the routes are gone, not renamed",
+		Origin:      "#626",
 	},
 }
 
@@ -366,10 +409,10 @@ var retiringProse = regexp.MustCompile(`(?i)\b(retire[ds]?|retirement|was|were|o
 // purpose: a long line can easily mention some unrelated thing that "was
 // replaced" while still making a current-tense claim about the retired term,
 // and a whole-line escape would wave that through. Wide enough for the real
-// phrasings ("the `component_type` registry retired with the product catalog"),
+// phrasings ("the `system_type` registry was promoted to standard"),
 // narrow enough that a clause about something else does not license it. Every
 // real phrasing in the corpus puts the marker within ~25 characters ("the
-// `component_type` registry retired with...", "replaces the old `component_type`",
+// `system_type` registry was promoted...", "replaces the old `field_definition`",
 // "was `property_value`, built"), so 30 fits them all while a mention two
 // clauses away does not reach.
 const retirementWindow = 30

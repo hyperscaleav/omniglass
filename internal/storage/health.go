@@ -28,8 +28,9 @@ import (
 // Recompute at the write, inside the caller's transaction. Every mutation that
 // can change health recomputes the affected chain before it commits: raising or
 // clearing an alarm, staffing or unstaffing a role, declaring or withdrawing one,
-// changing a component's capabilities or its product, creating a system, and
-// changing the standard it conforms to or the location it sits in. The
+// creating a system, and changing the standard it conforms to or the location it
+// sits in. A component's own condition is now purely its active alarms (#626),
+// so a product swap or a capability fact no longer belongs to that list. The
 // alternative, RECORDING on read, would stamp every transition at the moment
 // somebody opened a page, which is precisely the inaccuracy the record exists to
 // avoid.
@@ -90,20 +91,36 @@ type HealthReport struct {
 }
 
 // HealthRole is one contributing role, with the causing chain when it is
-// impaired. Degraded and Alarms are what turn a verdict into something an
-// operator can act on: the role, the capability it lost, and the alarm that took
-// it. A satisfied role carries neither.
+// impaired. Down and Alarms are what turn a verdict into something an
+// operator can act on: which assigned components are not occupying their
+// slot, and the alarms that took them down. A satisfied role carries
+// neither, and a role that is merely short-staffed (nobody down, just nobody
+// assigned) carries Down empty too.
+//
+// Choice, Alternate and Active are the #626 grouping, carried onto the
+// report so a consumer can group what the verdict already groups: Choice
+// and Alternate are empty for an unconditional role (it always counts), and
+// Active is true for every unconditional role but only for the roles of a
+// choice's currently-winning alternate (internal/health.Choice.Active).
+// Without this, the verdict and the role list can read as contradicting
+// each other: a satisfied all-in-one alternate reads healthy while the
+// same report lists its unbuilt component-system alternate's roles as
+// impaired, with nothing to say those roles are not the reason.
 type HealthRole struct {
 	Name        string
 	DisplayName string
 	Impact      string
-	Required    []string
 	Quorum      int
 	Satisfying  int
+	Short       int // how many more occupants the role needs to reach quorum
+	Spare       int // how many occupants the role has beyond quorum
 	Impaired    bool
 	AssignedTo  []string
-	Degraded    []string // required capabilities an active alarm has taken away
-	Alarms      []Alarm  // the active alarms that degraded them
+	Down        []string // assigned components whose own verdict is outage
+	Alarms      []Alarm  // the active alarms on those down components
+	Choice      string   // the choice this role belongs to; empty when unconditional
+	Alternate   string   // the alternate within Choice; empty when unconditional
+	Active      bool     // true for an unconditional role, or a role in its choice's active alternate
 }
 
 // HealthSystem is one system under a location, with its recorded verdict. It is
@@ -121,24 +138,63 @@ type HealthTransition struct {
 }
 
 // resolvedRole is a system's role with everything both the verdict and the report
-// need: the declaration, who fills it, and what an alarm has taken from each of
-// them.
+// need: the declaration and who fills it, each with its own current verdict.
 type resolvedRole struct {
 	ID          string
 	Name        string
 	DisplayName string
 	Quorum      int
 	Impact      string
-	Required    []string
 	Assigned    []health.Component
+	// AssignedIDs is Assigned's own component id, index for index: the pure
+	// health.Component the rollup and the report both consume carries only a
+	// Name (display), so a caller that needs to look a specific assignee back
+	// up unambiguously (explainRole's active-alarm read) takes the id from
+	// here rather than the name Assigned carries, which #627 no longer
+	// guarantees is unique.
+	AssignedIDs []string
+	// ChoiceID, ChoiceName, AlternateID, AlternateName and AlternatePos are
+	// set when this role joins one alternate of a choice (#626); nil means
+	// unconditional (system_role.alternate_id is NULL), always folded
+	// directly rather than grouped. splitHealthRoles is what turns these
+	// back into health.SystemVerdictWith's shape.
+	ChoiceID      *string
+	ChoiceName    *string
+	AlternateID   *string
+	AlternateName *string
+	AlternatePos  *int
 }
 
 // RecomputeHealth recomputes and records the health chain a component sits in:
 // the component itself, every system it staffs, and every location over those
 // systems. It runs inside the caller's transaction, so the verdict commits with
-// the write that caused it or not at all.
-func (p *PG) RecomputeHealth(ctx context.Context, q txQuerier, componentName string) error {
-	return p.recomputeChain(ctx, q, []string{componentName}, nil, nil)
+// the write that caused it or not at all. componentRef is a reference (name or
+// uuid, ADR-0062): resolved once here, before it ever reaches recomputeChain, so
+// nothing downstream re-derives the id from a name that might no longer be
+// unique (#627).
+func (p *PG) RecomputeHealth(ctx context.Context, q txQuerier, componentRef string) error {
+	c, err := scopedByName(ctx, q, componentConfig, componentRef)
+	if err != nil {
+		return err
+	}
+	return p.recomputeChain(ctx, q, []ownerRef{{ID: c.ID, Name: c.Name}}, nil, nil)
+}
+
+// ownerRef pairs a health owner's id with its name. Every internal query in
+// this file binds the id, including recordHealth and healthTransitions:
+// ownerArcExprN's component/system/location branch binds directly ($N::uuid,
+// fixed to do so in the round that closed the collection ingest path), so
+// nothing downstream re-derives an id from a name that #627 no longer
+// guarantees is unique. Name is not currently read anywhere; it survives on
+// the type because every construction site already has the row in hand
+// (resolving the id pulls the name along for free) except one that used to
+// pay for a lookup solely to populate it (systemConfig.afterDelete, since
+// fixed to leave it unset). Kept rather than dropped so a future health-report
+// read that wants a display name without a second lookup has it; if that
+// stays untrue, cut the field.
+type ownerRef struct {
+	ID   string
+	Name string
 }
 
 // recomputeChain is the shape every trigger reduces to: some components whose own
@@ -150,59 +206,60 @@ func (p *PG) RecomputeHealth(ctx context.Context, q txQuerier, componentName str
 // Every owner is locked before its inputs are resolved, and the lock is held to
 // commit, so a concurrent recompute of the same owner resolves over this one's
 // committed result rather than over the state it is replacing. Owners are visited
-// in a fixed order (components, then systems, then locations, each by name), which
+// in a fixed order (components, then systems, then locations, each by id), which
 // is what keeps two recomputes over overlapping chains from deadlocking on each
 // other's locks.
-func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, systems, locations []string) error {
-	affected := newNameSet(systems)
+func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, systems, locations []ownerRef) error {
+	affected := newRefSet(systems)
 
-	for _, c := range newNameSet(components).sorted() {
-		if err := lockHealthOwner(ctx, q, "component", c); err != nil {
+	for _, c := range newRefSet(components).sorted() {
+		if err := lockHealthOwner(ctx, q, "component", c.ID); err != nil {
 			return err
 		}
-		severities, err := p.activeAlarmSeverities(ctx, q, c)
+		severities, err := p.activeAlarmSeverities(ctx, q, c.ID)
 		if err != nil {
 			return err
 		}
-		if err := recordHealth(ctx, q, "component", c, health.ComponentVerdict(severities)); err != nil {
+		if err := recordHealth(ctx, q, "component", c.ID, health.ComponentVerdict(severities)); err != nil {
 			return err
 		}
-		staffed, err := p.systemsStaffedBy(ctx, q, c)
+		staffed, err := p.systemsStaffedBy(ctx, q, c.ID)
 		if err != nil {
 			return err
 		}
 		affected.add(staffed...)
 	}
 
-	systemNames := affected.sorted()
-	for _, s := range systemNames {
-		if err := lockHealthOwner(ctx, q, "system", s); err != nil {
+	systemRefs := affected.sorted()
+	for _, s := range systemRefs {
+		if err := lockHealthOwner(ctx, q, "system", s.ID); err != nil {
 			return err
 		}
-		roles, err := p.resolveHealthRoles(ctx, q, s)
+		roles, err := p.resolveHealthRoles(ctx, q, s.ID)
 		if err != nil {
 			return err
 		}
-		if err := recordHealth(ctx, q, "system", s, health.SystemVerdict(healthRoles(roles))); err != nil {
+		unconditional, choices, _ := splitHealthRoles(roles)
+		if err := recordHealth(ctx, q, "system", s.ID, health.SystemVerdictWith(unconditional, choices)); err != nil {
 			return err
 		}
 	}
 
 	// A location's verdict reads the systems' RECORDED values, which the loop
 	// above has just refreshed inside this transaction.
-	affectedLocations, err := p.locationsOver(ctx, q, systemNames, locations)
+	affectedLocations, err := p.locationsOver(ctx, q, systemRefs, locations)
 	if err != nil {
 		return err
 	}
 	for _, l := range affectedLocations {
-		if err := lockHealthOwner(ctx, q, "location", l); err != nil {
+		if err := lockHealthOwner(ctx, q, "location", l.ID); err != nil {
 			return err
 		}
-		v, err := p.locationVerdict(ctx, q, l)
+		v, err := p.locationVerdict(ctx, q, l.ID)
 		if err != nil {
 			return err
 		}
-		if err := recordHealth(ctx, q, "location", l, v); err != nil {
+		if err := recordHealth(ctx, q, "location", l.ID, v); err != nil {
 			return err
 		}
 	}
@@ -249,10 +306,42 @@ func lockAdvisory(ctx context.Context, q txQuerier, key string) error {
 	return nil
 }
 
+// resolveSystemRefs resolves each system reference (name or uuid, ADR-0062) to
+// its id and canonical name once, so recomputeChain never re-derives an id
+// from a name that might no longer be unique (#627).
+func (p *PG) resolveSystemRefs(ctx context.Context, q txQuerier, refs []string) ([]ownerRef, error) {
+	out := make([]ownerRef, 0, len(refs))
+	for _, ref := range refs {
+		sys, err := scopedByName(ctx, q, systemConfig, ref)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ownerRef{ID: sys.ID, Name: sys.Name})
+	}
+	return out, nil
+}
+
+// resolveLocationRefs mirrors resolveSystemRefs for locations.
+func (p *PG) resolveLocationRefs(ctx context.Context, q txQuerier, refs []string) ([]ownerRef, error) {
+	out := make([]ownerRef, 0, len(refs))
+	for _, ref := range refs {
+		loc, err := scopedByName(ctx, q, locationConfig, ref)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ownerRef{ID: loc.ID, Name: loc.Name})
+	}
+	return out, nil
+}
+
 // recomputeSystems is the trigger shape for a declaration change, which moves a
 // system's roles without touching any component.
 func (p *PG) recomputeSystems(ctx context.Context, q txQuerier, systems ...string) error {
-	return p.recomputeChain(ctx, q, nil, systems, nil)
+	refs, err := p.resolveSystemRefs(ctx, q, systems)
+	if err != nil {
+		return err
+	}
+	return p.recomputeChain(ctx, q, nil, refs, nil)
 }
 
 // recomputeMovedSystem is the trigger shape for a system that changed location:
@@ -260,37 +349,15 @@ func (p *PG) recomputeSystems(ctx context.Context, q txQuerier, systems ...strin
 // not, so that one is named. The old location may have improved (its worst system
 // just walked out), which is an edge as real as any failure.
 func (p *PG) recomputeMovedSystem(ctx context.Context, q txQuerier, system string, leftLocations ...string) error {
-	return p.recomputeChain(ctx, q, nil, []string{system}, leftLocations)
-}
-
-// recomputeProductComponents is the trigger shape for a catalog edit: the product
-// changed, so every component built to it may now provide a different capability
-// set, and every system staffed by one of those components may have moved. The
-// components are named and recomputeChain walks the rest of the way up.
-//
-// A product with no components in use recomputes nothing, which is the common
-// case for a catalog edit and costs one query.
-func (p *PG) recomputeProductComponents(ctx context.Context, q txQuerier, productID string) error {
-	rows, err := q.Query(ctx, `select name from component where product_id = (select id from product where `+registryRefCol(productID)+` = $1) order by name`, productID)
+	sys, err := scopedByName(ctx, q, systemConfig, system)
 	if err != nil {
-		return fmt.Errorf("storage: components of product %q: %w", productID, err)
+		return err
 	}
-	defer rows.Close()
-	var names []string
-	for rows.Next() {
-		var n string
-		if err := rows.Scan(&n); err != nil {
-			return fmt.Errorf("storage: scan component of product %q: %w", productID, err)
-		}
-		names = append(names, n)
+	left, err := p.resolveLocationRefs(ctx, q, leftLocations)
+	if err != nil {
+		return err
 	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("storage: iterate components of product %q: %w", productID, err)
-	}
-	if len(names) == 0 {
-		return nil
-	}
-	return p.recomputeChain(ctx, q, names, nil, nil)
+	return p.recomputeChain(ctx, q, nil, []ownerRef{{ID: sys.ID, Name: sys.Name}}, left)
 }
 
 // recordHealth is the transition-only write, and the reason this slice adds no
@@ -317,6 +384,10 @@ func (p *PG) recomputeProductComponents(ctx context.Context, q txQuerier, produc
 // history starts at its first health-relevant write has a defined beginning; the
 // alternative (recording only once something goes wrong) leaves a reader unable
 // to tell "healthy since we started watching" from "never evaluated".
+// ownerID is an id for a component/system/location owner (recomputeChain
+// always has one, via ownerRef; SystemHealth and LocationHealth resolve their
+// own before calling healthTransitions below), a name for a node (unchanged;
+// node names stay globally unique). See ownerArcExprN.
 func recordHealth(ctx context.Context, q txQuerier, ownerKind, ownerID string, v health.Verdict) error {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {
@@ -344,100 +415,117 @@ func recordHealth(ctx context.Context, q txQuerier, ownerKind, ownerID string, v
 }
 
 // ownerArcExpr is the SQL for the value a health owner column stores, given the
-// reference the recompute passes around. The recompute speaks NAMES throughout
-// (recomputeChain takes them, newNameSet dedupes them, the advisory lock keys on
-// one), and that is deliberately left alone: it is the part that took two
-// attempts to get right. So the resolution happens here, at the write, rather
-// than by threading ids through all of it.
-//
-// A node resolves to its principal_id, which is its primary key and its
-// enrollment identity.
+// reference the recompute passes around. It is the shared, owner-kind-generic
+// primitive: current_values.go, property_samples.go, and settlement.go build
+// their own SQL from it too, so ownerID here follows the same contract theirs
+// does. For a component, system, or location it binds an id directly ($N::uuid,
+// no lookup): #627 scopes name uniqueness to placement, so a name-based
+// subquery here would raise SQLSTATE 21000 the moment two rows share a name.
+// Every caller across all four files resolves the reference to an id once,
+// before it ever reaches this expression (recomputeChain's ownerRef in this
+// file; ownerArcValue in the others), so ownerID is always already an id for
+// these three kinds, never a bare name. A node stays name-resolved: node names
+// remain globally unique (they ride NATS subjects), so there is nothing to
+// convert.
 func ownerArcExpr(ownerKind string) string { return ownerArcExprN(ownerKind, 2) }
 
 // ownerArcExprN is the same expression at an arbitrary parameter position, since
 // the reads and the write do not agree on where the owner sits.
 func ownerArcExprN(ownerKind string, n int) string {
-	p := fmt.Sprintf("$%d::text", n)
 	switch ownerKind {
 	case "component", "system", "location":
-		return `(select id from ` + ownerKind + ` where name = ` + p + `)`
+		return fmt.Sprintf("$%d::uuid", n)
 	case "node":
-		return `(select principal_id from node where name = ` + p + `)`
+		return fmt.Sprintf("(select principal_id from node where name = $%d::text)", n)
 	}
-	return p
+	return fmt.Sprintf("$%d::text", n)
 }
 
 // activeAlarmSeverities lists the severities of a component's active alarms, the
-// only input its own verdict takes.
-func (p *PG) activeAlarmSeverities(ctx context.Context, q txQuerier, componentName string) ([]string, error) {
+// only input its own verdict takes. Takes the component's id directly (every
+// caller already has it, recomputeChain's ownerRef included): binding it
+// avoids re-deriving an id from a name that #627 no longer guarantees is
+// unique.
+func (p *PG) activeAlarmSeverities(ctx context.Context, q txQuerier, componentID string) ([]string, error) {
 	var severities []string
 	if err := q.QueryRow(ctx, `
 		select coalesce(array_agg(severity), '{}')
-		from alarm where component_id = (select id from component where name = $1) and cleared_at is null`,
-		componentName).Scan(&severities); err != nil {
-		return nil, fmt.Errorf("storage: active alarm severities %q: %w", componentName, err)
+		from alarm where component_id = $1::uuid and cleared_at is null`,
+		componentID).Scan(&severities); err != nil {
+		return nil, fmt.Errorf("storage: active alarm severities %q: %w", componentID, err)
 	}
 	return severities, nil
 }
 
-// degradedCapabilities is the union of capabilities named by a component's active
-// alarms: what the component can no longer be trusted to do. It is the single
-// mechanism by which an alarm reaches a system.
-func (p *PG) degradedCapabilities(ctx context.Context, q txQuerier, componentName string) ([]string, error) {
-	var caps []string
-	if err := q.QueryRow(ctx, `
-		select coalesce(array_agg(distinct cap.name), '{}')
-		from alarm a
-		join alarm_capability ac on ac.alarm_id = a.id
-		join capability cap on cap.id = ac.capability_id
-		where a.component_id = (select id from component where name = $1) and a.cleared_at is null`,
-		componentName).Scan(&caps); err != nil {
-		return nil, fmt.Errorf("storage: degraded capabilities %q: %w", componentName, err)
+// componentVerdict resolves one component's own current verdict from its
+// active alarms: not the recorded row (a read must not trust a trigger it did
+// not just run), but the same live computation the recompute makes. It is the
+// only input a slot it occupies takes now: an alarm impairs a component
+// wholesale, not by name capability, so there is nothing else to resolve.
+// Takes the component's id (see activeAlarmSeverities).
+func (p *PG) componentVerdict(ctx context.Context, q txQuerier, componentID string) (health.Verdict, error) {
+	severities, err := p.activeAlarmSeverities(ctx, q, componentID)
+	if err != nil {
+		return health.Healthy, err
 	}
-	return caps, nil
+	return health.ComponentVerdict(severities), nil
 }
 
 // systemsStaffedBy lists the systems this component fills a role in, the systems
-// whose verdict its condition can move.
-func (p *PG) systemsStaffedBy(ctx context.Context, q txQuerier, componentName string) ([]string, error) {
+// whose verdict its condition can move, each as an ownerRef: the query already
+// joins by id (ra.component_id = ra.system_id -> s.id), so returning the id
+// alongside the name costs nothing and is what lets recomputeChain's caller
+// avoid a second, ambiguity-prone name lookup for every system it just found.
+func (p *PG) systemsStaffedBy(ctx context.Context, q txQuerier, componentID string) ([]ownerRef, error) {
 	rows, err := q.Query(ctx, `
-		select distinct s.name from system_role_assignment ra join system s on s.id = ra.system_id
-		where ra.component_id = (select id from component where name = $1) order by 1`,
-		componentName)
+		select distinct s.id, s.name from system_role_assignment ra join system s on s.id = ra.system_id
+		where ra.component_id = $1::uuid order by 2`,
+		componentID)
 	if err != nil {
-		return nil, fmt.Errorf("storage: systems staffed by %q: %w", componentName, err)
+		return nil, fmt.Errorf("storage: systems staffed by %q: %w", componentID, err)
 	}
 	defer rows.Close()
-	return scanNames(rows, "systems staffed by")
+	return scanOwnerRefs(rows, "systems staffed by")
 }
 
-// conformingSystems lists the systems a standard's declaration reaches. Declaring
-// a role on a standard moves every conforming system at once, which is the arc a
-// per-system recompute would miss.
-func (p *PG) conformingSystems(ctx context.Context, q txQuerier, standardID string) ([]string, error) {
-	rows, err := q.Query(ctx, `select name from system where standard_id = (select id from standard where name = $1 or id::text = $1) order by name`, standardID)
+// conformingSystems lists the systems a standard's declaration reaches, each as
+// an ownerRef. Declaring a role on a standard moves every conforming system at
+// once, which is the arc a per-system recompute would miss. id is selected
+// alongside name (both are right there in the same row, keyed on
+// standard_id, an unambiguous FK): the caller hands these straight to
+// recomputeChain, which needs the id to lock and record each system without
+// re-deriving one from a name #627 no longer guarantees is unique.
+func (p *PG) conformingSystems(ctx context.Context, q txQuerier, standardID string) ([]ownerRef, error) {
+	rows, err := q.Query(ctx, `select id, name from system where standard_id = (select id from standard where name = $1 or id::text = $1) order by name`, standardID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: conforming systems %q: %w", standardID, err)
 	}
 	defer rows.Close()
-	return scanNames(rows, "conforming systems")
+	return scanOwnerRefs(rows, "conforming systems")
 }
 
-// systemsForRoleOwner resolves the systems one role declaration reaches: the
-// single system for an ad-hoc declaration, every conforming system for a
-// standard's, since those inherit it live.
-func (p *PG) systemsForRoleOwner(ctx context.Context, q txQuerier, ownerKind, ownerID string) ([]string, error) {
+// systemsForRoleOwner resolves the systems one role declaration reaches, each
+// as an ownerRef: the single system for an ad-hoc declaration (resolved once,
+// ambiguity-safe), every conforming system for a standard's, since those
+// inherit it live.
+func (p *PG) systemsForRoleOwner(ctx context.Context, q txQuerier, ownerKind, ownerID string) ([]ownerRef, error) {
 	if ownerKind == "standard" {
 		return p.conformingSystems(ctx, q, ownerID)
 	}
-	return []string{ownerID}, nil
+	sys, err := scopedByName(ctx, q, systemConfig, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	return []ownerRef{{ID: sys.ID, Name: sys.Name}}, nil
 }
 
 // locationsOver returns the locations holding these systems, the locations named
 // explicitly, and every ancestor above either: the full set whose rollup the
 // change can move. The explicit arm carries the location a system has just LEFT,
-// which its row no longer points at.
-func (p *PG) locationsOver(ctx context.Context, q txQuerier, systems, named []string) ([]string, error) {
+// which its row no longer points at. Both inputs and the result are ownerRefs,
+// resolved by id (systems.location_id, location.parent_id are both ids
+// already), never by re-joining on a name.
+func (p *PG) locationsOver(ctx context.Context, q txQuerier, systems, named []ownerRef) ([]ownerRef, error) {
 	if len(systems) == 0 && len(named) == 0 {
 		return nil, nil
 	}
@@ -445,10 +533,10 @@ func (p *PG) locationsOver(ctx context.Context, q txQuerier, systems, named []st
 		with recursive placed as (
 			select l.id, l.name, l.parent_id
 			from system s join location l on l.id = s.location_id
-			where s.name = any($1)
+			where s.id = any($1::uuid[])
 			union
 			select l.id, l.name, l.parent_id
-			from location l where l.name = any($2)
+			from location l where l.id = any($2::uuid[])
 		),
 		ancestry as (
 			select id, name, parent_id from placed
@@ -456,12 +544,12 @@ func (p *PG) locationsOver(ctx context.Context, q txQuerier, systems, named []st
 			select p.id, p.name, p.parent_id
 			from location p join ancestry a on a.parent_id = p.id
 		)
-		select distinct name from ancestry order by name`, systems, named)
+		select distinct id, name from ancestry order by name`, refIDs(systems), refIDs(named))
 	if err != nil {
 		return nil, fmt.Errorf("storage: locations over systems: %w", err)
 	}
 	defer rows.Close()
-	return scanNames(rows, "locations over systems")
+	return scanOwnerRefs(rows, "locations over systems")
 }
 
 // locationVerdict rolls up a location from the RECORDED health of every system
@@ -471,10 +559,11 @@ func (p *PG) locationsOver(ctx context.Context, q txQuerier, systems, named []st
 // verdicts, is what makes the recompute order-independent: the recursive
 // definition and this one agree (a location's only inputs are systems, however
 // deep), but this one never depends on a child having been recomputed first.
-func (p *PG) locationVerdict(ctx context.Context, q txQuerier, locationName string) (health.Verdict, error) {
+// Takes the location's id directly (see activeAlarmSeverities).
+func (p *PG) locationVerdict(ctx context.Context, q txQuerier, locationID string) (health.Verdict, error) {
 	rows, err := q.Query(ctx, `
 		with recursive subtree as (
-			select id from location where name = $1
+			select id from location where id = $1::uuid
 			union
 			select c.id from location c join subtree s on c.parent_id = s.id
 		)
@@ -482,9 +571,9 @@ func (p *PG) locationVerdict(ctx context.Context, q txQuerier, locationName stri
 		from property sd
 		where sd.property_type_id = (select id from property_type where name = $2)
 		  and sd.system_id in (select id from system where location_id in (select id from subtree))
-		order by sd.system_id, sd.id desc`, locationName, healthKey)
+		order by sd.system_id, sd.id desc`, locationID, healthKey)
 	if err != nil {
-		return health.Healthy, fmt.Errorf("storage: location verdict %q: %w", locationName, err)
+		return health.Healthy, fmt.Errorf("storage: location verdict %q: %w", locationID, err)
 	}
 	defer rows.Close()
 
@@ -492,90 +581,109 @@ func (p *PG) locationVerdict(ctx context.Context, q txQuerier, locationName stri
 	for rows.Next() {
 		var value string
 		if err := rows.Scan(&value); err != nil {
-			return health.Healthy, fmt.Errorf("storage: scan location verdict %q: %w", locationName, err)
+			return health.Healthy, fmt.Errorf("storage: scan location verdict %q: %w", locationID, err)
 		}
 		children = append(children, health.ParseVerdict(value))
 	}
 	if err := rows.Err(); err != nil {
-		return health.Healthy, fmt.Errorf("storage: iterate location verdict %q: %w", locationName, err)
+		return health.Healthy, fmt.Errorf("storage: iterate location verdict %q: %w", locationID, err)
 	}
 	return health.RollUp(children), nil
 }
 
 // resolveHealthRoles resolves a system's roles from both arcs (inherited from its
-// standard, declared on the system) with what each assigned component provides
-// and what an alarm has taken away. It is the resolution EffectiveRoles does,
-// carried far enough for the verdict: the required set, the quorum, the impact,
-// and each component's effective minus degraded capabilities.
-func (p *PG) resolveHealthRoles(ctx context.Context, q txQuerier, systemName string) ([]resolvedRole, error) {
+// standard, declared on the system) with each assigned component's own current
+// verdict. It is the resolution EffectiveRoles does, carried far enough for the
+// verdict: the quorum, the impact, and who occupies the slot today. Takes the
+// system's id directly (see activeAlarmSeverities).
+func (p *PG) resolveHealthRoles(ctx context.Context, q txQuerier, systemID string) ([]resolvedRole, error) {
+	// A correlated subquery for assigned, not a GROUP BY: array_agg(distinct
+	// ... order by ra.position) is rejected by Postgres outright (the ORDER
+	// BY expression must appear in the DISTINCT argument list), and this
+	// query joins nothing else that would fan assignment rows out, so the
+	// subquery form EffectiveRoles needs for its extra joins works here too,
+	// ordered by the occupant's position (#626) rather than alphabetically.
 	rows, err := q.Query(ctx, `
 		with sys as (
-			select id, name, standard_id from system where name = $1
+			select id, name, standard_id from system where id = $1::uuid
 		),
 		roles as (
-			select r.id, r.name, r.display_name, r.quorum, r.impact
+			select r.id, r.name, r.display_name, r.quorum, r.impact, r.alternate_id
 			from sys join system_role r on r.owner_kind = 'standard' and r.standard_id = sys.standard_id
 			union all
-			select r.id, r.name, r.display_name, r.quorum, r.impact
+			select r.id, r.name, r.display_name, r.quorum, r.impact, r.alternate_id
 			from sys join system_role r on r.owner_kind = 'system' and r.system_id = sys.id
 		)
 		select roles.id, roles.name, roles.display_name, roles.quorum, roles.impact,
-		       coalesce(array_agg(distinct cap.name) filter (where cap.name is not null), '{}'),
-		       -- NAMES, not ids: the rollup looks each assignee's capabilities and
-		       -- alarms up by name, and the report displays them.
-		       coalesce(array_agg(distinct ac.name) filter (where ac.name is not null), '{}')
-		from roles
-		left join system_role_capability rc on rc.role_id = roles.id
-		left join capability cap on cap.id = rc.capability_id
-		left join system_role_assignment ra on ra.role_id = roles.id
-		     and ra.system_id = (select id from system where name = $1)
-		left join component ac on ac.id = ra.component_id
-		group by roles.id, roles.name, roles.display_name, roles.quorum, roles.impact
-		order by roles.name`, systemName)
+		       -- names for display, ids to look an assignee's own verdict up
+		       -- unambiguously (#627): both come off the same
+		       -- ra.component_id = ac.id join, so carrying the id costs
+		       -- nothing extra here and saves every caller from re-resolving
+		       -- one from a name that might no longer be unique.
+		       coalesce((select array_agg(ac.name order by ra.position)
+		                   from system_role_assignment ra join component ac on ac.id = ra.component_id
+		                  where ra.role_id = roles.id and ra.system_id = sys.id), '{}'),
+		       coalesce((select array_agg(ac.id order by ra.position)
+		                   from system_role_assignment ra join component ac on ac.id = ra.component_id
+		                  where ra.role_id = roles.id and ra.system_id = sys.id), '{}'),
+		       roles.alternate_id, ca.name, ca.position, rc.id, rc.name
+		-- sys first, then roles: a bare comma before a JOIN...ON only puts the
+		-- item immediately to its right in scope for that ON clause, so
+		-- "roles, sys left join choice_alternate" would leave "roles"
+		-- invisible to ca's ON clause. roles must be adjacent to the joins
+		-- that reference it; sys is only needed by the correlated subquery
+		-- above, which (unlike an ON clause) can reach any FROM-list item.
+		from sys, roles
+		left join choice_alternate ca on ca.id = roles.alternate_id
+		left join role_choice rc on rc.id = ca.choice_id
+		order by roles.name`, systemID)
 	if err != nil {
-		return nil, fmt.Errorf("storage: resolve health roles %q: %w", systemName, err)
+		return nil, fmt.Errorf("storage: resolve health roles %q: %w", systemID, err)
 	}
 
 	type rawRole struct {
 		resolvedRole
-		assignedTo []string
+		assignedTo  []string
+		assignedIDs []string
 	}
 	var raw []rawRole
 	for rows.Next() {
 		var r rawRole
 		if err := rows.Scan(&r.ID, &r.Name, &r.DisplayName, &r.Quorum, &r.Impact,
-			&r.Required, &r.assignedTo); err != nil {
+			&r.assignedTo, &r.assignedIDs, &r.AlternateID, &r.AlternateName, &r.AlternatePos, &r.ChoiceID, &r.ChoiceName); err != nil {
 			rows.Close()
-			return nil, fmt.Errorf("storage: scan health role %q: %w", systemName, err)
+			return nil, fmt.Errorf("storage: scan health role %q: %w", systemID, err)
 		}
 		raw = append(raw, r)
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
-		return nil, fmt.Errorf("storage: iterate health roles %q: %w", systemName, err)
+		return nil, fmt.Errorf("storage: iterate health roles %q: %w", systemID, err)
 	}
 	rows.Close()
 
-	// One component can fill several roles in a system, so its capability sets are
-	// resolved once and reused.
+	// A component fills at most one role per system (#626), so an id can no
+	// longer repeat across this system's role list: the cache below costs
+	// nothing to keep even so, since a miss is just one extra query, not a
+	// wrong answer. Keyed by id, not name: two components could share a name
+	// once #627 lands, and a name-keyed cache would hand one assignee's
+	// verdict to the other.
 	resolved := map[string]health.Component{}
 	out := make([]resolvedRole, 0, len(raw))
 	for _, r := range raw {
 		role := r.resolvedRole
 		role.Assigned = make([]health.Component, 0, len(r.assignedTo))
-		for _, name := range r.assignedTo {
-			c, ok := resolved[name]
+		role.AssignedIDs = append([]string(nil), r.assignedIDs...)
+		for i, name := range r.assignedTo {
+			id := r.assignedIDs[i]
+			c, ok := resolved[id]
 			if !ok {
-				provides, err := p.EffectiveCapabilities(ctx, q, name)
+				v, err := p.componentVerdict(ctx, q, id)
 				if err != nil {
 					return nil, err
 				}
-				degraded, err := p.degradedCapabilities(ctx, q, name)
-				if err != nil {
-					return nil, err
-				}
-				c = health.Component{Name: name, Provides: provides, Degraded: degraded}
-				resolved[name] = c
+				c = health.Component{Name: name, Verdict: v}
+				resolved[id] = c
 			}
 			role.Assigned = append(role.Assigned, c)
 		}
@@ -584,19 +692,89 @@ func (p *PG) resolveHealthRoles(ctx context.Context, q txQuerier, systemName str
 	return out, nil
 }
 
-// healthRoles projects the resolved roles onto the pure rollup's input.
-func healthRoles(rs []resolvedRole) []health.Role {
-	out := make([]health.Role, 0, len(rs))
-	for _, r := range rs {
-		out = append(out, health.Role{
-			Name:     r.Name,
-			Required: r.Required,
-			Quorum:   r.Quorum,
-			Impact:   r.Impact,
-			Assigned: r.Assigned,
-		})
+// splitHealthRoles partitions a system's resolved roles into the two shapes
+// health.SystemVerdictWith takes (#626): the roles that always count
+// (system_role.alternate_id is NULL) and the roles grouped by the choice and
+// alternate they belong to, each alternate's roles ordered by
+// choice_alternate.position (internal/health.Choice.Active's tie-break).
+// Flattening every role through a single fold, the way the pre-#626
+// healthRoles did, is not merely incomplete once a choice exists: an
+// all-in-one room's satisfied video-bar alternate would still take the
+// system to outage over its component-system alternate's five unstaffed
+// roles, because nothing would tell the fold those five are optional.
+//
+// Building this from a map rather than relying on the query's ORDER BY
+// keeping same-choice rows contiguous is deliberate: the query orders by
+// roles.name (for the unrelated per-role report this same read serves), not
+// by choice or position, so grouping has to happen here regardless of scan
+// order. Choices are then sorted by name and each choice's alternates by
+// position for a deterministic, map-iteration-free result.
+//
+// byID is choices again, keyed by choice_id rather than indexed by name:
+// health.Choice carries only a Name (the pure package has no notion of a
+// storage id), but two DISTINCT choices can share one, a system inheriting
+// a standard-owned "conferencing" while also declaring its own ad-hoc
+// "conferencing" (role_choice_name_key is scoped to one owner arc, not
+// globally). A caller building a name-keyed lookup from choices alone would
+// silently collapse the two; byID is what lets explainRole (SystemHealth)
+// resolve a role's active status by the same id resolvedRole already
+// carries instead.
+func splitHealthRoles(rs []resolvedRole) (unconditional []health.Role, choices []health.Choice, byID map[string]health.Choice) {
+	type altGroup struct {
+		name  string
+		pos   int
+		roles []health.Role
 	}
-	return out
+	choiceNames := map[string]string{}              // choice id -> name
+	choiceAlts := map[string]map[string]*altGroup{} // choice id -> alternate id -> group
+
+	for _, r := range rs {
+		role := health.Role{Name: r.Name, Quorum: r.Quorum, Impact: r.Impact, Assigned: r.Assigned}
+		if r.ChoiceID == nil {
+			unconditional = append(unconditional, role)
+			continue
+		}
+		cid, aid := *r.ChoiceID, *r.AlternateID
+		choiceNames[cid] = *r.ChoiceName
+		if choiceAlts[cid] == nil {
+			choiceAlts[cid] = map[string]*altGroup{}
+		}
+		g := choiceAlts[cid][aid]
+		if g == nil {
+			pos := 0
+			if r.AlternatePos != nil {
+				pos = *r.AlternatePos
+			}
+			g = &altGroup{name: *r.AlternateName, pos: pos}
+			choiceAlts[cid][aid] = g
+		}
+		g.roles = append(g.roles, role)
+	}
+
+	cids := make([]string, 0, len(choiceNames))
+	for cid := range choiceNames {
+		cids = append(cids, cid)
+	}
+	sort.Slice(cids, func(i, j int) bool { return choiceNames[cids[i]] < choiceNames[cids[j]] })
+
+	for _, cid := range cids {
+		groups := choiceAlts[cid]
+		alts := make([]altGroup, 0, len(groups))
+		for _, g := range groups {
+			alts = append(alts, *g)
+		}
+		sort.Slice(alts, func(i, j int) bool { return alts[i].pos < alts[j].pos })
+		out := health.Choice{Name: choiceNames[cid]}
+		for _, g := range alts {
+			out.Alternates = append(out.Alternates, health.Alternate{Name: g.name, Roles: g.roles})
+		}
+		choices = append(choices, out)
+		if byID == nil {
+			byID = make(map[string]health.Choice, len(cids))
+		}
+		byID[cid] = out
+	}
+	return unconditional, choices, byID
 }
 
 // SystemHealth reports a system's current verdict, the roles that produced it,
@@ -608,28 +786,56 @@ func healthRoles(rs []resolvedRole) []health.Role {
 // value. The two agree whenever the trigger set is complete, and where they would
 // disagree the resolved roles are the honest answer: a system that conforms to a
 // standard whose roles nobody has staffed is broken from the moment it exists.
+// "The roles served beside it" is the flat list, not the fold's inputs
+// directly: a choice's non-active alternate still serves its roles here
+// (each with Active false, HealthRole), so the verdict can be healthy while
+// the list beside it shows impaired rows, and Active is what tells the two
+// apart rather than that being a disagreement.
 func (p *PG) SystemHealth(ctx context.Context, systemName string, since time.Time, read scope.Set) (*HealthReport, error) {
-	inScope, err := p.ownerInScope(ctx, p.pool, "system", systemName, read)
+	// Resolved once, here, rather than through ownerInScope (which does the
+	// same lookup but discards the id): every read below, including
+	// healthTransitions, binds sys.ID, never re-derived from systemName once
+	// it might no longer be unique (#627). rep.OwnerID keeps echoing the
+	// caller's own reference, unchanged. scopedByNameInScope, not
+	// scopedByName-then-inScopeTree: ruling 2 requires ambiguity judged
+	// inside read, not estate-wide, since a name unique within this caller's
+	// own scope must resolve even when an unrelated out-of-scope row shares
+	// it.
+	sys, err := scopedByNameInScope(ctx, p.pool, systemConfig, systemName, "system", read)
 	if err != nil {
 		return nil, err
-	}
-	if !inScope {
-		return nil, ErrSystemNotFound
 	}
 	rep := &HealthReport{OwnerKind: "system", OwnerID: systemName, Roles: []HealthRole{}}
-	roles, err := p.resolveHealthRoles(ctx, p.pool, systemName)
+	roles, err := p.resolveHealthRoles(ctx, p.pool, sys.ID)
 	if err != nil {
 		return nil, err
 	}
-	rep.Verdict = health.SystemVerdict(healthRoles(roles)).String()
+	unconditional, choices, choicesByID := splitHealthRoles(roles)
+	rep.Verdict = health.SystemVerdictWith(unconditional, choices).String()
+	// The same choices splitHealthRoles just grouped for the verdict name
+	// which alternate is active in each, so explainRole can mark every role
+	// with whether it is the reason the verdict reads what it does or a
+	// roads-not-taken alternate's role: the report would otherwise repeat
+	// the pre-#626 contradiction the fold itself was built to fix, just one
+	// level lower, listing an unbuilt alternate's roles as impaired beside a
+	// verdict that already knows to ignore them. Keyed by choice id
+	// (choicesByID), not name: a system can reach two distinct choices that
+	// happen to share a name (its standard's and its own ad-hoc one), and a
+	// name-keyed lookup would silently collapse them.
+	activeAlt := map[string]string{} // choice id -> its active alternate's name
+	for cid, c := range choicesByID {
+		if active, ok := c.Active(); ok {
+			activeAlt[cid] = active.Name
+		}
+	}
 	for i := range roles {
-		row, err := p.explainRole(ctx, p.pool, roles[i])
+		row, err := p.explainRole(ctx, p.pool, roles[i], activeAlt)
 		if err != nil {
 			return nil, err
 		}
 		rep.Roles = append(rep.Roles, row)
 	}
-	if rep.Transitions, err = healthTransitions(ctx, p.pool, "system", systemName, since); err != nil {
+	if rep.Transitions, err = healthTransitions(ctx, p.pool, "system", sys.ID, since); err != nil {
 		return nil, err
 	}
 	return rep, nil
@@ -638,27 +844,27 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, since time.Tim
 // LocationHealth reports a location's current verdict, the systems beneath it
 // with theirs, and its recorded transitions. The systems are the drill-down: a
 // degraded location names which system is at fault, and the system health read
-// names the role, the capability, and the alarm.
+// names the role, which occupant is down, and the alarm.
 //
 // The verdict is the rollup of exactly those systems, so the headline and the
 // drill-down can never disagree: a location cannot read healthy over a system it
 // itself lists as an outage.
 func (p *PG) LocationHealth(ctx context.Context, locationName string, since time.Time, read scope.Set) (*HealthReport, error) {
-	inScope, err := p.ownerInScope(ctx, p.pool, "location", locationName, read)
+	// Resolved once via scopedByNameInScope, not scopedByName-then-
+	// inScopeTree (see SystemHealth's comment; ruling 2, #627); rep.OwnerID
+	// keeps echoing the caller's own reference, unchanged.
+	loc, err := scopedByNameInScope(ctx, p.pool, locationConfig, locationName, "location", read)
 	if err != nil {
 		return nil, err
 	}
-	if !inScope {
-		return nil, ErrLocationNotFound
-	}
 	rep := &HealthReport{OwnerKind: "location", OwnerID: locationName, Systems: []HealthSystem{}}
-	systems, err := p.subtreeSystemHealth(ctx, p.pool, locationName)
+	systems, err := p.subtreeSystemHealth(ctx, p.pool, loc.ID)
 	if err != nil {
 		return nil, err
 	}
 	rep.Systems = systems
 	rep.Verdict = health.RollUp(systemVerdicts(systems)).String()
-	if rep.Transitions, err = healthTransitions(ctx, p.pool, "location", locationName, since); err != nil {
+	if rep.Transitions, err = healthTransitions(ctx, p.pool, "location", loc.ID, since); err != nil {
 		return nil, err
 	}
 	return rep, nil
@@ -674,22 +880,37 @@ func systemVerdicts(systems []HealthSystem) []health.Verdict {
 }
 
 // explainRole turns a resolved role into the report row, adding the causing chain
-// when the role is impaired: which required capabilities its components lost, and
-// which active alarms took them. A satisfied role needs no explanation, so it
-// costs no alarm read.
-func (p *PG) explainRole(ctx context.Context, q txQuerier, r resolvedRole) (HealthRole, error) {
-	role := health.Role{Name: r.Name, Required: r.Required, Quorum: r.Quorum, Impact: r.Impact, Assigned: r.Assigned}
+// when the role is impaired: which assigned components are not occupying their
+// slot (down), and which active alarms took them down. A satisfied role needs
+// no explanation, so it costs no alarm read. activeAlt is the choice-id to
+// active-alternate-name lookup SystemHealth built from the same
+// splitHealthRoles grouping the verdict itself folds, so a role's Active flag
+// can never disagree with what actually decided the verdict. Keyed by id, not
+// name: two distinct choices (a system's own and its standard's) can share a
+// name, and a name-keyed lookup would answer for the wrong one.
+func (p *PG) explainRole(ctx context.Context, q txQuerier, r resolvedRole, activeAlt map[string]string) (HealthRole, error) {
+	role := health.Role{Name: r.Name, Quorum: r.Quorum, Impact: r.Impact, Assigned: r.Assigned}
+	var choiceName, altName string
+	active := true // unconditional: always counts
+	if r.ChoiceID != nil {
+		choiceName, altName = *r.ChoiceName, *r.AlternateName
+		active = activeAlt[*r.ChoiceID] == altName
+	}
 	row := HealthRole{
 		Name:        r.Name,
 		DisplayName: r.DisplayName,
 		Impact:      r.Impact,
-		Required:    r.Required,
 		Quorum:      r.Quorum,
 		Satisfying:  role.Satisfying(),
+		Short:       role.Short(),
+		Spare:       role.Spare(),
 		Impaired:    role.Impaired(),
 		AssignedTo:  make([]string, 0, len(r.Assigned)),
-		Degraded:    []string{},
+		Down:        []string{},
 		Alarms:      []Alarm{},
+		Choice:      choiceName,
+		Alternate:   altName,
+		Active:      active,
 	}
 	for _, c := range r.Assigned {
 		row.AssignedTo = append(row.AssignedTo, c.Name)
@@ -698,41 +919,32 @@ func (p *PG) explainRole(ctx context.Context, q txQuerier, r resolvedRole) (Heal
 		return row, nil
 	}
 
-	required := newNameSet(r.Required)
-	lost := newNameSet(nil)
-	for _, c := range r.Assigned {
-		for _, d := range c.Degraded {
-			if required.has(d) {
-				lost.add(d)
-			}
+	for i, c := range r.Assigned {
+		if c.Occupies() {
+			continue
 		}
-	}
-	row.Degraded = lost.sorted()
-	if len(row.Degraded) == 0 {
-		// The role is short-staffed rather than broken: nobody was assigned, or the
-		// assignments never provided what it requires. There is no alarm to name.
-		return row, nil
-	}
-	for _, c := range r.Assigned {
-		alarms, err := p.activeAlarms(ctx, q, c.Name)
+		row.Down = append(row.Down, c.Name)
+		// r.AssignedIDs[i] is the same assignee: resolvedRole keeps the two
+		// slices built together (resolveHealthRoles), so an id-by-name
+		// re-lookup here, ambiguous once #627 lands, is never needed.
+		alarms, err := p.activeAlarms(ctx, q, r.AssignedIDs[i])
 		if err != nil {
 			return row, err
 		}
-		for _, a := range alarms {
-			if namesAny(a.Capabilities, lost) {
-				row.Alarms = append(row.Alarms, a)
-			}
-		}
+		row.Alarms = append(row.Alarms, alarms...)
 	}
+	// The role may be short-staffed rather than broken: nobody was assigned at
+	// all, so nobody is "down" and there is no alarm to name.
 	return row, nil
 }
 
 // subtreeSystemHealth lists the systems placed anywhere under a location with
-// their recorded verdicts, ordered by name.
-func (p *PG) subtreeSystemHealth(ctx context.Context, q txQuerier, locationName string) ([]HealthSystem, error) {
+// their recorded verdicts, ordered by name. Takes the location's id directly
+// (see activeAlarmSeverities).
+func (p *PG) subtreeSystemHealth(ctx context.Context, q txQuerier, locationID string) ([]HealthSystem, error) {
 	rows, err := q.Query(ctx, `
 		with recursive subtree as (
-			select id from location where name = $1
+			select id from location where id = $1::uuid
 			union
 			select c.id from location c join subtree s on c.parent_id = s.id
 		)
@@ -744,9 +956,9 @@ func (p *PG) subtreeSystemHealth(ctx context.Context, q txQuerier, locationName 
 		), 'healthy')
 		from system s
 		where s.location_id in (select id from subtree)
-		order by s.name`, locationName, healthKey)
+		order by s.name`, locationID, healthKey)
 	if err != nil {
-		return nil, fmt.Errorf("storage: subtree system health %q: %w", locationName, err)
+		return nil, fmt.Errorf("storage: subtree system health %q: %w", locationID, err)
 	}
 	defer rows.Close()
 
@@ -754,7 +966,7 @@ func (p *PG) subtreeSystemHealth(ctx context.Context, q txQuerier, locationName 
 	for rows.Next() {
 		var s HealthSystem
 		if err := rows.Scan(&s.Name, &s.Verdict); err != nil {
-			return nil, fmt.Errorf("storage: scan subtree system health %q: %w", locationName, err)
+			return nil, fmt.Errorf("storage: scan subtree system health %q: %w", locationID, err)
 		}
 		out = append(out, s)
 	}
@@ -763,7 +975,9 @@ func (p *PG) subtreeSystemHealth(ctx context.Context, q txQuerier, locationName 
 
 // healthTransitions reads an owner's recorded edges at or after since,
 // oldest-first: the same ordered flip sequence the reachability strip reads, on
-// the owner arc rather than the component-and-instance one.
+// the owner arc rather than the component-and-instance one. ownerID follows
+// recordHealth's contract (see ownerArcExprN): an id for
+// component/system/location, a name for node.
 func healthTransitions(ctx context.Context, q txQuerier, ownerKind, ownerID string, since time.Time) ([]HealthTransition, error) {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {
@@ -789,44 +1003,48 @@ func healthTransitions(ctx context.Context, q txQuerier, ownerKind, ownerID stri
 	return out, rows.Err()
 }
 
-// nameSet is the small dedupe-and-order helper the recompute leans on: the
+// refSet is the small dedupe-and-order helper the recompute leans on: the
 // affected sets are unions from several queries, and the visit order must be
-// deterministic.
-type nameSet map[string]bool
+// deterministic. Keyed by id, not name (nameSet's #627 replacement): two
+// distinct owners can share a name, but never an id, so keying on the name
+// would silently collapse them into one visit.
+type refSet map[string]string // id -> name
 
-func newNameSet(names []string) nameSet {
-	s := make(nameSet, len(names))
-	s.add(names...)
+func newRefSet(refs []ownerRef) refSet {
+	s := make(refSet, len(refs))
+	s.add(refs...)
 	return s
 }
 
-func (s nameSet) add(names ...string) {
-	for _, n := range names {
-		if n != "" {
-			s[n] = true
+func (s refSet) add(refs ...ownerRef) {
+	for _, r := range refs {
+		if r.ID != "" {
+			s[r.ID] = r.Name
 		}
 	}
 }
 
-func (s nameSet) has(name string) bool { return s[name] }
-
-func (s nameSet) sorted() []string {
-	out := make([]string, 0, len(s))
-	for n := range s {
-		out = append(out, n)
+func (s refSet) sorted() []ownerRef {
+	ids := make([]string, 0, len(s))
+	for id := range s {
+		ids = append(ids, id)
 	}
-	sort.Strings(out)
+	sort.Strings(ids)
+	out := make([]ownerRef, len(ids))
+	for i, id := range ids {
+		out[i] = ownerRef{ID: id, Name: s[id]}
+	}
 	return out
 }
 
-// namesAny reports whether any of these names is in the set.
-func namesAny(names []string, s nameSet) bool {
-	for _, n := range names {
-		if s.has(n) {
-			return true
-		}
+// refIDs projects a []ownerRef to its ids, for binding into a `= any($1::uuid[])`
+// parameter.
+func refIDs(refs []ownerRef) []string {
+	out := make([]string, len(refs))
+	for i, r := range refs {
+		out[i] = r.ID
 	}
-	return false
+	return out
 }
 
 // scanNames drains a single-text-column result into a slice.
@@ -838,6 +1056,22 @@ func scanNames(rows pgx.Rows, what string) ([]string, error) {
 			return nil, fmt.Errorf("storage: scan %s: %w", what, err)
 		}
 		out = append(out, n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("storage: iterate %s: %w", what, err)
+	}
+	return out, nil
+}
+
+// scanOwnerRefs drains an (id, name) two-column result into ownerRefs.
+func scanOwnerRefs(rows pgx.Rows, what string) ([]ownerRef, error) {
+	var out []ownerRef
+	for rows.Next() {
+		var r ownerRef
+		if err := rows.Scan(&r.ID, &r.Name); err != nil {
+			return nil, fmt.Errorf("storage: scan %s: %w", what, err)
+		}
+		out = append(out, r)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("storage: iterate %s: %w", what, err)
