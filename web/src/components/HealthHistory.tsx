@@ -19,8 +19,12 @@ import type { HealthTransition } from "../lib/health";
 // strip uses, drawn from the same lib/timeline spans. One timeline idiom in the
 // console, two things measured with it.
 
+// Every verdict the domain has, because the fallback below is the NO-DATA tone:
+// a verdict missing from this map renders as though it were never measured
+// (#631, found in review when incomplete first became recordable).
 const TONE: Record<string, string> = {
   healthy: "bg-success",
+  incomplete: "bg-incomplete",
   degraded: "bg-warning",
   outage: "bg-error",
 };
@@ -28,6 +32,7 @@ const tone = (v: string) => TONE[v] ?? "bg-base-300";
 
 const PILL: Record<string, string> = {
   healthy: "badge-success",
+  incomplete: "badge-incomplete",
   degraded: "badge-warning",
   outage: "badge-error",
 };

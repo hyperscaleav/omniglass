@@ -658,8 +658,10 @@ Un-acknowledging is deliberately not a verb yet
 
 The reports are one shape over two owners:
 
-- `GET /systems/{name}/health` (`system:read`) returns the verdict (`healthy` / `degraded` /
-  `outage`) plus `roles`: every role the system needs filled, where `satisfying` counts the assigned
+- `GET /systems/{name}/health` (`system:read`) returns the verdict (`healthy` / `incomplete` /
+  `degraded` / `outage`, in rank order, where `incomplete` is a role short because its hardware was
+  never installed rather than because installed hardware is failing)
+  plus `roles`: every role the system needs filled, where `satisfying` counts the assigned
   components currently occupying it (their own verdict is not outage; a degraded one still counts),
   `down` names the **assigned** components whose own verdict is outage, and `alarms` the active
   alarms on those. An impaired role with an **empty** `down` is **short-staffed**, not broken, a

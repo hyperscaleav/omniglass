@@ -313,8 +313,15 @@ the systems list:
 | verdict | means |
 |---|---|
 | **healthy** | nothing the room depends on is impaired |
+| **incomplete** | something it needs was never installed |
 | **degraded** | it is working, worse |
 | **outage** | it is not working |
+
+**`incomplete` is not a fault.** It means a role is short because nobody has put the hardware in
+yet, so no alarm will ever fire for it: there is nothing there to alarm. A room mid-installation
+reads incomplete, and it stays that way until somebody fills the slot. That is deliberately a
+different colour from a room that is broken, because during a rollout most of your estate is in
+the first state and you need to be able to see past it to the second.
 
 A location's verdict is the **worst** of every system placed anywhere beneath it, so a campus reads red
 when one room in one building is out. A system's verdict is the worst contribution among the **roles** it
