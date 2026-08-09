@@ -1,0 +1,146 @@
+package storagetest
+
+import (
+	"context"
+	"testing"
+
+	"github.com/hyperscaleav/omniglass/db"
+	"github.com/jackc/pgx/v5"
+)
+
+// wantTemplate is the name the harness must build its template database under.
+// Spelled out here rather than read from the harness so the test states the
+// contract instead of restating the implementation.
+const wantTemplate = "og_template"
+
+// TestProvisionIsolatesWrites is the property the harness exists to provide:
+// one test's rows are invisible to the next test's database. Provisioning from
+// a template rather than replaying migrations is the change most likely to
+// break it, either by handing two tests the same database or by letting a
+// write reach the template every later database is copied from, so the write
+// happens between the two provisions and the second database must not see it.
+func TestProvisionIsolatesWrites(t *testing.T) {
+	ctx := context.Background()
+	first := NewDSN(t)
+
+	const probe = "isolation-probe-649"
+	firstConn := connect(t, ctx, first)
+	if _, err := firstConn.Exec(ctx,
+		`insert into location_type (name, display_name) values ($1, $1)`, probe); err != nil {
+		t.Fatalf("insert probe row: %v", err)
+	}
+
+	// Provision AFTER the write, so a write that leaked into the template would
+	// be copied into this database.
+	second := NewDSN(t)
+	if first == second {
+		t.Fatalf("two provisions returned the same DSN %q; databases are not isolated", first)
+	}
+	secondConn := connect(t, ctx, second)
+
+	if got := probeCount(t, ctx, firstConn, probe); got != 1 {
+		t.Errorf("probe row count in the database it was written to = %d, want 1", got)
+	}
+	if got := probeCount(t, ctx, secondConn, probe); got != 0 {
+		t.Errorf("probe row count in a freshly provisioned database = %d, want 0", got)
+	}
+}
+
+// TestProvisionCarriesFullSchema proves a provisioned database is
+// indistinguishable from a migrated one, including to dbmate: every embedded
+// migration is recorded as applied. A copy that silently landed an empty or
+// partial schema turns this red, and so does a template built from a stale
+// migration set. The expected count is derived from the embedded migration set
+// rather than hand-written, so it cannot drift as migrations land.
+func TestProvisionCarriesFullSchema(t *testing.T) {
+	ctx := context.Background()
+	conn := connect(t, ctx, NewDSN(t))
+
+	entries, err := db.FS.ReadDir("migrations")
+	if err != nil {
+		t.Fatalf("read embedded migrations: %v", err)
+	}
+	want := len(entries)
+	if want == 0 {
+		t.Fatal("embedded migration set is empty; the test would assert nothing")
+	}
+
+	var got int
+	if err := conn.QueryRow(ctx, `select count(*) from schema_migrations`).Scan(&got); err != nil {
+		t.Fatalf("count schema_migrations: %v", err)
+	}
+	if got != want {
+		t.Errorf("schema_migrations rows = %d, want %d (one per embedded migration)", got, want)
+	}
+}
+
+// TestTemplateRefusesConnections is the direct regression test for the
+// hardening that makes CREATE DATABASE ... TEMPLATE deterministic. internal/
+// migrate builds a dbmate.DB it never explicitly closes, so the harness must
+// terminate stray backends and then set allow_connections = false rather than
+// assume dbmate left nothing behind. A template that still accepts connections
+// copies correctly only by timing, which is the flake this closes.
+func TestTemplateRefusesConnections(t *testing.T) {
+	ctx := context.Background()
+	NewDSN(t) // force the container and the template into existence
+
+	admin := connect(t, ctx, adminDSN)
+	var isTemplate, allowConn bool
+	err := admin.QueryRow(ctx,
+		`select datistemplate, datallowconn from pg_database where datname = $1`,
+		wantTemplate).Scan(&isTemplate, &allowConn)
+	if err != nil {
+		t.Fatalf("look up template database %s: %v", wantTemplate, err)
+	}
+	if !isTemplate {
+		t.Errorf("%s datistemplate = false, want true", wantTemplate)
+	}
+	if allowConn {
+		t.Errorf("%s datallowconn = true, want false: a connectable template can race a copy", wantTemplate)
+	}
+}
+
+// TestProvisionUnderRepetition provisions in a tight loop, which is how the
+// suite actually uses the harness: hundreds of back-to-back copies from one
+// template. Every one must succeed. Without the hardening above this is where
+// "source database is being accessed by other users" surfaces.
+func TestProvisionUnderRepetition(t *testing.T) {
+	ctx := context.Background()
+	const rounds = 20
+	seen := make(map[string]bool, rounds)
+	for i := range rounds {
+		dsn := NewDSN(t)
+		if seen[dsn] {
+			t.Fatalf("round %d reused DSN %q", i, dsn)
+		}
+		seen[dsn] = true
+		conn := connect(t, ctx, dsn)
+		var n int
+		if err := conn.QueryRow(ctx, `select count(*) from schema_migrations`).Scan(&n); err != nil {
+			t.Fatalf("round %d: count schema_migrations: %v", i, err)
+		}
+		if n == 0 {
+			t.Fatalf("round %d: provisioned database has no applied migrations", i)
+		}
+	}
+}
+
+func connect(t *testing.T, ctx context.Context, dsn string) *pgx.Conn {
+	t.Helper()
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close(context.Background()) })
+	return conn
+}
+
+func probeCount(t *testing.T, ctx context.Context, conn *pgx.Conn, name string) int {
+	t.Helper()
+	var n int
+	if err := conn.QueryRow(ctx,
+		`select count(*) from location_type where name = $1`, name).Scan(&n); err != nil {
+		t.Fatalf("count probe rows: %v", err)
+	}
+	return n
+}
