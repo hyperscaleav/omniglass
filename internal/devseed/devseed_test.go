@@ -696,18 +696,24 @@ func TestSeededNamesComeFromTheGenerator(t *testing.T) {
 		// Components: the stem comes from the product's component_type, the
 		// ordinal from the room.
 		{what: "the huddle display", table: "component", place: "huddle", name: "display-1", ordinal: 1, generated: true},
-		{what: "the shared video bar", table: "component", place: "boardroom", name: "videobar-1", ordinal: 1, generated: true},
-		{what: "the second video bar", table: "component", place: "boardroom", name: "videobar-2", ordinal: 2, generated: true},
-		{what: "the first boardroom panel", table: "component", place: "boardroom", name: "display-1", ordinal: 1, generated: true},
-		{what: "the second boardroom panel", table: "component", place: "boardroom", name: "display-2", ordinal: 2, generated: true},
-		{what: "the power conditioner", table: "component", place: "boardroom", name: "device-1", ordinal: 1, generated: true},
+		{what: "the shared video bar", table: "component", place: "boardroom-a", name: "videobar-1", ordinal: 1, generated: true},
+		{what: "the second video bar", table: "component", place: "boardroom-a", name: "videobar-2", ordinal: 2, generated: true},
+		{what: "room A's panel", table: "component", place: "boardroom-a", name: "display-1", ordinal: 1, generated: true},
+		// Room B's panel is the first display in ITS room: the ordinal resets
+		// across the air wall because the bucket is the room.
+		{what: "room B's panel", table: "component", place: "boardroom-b", name: "display-1", ordinal: 1, generated: true},
+		{what: "the power conditioner", table: "component", place: "boardroom-a", name: "device-1", ordinal: 1, generated: true},
 		{what: "the auditorium display", table: "component", place: "auditorium", name: "display-1", ordinal: 1, generated: true},
-		{what: "the DSP", table: "component", place: "boardroom", name: "dsp", generated: false},
+		{what: "the DSP", table: "component", place: "boardroom-a", name: "dsp", generated: false},
 
 		// Systems: the first of its stem in a bucket carries no ordinal while
-		// storing one.
-		{what: "the first boardroom half", table: "system", place: "boardroom", name: "boardroom", ordinal: 1, generated: true},
-		{what: "the second boardroom half", table: "system", place: "boardroom", name: "boardroom-2", ordinal: 2, generated: true},
+		// storing one. The boardroom halves are one bucket each now, so both
+		// mint plain `boardroom`; the lab pods share a bucket and show the
+		// ordinal.
+		{what: "the first boardroom half", table: "system", place: "boardroom-a", name: "boardroom", ordinal: 1, generated: true},
+		{what: "the second boardroom half", table: "system", place: "boardroom-b", name: "boardroom", ordinal: 1, generated: true},
+		{what: "the first lab pod", table: "system", place: "media-lab", name: "classroom", ordinal: 1, generated: true},
+		{what: "the second lab pod", table: "system", place: "media-lab", name: "classroom-2", ordinal: 2, generated: true},
 	} {
 		placeCol := "location_id"
 		if tc.table == "location" {
@@ -834,23 +840,29 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 		platform bool
 	}{
 		{table: "component", place: "huddle", name: "display-1", label: "Display 1", platform: true},
-		{table: "component", place: "boardroom", name: "videobar-1", label: "Video Bar 1", platform: true},
-		{table: "component", place: "boardroom", name: "videobar-2", label: "Video Bar 2", platform: true},
-		{table: "component", place: "boardroom", name: "display-1", label: "Display 1", platform: true},
-		{table: "component", place: "boardroom", name: "display-2", label: "Display 2", platform: true},
+		{table: "component", place: "boardroom-a", name: "videobar-1", label: "Video Bar 1", platform: true},
+		{table: "component", place: "boardroom-a", name: "videobar-2", label: "Video Bar 2", platform: true},
+		{table: "component", place: "boardroom-a", name: "display-1", label: "Display 1", platform: true},
+		// Room B's panel is the first display in ITS room, so it reads
+		// display-1 too: the placement-scoped name index doing its job across
+		// the air wall.
+		{table: "component", place: "boardroom-b", name: "display-1", label: "Display 1", platform: true},
 		{table: "component", place: "auditorium", name: "display-1", label: "Display 1", platform: true},
 		// The unclassified box: the rule can only say "Generic Device 1", so
 		// the operator's words win and keep the pen.
-		{table: "component", place: "boardroom", name: "device-1", label: "Power Conditioner", platform: false},
-		{table: "component", place: "boardroom", name: "dsp", label: "Boardroom DSP", platform: false},
-		// The two halves of the divisible room, and the estate's only same-type
-		// siblings. The shipped rule reads the type AND the ordinal (#693), and
-		// the ordinal is the one the name carries, so the first half reads
-		// "Boardroom" beside its `boardroom` name and the second "Boardroom 2"
-		// beside `boardroom-2`. Both were pinned ("Boardroom A", "Boardroom B")
-		// while the rule could only render one string for the pair.
-		{table: "system", place: "boardroom", name: "boardroom", label: "Boardroom", platform: true},
-		{table: "system", place: "boardroom", name: "boardroom-2", label: "Boardroom 2", platform: true},
+		{table: "component", place: "boardroom-a", name: "device-1", label: "Power Conditioner", platform: false},
+		{table: "component", place: "boardroom-a", name: "dsp", label: "Boardroom DSP", platform: false},
+		// The two halves of the divisible room are two ROOMS now, so each half
+		// is the first `board` system in its own bucket and both mint plain
+		// `boardroom` (ADR-0101): same name, two rooms.
+		{table: "system", place: "boardroom-a", name: "boardroom", label: "Boardroom", platform: true},
+		{table: "system", place: "boardroom-b", name: "boardroom", label: "Boardroom", platform: true},
+		// The same-BUCKET same-type siblings live in the media lab: the shipped
+		// rule reads the type AND the ordinal (#693), so the first pod reads
+		// "Classroom" beside its `classroom` name and the second "Classroom 2"
+		// beside `classroom-2`.
+		{table: "system", place: "media-lab", name: "classroom", label: "Classroom", platform: true},
+		{table: "system", place: "media-lab", name: "classroom-2", label: "Classroom 2", platform: true},
 		// The two floors, which used to be here as PINS over a generated name
 		// (`1` labelled Level 2). They are named for their designations now, so
 		// the rule renders those designations and the platform holds the pen.
@@ -922,22 +934,26 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 	ctx, conn, _ := seededEstate(t)
 
 	for _, tc := range []struct {
-		system string
-		want   map[string]string // role -> the component names filling it, joined
+		room string
+		want map[string]string // role -> the component names filling it, joined
 	}{
-		{system: "boardroom", want: map[string]string{"room-mic": "videobar-1,videobar-2", "main-display": "display-1"}},
-		{system: "boardroom-2", want: map[string]string{"room-mic": "videobar-1", "main-display": "display-2"}},
+		// Both halves mint `boardroom` in their own rooms, so the room is the
+		// address here. The shared bar staffs room-mic in BOTH, from its
+		// physical home in A.
+		{room: "boardroom-a", want: map[string]string{"room-mic": "videobar-1,videobar-2", "main-display": "display-1"}},
+		{room: "boardroom-b", want: map[string]string{"room-mic": "videobar-1", "main-display": "display-1"}},
 	} {
 		rows, err := conn.Query(ctx, `
 			select r.name, c.name
 			from system_role_assignment a
 			join system s on s.id = a.system_id
+			join location l on l.id = s.location_id
 			join system_role r on r.id = a.role_id
 			join component c on c.id = a.component_id
-			where s.name = $1
-			order by r.name, c.name`, tc.system)
+			where l.name = $1
+			order by r.name, c.name`, tc.room)
 		if err != nil {
-			t.Fatalf("read staffing for %q: %v", tc.system, err)
+			t.Fatalf("read staffing for %q: %v", tc.room, err)
 		}
 		got := map[string]string{}
 		for rows.Next() {
@@ -956,11 +972,11 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 		rows.Close()
 		for role, want := range tc.want {
 			if got[role] != want {
-				t.Errorf("system %q role %q is filled by %q, want %q", tc.system, role, got[role], want)
+				t.Errorf("the system in %q: role %q is filled by %q, want %q", tc.room, role, got[role], want)
 			}
 		}
 		if len(got) != len(tc.want) {
-			t.Errorf("system %q staffing = %v, want %v", tc.system, got, tc.want)
+			t.Errorf("the system in %q: staffing = %v, want %v", tc.room, got, tc.want)
 		}
 	}
 
@@ -1360,45 +1376,63 @@ func TestSeededEstateShowsEveryVerdict(t *testing.T) {
 		return rep.Verdict
 	}
 
-	// Systems are platform-named, so the fixture key is not an address. Each
-	// interesting room holds exactly one system (the divisible boardroom's two
-	// halves are the exception, and their minted names are pinned by ADR-0101:
-	// "boardroom" for the first, "boardroom-2" for the second), so a system is
-	// resolved to its uuid through the room that holds it.
+	// Systems are platform-named, so the fixture key is not an address, and a
+	// minted name is not one either: both boardroom halves mint plain
+	// `boardroom` in their own rooms, so the bare name is ambiguous
+	// estate-wide. A system is resolved to its uuid through the room that
+	// holds it instead, and a room may hold more than one (the lab's two
+	// pods), so the verdict is asserted over every system in the room.
 	conn2, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
 	defer conn2.Close(ctx)
-	systemIn := func(room string) string {
+	systemsIn := func(room string) []string {
 		t.Helper()
-		var id string
-		if err := conn2.QueryRow(ctx,
-			`select s.id from system s join location l on s.location_id = l.id where l.name = $1`,
-			room).Scan(&id); err != nil {
-			t.Fatalf("resolve system in room %q: %v", room, err)
+		rows, err := conn2.Query(ctx,
+			`select s.id from system s join location l on s.location_id = l.id where l.name = $1 order by s.name`,
+			room)
+		if err != nil {
+			t.Fatalf("resolve systems in room %q: %v", room, err)
 		}
-		return id
+		defer rows.Close()
+		var ids []string
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				t.Fatalf("scan system id in room %q: %v", room, err)
+			}
+			ids = append(ids, id)
+		}
+		if len(ids) == 0 {
+			t.Fatalf("no system in room %q", room)
+		}
+		return ids
 	}
 
-	for _, tc := range []struct{ system, want, why string }{
-		{systemIn("media-lab"), "incomplete", "conforms to a standard with nothing assigned to any role: a commissioning gap, and no alarm will ever fire for it"},
-		{"boardroom-2", "incomplete", "one of the two microphones it wants, and that one is fine: the shortfall is a box nobody installed, not a box that broke"},
-		{systemIn("briefing"), "incomplete", "same shape as the second boardroom half: short a microphone nobody has installed"},
-		{systemIn("auditorium"), "degraded", "fully staffed, but a critical alarm took one of its two microphones down: a real failure, not a gap"},
-		{systemIn("bay-1"), "healthy", "fully staffed and quiet"},
-		{systemIn("huddle"), "healthy", "built all-in-one, so the component-build alternate it never staffed does not impair it"},
+	for _, tc := range []struct{ room, want, why string }{
+		{"media-lab", "incomplete", "two pods conforming to a standard with nothing assigned to any role: commissioning gaps, and no alarm will ever fire for them"},
+		{"boardroom-a", "healthy", "fully staffed, the shared bar counted where it physically sits"},
+		{"boardroom-b", "incomplete", "one of the two microphones it wants, and that one is fine: the shortfall is a box nobody installed, not a box that broke"},
+		{"briefing", "incomplete", "same shape as the second boardroom half: short a microphone nobody has installed"},
+		{"auditorium", "degraded", "fully staffed, but a critical alarm took one of its two microphones down: a real failure, not a gap"},
+		{"bay-1", "healthy", "fully staffed and quiet"},
+		{"huddle", "healthy", "built all-in-one, so the component-build alternate it never staffed does not impair it"},
 	} {
-		if got := verdictOf(tc.system); got != tc.want {
-			t.Errorf("%s reads %q, want %q: %s", tc.system, got, tc.want, tc.why)
+		for _, id := range systemsIn(tc.room) {
+			if got := verdictOf(id); got != tc.want {
+				t.Errorf("a system in %s reads %q, want %q: %s", tc.room, got, tc.want, tc.why)
+			}
 		}
 	}
 
 	// The estate must not be monochrome: an operator judging the canvas needs
 	// more than one colour on it.
 	seen := map[string]bool{}
-	for _, s := range []string{systemIn("media-lab"), "boardroom", "boardroom-2", systemIn("auditorium"), systemIn("huddle"), systemIn("bay-1"), systemIn("briefing")} {
-		seen[verdictOf(s)] = true
+	for _, room := range []string{"media-lab", "boardroom-a", "boardroom-b", "auditorium", "huddle", "bay-1", "briefing"} {
+		for _, id := range systemsIn(room) {
+			seen[verdictOf(id)] = true
+		}
 	}
 	if len(seen) < 3 {
 		t.Errorf("the seeded estate shows %d distinct verdicts (%v), want at least 3 so the canvas is judged against a real spread", len(seen), seen)

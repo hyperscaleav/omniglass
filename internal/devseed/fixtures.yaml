@@ -83,15 +83,24 @@ locations:
     name: level-2
     type: floor
     parent: west
-  # A room's name is ground truth an operator knows, so the fixture types it. It
-  # needs no ancestry in it: names are unique within their parent (not across the
-  # estate), so `boardroom` under this floor is a complete name and
-  # `hq.west.level-2.boardroom` is the address that disambiguates it.
+  # Boardroom A and B are the two halves of a divisible space, and they are two
+  # ROOMS, not two systems sharing one. An air wall splits a room into rooms;
+  # nothing in an estate has two boardrooms inside one boardroom. The shared bar
+  # lives physically in A and serves both (components, below), which is what
+  # actually happens when the wall opens, and it is why membership has to be
+  # many-valued.
   #
-  # No label: the shipped rule renders "Boardroom" from this name, and a
-  # pin restating it would only hide which of the two produced it.
-  - key: boardroom
-    name: boardroom
+  # A room's name is ground truth an operator knows, so the fixture types it. It
+  # needs no ancestry in it: names are unique within their parent (not across
+  # the estate). No labels: the shipped rule renders "Boardroom A" and
+  # "Boardroom B" from these names, the halves' real-world signage (ADR-0103's
+  # designation case).
+  - key: boardroom-a
+    name: boardroom-a
+    type: room
+    parent: west-l2
+  - key: boardroom-b
+    name: boardroom-b
     type: room
     parent: west-l2
   # Pinned: "Huddle" is not what anybody calls the room, and the noun is not in
@@ -101,6 +110,15 @@ locations:
     label: Huddle Room
     type: room
     parent: west-l2
+  # Ground-floor lobby, holding a signage endpoint nobody has commissioned into
+  # a system yet (components, below): a display on the wall and no system above
+  # it is an ordinary state, and the estate canvas draws it as a hole rather
+  # than hiding it. No label: the rule renders "Lobby", and the building above
+  # it already says which one.
+  - key: lobby
+    name: lobby
+    type: room
+    parent: west
 
   # East Campus: a second site.
   #
@@ -307,18 +325,26 @@ components:
   - key: huddle-display
     product: samsung-qm55
     location: huddle
+  # The lobby's signage endpoint, deliberately in no system: the display is on
+  # the wall and nobody has commissioned it, so the canvas draws the room as a
+  # hole with a device already waiting in it.
+  - key: lobby-display
+    product: samsung-qm55
+    location: lobby
+  # The shared bar lives physically in room A and serves both halves of the
+  # divisible boardroom (assignments, below).
   - key: shared-bar
     product: cisco-room-bar
-    location: boardroom
+    location: boardroom-a
   - key: bar-a
     product: cisco-room-bar
-    location: boardroom
+    location: boardroom-a
   - key: panel-a
     product: samsung-qm55
-    location: boardroom
+    location: boardroom-a
   - key: panel-b
     product: samsung-qm55
-    location: boardroom
+    location: boardroom-b
   # No product on purpose: it classifies as generic-device, a type no role's
   # accepted_types names, so no role can want it. It is in the room and
   # accounted for, and nothing more, which is exactly the case membership
@@ -328,7 +354,7 @@ components:
   # are the only thing that says what the box is.
   - key: power
     label: Power Conditioner
-    location: boardroom
+    location: boardroom-a
   - key: auditorium-display
     product: samsung-qm55
     location: auditorium
@@ -403,38 +429,28 @@ property_values:
     property: firmware-version
     value: 2.1.4
 
-# Two systems in one room: a divisible boardroom with an air wall down the middle.
-# This is the case a single system pointer on a component could never express, and
-# it is why membership is many-valued: the shared room bar feeds BOTH halves and is a
-# member of each, while the mics and displays belong to one half only.
+# The two halves of a divisible boardroom, one system per ROOM. The shared room
+# bar sits physically in A and feeds BOTH halves, so it is a member of each: the
+# case a single system pointer on a component could never express, and the
+# reason membership is many-valued. The other mics and displays belong to one
+# half only.
 #
-# Neither names itself either: both are `board` systems in the same room, so the
-# platform mints `boardroom` for the first (the first of its stem in a bucket
-# carries no ordinal, ADR-0101) and `boardroom-2` for the second.
-#
-# Neither LABELS itself either, and that is new (#693). Both were pinned
-# "Boardroom A" and "Boardroom B" for two slices, because the shipped system rule
-# read the type alone and rendered "Boardroom" for both halves: a pin was the
-# only thing that told them apart on the surface an operator reads. The rule
-# reads the ordinal now, so it renders "Boardroom" and "Boardroom 2" from the
-# same facts the names came from, and a pin here would be the hand-typed copy of
-# the rule's own output that this file exists to avoid. Released, both of them:
-# they are the estate's only same-type siblings, so they are the only rows that
-# can demonstrate the thing the rule was changed to do.
-#
-# The air wall's own signage would earn a pin back (a room whose halves are
-# signed A and B is ADR-0103's designation case, the same argument that pins
-# "Level 2" onto a floor). This estate has no such signage to state, and
-# inventing one to keep the pin would be pinning a fact the fixture made up.
+# Neither system names itself: each is the first `board` system in its own room,
+# so the platform mints `boardroom` in each bucket (the first of its stem in a
+# bucket carries no ordinal, ADR-0101). Same name, two rooms, which is the
+# placement-scoped name index doing for systems what display-1-per-room does
+# for components. The same-BUCKET siblings that demonstrate the ordinal (#693)
+# live in the media lab now (below), since an air wall makes two rooms, not two
+# boardrooms inside one.
 systems:
   - key: boardroom-a
     standard: meeting-room
     system_type: board
-    location: boardroom
+    location: boardroom-a
   - key: boardroom-b
     standard: meeting-room
     system_type: board
-    location: boardroom
+    location: boardroom-b
 
   # A huddle room on the choice-bearing standard: it is built all-in-one, so
   # the component-build alternate stays unstaffed WITHOUT impairing the room
@@ -452,14 +468,24 @@ systems:
     system_type: meeting
     location: auditorium
 
-  # Racked, cabled, and not yet commissioned: a system conforming to a standard
-  # with nothing assigned to any role it declares. It reads INCOMPLETE, the
-  # verdict #631 added, and nothing in this seed produced it before. Most of a
-  # real estate looks like this for months, which is the whole reason that
-  # verdict is not outage.
-  - key: media-lab-av
+  # Racked, cabled, and not yet commissioned: two training pods conforming to a
+  # standard with nothing assigned to any role either declares. Both read
+  # INCOMPLETE, the verdict #631 added, and nothing in this seed produced it
+  # before. Most of a real estate looks like this for months, which is the
+  # whole reason that verdict is not outage.
+  #
+  # They are also the estate's same-BUCKET same-type siblings, the pair that
+  # demonstrates the ordinal the system rule reads (#693): two `class` systems
+  # in one room mint `classroom` and `classroom-2`, rendering "Classroom" and
+  # "Classroom 2". The divisible boardroom used to carry this demo and cannot
+  # any more, its halves being two rooms now (one bucket each).
+  - key: lab-pod-a
     standard: meeting-room
-    system_type: meeting
+    system_type: class
+    location: lab
+  - key: lab-pod-b
+    standard: meeting-room
+    system_type: class
     location: lab
 
   # One microphone short of its quorum of two, with the one it has healthy

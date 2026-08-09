@@ -743,7 +743,7 @@ func seedNodeLogs(ctx context.Context, gw storage.Gateway) error {
 // reachLocation and reachNodeLocation are fixture KEYS.
 const (
 	reachComponent    = "dsp"
-	reachLocation     = "boardroom"
+	reachLocation     = "boardroom-a"
 	reachNodeLocation = "west"
 	reachNode         = "edge-hq"
 	reachHost         = "10.20.4.12"
