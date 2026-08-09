@@ -1521,6 +1521,9 @@ components:
           type:
             - array
             - "null"
+        alternate:
+          description: The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626); absent when the role is unconditional. The same form the write body takes, so a read round-trips into a write
+          type: string
         assigned:
           description: How many components fill the role
           format: int64
@@ -5265,6 +5268,9 @@ components:
           type:
             - array
             - "null"
+        alternate:
+          description: The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626); absent when the role is unconditional. The same form the write body takes, so a read round-trips into a write
+          type: string
         capacity:
           description: The most components the role will accept; null means no upper bound beyond quorum
           format: int64

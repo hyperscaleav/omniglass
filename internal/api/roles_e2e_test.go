@@ -24,6 +24,7 @@ type effectiveRoleWire struct {
 	Capacity       *int     `json:"capacity"`
 	PositionLabels []string `json:"position_labels"`
 	Impact         string   `json:"impact"`
+	Alternate      string   `json:"alternate"`
 	AcceptedTypes  []string `json:"accepted_types"`
 	PinnedProducts []string `json:"pinned_products"`
 	FromStandard   bool     `json:"from_standard"`

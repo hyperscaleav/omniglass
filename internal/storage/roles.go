@@ -52,14 +52,18 @@ type SystemRole struct {
 	// the rollup takes from the declaration side beyond the requirement itself.
 	Impact string
 	// AlternateID is the choice_alternate this role joins (#626); nil means
-	// unconditional. Carried here purely so SetSystemRole and
-	// DeleteSystemRole's audit before/after images (systemRoleCols) capture
-	// a change to it; nothing on the read side (ListSystemRoles,
-	// systemRoleBody) surfaces it yet, deliberately deferred to the
-	// operator-facing read surface.
+	// unconditional. It is the id the write stores and the audit
+	// before/after images (systemRoleCols) record a change to.
 	AlternateID *string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	// Alternate is the same membership as an address, "choice-name/alternate-name",
+	// empty when the role is unconditional: the exact form the write body
+	// takes, so a read round-trips into a write without translation. Every
+	// read fills it (#640); a field a caller can write and no caller can
+	// read is not a contract, and it cannot be confirmed by the generated
+	// client or the CLI.
+	Alternate string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // The field names a role declaration patches, spelled the way the wire body
@@ -342,7 +346,8 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 			from sys join system_role r on r.owner_kind = 'system' and r.system_id = sys.id
 		)
 		select roles.id, roles.name, roles.display_name, roles.quorum, roles.capacity, roles.position_labels,
-		       roles.impact, roles.from_standard, roles.created_at, roles.updated_at,
+		       roles.impact, `+alternateRefExpr("roles")+` as alternate,
+		       roles.from_standard, roles.created_at, roles.updated_at,
 		       coalesce((select array_agg(ct.name order by ct.name)
 		                   from system_role_type rt join component_type ct on ct.id = rt.component_type_id
 		                  where rt.role_id = roles.id), '{}') as types,
@@ -366,7 +371,7 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 	for rows.Next() {
 		var e EffectiveRole
 		if err := rows.Scan(&e.ID, &e.Name, &e.DisplayName, &e.Quorum, &e.Capacity, &e.PositionLabels,
-			&e.Impact, &e.FromStandard, &e.CreatedAt, &e.UpdatedAt,
+			&e.Impact, &e.Alternate, &e.FromStandard, &e.CreatedAt, &e.UpdatedAt,
 			&e.AcceptedTypes, &e.PinnedProducts, &e.AssignedTo, &e.Positions); err != nil {
 			return nil, fmt.Errorf("storage: scan effective role: %w", err)
 		}

@@ -4366,6 +4366,8 @@ export interface components {
         EffectiveRoleBody: {
             /** @description The component_types a filling component's product must be classified within (self or a descendant); empty accepts any type */
             accepted_types: string[] | null;
+            /** @description The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626); absent when the role is unconditional. The same form the write body takes, so a read round-trips into a write */
+            alternate?: string;
             /**
              * Format: int64
              * @description How many components fill the role
@@ -6394,6 +6396,8 @@ export interface components {
             readonly $schema?: string;
             /** @description The component_types a filling component's product must be classified within (self or a descendant); empty accepts any type */
             accepted_types: string[] | null;
+            /** @description The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626); absent when the role is unconditional. The same form the write body takes, so a read round-trips into a write */
+            alternate?: string;
             /**
              * Format: int64
              * @description The most components the role will accept; null means no upper bound beyond quorum

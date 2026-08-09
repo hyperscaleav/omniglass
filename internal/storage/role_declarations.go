@@ -27,7 +27,20 @@ var ErrUnknownRoleOwner = errors.New("storage: unknown role owner_kind")
 // this list: omitting it left the audit trail blind to exactly the field
 // this fix round made deliberately writable, so a role moving between
 // alternates left no evidence.
-const systemRoleCols = `id, owner_kind, name, display_name, quorum, capacity, position_labels, impact, alternate_id, created_at, updated_at`
+var systemRoleCols = `id, owner_kind, name, display_name, quorum, capacity, position_labels, impact, alternate_id, ` +
+	alternateRefExpr("system_role") + `, created_at, updated_at`
+
+// alternateRefExpr renders a role's alternate membership as the address the
+// write body takes, "choice-name/alternate-name", empty when the role is
+// unconditional (#640). A scalar subquery rather than a join so it drops into
+// a select list, a RETURNING clause, and a per-row correlated read alike
+// without changing the shape of the statement around it; table is whatever the
+// surrounding statement calls system_role.
+func alternateRefExpr(table string) string {
+	return `coalesce((select rc.name || '/' || ca.name
+	                     from choice_alternate ca join role_choice rc on rc.id = ca.choice_id
+	                    where ca.id = ` + table + `.alternate_id), '')`
+}
 
 // roleOwnerColumn maps a role owner kind to its exclusive-arc column. Every
 // identifier it returns is a compile-time constant, never caller input, so
@@ -88,7 +101,7 @@ func roleOwnerColumn(ownerKind string) (string, error) {
 func scanSystemRole(row pgx.Row) (*SystemRole, error) {
 	var r SystemRole
 	if err := row.Scan(&r.ID, &r.OwnerKind, &r.Name, &r.DisplayName, &r.Quorum, &r.Capacity, &r.PositionLabels,
-		&r.Impact, &r.AlternateID, &r.CreatedAt, &r.UpdatedAt); err != nil {
+		&r.Impact, &r.AlternateID, &r.Alternate, &r.CreatedAt, &r.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &r, nil
@@ -155,7 +168,7 @@ func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]
 	// needs them qualified by the role alias.
 	q := fmt.Sprintf(`
 		select r.id, r.owner_kind, r.name, r.display_name, r.quorum, r.capacity, r.position_labels, r.impact,
-		       r.created_at, r.updated_at,
+		       `+alternateRefExpr("r")+` as alternate, r.created_at, r.updated_at,
 		       coalesce(array_agg(distinct ct.name order by ct.name) filter (where ct.name is not null), '{}') as types,
 		       coalesce(array_agg(distinct pr.name order by pr.name) filter (where pr.name is not null), '{}') as products
 		from system_role r
@@ -177,7 +190,7 @@ func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]
 	for rows.Next() {
 		var r SystemRole
 		if err := rows.Scan(&r.ID, &r.OwnerKind, &r.Name, &r.DisplayName, &r.Quorum, &r.Capacity, &r.PositionLabels,
-			&r.Impact, &r.CreatedAt, &r.UpdatedAt, &r.AcceptedTypes, &r.PinnedProducts); err != nil {
+			&r.Impact, &r.Alternate, &r.CreatedAt, &r.UpdatedAt, &r.AcceptedTypes, &r.PinnedProducts); err != nil {
 			return nil, fmt.Errorf("storage: scan role: %w", err)
 		}
 		r.OwnerID = ownerID

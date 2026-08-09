@@ -42,6 +42,7 @@ type systemRoleBody struct {
 	AcceptedTypes  []string `json:"accepted_types" doc:"The component_types a filling component's product must be classified within (self or a descendant); empty accepts any type"`
 	PinnedProducts []string `json:"pinned_products" doc:"If set, a filling component's product must be one of these; empty accepts any product of an accepted type"`
 	Impact         string   `json:"impact" doc:"What an impaired role means for its system: outage, degraded, or none"`
+	Alternate      string   `json:"alternate,omitempty" doc:"The choice/alternate this role joins, addressed as \"choice-name/alternate-name\" (#626); absent when the role is unconditional. The same form the write body takes, so a read round-trips into a write"`
 }
 
 func toSystemRoleBody(r *storage.SystemRole) systemRoleBody {
@@ -64,6 +65,7 @@ func toSystemRoleBody(r *storage.SystemRole) systemRoleBody {
 		AcceptedTypes:  types,
 		PinnedProducts: products,
 		Impact:         r.Impact,
+		Alternate:      r.Alternate,
 	}
 }
 
@@ -79,6 +81,7 @@ type effectiveRoleBody struct {
 	AcceptedTypes  []string `json:"accepted_types" doc:"The component_types a filling component's product must be classified within (self or a descendant); empty accepts any type"`
 	PinnedProducts []string `json:"pinned_products" doc:"If set, a filling component's product must be one of these; empty accepts any product of an accepted type"`
 	Impact         string   `json:"impact" doc:"What an impaired role means for its system: outage, degraded, or none"`
+	Alternate      string   `json:"alternate,omitempty" doc:"The choice/alternate this role joins, addressed as \"choice-name/alternate-name\" (#626); absent when the role is unconditional. The same form the write body takes, so a read round-trips into a write"`
 	FromStandard   bool     `json:"from_standard" doc:"True when the role is inherited from the system's standard; false when declared on the system"`
 	AssignedTo     []string `json:"assigned_to" doc:"The component names filling this role in this system"`
 	// Positions is index-for-index with AssignedTo: Positions[i] is
@@ -124,6 +127,7 @@ func toEffectiveRoleBody(e *storage.EffectiveRole) effectiveRoleBody {
 		AcceptedTypes:  types,
 		PinnedProducts: products,
 		Impact:         e.Impact,
+		Alternate:      e.Alternate,
 		FromStandard:   e.FromStandard,
 		Positions:      positions,
 		AssignedTo:     to,

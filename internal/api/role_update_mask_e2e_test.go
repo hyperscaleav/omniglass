@@ -194,6 +194,115 @@ func TestRolePatchRefusesAMaskItCannotHonor(t *testing.T) {
 	}
 }
 
+// TestRoleAlternateRoundTrips is #640: the alternate was writable and read by
+// nothing, so an operator could put a role into an alternate and had no API way
+// to confirm it landed, and neither the generated client nor the CLI could
+// round-trip it. Both role reads carry it now, and the write's own echo does
+// too, so the same PATCH-then-GET that confirms every other field confirms this
+// one.
+func TestRoleAlternateRoundTrips(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	t.Cleanup(gw.Close)
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ownerTok := bootstrapOwnerTok(t, ctx, gw)
+	srv := httptest.NewServer(api.NewHandler(gw))
+	t.Cleanup(srv.Close)
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	c.do(ownerTok, http.MethodPost, "/standards", map[string]any{
+		"name": "alt-room", "display_name": "Alternate Room",
+	}, http.StatusCreated)
+	// A choice has no write route of its own yet, so it arrives the way the
+	// shipped standards' choices do.
+	if _, err := gw.SeedRoleChoice(ctx, "standard", "alt-room", storage.RoleChoiceSpec{
+		Name: "conferencing", DisplayName: "Conferencing",
+		Alternates: []storage.AlternateSpec{
+			{Name: "all-in-one", DisplayName: "All-in-one"},
+			{Name: "component-system", DisplayName: "Component System"},
+		},
+	}); err != nil {
+		t.Fatalf("seed choice: %v", err)
+	}
+
+	const path = "/standards/alt-room/roles/conf-bar"
+	readAlt := func() string {
+		t.Helper()
+		var list struct {
+			Roles []declaredRoleWire `json:"roles"`
+		}
+		if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/alt-room/roles", nil, http.StatusOK), &list); err != nil {
+			t.Fatalf("decode standard roles: %v", err)
+		}
+		for _, r := range list.Roles {
+			if r.Name == "conf-bar" {
+				return r.Alternate
+			}
+		}
+		t.Fatalf("conf-bar not in the declaration read %+v", list.Roles)
+		return ""
+	}
+
+	// The write's own echo answers first: a caller does not have to re-read to
+	// see what it just joined.
+	var echo declaredRoleWire
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, path, map[string]any{
+		"display_name": "Conferencing Bar", "accepted_types": []string{"video-bar"},
+		"alternate": "conferencing/all-in-one",
+	}, http.StatusOK), &echo); err != nil {
+		t.Fatalf("decode declare echo: %v", err)
+	}
+	if echo.Alternate != "conferencing/all-in-one" {
+		t.Fatalf("declare echo alternate = %q, want conferencing/all-in-one (#640)", echo.Alternate)
+	}
+	if got := readAlt(); got != "conferencing/all-in-one" {
+		t.Fatalf("alternate on the declaration read = %q, want conferencing/all-in-one (#640)", got)
+	}
+
+	// And on the resolved per-system read, where an operator actually works.
+	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "alt-1", "standard_id": "alt-room"}, http.StatusCreated)
+	var w systemRolesWire
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/systems/alt-1/roles", nil, http.StatusOK), &w); err != nil {
+		t.Fatalf("decode system roles: %v", err)
+	}
+	if got := w.find(t, "conf-bar").Alternate; got != "conferencing/all-in-one" {
+		t.Fatalf("alternate on the resolved read = %q, want conferencing/all-in-one (#640)", got)
+	}
+
+	// Moving between alternates, confirmed by reading it back.
+	c.do(ownerTok, http.MethodPatch, path, map[string]any{"alternate": "conferencing/component-system"}, http.StatusOK)
+	if got := readAlt(); got != "conferencing/component-system" {
+		t.Fatalf("alternate after the move = %q, want conferencing/component-system", got)
+	}
+
+	// An unrelated edit leaves it alone (#626, now visible rather than taken on
+	// trust), and an explicit empty string detaches.
+	c.do(ownerTok, http.MethodPatch, path, map[string]any{"display_name": "Conferencing Bar (renamed)"}, http.StatusOK)
+	if got := readAlt(); got != "conferencing/component-system" {
+		t.Fatalf("alternate after an unrelated edit = %q, want it untouched", got)
+	}
+	c.do(ownerTok, http.MethodPatch, path, map[string]any{"alternate": ""}, http.StatusOK)
+	if got := readAlt(); got != "" {
+		t.Fatalf("alternate after an explicit detach = %q, want the role unconditional", got)
+	}
+
+	// And the mask reaches it like any other field: named with nothing to
+	// carry, it clears.
+	c.do(ownerTok, http.MethodPatch, path, map[string]any{"alternate": "conferencing/all-in-one"}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, path, map[string]any{"update_mask": []string{"alternate"}}, http.StatusOK)
+	if got := readAlt(); got != "" {
+		t.Fatalf("alternate after a mask that names it and carries nothing = %q, want it cleared", got)
+	}
+}
+
 // TestSystemRolePatchTakesTheSameMask pins the system arc against the standard
 // arc: the two share a body but not a handler, so a fix to one is not a fix to
 // the other (#639 names both).
