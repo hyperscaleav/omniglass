@@ -57,6 +57,27 @@ Integration and end-to-end tests share one real-Postgres harness,
 (lazily, via `sync.Once`) and hands each test a fresh, migrated, isolated
 database, so tests never share mutable state or collide on a host port.
 
+The migration chain is applied **once per test binary**, into a template
+database, and each test's database is a `CREATE DATABASE ... TEMPLATE` copy of
+it. A copy is a file-level clone rather than a replay of every migration, and it
+carries `schema_migrations` with it, so a provisioned database is
+indistinguishable from a migrated one, including to dbmate. Isolation is
+unchanged: every test still gets its own database.
+
+Building the template is per-binary work, so the harness caches its **success
+and never its failure**. A `sync.Once` here would remember one transient hiccup
+(a flapping container, a refused admin connection) and fail every remaining test
+in the binary from it; retrying on the next call keeps a blip costing one test,
+which is what the per-test migration replay used to give for free.
+
+Postgres refuses to copy a template that has live connections, and
+`internal/migrate` builds a `dbmate.DB` it never explicitly closes, so the
+harness does not assume dbmate left nothing behind. After migrating it
+terminates any backend still attached to the template and then sets
+`allow_connections = false`, which makes the copy deterministic rather than
+timing-dependent. Retrying on `source database ... is being accessed by other
+users` would only have turned a deterministic failure into an intermittent one.
+
 Cleanup is a hard contract, not a convenience. Every package that uses the
 harness **must** route its tests through `storagetest.Main` from a `TestMain`:
 

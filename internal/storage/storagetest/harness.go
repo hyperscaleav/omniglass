@@ -1,8 +1,15 @@
 // Package storagetest provides the shared real-Postgres test harness. Every
 // integration test runs against an ephemeral, fully isolated database: one
 // container is started lazily per test binary (sync.Once), and each NewDB call
-// creates and migrates a fresh database, so tests never share mutable state and
-// never collide on a host port.
+// creates a fresh database, so tests never share mutable state and never
+// collide on a host port.
+//
+// The migration chain runs once per test binary, into a template database, and
+// each test's database is a CREATE DATABASE ... TEMPLATE copy of it. A copy is
+// a file-level clone rather than a replay of every migration, and it carries
+// schema_migrations with it, so a provisioned database is indistinguishable
+// from a migrated one, including to dbmate. Isolation is unchanged: every test
+// still gets its own database.
 //
 // The container is reclaimed by [Main], which every consuming package must run
 // from its TestMain so cleanup happens in-process on normal exit. The
@@ -32,12 +39,19 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
+// templateName is the database the migration chain is applied to once per test
+// binary. Every test database is a copy of it.
+const templateName = "og_template"
+
 var (
 	startOnce sync.Once
 	ctr       *tcpostgres.PostgresContainer // shared container, terminated by Main
 	adminDSN  string                        // DSN to the container's default db, for CREATE DATABASE
 	startErr  error
 	dbCounter atomic.Int64
+
+	templateMu    sync.Mutex
+	templateReady bool
 )
 
 // startContainer starts one ephemeral Postgres container and returns it with
@@ -80,18 +94,137 @@ func ensureContainer() {
 	})
 }
 
+// ensureTemplate starts the container and builds the template database once per
+// test binary, returning the error rather than storing it.
+//
+// Success is cached; failure deliberately is not. A sync.Once here would
+// remember a transient failure forever and fail every remaining test in the
+// binary from it, turning a one-test blip into a whole-binary wipeout. Before
+// the template existed each test connected and migrated on its own, so a
+// hiccup cost exactly one test; retrying on the next call keeps that blast
+// radius. The mutex serializes the build so t.Parallel tests cannot race two
+// of them.
+func ensureTemplate() error {
+	templateMu.Lock()
+	defer templateMu.Unlock()
+	if templateReady {
+		return nil
+	}
+	ensureContainer()
+	if startErr != nil {
+		return fmt.Errorf("start postgres container: %w", startErr)
+	}
+	if err := buildTemplate(context.Background()); err != nil {
+		return fmt.Errorf("build template database: %w", err)
+	}
+	templateReady = true
+	return nil
+}
+
+// buildTemplate applies the whole migration chain to the template database and
+// then seals it. It is the single expensive step of the harness, paid once per
+// test binary instead of once per test.
+func buildTemplate(ctx context.Context) error {
+	admin, err := pgx.Connect(ctx, adminDSN)
+	if err != nil {
+		return fmt.Errorf("admin connect: %w", err)
+	}
+	// Two ways a template can already be here, both handled by recreating it
+	// rather than reusing it. The OMNIGLASS_TEST_ADMIN_DSN escape hatch points
+	// the harness at a long-lived Postgres, where a template from an earlier run
+	// survives and may carry a different migration set. And because a failed
+	// build is retried by the next test rather than cached, this can be a second
+	// attempt over a template the first one left half-built, migrated but
+	// unsealed, or fully sealed. A stale or partial template is a wrong schema
+	// for every test in the binary, so the only safe move is to start over.
+	if err := dropTemplate(ctx, admin); err != nil {
+		_ = admin.Close(ctx)
+		return err
+	}
+	if _, err := admin.Exec(ctx, "CREATE DATABASE "+pgx.Identifier{templateName}.Sanitize()); err != nil {
+		_ = admin.Close(ctx)
+		return fmt.Errorf("create template %s: %w", templateName, err)
+	}
+	if err := admin.Close(ctx); err != nil {
+		return fmt.Errorf("close admin connection: %w", err)
+	}
+
+	if err := migrate.Run(withDBName(adminDSN, templateName)); err != nil {
+		return fmt.Errorf("migrate template %s: %w", templateName, err)
+	}
+	return sealTemplate(ctx)
+}
+
+// sealTemplate closes the template to connections so copying from it can never
+// race one. internal/migrate builds a dbmate.DB it never explicitly closes, so
+// the harness cannot assume dbmate left no session behind: it terminates
+// whatever is still attached and then refuses connections outright. With
+// allow_connections false the template cannot be connected to at all, which is
+// what makes CREATE DATABASE ... TEMPLATE deterministic. Retrying on "source
+// database is being accessed by other users" would only turn a deterministic
+// failure into an intermittent one.
+func sealTemplate(ctx context.Context) error {
+	admin, err := pgx.Connect(ctx, adminDSN)
+	if err != nil {
+		return fmt.Errorf("admin connect: %w", err)
+	}
+	defer func() { _ = admin.Close(ctx) }()
+
+	if _, err := admin.Exec(ctx,
+		`select pg_terminate_backend(pid) from pg_stat_activity
+		  where datname = $1 and pid <> pg_backend_pid()`, templateName); err != nil {
+		return fmt.Errorf("terminate backends on %s: %w", templateName, err)
+	}
+	if _, err := admin.Exec(ctx, "alter database "+pgx.Identifier{templateName}.Sanitize()+
+		" with is_template = true allow_connections = false"); err != nil {
+		return fmt.Errorf("seal template %s: %w", templateName, err)
+	}
+	return nil
+}
+
+// dropTemplate removes a template database left by an earlier run or by a
+// failed build, if there is one. Postgres refuses to drop a database while its
+// template flag is set, and a sealed template cannot be connected to at all, so
+// the seal is undone first. ALTER DATABASE does not require a connection to its
+// target, which is what makes a sealed template droppable.
+func dropTemplate(ctx context.Context, admin *pgx.Conn) error {
+	var exists bool
+	if err := admin.QueryRow(ctx,
+		"select exists (select 1 from pg_database where datname = $1)",
+		templateName).Scan(&exists); err != nil {
+		return fmt.Errorf("look up template %s: %w", templateName, err)
+	}
+	if !exists {
+		return nil
+	}
+	if _, err := admin.Exec(ctx, "alter database "+pgx.Identifier{templateName}.Sanitize()+
+		" with is_template = false allow_connections = true"); err != nil {
+		return fmt.Errorf("unseal stale template %s: %w", templateName, err)
+	}
+	if _, err := admin.Exec(ctx,
+		`select pg_terminate_backend(pid) from pg_stat_activity
+		  where datname = $1 and pid <> pg_backend_pid()`, templateName); err != nil {
+		return fmt.Errorf("terminate backends on stale %s: %w", templateName, err)
+	}
+	if _, err := admin.Exec(ctx, "DROP DATABASE IF EXISTS "+pgx.Identifier{templateName}.Sanitize()); err != nil {
+		return fmt.Errorf("drop stale template %s: %w", templateName, err)
+	}
+	return nil
+}
+
 // NewDSN returns the DSN of a fresh, migrated, isolated Postgres database.
-// Skipped under -short. The database is discarded when the shared container is
-// reaped on process exit. Use this when the test needs the raw DSN (e.g. to
-// launch the server binary against it).
+// Skipped under -short. The database is a copy of the per-binary template, so
+// it arrives with the full schema and the full schema_migrations history
+// without replaying a single migration. It is discarded when the shared
+// container is reaped on process exit. Use this when the test needs the raw DSN
+// (e.g. to launch the server binary against it).
 func NewDSN(t *testing.T) string {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("storage: skipped under -short (Postgres testcontainer)")
 	}
-	ensureContainer()
-	if startErr != nil {
-		t.Fatalf("start postgres container: %v", startErr)
+	if err := ensureTemplate(); err != nil {
+		t.Fatal(err)
 	}
 	ctx := context.Background()
 
@@ -100,17 +233,13 @@ func NewDSN(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("admin connect: %v", err)
 	}
-	if _, err := admin.Exec(ctx, "CREATE DATABASE "+pgx.Identifier{dbName}.Sanitize()); err != nil {
-		_ = admin.Close(ctx)
-		t.Fatalf("create database %s: %v", dbName, err)
-	}
+	_, err = admin.Exec(ctx, "CREATE DATABASE "+pgx.Identifier{dbName}.Sanitize()+
+		" TEMPLATE "+pgx.Identifier{templateName}.Sanitize())
 	_ = admin.Close(ctx)
-
-	dsn := withDBName(adminDSN, dbName)
-	if err := migrate.Run(dsn); err != nil {
-		t.Fatalf("migrate %s: %v", dbName, err)
+	if err != nil {
+		t.Fatalf("create database %s from template %s: %v", dbName, templateName, err)
 	}
-	return dsn
+	return withDBName(adminDSN, dbName)
 }
 
 // NewDB returns a Gateway backed by a fresh, migrated, isolated database.
