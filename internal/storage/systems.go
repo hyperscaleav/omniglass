@@ -360,7 +360,7 @@ func attachSystemPaths(ctx context.Context, q querier, ss []*System, full bool) 
 		segs := paths[s.ID]
 		s.PathSegments = segs
 		s.Path = strings.Join(segs, ".")
-		s.Renders = Renders{Dash: RenderDash(segs), Bare: RenderBare(segs, "")}
+		s.Renders = Renders{Dash: RenderDash(segs), Bare: RenderBare(segs, "", "")}
 	}
 	return nil
 }

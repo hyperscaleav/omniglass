@@ -190,6 +190,20 @@ func TestListComponentsSkipsAbbrevGetCompactsFully(t *testing.T) {
 	if listed.Renders.Bare != wantListBare {
 		t.Errorf("ListComponents Renders.Bare = %q, want %q (LIST must not pay the abbrev queries)", listed.Renders.Bare, wantListBare)
 	}
+
+	// display-1 is a HAND-TYPED name on a component whose type is
+	// generic-device (stem "device", abbrev "dev"), so no substitution is
+	// legitimate on it in either direction: the type never minted this name
+	// (#654). Asserting that on the GET path too keeps this test honest, since
+	// the compaction it exercises below has to come from a name the type
+	// actually owns.
+	gotHand, err := gw.GetComponent(ctx, fx.display1.ID, all)
+	if err != nil {
+		t.Fatalf("GetComponent(display1.ID) = %v", err)
+	}
+	if want := "boi17c415adisplay-1"; gotHand.Renders.Bare != want {
+		t.Errorf("GetComponent Renders.Bare = %q, want %q (a foreign stem is never compacted)", gotHand.Renders.Bare, want)
+	}
 	// Dash and the address itself are NOT gated: they cost nothing beyond
 	// PathOf, which LIST already pays for pathRender.
 	if listed.Renders.Dash == "" {
@@ -199,11 +213,35 @@ func TestListComponentsSkipsAbbrevGetCompactsFully(t *testing.T) {
 		t.Error("ListComponents Path is empty, want the dotted address (not gated by full)")
 	}
 
-	got, err := gw.GetComponent(ctx, fx.display1.ID, all)
+	// A component whose name IS its type's stem-ordinal pair, which is what
+	// the generator mints: generic-device's seeded stem is "device" and its
+	// abbrev is "dev", so device-1 compacts to dev1 on a GET and stays whole
+	// on a LIST. This is the pair the test exists to tell apart, and it needs
+	// a name the type owns for the compaction to be legitimate at all.
+	owned, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
+		Name: "device-1", LocationName: &fx.r415a.Name,
+	}, all)
 	if err != nil {
-		t.Fatalf("GetComponent(display1.ID) = %v", err)
+		t.Fatalf("create device-1: %v", err)
 	}
-	wantGetBare := "boi17c415adev1" // generic-device's seeded abbrev is "dev"
+
+	list2, err := gw.ListComponents(ctx, all)
+	if err != nil {
+		t.Fatalf("ListComponents (owned): %v", err)
+	}
+	for i := range list2 {
+		if list2[i].ID == owned.ID {
+			if want := "boi17c415adevice-1"; list2[i].Renders.Bare != want {
+				t.Errorf("ListComponents Renders.Bare = %q, want %q (LIST must not pay the abbrev queries)", list2[i].Renders.Bare, want)
+			}
+		}
+	}
+
+	got, err := gw.GetComponent(ctx, owned.ID, all)
+	if err != nil {
+		t.Fatalf("GetComponent(device-1) = %v", err)
+	}
+	wantGetBare := "boi17c415adev1" // generic-device's seeded stem is "device", abbrev "dev"
 	if got.Renders.Bare != wantGetBare {
 		t.Errorf("GetComponent Renders.Bare = %q, want %q", got.Renders.Bare, wantGetBare)
 	}

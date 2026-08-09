@@ -197,25 +197,29 @@ func attachComponentPaths(ctx context.Context, q querier, cs []*Component, full 
 	if err != nil {
 		return err
 	}
-	abbrevs := make(map[string]string) // product id -> its type's abbrev, resolved once
+	// Both halves of the substitution come from one registry row, so they are
+	// resolved and memoized together: the abbrev says what to write, the stem
+	// says the segment is one this type actually minted (#654).
+	type typeFacts struct{ stem, abbrev string }
+	facts := make(map[string]typeFacts) // product id -> its type's stem and abbrev, resolved once
 	for _, c := range cs {
 		segs := paths[c.ID]
 		c.PathSegments = segs
 		c.Path = strings.Join(segs, ".")
-		abbrev := ""
+		var tf typeFacts
 		if full && c.ProductID != nil {
-			a, done := abbrevs[*c.ProductID]
+			f, done := facts[*c.ProductID]
 			if !done {
 				if typeID, err := componentTypeIDForProduct(ctx, q, *c.ProductID); err == nil {
-					if _, _, resolved, _, err := resolveTypeFacts(ctx, q, typeID); err == nil {
-						a = resolved
+					if stem, _, abbrev, _, err := resolveTypeFacts(ctx, q, typeID); err == nil {
+						f = typeFacts{stem: stem, abbrev: abbrev}
 					}
 				}
-				abbrevs[*c.ProductID] = a
+				facts[*c.ProductID] = f
 			}
-			abbrev = a
+			tf = f
 		}
-		c.Renders = Renders{Dash: RenderDash(segs), Bare: RenderBare(segs, abbrev)}
+		c.Renders = Renders{Dash: RenderDash(segs), Bare: RenderBare(segs, tf.stem, tf.abbrev)}
 	}
 	return nil
 }

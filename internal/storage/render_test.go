@@ -46,7 +46,7 @@ func TestRenderDashPlainLocationHasNoAccessorToStrip(t *testing.T) {
 // all, which is the point of a "bare" form (a physical label with no room for
 // punctuation).
 func TestRenderBareReplacesStemOrdinalWithAbbrev(t *testing.T) {
-	got := RenderBare(parseOrFail(t, "boi.17c.216b.$comp.display-1"), "dsp")
+	got := RenderBare(parseOrFail(t, "boi.17c.216b.$comp.display-1"), "display", "dsp")
 	want := "boi17c216bdsp1"
 	if got != want {
 		t.Fatalf("RenderBare = %q, want %q", got, want)
@@ -54,7 +54,7 @@ func TestRenderBareReplacesStemOrdinalWithAbbrev(t *testing.T) {
 }
 
 func TestRenderBareMultiDigitOrdinal(t *testing.T) {
-	got := RenderBare(parseOrFail(t, "boi.$comp.display-12"), "dsp")
+	got := RenderBare(parseOrFail(t, "boi.$comp.display-12"), "display", "dsp")
 	want := "boidsp12"
 	if got != want {
 		t.Fatalf("RenderBare = %q, want %q", got, want)
@@ -66,7 +66,7 @@ func TestRenderBareMultiDigitOrdinal(t *testing.T) {
 // to compact the final segment TO, so RenderBare falls back to the dash
 // render's segments, just concatenated instead of dashed.
 func TestRenderBareNoAbbrevFallsBackToConcatenation(t *testing.T) {
-	got := RenderBare(parseOrFail(t, "boi.17c.216b.$comp.display-1"), "")
+	got := RenderBare(parseOrFail(t, "boi.17c.216b.$comp.display-1"), "display", "")
 	want := "boi17c216bdisplay-1"
 	if got != want {
 		t.Fatalf("RenderBare = %q, want %q", got, want)
@@ -78,15 +78,39 @@ func TestRenderBareNoAbbrevFallsBackToConcatenation(t *testing.T) {
 // nothing pickOrdinal-shaped for RenderBare to substitute, so the segment is
 // left exactly as the dash render has it.
 func TestRenderBareNoOrdinalTailLeavesSegmentUnchanged(t *testing.T) {
-	got := RenderBare(parseOrFail(t, "boi.$comp.front-desk-display"), "dsp")
+	got := RenderBare(parseOrFail(t, "boi.$comp.front-desk-display"), "display", "dsp")
 	want := "boifront-desk-display"
 	if got != want {
 		t.Fatalf("RenderBare = %q, want %q", got, want)
 	}
 }
 
+// The abbrev substitution belongs to the type that minted the name, so it may
+// only fire on that type's own stem. An operator who renames a component takes
+// the pen for good (name_generated clears and never returns except through
+// :resetName), and the name they chose can end in a digit run for reasons of
+// their own: rack-3, booth-2, row-14. Compacting "rack-3" to "dsp3" puts a word
+// on a cable label that appears nowhere in the entity's name.
+func TestRenderBareLeavesAForeignStemAlone(t *testing.T) {
+	got := RenderBare(parseOrFail(t, "boi.$comp.rack-3"), "display", "dsp")
+	want := "boirack-3"
+	if got != want {
+		t.Fatalf("RenderBare = %q, want %q", got, want)
+	}
+}
+
+// A stem the caller could not resolve is not a licence to substitute on any
+// trailing digit run: with nothing to match against, the segment stands.
+func TestRenderBareEmptyStemLeavesSegmentUnchanged(t *testing.T) {
+	got := RenderBare(parseOrFail(t, "boi.$comp.display-1"), "", "dsp")
+	want := "boidisplay-1"
+	if got != want {
+		t.Fatalf("RenderBare = %q, want %q", got, want)
+	}
+}
+
 func TestRenderBareEmptySegments(t *testing.T) {
-	if got := RenderBare(nil, "dsp"); got != "" {
+	if got := RenderBare(nil, "display", "dsp"); got != "" {
 		t.Fatalf("RenderBare(nil) = %q, want empty", got)
 	}
 }
