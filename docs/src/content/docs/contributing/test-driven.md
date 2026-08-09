@@ -64,6 +64,12 @@ carries `schema_migrations` with it, so a provisioned database is
 indistinguishable from a migrated one, including to dbmate. Isolation is
 unchanged: every test still gets its own database.
 
+Building the template is per-binary work, so the harness caches its **success
+and never its failure**. A `sync.Once` here would remember one transient hiccup
+(a flapping container, a refused admin connection) and fail every remaining test
+in the binary from it; retrying on the next call keeps a blip costing one test,
+which is what the per-test migration replay used to give for free.
+
 Postgres refuses to copy a template that has live connections, and
 `internal/migrate` builds a `dbmate.DB` it never explicitly closes, so the
 harness does not assume dbmate left nothing behind. After migrating it

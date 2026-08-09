@@ -125,6 +125,63 @@ func TestProvisionUnderRepetition(t *testing.T) {
 	}
 }
 
+// TestTemplateBuildFailureIsNotCached pins the blast radius of a transient
+// failure. Building the template is per-binary work, so caching its error would
+// fail every remaining test in the binary from one hiccup: the harness has been
+// seen to hit a refused admin connection when the container flaps, and before
+// the template existed that cost exactly one test, because each test connected
+// and migrated on its own. Only success may be cached.
+//
+// The failure is forced the way the real one arrives, by pointing the harness
+// at an endpoint that refuses connections. This mutates harness state, so it
+// restores it and must not run alongside a t.Parallel test.
+func TestTemplateBuildFailureIsNotCached(t *testing.T) {
+	if testing.Short() {
+		t.Skip("storagetest: skipped under -short (Postgres testcontainer)")
+	}
+	NewDSN(t) // container up, template built and sealed
+
+	good := adminDSN
+	t.Cleanup(func() {
+		// Leave the harness usable for later tests whatever happens below. A
+		// false templateReady only costs the next caller one rebuild.
+		adminDSN = good
+		templateReady = false
+	})
+
+	// Nothing listens on port 1, so the admin connect is refused outright.
+	adminDSN = "postgres://omniglass:omniglass@127.0.0.1:1/postgres?sslmode=disable"
+	templateReady = false
+
+	if err := ensureTemplate(); err == nil {
+		t.Fatal("ensureTemplate returned nil against an endpoint that refuses connections")
+	}
+	if templateReady {
+		t.Fatal("a failed build marked the template ready")
+	}
+
+	// The property under test: the very next call retries rather than replaying
+	// the stored error. This also drives the retry over a template the previous
+	// successful build left sealed, which is only droppable because the seal is
+	// undone first.
+	adminDSN = good
+	if err := ensureTemplate(); err != nil {
+		t.Fatalf("ensureTemplate did not recover after a transient failure: %v", err)
+	}
+	if !templateReady {
+		t.Fatal("a successful rebuild did not mark the template ready")
+	}
+	recovered := context.Background()
+	conn := connect(t, recovered, NewDSN(t))
+	var n int
+	if err := conn.QueryRow(recovered, `select count(*) from schema_migrations`).Scan(&n); err != nil {
+		t.Fatalf("count schema_migrations after recovery: %v", err)
+	}
+	if n == 0 {
+		t.Fatal("the rebuilt template provisioned a database with no applied migrations")
+	}
+}
+
 func connect(t *testing.T, ctx context.Context, dsn string) *pgx.Conn {
 	t.Helper()
 	conn, err := pgx.Connect(ctx, dsn)

@@ -50,8 +50,8 @@ var (
 	startErr  error
 	dbCounter atomic.Int64
 
-	templateOnce sync.Once
-	templateErr  error
+	templateMu    sync.Mutex
+	templateReady bool
 )
 
 // startContainer starts one ephemeral Postgres container and returns it with
@@ -94,17 +94,31 @@ func ensureContainer() {
 	})
 }
 
-// ensureTemplate starts the container and builds the template database once
-// per test binary, following the ensureContainer idiom: the work happens under
-// a sync.Once and the outcome is read from templateErr.
-func ensureTemplate() {
-	templateOnce.Do(func() {
-		ensureContainer()
-		if startErr != nil {
-			return // NewDSN reports startErr; nothing to build against
-		}
-		templateErr = buildTemplate(context.Background())
-	})
+// ensureTemplate starts the container and builds the template database once per
+// test binary, returning the error rather than storing it.
+//
+// Success is cached; failure deliberately is not. A sync.Once here would
+// remember a transient failure forever and fail every remaining test in the
+// binary from it, turning a one-test blip into a whole-binary wipeout. Before
+// the template existed each test connected and migrated on its own, so a
+// hiccup cost exactly one test; retrying on the next call keeps that blast
+// radius. The mutex serializes the build so t.Parallel tests cannot race two
+// of them.
+func ensureTemplate() error {
+	templateMu.Lock()
+	defer templateMu.Unlock()
+	if templateReady {
+		return nil
+	}
+	ensureContainer()
+	if startErr != nil {
+		return fmt.Errorf("start postgres container: %w", startErr)
+	}
+	if err := buildTemplate(context.Background()); err != nil {
+		return fmt.Errorf("build template database: %w", err)
+	}
+	templateReady = true
+	return nil
 }
 
 // buildTemplate applies the whole migration chain to the template database and
@@ -115,10 +129,14 @@ func buildTemplate(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("admin connect: %w", err)
 	}
-	// The OMNIGLASS_TEST_ADMIN_DSN escape hatch points the harness at a
-	// long-lived Postgres, where a template from an earlier run can still be
-	// present and built from a different migration set. Recreate rather than
-	// reuse: a stale template is a wrong schema for every test in the binary.
+	// Two ways a template can already be here, both handled by recreating it
+	// rather than reusing it. The OMNIGLASS_TEST_ADMIN_DSN escape hatch points
+	// the harness at a long-lived Postgres, where a template from an earlier run
+	// survives and may carry a different migration set. And because a failed
+	// build is retried by the next test rather than cached, this can be a second
+	// attempt over a template the first one left half-built, migrated but
+	// unsealed, or fully sealed. A stale or partial template is a wrong schema
+	// for every test in the binary, so the only safe move is to start over.
 	if err := dropTemplate(ctx, admin); err != nil {
 		_ = admin.Close(ctx)
 		return err
@@ -164,10 +182,11 @@ func sealTemplate(ctx context.Context) error {
 	return nil
 }
 
-// dropTemplate removes a template database left by an earlier run, if there is
-// one. Postgres refuses to drop a database while its template flag is set, and
-// the flag can only be cleared with connections allowed, so the seal is undone
-// before the drop.
+// dropTemplate removes a template database left by an earlier run or by a
+// failed build, if there is one. Postgres refuses to drop a database while its
+// template flag is set, and a sealed template cannot be connected to at all, so
+// the seal is undone first. ALTER DATABASE does not require a connection to its
+// target, which is what makes a sealed template droppable.
 func dropTemplate(ctx context.Context, admin *pgx.Conn) error {
 	var exists bool
 	if err := admin.QueryRow(ctx,
@@ -204,12 +223,8 @@ func NewDSN(t *testing.T) string {
 	if testing.Short() {
 		t.Skip("storage: skipped under -short (Postgres testcontainer)")
 	}
-	ensureTemplate()
-	if startErr != nil {
-		t.Fatalf("start postgres container: %v", startErr)
-	}
-	if templateErr != nil {
-		t.Fatalf("build template database: %v", templateErr)
+	if err := ensureTemplate(); err != nil {
+		t.Fatal(err)
 	}
 	ctx := context.Background()
 

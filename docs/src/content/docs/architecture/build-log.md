@@ -2948,5 +2948,8 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   builds a `dbmate.DB` it never explicitly closes, so the template is sealed rather than assumed
   clean: stray backends are terminated and `allow_connections` is set false, making the copy
   deterministic instead of timing-dependent (a retry on the in-use error would have converted a
-  deterministic bug into an intermittent one). `internal/storage` fell from 152s to 65s
-  (`b661c4b`, `2a02307`).
+  deterministic bug into an intermittent one). Review caught the one regression the speedup
+  smuggled in: per-binary work behind a `sync.Once` caches its error permanently, so a single
+  transient container hiccup failed every remaining test in the binary where the per-test replay it
+  replaced would have cost exactly one test. Success is cached and failure is not, so the next test
+  retries. `internal/storage` fell from 152s to 65s (`b661c4b`, `2a02307`).
