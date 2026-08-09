@@ -20,6 +20,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/blob"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -631,6 +632,7 @@ type PG struct {
 	pool   *pgxpool.Pool
 	secret secret.Provider
 	blob   blob.Store
+	tracer pgx.QueryTracer
 }
 
 // Option configures a PG at construction. The secret provider is optional so
@@ -653,11 +655,46 @@ func WithBlobStore(store blob.Store) Option {
 	return func(p *PG) { p.blob = store }
 }
 
+// WithQueryTracer installs a pgx query tracer on every connection the pool
+// opens: pgx calls it at the start and end of each Query, QueryRow and Exec, so
+// it observes every statement the gateway issues, whichever gateway method
+// issued it. That whole-pool reach is the point. The read paths query p.pool
+// directly rather than a querier a caller injected, so a wrapper around some
+// argument cannot see them, and this is the only seam that can. Production
+// observability first (an OpenTelemetry pgx tracer attaches here); the test
+// harness uses it to count round trips, which is how this repo asserts a LIST
+// has not regressed into an N+1 (storagetest.NewCountingDB).
+//
+// Unlike the other options, this one has to reach the CONNECTION config rather
+// than the gateway struct, which is why NewPG parses the DSN into a config and
+// builds the pool from that.
+func WithQueryTracer(tracer pgx.QueryTracer) Option {
+	return func(p *PG) { p.tracer = tracer }
+}
+
 // NewPG opens a pgx pool against dsn and verifies connectivity once before
 // returning, so a bad DSN or an unreachable database fails fast at boot rather
 // than on the first query.
+//
+// The options are applied BEFORE the pool is built, because a query tracer
+// belongs to the connection config pgxpool reads as it opens each connection:
+// an option applied afterwards could never install one. Nothing an option sets
+// reads the pool, so the earlier application is invisible to the other two, and
+// the pool-derived default (the pgblobs store) is filled in afterwards only
+// where WithBlobStore left none.
 func NewPG(ctx context.Context, dsn string, opts ...Option) (*PG, error) {
-	pool, err := pgxpool.New(ctx, dsn)
+	p := &PG{}
+	for _, opt := range opts {
+		opt(p)
+	}
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("storage: parse dsn: %w", err)
+	}
+	if p.tracer != nil {
+		cfg.ConnConfig.Tracer = p.tracer
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("storage: open pool: %w", err)
 	}
@@ -665,9 +702,9 @@ func NewPG(ctx context.Context, dsn string, opts ...Option) (*PG, error) {
 		pool.Close()
 		return nil, fmt.Errorf("storage: ping: %w", err)
 	}
-	p := &PG{pool: pool, blob: NewPGBlobStore(pool)}
-	for _, opt := range opts {
-		opt(p)
+	p.pool = pool
+	if p.blob == nil {
+		p.blob = NewPGBlobStore(pool)
 	}
 	return p, nil
 }

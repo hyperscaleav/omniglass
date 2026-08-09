@@ -97,3 +97,44 @@ For orphans left by a genuinely hard kill (a `SIGKILL` or a Docker restart befor
 either mechanism fires), sweep them with `make clean-testcontainers`. It
 force-removes leftover Postgres test containers, scoped by the testcontainers
 label and the `postgres:18` image so it never touches the compose dev stack.
+
+## Counting round trips, not timing them
+
+Read performance is asserted as a **count of SQL statements**, not as a duration.
+The Gateway's dominant cost is round trips to Postgres, and the regression that
+hurts at estate scale is the N+1: fifteen thousand components paying two or three
+queries each. A count is deterministic. It needs no stored baseline, no threshold
+policy, and no warm-up, and it fails with an exact number that names the defect,
+where a wall-clock measurement on a laptop or a shared runner has variance that
+swamps anything short of a catastrophe. What a count cannot see is a missing index
+or a sequential scan inside one query; that is a different instrument, not a reason
+to skip this one.
+
+`internal/storage/storagetest/querycount` is the primitive.
+`storagetest.NewCountingDB` hands back a gateway plus a `querycount.Counter`, and
+the counter is a `pgx.QueryTracer` attached to the pool's connection config, so it
+sees every statement the gateway issues.
+
+**The seam is the whole design, and it fails silently.** A count means nothing if
+the code under test does not go through the counted seam: a counter wrapped around
+some argument that the code never reaches for reports a small, flat, entirely
+fictional number, and the assertion built on it reads as coverage while measuring
+nothing. The gateway's `List` methods take a `scope.Set` and query the pool
+directly, so only the pool tracer observes them; `Counter.Wrap` observes only a
+function that takes its querier as a parameter, such as the address-attach hooks.
+A count of zero where several statements were expected is the tell.
+
+Every count assertion checks **both** properties, because neither alone has teeth:
+
+- **Flatness**: the same cost at a small page and a larger one. A ceiling alone
+  passes an implementation that is flat at a bad number.
+- **A ceiling**: an absolute maximum. Equality alone passes an implementation that
+  is still per-row with a smaller constant, and passes anything at all if the two
+  pages are secretly the same size.
+
+The fixture has to vary the dimension the count grows along, which is subtler than
+page size: an address walk grows with the number of distinct rooms a page spans, so
+a page confined to one room makes a per-room loop look exactly as flat as a batch.
+And a new assertion earns its place by **mutation**: break the batching or the join,
+watch the number move, revert. A count test whose only red was a build failure has
+not been shown to measure anything.
