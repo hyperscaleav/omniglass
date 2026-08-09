@@ -78,7 +78,7 @@ describe("RoleEditor on a standard", () => {
     let put: Request | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
-      if (req.method === "PUT") {
+      if (req.method === "PATCH") {
         put = req.clone();
         return json({ name: "camera", display_name: "Room camera", quorum: 1, accepted_types: ["video-bar"] });
       }
@@ -110,7 +110,7 @@ describe("RoleEditor on a standard", () => {
     let put: Request | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
-      if (req.method === "PUT") {
+      if (req.method === "PATCH") {
         put = req.clone();
         return json({ name: "main-display", display_name: "Main display", quorum: 2, accepted_types: ["display"] });
       }
@@ -146,7 +146,7 @@ describe("RoleEditor on a standard", () => {
     let put: Request | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
-      if (req.method === "PUT") {
+      if (req.method === "PATCH") {
         put = req.clone();
         return json({ name: "main-display", display_name: "Main display", quorum: 2, accepted_types: ["display"], impact: "outage" });
       }
@@ -168,7 +168,7 @@ describe("RoleEditor on a standard", () => {
     let put: Request | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
-      if (req.method === "PUT") { put = req.clone(); return json({}); }
+      if (req.method === "PATCH") { put = req.clone(); return json({}); }
       return json({ roles: declared });
     });
 

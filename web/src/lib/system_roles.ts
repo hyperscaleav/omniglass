@@ -51,9 +51,11 @@ export async function standardRoles(id: string): Promise<DeclaredRole[]> {
 }
 
 // setStandardRole declares a role on the standard, or revises it in place: the
-// role is addressed by name, so the write is idempotent.
+// role is addressed by name, so the write is idempotent. A PATCH, and partial:
+// what the body carries changes, what it omits is left alone, and what its
+// update_mask names is written whether the body carries it or not (#666).
 export async function setStandardRole(id: string, role: string, body: RoleSpec): Promise<DeclaredRole> {
-  const { data, error } = await api.PUT("/standards/{id}/roles/{role}", { params: { path: { id, role } }, body });
+  const { data, error } = await api.PATCH("/standards/{id}/roles/{role}", { params: { path: { id, role } }, body });
   if (error) throw error;
   return data as DeclaredRole;
 }

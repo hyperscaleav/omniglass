@@ -10,6 +10,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/updatemask"
 )
 
 // The role surface, in three parts. Declaration: what a standard says every
@@ -151,21 +152,44 @@ type listSystemRolesOutput struct {
 // roleSpecBody is the declaration payload, shared by the standard and system
 // arcs: the role is addressed by the path, so the body carries only how it
 // presents and what it requires.
+//
+// Every field is patched under the mask (#666, AIP-134): with no update_mask,
+// the fields this body populated are the ones that change, so an omitted field
+// keeps whatever the role already declares. Naming a field in update_mask is
+// what writes it regardless, which is the only way to CLEAR one, since a
+// cleared field and an omitted field carry the same empty value on the wire.
 type roleSpecBody struct {
-	DisplayName    string   `json:"display_name,omitempty" doc:"The role's human label; defaults to the role name"`
-	Quorum         int      `json:"quorum,omitempty" minimum:"0" doc:"How many components must fill the role; omit for one"`
-	Capacity       *int     `json:"capacity,omitempty" minimum:"1" doc:"The most components the role will accept; must be at least quorum. Omit to leave whatever is already declared unchanged (or unbounded on first declare); there is no way to explicitly clear a capacity back to unbounded once set"`
-	PositionLabels []string `json:"position_labels,omitempty" doc:"Human labels for each position within the role, by index; replaces the label set wholesale. Omit or empty clears labelling"`
-	AcceptedTypes  []string `json:"accepted_types,omitempty" doc:"The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type"`
-	PinnedProducts []string `json:"pinned_products,omitempty" doc:"If set, a filling component's product must be one of these; replaces the pinned set wholesale. Omit or empty accepts any product of an accepted type"`
-	Impact         string   `json:"impact,omitempty" enum:"outage,degraded,none" doc:"What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display"`
-	// Alternate is *string, not string: omitting it must leave whatever
-	// alternate this role already joins alone, the same reading Capacity
-	// gets above, because every other field on this body wholesale-replaces
-	// and a role's alternate silently detaching on an unrelated edit (#626)
-	// took a shipped standard's systems from healthy to degraded with no
-	// audit trail and no way back except raw SQL.
-	Alternate *string `json:"alternate,omitempty" doc:"The choice/alternate this role joins, addressed as \"choice-name/alternate-name\" (#626). Omit to leave whatever is already declared unchanged; an empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422"`
+	UpdateMask     []string `json:"update_mask,omitempty" doc:"Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED; send [\"*\"] for full replacement, where every field the body omits goes back to its default. A field this resource does not patch is a 422 naming it"`
+	DisplayName    string   `json:"display_name,omitempty" doc:"The role's human label; defaults to the role name on first declare"`
+	Quorum         int      `json:"quorum,omitempty" minimum:"0" doc:"How many components must fill the role; one on first declare"`
+	Capacity       *int     `json:"capacity,omitempty" minimum:"1" doc:"The most components the role will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded"`
+	PositionLabels []string `json:"position_labels,omitempty" doc:"Human labels for each position within the role, by index; replaces the label set wholesale when written. An empty list is not a populated field, so clearing the labels means naming position_labels in update_mask"`
+	AcceptedTypes  []string `json:"accepted_types,omitempty" doc:"The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale when written, and an empty set accepts any type. Clearing it means naming accepted_types in update_mask"`
+	PinnedProducts []string `json:"pinned_products,omitempty" doc:"If set, a filling component's product must be one of these; replaces the pinned set wholesale when written, and an empty set accepts any product of an accepted type. Clearing it means naming pinned_products in update_mask"`
+	Impact         string   `json:"impact,omitempty" enum:"outage,degraded,none" doc:"What an impaired role means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display"`
+	// Alternate is *string, not string, because the empty string is the
+	// explicit DETACH here rather than an absent value: a role's alternate
+	// silently detaching on an unrelated edit (#626) took a shipped
+	// standard's systems from healthy to degraded with no audit trail and no
+	// way back except raw SQL, so a set pointer always means the caller said
+	// something about this field.
+	Alternate *string `json:"alternate,omitempty" doc:"The choice/alternate this role joins, addressed as \"choice-name/alternate-name\" (#626). An empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422"`
+}
+
+// resolveRoleWrite turns the body's update_mask into the write set the write
+// obeys, refusing a mask this resource cannot honor with the field named.
+//
+// The implied mask (an absent update_mask) is read off the SPEC the write is
+// about to store, not off the body field by field, so "which fields did the
+// caller send" is defined once for both layers instead of once per layer,
+// where the two definitions would drift.
+func resolveRoleWrite(body roleSpecBody, spec storage.SystemRoleSpec) (storage.SystemRoleSpec, error) {
+	write, err := updatemask.Resolve(body.UpdateMask, storage.RolePatchFields, spec.Populated())
+	if err != nil {
+		return spec, err
+	}
+	spec.Write = write
+	return spec, nil
 }
 
 type standardRolePathInput struct {
@@ -245,16 +269,20 @@ func registerStandardRoleRoutes(api huma.API, a *authenticator, gw storage.Gatew
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "set-standard-role",
-		Method:      http.MethodPut,
+		Method:      http.MethodPatch,
 		Path:        "/standards/{id}/roles/{role}",
 		Summary:     "Declare a role on a standard",
-		Description: "Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent). accepted_types and pinned_products each replace their set wholesale. An unknown standard, type, or product is a 422. Gated by standard:update.",
+		Description: "Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent and declaring is this same route). Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. An unknown standard, type, or product is a 422, as is a mask naming a field this resource does not patch. Gated by standard:update.",
 	}, "standard", "update"), func(ctx context.Context, in *setStandardRoleInput) (*systemRoleOutput, error) {
 		altID, err := resolveAlternateBody(ctx, gw, "standard", in.ID, in.Body)
 		if err != nil {
 			return nil, mapRoleErr(err)
 		}
-		r, err := gw.SetSystemRole(ctx, actorID(ctx), "standard", in.ID, roleSpec(in.Role, in.Body, altID))
+		spec, err := resolveRoleWrite(in.Body, roleSpec(in.Role, in.Body, altID))
+		if err != nil {
+			return nil, mapRoleErr(err)
+		}
+		r, err := gw.SetSystemRole(ctx, actorID(ctx), "standard", in.ID, spec)
 		if err != nil {
 			return nil, mapRoleErr(err)
 		}
@@ -302,10 +330,10 @@ func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "set-system-role",
-		Method:      http.MethodPut,
+		Method:      http.MethodPatch,
 		Path:        "/systems/{name}/roles/{role}",
 		Summary:     "Declare a role on a system",
-		Description: "Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. accepted_types and pinned_products each replace their set wholesale. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
+		Description: "Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
 	}, "system", "update"), func(ctx context.Context, in *setSystemRoleInput) (*systemRoleOutput, error) {
 		sysID, err := requireSystemInScope(ctx, a, gw, in.Name)
 		if err != nil {
@@ -315,7 +343,11 @@ func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		if err != nil {
 			return nil, mapRoleErr(err)
 		}
-		r, err := gw.SetSystemRole(ctx, actorID(ctx), "system", sysID, roleSpec(in.Role, in.Body, altID))
+		spec, err := resolveRoleWrite(in.Body, roleSpec(in.Role, in.Body, altID))
+		if err != nil {
+			return nil, mapRoleErr(err)
+		}
+		r, err := gw.SetSystemRole(ctx, actorID(ctx), "system", sysID, spec)
 		if err != nil {
 			return nil, mapRoleErr(err)
 		}
@@ -390,20 +422,19 @@ func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 	})
 }
 
-// roleSpec fills the declaration spec from the path and body, defaulting the
-// label to the role name so a minimal write still reads properly on a
-// surface. altID is the already-resolved AlternateID (resolveAlternateBody),
-// not read from body directly: resolution needs the gateway and the owner,
-// neither of which this function has, and keeping it a pure function here
-// keeps roleSpec testable without a database.
+// roleSpec fills the declaration spec from the path and body, field for field:
+// nothing is defaulted here, because a default applied on the way in is
+// indistinguishable from a value the caller sent, and the implied mask is
+// exactly that distinction (the role-name default for an absent display_name
+// lives in SetSystemRole, on the value, where it applies only to a write that
+// actually writes the field). altID is the already-resolved AlternateID
+// (resolveAlternateBody), not read from body directly: resolution needs the
+// gateway and the owner, neither of which this function has, and keeping it a
+// pure function here keeps roleSpec testable without a database.
 func roleSpec(name string, body roleSpecBody, altID *string) storage.SystemRoleSpec {
-	display := body.DisplayName
-	if display == "" {
-		display = name
-	}
 	return storage.SystemRoleSpec{
 		Name:           name,
-		DisplayName:    display,
+		DisplayName:    body.DisplayName,
 		Quorum:         body.Quorum,
 		Capacity:       body.Capacity,
 		PositionLabels: body.PositionLabels,
@@ -470,6 +501,14 @@ func requireComponentInScope(ctx context.Context, a *authenticator, gw storage.G
 func mapRoleErr(err error) error {
 	if refErr, ok := mapRefErr(err); ok {
 		return refErr
+	}
+	// A mask this resource cannot honor is a request fault that names the
+	// field, the same shape as a shortfall: the caller stated an intent the
+	// resource has no field for, and a silent no-op would leave them
+	// believing a write landed.
+	var maskErr *updatemask.Error
+	if errors.As(err, &maskErr) {
+		return huma.Error422UnprocessableEntity(maskErr.Error())
 	}
 	var typeShort *storage.TypeShortfall
 	if errors.As(err, &typeShort) {
