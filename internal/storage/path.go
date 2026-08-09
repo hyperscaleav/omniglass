@@ -282,6 +282,64 @@ func PathOf(ctx context.Context, q querier, tbl scopeTable, id string) ([]string
 	return segs, nil
 }
 
+// PathsOf computes the dotted address of every id in ids, in a constant
+// number of queries rather than PathOf's two or three per id: one walk of
+// the whole page's own chains, and for componentTable/systemTable one
+// plane-root lookup plus one walk of the DISTINCT plane-root locations.
+// This is the entry point a LIST uses (#643); PathOf stays the single-row
+// one, and its doc comment above stays the spec of the address shape both
+// produce. The composition here is deliberately PathOf's, step for step,
+// because TestPathsOfMatchesPathOfRowForRow holds the two to being
+// indistinguishable row for row.
+//
+// The returned map is keyed by id: repeats in ids collapse, and an id with
+// no row in tbl gets no entry at all (reading the map for one yields nil,
+// which is also what PathOf's location branch returns for a row that is not
+// there; its plane-root branch, which reads a single row, errors instead).
+func PathsOf(ctx context.Context, q querier, tbl scopeTable, ids []string) (map[string][]string, error) {
+	own, err := ancestorNamesBatch(ctx, q, tbl, ids)
+	if err != nil {
+		return nil, err
+	}
+	if tbl == locationTable {
+		return own, nil
+	}
+	locIDs, err := planeRootLocationIDs(ctx, q, tbl, ids)
+	if err != nil {
+		return nil, err
+	}
+	rootIDs := make([]string, 0, len(locIDs))
+	for _, locID := range locIDs {
+		if locID != nil {
+			rootIDs = append(rootIDs, *locID)
+		}
+	}
+	// One walk for every plane root's location, however many rows share a
+	// room (ancestorNamesBatch de-duplicates the seeds itself, and a page of
+	// components from one room is the common case).
+	roots, err := ancestorNamesBatch(ctx, q, locationTable, rootIDs)
+	if err != nil {
+		return nil, err
+	}
+	accessor := accessorComp
+	if tbl == systemTable {
+		accessor = accessorSys
+	}
+	out := make(map[string][]string, len(own))
+	for id, chain := range own {
+		var root []string
+		if locID := locIDs[id]; locID != nil {
+			root = roots[*locID]
+		}
+		segs := make([]string, 0, len(root)+1+len(chain))
+		segs = append(segs, root...)
+		segs = append(segs, accessor)
+		segs = append(segs, chain...)
+		out[id] = segs
+	}
+	return out, nil
+}
+
 // ancestorNames walks id's own parent_id chain within tbl, from id up to the
 // row whose parent_id is null, returning the chain's names root first (id's
 // own name last). Every one of the three tree tables shares this exact
@@ -310,6 +368,101 @@ func ancestorNames(ctx context.Context, q querier, tbl scopeTable, id string) ([
 		names = append(names, n)
 	}
 	return names, rows.Err()
+}
+
+// ancestorNamesBatch is ancestorNames for a whole page: the same recursive
+// CTE, seeded with every id at once and carrying the seed through the
+// recursion as origin, so one round trip returns every chain keyed by the id
+// it was walked for. Each chain comes back in the same order the single-row
+// walk returns (root first, the seed's own name last), because the rows are
+// ordered by depth descending within each origin.
+//
+// The CYCLE clause is the single-row query's, unchanged and unfiltered:
+// PostgreSQL tracks the cycle path per derivation path, so several origins
+// sharing one CTE does not weaken it, and adding a `where not is_cycle` the
+// single-row walk does not have would make the two disagree on malformed
+// data (exactly what the equivalence test exists to catch).
+//
+// Empty ids costs no query at all, and repeated ids are walked once: the
+// plane-root location set in particular repeats heavily (every component in
+// one room names the same location).
+func ancestorNamesBatch(ctx context.Context, q querier, tbl scopeTable, ids []string) (map[string][]string, error) {
+	out := make(map[string][]string)
+	seeds := distinctIDs(ids)
+	if len(seeds) == 0 {
+		return out, nil
+	}
+	rows, err := q.Query(ctx, `
+		with recursive anc(origin, id, name, parent_id, depth) as (
+			select id, id, name, parent_id, 0 from `+string(tbl)+` where id = any($1::uuid[])
+			union all
+			select anc.origin, t.id, t.name, t.parent_id, anc.depth + 1
+			from `+string(tbl)+` t join anc on t.id = anc.parent_id
+		) cycle id set is_cycle using path
+		select origin, name from anc order by origin, depth desc`, seeds)
+	if err != nil {
+		return nil, fmt.Errorf("storage: walk %s ancestor names for %d ids: %w", tbl, len(seeds), err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var origin, name string
+		if err := rows.Scan(&origin, &name); err != nil {
+			return nil, fmt.Errorf("storage: scan %s ancestor name: %w", tbl, err)
+		}
+		out[origin] = append(out[origin], name)
+	}
+	return out, rows.Err()
+}
+
+// planeRootLocationIDs is planeRootLocationID for a whole page: the same
+// walk to the row with no parent, seeded with every id at once, returning
+// each id's plane root's own location_id (nil for an unplaced root). The
+// DISTINCT ON picks each origin's deepest row, which is the single-row
+// query's `order by depth desc limit 1` applied per origin. An id with no
+// row in tbl gets no entry, where the single-row version returns pgx's
+// no-rows error.
+func planeRootLocationIDs(ctx context.Context, q querier, tbl scopeTable, ids []string) (map[string]*string, error) {
+	out := make(map[string]*string)
+	seeds := distinctIDs(ids)
+	if len(seeds) == 0 {
+		return out, nil
+	}
+	rows, err := q.Query(ctx, `
+		with recursive anc(origin, id, parent_id, location_id, depth) as (
+			select id, id, parent_id, location_id, 0 from `+string(tbl)+` where id = any($1::uuid[])
+			union all
+			select anc.origin, t.id, t.parent_id, t.location_id, anc.depth + 1
+			from `+string(tbl)+` t join anc on t.id = anc.parent_id
+		) cycle id set is_cycle using path
+		select distinct on (origin) origin, location_id from anc order by origin, depth desc`, seeds)
+	if err != nil {
+		return nil, fmt.Errorf("storage: resolve %s plane-root locations for %d ids: %w", tbl, len(seeds), err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var origin string
+		var locID *string
+		if err := rows.Scan(&origin, &locID); err != nil {
+			return nil, fmt.Errorf("storage: scan %s plane-root location: %w", tbl, err)
+		}
+		out[origin] = locID
+	}
+	return out, rows.Err()
+}
+
+// distinctIDs drops repeats, keeping first-seen order so a query's bind
+// values stay deterministic (a stable plan, and a readable one in a log).
+func distinctIDs(ids []string) []string {
+	out := make([]string, 0, len(ids))
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
 }
 
 // planeRootLocationID resolves id's plane root's own location_id: the row

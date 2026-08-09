@@ -67,8 +67,8 @@ type Component struct {
 	// insert once that generator writes.
 	NameGenerated bool
 	// Path, PathSegments, and Renders are the dotted address and its two
-	// display-only compact forms (#627 Task 15), attached by attachComponentPath
-	// after every GET or LIST fetch (see scopedConfig.attachPath). Zero-value
+	// display-only compact forms (#627 Task 15), attached by attachComponentPaths
+	// after every GET or LIST fetch (see scopedConfig.attachPaths). Zero-value
 	// (empty) on a row this gateway returns from a write path (create, update,
 	// move, rename, resetName): those responses carry Name/NameGenerated fresh,
 	// and the console's own query-invalidation refetch picks up Path moments
@@ -157,14 +157,15 @@ var componentConfig = scopedConfig[Component]{
 	table: componentTable, cols: componentCols, resource: "component",
 	scan: scanComponent, idOf: func(c *Component) string { return c.ID },
 	notFound: ErrComponentNotFound, forbidden: ErrComponentForbidden, occupied: ErrComponentOccupied,
-	attachPath: attachComponentPath,
+	attachPaths: attachComponentPaths,
 }
 
-// attachComponentPath fills c.Path/.PathSegments/.Renders (#627 Task 15):
-// PathOf's reverse walk for the address, and RenderDash/RenderBare's compact
-// forms. The bare render's abbreviation comes from the component's own
-// product's component_type, resolved through the same inherited-from-parent
-// chain generateNameForProduct walks (resolveTypeFacts): the identical
+// attachComponentPaths fills every c's Path/.PathSegments/.Renders (#627
+// Task 15): PathsOf's reverse walk for the addresses, whatever the page
+// size (#643), and RenderDash/RenderBare's compact forms per row. The bare
+// render's abbreviation comes from the component's own product's
+// component_type, resolved through the same inherited-from-parent chain
+// generateNameForProduct walks (resolveTypeFacts): the identical
 // stem-and-abbrev source a generated name itself came from, so a component's
 // bare render always compacts with the type its own name was minted against.
 // A component with no product (unreachable through the API, which requires
@@ -174,29 +175,48 @@ var componentConfig = scopedConfig[Component]{
 //
 // full gates the abbrev resolution (review finding 3, task-15-review.md #2):
 // componentTypeIDForProduct plus resolveTypeFacts' own ancestor walk (up to
-// maxComponentTypeDepth levels) are two more queries on top of PathOf's own
-// two or three, paid per row on an unpaginated LIST for renders.bare, a
+// maxComponentTypeDepth levels) are two more queries, for renders.bare, a
 // field no console surface reads (only renders.dash, which needs no abbrev
 // at all). scopedList calls this with full=false; scopedGet, the one-row
 // case where the extra cost is a single request's, not the whole estate's,
-// passes true. Path/PathSegments/Renders.Dash are computed either way, since
-// those cost nothing extra beyond PathOf itself.
-func attachComponentPath(ctx context.Context, q querier, c *Component, full bool) error {
-	segs, err := PathOf(ctx, q, componentTable, c.ID)
+// passes true. Resolved once per DISTINCT product across the page, not once
+// per row: full is only ever true for a single row today, so that changes
+// nothing observable now, and it stops the N+1 from returning the day a
+// caller passes many rows with full=true.
+// Path/PathSegments/Renders.Dash are computed either way, since those cost
+// nothing beyond the walk the page already pays for.
+func attachComponentPaths(ctx context.Context, q querier, cs []*Component, full bool) error {
+	if len(cs) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(cs))
+	for _, c := range cs {
+		ids = append(ids, c.ID)
+	}
+	paths, err := PathsOf(ctx, q, componentTable, ids)
 	if err != nil {
 		return err
 	}
-	c.PathSegments = segs
-	c.Path = strings.Join(segs, ".")
-	abbrev := ""
-	if full && c.ProductID != nil {
-		if typeID, err := componentTypeIDForProduct(ctx, q, *c.ProductID); err == nil {
-			if _, _, a, _, err := resolveTypeFacts(ctx, q, typeID); err == nil {
-				abbrev = a
+	abbrevs := make(map[string]string) // product id -> its type's abbrev, resolved once
+	for _, c := range cs {
+		segs := paths[c.ID]
+		c.PathSegments = segs
+		c.Path = strings.Join(segs, ".")
+		abbrev := ""
+		if full && c.ProductID != nil {
+			a, done := abbrevs[*c.ProductID]
+			if !done {
+				if typeID, err := componentTypeIDForProduct(ctx, q, *c.ProductID); err == nil {
+					if _, _, resolved, _, err := resolveTypeFacts(ctx, q, typeID); err == nil {
+						a = resolved
+					}
+				}
+				abbrevs[*c.ProductID] = a
 			}
+			abbrev = a
 		}
+		c.Renders = Renders{Dash: RenderDash(segs), Bare: RenderBare(segs, abbrev)}
 	}
-	c.Renders = Renders{Dash: RenderDash(segs), Bare: RenderBare(segs, abbrev)}
 	return nil
 }
 

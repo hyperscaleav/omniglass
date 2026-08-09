@@ -23,10 +23,10 @@ import (
 // in a _test.go file).
 var HarnessDSN func(t *testing.T) string
 
-// batchPathPool opens a pool on a fresh migrated database. Unseeded: the
-// fixture below inserts the three reference rows it needs (a location_type,
-// a component_type, a product) itself, so the tree it builds is exactly the
-// shape being asserted and nothing else.
+// batchPathPool opens a pool on a fresh migrated database. Not boot-seeded:
+// the fixture below inserts the one reference row it needs (a location_type)
+// itself, so the tree it builds is exactly the shape being asserted and
+// nothing else.
 func batchPathPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	if HarnessDSN == nil {
@@ -77,8 +77,10 @@ func buildBatchPathFixture(t *testing.T, pool *pgxpool.Pool) batchPathFixture {
 	}
 
 	locType := scan1(`insert into location_type (name, display_name) values ('room', 'Room') returning id`)
-	compType := scan1(`insert into component_type (name, display_name, abbrev) values ('device', 'Device', 'dev') returning id`)
-	product := scan1(`insert into product (name, display_name, component_type_id) values ('generic-device', 'Generic Device', $1) returning id`, compType)
+	// generic-device exists on any migrated database (the product/type floor
+	// backfill creates it), and product_id is NOT NULL on component, so the
+	// fixture classifies against that rather than inventing a product.
+	product := scan1(`select id from product where name = 'generic-device'`)
 
 	loc := func(name string, parent *string) string {
 		return scan1(`insert into location (name, location_type, parent_id) values ($1, $2, $3) returning id`, name, locType, parent)

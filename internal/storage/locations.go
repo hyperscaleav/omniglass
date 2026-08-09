@@ -126,7 +126,7 @@ type Location struct {
 	// Path, PathSegments, and Renders are the dotted address (no accessor: a
 	// location's own address IS its location-tree ancestor chain) and its two
 	// display-only compact forms (#627 Task 15), attached by
-	// attachLocationPath after every GET or LIST fetch; see Component's own
+	// attachLocationPaths after every GET or LIST fetch; see Component's own
 	// Path field for the full reasoning (write paths leave this zero-value).
 	Path         string
 	PathSegments []string
@@ -377,20 +377,33 @@ func scanLocation(row pgx.Row) (*Location, error) {
 	return &l, nil
 }
 
-// attachLocationPath fills l.Path/.PathSegments/.Renders (#627 Task 15). A
-// location has no accessor and no type-level abbreviation (location_type
-// carries no abbrev column the way component_type does), so RenderBare
-// always gets "" here. full is unused (see attachSystemPath's own doc
-// comment for why the parameter exists anyway).
-func attachLocationPath(ctx context.Context, q querier, l *Location, full bool) error {
+// attachLocationPaths fills every l's Path/.PathSegments/.Renders (#627 Task
+// 15), in one batch walk however long the page (#643, and one query rather
+// than the accessor planes' three: a location's address is its own ancestor
+// chain, with no plane root to cross to). A location has no accessor and no
+// type-level abbreviation (location_type carries no abbrev column the way
+// component_type does), so RenderBare always gets "" here. full is unused
+// (see attachSystemPaths' own doc comment for why the parameter exists
+// anyway).
+func attachLocationPaths(ctx context.Context, q querier, ls []*Location, full bool) error {
 	_ = full
-	segs, err := PathOf(ctx, q, locationTable, l.ID)
+	if len(ls) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(ls))
+	for _, l := range ls {
+		ids = append(ids, l.ID)
+	}
+	paths, err := PathsOf(ctx, q, locationTable, ids)
 	if err != nil {
 		return err
 	}
-	l.PathSegments = segs
-	l.Path = strings.Join(segs, ".")
-	l.Renders = Renders{Dash: RenderDash(segs), Bare: RenderBare(segs, "")}
+	for _, l := range ls {
+		segs := paths[l.ID]
+		l.PathSegments = segs
+		l.Path = strings.Join(segs, ".")
+		l.Renders = Renders{Dash: RenderDash(segs), Bare: RenderBare(segs, "")}
+	}
 	return nil
 }
 
@@ -399,7 +412,7 @@ var locationConfig = scopedConfig[Location]{
 	table: locationTable, cols: locationCols, resource: "location",
 	scan: scanLocation, idOf: func(l *Location) string { return l.ID },
 	notFound: ErrLocationNotFound, forbidden: ErrLocationForbidden, occupied: ErrLocationOccupied,
-	attachPath: attachLocationPath,
+	attachPaths: attachLocationPaths,
 }
 
 // ListLocations returns the locations in the caller's read scope, ordered by
