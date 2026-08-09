@@ -168,6 +168,16 @@ describe("locationsWithoutSystems", () => {
   it("names empty leaves and not their parents", () => {
     expect(locationsWithoutSystems(view).map((l) => l.name)).toEqual(["hq-r2"]);
   });
+
+  // The system tier is scoped independently of the place tree, so a view can
+  // arrive with locations and no systems because the caller may not read them.
+  // Claiming every leaf is a hole there would tell a scoped operator their
+  // commissioned estate is empty, and nothing here can tell that case from a
+  // genuinely empty one, so it claims nothing.
+  it("claims no holes when it cannot see the systems at all", () => {
+    const noSystems = { ...view, systems: [] } as unknown as EstateView;
+    expect(locationsWithoutSystems(noSystems)).toEqual([]);
+  });
 });
 
 describe("estateTotals", () => {

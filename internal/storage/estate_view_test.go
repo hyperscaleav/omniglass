@@ -2,6 +2,7 @@ package storage_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+	"github.com/jackc/pgx/v5"
 )
 
 // The estate projection is the read behind the estate canvas: every root
@@ -31,6 +33,7 @@ import (
 // is what the shared-dot rules are read against.
 type estateFixture struct {
 	gw  *storage.PG
+	dsn string
 	all scope.Set
 }
 
@@ -40,7 +43,8 @@ func newEstateFixture(t *testing.T) *estateFixture {
 		t.Skip("integration test needs Postgres")
 	}
 	ctx := context.Background()
-	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
@@ -48,7 +52,7 @@ func newEstateFixture(t *testing.T) *estateFixture {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	f := &estateFixture{gw: gw, all: scope.Set{All: true}}
+	f := &estateFixture{gw: gw, dsn: dsn, all: scope.Set{All: true}}
 
 	mk := func(name, kind string, parent *string) {
 		t.Helper()
@@ -254,6 +258,60 @@ func TestEstateProjectionScopesEachTierOnItsOwn(t *testing.T) {
 	for _, s := range v.Systems {
 		if len(s.Dots) != 0 {
 			t.Fatalf("system %q projected %d dots with no component read scope", s.Name, len(s.Dots))
+		}
+	}
+}
+
+// The projection reads the current verdict for every location and every system
+// as a correlated subquery, so those two lookups must be index-backed or the
+// canvas seq-scans the telemetry lane once per row (#632 review). The claim is
+// put to the PLANNER, not to the catalog: an index that exists but is never
+// chosen buys nothing, and asserting its existence alone is how a performance
+// guard stays green while the query stays slow.
+//
+// seqscan is disabled for the question because the fixture's property table is
+// tiny and Postgres would rightly scan it whatever exists; what the planner
+// reaches for INSTEAD is what it will choose once the lane is real.
+func TestEstateProjectionVerdictLookupsAreIndexed(t *testing.T) {
+	f := newEstateFixture(t)
+	ctx := context.Background()
+
+	conn, err := pgx.Connect(ctx, f.dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	if _, err := conn.Exec(ctx, "set enable_seqscan = off"); err != nil {
+		t.Fatalf("disable seqscan: %v", err)
+	}
+
+	for _, tc := range []struct{ owner, table, index string }{
+		{"system_id", "system", "property_system_idx"},
+		{"location_id", "location", "property_location_idx"},
+	} {
+		rows, err := conn.Query(ctx, `explain select (select v.value #>> '{}' from property v
+			where v.`+tc.owner+` = t.id
+			  and v.property_type_id = (select id from property_type where name = 'health')
+			  and v.instance = ''
+			order by v.id desc limit 1) from `+tc.table+` t`)
+		if err != nil {
+			t.Fatalf("explain %s: %v", tc.owner, err)
+		}
+		var plan string
+		for rows.Next() {
+			var line string
+			if err := rows.Scan(&line); err != nil {
+				t.Fatalf("scan plan: %v", err)
+			}
+			plan += line + "\n"
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			t.Fatalf("plan rows: %v", err)
+		}
+		if !strings.Contains(plan, tc.index) {
+			t.Errorf("the %s verdict subquery does not reach for %s, so it would scan the telemetry lane once per row.\nplan:\n%s",
+				tc.table, tc.index, plan)
 		}
 	}
 }

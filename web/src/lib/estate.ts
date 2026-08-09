@@ -195,11 +195,22 @@ export function bandsOf(view: EstateView, grouping: Grouping = byRootLocation): 
   });
 }
 
-// systemsWithoutDots names the rooms that exist and hold nothing: the dashed
-// holes the canvas draws. A hole is the half of the estate a list view cannot
-// show, and naming it is most of what the canvas is for.
+// locationsWithoutSystems names the rooms that exist and hold nothing: the
+// dashed holes the canvas draws. A hole is the half of the estate a list view
+// cannot show, and naming it is most of what the canvas is for.
+//
+// It answers ONLY from what the view contains, which matters because the system
+// tier is scoped independently of the place tree. A caller who may read
+// locations but not systems receives a view with no systems in it, and "every
+// leaf is a hole" would then be a confident lie about a fully commissioned
+// estate. There is no way to tell that case from a genuinely empty one from
+// here, so this refuses to guess: with no systems in view at all, it claims no
+// holes. A brand-new estate loses a true-but-obvious answer; a scoped operator
+// is not told their rooms are empty when they are not.
 export function locationsWithoutSystems(view: EstateView): EstateLocation[] {
-  const placed = new Set((view.systems ?? []).map((s) => s.location).filter(Boolean) as string[]);
+  const systems = view.systems ?? [];
+  if (systems.length === 0) return [];
+  const placed = new Set(systems.map((s) => s.location).filter(Boolean) as string[]);
   const hasChild = new Set((view.locations ?? []).map((l) => l.parent).filter(Boolean) as string[]);
   // A leaf with no system is a hole. A branch without one is not: its rooms are
   // where the systems belong, and drawing a hole at every level above them
