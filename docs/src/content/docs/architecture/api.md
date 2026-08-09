@@ -676,6 +676,33 @@ Both resolve their owner **within the caller's scope first** (an out-of-scope sy
 very rows served beside it, so a report can never disagree with its own evidence
 ([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).
 
+## Views: reads shaped for a surface
+
+Every read above answers "what is this row". A **view** answers "what does this screen need", and it
+earns its own tier only when composing the entity reads in the browser would be the wrong shape.
+
+- `GET /views/estate` (`location:read`) is the read behind the estate canvas: every location flat
+  with its `parent` and `verdict`, every system with its `location` and `verdict`, and one **dot**
+  per component in each system. A dot is `{component, name, verdict, primary, shared}` and nothing
+  else. The canvas paints a square per component across the whole estate, so a component **row** per
+  square is an estate-sized payload on every paint; the projection is the shape that avoids it, and
+  the wire is pinned by test against being widened back into a component list.
+
+Two properties are worth stating because they are easy to lose:
+
+- **Flat, not nested.** Locations carry a parent id and the client assembles the tree. The server
+  says what exists and how it is placed; the client decides how the estate is **gathered into
+  bands**, which is what lets a future grouping (by standard, by vendor, by tag) be a mapper rather
+  than a second endpoint.
+- **Scoped per tier.** The three tiers resolve their own read scope, so a principal who may read the
+  place tree but not its components gets the shape of their estate with no contents, and one with no
+  estate scope at all gets an **empty canvas rather than a refusal**: there is simply nothing of
+  theirs to draw.
+
+A view is a read and only a read. It adds no write path and no judgement of its own: the verdicts it
+serves are the ones the health rollup already recorded, so the canvas and the detail page cannot land
+on different answers about the same room.
+
 ## Files: content-addressed bytes behind a handle
 
 A **file** is a searchable handle over a content-addressed [blob](/architecture/files/): the metadata is

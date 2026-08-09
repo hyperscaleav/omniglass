@@ -700,6 +700,15 @@ type Gateway interface {
 	SystemVerdicts(ctx context.Context, read scope.Set) ([]SystemVerdict, error)
 	LocationHealth(ctx context.Context, locationName string, window time.Duration, read scope.Set) (*HealthReport, error)
 
+	// EstateProjection is the read behind the estate canvas: the whole in-scope
+	// place tree, the systems on it, and one dot per component in each system.
+	// Deliberately not a component list (a dot needs an id, a verdict and two
+	// flags), and deliberately flat, so the client owns how the estate is
+	// gathered into bands. The three scope sets are separate because they answer
+	// three different permissions: a principal who may read the place tree but
+	// not its components sees the shape of their estate with no contents.
+	EstateProjection(ctx context.Context, locRead, sysRead, compRead scope.Set) (*EstateView, error)
+
 	// The tag tier: the governed key vocabulary and the per-entity value
 	// bindings. Minting a key (tag:create) is a tenant-wide governance action;
 	// binding a value is the owner's own write, so the binding methods take the

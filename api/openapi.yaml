@@ -1946,6 +1946,31 @@ components:
           format: uri
           type: string
       type: object
+    EstateDotBody:
+      additionalProperties: false
+      properties:
+        component:
+          description: "The component's uuid: what the canvas navigates to when a dot is clicked"
+          type: string
+        name:
+          description: The component's name, for the dot's hover title
+          type: string
+        primary:
+          description: True in the component's primary system, the one cluster that draws it solid. A shared component is a ghost outline everywhere else, so the estate never counts one physical device twice
+          type: boolean
+        shared:
+          description: True when the component belongs to more than one system, which is what earns it a ring
+          type: boolean
+        verdict:
+          description: "healthy, incomplete, degraded, or outage: the component's own verdict, which is the only thing that colours the dot"
+          type: string
+      required:
+        - component
+        - name
+        - verdict
+        - primary
+        - shared
+      type: object
     EstateHealthOutputBody:
       additionalProperties: false
       properties:
@@ -1991,6 +2016,94 @@ components:
         - roles
         - systems
         - transitions
+      type: object
+    EstateLocationBody:
+      additionalProperties: false
+      properties:
+        display_name:
+          type: string
+        id:
+          description: The location's uuid, the address the canvas navigates by
+          type: string
+        location_type:
+          description: The type's name, which the band renders as its type chip
+          type: string
+        location_type_id:
+          description: The type's uuid, the stable handle beside its renameable name
+          type: string
+        name:
+          type: string
+        parent:
+          description: The uuid of this location's parent; absent on a root. The tree is flat here and assembled by the client
+          type: string
+        verdict:
+          description: The location's recorded verdict, worst-wins over the systems beneath it
+          type: string
+      required:
+        - id
+        - name
+        - display_name
+        - location_type
+        - location_type_id
+        - verdict
+      type: object
+    EstateSystemBody:
+      additionalProperties: false
+      properties:
+        display_name:
+          type: string
+        dots:
+          description: One entry per component in this system; empty when the caller may read the system but not its components
+          items:
+            $ref: "#/components/schemas/EstateDotBody"
+          type:
+            - array
+            - "null"
+        id:
+          description: The system's uuid, the address the canvas navigates by
+          type: string
+        location:
+          description: The uuid of the location this system is placed at; absent when it is placed nowhere
+          type: string
+        name:
+          type: string
+        verdict:
+          description: The system's recorded verdict, the same one its health read serves
+          type: string
+      required:
+        - id
+        - name
+        - display_name
+        - verdict
+        - dots
+      type: object
+    EstateViewOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/EstateViewOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        locations:
+          description: "Every location the caller may read, flat: each carries its parent, and the client builds the tree. Flat rather than nested so the estate can be gathered into bands by something other than place without a second read"
+          items:
+            $ref: "#/components/schemas/EstateLocationBody"
+          type:
+            - array
+            - "null"
+        systems:
+          description: Every system the caller may read, each carrying its dots
+          items:
+            $ref: "#/components/schemas/EstateSystemBody"
+          type:
+            - array
+            - "null"
+      required:
+        - locations
+        - systems
       type: object
     EventBody:
       additionalProperties: false
@@ -13435,6 +13548,25 @@ paths:
           description: Error
       summary: Update a vendor
       x-omniglass-permission: vendor:update
+  /views/estate:
+    get:
+      description: "The whole in-scope estate in one read: every location flat with its parent and verdict, every system with its location and verdict, and one dot per component in each system. A dot carries an id, a verdict, and the primary/shared flags, never a component row: the canvas paints a square per component across the estate, and an estate-sized component list to draw squares is the cost this read exists to avoid. Each tier is scoped on its own read permission, so a principal who may read the place tree but not its components gets the shape of their estate with no contents, and one with no estate scope at all gets an empty canvas rather than a refusal. Gated by location:read."
+      operationId: get-estate-view
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EstateViewOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Read the estate as the canvas draws it
+      x-omniglass-permission: location:read
 servers:
   - url: /api/v1
 

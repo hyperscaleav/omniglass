@@ -807,3 +807,7 @@ func (UnimplementedGateway) SystemVerdicts(context.Context, scope.Set) ([]System
 func (UnimplementedGateway) LocationHealth(context.Context, string, time.Duration, scope.Set) (*HealthReport, error) {
 	return nil, nil
 }
+
+func (UnimplementedGateway) EstateProjection(context.Context, scope.Set, scope.Set, scope.Set) (*EstateView, error) {
+	return nil, nil
+}

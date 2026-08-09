@@ -3848,6 +3848,26 @@ export interface paths {
         patch: operations["update-vendor"];
         trace?: never;
     };
+    "/views/estate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the estate as the canvas draws it
+         * @description The whole in-scope estate in one read: every location flat with its parent and verdict, every system with its location and verdict, and one dot per component in each system. A dot carries an id, a verdict, and the primary/shared flags, never a component row: the canvas paints a square per component across the estate, and an estate-sized component list to draw squares is the cost this read exists to avoid. Each tier is scoped on its own read permission, so a principal who may read the place tree but not its components gets the shape of their estate with no contents, and one with no estate scope at all gets an empty canvas rather than a refusal. Gated by location:read.
+         */
+        get: operations["get-estate-view"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4959,6 +4979,18 @@ export interface components {
              */
             type: string;
         };
+        EstateDotBody: {
+            /** @description The component's uuid: what the canvas navigates to when a dot is clicked */
+            component: string;
+            /** @description The component's name, for the dot's hover title */
+            name: string;
+            /** @description True in the component's primary system, the one cluster that draws it solid. A shared component is a ghost outline everywhere else, so the estate never counts one physical device twice */
+            primary: boolean;
+            /** @description True when the component belongs to more than one system, which is what earns it a ring */
+            shared: boolean;
+            /** @description healthy, incomplete, degraded, or outage: the component's own verdict, which is the only thing that colours the dot */
+            verdict: string;
+        };
         EstateHealthOutputBody: {
             /**
              * Format: uri
@@ -4976,6 +5008,44 @@ export interface components {
             transitions: components["schemas"]["HealthTransitionBody"][] | null;
             /** @description healthy, incomplete, degraded, or outage: the rollup of the roles or systems served beside it. incomplete is a commissioning gap, a role short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded */
             verdict: string;
+        };
+        EstateLocationBody: {
+            display_name: string;
+            /** @description The location's uuid, the address the canvas navigates by */
+            id: string;
+            /** @description The type's name, which the band renders as its type chip */
+            location_type: string;
+            /** @description The type's uuid, the stable handle beside its renameable name */
+            location_type_id: string;
+            name: string;
+            /** @description The uuid of this location's parent; absent on a root. The tree is flat here and assembled by the client */
+            parent?: string;
+            /** @description The location's recorded verdict, worst-wins over the systems beneath it */
+            verdict: string;
+        };
+        EstateSystemBody: {
+            display_name: string;
+            /** @description One entry per component in this system; empty when the caller may read the system but not its components */
+            dots: components["schemas"]["EstateDotBody"][] | null;
+            /** @description The system's uuid, the address the canvas navigates by */
+            id: string;
+            /** @description The uuid of the location this system is placed at; absent when it is placed nowhere */
+            location?: string;
+            name: string;
+            /** @description The system's recorded verdict, the same one its health read serves */
+            verdict: string;
+        };
+        EstateViewOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EstateViewOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Every location the caller may read, flat: each carries its parent, and the client builds the tree. Flat rather than nested so the estate can be gathered into bands by something other than place without a second read */
+            locations: components["schemas"]["EstateLocationBody"][] | null;
+            /** @description Every system the caller may read, each carrying its dots */
+            systems: components["schemas"]["EstateSystemBody"][] | null;
         };
         EventBody: {
             /** @description Structured attributes, when the occurrence carried a JSON payload */
@@ -15918,6 +15988,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VendorBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-estate-view": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EstateViewOutputBody"];
                 };
             };
             /** @description Error */

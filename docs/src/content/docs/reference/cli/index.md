@@ -5019,3 +5019,27 @@ Example:
 omniglass vendor update <id>
 ```
 
+## `omniglass view`
+
+Commands for the view resource
+
+### `omniglass view estate`
+
+Commands for the estate resource
+
+#### `omniglass view estate list`
+
+Read the estate as the canvas draws it
+
+```
+omniglass view estate list
+```
+
+The whole in-scope estate in one read: every location flat with its parent and verdict, every system with its location and verdict, and one dot per component in each system. A dot carries an id, a verdict, and the primary/shared flags, never a component row: the canvas paints a square per component across the estate, and an estate-sized component list to draw squares is the cost this read exists to avoid. Each tier is scoped on its own read permission, so a principal who may read the place tree but not its components gets the shape of their estate with no contents, and one with no estate scope at all gets an empty canvas rather than a refusal. Gated by location:read.
+
+Example:
+
+```sh
+omniglass view estate list
+```
+
