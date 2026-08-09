@@ -402,7 +402,7 @@ func attachLocationPaths(ctx context.Context, q querier, ls []*Location, full bo
 		segs := paths[l.ID]
 		l.PathSegments = segs
 		l.Path = strings.Join(segs, ".")
-		l.Renders = Renders{Dash: RenderDash(segs), Bare: RenderBare(segs, "")}
+		l.Renders = Renders{Dash: RenderDash(segs), Bare: RenderBare(segs, "", "")}
 	}
 	return nil
 }

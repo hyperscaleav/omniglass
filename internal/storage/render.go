@@ -29,12 +29,12 @@ type Renders struct {
 // derives from its own placement (its root ancestor's location, walked by
 // PathOf below), never from a system it happens to belong to.
 
-// trailingOrdinalRe matches a segment's own generated-name tail: the
-// "-<digits>" suffix generateComponentName always mints (namegen.go's
-// ordinalSuffixRe, applied here to a whole path segment rather than a
-// stripped stem remainder, since RenderBare does not know the segment's stem
-// on its own, only its abbreviation).
-var trailingOrdinalRe = regexp.MustCompile(`-([0-9]+)$`)
+// ordinalOnlyRe matches what is left of a segment once its own stem and the
+// separator are cut away: the all-digit ordinal generateComponentName mints
+// (namegen.go's ordinalSuffixRe, anchored here against the remainder rather
+// than the whole segment, so the match is only ever consulted after the stem
+// has already been confirmed).
+var ordinalOnlyRe = regexp.MustCompile(`^[0-9]+$`)
 
 // nonAccessorSegments drops every accessor ($comp/$sys/$role) from segments,
 // keeping the rest in order: the one filter both renders below share.
@@ -59,28 +59,37 @@ func RenderDash(segments []string) string {
 
 // RenderBare is the compact render: RenderDash's segments concatenated with
 // NO separator (the point of a "bare" form: a physical label has no room for
-// punctuation), with the final segment's own stem-ordinal tail
-// ("display-1") replaced by "<abbrev><ordinal>" ("dsp1") when abbrev is
-// non-empty and that final segment actually carries a trailing "-<n>" (every
-// platform-generated name does; an operator-typed rename, which clears
-// name_generated for good, may not). abbrev is the owning row's own type
-// registry's abbreviation (component_type.abbrev, resolved through the same
-// inherited-from-parent chain generateNameForProduct walks); system and
-// location addresses have no type-level abbreviation today, so their
-// callers pass "" and get the concatenated segments back with the final one
+// punctuation), with the final segment replaced by "<abbrev><ordinal>"
+// ("dsp1") when that segment is exactly this type's own "<stem>-<ordinal>"
+// ("display-1").
+//
+// stem and abbrev come from the SAME registry row (component_type's stem and
+// abbrev, resolved together through the inherited-from-parent chain
+// generateNameForProduct walks), and both are required for the substitution:
+// the abbrev says what to write, the stem says the segment is one this type
+// actually minted. Matching a bare trailing "-<n>" without confirming the stem
+// (#654) rewrote names the platform never generated, so a component an
+// operator renamed to "rack-3" rendered as "dsp3", putting a word on a cable
+// label that appears nowhere in the entity's name. An operator rename clears
+// name_generated for good, and the name they choose is theirs: "booth-2",
+// "row-14", "rack-3" all keep their own words.
+//
+// A caller with no abbrev, no stem, or a final segment that is not this type's
+// stem-ordinal pair gets the concatenated segments back with the last one
 // untouched, which is the only sensible degradation when there is nothing to
-// compact it to.
-func RenderBare(segments []string, abbrev string) string {
+// compact it to. System and location addresses have no type-level abbreviation
+// today, so their callers pass "" for both.
+func RenderBare(segments []string, stem, abbrev string) string {
 	kept := nonAccessorSegments(segments)
 	if len(kept) == 0 {
 		return ""
 	}
-	if abbrev != "" {
+	if stem != "" && abbrev != "" {
 		last := kept[len(kept)-1]
-		if m := trailingOrdinalRe.FindStringSubmatch(last); m != nil {
+		if ordinal, ok := strings.CutPrefix(last, stem+"-"); ok && ordinalOnlyRe.MatchString(ordinal) {
 			compacted := make([]string, len(kept))
 			copy(compacted, kept)
-			compacted[len(compacted)-1] = abbrev + m[1]
+			compacted[len(compacted)-1] = abbrev + ordinal
 			kept = compacted
 		}
 	}
