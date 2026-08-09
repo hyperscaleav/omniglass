@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -93,16 +94,47 @@ func scanSystemRole(row pgx.Row) (*SystemRole, error) {
 	return &r, nil
 }
 
-// normalizePositionLabels returns a non-nil slice so an omitted set writes
-// and reads back as an empty text[], not SQL NULL (position_labels is not
-// null). Unlike capacity, a label set always wholesale-replaces: there is no
-// "leave unchanged" reading for a list, the same rule accepted_types and
-// pinned_products already follow.
+// normalizePositionLabels returns a non-nil slice so a set the write does not
+// carry lands as an empty text[], not SQL NULL (position_labels is not null).
 func normalizePositionLabels(s []string) []string {
 	if s == nil {
 		return []string{}
 	}
 	return s
+}
+
+// roleWriteColumns is the system_role columns SetSystemRole's upsert may
+// write, in statement order, and roleColumnFields maps each one to the wire
+// field an update_mask names it by. The pair is what lets the UPDATE branch be
+// built from the write set rather than hand-maintained per field.
+var (
+	roleWriteColumns = []string{"display_name", "quorum", "capacity", "position_labels", "impact", "alternate_id"}
+	roleColumnFields = map[string]string{
+		"display_name":    RoleFieldDisplayName,
+		"quorum":          RoleFieldQuorum,
+		"capacity":        RoleFieldCapacity,
+		"position_labels": RoleFieldPositionLabels,
+		"impact":          RoleFieldImpact,
+		"alternate_id":    RoleFieldAlternate,
+	}
+)
+
+// roleTypedSlot reads a role's typed-slot requirement as it stands: the
+// accepted types and pinned products by name, both ordered, both empty rather
+// than nil when the role holds none. SetSystemRole calls it for a set its
+// write did not name, where the spec no longer describes what the role holds.
+func roleTypedSlot(ctx context.Context, q querier, roleID string) ([]string, []string, error) {
+	types, products := []string{}, []string{}
+	if err := q.QueryRow(ctx, `
+		select coalesce((select array_agg(ct.name order by ct.name)
+		                   from system_role_type rt join component_type ct on ct.id = rt.component_type_id
+		                  where rt.role_id = $1), '{}'),
+		       coalesce((select array_agg(pr.name order by pr.name)
+		                   from system_role_product rp join product pr on pr.id = rp.product_id
+		                  where rp.role_id = $1), '{}')`, roleID).Scan(&types, &products); err != nil {
+		return nil, nil, fmt.Errorf("storage: read role typed slot %s: %w", roleID, err)
+	}
+	return types, products, nil
 }
 
 // ListSystemRoles returns the roles one owner declares itself, ordered by
@@ -156,10 +188,15 @@ func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]
 
 // SetSystemRole declares a role on a standard or a system, or revises the
 // declaration in place: the role is addressed by name within its owner arc,
-// so the write is an upsert and the surface's save is idempotent. The
-// typed-slot requirement (AcceptedTypes, PinnedProducts) is replaced
-// wholesale in the same transaction: what the caller sends is what the role
-// accepts afterwards, so a type can be dropped by omitting it.
+// so the write is an upsert and the surface's save is idempotent.
+//
+// WHICH fields it writes is spec.Write, the resolved update_mask (#666): a
+// field outside the write set keeps whatever the role already has, and on a
+// create takes its default, so an edit can no longer carry away a field it
+// never mentioned (#639) and a masked field carrying its zero value clears
+// (#638). A caller that sets no mask writes the fields it populated, which is
+// what this did for every field but Capacity and AlternateID before the mask
+// existed.
 //
 // A quorum below one means one: a role no component need fill is not a role.
 // An owner, type, or product that does not exist is ErrRoleRefNotFound (a
@@ -172,18 +209,55 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 	if err != nil {
 		return nil, err
 	}
+	write := spec.writeFields()
+	// Each value is taken only if the write set names its field, then
+	// defaulted: a field the write does not write contributes its default to
+	// the INSERT branch (a create has nothing to preserve) and is discarded
+	// by the UPDATE branch, which reads the stored column instead.
+	display := spec.DisplayName
+	if !write.Has(RoleFieldDisplayName) {
+		display = ""
+	}
+	if display == "" {
+		// A minimal write still reads properly on a surface. The default
+		// lives here rather than in the API layer so it applies to the
+		// value, not to the decision to write one: the API's body is what
+		// says whether display_name is being written at all.
+		display = spec.Name
+	}
 	quorum := spec.Quorum
+	if !write.Has(RoleFieldQuorum) {
+		quorum = 0
+	}
 	if quorum < 1 {
 		quorum = 1
 	}
+	// The impact is validated before the mask narrows anything: a value that
+	// is not one of the three is a request fault whether or not this write
+	// was going to store it.
+	if spec.Impact != "" && !roleImpacts[spec.Impact] {
+		return nil, ErrRoleImpact
+	}
 	impact := spec.Impact
+	if !write.Has(RoleFieldImpact) {
+		impact = ""
+	}
 	if impact == "" {
 		impact = "degraded"
 	}
-	if !roleImpacts[impact] {
-		return nil, ErrRoleImpact
+	capacity := spec.Capacity
+	if !write.Has(RoleFieldCapacity) {
+		capacity = nil
 	}
-	positionLabels := normalizePositionLabels(spec.PositionLabels)
+	labels := spec.PositionLabels
+	if !write.Has(RoleFieldPositionLabels) {
+		labels = nil
+	}
+	positionLabels := normalizePositionLabels(labels)
+	alternateID := spec.AlternateID
+	if !write.Has(RoleFieldAlternate) {
+		alternateID = nil
+	}
 
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -217,7 +291,7 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 	// is staffed independently in every system that conforms to it, so any
 	// one of them can exceed a new, lower cap regardless of what this system
 	// (the one whose edit triggered the check) looks like.
-	if spec.Capacity != nil && prior != nil {
+	if capacity != nil && prior != nil {
 		var sysName string
 		var have int
 		err := tx.QueryRow(ctx, `
@@ -225,74 +299,103 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 			  join system s on s.id = ra.system_id
 			 where ra.role_id = $1
 			 group by s.name having count(*) > $2
-			 order by count(*) desc, s.name limit 1`, prior.ID, *spec.Capacity).Scan(&sysName, &have)
+			 order by count(*) desc, s.name limit 1`, prior.ID, *capacity).Scan(&sysName, &have)
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
 			// nothing exceeds the new cap
 		case err != nil:
 			return nil, fmt.Errorf("storage: capacity precheck %s: %w", prior.ID, err)
 		default:
-			return nil, &CapacityShortfall{Role: prior.DisplayName, System: sysName, Have: have, Want: *spec.Capacity}
+			return nil, &CapacityShortfall{Role: prior.DisplayName, System: sysName, Have: have, Want: *capacity}
 		}
 	}
+
+	// The UPDATE branch is built from the write set: a field it names takes
+	// the row this statement proposed (excluded), a field it does not keeps
+	// the stored column. Choosing between the two in the STATEMENT rather
+	// than in Go keeps the whole decision inside the one upsert, so a
+	// preserved field is read and rewritten atomically instead of being
+	// merged from a row this transaction read a moment earlier.
+	//
+	// alternate_id needs no special case any more: excluded.alternate_id is
+	// already the nullif'd value from the VALUES list above, so writing it
+	// stores the caller's alternate (or NULL, the explicit detach), and not
+	// writing it keeps the existing one. That is the same three-state
+	// reading the old raw-$9 case expression implemented by hand, now the
+	// same rule every other field follows.
+	assign := func(col string) string {
+		if write.Has(roleColumnFields[col]) {
+			return col + " = excluded." + col
+		}
+		return col + " = system_role." + col
+	}
+	sets := make([]string, 0, len(roleWriteColumns)+1)
+	for _, c := range roleWriteColumns {
+		sets = append(sets, assign(c))
+	}
+	sets = append(sets, "updated_at = now()")
 
 	r, err := scanSystemRole(tx.QueryRow(ctx, fmt.Sprintf(`
 		insert into system_role (owner_kind, %s, name, display_name, quorum, capacity, position_labels, impact, alternate_id)
 		values ($1, %s, $3, $4, $5, $6, $7, $8, nullif($9, '')::uuid)
 		on conflict (owner_kind, standard_id, system_id, name) do update
-			set display_name    = excluded.display_name,
-			    quorum          = excluded.quorum,
-			    capacity        = coalesce(excluded.capacity, system_role.capacity),
-			    position_labels = excluded.position_labels,
-			    impact          = excluded.impact,
-			    -- $9 is bound as *string (roles.go): a nil pointer arrives as
-			    -- SQL NULL and means the caller did not mention this field,
-			    -- so the existing alternate survives (the coalesce below);
-			    -- a non-nil pointer means the caller sent a value, and an
-			    -- empty one is the explicit detach path (nullif turns it
-			    -- into NULL same as the insert branch above). Checking the
-			    -- RAW $9 rather than excluded.alternate_id is load-bearing:
-			    -- both "omitted" and "explicitly detach" produce a NULL
-			    -- excluded.alternate_id after nullif, and only $9 itself
-			    -- still tells them apart.
-			    alternate_id    = case when $9 is null then system_role.alternate_id else nullif($9, '')::uuid end,
-			    updated_at      = now()
-		returning `+systemRoleCols, col, roleOwnerExpr(ownerKind)),
-		ownerKind, ownerArg, spec.Name, spec.DisplayName, quorum, spec.Capacity, positionLabels, impact, spec.AlternateID))
+			set %s
+		returning `+systemRoleCols, col, roleOwnerExpr(ownerKind), strings.Join(sets, ",\n\t\t\t    ")),
+		ownerKind, ownerArg, spec.Name, display, quorum, capacity, positionLabels, impact, alternateID))
 	if err != nil {
 		return nil, mapRoleWriteErr(err)
 	}
 	r.OwnerID = ownerID
 
-	// The typed-slot guard's requirement, replaced wholesale: what the caller
-	// sends is what the role accepts (types) and pins (products) afterwards.
-	if _, err := tx.Exec(ctx, `delete from system_role_type where role_id = $1`, r.ID); err != nil {
-		return nil, fmt.Errorf("storage: clear role types %s: %w", r.ID, err)
-	}
-	if len(spec.AcceptedTypes) > 0 {
-		if _, err := tx.Exec(ctx, `
-			insert into system_role_type (role_id, component_type_id)
-			select $1, (select id from component_type where name = c or id::text = c)
-			from unnest($2::text[]) c
-			on conflict (role_id, component_type_id) do nothing`, r.ID, spec.AcceptedTypes); err != nil {
-			return nil, mapRoleWriteErr(err)
+	// The typed-slot guard's requirement, replaced wholesale when the write
+	// set names it: what the caller sends is what the role accepts (types)
+	// and pins (products) afterwards. A set the write does not name is left
+	// exactly as it stands, and read back below rather than echoed, since
+	// the spec no longer says what the role holds.
+	if write.Has(RoleFieldAcceptedTypes) {
+		if _, err := tx.Exec(ctx, `delete from system_role_type where role_id = $1`, r.ID); err != nil {
+			return nil, fmt.Errorf("storage: clear role types %s: %w", r.ID, err)
 		}
+		if len(spec.AcceptedTypes) > 0 {
+			if _, err := tx.Exec(ctx, `
+				insert into system_role_type (role_id, component_type_id)
+				select $1, (select id from component_type where name = c or id::text = c)
+				from unnest($2::text[]) c
+				on conflict (role_id, component_type_id) do nothing`, r.ID, spec.AcceptedTypes); err != nil {
+				return nil, mapRoleWriteErr(err)
+			}
+		}
+		r.AcceptedTypes = append([]string(nil), spec.AcceptedTypes...)
 	}
-	r.AcceptedTypes = append([]string(nil), spec.AcceptedTypes...)
 
-	if _, err := tx.Exec(ctx, `delete from system_role_product where role_id = $1`, r.ID); err != nil {
-		return nil, fmt.Errorf("storage: clear role products %s: %w", r.ID, err)
+	if write.Has(RoleFieldPinnedProducts) {
+		if _, err := tx.Exec(ctx, `delete from system_role_product where role_id = $1`, r.ID); err != nil {
+			return nil, fmt.Errorf("storage: clear role products %s: %w", r.ID, err)
+		}
+		if len(spec.PinnedProducts) > 0 {
+			if _, err := tx.Exec(ctx, `
+				insert into system_role_product (role_id, product_id)
+				select $1, (select id from product where name = c or id::text = c)
+				from unnest($2::text[]) c
+				on conflict (role_id, product_id) do nothing`, r.ID, spec.PinnedProducts); err != nil {
+				return nil, mapRoleWriteErr(err)
+			}
+		}
+		r.PinnedProducts = append([]string(nil), spec.PinnedProducts...)
 	}
-	if len(spec.PinnedProducts) > 0 {
-		if _, err := tx.Exec(ctx, `
-			insert into system_role_product (role_id, product_id)
-			select $1, (select id from product where name = c or id::text = c)
-			from unnest($2::text[]) c
-			on conflict (role_id, product_id) do nothing`, r.ID, spec.PinnedProducts); err != nil {
-			return nil, mapRoleWriteErr(err)
+
+	if !write.Has(RoleFieldAcceptedTypes) || !write.Has(RoleFieldPinnedProducts) {
+		types, products, err := roleTypedSlot(ctx, tx, r.ID)
+		if err != nil {
+			return nil, err
+		}
+		if !write.Has(RoleFieldAcceptedTypes) {
+			r.AcceptedTypes = types
+		}
+		if !write.Has(RoleFieldPinnedProducts) {
+			r.PinnedProducts = products
 		}
 	}
-	r.PinnedProducts = append([]string(nil), spec.PinnedProducts...)
 
 	verb := "create"
 	if before != nil {

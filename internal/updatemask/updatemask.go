@@ -65,6 +65,24 @@ func (f Fields) Names() []string {
 	return out
 }
 
+// Implied is the write set an ABSENT update_mask implies: exactly the fields
+// the body populated, AIP-134's "an implied field mask equivalent to all fields
+// that are populated". Resolve returns this for a nil mask; it is exported so a
+// layer holding no wire mask at all (a caller that predates #666) reaches the
+// same rule rather than reimplementing it.
+//
+// The result is a copy: the write set outlives the caller's populated map, and
+// a consumer that narrows one must not silently narrow the other.
+func Implied(populated Fields) Fields {
+	out := make(Fields, len(populated))
+	for n, on := range populated {
+		if on {
+			out[n] = true
+		}
+	}
+	return out
+}
+
 // Error is a mask the resource cannot honor: it names a field the resource
 // does not patch, or it combines "*" with named fields. Field is the offending
 // path and Patchable is what the resource would have accepted, because a
@@ -94,16 +112,7 @@ func (e *Error) Error() string {
 // carried a non-empty value for.
 func Resolve(mask []string, patchable []string, populated Fields) (Fields, error) {
 	if mask == nil {
-		// Copied, not aliased: the write set outlives the caller's
-		// populated map, and a consumer that later narrows one must not
-		// silently narrow the other.
-		out := make(Fields, len(populated))
-		for n, on := range populated {
-			if on {
-				out[n] = true
-			}
-		}
-		return out, nil
+		return Implied(populated), nil
 	}
 	known := Of(patchable...)
 	out := make(Fields, len(mask))

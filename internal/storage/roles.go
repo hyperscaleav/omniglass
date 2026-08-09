@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/updatemask"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -61,10 +62,32 @@ type SystemRole struct {
 	UpdatedAt   time.Time
 }
 
-// SystemRoleSpec is the declaration input. AcceptedTypes, PinnedProducts, and
-// PositionLabels each replace their value wholesale on an update; Capacity
-// and AlternateID do not (nil leaves whatever is already declared alone, see
-// SystemRole.Capacity and the AlternateID comment below).
+// The field names a role declaration patches, spelled the way the wire body
+// spells them, because an update_mask path IS a wire field name (#666). They
+// are constants rather than literals at each site so a write-set check and the
+// mask the API resolves can never drift into naming different fields, which
+// would silently stop writing one.
+const (
+	RoleFieldDisplayName    = "display_name"
+	RoleFieldQuorum         = "quorum"
+	RoleFieldCapacity       = "capacity"
+	RoleFieldPositionLabels = "position_labels"
+	RoleFieldAcceptedTypes  = "accepted_types"
+	RoleFieldPinnedProducts = "pinned_products"
+	RoleFieldImpact         = "impact"
+	RoleFieldAlternate      = "alternate"
+)
+
+// RolePatchFields is every field a role declaration lets a write set, in the
+// order a refusal lists them.
+var RolePatchFields = []string{
+	RoleFieldDisplayName, RoleFieldQuorum, RoleFieldCapacity, RoleFieldPositionLabels,
+	RoleFieldAcceptedTypes, RoleFieldPinnedProducts, RoleFieldImpact, RoleFieldAlternate,
+}
+
+// SystemRoleSpec is the declaration input. Which of its fields a write writes
+// is Write's business: a field outside the write set keeps whatever the role
+// already has, or, when the write creates the role, takes its default.
 type SystemRoleSpec struct {
 	Name           string
 	DisplayName    string
@@ -95,6 +118,51 @@ type SystemRoleSpec struct {
 	// different owner, mapped to ErrRoleRefNotFound the same way an unknown
 	// accepted type or pinned product is.
 	AlternateID *string
+	// Write is the resolved update_mask (#666): the fields this write
+	// writes. NIL means the caller sent no mask, which AIP-134 reads as the
+	// implied mask of the fields the spec populated, and which is what every
+	// caller that predates the mask gets. A NON-NIL empty set is a caller
+	// naming no fields, and writes nothing.
+	Write updatemask.Fields
+}
+
+// Populated is the spec's implied mask: the fields it carries a non-empty
+// value for, AIP-134's reading of an absent update_mask. Exported because the
+// API resolves the wire mask against the same spec it is about to write, so
+// "populated" is defined once for both layers rather than once per layer, where
+// the two definitions would drift.
+//
+// Capacity and AlternateID count as populated whenever the POINTER is set,
+// including a pointer to the empty string: the empty string is already this
+// house's explicit-clear sentinel for an optional reference (emptyPtrToNil,
+// internal/api/products.go), and reading it as unpopulated would take the
+// detach path away.
+func (s SystemRoleSpec) Populated() updatemask.Fields {
+	p := updatemask.Fields{}
+	set := func(name string, on bool) {
+		if on {
+			p[name] = true
+		}
+	}
+	set(RoleFieldDisplayName, s.DisplayName != "")
+	set(RoleFieldQuorum, s.Quorum != 0)
+	set(RoleFieldCapacity, s.Capacity != nil)
+	set(RoleFieldPositionLabels, len(s.PositionLabels) > 0)
+	set(RoleFieldAcceptedTypes, len(s.AcceptedTypes) > 0)
+	set(RoleFieldPinnedProducts, len(s.PinnedProducts) > 0)
+	set(RoleFieldImpact, s.Impact != "")
+	set(RoleFieldAlternate, s.AlternateID != nil)
+	return p
+}
+
+// writeFields is the write set this spec actually writes: the explicit mask
+// when the caller resolved one, otherwise the implied mask over what the spec
+// populated.
+func (s SystemRoleSpec) writeFields() updatemask.Fields {
+	if s.Write != nil {
+		return s.Write
+	}
+	return updatemask.Implied(s.Populated())
 }
 
 // EffectiveRole is one role resolved for a system: the declaration plus who fills
