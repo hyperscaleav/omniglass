@@ -55,8 +55,21 @@ func batchPathPool(t *testing.T) *pgxpool.Pool {
 //	        dante-card-1 (component, child of dsp-1, no location of its own)
 //	    av (system, placed at 17c)
 //	spare-1 (component, unplaced root)
-//	  spare-card-1 (component, child of spare-1)
+//	  spare-card-1 (component, child of spare-1, WITH its own location: 415a)
 //	spare-sys (system, unplaced root)
+//
+// spare-card-1's own location_id is the fixture's load-bearing row, and the
+// reason it is set to a location its plane root is not at. PathOf's doc
+// comment singles out one subtle rule: only a PLANE ROOT's own location_id
+// participates in an address, never a descendant's, even though a descendant
+// may legitimately carry one (CreateComponent and MoveComponent both allow
+// it, and the two columns are written independently). Without a descendant
+// whose own location_id differs from its plane root's, "the plane root's
+// location_id" and "the deepest non-null location_id in the chain" are the
+// same function over the fixture, and a walker that implemented the second
+// would pass every assertion here. spare-card-1 separates them: its plane
+// root is unplaced, so the correct address carries NO location prefix, while
+// the deepest-non-null rule would prefix it with boi.17c.415a.
 //
 // Plus one shape no gateway write can produce: two components that are each
 // other's parent. The recursive walks stop on it by their CYCLE clause, and
@@ -108,7 +121,10 @@ func buildBatchPathFixture(t *testing.T, pool *pgxpool.Pool) batchPathFixture {
 	fx.dsp1 = comp("dsp-1", nil, &fx.r415a)
 	fx.danteCard1 = comp("dante-card-1", &fx.dsp1, nil)
 	fx.spare1 = comp("spare-1", nil, nil)
-	fx.spareCard1 = comp("spare-card-1", &fx.spare1, nil)
+	// A descendant carrying its own location, under a plane root that has
+	// none: the row that tells the plane-root rule apart from a
+	// deepest-non-null one. See the fixture doc comment.
+	fx.spareCard1 = comp("spare-card-1", &fx.spare1, &fx.r415a)
 	fx.av = sys("av", nil, &fx.c17)
 	fx.spareSys = sys("spare-sys", nil, nil)
 
@@ -167,6 +183,11 @@ func TestPathsOfMatchesPathOfRowForRow(t *testing.T) {
 	// into the location tree, the unplaced plane root and its child (empty
 	// root, the branch PathOf leaves the prefix off entirely), the placed
 	// and unplaced systems, and the location chain.
+	//
+	// spare-card-1 is the discriminating one: it carries location 415a
+	// itself, and its address still opens on the accessor, because only its
+	// plane root's location_id (none) counts. A walk that read the deepest
+	// non-null location_id in the chain would prefix it boi.17c.415a.
 	want := map[string][]string{
 		fx.display1:   {"boi", "17c", "415a", "$comp", "display-1"},
 		fx.danteCard1: {"boi", "17c", "415a", "$comp", "dsp-1", "dante-card-1"},
