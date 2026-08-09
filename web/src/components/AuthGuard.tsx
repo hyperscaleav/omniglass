@@ -1,6 +1,7 @@
 import { Show, type ParentComponent, createEffect } from "solid-js";
 import { useLocation, useNavigate } from "@solidjs/router";
 import { useMe } from "../lib/auth";
+import { encodeNext } from "../lib/next";
 import ForceChangePassword from "./ForceChangePassword";
 
 // AuthGuard gates the console chrome. It reads /auth/me; while pending it shows
@@ -16,9 +17,10 @@ export const AuthGuard: ParentComponent = (props) => {
     if (me.isPending) return;
     if (me.data === null) {
       // Not authenticated (no/invalid session cookie): redirect to login carrying
-      // the attempted path.
-      const next = encodeURIComponent(location.pathname + location.search);
-      navigate(next === "%2F" ? "/login" : `/login?next=${next}`, { replace: true });
+      // the attempted path. encodeNext and Login's resolveNext are inverses kept
+      // in one module so they cannot drift apart again (#646).
+      const next = encodeNext(location.pathname, location.search, location.hash);
+      navigate(next === null ? "/login" : `/login?next=${next}`, { replace: true });
     }
   });
 

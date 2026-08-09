@@ -206,7 +206,7 @@ export default function Components() {
     const [resetting, setResetting] = createSignal(false);
     async function runCheck() {
       setChecking(true);
-      try { setNameCheck(await checkComponentName(name().trim(), n().raw.parent, n().raw.location)); }
+      try { setNameCheck(await checkComponentName(name().trim(), n().raw.parent_id, n().raw.location_id)); }
       catch { setNameCheck(null); }
       finally { setChecking(false); }
     }
