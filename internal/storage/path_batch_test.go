@@ -57,11 +57,18 @@ func batchPathPool(t *testing.T) *pgxpool.Pool {
 //	spare-1 (component, unplaced root)
 //	  spare-card-1 (component, child of spare-1)
 //	spare-sys (system, unplaced root)
+//
+// Plus one shape no gateway write can produce: two components that are each
+// other's parent. The recursive walks stop on it by their CYCLE clause, and
+// the batch walker must stop in exactly the same place as the single-row one,
+// which is why neither filters is_cycle out. Malformed data is where two
+// implementations of the same walk are most likely to diverge unnoticed.
 type batchPathFixture struct {
 	productID                                      string
 	boi, c17, r415a                                string
 	display1, dsp1, danteCard1, spare1, spareCard1 string
 	av, spareSys                                   string
+	loopA, loopB                                   string
 }
 
 func buildBatchPathFixture(t *testing.T, pool *pgxpool.Pool) batchPathFixture {
@@ -104,6 +111,17 @@ func buildBatchPathFixture(t *testing.T, pool *pgxpool.Pool) batchPathFixture {
 	fx.spareCard1 = comp("spare-card-1", &fx.spare1, nil)
 	fx.av = sys("av", nil, &fx.c17)
 	fx.spareSys = sys("spare-sys", nil, nil)
+
+	// The cycle, written directly: inserted as two roots, then pointed at
+	// each other, since neither could name the other as its parent before
+	// the other existed (and no gateway write path would allow it at all).
+	fx.loopA = comp("loop-a", nil, nil)
+	fx.loopB = comp("loop-b", nil, nil)
+	for _, pair := range [][2]string{{fx.loopA, fx.loopB}, {fx.loopB, fx.loopA}} {
+		if _, err := pool.Exec(ctx, `update component set parent_id = $2 where id = $1`, pair[0], pair[1]); err != nil {
+			t.Fatalf("fixture cycle: %v", err)
+		}
+	}
 	return fx
 }
 
