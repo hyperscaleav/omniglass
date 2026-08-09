@@ -360,6 +360,37 @@ func (p *PG) recomputeMovedSystem(ctx context.Context, q txQuerier, system strin
 	return p.recomputeChain(ctx, q, nil, []ownerRef{{ID: sys.ID, Name: sys.Name}}, left)
 }
 
+// recomputeMovedLocation is the trigger shape for a location that changed
+// parent (#642). A location's rollup folds every system in its own subtree, so
+// a move carries that whole contribution from one ancestor chain to another and
+// BOTH chains move: the one it joined is reachable from its row, the one it
+// LEFT is not, so that parent is named, exactly as recomputeMovedSystem names
+// the location a system walked out of.
+//
+// One row per side is the whole input, not a walk. locationsOver takes its
+// named locations as the SEED of a recursive ancestry CTE, so naming the moved
+// location covers its new parent and every ancestor above it, and naming the
+// old parent covers the old chain the same way. Walking either chain in Go
+// first would reimplement, in a second place, the walk the query already
+// performs. Resolving the old chain AFTER the write is equally safe: the only
+// parent edge this write touches is the moved row's own, so the old parent's
+// own ancestry reads the same before and after.
+//
+// The moved location itself is included and costs nothing. Its own verdict
+// cannot move (the subtree it folds travelled with it), and recordHealth writes
+// nothing when the value has not changed, so it contributes the new chain's
+// seed without adding an edge of its own.
+func (p *PG) recomputeMovedLocation(ctx context.Context, q txQuerier, moved ownerRef, leftParentID *string) error {
+	named := []ownerRef{moved}
+	if leftParentID != nil {
+		// The id is already in hand from the pre-write image; no lookup, and
+		// no name needed (locations resolve their own names inside
+		// locationsOver).
+		named = append(named, ownerRef{ID: *leftParentID})
+	}
+	return p.recomputeChain(ctx, q, nil, nil, named)
+}
+
 // recordHealth is the transition-only write, and the reason this slice adds no
 // history table of its own. It writes NOTHING when the computed verdict already
 // matches the last one recorded for this owner.

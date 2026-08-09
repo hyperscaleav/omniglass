@@ -758,6 +758,111 @@ func TestHealthMovesOnRelocation(t *testing.T) {
 	}
 }
 
+// TestHealthMovesOnLocationMove is the location-tier twin of the relocate proof
+// above (#642). A location that moves carries every system in its own subtree
+// from one ancestor chain to another, so BOTH chains have to be recomputed: the
+// chain it left loses that contribution (an improvement, an edge as real as any
+// failure) and the chain it joins takes it on.
+//
+// Both sides are asserted, and each is asserted TWO levels up, which is what
+// makes the test load-bearing in both directions at once. Asserting only the
+// arrival would pass an implementation that never names the location left
+// behind, which is half the defect; asserting only the direct parent on each
+// side would pass one that named the two parents and never walked above them.
+// The two branches hang off DIFFERENT roots so nothing is shared above the
+// move: a common ancestor would read the same verdict either way and prove
+// nothing.
+func TestHealthMovesOnLocationMove(t *testing.T) {
+	f := newHealthFixture(t)
+	ctx := context.Background()
+
+	// north-campus > north-b1 > mover-room (the room that moves, holding a
+	// degraded system), and south-campus > south-b1 > anchor-room (a healthy
+	// system, so the arrival branch has a RECORDED healthy verdict to move off
+	// of rather than no history at all).
+	f.mustLocation(t, ctx, "north-campus", "campus", nil)
+	f.mustLocation(t, ctx, "north-b1", "building", ptrStr("north-campus"))
+	f.mustLocation(t, ctx, "mover-room", "room", ptrStr("north-b1"))
+	f.mustLocation(t, ctx, "south-campus", "campus", nil)
+	f.mustLocation(t, ctx, "south-b1", "building", ptrStr("south-campus"))
+	f.mustLocation(t, ctx, "anchor-room", "room", ptrStr("south-b1"))
+
+	anchorRoom := "anchor-room"
+	if _, err := f.gw.CreateSystem(ctx, "", storage.SystemSpec{
+		Name: "anchor-sys", LocationName: &anchorRoom,
+	}, f.all); err != nil {
+		t.Fatalf("create anchor system: %v", err)
+	}
+	// Conforming to the fixture's standard with nobody staffing its role is
+	// what makes this system degraded, with no alarm needed.
+	std, moverRoom := "health-huddle", "mover-room"
+	if _, err := f.gw.CreateSystem(ctx, "", storage.SystemSpec{
+		Name: "mover-sys", StandardID: &std, LocationName: &moverRoom,
+	}, f.all); err != nil {
+		t.Fatalf("create mover system: %v", err)
+	}
+
+	for _, tc := range []struct{ name, want string }{
+		{"mover-room", "degraded"}, {"north-b1", "degraded"}, {"north-campus", "degraded"},
+		{"anchor-room", "healthy"}, {"south-b1", "healthy"}, {"south-campus", "healthy"},
+	} {
+		if _, v := f.recorded(t, ctx, "location", tc.name); v != tc.want {
+			t.Fatalf("%s = %q before the move, want %q", tc.name, v, tc.want)
+		}
+	}
+	moverRows, _ := f.recorded(t, ctx, "location", "mover-room")
+	anchorRows, _ := f.recorded(t, ctx, "location", "anchor-room")
+
+	newParent := "south-b1"
+	if _, err := f.gw.MoveLocation(ctx, "", "mover-room", storage.LocationMove{ParentName: &newParent}, f.all, f.all); err != nil {
+		t.Fatalf("move location: %v", err)
+	}
+
+	// The chain it left recovers, the direct parent and the root above it.
+	for _, name := range []string{"north-b1", "north-campus"} {
+		if _, v := f.recorded(t, ctx, "location", name); v != "healthy" {
+			t.Errorf("%s = %q after the room left, want healthy: the ancestors of the OLD parent must be recomputed too (series %v)",
+				name, v, f.healthSeries(t, ctx, "location", name))
+		}
+	}
+	// The chain it joined takes the verdict on, to the same depth.
+	for _, name := range []string{"south-b1", "south-campus"} {
+		if _, v := f.recorded(t, ctx, "location", name); v != "degraded" {
+			t.Errorf("%s = %q after the room arrived, want degraded: the ancestors of the NEW parent must be recomputed too (series %v)",
+				name, v, f.healthSeries(t, ctx, "location", name))
+		}
+	}
+	// The moved room's own verdict folds its own subtree, which travelled with
+	// it, so nothing about it changed and nothing may be written for it. Same
+	// for the room that never moved.
+	if n, v := f.recorded(t, ctx, "location", "mover-room"); n != moverRows || v != "degraded" {
+		t.Errorf("mover-room = %d rows / %q, want %d / degraded: its own subtree did not change", n, v, moverRows)
+	}
+	if n, v := f.recorded(t, ctx, "location", "anchor-room"); n != anchorRows || v != "healthy" {
+		t.Errorf("anchor-room = %d rows / %q, want %d / healthy: an unrelated room must not be rewritten", n, v, anchorRows)
+	}
+
+	// The record and the report agree on both ends: a location cannot read
+	// healthy over a system it itself lists as degraded.
+	for _, tc := range []struct{ name, want string }{
+		{"north-b1", "healthy"}, {"north-campus", "healthy"},
+		{"south-b1", "degraded"}, {"south-campus", "degraded"},
+	} {
+		rep, err := f.gw.LocationHealth(ctx, tc.name, time.Time{}, f.all)
+		if err != nil {
+			t.Fatalf("location health %s: %v", tc.name, err)
+		}
+		if rep.Verdict != tc.want {
+			t.Errorf("%s reported verdict = %q, want %q (systems %+v)", tc.name, rep.Verdict, tc.want, rep.Systems)
+		}
+		if _, recorded := f.recorded(t, ctx, "location", tc.name); recorded != rep.Verdict {
+			t.Errorf("%s recorded %q disagrees with the reported %q: a real transition went unrecorded (series %v)",
+				tc.name, recorded, rep.Verdict, f.healthSeries(t, ctx, "location", tc.name))
+		}
+	}
+	f.assertTransitionOnly(t, ctx)
+}
+
 // reportedVerdicts reads the drill-down's verdicts back for the consistency check.
 func reportedVerdicts(systems []storage.HealthSystem) []health.Verdict {
 	out := make([]health.Verdict, 0, len(systems))

@@ -615,6 +615,15 @@ func TestHealthInvariantAcrossEveryTrigger(t *testing.T) {
 				Name: "sweep-sys-2", StandardID: &std, LocationName: &room2}, f.all)
 			return err
 		}},
+		{"open a second building for the room to move into", func() error {
+			_, err := f.gw.CreateLocation(ctx, "", storage.LocationSpec{
+				Name: "hq-b2", LocationType: "building", ParentName: ptrStr("hq")}, f.all)
+			return err
+		}},
+		{"move the room holding both systems, which recomputes both ancestor chains", func() error {
+			_, err := f.gw.MoveLocation(ctx, "", room2, storage.LocationMove{ParentName: ptrStr("hq-b2")}, f.all, f.all)
+			return err
+		}},
 	} {
 		if err := step.do(); err != nil {
 			t.Fatalf("%s: %v", step.what, err)
