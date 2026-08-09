@@ -116,13 +116,38 @@ The `fields` read mask (a response subset, AIP-157) selects the fields a read re
 the full resource.
 :::
 
-Today the full resource is the only behavior. `PATCH` carries an implicit **write mask**, built
-today: only the fields present in the body change, so a partial update never clobbers an omitted
-field.
+Today the full resource is the only read behavior. The **write mask** is built, AIP-134 exactly
+([ADR-0091](/architecture/decisions/#adr-0091-an-update_mask-says-which-fields-a-patch-writes)):
+
+- **Omit `update_mask`** and the mask is **implied**: the fields the body populated (a non-empty
+  value) change, and an omitted field is left alone. This is what every `PATCH` in the tree has always
+  done, so it is the behavior of all of them.
+- **Send `update_mask`** and exactly the fields it names change, **populated or not**, so a named
+  field the body leaves empty is **cleared**. This is the only way to clear a field that has no
+  empty-value sentinel of its own, an integer or a list where "empty" and "absent" look the same on
+  the wire.
+- **`update_mask: ["*"]`** is **full replacement**, the equivalent of a `PUT`: every patchable field
+  is written, so one the body omits goes back to its default. It cannot be combined with named
+  fields.
+- A mask naming a field the resource does not patch is a **422 naming the field**, never a silent
+  no-op.
+
+The mask rides in the **request body**, not the query string: this API has no gRPC transcoding to
+force the split, Huma models a body as a typed struct, and a body field generates cleanly into both
+the typed client and a CLI flag. It is top-level field names only, spelled as the body spells them.
+
+The **three-state string** convention (an omitted field unchanged, an explicit `""` clears, a value
+sets: `moveComponentInput`, a system's `standard`) is untouched and stays the idiomatic way to clear a
+string. The mask is what generalizes clearing to everything that is not a string; retiring the
+sentinel in its favor is a separate ripple, not folded in here.
+
+Built on the role declarations (`PATCH /standards/{id}/roles/{role}`, `PATCH
+/systems/{name}/roles/{role}`). The other `PATCH` routes accept no mask yet, and they do not need
+one to stay correct: an absent mask is the implied mask, which is exactly what they already do.
 
 :::caution[Open question]
-Field-mask depth: top-level fields only, or nested paths (`a.b.c`), and whether a list's `fields` and a
-get's `fields` share one grammar.
+Field-mask depth: top-level fields only (what the write mask ships), or nested paths (`a.b.c`), and
+whether a list's `fields` and a get's `fields` share one grammar.
 :::
 
 ## Errors: one problem+json envelope
@@ -444,24 +469,29 @@ needs, and what one system declares ad-hoc), **resolution** (the per-system read
 fills each role today), and **staffing** (assign and unassign). It is **not** the
 [IAM role](/architecture/identity-access/): `/roles` is the RBAC catalog, these routes are the estate model.
 
-A role is addressed **by name within its owner**, so every declaration is a `PUT` that declares or
-revises in place. The body is `{display_name?, quorum?, capacity?, position_labels?, accepted_types?,
-pinned_products?, impact?}`; `accepted_types` and `pinned_products` each **replace** their set
-wholesale (the typed-slot guard, below), as does `position_labels` (a human label for each position
-within the role, by index). `capacity` is the most components the role will accept (at least
-`quorum`); omitted leaves whatever is already declared unchanged, or unbounded on first declare,
-with no way back to unbounded once set. `impact` is `outage` / `degraded` / `none` (omitted means
-`degraded`), what an impaired role does to its system's [health](#health-the-verdict-and-why); an
-unknown impact is a 422. Gating follows the owner:
+A role is addressed **by name within its owner**, so every declaration is a `PATCH` that declares or
+revises in place. The body is `{update_mask?, display_name?, quorum?, capacity?, position_labels?,
+accepted_types?, pinned_products?, impact?, alternate?}`, patched under the
+[write mask](#partial-responses-field-masks): the fields the body populates change and the rest of
+the declaration is left alone, and `update_mask` names the fields that change whether the body
+populates them or not. `accepted_types`, `pinned_products` and `position_labels` each **replace**
+their set wholesale when written, so clearing one means naming it in `update_mask` (an empty list is
+not a populated field, so on its own it means unchanged). `capacity` is the most components the role
+will accept (at least `quorum`), unbounded on first declare, and naming `capacity` in `update_mask`
+with no value is what clears it back to unbounded. `impact` is `outage` / `degraded` / `none`
+(`degraded` on first declare), what an impaired role does to its system's
+[health](#health-the-verdict-and-why); an unknown impact is a 422. `alternate` is the
+`choice-name/alternate-name` this role joins, an empty string detaching it; every role read returns it
+in the same form. Gating follows the owner:
 
-- `GET /standards/{id}/roles` plus `PUT` / `DELETE /standards/{id}/roles/{role}`, gated `standard:read` /
+- `GET /standards/{id}/roles` plus `PATCH` / `DELETE /standards/{id}/roles/{role}`, gated `standard:read` /
   `:update` / `:delete`. Withdrawing a role takes every assignment conforming systems made to it (a
   cascade); a role the standard does not declare is a 404.
-- `PUT` / `DELETE /systems/{name}/roles/{role}`, gated `system:update`, for a role declared **directly on
+- `PATCH` / `DELETE /systems/{name}/roles/{role}`, gated `system:update`, for a role declared **directly on
   one system**. A role the system does not declare **itself** is a 404 here: an inherited role is
   withdrawn on the standard.
 - `GET /systems/{name}/roles` is the **resolved read**, gated `system:read`: the declaration
-  (including `impact`, `capacity`, `position_labels`) plus `from_standard`, `assigned_to` (the
+  (including `impact`, `capacity`, `position_labels`, `alternate`) plus `from_standard`, `assigned_to` (the
   component names filling it here, in position order), `positions` (each entry's own 1-based
   position, index for index with `assigned_to`; not assumed dense, since an unassign leaves a gap
   rather than compacting), `assigned`, and **`understaffed`** (how many more before quorum), the

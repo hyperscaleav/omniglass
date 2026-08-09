@@ -12,7 +12,7 @@ import { uuidFor } from "../lib/testids";
 // The editor curates the roles a standard declares: the slots every conforming
 // system needs filled, each with the typed-slot guard (#626) a filling
 // component's product must clear and how many components the slot wants. Data
-// is seeded into the query cache so no server is needed; the PUT / DELETE
+// is seeded into the query cache so no server is needed; the PATCH / DELETE
 // fetches are faked where a test drives them. The mount hosts the editor
 // inside a blade edit slot, as the standard blade does: the controls are
 // edit-state affordances (#621), so the default mount enters edit mode;
@@ -74,11 +74,44 @@ describe("RoleEditor on a standard", () => {
     expect(within(row).getByText("video-bar")).toBeTruthy();
   });
 
-  it("declares a role, PUTting its name, label, quorum, and typed-slot guard", async () => {
+  // The editor owns a fixed set of fields and sends them all, so its save has
+  // to name them all in the mask: without one, a field the operator EMPTIED
+  // (the last pinned product, a capacity, the labels) arrives as an empty
+  // value, which the API reads as "unchanged", and the removal is silently
+  // dropped. The mask must stop at what the editor owns: alternate has no
+  // control here (#640 gave it a read, not an editor), so naming it would clear
+  // a role's alternate on an unrelated edit, the exact #626 defect.
+  it("names every field it owns in the update mask, and nothing it does not", async () => {
+    let patch: Request | undefined;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "PATCH") {
+        patch = req.clone();
+        return json({ name: "main-display", display_name: "Main display", quorum: 1 });
+      }
+      return json({ roles: declared });
+    });
+
+    const { getByLabelText } = mount();
+    fireEvent.click(getByLabelText("Edit main-display"));
+    // Empty the pinned set: the operator's removal is the case that needs the
+    // mask to survive the round trip.
+    fireEvent.click(getByLabelText("Stop pinning samsung-qm55"));
+    fireEvent.click(getByLabelText("Save main-display"));
+
+    await waitFor(() => expect(patch).toBeTruthy());
+    const body = await patch!.json();
+    expect([...body.update_mask].sort()).toEqual([
+      "accepted_types", "capacity", "display_name", "impact", "pinned_products", "position_labels", "quorum",
+    ]);
+    expect(body.pinned_products).toEqual([]);
+  });
+
+  it("declares a role, patching its name, label, quorum, and typed-slot guard", async () => {
     let put: Request | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
-      if (req.method === "PUT") {
+      if (req.method === "PATCH") {
         put = req.clone();
         return json({ name: "camera", display_name: "Room camera", quorum: 1, accepted_types: ["video-bar"] });
       }
@@ -97,6 +130,7 @@ describe("RoleEditor on a standard", () => {
     await waitFor(() => expect(put).toBeTruthy());
     expect(put!.url).toContain("/standards/meeting-room/roles/camera");
     expect(await put!.json()).toEqual({
+      update_mask: ["display_name", "quorum", "capacity", "position_labels", "accepted_types", "pinned_products", "impact"],
       quorum: 3,
       display_name: "Room camera",
       accepted_types: ["video-bar"],
@@ -110,7 +144,7 @@ describe("RoleEditor on a standard", () => {
     let put: Request | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
-      if (req.method === "PUT") {
+      if (req.method === "PATCH") {
         put = req.clone();
         return json({ name: "main-display", display_name: "Main display", quorum: 2, accepted_types: ["display"] });
       }
@@ -129,6 +163,7 @@ describe("RoleEditor on a standard", () => {
     await waitFor(() => expect(put).toBeTruthy());
     expect(put!.url).toContain("/standards/meeting-room/roles/main-display");
     expect(await put!.json()).toEqual({
+      update_mask: ["display_name", "quorum", "capacity", "position_labels", "accepted_types", "pinned_products", "impact"],
       quorum: 2,
       display_name: "Main display",
       accepted_types: ["display"],
@@ -146,7 +181,7 @@ describe("RoleEditor on a standard", () => {
     let put: Request | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
-      if (req.method === "PUT") {
+      if (req.method === "PATCH") {
         put = req.clone();
         return json({ name: "main-display", display_name: "Main display", quorum: 2, accepted_types: ["display"], impact: "outage" });
       }
@@ -168,7 +203,7 @@ describe("RoleEditor on a standard", () => {
     let put: Request | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
-      if (req.method === "PUT") { put = req.clone(); return json({}); }
+      if (req.method === "PATCH") { put = req.clone(); return json({}); }
       return json({ roles: declared });
     });
 

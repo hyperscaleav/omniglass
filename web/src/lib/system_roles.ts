@@ -25,8 +25,10 @@ import type { components } from "../api/schema.gen";
 export type EffectiveRole = components["schemas"]["EffectiveRoleBody"];
 // A role as its OWNER declares it (the standard's line, and the write's echo).
 export type DeclaredRole = components["schemas"]["SystemRoleBody"];
-// The declaration body: accepted_types and pinned_products each replace their
-// set wholesale.
+// The declaration body. Partial by default: what it carries changes, what it
+// omits is left alone. update_mask names the fields the write means to set
+// regardless, which is the only way to clear one (#666); accepted_types and
+// pinned_products still replace their set wholesale when written.
 export type RoleSpec = components["schemas"]["RoleSpecBody"];
 
 // One cache namespace per arc, so a standard and a system that share an address
@@ -51,9 +53,11 @@ export async function standardRoles(id: string): Promise<DeclaredRole[]> {
 }
 
 // setStandardRole declares a role on the standard, or revises it in place: the
-// role is addressed by name, so the write is idempotent.
+// role is addressed by name, so the write is idempotent. A PATCH, and partial:
+// what the body carries changes, what it omits is left alone, and what its
+// update_mask names is written whether the body carries it or not (#666).
 export async function setStandardRole(id: string, role: string, body: RoleSpec): Promise<DeclaredRole> {
-  const { data, error } = await api.PUT("/standards/{id}/roles/{role}", { params: { path: { id, role } }, body });
+  const { data, error } = await api.PATCH("/standards/{id}/roles/{role}", { params: { path: { id, role } }, body });
   if (error) throw error;
   return data as DeclaredRole;
 }

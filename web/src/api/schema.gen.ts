@@ -2808,11 +2808,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /**
-         * Declare a role on a standard
-         * @description Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent). accepted_types and pinned_products each replace their set wholesale. An unknown standard, type, or product is a 422. Gated by standard:update.
-         */
-        put: operations["set-standard-role"];
+        put?: never;
         post?: never;
         /**
          * Withdraw a role from a standard
@@ -2821,7 +2817,11 @@ export interface paths {
         delete: operations["delete-standard-role"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Declare a role on a standard
+         * @description Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent and declaring is this same route). Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and ["*"] replaces the whole declaration. An unknown standard, type, or product is a 422, as is a mask naming a field this resource does not patch. Gated by standard:update.
+         */
+        patch: operations["set-standard-role"];
         trace?: never;
     };
     "/systems": {
@@ -3052,11 +3052,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /**
-         * Declare a role on a system
-         * @description Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. accepted_types and pinned_products each replace their set wholesale. Gated by system:update; an out-of-scope system is a non-disclosing 404.
-         */
-        put: operations["set-system-role"];
+        put?: never;
         post?: never;
         /**
          * Withdraw a role from a system
@@ -3065,7 +3061,11 @@ export interface paths {
         delete: operations["delete-system-role"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Declare a role on a system
+         * @description Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and ["*"] replaces the whole declaration. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         */
+        patch: operations["set-system-role"];
         trace?: never;
     };
     "/systems/{name}/roles/{role}/assignments/{component}": {
@@ -4366,6 +4366,8 @@ export interface components {
         EffectiveRoleBody: {
             /** @description The component_types a filling component's product must be classified within (self or a descendant); empty accepts any type */
             accepted_types: string[] | null;
+            /** @description The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626); absent when the role is unconditional. The same form the write body takes, so a read round-trips into a write */
+            alternate?: string;
             /**
              * Format: int64
              * @description How many components fill the role
@@ -5966,31 +5968,33 @@ export interface components {
              * @example /api/v1/schemas/RoleSpecBody.json
              */
             readonly $schema?: string;
-            /** @description The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale. Omit or empty accepts any type */
+            /** @description The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale when written, and an empty set accepts any type. Clearing it means naming accepted_types in update_mask */
             accepted_types?: string[] | null;
-            /** @description The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626). Omit to leave whatever is already declared unchanged; an empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422 */
+            /** @description The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626). An empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422 */
             alternate?: string;
             /**
              * Format: int64
-             * @description The most components the role will accept; must be at least quorum. Omit to leave whatever is already declared unchanged (or unbounded on first declare); there is no way to explicitly clear a capacity back to unbounded once set
+             * @description The most components the role will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded
              */
             capacity?: number;
-            /** @description The role's human label; defaults to the role name */
+            /** @description The role's human label; defaults to the role name on first declare */
             display_name?: string;
             /**
-             * @description What an impaired role means for its system; omit for degraded. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display
+             * @description What an impaired role means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display
              * @enum {string}
              */
             impact?: "outage" | "degraded" | "none";
-            /** @description If set, a filling component's product must be one of these; replaces the pinned set wholesale. Omit or empty accepts any product of an accepted type */
+            /** @description If set, a filling component's product must be one of these; replaces the pinned set wholesale when written, and an empty set accepts any product of an accepted type. Clearing it means naming pinned_products in update_mask */
             pinned_products?: string[] | null;
-            /** @description Human labels for each position within the role, by index; replaces the label set wholesale. Omit or empty clears labelling */
+            /** @description Human labels for each position within the role, by index; replaces the label set wholesale when written. An empty list is not a populated field, so clearing the labels means naming position_labels in update_mask */
             position_labels?: string[] | null;
             /**
              * Format: int64
-             * @description How many components must fill the role; omit for one
+             * @description How many components must fill the role; one on first declare
              */
             quorum?: number;
+            /** @description Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED; send ["*"] for full replacement, where every field the body omits goes back to its default. A field this resource does not patch is a 422 naming it */
+            update_mask?: string[] | null;
         };
         RolesOutputBody: {
             /**
@@ -6392,6 +6396,8 @@ export interface components {
             readonly $schema?: string;
             /** @description The component_types a filling component's product must be classified within (self or a descendant); empty accepts any type */
             accepted_types: string[] | null;
+            /** @description The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626); absent when the role is unconditional. The same form the write body takes, so a read round-trips into a write */
+            alternate?: string;
             /**
              * Format: int64
              * @description The most components the role will accept; null means no upper bound beyond quorum
@@ -13074,6 +13080,38 @@ export interface operations {
             };
         };
     };
+    "delete-standard-role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The standard id */
+                id: string;
+                /** @description The role name */
+                role: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "set-standard-role": {
         parameters: {
             query?: never;
@@ -13100,38 +13138,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SystemRoleBody"];
                 };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "delete-standard-role": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The standard id */
-                id: string;
-                /** @description The role name */
-                role: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description Error */
             default: {
@@ -13630,6 +13636,38 @@ export interface operations {
             };
         };
     };
+    "delete-system-role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's name, or a dotted address (e.g. boi.17c.$sys.av) */
+                name: string;
+                /** @description The role name */
+                role: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "set-system-role": {
         parameters: {
             query?: never;
@@ -13656,38 +13694,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SystemRoleBody"];
                 };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "delete-system-role": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The system's name, or a dotted address (e.g. boi.17c.$sys.av) */
-                name: string;
-                /** @description The role name */
-                role: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description Error */
             default: {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/updatemask"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -51,20 +52,46 @@ type SystemRole struct {
 	// the rollup takes from the declaration side beyond the requirement itself.
 	Impact string
 	// AlternateID is the choice_alternate this role joins (#626); nil means
-	// unconditional. Carried here purely so SetSystemRole and
-	// DeleteSystemRole's audit before/after images (systemRoleCols) capture
-	// a change to it; nothing on the read side (ListSystemRoles,
-	// systemRoleBody) surfaces it yet, deliberately deferred to the
-	// operator-facing read surface.
+	// unconditional. It is the id the write stores and the audit
+	// before/after images (systemRoleCols) record a change to.
 	AlternateID *string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	// Alternate is the same membership as an address, "choice-name/alternate-name",
+	// empty when the role is unconditional: the exact form the write body
+	// takes, so a read round-trips into a write without translation. Every
+	// read fills it (#640); a field a caller can write and no caller can
+	// read is not a contract, and it cannot be confirmed by the generated
+	// client or the CLI.
+	Alternate string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
-// SystemRoleSpec is the declaration input. AcceptedTypes, PinnedProducts, and
-// PositionLabels each replace their value wholesale on an update; Capacity
-// and AlternateID do not (nil leaves whatever is already declared alone, see
-// SystemRole.Capacity and the AlternateID comment below).
+// The field names a role declaration patches, spelled the way the wire body
+// spells them, because an update_mask path IS a wire field name (#666). They
+// are constants rather than literals at each site so a write-set check and the
+// mask the API resolves can never drift into naming different fields, which
+// would silently stop writing one.
+const (
+	RoleFieldDisplayName    = "display_name"
+	RoleFieldQuorum         = "quorum"
+	RoleFieldCapacity       = "capacity"
+	RoleFieldPositionLabels = "position_labels"
+	RoleFieldAcceptedTypes  = "accepted_types"
+	RoleFieldPinnedProducts = "pinned_products"
+	RoleFieldImpact         = "impact"
+	RoleFieldAlternate      = "alternate"
+)
+
+// RolePatchFields is every field a role declaration lets a write set, in the
+// order a refusal lists them.
+var RolePatchFields = []string{
+	RoleFieldDisplayName, RoleFieldQuorum, RoleFieldCapacity, RoleFieldPositionLabels,
+	RoleFieldAcceptedTypes, RoleFieldPinnedProducts, RoleFieldImpact, RoleFieldAlternate,
+}
+
+// SystemRoleSpec is the declaration input. Which of its fields a write writes
+// is Write's business: a field outside the write set keeps whatever the role
+// already has, or, when the write creates the role, takes its default.
 type SystemRoleSpec struct {
 	Name           string
 	DisplayName    string
@@ -95,6 +122,51 @@ type SystemRoleSpec struct {
 	// different owner, mapped to ErrRoleRefNotFound the same way an unknown
 	// accepted type or pinned product is.
 	AlternateID *string
+	// Write is the resolved update_mask (#666): the fields this write
+	// writes. NIL means the caller sent no mask, which AIP-134 reads as the
+	// implied mask of the fields the spec populated, and which is what every
+	// caller that predates the mask gets. A NON-NIL empty set is a caller
+	// naming no fields, and writes nothing.
+	Write updatemask.Fields
+}
+
+// Populated is the spec's implied mask: the fields it carries a non-empty
+// value for, AIP-134's reading of an absent update_mask. Exported because the
+// API resolves the wire mask against the same spec it is about to write, so
+// "populated" is defined once for both layers rather than once per layer, where
+// the two definitions would drift.
+//
+// Capacity and AlternateID count as populated whenever the POINTER is set,
+// including a pointer to the empty string: the empty string is already this
+// house's explicit-clear sentinel for an optional reference (emptyPtrToNil,
+// internal/api/products.go), and reading it as unpopulated would take the
+// detach path away.
+func (s SystemRoleSpec) Populated() updatemask.Fields {
+	p := updatemask.Fields{}
+	set := func(name string, on bool) {
+		if on {
+			p[name] = true
+		}
+	}
+	set(RoleFieldDisplayName, s.DisplayName != "")
+	set(RoleFieldQuorum, s.Quorum != 0)
+	set(RoleFieldCapacity, s.Capacity != nil)
+	set(RoleFieldPositionLabels, len(s.PositionLabels) > 0)
+	set(RoleFieldAcceptedTypes, len(s.AcceptedTypes) > 0)
+	set(RoleFieldPinnedProducts, len(s.PinnedProducts) > 0)
+	set(RoleFieldImpact, s.Impact != "")
+	set(RoleFieldAlternate, s.AlternateID != nil)
+	return p
+}
+
+// writeFields is the write set this spec actually writes: the explicit mask
+// when the caller resolved one, otherwise the implied mask over what the spec
+// populated.
+func (s SystemRoleSpec) writeFields() updatemask.Fields {
+	if s.Write != nil {
+		return s.Write
+	}
+	return updatemask.Implied(s.Populated())
 }
 
 // EffectiveRole is one role resolved for a system: the declaration plus who fills
@@ -274,7 +346,8 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 			from sys join system_role r on r.owner_kind = 'system' and r.system_id = sys.id
 		)
 		select roles.id, roles.name, roles.display_name, roles.quorum, roles.capacity, roles.position_labels,
-		       roles.impact, roles.from_standard, roles.created_at, roles.updated_at,
+		       roles.impact, `+alternateRefExpr("roles")+` as alternate,
+		       roles.from_standard, roles.created_at, roles.updated_at,
 		       coalesce((select array_agg(ct.name order by ct.name)
 		                   from system_role_type rt join component_type ct on ct.id = rt.component_type_id
 		                  where rt.role_id = roles.id), '{}') as types,
@@ -298,7 +371,7 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 	for rows.Next() {
 		var e EffectiveRole
 		if err := rows.Scan(&e.ID, &e.Name, &e.DisplayName, &e.Quorum, &e.Capacity, &e.PositionLabels,
-			&e.Impact, &e.FromStandard, &e.CreatedAt, &e.UpdatedAt,
+			&e.Impact, &e.Alternate, &e.FromStandard, &e.CreatedAt, &e.UpdatedAt,
 			&e.AcceptedTypes, &e.PinnedProducts, &e.AssignedTo, &e.Positions); err != nil {
 			return nil, fmt.Errorf("storage: scan effective role: %w", err)
 		}
