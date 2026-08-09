@@ -351,7 +351,7 @@ func TestRunIdempotent(t *testing.T) {
 	if locs != len(fixtures.Locations) {
 		t.Errorf("locations = %d, want %d (seed not idempotent or incomplete)", locs, len(fixtures.Locations))
 	}
-	var comps, systems int
+	var comps, systems, alarms int
 	if err := conn.QueryRow(ctx, `select count(*) from component`).Scan(&comps); err != nil {
 		t.Fatalf("count components: %v", err)
 	}
@@ -363,6 +363,17 @@ func TestRunIdempotent(t *testing.T) {
 	}
 	if systems != len(fixtures.Systems) {
 		t.Errorf("systems = %d, want %d (seed not idempotent or incomplete)", systems, len(fixtures.Systems))
+	}
+	// Alarms matter most and were the ones going unchecked: the fixtures
+	// section leans entirely on RaiseAlarm's dedup_key to be idempotent, with
+	// no read-before-write of its own, and devseed runs on every `make dev`
+	// start. An untested dedup would stack one more alarm per restart and drag
+	// the seeded verdicts along with it.
+	if err := conn.QueryRow(ctx, `select count(*) from alarm`).Scan(&alarms); err != nil {
+		t.Fatalf("count alarms: %v", err)
+	}
+	if alarms != len(fixtures.Alarms) {
+		t.Errorf("alarms = %d, want %d: a second run re-raised instead of finding the standing condition", alarms, len(fixtures.Alarms))
 	}
 	// Membership and staffing are counted too, because they are where a resolver
 	// that zipped the fixture onto the estate in the wrong order shows up: every
@@ -1392,4 +1403,16 @@ func TestSeededEstateShowsEveryVerdict(t *testing.T) {
 	if len(seen) < 3 {
 		t.Errorf("the seeded estate shows %d distinct verdicts (%v), want at least 3 so the canvas is judged against a real spread", len(seen), seen)
 	}
+}
+
+// fixtureComponentNames is the fixture's own component list, for counting only
+// the rows the fixture declares: seedReachability creates one of its own beside
+// them, and a bare count(*) would fold the two together and stop meaning
+// "everything declared landed exactly once".
+func fixtureComponentNames(doc devseed.Doc) []string {
+	out := make([]string, 0, len(doc.Components))
+	for _, c := range doc.Components {
+		out = append(out, c.Name)
+	}
+	return out
 }
