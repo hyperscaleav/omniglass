@@ -158,15 +158,15 @@ func TestPathOfLocationHasNoAccessor(t *testing.T) {
 }
 
 // TestListComponentsSkipsAbbrevGetCompactsFully is review finding 3
-// (task-15-review.md #2): attachComponentPath's abbrev resolution
+// (task-15-review.md #2): attachComponentPaths' abbrev resolution
 // (componentTypeIDForProduct plus resolveTypeFacts' own ancestor walk) costs
-// two more queries beyond PathOf's own, paid on every row of an unpaginated
-// LIST for renders.bare, a field no console surface reads. ListComponents
-// must skip that resolution (RenderBare falls back to its own no-abbrev
-// concatenation, still a real value, just not abbrev-compacted);
-// GetComponent, the one-row case, still resolves and substitutes it in
-// full. Both come from the identical scanned row, so a difference here can
-// only be attachPath's own full flag, not fixture drift.
+// two more queries per distinct product on the page, for renders.bare, a
+// field no console surface reads. ListComponents must skip that resolution
+// (RenderBare falls back to its own no-abbrev concatenation, still a real
+// value, just not abbrev-compacted); GetComponent, the one-row case, still
+// resolves and substitutes it in full. Both come from the identical scanned
+// row, so a difference here can only be the attach's own full flag, not
+// fixture drift.
 func TestListComponentsSkipsAbbrevGetCompactsFully(t *testing.T) {
 	gw, _ := newDuplicateNameFixture(t)
 	fx := buildAddressFixture(t, gw)

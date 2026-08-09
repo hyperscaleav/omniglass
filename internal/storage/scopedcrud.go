@@ -70,32 +70,33 @@ type scopedConfig[T any] struct {
 	// the transaction so the ripple cannot commit apart from the delete that caused
 	// it. Optional; nil for entities whose removal ripples nowhere.
 	afterDelete func(ctx context.Context, p *PG, q txQuerier, before *T) error
-	// attachPath fills v's Path/PathSegments/Renders from the database (#627
-	// Task 15), after scan, scoped deliberately to the two read entry points
-	// (scopedGet and scopedList below): the wire's "read struct" is the GET
-	// and LIST response, not every internal resolve a create or move runs
-	// along the way (a parent-name lookup mid-create has no reason to also
-	// compute that parent's own full path). Optional; nil for an entity this
-	// task's grammar does not address (none of the three tree entities leave
-	// it nil today).
+	// attachPaths fills each v's Path/PathSegments/Renders from the database
+	// (#627 Task 15), after scan, scoped deliberately to the two read entry
+	// points (scopedGet and scopedList below): the wire's "read struct" is
+	// the GET and LIST response, not every internal resolve a create or move
+	// runs along the way (a parent-name lookup mid-create has no reason to
+	// also compute that parent's own full path). Optional; nil for an entity
+	// this task's grammar does not address (none of the three tree entities
+	// leave it nil today).
 	//
-	// full is false on scopedList's per-row call and true on scopedGet's
-	// (review finding 3, task-15-review.md #2): a component's bare render
-	// needs its product's resolved component_type abbrev, which costs two
-	// more queries beyond PathOf's own two-to-three (componentTypeIDForProduct
-	// plus resolveTypeFacts' own ancestor walk, up to maxComponentTypeDepth
-	// levels), paid on EVERY row of an unpaginated LIST for a field
+	// One batch hook, not a row hook and a page hook (#643): scopedList
+	// passes the whole page and scopedGet a one-element slice, so both read
+	// paths run the identical code and a GET's render cannot drift from the
+	// same row's render in a LIST. The implementation walks the page's
+	// addresses in a constant number of queries (PathsOf), which is the
+	// point: the per-row walk this replaced cost two to three queries per
+	// row of an unpaginated LIST.
+	//
+	// full is false on scopedList's call and true on scopedGet's (review
+	// finding 3, task-15-review.md #2): a component's bare render needs its
+	// product's resolved component_type abbrev, which costs two more queries
+	// per distinct product (componentTypeIDForProduct plus resolveTypeFacts'
+	// own ancestor walk, up to maxComponentTypeDepth levels) for a field
 	// (renders.bare) no console surface reads (only renders.dash). A single
-	// GET still computes it in full; attachComponentPath is the only
+	// GET still computes it in full; attachComponentPaths is the only
 	// implementation that reads full today, the location/system ones ignore
 	// it (neither has a bare-render abbrev source at all).
-	//
-	// PathOf itself still runs once per row inside scopedList (two to three
-	// queries each, the walk itself, not the abbrev this flag guards), an
-	// N+1 the review flagged as real at estate scale but out of scope for
-	// this fix round; batching it across a whole LIST into one recursive
-	// CTE is tracked separately (#643).
-	attachPath func(ctx context.Context, q querier, v *T, full bool) error
+	attachPaths func(ctx context.Context, q querier, vs []*T, full bool) error
 }
 
 // sameOptional reports whether two optional columns hold the same value, absence
@@ -145,11 +146,16 @@ func scopedList[T any](ctx context.Context, p *PG, cfg scopedConfig[T], read sco
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	if cfg.attachPath != nil {
+	if cfg.attachPaths != nil && len(out) > 0 {
+		// Pointers into out, so the hook fills the rows the caller gets back
+		// rather than copies of them, and one call for the whole page: the
+		// walk behind it is a constant number of queries in page size.
+		vs := make([]*T, len(out))
 		for i := range out {
-			if err := cfg.attachPath(ctx, p.pool, &out[i], false); err != nil {
-				return nil, err
-			}
+			vs[i] = &out[i]
+		}
+		if err := cfg.attachPaths(ctx, p.pool, vs, false); err != nil {
+			return nil, err
 		}
 	}
 	return out, nil
@@ -659,8 +665,8 @@ func scopedGet[T any](ctx context.Context, p *PG, cfg scopedConfig[T], name stri
 	if err != nil {
 		return nil, err
 	}
-	if cfg.attachPath != nil {
-		if err := cfg.attachPath(ctx, p.pool, v, true); err != nil {
+	if cfg.attachPaths != nil {
+		if err := cfg.attachPaths(ctx, p.pool, []*T{v}, true); err != nil {
 			return nil, err
 		}
 	}

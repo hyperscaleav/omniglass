@@ -72,7 +72,7 @@ type System struct {
 	ParentName   *string
 	LocationName *string
 	// Path, PathSegments, and Renders are the dotted address and its two
-	// display-only compact forms (#627 Task 15), attached by attachSystemPath
+	// display-only compact forms (#627 Task 15), attached by attachSystemPaths
 	// after every GET or LIST fetch; see Component's own Path field for the
 	// full reasoning (write paths leave this zero-value).
 	Path         string
@@ -332,25 +332,36 @@ func scanSystem(row pgx.Row) (*System, error) {
 	return &s, nil
 }
 
-// attachSystemPath fills s.Path/.PathSegments/.Renders (#627 Task 15). A
-// system's address has the identical shape a component's does (its own
-// plane root's location, never a location derived from anything else), but
-// no bare-render abbreviation source: a standard (the system-side
-// counterpart of a product) carries no abbrev column the way component_type
-// does, so RenderBare always gets "" here and falls back to its
-// no-abbrev concatenation. full is unused here (nothing to gate: PathOf is
-// the whole cost); it exists so this matches scopedConfig.attachPath's
-// shared signature, which attachComponentPath's own full does need (review
-// finding 3, task-15-review.md #2).
-func attachSystemPath(ctx context.Context, q querier, s *System, full bool) error {
+// attachSystemPaths fills every s's Path/.PathSegments/.Renders (#627 Task
+// 15), in one batch walk however long the page (#643). A system's address
+// has the identical shape a component's does (its own plane root's location,
+// never a location derived from anything else), but no bare-render
+// abbreviation source: a standard (the system-side counterpart of a product)
+// carries no abbrev column the way component_type does, so RenderBare always
+// gets "" here and falls back to its no-abbrev concatenation. full is unused
+// here (nothing to gate: the walk is the whole cost); it exists so this
+// matches scopedConfig.attachPaths' shared signature, which
+// attachComponentPaths' own full does need (review finding 3,
+// task-15-review.md #2).
+func attachSystemPaths(ctx context.Context, q querier, ss []*System, full bool) error {
 	_ = full
-	segs, err := PathOf(ctx, q, systemTable, s.ID)
+	if len(ss) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(ss))
+	for _, s := range ss {
+		ids = append(ids, s.ID)
+	}
+	paths, err := PathsOf(ctx, q, systemTable, ids)
 	if err != nil {
 		return err
 	}
-	s.PathSegments = segs
-	s.Path = strings.Join(segs, ".")
-	s.Renders = Renders{Dash: RenderDash(segs), Bare: RenderBare(segs, "")}
+	for _, s := range ss {
+		segs := paths[s.ID]
+		s.PathSegments = segs
+		s.Path = strings.Join(segs, ".")
+		s.Renders = Renders{Dash: RenderDash(segs), Bare: RenderBare(segs, "")}
+	}
 	return nil
 }
 
@@ -365,7 +376,7 @@ var systemConfig = scopedConfig[System]{
 	table: systemTable, cols: systemCols, resource: "system",
 	scan: scanSystem, idOf: func(s *System) string { return s.ID },
 	notFound: ErrSystemNotFound, forbidden: ErrSystemForbidden, occupied: ErrSystemOccupied,
-	attachPath: attachSystemPath,
+	attachPaths: attachSystemPaths,
 	afterDelete: func(ctx context.Context, p *PG, q txQuerier, before *System) error {
 		if before.LocationID == nil {
 			return nil // placed nowhere: its removal rolls up to nothing
