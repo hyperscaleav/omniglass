@@ -1,6 +1,7 @@
 import { Show, createSignal, createResource } from "solid-js";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { useLogin, useTokenLogin } from "../lib/auth";
+import { resolveNext } from "../lib/next";
 import { api } from "../api/client";
 import { BrandMark, Wordmark } from "../components/Brand";
 import Button from "../components/Button";
@@ -29,20 +30,10 @@ export default function Login() {
     return data?.bootstrapped ?? true;
   });
 
-  // Resolve ?next= to a safe in-app path. Parsing against the current origin and
-  // refusing cross-origin results blocks an open redirect; the /web base is
-  // stripped so the router does not double-count it.
-  const next = (): string => {
-    const raw = typeof params.next === "string" ? params.next : "/";
-    try {
-      const u = new URL(decodeURIComponent(raw), window.location.origin);
-      if (u.origin !== window.location.origin) return "/";
-      const p = u.pathname.replace(/^\/web/, "") || "/";
-      return p.startsWith("/") ? p : "/";
-    } catch {
-      return "/";
-    }
-  };
+  // Resolve ?next= to a safe in-app path. The rule and its inverse live together
+  // in lib/next, because they used to disagree: AuthGuard captured the query
+  // string and this dropped it (#646).
+  const next = (): string => resolveNext(params.next, window.location.origin);
 
   const canSubmit = () => (mode() === "password" ? !!username() && !!password() : !!token());
 

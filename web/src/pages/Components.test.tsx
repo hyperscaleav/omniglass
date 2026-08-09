@@ -194,6 +194,7 @@ describe("Components create-as-route", () => {
     const nameInput = screen.getByPlaceholderText("mic-2 (optional)") as HTMLInputElement;
     expect(nameInput.value).toBe("");
     let captured: unknown;
+    const seen: string[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const { method, url } = req;
@@ -207,7 +208,7 @@ describe("Components create-as-route", () => {
       throw new Error(`unexpected fetch in this test: ${method} ${url}`);
     });
     fireEvent.click(screen.getByText("Create component"));
-    await waitFor(() => expect(captured).toBeTruthy());
+    await waitFor(() => expect(captured).toBeTruthy(), { timeout: 3000 }).catch(() => { throw new Error("urls seen: " + JSON.stringify(seen)); });
     const body = captured as Record<string, unknown>;
     expect("name" in body).toBe(false);
     expect(body.display_name).toBe("Ceiling Mic 9");
@@ -232,6 +233,58 @@ describe("Components create-as-route", () => {
     expect(nameInput.disabled).toBe(false);
     // An inline check button sits beside it.
     expect(screen.getByLabelText("Check name")).toBeTruthy();
+  });
+
+  // #644: names are unique within their PLACEMENT since #627, so two different
+  // rooms can legally both be called "415a". Addressing the precheck's location
+  // by name therefore cannot say which one is meant: the request errors and the
+  // catch swallows it into silence, so the operator loses the live "this name is
+  // taken" hint for exactly the estates where duplicate names are normal. The
+  // row already carries the uuid, and :checkName dual-accepts one (ADR-0062).
+  it("addresses the name precheck's placement by uuid, not by a placement-scoped name", async () => {
+    const locID = uuidFor("loc-415a");
+    const placed: Component = { ...comp, location: "415a", location_id: locID };
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...COMPONENTS_KEY], [placed]);
+    qc.setQueryData([...SYSTEMS_KEY], []);
+    qc.setQueryData([...LOCATIONS_KEY], [{ id: locID, name: "415a" }]);
+    qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...ME_KEY], me);
+    qc.setQueryData([...TAGS_KEY], []);
+    qc.setQueryData([...entityTagsKey("component", "mic-2")], []);
+    window.history.pushState({}, "", "/components/mic-2");
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="/components" component={Components} />
+          <Route path="/components/:id" component={Components} />
+        </Router>
+      </QueryClientProvider>
+    ));
+
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    const nameInput = (await screen.findByDisplayValue("mic-2")) as HTMLInputElement;
+
+    let captured: unknown;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const { method, url } = req;
+      if (method === "POST" && url.includes("checkName")) {
+        captured = JSON.parse(await req.clone().text());
+        return new Response(JSON.stringify({ available: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({}), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+
+    // The check button is disabled while the name still equals the stored one,
+    // so a precheck only ever runs against a name the operator has changed.
+    fireEvent.input(nameInput, { target: { value: "mic-3" } });
+    fireEvent.click(screen.getByLabelText("Check name"));
+    await waitFor(() => expect(captured).toBeTruthy());
+    const body = captured as Record<string, unknown>;
+    expect(body.location).toBe(locID);
+    expect(body.location).not.toBe("415a");
   });
 
   it("a fresh detail view keeps the name read-only", async () => {

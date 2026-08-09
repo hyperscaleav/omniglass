@@ -283,7 +283,7 @@ export default function Locations() {
     const [initialParentName, setInitialParentName] = createSignal("");
     async function runCheck() {
       setChecking(true);
-      try { setNameCheck(await checkLocationName(name().trim(), n().raw.parent)); }
+      try { setNameCheck(await checkLocationName(name().trim(), n().raw.parent_id)); }
       catch { setNameCheck(null); }
       finally { setChecking(false); }
     }
