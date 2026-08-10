@@ -92,6 +92,14 @@ the [cascade](/architecture/cascade/#structural-multi-membership-a-component-in-
 (`?system=` asks as a specific system; otherwise the primary membership seeds the chain), so a shared device
 answers differently per system.
 
+**The cascade is authorized by the component it resolves for, not band by band**
+([ADR-0093](/architecture/decisions/#adr-0093-the-tag-cascade-follows-the-component-it-resolves-for)). A caller
+who can read the component sees every value that cascades onto it, including one owned by a system or a
+location they could not have listed directly, because a resolved value is part of that component's own
+configuration and reporting a filtered one would describe a configuration the platform does not actually
+apply. `?system=` narrows that answer to one membership and can never widen it: the named system must already
+be one the component belongs to.
+
 **Systems and locations resolve too.** A **location** resolves `platform` plus its own location tree; a
 **system** resolves `platform`, its own system tree, and **the location it is placed at** (its `location_id`
 tree), so a system in a PCI building surfaces `compliance: pci`; a **node** is estate-wide, resolving
