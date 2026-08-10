@@ -127,6 +127,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0090](#adr-0090-a-derived-value-is-a-default-that-tracks-until-touched) | 2026-08-08 | Accepted | A derivable value fills at create, tracks live while the platform holds the pen, freezes on the operator's first edit, and resumes tracking only on an explicit reset; `component.name_generated` ships `DEFAULT false`, not the epic's `DEFAULT true`, so no pre-existing operator-typed name is silently claimed by the platform |
 | [ADR-0091](#adr-0091-an-update_mask-says-which-fields-a-patch-writes) | 2026-08-09 | Accepted | A `PATCH` body may carry an optional `update_mask` with AIP-134 semantics exactly (absent is the implied mask of populated fields, present writes exactly what it names so a zero value clears, `["*"]` is full replacement, an unknown field is a 422 naming it); it rides in the body, the three-state string sentinel stays, the other 108 `PATCH` routes are not retrofitted, and the role declarations convert from `PUT` to `PATCH` as its first consumer |
 | [ADR-0092](#adr-0092-a-location-move-recomputes-both-ancestor-chains) | 2026-08-09 | Accepted | `MoveLocation` recomputes health over both ancestor chains (joined and left) inside its own transaction, the second and last member of the exception class ADR-0088 carved out for a system's relocate; one named row per side seeds the recursive ancestry walk the query already performs, and a no-op move recomputes nothing |
+| [ADR-0093](#adr-0093-the-tag-cascade-follows-the-component-it-resolves-for) | 2026-08-09 | Accepted | Effective tags are scoped by the component the cascade resolves FOR, not per band: a caller who can read the component sees every value that cascades onto it, including from systems and locations it could not list directly; the `?system=` seed is a filter over that answer, never a widening of it |
 | [ADR-0094](#adr-0094-benchmarks-are-the-second-performance-instrument-and-they-gate-nothing) | 2026-08-09 | Accepted | Performance has two instruments: round-trip counting gates in `make test`, wall-clock benchmarks (`make bench`, two estate sizes, fixtures outside the timed section) are diagnostic and gate nothing; no CI perf job, no stored baseline, no `EXPLAIN` assertions (deferred), no timing assertion anywhere, and one candidate benchmark was measured as three-quarters transport and dropped rather than shipped |
 
 ## Entries
@@ -3375,6 +3376,7 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   [#639](https://github.com/hyperscaleav/omniglass/issues/639) and
   [#640](https://github.com/hyperscaleav/omniglass/issues/640).
 
+
 ### ADR-0092: A location move recomputes both ancestor chains
 
 - **Date:** 2026-08-09 | **Status:** Accepted | **Pages:** [health](/architecture/health/),
@@ -3408,6 +3410,35 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   confined to the recorded history, which is exactly the "a missing trigger is a hole in the history"
   cost the health page enumerates its trigger list to avoid.
 
+### ADR-0093: The tag cascade follows the component it resolves for
+
+- **Date:** 2026-08-09 | **Status:** Accepted | **Pages:** [tags](/architecture/tags/),
+  [identity and access](/architecture/identity-access/)
+- **Decision:** Effective tags are authorized by the **component the cascade resolves for**, and by
+  nothing else. A caller who can read that component sees every value that cascades onto it,
+  including values owned by a system or a location the caller could not have listed directly. The
+  `?system=` parameter is a **filter over that answer**, choosing which membership seeds the system
+  band, and never a widening of it: `seed_sys` already requires the named system to be one the
+  component belongs to. Per-band scope checks are deliberately NOT applied.
+- **Context:** [#641](https://github.com/hyperscaleav/omniglass/issues/641) proposed resolving
+  `?system=` through the caller's read scope. Three findings closed it as the posture we already
+  hold rather than a defect. First, the obvious implementation is the exact change
+  [#627](https://github.com/hyperscaleav/omniglass/issues/627) made and reverted as a critical:
+  `ResolveTags` resolves its scope for **component** (the route is gated on `component:read`), and
+  `inScopeTree` walks the target table's own chain, so a component-tier id can never appear in a
+  system's ancestor chain and every non-all caller's band silently vanished, a wrong answer with no
+  error rather than a refusal. `TestResolveTagsSystemBandSurvivesScopedCaller` stands as that
+  regression and asserts the band IS present for a scoped caller. Second, the check would not close
+  the disclosure it named: the same values reach the same caller through the primary-membership
+  default seed, through `sys_chain`'s ancestor walk above the seeded system, and through the
+  deliberately scopeless batch resolver behind the directory's Tags column. Third, and decisively,
+  the cascade is a property OF the component: a value that resolves onto a component the caller may
+  read is part of that component's configuration, and withholding it would report a resolved
+  configuration that no longer resolves to what the platform actually applies. The alternative, a
+  per-band scope-filtered cascade, is a coherent design and a much larger one (per-tier scopes
+  threaded from the API, a rule for the default seed and the ancestor walk, redaction of shadowed
+  candidates, a batch contract, and that regression rewritten). It is not ruled out forever; it is
+  ruled out as a patch, and it would need a threat model that wants it.
 ### ADR-0094: Benchmarks are the second performance instrument, and they gate nothing
 
 - **Date:** 2026-08-09 | **Status:** Accepted | **Pages:** [test-driven](/contributing/test-driven/)
