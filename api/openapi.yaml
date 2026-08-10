@@ -364,6 +364,9 @@ components:
             - "null"
         display_name:
           type: string
+        display_name_generated:
+          description: "Whether the platform rendered this display name from a label rule rather than an operator typing it. Read-only: write display_name to claim it, write an empty display_name to hand it back."
+          type: boolean
         effective_tags:
           additionalProperties:
             type: string
@@ -422,6 +425,7 @@ components:
         - name
         - system_count
         - name_generated
+        - display_name_generated
       type: object
     ComponentMetricsOutputBody:
       additionalProperties: false
@@ -3151,6 +3155,9 @@ components:
             - "null"
         display_name:
           type: string
+        display_name_generated:
+          description: "Whether the platform rendered this display name from a label rule rather than an operator typing it. Read-only: write display_name to claim it, write an empty display_name to hand it back."
+          type: boolean
         effective_tags:
           additionalProperties:
             type: string
@@ -3188,6 +3195,7 @@ components:
       required:
         - id
         - name
+        - display_name_generated
         - location_type
         - location_type_id
       type: object
@@ -5185,6 +5193,9 @@ components:
             - "null"
         display_name:
           type: string
+        display_name_generated:
+          description: "Whether the platform rendered this display name from a label rule rather than an operator typing it. Read-only: write display_name to claim it, write an empty display_name to hand it back."
+          type: boolean
         effective_tags:
           additionalProperties:
             type: string
@@ -5238,6 +5249,7 @@ components:
       required:
         - id
         - name
+        - display_name_generated
         - member_count
       type: object
     SystemMemberBody:

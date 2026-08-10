@@ -12,28 +12,30 @@ import (
 
 // systemBody is the wire shape of a system.
 type systemBody struct {
-	ID            string            `json:"id"`
-	Name          string            `json:"name"`
-	DisplayName   string            `json:"display_name,omitempty"`
-	Standard      string            `json:"standard,omitempty" doc:"The standard's handle, for display; omitted for a one-off system"`
-	StandardID    string            `json:"standard_id,omitempty" doc:"The standard's uuid; the stable form of standard"`
-	SystemType    string            `json:"system_type,omitempty" doc:"The system_type's name, for display: what kind of space this is (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the blueprint it is built to."`
-	SystemTypeID  string            `json:"system_type_id,omitempty" doc:"The system_type's uuid; the stable form of system_type"`
-	ParentID      *string           `json:"parent_id,omitempty" doc:"The parent system's id, the canonical handle"`
-	Parent        *string           `json:"parent,omitempty" doc:"The parent system's name, for display; absent for a root system"`
-	LocationID    *string           `json:"location_id,omitempty" doc:"The location's id, the canonical handle"`
-	Location      *string           `json:"location,omitempty" doc:"The location's name, for display"`
-	MemberCount   int               `json:"member_count" doc:"How many components are bound into this system"`
-	Path          string            `json:"path,omitempty" doc:"The dotted address (e.g. boi.17c.$sys.av). Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it)."`
-	PathSegments  []string          `json:"path_segments,omitempty" doc:"path split on '.', accessors included, so the round trip through the resolver stays lossless."`
-	Renders       *renderBody       `json:"renders,omitempty" doc:"Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy."`
-	Actions       []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
-	EffectiveTags map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this system (platform, its location, its system tree); for the Tags column."`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name,omitempty"`
+	// The LABEL's pen (#682); see componentBody for why it is read-only.
+	DisplayNameGenerated bool              `json:"display_name_generated" doc:"Whether the platform rendered this display name from a label rule rather than an operator typing it. Read-only: write display_name to claim it, write an empty display_name to hand it back."`
+	Standard             string            `json:"standard,omitempty" doc:"The standard's handle, for display; omitted for a one-off system"`
+	StandardID           string            `json:"standard_id,omitempty" doc:"The standard's uuid; the stable form of standard"`
+	SystemType           string            `json:"system_type,omitempty" doc:"The system_type's name, for display: what kind of space this is (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the blueprint it is built to."`
+	SystemTypeID         string            `json:"system_type_id,omitempty" doc:"The system_type's uuid; the stable form of system_type"`
+	ParentID             *string           `json:"parent_id,omitempty" doc:"The parent system's id, the canonical handle"`
+	Parent               *string           `json:"parent,omitempty" doc:"The parent system's name, for display; absent for a root system"`
+	LocationID           *string           `json:"location_id,omitempty" doc:"The location's id, the canonical handle"`
+	Location             *string           `json:"location,omitempty" doc:"The location's name, for display"`
+	MemberCount          int               `json:"member_count" doc:"How many components are bound into this system"`
+	Path                 string            `json:"path,omitempty" doc:"The dotted address (e.g. boi.17c.$sys.av). Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it)."`
+	PathSegments         []string          `json:"path_segments,omitempty" doc:"path split on '.', accessors included, so the round trip through the resolver stays lossless."`
+	Renders              *renderBody       `json:"renders,omitempty" doc:"Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy."`
+	Actions              []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
+	EffectiveTags        map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this system (platform, its location, its system tree); for the Tags column."`
 }
 
 func toSystemBody(s *storage.System) systemBody {
 	return systemBody{
-		ID: s.ID, Name: s.Name, DisplayName: s.DisplayName,
+		ID: s.ID, Name: s.Name, DisplayName: s.DisplayName, DisplayNameGenerated: s.DisplayNameGenerated,
 		Standard: derefStr(s.StandardName), StandardID: derefStr(s.StandardID),
 		SystemType: derefStr(s.SystemTypeName), SystemTypeID: derefStr(s.SystemTypeID),
 		ParentID: s.ParentID, Parent: s.ParentName, LocationID: s.LocationID, Location: s.LocationName,

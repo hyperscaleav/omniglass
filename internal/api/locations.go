@@ -13,23 +13,25 @@ import (
 // locationBody is the wire shape of a location: name-addressable, classified by
 // location_type, optionally nested under a parent (by id).
 type locationBody struct {
-	ID             string            `json:"id"`
-	Name           string            `json:"name"`
-	DisplayName    string            `json:"display_name,omitempty"`
-	LocationType   string            `json:"location_type" doc:"The location_type name"`
-	LocationTypeID string            `json:"location_type_id" doc:"The location_type's uuid, the stable form of location_type"`
-	ParentID       *string           `json:"parent_id,omitempty" doc:"The parent location's id, the canonical handle"`
-	Parent         *string           `json:"parent,omitempty" doc:"The parent location's name, for display; absent for a site root"`
-	Path           string            `json:"path,omitempty" doc:"The dotted address (e.g. boi.17c.415a); no accessor, since a location's own address IS its location-tree ancestor chain. Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it)."`
-	PathSegments   []string          `json:"path_segments,omitempty" doc:"path split on '.'."`
-	Renders        *renderBody       `json:"renders,omitempty" doc:"Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy."`
-	Actions        []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
-	EffectiveTags  map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this location (platform and its location tree); for the Tags column."`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name,omitempty"`
+	// The LABEL's pen (#682); see componentBody for why it is read-only.
+	DisplayNameGenerated bool              `json:"display_name_generated" doc:"Whether the platform rendered this display name from a label rule rather than an operator typing it. Read-only: write display_name to claim it, write an empty display_name to hand it back."`
+	LocationType         string            `json:"location_type" doc:"The location_type name"`
+	LocationTypeID       string            `json:"location_type_id" doc:"The location_type's uuid, the stable form of location_type"`
+	ParentID             *string           `json:"parent_id,omitempty" doc:"The parent location's id, the canonical handle"`
+	Parent               *string           `json:"parent,omitempty" doc:"The parent location's name, for display; absent for a site root"`
+	Path                 string            `json:"path,omitempty" doc:"The dotted address (e.g. boi.17c.415a); no accessor, since a location's own address IS its location-tree ancestor chain. Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it)."`
+	PathSegments         []string          `json:"path_segments,omitempty" doc:"path split on '.'."`
+	Renders              *renderBody       `json:"renders,omitempty" doc:"Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy."`
+	Actions              []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
+	EffectiveTags        map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this location (platform and its location tree); for the Tags column."`
 }
 
 func toLocationBody(l *storage.Location) locationBody {
 	return locationBody{
-		ID: l.ID, Name: l.Name, DisplayName: l.DisplayName,
+		ID: l.ID, Name: l.Name, DisplayName: l.DisplayName, DisplayNameGenerated: l.DisplayNameGenerated,
 		LocationType: l.LocationType, LocationTypeID: l.LocationTypeID, ParentID: l.ParentID, Parent: l.ParentName,
 		Path: l.Path, PathSegments: l.PathSegments, Renders: toRenderBody(l.Path, l.Renders),
 	}
