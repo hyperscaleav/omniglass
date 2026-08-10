@@ -240,10 +240,12 @@ systems:
   - name: boardroom-a
     display_name: Boardroom A
     standard: meeting-room
+    system_type: board
     location: hq-west-2-boardroom
   - name: boardroom-b
     display_name: Boardroom B
     standard: meeting-room
+    system_type: board
     location: hq-west-2-boardroom
 
 # Membership without a job. The shared bar staffs the microphone role in both halves

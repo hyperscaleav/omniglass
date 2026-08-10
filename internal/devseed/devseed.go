@@ -45,12 +45,14 @@ type Doc struct {
 }
 
 // System is one example system: a thing in a room that either works or does not.
-// Standard names a boot-seeded blueprint whose roles it inherits live; Location
-// names a fixture location.
+// Standard names a boot-seeded blueprint whose roles it inherits live;
+// SystemType names a boot-seeded coarse space classifier (what kind of space it
+// is, a separate axis from the standard); Location names a fixture location.
 type System struct {
 	Name        string `yaml:"name"`
 	DisplayName string `yaml:"display_name"`
 	Standard    string `yaml:"standard"`
+	SystemType  string `yaml:"system_type"`
 	Location    string `yaml:"location"`
 }
 
@@ -376,6 +378,10 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 		if s.Standard != "" {
 			std := s.Standard
 			spec.StandardID = &std
+		}
+		if s.SystemType != "" {
+			st := s.SystemType
+			spec.SystemTypeID = &st
 		}
 		if s.Location != "" {
 			loc := s.Location
