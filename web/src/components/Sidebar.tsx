@@ -2,6 +2,7 @@ import { For, Show, createMemo, createResource } from "solid-js";
 import { A, useLocation, useNavigate } from "@solidjs/router";
 import { navItems, filterNav, type NavItem } from "../lib/nav";
 import { useMe, useLogout, can, fetchMyAvatar } from "../lib/auth";
+import { principalName } from "../lib/principals";
 import { PanelLeft, LogOut } from "./icons";
 import { BrandMark, Wordmark } from "./Brand";
 import Button from "./Button";
@@ -31,9 +32,9 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
   const ident = () => {
     const m = me.data;
     if (!m) return { name: "—", role: "" };
-    // Prefer the display name (falls through an empty one to the username), so
-    // setting it updates both the label and the initials avatar below.
-    const name = m.human?.display_name || m.human?.username || m.service?.label || m.principal.kind;
+    // The one principal rule (lib/principals), so setting a display name updates
+    // the label here, the initials avatar below, and the admin directory alike.
+    const name = principalName({ human: m.human, service: m.service, kind: m.principal.kind });
     return { name, role: m.grants[0]?.role ?? m.principal.kind };
   };
   // The tabs this principal may see: the ungated ones (Home, Explore, Learn, and

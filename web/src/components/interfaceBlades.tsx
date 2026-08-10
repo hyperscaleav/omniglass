@@ -282,7 +282,7 @@ function CreateInterfaceForm(props: { onCreated: (i: Interface) => void; compone
             <label class="eyebrow mb-1.5 block" for="new-iface-component">Component</label>
             <select id="new-iface-component" class="select select-bordered w-full" value={component()} onChange={(e) => setComponent(e.currentTarget.value)} disabled={busy()}>
               <option value="">Server-hosted (no component)</option>
-              <For each={components.data}>{(c) => <option value={c.name}>{c.display_name || c.name}</option>}</For>
+              <For each={components.data}>{(c) => <option value={c.name}>{entityLabel(c)}</option>}</For>
             </select>
           </div>
         }

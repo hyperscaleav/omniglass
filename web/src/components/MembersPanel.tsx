@@ -1,3 +1,4 @@
+import { entityLabel } from "../lib/entities";
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
@@ -145,7 +146,7 @@ export default function MembersPanel(props: {
                   when={roleOf().get(m.component)}
                   fallback={<span class="shrink-0 text-[10.5px] italic text-base-content/35">no role</span>}
                 >
-                  {(role) => <span class="badge badge-ghost badge-sm shrink-0">fills {role().display_name || role().name}</span>}
+                  {(role) => <span class="badge badge-ghost badge-sm shrink-0">fills {entityLabel(role())}</span>}
                 </Show>
                 <Show when={props.canUpdate}>
                   <Button

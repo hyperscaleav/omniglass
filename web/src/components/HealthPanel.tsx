@@ -1,3 +1,4 @@
+import { entityLabel } from "../lib/entities";
 import { For, Show, createMemo, type JSX } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
 import HealthBadge from "./HealthBadge";
@@ -114,7 +115,7 @@ function ChainRow(props: { cause: Cause; role: HealthRole; onOpenComponent?: (na
       </Step>
       <Arrow />
       <Step caption="Role below quorum">
-        <span class="text-[12.5px] font-medium">{r().display_name || r().name}</span>
+        <span class="text-[12.5px] font-medium">{entityLabel(r())}</span>
         <span class="tnum text-[11.5px] text-base-content/60">{quorumLabel(r())}</span>
       </Step>
       <Arrow />
@@ -135,7 +136,7 @@ function ImpairedRole(props: { role: HealthRole; verdict: string; onOpenComponen
   return (
     <div class="flex flex-col gap-2 px-3 py-3">
       <div class="flex flex-wrap items-baseline gap-2">
-        <span class="text-sm font-medium">{r().display_name || r().name}</span>
+        <span class="text-sm font-medium">{entityLabel(r())}</span>
         <span class="font-data text-[11px] text-base-content/45">{r().name}</span>
         <span class="flex-1" />
         <span class="badge badge-warning badge-soft badge-sm">impaired</span>
@@ -262,7 +263,7 @@ export default function SystemHealthPanel(props: { system: string; onOpenCompone
               <For each={holding()}>
                 {(r) => (
                   <span class="badge badge-ghost badge-sm gap-1" title={quorumLabel(r)}>
-                    {r.display_name || r.name}
+                    {entityLabel(r)}
                     <span class="tnum text-[10px] text-base-content/50">{r.satisfying}/{r.quorum}</span>
                   </span>
                 )}
@@ -282,8 +283,8 @@ export default function SystemHealthPanel(props: { system: string; onOpenCompone
               <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">not counted</span>
               <For each={inactive()}>
                 {(r) => (
-                  <span class="badge badge-ghost badge-sm gap-1" title={`${r.display_name || r.name} belongs to ${r.choice}/${r.alternate}, a choice a different alternate answered`}>
-                    {r.display_name || r.name}
+                  <span class="badge badge-ghost badge-sm gap-1" title={`${entityLabel(r)} belongs to ${r.choice}/${r.alternate}, a choice a different alternate answered`}>
+                    {entityLabel(r)}
                   </span>
                 )}
               </For>

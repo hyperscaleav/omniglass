@@ -18,7 +18,7 @@ import {
 } from "../lib/drivers";
 import { useMe, can } from "../lib/auth";
 import { registryLock } from "../lib/catalog";
-import { createIdentity } from "../lib/entities";
+import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
@@ -56,7 +56,7 @@ export default function Drivers() {
         loading: () => drivers.isPending,
         error: () => drivers.error,
         filterKeys: [
-          { key: "name", type: "string", hint: "substring", get: (d) => `${d.name} ${d.display_name}`, values: () => [] },
+          { key: "name", type: "string", hint: "substring", get: (d) => `${entityLabel(d)} ${d.name}`, values: () => [] },
           { key: "official", type: "string", hint: "exact", get: (d) => (d.official ? "official" : "custom"), values: () => ["official", "custom"] },
         ],
         filterPlaceholder: "filter drivers by name…",

@@ -79,13 +79,19 @@ export default function Systems() {
   const standardOptions = createMemo(() =>
     [...(standards.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name)),
   );
-  const standardLabel = (handle?: string) =>
-    handle ? (standards.data ?? []).find((s) => s.name === handle)?.display_name ?? handle : "";
+  const standardLabel = (handle?: string) => {
+    if (!handle) return "";
+    const row = (standards.data ?? []).find((s) => s.name === handle);
+    return row ? entityLabel(row) : handle;
+  };
   // The system_type picker reads through SystemTypeSelect (the tree, indented),
   // not a flat <select>: the taxonomy nests and the nesting is the point. The
   // label lookup is the same shape the standard's is.
-  const systemTypeLabel = (handle?: string) =>
-    handle ? (systemTypes.data ?? []).find((t) => t.name === handle)?.display_name ?? handle : "";
+  const systemTypeLabel = (handle?: string) => {
+    if (!handle) return "";
+    const row = (systemTypes.data ?? []).find((t) => t.name === handle);
+    return row ? entityLabel(row) : handle;
+  };
   // Keyed AND valued on uuid, not name (#627): two same-named locations or
   // systems would otherwise render as visually identical, value-identical
   // options, and posting either would name an ambiguous ref. The API

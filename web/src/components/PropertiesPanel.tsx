@@ -1,3 +1,4 @@
+import { entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, on, onCleanup, type JSX } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
@@ -229,7 +230,7 @@ export default function PropertiesPanel(
   const propRow = (p: EffectiveProperty, first: () => boolean) => (
     <>
       <FieldControl
-        label={p.display_name || p.property_type_name}
+        label={entityLabel({ name: p.property_type_name, display_name: p.display_name })}
         dataType={p.data_type as ValueType}
         resolved={resolvedStr(p)}
         isSet={p.is_set}

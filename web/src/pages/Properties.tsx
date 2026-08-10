@@ -1,3 +1,4 @@
+import { entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
@@ -65,7 +66,7 @@ export default function Properties(): JSX.Element {
           loading: () => properties.isPending,
           error: () => properties.error,
           filterKeys: [
-            { key: "name", type: "string", hint: "substring", get: (r) => `${r.name} ${r.display_name ?? ""}`, values: () => [] },
+            { key: "name", type: "string", hint: "substring", get: (r) => `${entityLabel(r)} ${r.name}`, values: () => [] },
             { key: "type", type: "string", hint: "exact", get: (r) => r.data_type, values: () => PROPERTY_DATA_TYPES },
             { key: "official", type: "string", hint: "exact", get: (r) => (r.official ? "official" : "custom"), values: () => ["official", "custom"] },
           ],

@@ -6,7 +6,7 @@ import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import BladeField, { EMPTY_VALUE } from "../components/BladeField";
 import FieldRow from "../components/FieldRow";
-import { createIdentity } from "../lib/entities";
+import { createIdentity, entityLabel } from "../lib/entities";
 import { useFormActions } from "../lib/formactions";
 import { Plus } from "../components/icons";
 import {
@@ -80,7 +80,7 @@ export default function Vendors() {
         loading: () => makes.isPending,
         error: () => makes.error,
         filterKeys: [
-          { key: "name", type: "string", hint: "substring", get: (m) => `${m.name} ${m.display_name}`, values: () => [] },
+          { key: "name", type: "string", hint: "substring", get: (m) => `${entityLabel(m)} ${m.name}`, values: () => [] },
           { key: "kind", type: "string", hint: "exact", get: (m) => m.kind, values: () => VENDOR_KINDS },
           { key: "official", type: "string", hint: "exact", get: (m) => (m.official ? "official" : "custom"), values: () => ["official", "custom"] },
         ],

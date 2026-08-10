@@ -263,7 +263,11 @@ export default function Locations() {
       const pool = allowed.length === 0 ? (locations.data ?? []) : (locations.data ?? []).filter((l) => allowed.includes(l.location_type));
       return pool.map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id, rank: TYPE_RANK[l.location_type] ?? 9 }));
     });
-    const parentTypeLabel = (nm: string) => (nm === ROOT_PLACEMENT ? "Root" : locationTypes.data?.find((t) => t.name === nm)?.display_name ?? nm);
+    const parentTypeLabel = (nm: string) => {
+      if (nm === ROOT_PLACEMENT) return "Root";
+      const row = locationTypes.data?.find((t) => t.name === nm);
+      return row ? entityLabel(row) : nm;
+    };
     const parentHint = () =>
       allowedParentTypes().length
         ? `Restricted to: ${allowedParentTypes().map(parentTypeLabel).join(", ")}. Moving back to root is not supported here.`

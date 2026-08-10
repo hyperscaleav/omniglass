@@ -1,3 +1,4 @@
+import { entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
@@ -274,8 +275,8 @@ function CreateSecretForm(p: { onCreated: (s: Secret) => void }): JSX.Element {
   // (ADR-0062, uuid-or-name dual accept).
   const ownerTree = createMemo<TreeNode[]>(() => {
     switch (ownerKind()) {
-      case "location": return (locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: l.display_name || l.name, parentId: l.parent_id }));
-      case "component": return (components.data ?? []).map((c) => ({ id: c.id, value: c.id, label: c.display_name || c.name, parentId: c.parent_id }));
+      case "location": return (locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id }));
+      case "component": return (components.data ?? []).map((c) => ({ id: c.id, value: c.id, label: entityLabel(c), parentId: c.parent_id }));
       default: return [];
     }
   });

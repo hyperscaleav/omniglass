@@ -1,3 +1,4 @@
+import { entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
@@ -63,7 +64,7 @@ export default function Metrics(): JSX.Element {
           loading: () => metrics.isPending,
           error: () => metrics.error,
           filterKeys: [
-            { key: "name", type: "string", hint: "substring", get: (r) => `${r.name} ${r.display_name ?? ""}`, values: () => [] },
+            { key: "name", type: "string", hint: "substring", get: (r) => `${entityLabel(r)} ${r.name}`, values: () => [] },
             { key: "type", type: "string", hint: "exact", get: (r) => r.data_type, values: () => METRIC_DATA_TYPES },
             { key: "unit", type: "string", hint: "exact", get: (r) => r.unit ?? "", values: (rs) => [...new Set(rs.map((r) => r.unit ?? "").filter(Boolean))].sort() },
             { key: "official", type: "string", hint: "exact", get: (r) => (r.official ? "official" : "custom"), values: () => ["official", "custom"] },

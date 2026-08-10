@@ -1,5 +1,6 @@
 import { createSignal } from "solid-js";
 import { api } from "../api/client";
+import { entityLabel } from "./entities";
 import type { Grant, CreateGrant } from "./principals";
 
 // The principal-groups data layer: a group holds role x scope grants that its
@@ -30,9 +31,9 @@ export function consumePendingGroupEdit(id: string): boolean {
   return true;
 }
 
-// groupName is a group's human label: its display name, else its name.
+// groupName is a group's human label, through the one renderer (#683).
 export function groupName(g: Group): string {
-  return g.display_name || g.name;
+  return entityLabel(g);
 }
 // memberName is a member's label: a human's username, else a service's display name (its label).
 export function memberName(m: GroupMember): string {
