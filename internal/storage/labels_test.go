@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strconv"
 	"testing"
 
 	"bytes"
@@ -189,6 +190,52 @@ func TestAnUnparseableRuleIsRefusedAndNeverStored(t *testing.T) {
 	}
 	if ct.LabelRule == nil || *ct.LabelRule != "{{.TypeName | title}}" {
 		t.Fatalf("stored rule = %v, want the good rule to have survived every refusal", ct.LabelRule)
+	}
+}
+
+// The grammar refusal reaches the STORAGE layer, which is what makes it a fix
+// rather than a library nicety: a rule that would allocate without bound is
+// refused at rule-edit time by the same validateLabelRule the syntax errors go
+// through, so it never reaches a column that a later write path executes.
+//
+// The rule below is 437 bytes and allocates 85 MB while writing 8, and each
+// further doubling is 35 more bytes for twice the memory. Stored on a shipped
+// type it forks that row and becomes effective for every component of it, so it
+// would re-trigger on every later create, rename, move, reclassify and reset.
+func TestARuleThatWouldAllocateWithoutBoundCannotBeStored(t *testing.T) {
+	gw, ctx := seededGateway(t)
+
+	assign := `{{$a := printf "%1000s" .TypeName}}`
+	for range 14 {
+		assign += `{{$a = printf "%s%s" $a $a}}`
+	}
+	assign += `{{len $a}}`
+
+	nested := `(printf "%1000s" .TypeName)`
+	for range 8 {
+		nested = `(printf "%s%s" ` + nested + ` ` + nested + `)`
+	}
+	// Piped into an allowed function, so the refusal comes from the nested
+	// printf: banning assignment alone would not catch this one.
+	nested = `{{` + nested + ` | slug}}`
+
+	for _, bad := range []string{assign, nested, `{{printf "%100000s" .TypeName}}`} {
+		if _, err := gw.UpdateComponentType(ctx, "", "display", storage.ComponentTypePatch{LabelRule: &bad}); !errors.Is(err, storage.ErrInvalidLabelRule) {
+			t.Fatalf("UpdateComponentType with a %d-byte unbounded rule = %v, want ErrInvalidLabelRule", len(bad), err)
+		}
+		if _, err := gw.CreateProduct(ctx, "", storage.Product{Name: "p" + strconv.Itoa(len(bad)), DisplayName: "P", ComponentType: "display", LabelRule: &bad}); !errors.Is(err, storage.ErrInvalidLabelRule) {
+			t.Fatalf("CreateProduct with an unbounded rule = %v, want ErrInvalidLabelRule", err)
+		}
+		if _, err := gw.SetLabelRule(ctx, "", "component", bad); !errors.Is(err, storage.ErrInvalidLabelRule) {
+			t.Fatalf("SetLabelRule with an unbounded rule = %v, want ErrInvalidLabelRule", err)
+		}
+	}
+	ct, err := gw.GetComponentType(ctx, "display")
+	if err != nil {
+		t.Fatalf("get component_type: %v", err)
+	}
+	if ct.LabelRule != nil {
+		t.Fatalf("stored rule = %q, want none of the refusals to have landed", *ct.LabelRule)
 	}
 }
 

@@ -157,7 +157,6 @@ func TestARuleCannotTraverseOutOfTheDataMap(t *testing.T) {
 	}{
 		{"field of a string", "{{.TypeName.Anything}}"},
 		{"method on a string", "{{.TypeName.ToUpper}}"},
-		{"call a data value", "{{call .TypeName}}"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := mustParse(t, tc.src)
@@ -170,22 +169,12 @@ func TestARuleCannotTraverseOutOfTheDataMap(t *testing.T) {
 	}
 }
 
-// index is the builtin that DOES work here, and it is worth pinning rather than
-// assuming: text/template indexes maps and strings, so `index` over Data is a
-// key lookup and over a value is a byte of a string already in the map. Neither
-// reaches anything the map does not already carry, which is the property that
-// matters. A key the map does not hold indexes to nothing, exactly as the
-// field form does.
-func TestIndexIsConfinedToTheDataMap(t *testing.T) {
-	r := mustParse(t, `[{{index . "TypeName"}}][{{index . "Secret"}}]`)
-	got, err := r.Render(label.Data{"TypeName": "Ceiling Mic"})
-	if err != nil {
-		t.Fatalf("Render: %v", err)
-	}
-	if got != "[Ceiling Mic][]" {
-		t.Fatalf("Render = %q, want %q", got, "[Ceiling Mic][]")
-	}
-}
+// `call` and `index` are the two builtins that would reach a value some other
+// way, and both are now refused by name at parse time rather than left to fail
+// (or, in index's case, quietly succeed) at execution. They are listed with the
+// rest of the closed grammar in
+// TestParseRefusesTheConstructsThatMakeWorkUnbounded; the field form above is
+// what remains, and it still degrades.
 
 // The other half of the same argument: a name that looks like a credential is
 // not special-cased, it is simply not a key. It renders as nothing, exactly
@@ -203,15 +192,115 @@ func TestARuleAskingForACredentialGetsNothing(t *testing.T) {
 }
 
 // A rule that renders an absurd string is a render failure, not a row with a
-// megabyte in a text column. printf is a text/template builtin that cannot be
-// removed, and its width verb is the one way a closed string map can still
-// produce output far larger than its inputs.
+// megabyte in a text column. With the grammar closed (below) the only way left
+// to reach the ceiling is literal text an operator typed, which is exactly the
+// case the ceiling is for.
 func TestRenderRefusesAnAbsurdlyLongResult(t *testing.T) {
-	r := mustParse(t, `{{printf "%100000s" .TypeName}}`)
+	r := mustParse(t, strings.Repeat("x", label.MaxLen+1))
 	if _, err := r.Render(label.Data{"TypeName": "x"}); err == nil {
-		t.Fatal("Render of a 100000-wide printf succeeded, want a refusal")
+		t.Fatal("Render of an over-long literal succeeded, want a refusal")
 	} else if !errors.Is(err, label.ErrRuleFailed) {
 		t.Fatalf("Render = %v, want ErrRuleFailed", err)
+	}
+}
+
+// --- the closed grammar -------------------------------------------------
+
+// THE OUTPUT CEILING IS NOT A WORK CEILING, and that is why the grammar is an
+// allowlist rather than a bigger cap.
+//
+// A value built inside a pipeline is materialized by fmt and never written, so
+// the capped writer never sees it. `{{$a := printf "%1000s" .TypeName}}` plus
+// fourteen `{{$a = printf "%s%s" $a $a}}` plus `{{len $a}}` is 437 bytes of
+// operator-authored rule that allocates 85 MB and writes 8, and each further
+// doubling is 35 more bytes of rule for twice the memory: twenty of them is
+// several GB and an unrecoverable OOM of the single binary, re-triggered on
+// every later write to any entity of that type.
+//
+// Banning `:=` does not fix it. The nested form
+// `{{len (printf "%s%s" (printf "%s%s" ...) ...)}}` does the same with no
+// assignment at all. And printf is a text/template BUILTIN, so it is not
+// something the FuncMap granted and not something removing the FuncMap entry
+// takes away.
+//
+// So the fix is the same argument that justified the closed data map, applied
+// to the other half of the sandbox: the grammar is a closed set of node types
+// and function names, and everything text/template otherwise offers is refused
+// at PARSE time, which is rule-edit time, before it can be stored.
+func TestParseRefusesTheConstructsThatMakeWorkUnbounded(t *testing.T) {
+	assign := `{{$a := printf "%1000s" .TypeName}}`
+	for range 14 {
+		assign += `{{$a = printf "%s%s" $a $a}}`
+	}
+	assign += `{{len $a}}`
+
+	// Deliberately piped into an ALLOWED function at the top, so the refusal
+	// has to come from the nested printf rather than from the outer call. This
+	// is the form that defeats the obvious fix of banning assignment.
+	nested := `(printf "%1000s" .TypeName)`
+	for range 8 {
+		nested = `(printf "%s%s" ` + nested + ` ` + nested + `)`
+	}
+	nested = `{{` + nested + ` | slug}}`
+
+	for _, tc := range []struct{ name, src string }{
+		{"the assignment form", assign},
+		{"the nested-pipeline form, which needs no assignment", nested},
+		{"printf on its own", `{{printf "%100000s" .TypeName}}`},
+		{"print", `{{print .TypeName .TypeName}}`},
+		{"println", `{{println .TypeName}}`},
+		{"a variable declaration", `{{$a := .TypeName}}{{$a}}`},
+		{"range, the other way to repeat work", `{{range .}}{{.}}{{end}}`},
+		{"with, which rebinds dot", `{{with .TypeName}}{{.}}{{end}}`},
+		{"template invocation", `{{template "other"}}`},
+		{"define, which would leave an associated template", `{{define "other"}}x{{end}}{{.TypeName}}`},
+		{"call", `{{call .TypeName}}`},
+		{"index", `{{index . "TypeName"}}`},
+		{"slice", `{{slice .TypeName 0 1}}`},
+		{"len", `{{len .TypeName}}`},
+		{"html", `{{html .TypeName}}`},
+		{"js", `{{js .TypeName}}`},
+		{"urlquery", `{{urlquery .TypeName}}`},
+		{"a parenthesized chain", `{{(.TypeName).Anything}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := label.Basic.Parse(tc.src); err == nil {
+				t.Fatalf("Parse accepted %.60q, want a refusal at rule-edit time", tc.src)
+			} else if !errors.Is(err, label.ErrRuleUnparseable) {
+				t.Fatalf("Parse = %v, want ErrRuleUnparseable", err)
+			}
+		})
+	}
+}
+
+// The other half of an allowlist: what it still admits. Comparison and logic
+// are the builtins a real rule needs, and every one of them returns a bool from
+// values it does not copy, so none can be made to do work proportional to
+// anything but the rule's own length.
+func TestParseAdmitsTheComparisonAndLogicBuiltins(t *testing.T) {
+	for _, src := range []string{
+		`{{if eq .TypeName "Display"}}D{{end}}`,
+		`{{if ne .TypeName "Display"}}not D{{end}}`,
+		`{{if and .TypeName .Ordinal}}both{{end}}`,
+		`{{if or .TypeName .Ordinal}}either{{end}}`,
+		`{{if not .Ordinal}}none{{end}}`,
+		`{{if lt .Ordinal "5"}}low{{else}}high{{end}}`,
+		`{{if le .Ordinal "5"}}x{{end}}{{if gt .Ordinal "5"}}y{{end}}{{if ge .Ordinal "5"}}z{{end}}`,
+		`{{/* a comment */}}{{.TypeName}}`,
+	} {
+		if _, err := label.Basic.Parse(src); err != nil {
+			t.Fatalf("Parse(%q) = %v, want no error", src, err)
+		}
+	}
+}
+
+// The grammar is closed at the ENGINE, not at one entry point, so a rule that
+// slipped in before this landed still cannot execute what it names. Belt and
+// braces on the one thing that would otherwise be a stored-data problem rather
+// than a code problem.
+func TestAnAlreadyStoredForbiddenRuleStillCannotRender(t *testing.T) {
+	if _, err := label.Basic.Parse(`{{printf "%1000s" .TypeName}}`); err == nil {
+		t.Fatal("precondition: printf parsed")
 	}
 }
 

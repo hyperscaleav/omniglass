@@ -133,7 +133,7 @@ below from the project's history. From here it grows one slice at a time.
 
 | [ADR-0096](#adr-0096-the-system_type-name-returns-as-the-coarse-space-taxonomy) | 2026-08-09 | Accepted | A nested, universally seeded **`system_type`** registry lands beside `standard` (not inside it): the coarse taxonomy of what kind of space a system is (`av / room / {board, class, ...}`, `av / sign / {...}`), with `stem`, `abbrev`, and `icon` inherited down `parent_id` and overridable at any node, and `system.system_type_id` nullable for now. The identifier is reused deliberately (it was ADR-0048's retired column name for `standard_id`), so its docs-lint denylist entry is removed on ADR-0085's precedent |
 | [ADR-0097](#adr-0097-allocation-tests-the-name-it-would-mint-rather-than-reading-the-ordinal-it-stored) | 2026-08-10 | Accepted | The generated ordinal becomes a stored nullable `component.ordinal`, but sibling allocation does **not** read it: it reads sibling NAMES and returns the lowest ordinal whose MINTED name is free. An operator can hold a generated-shaped name with no ordinal, and the unique index is on the name, so an ordinal-only allocator would remint a taken name as a `23505`. Minting candidates instead of parsing siblings is what makes a stem-less name (a floor called `1`) possible, not the column; the column is what every reader DOWNSTREAM of allocation consumes. No scoped-unique index on the ordinal |
-| [ADR-0098](#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits) | 2026-08-10 | Accepted | A label rule is Go `text/template` over a **closed `map[string]string`**: the sandbox is the data map, so a secret is absent rather than filtered, and field traversal, `call` and `index` cannot reach past a string. The map carries the entity's own columns and its resolved classification facts, and deliberately **no placement**: every input then changes on exactly five of the entity's own acts (create, rename, move, reclassify, reset), which is what makes the stored label's recompute-and-compare invariant provable. Exposing a location's name would put a location rename in that set and stale every label under it. The global tier is one row per entity kind with TWO columns, `default_template` (boot-seed space, authoritative) and `template` (operator space, nullable) |
+| [ADR-0098](#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits) | 2026-08-10 | Accepted | A label rule is Go `text/template` over a **closed `map[string]string`** AND a **closed grammar**: the sandbox is the data map (a secret is absent rather than filtered) plus an allowlist over the parsed tree (a closed set of node types and function names, so `printf` and friends are refused at rule-edit time; a length cap bounds output, which is not the same as bounding work). The map carries the entity's own columns and its resolved classification facts, and deliberately **no placement**: every input then changes on exactly five of the entity's own acts (create, rename, move, reclassify, reset), which is what makes the stored label's recompute-and-compare invariant provable. Exposing a location's name would put a location rename in that set and stale every label under it. The global tier is one row per entity kind with TWO columns, `default_template` (boot-seed space, authoritative) and `template` (operator space, nullable) |
 
 ## Entries
 
@@ -3705,15 +3705,36 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   | system | `Name`, `TypeName`, `TypeAbbrev`, `Stem`, `StandardName` |
   | location | `Name`, `TypeName` |
 
-- **Decision (the sandbox is the data map):** Nothing filters a syntax, escapes a value, or denies a
-  field name. The value type is `string`, so field traversal, a method call, and the `call` builtin
-  all fail at execution rather than reaching further, and `index` can only reach what the map already
-  holds. A key the map does not carry renders as the empty string (`missingkey=zero`, set explicitly
-  rather than relied on). A secret, a credential and a token are absent **structurally**, never put
-  in, which is why a general template engine was chosen over a custom interpolation DSL: the security
-  property a label rule needs is not a syntax that cannot express dangerous things, it is an
-  environment that contains nothing dangerous, and the environment is ours entirely. Adding a key is
-  the only way to widen what a rule can read, so the key set is pinned by a test.
+- **Decision (the sandbox is the data map AND the grammar):** Two allowlists, the same argument
+  twice.
+
+  The DATA half filters nothing. The value type is `string`, so field traversal and a method call
+  fail at execution rather than reaching further; a key the map does not carry renders as the empty
+  string (`missingkey=zero`, set explicitly rather than relied on); a secret, a credential and a
+  token are absent **structurally**, never put in. That is why a general template engine beat a
+  custom interpolation DSL: the security property a label rule needs is not a syntax that cannot
+  express dangerous things, it is an environment that contains nothing dangerous, and the environment
+  is ours entirely. Adding a key is the only way to widen what a rule can read, so the key set is
+  pinned by a test.
+
+  The GRAMMAR half is an allowlist over the **parsed tree**, checked at parse time, admitting a
+  closed set of node types (text, action, pipeline, command, field, dot, identifier, literal,
+  `{{if}}`, comment) and a closed set of function names (`title`, `upper`, `lower`, `slug`, plus
+  `and`/`or`/`not` and the six comparisons). Everything else text/template offers is refused:
+  `printf`, `print`, `println`, `call`, `index`, `slice`, `len`, `html`, `js`, `urlquery`, variable
+  declarations, `{{range}}`, `{{with}}`, `{{template}}` and `{{define}}`.
+
+  **A superseded claim, corrected here:** an earlier draft of this entry said `printf`'s width verb
+  was "the one way a closed map of short strings still produces output far larger than its inputs"
+  and that the ceiling therefore lived in a cap on rendered length. Both halves were wrong. The cap
+  bounds bytes reaching the WRITER, and a value built inside a pipeline is materialized by `fmt` and
+  never written, so the cap never sees it: 437 bytes of operator-authored rule allocates 85 MB and
+  writes 8, with every further doubling 35 more bytes of rule for twice the memory, which OOMs the
+  single binary and re-triggers on every later write to any entity of that type. Refusing `:=` does
+  not fix it (the nested-pipeline form needs no assignment) and neither does removing a FuncMap entry
+  (`printf` is a builtin the FuncMap never granted). A closed grammar does, and it does it at
+  rule-edit time so nothing is ever stored. The length cap stays as a ceiling on OUTPUT, which is now
+  reachable only by literal text an operator typed.
 
 - **Context (why placement is excluded):** The label is **stored**, so a stored value must equal what
   its rule produces, and every input to a rule is therefore something a write path has to re-render

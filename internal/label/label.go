@@ -12,10 +12,12 @@
 // more to write, document, test and maintain than Go's own, for a smaller
 // feature set and a worse error message.
 //
-// # The sandbox is the data map
+// # The sandbox is the data map AND the grammar
 //
-// This is the whole of the security argument, so it is worth stating in the
-// negative: nothing in this package filters, escapes, or denies anything.
+// There are two halves, and they are the same argument twice: an allowlist of
+// what the rule can reach, rather than a denylist of what it must not do.
+//
+// The data half. Nothing here filters, escapes, or denies a VALUE.
 //
 //   - [Data] is map[string]string. Its values have no fields, no methods worth
 //     reaching, and no pointers to another entity, so field traversal, `call`
@@ -30,6 +32,27 @@
 // The corollary is a rule the caller must keep: whoever builds a [Data] owns the
 // sandbox. Adding a key is adding to the attack surface; adding a key that is
 // itself a container or carries a method would end the argument entirely.
+//
+// The grammar half ([checkTree]). A closed data map bounds what a rule can
+// READ; it does not bound what a rule can DO, and the two are not the same
+// problem. [MaxLen] caps the bytes reaching the writer, but a value built
+// inside a pipeline is materialized by fmt and never written, so the cap never
+// sees it: 437 bytes of rule (`{{$a := printf "%1000s" .TypeName}}` and
+// fourteen `{{$a = printf "%s%s" $a $a}}`) allocates 85 MB and writes 8, with
+// every further doubling 35 more bytes of rule for twice the memory. Twenty of
+// them OOMs the single binary, and the rule is stored, so it re-triggers on
+// every later write to any entity of that type.
+//
+// Refusing `:=` would not fix it, because the nested form
+// `{{(printf "%s%s" (printf ...) ...) | slug}}` does the same with no
+// assignment; and printf is a text/template BUILTIN, so the FuncMap never
+// granted it and removing a FuncMap entry never takes it away. So the grammar
+// is an allowlist too: a closed set of node types and a closed set of function
+// names, checked against the parsed tree, with everything text/template
+// otherwise offers refused at PARSE time. That refusal is rule-EDIT time, so
+// such a rule is never stored, and a rule that predates the check still cannot
+// execute what it names, because the check lives in [Engine.Parse] and every
+// render parses.
 //
 // # Failure has two shapes and they are not the same
 //
@@ -46,16 +69,20 @@ import (
 	"regexp"
 	"strings"
 	"text/template"
+	"text/template/parse"
 	"unicode"
 )
 
-// MaxLen bounds a rendered label. text/template's printf is a builtin that
-// cannot be removed, and its width verb is the one way a closed map of short
-// strings still produces output far larger than its inputs; a text column will
-// take whatever it is given, so the ceiling lives here. An over-long render is
-// a render FAILURE rather than a truncation: a label silently cut in half is a
+// MaxLen bounds a rendered label. A text column takes whatever it is given, and
+// with the grammar closed the way left to reach this ceiling is literal text an
+// operator typed, which is exactly the case it is for. An over-long render is a
+// render FAILURE rather than a truncation: a label silently cut in half is a
 // worse answer than no label, since the read ladder's next rung (the entity's
 // name) is at least correct.
+//
+// It is a ceiling on OUTPUT and deliberately not relied on as a ceiling on
+// WORK. Bytes that never reach the writer are never counted, which is what
+// [checkTree] exists to bound instead.
 const MaxLen = 200
 
 var (
@@ -126,14 +153,142 @@ type Rule struct {
 // it. An empty rule parses and renders empty, which is how "this tier has no
 // opinion" is written down when a caller needs a compiled rule anyway.
 func (e *Engine) Parse(src string) (*Rule, error) {
-	tpl, err := template.New("label").
+	tpl, err := template.New(rootName).
 		Funcs(e.funcs).
 		Option("missingkey=zero").
 		Parse(src)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s", ErrRuleUnparseable, err)
 	}
+	if err := checkTree(tpl); err != nil {
+		return nil, fmt.Errorf("%w: %s", ErrRuleUnparseable, err)
+	}
 	return &Rule{tpl: tpl}, nil
+}
+
+// rootName is the one template a rule may consist of. A second one can only
+// come from a {{define}}, which checkTree refuses.
+const rootName = "label"
+
+// allowedFuncs is the closed set of function names a rule may name: the
+// FuncMap's four, plus the comparison and logic builtins.
+//
+// The builtins are here because the parser accepts them whether or not the
+// FuncMap does, so a set that listed only our own functions would be describing
+// a smaller language than the one being run. Each admitted one returns a bool
+// from values it does not copy, so none can be made to do work proportional to
+// anything but the rule's own length.
+//
+// Everything else is refused BY NAME rather than by what it appears to do:
+// printf, print and println build strings, index and slice and call reach into
+// values, html and js and urlquery escape for an output this is not. len is
+// refused for having no use a label rule's {{if .X}} does not already cover; it
+// is harmless, and admitting a harmless function is still widening the language
+// for nothing.
+var allowedFuncs = map[string]bool{
+	"title": true, "upper": true, "lower": true, "slug": true,
+	"and": true, "or": true, "not": true,
+	"eq": true, "ne": true, "lt": true, "le": true, "gt": true, "ge": true,
+}
+
+// checkTree walks a parsed rule and refuses any node type or function name
+// outside the closed set. See the package comment for why an allowlist rather
+// than a cap.
+//
+// {{if}} is the one branching form admitted, because the shipped rules need it
+// to suppress an absent ordinal and because a branch cannot repeat. {{range}}
+// can, and {{with}} only restates {{if}} while rebinding dot, so neither earns
+// the surface. {{template}} would invoke another tree and {{define}} would
+// leave one, so both go, and the associated-template count is checked directly
+// rather than inferred from the absence of a node: a {{define}} is stripped
+// from the root tree, so it is invisible to the walk.
+func checkTree(tpl *template.Template) error {
+	if len(tpl.Templates()) > 1 {
+		return errors.New("a rule may not define another template")
+	}
+	if tpl.Tree == nil || tpl.Tree.Root == nil {
+		return nil
+	}
+	return checkNode(tpl.Tree.Root)
+}
+
+func checkNode(n parse.Node) error {
+	switch n := n.(type) {
+	case nil:
+		return nil
+	case *parse.TextNode, *parse.StringNode, *parse.NumberNode, *parse.BoolNode,
+		*parse.DotNode, *parse.FieldNode, *parse.CommentNode:
+		return nil
+	case *parse.IdentifierNode:
+		if !allowedFuncs[n.Ident] {
+			return fmt.Errorf("function %q is not available to a label rule", n.Ident)
+		}
+		return nil
+	case *parse.ListNode:
+		for _, c := range n.Nodes {
+			if err := checkNode(c); err != nil {
+				return err
+			}
+		}
+		return nil
+	case *parse.ActionNode:
+		return checkNode(n.Pipe)
+	case *parse.PipeNode:
+		if len(n.Decl) > 0 {
+			return errors.New("a rule may not declare a variable")
+		}
+		for _, c := range n.Cmds {
+			if err := checkNode(c); err != nil {
+				return err
+			}
+		}
+		return nil
+	case *parse.CommandNode:
+		for _, a := range n.Args {
+			if err := checkNode(a); err != nil {
+				return err
+			}
+		}
+		return nil
+	case *parse.IfNode:
+		if err := checkNode(n.Pipe); err != nil {
+			return err
+		}
+		if err := checkNode(n.List); err != nil {
+			return err
+		}
+		if n.ElseList == nil {
+			return nil
+		}
+		return checkNode(n.ElseList)
+	default:
+		return fmt.Errorf("%s is not available to a label rule", describe(n))
+	}
+}
+
+// describe names a refused construct the way an operator wrote it, since
+// "*parse.RangeNode is not available" is a Go type talking to somebody who
+// typed a template.
+func describe(n parse.Node) string {
+	switch n.(type) {
+	case *parse.RangeNode:
+		return "{{range}}"
+	case *parse.WithNode:
+		return "{{with}}"
+	case *parse.TemplateNode:
+		return "{{template}}"
+	case *parse.VariableNode:
+		return "a variable"
+	case *parse.ChainNode:
+		return "a field of a parenthesized expression"
+	case *parse.BreakNode:
+		return "{{break}}"
+	case *parse.ContinueNode:
+		return "{{continue}}"
+	case *parse.NilNode:
+		return "nil"
+	}
+	return fmt.Sprintf("%T", n)
 }
 
 // Render executes r over d and normalizes the result: runs of whitespace

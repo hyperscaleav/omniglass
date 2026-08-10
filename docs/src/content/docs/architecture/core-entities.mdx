@@ -734,11 +734,17 @@ first-non-null walk `stem` and `abbrev` follow, per node across the fork boundar
 ([ADR-0095](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it)),
 so setting a rule on a shipped type forks that row and leaves the official one byte-identical.
 
-The rule language is Go `text/template` over a **closed map of strings** and a closed set of four
-functions (`title`, `upper`, `lower`, `slug`). The map is the sandbox: a component's rule can read
-`Name`, `Ordinal`, `TypeName`, `TypeAbbrev`, `Stem`, `ProductName` and `VendorName`, and there is no
-mechanism by which any other name resolves to anything, so a secret is unreachable because it was
-never put in rather than because a filter refused it. A rule that does not parse is refused at
+The rule language is Go `text/template` over a **closed map of strings** and a **closed grammar**.
+The map is the sandbox for what a rule can READ: a component's rule can read `Name`, `Ordinal`,
+`TypeName`, `TypeAbbrev`, `Stem`, `ProductName` and `VendorName`, and there is no mechanism by which
+any other name resolves to anything, so a secret is unreachable because it was never put in rather
+than because a filter refused it. The grammar is the sandbox for what a rule can DO: an allowlist
+over the parsed tree admits a closed set of node types and the functions `title`, `upper`, `lower`,
+`slug` plus `and`/`or`/`not` and the six comparisons, and refuses everything else text/template
+offers, `printf` and variable declarations and `{{range}}` among them. That second half is not
+tidiness: a value built inside a pipeline is never written, so a cap on rendered length cannot see
+it, and a few hundred bytes of rule can otherwise allocate gigabytes on every write to every entity
+of its type. A rule that does not parse, or that names something outside the grammar, is refused at
 rule-edit time (422) and never stored; a rule that fails while rendering one entity degrades to no
 label rather than failing the write it was riding.
 
