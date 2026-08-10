@@ -3297,3 +3297,27 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   `:move` that fails to re-render, because its fixture moved a component into a bucket where the same
   ordinal was free, so name, number and label were all unchanged; the bucket is now stocked to force
   a re-mint, and its reset is preceded by a rename for the same reason.
+  Review found four things after the slice was first proposed, and one was a hole in the argument
+  rather than a bug in the code. **A ceiling on output is not a ceiling on work.** The rendered-label
+  cap bounds bytes reaching the writer, and a value built inside a pipeline is materialized by `fmt`
+  and never written, so the cap never sees it: 437 bytes of operator-authored rule allocates 85 MB
+  and writes 8, every further doubling is 35 more bytes of rule for twice the memory, and twenty of
+  them is an unrecoverable OOM of the single binary that re-triggers on every later write to any
+  entity of that type, because the rule is stored and storing it on a shipped type forks that row for
+  everything under it. Refusing `:=` does not fix it (the nested-pipeline form needs no assignment)
+  and neither does removing a FuncMap entry (`printf` is a builtin the FuncMap never granted). The
+  fix is the closed-data-map argument applied to the other half of the sandbox: an **allowlist over
+  the parsed tree**, a closed set of node types and function names, refused at parse time so nothing
+  is ever stored. Six mutations back it, including a forbidden call in non-first argument position
+  behind an allowed function, which is the form a checker that inspects only the outermost call would
+  wave through.
+
+  The other three were the same defect in three places, a claim with nothing proving it. The pen
+  defaulted false with no backfill, so on an upgraded estate the feature would have applied only to
+  rows created afterwards; three of the four non-component stamps could be deleted with the suite
+  green, because every rename test ran against rows whose rule read nothing a rename changes and the
+  recompute-and-compare invariant iterated components only; and `label_rule` was declared
+  `ShapeIDOnly`, which promises a uuid, against a text primary key with no id column, published into
+  a generated reference. All three now have a test that fails when the thing is removed, and the
+  shape guard was extended from "every table has a declaration" to "the declaration agrees with the
+  primary key", which is what makes the third one catchable at all.

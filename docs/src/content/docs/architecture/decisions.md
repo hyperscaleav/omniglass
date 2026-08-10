@@ -3778,6 +3778,14 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   operator-owned because a rule once rendered nothing would exclude it forever from the recompute
   that exists to fix exactly that.
 
+- **Decision (the pen is backfilled, claimed only where there is no label):** The migration adding
+  `display_name_generated` defaults it false, and a one-time backfill then claims it on every
+  existing row whose `display_name` is `NULL` or empty, leaving it false where the operator typed
+  something. A row with no label has nothing to protect and is the majority case; left unclaimed it
+  is inert forever, because the write-path stamp returns immediately when the pen is false and a bulk
+  recompute only touches rows the platform already owns. The backfill writes the PEN and not the
+  label, since rendering needs the rule engine and logic lives in Go, so those rows take their labels
+  from the next write that touches them or from the recompute that can now see them.
 - **Consequence:** `label_rule` columns land on `component_type`, `system_type`, `location_type`,
   `product` and `standard`, but only `component_type` carries the fork today, so a rule on a
   **shipped** row of the other four is not operator-editable until each adopts ADR-0095's primitive.
