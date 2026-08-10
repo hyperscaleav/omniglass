@@ -762,15 +762,17 @@ func NewPG(ctx context.Context, dsn string, opts ...Option) (*PG, error) {
 	// over the gateway would make the two mutually constructing, and the settings
 	// package deliberately does not import storage.
 	p.settings = settings.NewService(p.settingsFile, func(ctx context.Context, scope string) (settings.Doc, map[string][]string, error) {
-		return p.settingLevel(ctx, scope)
+		return p.settingLevel(ctx, p.pool, scope)
 	})
 	return p, nil
 }
 
 // settingLevel adapts the override rows at a scope into the shape the settings
-// resolver takes: one document per namespace, plus the locked key-paths.
-func (p *PG) settingLevel(ctx context.Context, scope string) (settings.Doc, map[string][]string, error) {
-	rows, err := p.GetSettingOverrides(ctx, scope)
+// resolver takes: one document per namespace, plus the locked key-paths. The
+// querier is a parameter because a gateway path resolving a setting inside its
+// own transaction must read it there.
+func (p *PG) settingLevel(ctx context.Context, q querier, scope string) (settings.Doc, map[string][]string, error) {
+	rows, err := settingOverridesOn(ctx, q, scope)
 	if err != nil {
 		return nil, nil, err
 	}

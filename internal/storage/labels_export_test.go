@@ -30,7 +30,7 @@ func (p *PG) ExportRenderComponentLabel(ctx context.Context, id string) (string,
 	if err != nil {
 		return "", fmt.Errorf("storage: load component %q for label recompute: %w", id, err)
 	}
-	eng, err := p.labelEngine(ctx)
+	eng, err := p.labelEngine(ctx, p.pool)
 	if err != nil {
 		return "", err
 	}
@@ -43,7 +43,7 @@ func (p *PG) ExportRenderSystemLabel(ctx context.Context, id string) (string, er
 	if err != nil {
 		return "", fmt.Errorf("storage: load system %q for label recompute: %w", id, err)
 	}
-	eng, err := p.labelEngine(ctx)
+	eng, err := p.labelEngine(ctx, p.pool)
 	if err != nil {
 		return "", err
 	}
@@ -56,7 +56,7 @@ func (p *PG) ExportRenderLocationLabel(ctx context.Context, id string) (string, 
 	if err != nil {
 		return "", fmt.Errorf("storage: load location %q for label recompute: %w", id, err)
 	}
-	eng, err := p.labelEngine(ctx)
+	eng, err := p.labelEngine(ctx, p.pool)
 	if err != nil {
 		return "", err
 	}

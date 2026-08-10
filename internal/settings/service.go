@@ -34,11 +34,24 @@ func (s *Service) Resolve(ctx context.Context) (Resolved, error) {
 	if err != nil {
 		return Resolved{}, err
 	}
+	return s.ResolveOverride(platformDoc, platformLocks), nil
+}
+
+// ResolveOverride resolves the effective document from an override level the
+// CALLER has already read, for a caller that cannot let this service do the
+// reading: the Storage Gateway resolves a setting from inside a transaction it
+// is holding, and a read issued anywhere but that transaction would take a
+// second connection from the pool it is already occupying.
+//
+// The level stack is the one Resolve builds, so the two cannot answer
+// differently, and the caller supplies only the layer it is better placed to
+// fetch.
+func (s *Service) ResolveOverride(platformDoc Doc, platformLocks map[string][]string) Resolved {
 	return Resolve(
 		Level{Name: "default", Doc: s.defaults},
 		Level{Name: "file", Doc: s.file},
 		Level{Name: "platform", Doc: platformDoc, Locks: platformLocks},
-	), nil
+	)
 }
 
 // Effective returns the resolved values (all namespaces).

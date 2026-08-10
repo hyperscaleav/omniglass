@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/seed"
@@ -122,6 +123,46 @@ func TestTheSettingsFileLayerReachesTheEngine(t *testing.T) {
 	l := makeRoomIn(t, gw, ctx, "qm55-wall")
 	if l.DisplayName != "QM55-Wall" {
 		t.Fatalf("label = %q, want %q (the file layer did not reach the engine)", l.DisplayName, "QM55-Wall")
+	}
+}
+
+// Resolving the dictionary must not need a SECOND connection, because the write
+// that needs it is already holding one.
+//
+// A settings read issued against the pool from inside an open transaction
+// acquires another connection, and a pool where every connection is held by a
+// transaction doing exactly that has nowhere to get one: each waits for a
+// connection only another waiter can release. It is a deadlock rather than a
+// slowdown, it needs no unusual code to reach (a bulk import of the 15,000
+// components this epic exists for is enough), and it fails as a hang, so it
+// would surface as a timeout somewhere unrelated.
+//
+// A pool of exactly one connection is the whole population of that race, so this
+// test reaches the deadlock deterministically instead of hoping for it under
+// load. It is bounded so a regression fails rather than hangs.
+func TestRenderingALabelNeedsNoSecondConnection(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t)+"&pool_max_conns=1",
+		storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
+	if err != nil {
+		t.Fatalf("open single-connection gateway: %v", err)
+	}
+	t.Cleanup(gw.Close)
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	setLocationRule(t, gw, ctx, titleTheName)
+
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "dsp-closet", LocationType: "building"}, all); err != nil {
+		t.Fatalf("create a location on a one-connection pool: %v", err)
+	}
+	l, err := gw.GetLocation(ctx, "dsp-closet", all)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if l.DisplayName != "DSP-Closet" {
+		t.Fatalf("label = %q, want %q", l.DisplayName, "DSP-Closet")
 	}
 }
 

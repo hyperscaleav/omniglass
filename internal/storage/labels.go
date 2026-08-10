@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/label"
+	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -103,8 +104,19 @@ var grammarEngine = label.Basic
 // rendering MANY rows (the bulk recompute, #685) resolves the engine once and
 // passes it down; that is why the render functions below take one rather than
 // reaching for it themselves.
-func (p *PG) labelEngine(ctx context.Context) (*label.Engine, error) {
-	s, err := p.settings.EffectiveTyped(ctx)
+//
+// The querier is the caller's, and it is not a convenience. Every caller here is
+// mid-transaction, so it is holding a connection; reading the override level off
+// the POOL would acquire a second one, and a pool whose connections are all held
+// by transactions each waiting for a second connection is deadlocked, not slow.
+// Reading in the caller's transaction also means the dictionary and the row
+// being stamped come from one snapshot.
+func (p *PG) labelEngine(ctx context.Context, q querier) (*label.Engine, error) {
+	doc, locks, err := p.settingLevel(ctx, q, "platform")
+	if err != nil {
+		return nil, fmt.Errorf("storage: resolve the acronym dictionary: %w", err)
+	}
+	s, err := settings.Typed(p.settings.ResolveOverride(doc, locks).Values)
 	if err != nil {
 		return nil, fmt.Errorf("storage: resolve the acronym dictionary: %w", err)
 	}
@@ -440,7 +452,7 @@ func (p *PG) stampComponentLabel(ctx context.Context, tx pgx.Tx, c *Component) (
 	if !c.DisplayNameGenerated {
 		return c, nil
 	}
-	eng, err := p.labelEngine(ctx)
+	eng, err := p.labelEngine(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
@@ -532,7 +544,7 @@ func (p *PG) stampSystemLabel(ctx context.Context, tx pgx.Tx, s *System) (*Syste
 	if !s.DisplayNameGenerated {
 		return s, nil
 	}
-	eng, err := p.labelEngine(ctx)
+	eng, err := p.labelEngine(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
@@ -600,7 +612,7 @@ func (p *PG) stampLocationLabel(ctx context.Context, tx pgx.Tx, l *Location) (*L
 	if !l.DisplayNameGenerated {
 		return l, nil
 	}
-	eng, err := p.labelEngine(ctx)
+	eng, err := p.labelEngine(ctx, tx)
 	if err != nil {
 		return nil, err
 	}

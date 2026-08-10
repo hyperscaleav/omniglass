@@ -25,7 +25,15 @@ type SettingOverride struct {
 // platform settings describe the platform, not the estate, so no ABAC scope
 // applies; the route gates on settings:read.
 func (p *PG) GetSettingOverrides(ctx context.Context, scope string) ([]SettingOverride, error) {
-	rows, err := p.pool.Query(ctx, `
+	return settingOverridesOn(ctx, p.pool, scope)
+}
+
+// settingOverridesOn is GetSettingOverrides against a caller-supplied querier.
+// The gateway reads a setting itself (the acronym dictionary the label engine
+// titles with), and it does so from inside a transaction it is already holding,
+// where the pool is the one place the read must NOT go.
+func settingOverridesOn(ctx context.Context, q querier, scope string) ([]SettingOverride, error) {
+	rows, err := q.Query(ctx, `
 		select namespace, doc, locks
 		from setting_override
 		where scope = $1 and principal_id is null
