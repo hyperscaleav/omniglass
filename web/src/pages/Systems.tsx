@@ -125,6 +125,7 @@ export default function Systems() {
         id: s.id,
         addr: s.name,
         display: entityLabel(s),
+        generated: s.display_name_generated,
         // See Components.tsx's own nodes memo for why this beats the
         // page's tree-local pathOf walk for a system with no system parent.
         pathRender: s.renders?.dash,

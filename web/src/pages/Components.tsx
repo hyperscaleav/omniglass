@@ -125,6 +125,7 @@ export default function Components() {
         id: c.id,
         addr: c.name,
         display: entityLabel(c),
+        generated: c.display_name_generated,
         // The server's own dash render of this component's dotted path
         // (#627 Task 15): the list-mode ancestor sub-line falls back to it
         // for a component with no component parent, which the page's own

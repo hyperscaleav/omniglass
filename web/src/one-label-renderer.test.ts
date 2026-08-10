@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 //   c.display_name || c.name              a label render
 //   find(...)?.display_name ?? handle     a lookup that falls back to the handle
 //   `${r.name} ${r.display_name}`         a filter facet's search haystack
+//   n.display === (n.addr ?? n.id)        the same rule one step downstream
 //
 // The third one is why this guard exists rather than a rendering test. A facet
 // interpolating an ABSENT display_name searched the literal text "undefined", so
@@ -35,6 +36,12 @@ const FALLBACK = /display_name(?:\?\.trim\(\))?\s*(?:\|\||\?\?)\s*(.*)$/;
 // The raw column interpolated into a string, which is how the filter facets
 // built their search haystacks (and how they came to search "undefined").
 const INTERPOLATED = /\$\{[^}]*\bdisplay_name\b[^}]*\}/;
+// The same rule spelled downstream of the column, on a row whose label is already
+// resolved: `n.display === (n.addr ?? n.id)`. TreeList carried this for the whole
+// estate and the two regexes above could not see it, because it never mentions
+// `display_name` at all. It is the copy that mattered most, so it gets its own
+// pattern rather than trusting the next reader to notice.
+const RESOLVED = /\bdisplay\s*(?:===|!==)\s*\(?\w+\.(?:addr|id)\b/;
 
 function handRolled(line: string): boolean {
   for (let rest = line; ; ) {
@@ -106,7 +113,7 @@ function hits(): Hit[] {
       .split("\n")
       .forEach((line, i) => {
         if (isComment(line)) return;
-        if (handRolled(line) || INTERPOLATED.test(line)) out.push({ file, line: i + 1, text: line.trim() });
+        if (handRolled(line) || INTERPOLATED.test(line) || RESOLVED.test(line)) out.push({ file, line: i + 1, text: line.trim() });
       });
   }
   return out;

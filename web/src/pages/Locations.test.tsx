@@ -557,6 +557,36 @@ describe("Locations list identity", () => {
     // read as a typo and mangle every acronym in the domain).
     expect(screen.getAllByText("hq-boardroom-nvx-tx")).toHaveLength(1);
   });
+
+  // The pen (#683). TreeList kept its own copy of the identity rule, comparing the
+  // resolved label to the row's address, and that copy cannot see who chose the
+  // label. Left alone it would repeat the name under every platform-labelled row,
+  // which is the regression the flat list's IdentityCell was fixed to avoid, on the
+  // surface that renders most of the estate.
+  it("does not repeat the key beneath a label the platform rendered", async () => {
+    const generated: Location = {
+      id: uuidFor("l-gen"), name: "level-1", display_name: "Level 1",
+      display_name_generated: true, location_type: "campus", effective_tags: {},
+    };
+    mount("/locations", [generated]);
+    await waitFor(() => expect(screen.getByText("Level 1")).toBeTruthy());
+    const row = screen.getByText("Level 1").closest("tr")!;
+    expect(within(row).queryByText("level-1")).toBeNull();
+  });
+
+  it("marks a platform-rendered label so it reads apart from one an operator chose", async () => {
+    const generated: Location = {
+      id: uuidFor("l-gen"), name: "level-1", display_name: "Level 1",
+      display_name_generated: true, location_type: "campus", effective_tags: {},
+    };
+    mount("/locations", [generated]);
+    await waitFor(() => expect(screen.getByText("Level 1")).toBeTruthy());
+    const row = screen.getByText("Level 1").closest("tr")!;
+    expect(within(row).getByTitle(/platform/i)).toBeTruthy();
+    // And the operator's own label carries no such mark.
+    const mine = screen.getByText("HQ").closest("tr")!;
+    expect(within(mine).queryByTitle(/platform/i)).toBeNull();
+  });
 });
 
 // The create form leads with the display name and derives the key from it, so an
