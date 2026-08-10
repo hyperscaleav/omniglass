@@ -228,6 +228,12 @@ type Gateway interface {
 	// it left, inside its own transaction (#642): a location's rollup folds every
 	// system in its own subtree, so the move carries that contribution across.
 	MoveLocation(ctx context.Context, actorID, name string, move LocationMove, read, action scope.Set) (*Location, error)
+	// ResetLocationName is the location's half of the name pen (#686). It
+	// refuses today (ErrLocationTypeNoNameRule, a 422): the verb exists on all
+	// three trees so the contract is one shape, and a location has no stem
+	// source to mint from until #687 gives its type a name rule. The API gates
+	// it on location:rename, exactly as the component and system verbs are.
+	ResetLocationName(ctx context.Context, actorID, name string, read, action scope.Set) (*Location, error)
 	LocationNameTaken(ctx context.Context, name string, parentRef *string) (bool, error)
 	DeleteLocation(ctx context.Context, actorID, name string, read, action scope.Set) error
 
@@ -252,6 +258,14 @@ type Gateway interface {
 	// update is. Its own function, not a patch field (#627 Task 13), because a
 	// placement change is an authorization act; the API gates it on system:move.
 	MoveSystem(ctx context.Context, actorID, name string, move SystemMove, read, action scope.Set) (*System, error)
+	// ResetSystemName hands the pen back to the platform (#686): it regenerates
+	// the system's name from its current system_type and placement, the same
+	// rule CreateSystem applies when no name is given (the type's stem plus the
+	// lowest free ordinal, bare for the first of that stem in the bucket), and
+	// marks it name_generated again, whether or not it already was. The API
+	// gates it on system:rename, the existing token whose blast radius
+	// (changing the name) this is exactly.
+	ResetSystemName(ctx context.Context, actorID, name string, read, action scope.Set) (*System, error)
 	SystemNameTaken(ctx context.Context, name string, parentRef, locationRef *string) (bool, error)
 	DeleteSystem(ctx context.Context, actorID, name string, read, action scope.Set) error
 

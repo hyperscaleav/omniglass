@@ -679,12 +679,17 @@ func systemLabelChainWith(ctx context.Context, q querier, standardID, systemType
 	return in, nil
 }
 
-// systemLabelData is the closed data map for one system. No Ordinal: a system
-// does not generate a name yet, so there is no number the platform allocated
-// for it (#686 is the slice that brings one, and the key with it).
+// systemLabelData is the closed data map for one system. Ordinal joined it with
+// #686, which gave a system a generated name and the number behind it: absent
+// (the empty string) for an operator-named system, and present for a
+// platform-named one, including the SUPPRESSED first of its stem, whose name
+// carries no digits while its ordinal is 1. That is the case the column exists
+// for, and a rule reading .Ordinal reads the number rather than the name's
+// spelling of it.
 func systemLabelData(s *System, in systemLabelInputs, pl systemPlacement) label.Data {
 	return label.Data{
 		"Name":          s.Name,
+		"Ordinal":       ordinalText(s.Ordinal),
 		"TypeName":      in.typeName,
 		"TypeAbbrev":    in.abbrev,
 		"Stem":          in.stem,

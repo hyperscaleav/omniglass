@@ -464,9 +464,20 @@ func TestTheSystemAndLocationDataMapsAreClosedToo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("system label data: %v", err)
 	}
-	wantSys := []string{"LocationLabel", "Name", "StandardName", "Stem", "TypeAbbrev", "TypeName"}
+	// Ordinal joined this list with #686, the slice that gave a system a
+	// generated name and the number behind it, which systemLabelData's own
+	// comment named as the reason it was absent. This assertion is the tripwire
+	// that forces a key to be ADDED deliberately rather than to appear: widening
+	// it is the one edit a slice may make to it, and only alongside the map.
+	wantSys := []string{"LocationLabel", "Name", "Ordinal", "StandardName", "Stem", "TypeAbbrev", "TypeName"}
 	if got := sortedKeys(sysData); !equalStrings(got, wantSys) {
 		t.Fatalf("the system data map carries %v, want exactly %v", got, wantSys)
+	}
+	// An operator-named system owns no ordinal, so the key is present and
+	// EMPTY rather than absent: {{if .Ordinal}} is false, which is the same
+	// suppression a component's shipped rule already relies on.
+	if sysData["Ordinal"] != "" {
+		t.Errorf("an operator-named system carries Ordinal %q, want empty", sysData["Ordinal"])
 	}
 
 	loc, err := gw.GetLocation(ctx, room, all)

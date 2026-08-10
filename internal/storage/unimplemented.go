@@ -199,6 +199,9 @@ func (UnimplementedGateway) RenameLocation(context.Context, string, string, stri
 func (UnimplementedGateway) MoveLocation(context.Context, string, string, LocationMove, scope.Set, scope.Set) (*Location, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) ResetLocationName(context.Context, string, string, scope.Set, scope.Set) (*Location, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) LocationNameTaken(context.Context, string, *string) (bool, error) {
 	return false, nil
 }
@@ -236,6 +239,9 @@ func (UnimplementedGateway) RenameSystem(context.Context, string, string, string
 	return nil, nil
 }
 func (UnimplementedGateway) MoveSystem(context.Context, string, string, SystemMove, scope.Set, scope.Set) (*System, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ResetSystemName(context.Context, string, string, scope.Set, scope.Set) (*System, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) SystemNameTaken(context.Context, string, *string, *string) (bool, error) {

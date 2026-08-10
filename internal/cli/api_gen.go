@@ -2278,6 +2278,23 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "resetName <name>",
+					Short:   "Regenerate a location's name",
+					Long:    "Hands the pen back to the platform, the same verb components and systems carry. It refuses today, 422: a location_type carries no name rule, so there is nothing to regenerate the name from. Gated by location:rename, the same token :rename uses.",
+					Example: "  omniglass location resetName <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/locations/%s:resetName", url.PathEscape(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
 				var fKey string
 				var fValue string
 				cmd := &cobra.Command{
@@ -4999,7 +5016,7 @@ func generatedCommands() []*cobra.Command {
 					Use:     "create",
 					Short:   "Create a system",
 					Long:    "Creates a system, optionally under a parent (a root needs an all-scoped grant), at a location, conforming to a standard, and classified as a system_type. Gated by system:create.",
-					Example: "  omniglass system create --name name",
+					Example: "  omniglass system create",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/systems")
@@ -5027,8 +5044,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads; the name is the address")
 				cmd.Flags().StringVar(&fLocation, "location", "", "Location name this system is placed at")
-				cmd.Flags().StringVar(&fName, "name", "", "Name, unique within its placement (the address; lowercase letters, digits, hyphens)")
-				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fName, "name", "", "Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem.")
 				cmd.Flags().StringVar(&fParent, "parent", "", "Parent system name; omit for a root system")
 				cmd.Flags().StringVar(&fStandardId, "standard-id", "", "The standard it conforms to, by handle or uuid; omit for a one-off system")
 				cmd.Flags().StringVar(&fSystemTypeId, "system-type-id", "", "The system_type it is classified as (what kind of space it is), by name or uuid; omit to leave it unclassified")
@@ -5398,6 +5414,23 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique within its placement (lowercase letters, digits, hyphens)")
 				_ = cmd.MarkFlagRequired("name")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "resetName <name>",
+					Short:   "Regenerate a system's name",
+					Long:    "Hands the pen back to the platform: regenerates the name from the system's current system_type and placement (the same rule a nameless create applies, the type's stem plus the lowest free ordinal, bare for the first of that stem in the placement) and marks it name_generated, whether or not it already was. An unclassified system is a 422: the stem lives on the system_type. Gated by system:rename, the same token :rename uses: it changes the name, exactly that permission's blast radius.",
+					Example: "  omniglass system resetName <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/systems/%s:resetName", url.PathEscape(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
 				return cmd
 			}()
 			return cmd

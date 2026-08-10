@@ -1524,6 +1524,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/locations/{name}:resetName": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Regenerate a location's name
+         * @description Hands the pen back to the platform, the same verb components and systems carry. It refuses today, 422: a location_type carries no name rule, so there is nothing to regenerate the name from. Gated by location:rename, the same token :rename uses.
+         */
+        post: operations["reset-location-name"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/locations/{name}:setTag": {
         parameters: {
             query?: never;
@@ -3340,6 +3360,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/systems/{name}:resetName": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Regenerate a system's name
+         * @description Hands the pen back to the platform: regenerates the name from the system's current system_type and placement (the same rule a nameless create applies, the type's stem plus the lowest free ordinal, bare for the first of that stem in the placement) and marks it name_generated, whether or not it already was. An unclassified system is a 422: the stem lives on the system_type. Gated by system:rename, the same token :rename uses: it changes the name, exactly that permission's blast radius.
+         */
+        post: operations["reset-system-name"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/systems/{name}:setTag": {
         parameters: {
             query?: never;
@@ -4420,8 +4460,8 @@ export interface components {
             display_name?: string;
             /** @description Location name this system is placed at */
             location?: string;
-            /** @description Name, unique within its placement (the address; lowercase letters, digits, hyphens) */
-            name: string;
+            /** @description Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem. */
+            name?: string;
             /** @description Parent system name; omit for a root system */
             parent?: string;
             /** @description The standard it conforms to, by handle or uuid; omit for a one-off system */
@@ -5486,6 +5526,8 @@ export interface components {
             /** @description The location_type's uuid, the stable form of location_type */
             location_type_id: string;
             name: string;
+            /** @description Whether the platform picked this name rather than an operator typing it. Always false today: a location_type carries no name rule yet, so every location name is operator-typed. */
+            name_generated: boolean;
             /** @description The parent location's name, for display; absent for a site root */
             parent?: string;
             /** @description The parent location's id, the canonical handle */
@@ -6631,6 +6673,8 @@ export interface components {
              */
             member_count: number;
             name: string;
+            /** @description Whether the platform picked this name (from the system_type's stem) rather than an operator typing it. */
+            name_generated: boolean;
             /** @description The parent system's name, for display; absent for a root system */
             parent?: string;
             /** @description The parent system's id, the canonical handle */
@@ -10466,6 +10510,38 @@ export interface operations {
                 "application/json": components["schemas"]["RenameLocationInputBody"];
             };
         };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "reset-location-name": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location's name, or a dotted address (e.g. boi.17c.415a) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {
@@ -14566,6 +14642,38 @@ export interface operations {
                 "application/json": components["schemas"]["RenameSystemInputBody"];
             };
         };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "reset-system-name": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's name, or a dotted address (e.g. boi.17c.$sys.av) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {

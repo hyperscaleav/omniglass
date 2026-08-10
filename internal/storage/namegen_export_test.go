@@ -33,6 +33,25 @@ func (p *PG) ExportGenerateName(ctx context.Context, stem string, parentID, loca
 	return generateComponentName(ctx, tx, stem, parentID, locationID, excludeID)
 }
 
+// ExportGenerateSystemName is ExportGenerateName on the system tier (#686): it
+// runs the real two-step generator (resolve the system_type chain's stem, mint
+// the ordinal in the row's placement bucket) and rolls back, so the
+// recompute-and-compare invariant can ask "what would this system be called"
+// without a gateway read that nothing in production wants.
+//
+// It takes the system_type id rather than a stem, unlike the component shim
+// above, because the whole of a system's mint is derived from that one
+// reference: a test that resolved the stem itself would be comparing against a
+// restatement of the rule rather than against the rule.
+func (p *PG) ExportGenerateSystemName(ctx context.Context, systemTypeID, parentID, locationID, excludeID *string) (string, int, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return "", 0, fmt.Errorf("storage: begin export generate system name: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	return generateNameForSystemType(ctx, tx, systemTypeID, parentID, locationID, excludeID)
+}
+
 // ExportStemForProduct resolves the stem a product's component_type chain
 // yields, the input the generator mints from. The chain walk is the same one
 // generateNameForProduct runs, so a test comparing against it is comparing

@@ -16,6 +16,11 @@ type locationBody struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	DisplayName string `json:"display_name,omitempty"`
+	// The NAME's pen (#686); see systemBody for why it is read-only. False on
+	// every location today: the pen and the verbs ship on this tier ahead of a
+	// generator, so a name an operator types now is already frozen by the time
+	// #687 gives a location_type a name rule.
+	NameGenerated bool `json:"name_generated" doc:"Whether the platform picked this name rather than an operator typing it. Always false today: a location_type carries no name rule yet, so every location name is operator-typed."`
 	// The LABEL's pen (#682); see componentBody for why it is read-only.
 	DisplayNameGenerated bool              `json:"display_name_generated" doc:"Whether the platform rendered this display name from a label rule rather than an operator typing it. Read-only: write display_name to claim it, write an empty display_name to hand it back."`
 	LocationType         string            `json:"location_type" doc:"The location_type name"`
@@ -31,7 +36,8 @@ type locationBody struct {
 
 func toLocationBody(l *storage.Location) locationBody {
 	return locationBody{
-		ID: l.ID, Name: l.Name, DisplayName: l.DisplayName, DisplayNameGenerated: l.DisplayNameGenerated,
+		ID: l.ID, Name: l.Name, DisplayName: l.DisplayName,
+		NameGenerated: l.NameGenerated, DisplayNameGenerated: l.DisplayNameGenerated,
 		LocationType: l.LocationType, LocationTypeID: l.LocationTypeID, ParentID: l.ParentID, Parent: l.ParentName,
 		Path: l.Path, PathSegments: l.PathSegments, Renders: toRenderBody(l.Path, l.Renders),
 	}
@@ -354,6 +360,21 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	})
 
 	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "reset-location-name",
+		Method:      http.MethodPost,
+		Path:        "/locations/{name}:resetName",
+		Summary:     "Regenerate a location's name",
+		Description: "Hands the pen back to the platform, the same verb components and systems carry. It refuses today, 422: a location_type carries no name rule, so there is nothing to regenerate the name from. Gated by location:rename, the same token :rename uses.",
+	}, "location", "rename"), func(ctx context.Context, in *locationPathInput) (*locationOutput, error) {
+		l, err := gw.ResetLocationName(ctx, actorID(ctx), in.Name,
+			a.scopeFor(ctx, "location", "read"), a.scopeFor(ctx, "location", "rename"))
+		if err != nil {
+			return nil, mapLocationErr(err)
+		}
+		return &locationOutput{Body: toLocationBody(l)}, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "check-location-name",
 		Method:      http.MethodPost,
 		Path:        "/locations:checkName",
@@ -451,6 +472,8 @@ func mapLocationErr(err error) error {
 		return huma.Error422UnprocessableEntity("unknown location_type")
 	case errors.Is(err, storage.ErrLocationCycle):
 		return huma.Error422UnprocessableEntity("cannot move a location under itself or a descendant")
+	case errors.Is(err, storage.ErrLocationTypeNoNameRule):
+		return huma.Error422UnprocessableEntity("this location_type has no name rule, so the platform cannot generate a name for it: name it yourself")
 	default:
 		return huma.Error500InternalServerError("location operation failed")
 	}

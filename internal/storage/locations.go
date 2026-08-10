@@ -29,6 +29,16 @@ var (
 	ErrLocationCycle       = errors.New("storage: cannot move a location under itself or a descendant")
 	ErrReservedTypeID      = errors.New("storage: \"root\" is a reserved location_type id")
 
+	// ErrLocationTypeNoNameRule is :resetName on a location today (#686). The
+	// pen and both verbs spread to this tier so the shape is the same one on
+	// all three trees, but a location has nothing to regenerate FROM:
+	// location_type carries no stem, unlike component_type and system_type, so
+	// there is no mint. The seam is #687's nullable per-type name rule, which
+	// is also the reason this is a typed refusal naming the missing fact rather
+	// than a silent no-op: a no-op would report success for a name that never
+	// changed and would make the verb untestable the day the rule lands.
+	ErrLocationTypeNoNameRule = errors.New("storage: this location_type has no name rule, so the platform cannot generate a name for it")
+
 	// ErrLocationExistsUnderParent / ErrLocationExistsAtRoot name which
 	// placement bucket a 23505 collided in (#627 scopes name uniqueness to
 	// placement: unique under a given parent, or unique among roots, but not
@@ -118,6 +128,14 @@ type Location struct {
 	ID          string
 	Name        string
 	DisplayName string
+	// NameGenerated is the NAME's pen (#686); see System's own field for the
+	// polarity. False on every location today and written only false: a
+	// location cannot generate a name until its type carries a name rule
+	// (#687), so this tier has the pen and the verbs without a generator yet.
+	// It ships now rather than with the generator because the pen is what makes
+	// a later generated name safe: :rename freezes it false, so a row an
+	// operator named before #687 lands can never be re-minted afterwards.
+	NameGenerated bool
 	// DisplayNameGenerated is the label's pen (#682); see System's own field
 	// for the polarity and what a write does with it.
 	DisplayNameGenerated bool
@@ -386,14 +404,14 @@ func (p *PG) DeleteLocationType(ctx context.Context, actorID, id string) error {
 }
 
 // locationCols is the column list every location read scans, in struct order.
-const locationCols = `id, name, coalesce(display_name, ''), display_name_generated,
+const locationCols = `id, name, coalesce(display_name, ''), name_generated, display_name_generated,
 	(select t.name from location_type t where t.id = location.location_type) as location_type, location.location_type as location_type_id, parent_id,
 	(select p.name from location p where p.id = location.parent_id) as parent_name,
 	created_at, updated_at`
 
 func scanLocation(row pgx.Row) (*Location, error) {
 	var l Location
-	if err := row.Scan(&l.ID, &l.Name, &l.DisplayName, &l.DisplayNameGenerated, &l.LocationType, &l.LocationTypeID, &l.ParentID, &l.ParentName,
+	if err := row.Scan(&l.ID, &l.Name, &l.DisplayName, &l.NameGenerated, &l.DisplayNameGenerated, &l.LocationType, &l.LocationTypeID, &l.ParentID, &l.ParentName,
 		&l.CreatedAt, &l.UpdatedAt); err != nil {
 		return nil, err
 	}
@@ -702,8 +720,14 @@ func (p *PG) RenameLocation(ctx context.Context, actorID, name, newName string, 
 	if err := ValidateName("location", newName); err != nil {
 		return nil, err
 	}
+	// name_generated is cleared here whether or not it was already set (#686),
+	// the same freeze a component's and a system's rename applies: an operator
+	// who types a name is claiming the pen for good, and :resetName is the only
+	// way back. It writes false today over false, because nothing generates a
+	// location name yet; it is here so the row an operator names TODAY is still
+	// protected the day #687 gives its type a name rule.
 	after, err := scanLocation(tx.QueryRow(ctx,
-		`update location set name = $2, updated_at = now() where id = $1 returning `+locationCols,
+		`update location set name = $2, name_generated = false, updated_at = now() where id = $1 returning `+locationCols,
 		before.ID, newName))
 	if err != nil {
 		return nil, mapLocationWriteErr(err)
@@ -728,6 +752,28 @@ func (p *PG) RenameLocation(ctx context.Context, actorID, name, newName string, 
 		return nil, fmt.Errorf("storage: commit rename location: %w", err)
 	}
 	return after, nil
+}
+
+// ResetLocationName is the location tier's half of the pen (#686), and today it
+// always refuses: ErrLocationTypeNoNameRule (a 422 naming the missing fact).
+//
+// The verb exists on all three trees so the contract is one shape rather than
+// two, and it refuses HERE, in the gateway, rather than being left off the API:
+// a location has no stem source at all (location_type carries none, unlike
+// component_type and system_type), so there is no mint for it to run and no
+// honest success to report. The alternative, returning the row unchanged, would
+// report a reset that did not happen and would leave nothing for #687's first
+// test to flip.
+//
+// It resolves the target first, under the same read-then-action split
+// RenameLocation uses, so an operator learns "this type cannot generate a name"
+// only about a location they can actually see and rename. An unreadable one is
+// still the non-disclosing 404 it would be for any other act.
+func (p *PG) ResetLocationName(ctx context.Context, actorID, name string, read, action scope.Set) (*Location, error) {
+	if _, err := p.resolveForAction(ctx, p.pool, name, read, action); err != nil {
+		return nil, err
+	}
+	return nil, ErrLocationTypeNoNameRule
 }
 
 // DeleteLocation removes a location addressed by name, with the same three-way

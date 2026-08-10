@@ -1766,6 +1766,22 @@ Example:
 omniglass location rename <name> --name name
 ```
 
+### `omniglass location resetName`
+
+Regenerate a location's name
+
+```
+omniglass location resetName <name>
+```
+
+Hands the pen back to the platform, the same verb components and systems carry. It refuses today, 422: a location_type carries no name rule, so there is nothing to regenerate the name from. Gated by location:rename, the same token :rename uses.
+
+Example:
+
+```sh
+omniglass location resetName <name>
+```
+
 ### `omniglass location setTag`
 
 Set a tag value on a location
@@ -3893,7 +3909,7 @@ Creates a system, optionally under a parent (a root needs an all-scoped grant), 
 |---|---|---|---|
 | `--display-name` | string | (none) | What an operator reads; the name is the address |
 | `--location` | string | (none) | Location name this system is placed at |
-| `--name` | string | (none) | Name, unique within its placement (the address; lowercase letters, digits, hyphens) |
+| `--name` | string | (none) | Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem. |
 | `--parent` | string | (none) | Parent system name; omit for a root system |
 | `--standard-id` | string | (none) | The standard it conforms to, by handle or uuid; omit for a one-off system |
 | `--system-type-id` | string | (none) | The system_type it is classified as (what kind of space it is), by name or uuid; omit to leave it unclassified |
@@ -3901,7 +3917,7 @@ Creates a system, optionally under a parent (a root needs an all-scoped grant), 
 Example:
 
 ```sh
-omniglass system create --name name
+omniglass system create
 ```
 
 ### `omniglass system delete`
@@ -4223,6 +4239,22 @@ Example:
 
 ```sh
 omniglass system rename <name> --name name
+```
+
+### `omniglass system resetName`
+
+Regenerate a system's name
+
+```
+omniglass system resetName <name>
+```
+
+Hands the pen back to the platform: regenerates the name from the system's current system_type and placement (the same rule a nameless create applies, the type's stem plus the lowest free ordinal, bare for the first of that stem in the placement) and marks it name_generated, whether or not it already was. An unclassified system is a 422: the stem lives on the system_type. Gated by system:rename, the same token :rename uses: it changes the name, exactly that permission's blast radius.
+
+Example:
+
+```sh
+omniglass system resetName <name>
 ```
 
 ### `omniglass system role`

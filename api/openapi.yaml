@@ -1268,7 +1268,7 @@ components:
           description: Location name this system is placed at
           type: string
         name:
-          description: Name, unique within its placement (the address; lowercase letters, digits, hyphens)
+          description: Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem.
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
@@ -1282,8 +1282,6 @@ components:
         system_type_id:
           description: The system_type it is classified as (what kind of space it is), by name or uuid; omit to leave it unclassified
           type: string
-      required:
-        - name
       type: object
     CreateSystemTypeInputBody:
       additionalProperties: false
@@ -3271,6 +3269,9 @@ components:
           type: string
         name:
           type: string
+        name_generated:
+          description: "Whether the platform picked this name rather than an operator typing it. Always false today: a location_type carries no name rule yet, so every location name is operator-typed."
+          type: boolean
         parent:
           description: The parent location's name, for display; absent for a site root
           type: string
@@ -3293,6 +3294,7 @@ components:
       required:
         - id
         - name
+        - name_generated
         - display_name_generated
         - location_type
         - location_type_id
@@ -5319,6 +5321,9 @@ components:
           type: integer
         name:
           type: string
+        name_generated:
+          description: Whether the platform picked this name (from the system_type's stem) rather than an operator typing it.
+          type: boolean
         parent:
           description: The parent system's name, for display; absent for a root system
           type: string
@@ -5353,6 +5358,7 @@ components:
       required:
         - id
         - name
+        - name_generated
         - display_name_generated
         - member_count
       type: object
@@ -8905,6 +8911,33 @@ paths:
           description: Error
       summary: Rename a location
       x-omniglass-permission: location:rename
+  /locations/{name}:resetName:
+    post:
+      description: "Hands the pen back to the platform, the same verb components and systems carry. It refuses today, 422: a location_type carries no name rule, so there is nothing to regenerate the name from. Gated by location:rename, the same token :rename uses."
+      operationId: reset-location-name
+      parameters:
+        - description: The location's name, or a dotted address (e.g. boi.17c.415a)
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The location's name, or a dotted address (e.g. boi.17c.415a)
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Regenerate a location's name
+      x-omniglass-permission: location:rename
   /locations/{name}:setTag:
     post:
       description: Binds a value for a key on a location. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by location:update.
@@ -12323,6 +12356,33 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Rename a system
+      x-omniglass-permission: system:rename
+  /systems/{name}:resetName:
+    post:
+      description: "Hands the pen back to the platform: regenerates the name from the system's current system_type and placement (the same rule a nameless create applies, the type's stem plus the lowest free ordinal, bare for the first of that stem in the placement) and marks it name_generated, whether or not it already was. An unclassified system is a 422: the stem lives on the system_type. Gated by system:rename, the same token :rename uses: it changes the name, exactly that permission's blast radius."
+      operationId: reset-system-name
+      parameters:
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Regenerate a system's name
       x-omniglass-permission: system:rename
   /systems/{name}:setTag:
     post:
