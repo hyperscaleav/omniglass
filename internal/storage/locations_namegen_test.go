@@ -387,6 +387,22 @@ func TestLocationUpdateWithoutAClassificationChangeKeepsTheName(t *testing.T) {
 		t.Fatalf("ordinal after a label edit = %v, want 2", ordstr(after.Ordinal))
 	}
 
+	// The same patch written in the OTHER form a registry reference takes
+	// (ADR-0062): the type's uuid rather than its name. It addresses the row the
+	// location already carries, so it is still not a reclassify, and the
+	// comparison that says so has to be on the RESOLVED id rather than on the
+	// string the caller happened to type.
+	byUUID := after.LocationTypeID
+	again, err := gw.UpdateLocation(ctx, "", second.ID, storage.LocationPatch{
+		DisplayName: strptr("Level Two"), LocationType: &byUUID,
+	}, all, all)
+	if err != nil {
+		t.Fatalf("update by type uuid: %v", err)
+	}
+	if again.Name != "2" {
+		t.Fatalf("restating the type by uuid renamed the location to %q: the guard compares the ref rather than the resolved row", again.Name)
+	}
+
 	// A REAL reclassify does re-mint, into the new type's rule. "room" carries
 	// no rule at all, so it refuses rather than silently freezing the pen.
 	room := "room"

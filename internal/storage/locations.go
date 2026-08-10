@@ -703,7 +703,14 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 		namePatch    *string
 		ordinalPatch *int
 	)
-	typePatchID, err := resolveLocationTypeID(ctx, tx, patch.LocationType)
+	//
+	// The cheap half of the comparison runs first and skips the resolve
+	// entirely: a patch whose ref is the name or the uuid the row already
+	// carries changes nothing, and that is what the console sends on every
+	// ordinary save, so the common path costs no round trip at all. A ref that
+	// LOOKS different still resolves, because a uuid and its name address one
+	// row and only the id comparison can tell them apart.
+	typePatchID, err := resolveLocationTypeID(ctx, tx, restatedType(before, patch.LocationType))
 	if err != nil {
 		return nil, err
 	}
@@ -759,6 +766,26 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 		return nil, fmt.Errorf("storage: commit update location: %w", err)
 	}
 	return after, nil
+}
+
+// restatedType returns nil for a type ref that re-states what the row already
+// carries, so the caller can skip resolving it. It compares against whichever
+// form the ref is written in, the pair every registry reference is addressed by
+// (ADR-0062): a name against the row's name, a uuid against the row's id.
+//
+// It is a fast path, not a correctness one, and only in the safe direction: a
+// ref it lets through is resolved and compared by id anyway, so the two written
+// forms of one row still settle as unchanged. What it buys is the console's
+// every-save shape, which restates the type the row already has, no longer
+// costing a round trip to learn that.
+func restatedType(before *Location, ref *string) *string {
+	if ref == nil || *ref == "" {
+		return nil
+	}
+	if *ref == before.LocationType || *ref == before.LocationTypeID {
+		return nil
+	}
+	return ref
 }
 
 // resolveLocationTypeID resolves a location_type patch field (a name or a uuid)
