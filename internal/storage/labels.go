@@ -322,15 +322,24 @@ func componentLabelChain(ctx context.Context, q querier, productID string) (comp
 		prodRule *string
 		typeID   uuid.UUID
 	)
+	// The global tier rides along on this query rather than costing a round trip
+	// of its own: it is a left join on a three-row table keyed by its primary
+	// key, so it is free, and reading it unconditionally beats reading it only
+	// when the two more specific tiers turn out empty. This is a WRITE path
+	// every component create, rename, move, reclassify and reset goes through,
+	// and the estate this epic exists for has 15,000 components in it.
+	var global string
 	err := q.QueryRow(ctx, `
 		select p.display_name, coalesce(v.display_name, ''), p.label_rule, p.component_type_id,
-		       coalesce(s.image->>'display_name', ct.display_name)
+		       coalesce(s.image->>'display_name', ct.display_name),
+		       coalesce(lr.template, lr.default_template, '')
 		from product p
 		join component_type ct on ct.id = p.component_type_id
 		left join vendor v on v.id = p.vendor_id
 		left join registry_shadow s on s.registry = '`+componentTypeRegistry+`' and s.row_id = ct.id
+		left join label_rule lr on lr.entity_kind = 'component'
 		where p.id = $1`, productID).
-		Scan(&in.productName, &in.vendorName, &prodRule, &typeID, &in.typeName)
+		Scan(&in.productName, &in.vendorName, &prodRule, &typeID, &in.typeName, &global)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return in, ErrProductNotFound
 	}
@@ -342,10 +351,6 @@ func componentLabelChain(ctx context.Context, q querier, productID string) (comp
 		return in, fmt.Errorf("storage: resolve label facts for product %q: %w", productID, err)
 	}
 	in.stem, in.abbrev = stem, abbrev
-	global, err := globalLabelRule(ctx, q, "component")
-	if err != nil {
-		return in, err
-	}
 	in.rule = firstRule(derefRule(prodRule), chainRule, global)
 	return in, nil
 }
