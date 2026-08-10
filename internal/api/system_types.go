@@ -61,8 +61,8 @@ type createSystemTypeInput struct {
 		DisplayName string `json:"display_name" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		// A stem is a name prefix (#657's name rule mints it straight into a
 		// generated system name), so it follows the same rule a name does.
-		Stem     string `json:"stem,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The prefix a generated system name is built from; omit to inherit the parent's. Lowercase letters, digits, and hyphens. Required for a root type, which has no ancestor to inherit one from."`
-		Icon     string `json:"icon,omitempty" doc:"A glyph key; omit to inherit the parent's"`
+		Stem      string `json:"stem,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The prefix a generated system name is built from; omit to inherit the parent's. Lowercase letters, digits, and hyphens. Required for a root type, which has no ancestor to inherit one from."`
+		Icon      string `json:"icon,omitempty" doc:"A glyph key; omit to inherit the parent's"`
 		Abbrev    string `json:"abbrev,omitempty" doc:"A compact form of display_name; omit to inherit the parent's"`
 		LabelRule string `json:"label_rule,omitempty" doc:"The label template systems of this type get, a Go text/template over the system data map; omit to inherit the nearest ancestor's. Refused (422) if it does not compile"`
 		ParentID  string `json:"parent_id,omitempty" doc:"The parent system_type, by name or uuid; omit for a root type"`
@@ -74,7 +74,7 @@ type updateSystemTypeInput struct {
 	Body struct {
 		DisplayName *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
 		// Same rule as create's Stem: a name prefix follows the name rule.
-		Stem   *string `json:"stem,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"A new name prefix. Lowercase letters, digits, and hyphens."`
+		Stem      *string `json:"stem,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"A new name prefix. Lowercase letters, digits, and hyphens."`
 		Icon      *string `json:"icon,omitempty" doc:"A new glyph key"`
 		Abbrev    *string `json:"abbrev,omitempty" doc:"A new compact form"`
 		LabelRule *string `json:"label_rule,omitempty" doc:"A new label template for systems of this type; omit to leave unchanged, \"\" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels"`
