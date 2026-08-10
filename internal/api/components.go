@@ -129,6 +129,7 @@ const errProductRequired = "a component must be an instance of a product; name o
 // registerComponentRoutes wires the component CRUD surface, on the same pattern
 // as locations and systems.
 func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
+	registerLabelRecomputeRoutes(api, a, gw, "component", "/components")
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-components",
 		Method:      http.MethodGet,

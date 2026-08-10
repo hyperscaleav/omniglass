@@ -186,6 +186,7 @@ type checkNameOutput struct {
 // route declares its capability, each handler resolves the caller's per-action
 // scope and hands it to the gateway.
 func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
+	registerLabelRecomputeRoutes(api, a, gw, "system", "/systems")
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-systems",
 		Method:      http.MethodGet,

@@ -888,6 +888,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components:previewLabels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a component label recompute
+         * @description Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by component:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
+         */
+        post: operations["preview-component-labels"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components:recomputeLabels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Recompute component labels
+         * @description Applies what :previewLabels describes, over the rows in the caller's read and update scope, and returns exactly what it changed. Idempotent: a second call changes nothing. A label an operator typed by hand is left alone, and clearing that label by hand is how it is handed back to the platform. Recorded as ONE audit row for the operation, naming the rule tier and the affected count, rather than one row per changed entity. Gated by component:update.
+         */
+        post: operations["recompute-component-labels"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/drivers": {
         parameters: {
             query?: never;
@@ -1147,7 +1187,7 @@ export interface paths {
         put?: never;
         /**
          * Create a location type
-         * @description Creates a custom (non-official) location_type. Gated by location_type:create.
+         * @description Creates a custom (non-official) location_type, optionally with the label_rule locations of that type get. An unparseable rule is a 422. Gated by location_type:create.
          */
         post: operations["create-location-type"];
         delete?: never;
@@ -1175,7 +1215,7 @@ export interface paths {
         head?: never;
         /**
          * Update a location type
-         * @description Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by location_type:update.
+         * @description Patches a location_type's display_name, icon, allowed parents, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by location_type:update.
          */
         patch: operations["update-location-type"];
         trace?: never;
@@ -1518,6 +1558,46 @@ export interface paths {
          * @description Reports whether a proposed name is a valid slug and currently free within the given placement (under the given parent, or among roots when no parent is given). Advisory (Save is still gated by the unique constraint). Gated by location:update.
          */
         post: operations["check-location-name"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/locations:previewLabels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a location label recompute
+         * @description Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by location:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
+         */
+        post: operations["preview-location-labels"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/locations:recomputeLabels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Recompute location labels
+         * @description Applies what :previewLabels describes, over the rows in the caller's read and update scope, and returns exactly what it changed. Idempotent: a second call changes nothing. A label an operator typed by hand is left alone, and clearing that label by hand is how it is handed back to the platform. Recorded as ONE audit row for the operation, naming the rule tier and the affected count, rather than one row per changed entity. Gated by location:update.
+         */
+        post: operations["recompute-location-labels"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2859,7 +2939,7 @@ export interface paths {
         put?: never;
         /**
          * Create a system type
-         * @description Creates a custom (non-official) system_type, optionally under a parent. A root type must carry a stem, since it has no ancestor to inherit one from. Gated by system_type:create.
+         * @description Creates a custom (non-official) system_type, optionally under a parent and optionally with the label_rule systems of that type get. A root type must carry a stem, since it has no ancestor to inherit one from. An unparseable label_rule is a 422. Gated by system_type:create.
          */
         post: operations["create-system-type"];
         delete?: never;
@@ -2887,7 +2967,7 @@ export interface paths {
         head?: never;
         /**
          * Update a system type
-         * @description Patches a custom system_type's display_name, stem, icon, or abbrev. Official types are read-only (422). Gated by system_type:update.
+         * @description Patches a custom system_type's display_name, stem, icon, abbrev, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /systems:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by system_type:update.
          */
         patch: operations["update-system-type"];
         trace?: never;
@@ -3294,6 +3374,46 @@ export interface paths {
          * @description Reports whether a proposed name is a valid slug and currently free within the given placement (parent wins over location; neither means the root/unplaced bucket). Advisory (Save is still gated by the unique constraint). Gated by system:update.
          */
         post: operations["check-system-name"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems:previewLabels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a system label recompute
+         * @description Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by system:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
+         */
+        post: operations["preview-system-labels"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems:recomputeLabels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Recompute system labels
+         * @description Applies what :previewLabels describes, over the rows in the caller's read and update scope, and returns exactly what it changed. Idempotent: a second call changes nothing. A label an operator typed by hand is left alone, and clearing that label by hand is how it is handed back to the platform. Recorded as ONE audit row for the operation, naming the rule tier and the affected count, rather than one row per changed entity. Gated by system:update.
+         */
+        post: operations["recompute-system-labels"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4103,6 +4223,8 @@ export interface components {
             display_name: string;
             /** @description A glyph key; the console falls back to map-pin when empty */
             icon?: string;
+            /** @description The label template locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile */
+            label_rule?: string;
             /** @description The globally unique name (e.g. wing); "root" is reserved */
             name: string;
         };
@@ -4320,6 +4442,8 @@ export interface components {
             display_name: string;
             /** @description A glyph key; omit to inherit the parent's */
             icon?: string;
+            /** @description The label template systems of this type get, a Go text/template over the system data map; omit to inherit the nearest ancestor's. Refused (422) if it does not compile */
+            label_rule?: string;
             /** @description The globally unique name */
             name: string;
             /** @description The parent system_type, by name or uuid; omit for a root type */
@@ -4920,6 +5044,33 @@ export interface components {
              */
             open_edit: string;
         };
+        LabelChangeBody: {
+            /** @description The label as stored now; empty when the entity has none */
+            from: string;
+            /** @description The entity's uuid */
+            id: string;
+            /** @description The entity kind this row belongs to: component, system, or location */
+            kind: string;
+            /** @description The entity's name, for display */
+            name: string;
+            /** @description The label its rules produce; empty when the rule renders nothing */
+            to: string;
+        };
+        LabelRecomputeOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/LabelRecomputeOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Every row, one entry each. Bounded by the estate, not paginated: this is the whole blast radius by design */
+            changed: components["schemas"]["LabelChangeBody"][] | null;
+            /**
+             * Format: int64
+             * @description How many rows changed, or would change
+             */
+            count: number;
+        };
         LabelSettings: {
             /**
              * @description Words a generated label title-cases to a fixed form, whole-word and case-insensitive
@@ -5394,6 +5545,8 @@ export interface components {
             icon: string;
             /** @description The location type's uuid, the stable handle that survives a rename */
             id: string;
+            /** @description The label template locations of this type get; empty falls back to the global rule for locations */
+            label_rule?: string;
             /** @description The name an operator reads and types; renameable */
             name: string;
             official: boolean;
@@ -6592,6 +6745,8 @@ export interface components {
             icon?: string;
             /** @description The system_type's uuid, the stable handle that survives a rename */
             id: string;
+            /** @description The label template systems of this type get; empty inherits the nearest ancestor's, then the global rule for systems */
+            label_rule?: string;
             /** @description The name an operator reads and types; renameable */
             name: string;
             official: boolean;
@@ -6804,6 +6959,8 @@ export interface components {
             display_name?: string;
             /** @description A new glyph key; the console falls back to map-pin when empty */
             icon?: string;
+            /** @description A new label template for locations of this type; omit to leave unchanged, "" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels */
+            label_rule?: string;
         };
         UpdateMeInputBody: {
             /**
@@ -6954,6 +7111,8 @@ export interface components {
             display_name?: string;
             /** @description A new glyph key */
             icon?: string;
+            /** @description A new label template for systems of this type; omit to leave unchanged, "" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels */
+            label_rule?: string;
             /** @description A new name prefix. Lowercase letters, digits, and hyphens. */
             stem?: string;
         };
@@ -8812,6 +8971,64 @@ export interface operations {
             };
         };
     };
+    "preview-component-labels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabelRecomputeOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "recompute-component-labels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabelRecomputeOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-drivers": {
         parameters: {
             query?: never;
@@ -10326,6 +10543,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CheckNameOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "preview-location-labels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabelRecomputeOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "recompute-location-labels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabelRecomputeOutputBody"];
                 };
             };
             /** @description Error */
@@ -14368,6 +14643,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CheckNameOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "preview-system-labels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabelRecomputeOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "recompute-system-labels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabelRecomputeOutputBody"];
                 };
             };
             /** @description Error */

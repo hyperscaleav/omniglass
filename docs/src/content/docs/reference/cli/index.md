@@ -740,6 +740,22 @@ Example:
 omniglass component move <name>
 ```
 
+### `omniglass component previewLabels`
+
+Preview a component label recompute
+
+```
+omniglass component previewLabels
+```
+
+Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by component:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
+
+Example:
+
+```sh
+omniglass component previewLabels
+```
+
 ### `omniglass component property`
 
 Commands for the property resource
@@ -814,6 +830,22 @@ Example:
 
 ```sh
 omniglass component reachability list <name>
+```
+
+### `omniglass component recomputeLabels`
+
+Recompute component labels
+
+```
+omniglass component recomputeLabels
+```
+
+Applies what :previewLabels describes, over the rows in the caller's read and update scope, and returns exactly what it changed. Idempotent: a second call changes nothing. A label an operator typed by hand is left alone, and clearing that label by hand is how it is handed back to the platform. Recorded as ONE audit row for the operation, naming the rule tier and the affected count, rather than one row per changed entity. Gated by component:update.
+
+Example:
+
+```sh
+omniglass component recomputeLabels
 ```
 
 ### `omniglass component reconciliation`
@@ -1606,6 +1638,22 @@ Example:
 omniglass location move <name>
 ```
 
+### `omniglass location previewLabels`
+
+Preview a location label recompute
+
+```
+omniglass location previewLabels
+```
+
+Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by location:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
+
+Example:
+
+```sh
+omniglass location previewLabels
+```
+
 ### `omniglass location property`
 
 Commands for the property resource
@@ -1660,6 +1708,22 @@ Example:
 
 ```sh
 omniglass location property update <name> <property> --value value
+```
+
+### `omniglass location recomputeLabels`
+
+Recompute location labels
+
+```
+omniglass location recomputeLabels
+```
+
+Applies what :previewLabels describes, over the rows in the caller's read and update scope, and returns exactly what it changed. Idempotent: a second call changes nothing. A label an operator typed by hand is left alone, and clearing that label by hand is how it is handed back to the platform. Recorded as ONE audit row for the operation, naming the rule tier and the affected count, rather than one row per changed entity. Gated by location:update.
+
+Example:
+
+```sh
+omniglass location recomputeLabels
 ```
 
 ### `omniglass location removeTag`
@@ -1756,13 +1820,14 @@ Create a location type
 omniglass location-type create [flags]
 ```
 
-Creates a custom (non-official) location_type. Gated by location_type:create.
+Creates a custom (non-official) location_type, optionally with the label_rule locations of that type get. An unparseable rule is a 422. Gated by location_type:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--allowed-parent-types` | string | (none) | location_type names and/or the reserved root sentinel this type may be placed under; empty means unconstrained |
 | `--display-name` | string | (none) | What an operator reads in pickers and lists |
 | `--icon` | string | (none) | A glyph key; the console falls back to map-pin when empty |
+| `--label-rule` | string | (none) | The label template locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile |
 | `--name` | string | (none) | The globally unique name (e.g. wing); "root" is reserved |
 
 Example:
@@ -1925,13 +1990,14 @@ Update a location type
 omniglass location-type update <id> [flags]
 ```
 
-Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by location_type:update.
+Patches a location_type's display_name, icon, allowed parents, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by location_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--allowed-parent-types` | string | (none) | Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained |
 | `--display-name` | string | (none) | A new operator-facing label |
 | `--icon` | string | (none) | A new glyph key; the console falls back to map-pin when empty |
+| `--label-rule` | string | (none) | A new label template for locations of this type; omit to leave unchanged, "" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels |
 
 Example:
 
@@ -4031,6 +4097,22 @@ Example:
 omniglass system move <name>
 ```
 
+### `omniglass system previewLabels`
+
+Preview a system label recompute
+
+```
+omniglass system previewLabels
+```
+
+Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by system:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
+
+Example:
+
+```sh
+omniglass system previewLabels
+```
+
 ### `omniglass system property`
 
 Commands for the property resource
@@ -4085,6 +4167,22 @@ Example:
 
 ```sh
 omniglass system property update <name> <property> --value value
+```
+
+### `omniglass system recomputeLabels`
+
+Recompute system labels
+
+```
+omniglass system recomputeLabels
+```
+
+Applies what :previewLabels describes, over the rows in the caller's read and update scope, and returns exactly what it changed. Idempotent: a second call changes nothing. A label an operator typed by hand is left alone, and clearing that label by hand is how it is handed back to the platform. Recorded as ONE audit row for the operation, naming the rule tier and the affected count, rather than one row per changed entity. Gated by system:update.
+
+Example:
+
+```sh
+omniglass system recomputeLabels
 ```
 
 ### `omniglass system removeTag`
@@ -4303,13 +4401,14 @@ Create a system type
 omniglass system-type create [flags]
 ```
 
-Creates a custom (non-official) system_type, optionally under a parent. A root type must carry a stem, since it has no ancestor to inherit one from. Gated by system_type:create.
+Creates a custom (non-official) system_type, optionally under a parent and optionally with the label_rule systems of that type get. A root type must carry a stem, since it has no ancestor to inherit one from. An unparseable label_rule is a 422. Gated by system_type:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--abbrev` | string | (none) | A compact form of display_name; omit to inherit the parent's |
 | `--display-name` | string | (none) | What an operator reads in pickers and lists |
 | `--icon` | string | (none) | A glyph key; omit to inherit the parent's |
+| `--label-rule` | string | (none) | The label template systems of this type get, a Go text/template over the system data map; omit to inherit the nearest ancestor's. Refused (422) if it does not compile |
 | `--name` | string | (none) | The globally unique name |
 | `--parent-id` | string | (none) | The parent system_type, by name or uuid; omit for a root type |
 | `--stem` | string | (none) | The prefix a generated system name is built from; omit to inherit the parent's. Lowercase letters, digits, and hyphens. Required for a root type, which has no ancestor to inherit one from. |
@@ -4360,13 +4459,14 @@ Update a system type
 omniglass system-type update <id> [flags]
 ```
 
-Patches a custom system_type's display_name, stem, icon, or abbrev. Official types are read-only (422). Gated by system_type:update.
+Patches a custom system_type's display_name, stem, icon, abbrev, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /systems:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by system_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--abbrev` | string | (none) | A new compact form |
 | `--display-name` | string | (none) | A new operator-facing label |
 | `--icon` | string | (none) | A new glyph key |
+| `--label-rule` | string | (none) | A new label template for systems of this type; omit to leave unchanged, "" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels |
 | `--stem` | string | (none) | A new name prefix. Lowercase letters, digits, and hyphens. |
 
 Example:

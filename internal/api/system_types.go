@@ -25,6 +25,7 @@ type systemTypeBody struct {
 	Stem        string  `json:"stem,omitempty" doc:"The prefix a generated system name is built from; empty inherits the nearest ancestor's"`
 	Icon        string  `json:"icon,omitempty" doc:"A glyph key; empty inherits the nearest ancestor's"`
 	Abbrev      string  `json:"abbrev,omitempty" doc:"A compact form of display_name; empty inherits the nearest ancestor's"`
+	LabelRule   string  `json:"label_rule,omitempty" doc:"The label template systems of this type get; empty inherits the nearest ancestor's, then the global rule for systems"`
 	Official    bool    `json:"official"`
 	ParentID    *string `json:"parent_id,omitempty" doc:"The parent system_type's id, the canonical handle; absent for a root type"`
 	Parent      *string `json:"parent,omitempty" doc:"The parent system_type's name, for display; absent for a root type"`
@@ -33,7 +34,7 @@ type systemTypeBody struct {
 func toSystemTypeBody(st *storage.SystemType, parentName *string) systemTypeBody {
 	b := systemTypeBody{
 		ID: st.ID.String(), Name: st.Name, DisplayName: st.DisplayName,
-		Stem: derefStr(st.Stem), Icon: derefStr(st.Icon), Abbrev: derefStr(st.Abbrev),
+		Stem: derefStr(st.Stem), Icon: derefStr(st.Icon), Abbrev: derefStr(st.Abbrev), LabelRule: derefStr(st.LabelRule),
 		Official: st.Official,
 	}
 	if st.ParentID != nil {
@@ -62,8 +63,9 @@ type createSystemTypeInput struct {
 		// generated system name), so it follows the same rule a name does.
 		Stem     string `json:"stem,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The prefix a generated system name is built from; omit to inherit the parent's. Lowercase letters, digits, and hyphens. Required for a root type, which has no ancestor to inherit one from."`
 		Icon     string `json:"icon,omitempty" doc:"A glyph key; omit to inherit the parent's"`
-		Abbrev   string `json:"abbrev,omitempty" doc:"A compact form of display_name; omit to inherit the parent's"`
-		ParentID string `json:"parent_id,omitempty" doc:"The parent system_type, by name or uuid; omit for a root type"`
+		Abbrev    string `json:"abbrev,omitempty" doc:"A compact form of display_name; omit to inherit the parent's"`
+		LabelRule string `json:"label_rule,omitempty" doc:"The label template systems of this type get, a Go text/template over the system data map; omit to inherit the nearest ancestor's. Refused (422) if it does not compile"`
+		ParentID  string `json:"parent_id,omitempty" doc:"The parent system_type, by name or uuid; omit for a root type"`
 	}
 }
 
@@ -73,8 +75,9 @@ type updateSystemTypeInput struct {
 		DisplayName *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
 		// Same rule as create's Stem: a name prefix follows the name rule.
 		Stem   *string `json:"stem,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"A new name prefix. Lowercase letters, digits, and hyphens."`
-		Icon   *string `json:"icon,omitempty" doc:"A new glyph key"`
-		Abbrev *string `json:"abbrev,omitempty" doc:"A new compact form"`
+		Icon      *string `json:"icon,omitempty" doc:"A new glyph key"`
+		Abbrev    *string `json:"abbrev,omitempty" doc:"A new compact form"`
+		LabelRule *string `json:"label_rule,omitempty" doc:"A new label template for systems of this type; omit to leave unchanged, \"\" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels"`
 	}
 }
 
@@ -153,7 +156,7 @@ func registerSystemTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Path:          "/system-types",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a system type",
-		Description:   "Creates a custom (non-official) system_type, optionally under a parent. A root type must carry a stem, since it has no ancestor to inherit one from. Gated by system_type:create.",
+		Description:   "Creates a custom (non-official) system_type, optionally under a parent and optionally with the label_rule systems of that type get. A root type must carry a stem, since it has no ancestor to inherit one from. An unparseable label_rule is a 422. Gated by system_type:create.",
 	}, "system_type", "create"), func(ctx context.Context, in *createSystemTypeInput) (*systemTypeOutput, error) {
 		parent, err := resolveSystemTypeParent(ctx, gw, in.Body.ParentID)
 		if err != nil {
@@ -168,7 +171,7 @@ func registerSystemTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		st, err := gw.CreateSystemType(ctx, actorID(ctx), storage.SystemType{
 			Name: in.Body.Name, DisplayName: in.Body.DisplayName,
 			Stem: ptrOrNil(in.Body.Stem), Icon: ptrOrNil(in.Body.Icon), Abbrev: ptrOrNil(in.Body.Abbrev),
-			ParentID: parentID,
+			LabelRule: ptrOrNil(in.Body.LabelRule), ParentID: parentID,
 		})
 		if err != nil {
 			return nil, mapSystemTypeErr(err)
@@ -181,10 +184,11 @@ func registerSystemTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Method:      http.MethodPatch,
 		Path:        "/system-types/{id}",
 		Summary:     "Update a system type",
-		Description: "Patches a custom system_type's display_name, stem, icon, or abbrev. Official types are read-only (422). Gated by system_type:update.",
+		Description: "Patches a custom system_type's display_name, stem, icon, abbrev, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /systems:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by system_type:update.",
 	}, "system_type", "update"), func(ctx context.Context, in *updateSystemTypeInput) (*systemTypeOutput, error) {
 		st, err := gw.UpdateSystemType(ctx, actorID(ctx), in.ID, storage.SystemTypePatch{
 			DisplayName: in.Body.DisplayName, Stem: in.Body.Stem, Icon: in.Body.Icon, Abbrev: in.Body.Abbrev,
+			LabelRule: in.Body.LabelRule,
 		})
 		if err != nil {
 			return nil, mapSystemTypeErr(err)

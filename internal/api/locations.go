@@ -55,6 +55,7 @@ type locationTypeBody struct {
 	DisplayName        string   `json:"display_name"`
 	Icon               string   `json:"icon"`
 	AllowedParentTypes []string `json:"allowed_parent_types"`
+	LabelRule          string   `json:"label_rule,omitempty" doc:"The label template locations of this type get; empty falls back to the global rule for locations"`
 	Official           bool     `json:"official"`
 }
 
@@ -74,6 +75,7 @@ type createLocationTypeInput struct {
 		DisplayName        string   `json:"display_name" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		Icon               string   `json:"icon,omitempty" doc:"A glyph key; the console falls back to map-pin when empty"`
 		AllowedParentTypes []string `json:"allowed_parent_types,omitempty" doc:"location_type names and/or the reserved root sentinel this type may be placed under; empty means unconstrained"`
+		LabelRule          string   `json:"label_rule,omitempty" doc:"The label template locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile"`
 	}
 }
 
@@ -83,6 +85,7 @@ type updateLocationTypeInput struct {
 		DisplayName        *string   `json:"display_name,omitempty" doc:"A new operator-facing label"`
 		Icon               *string   `json:"icon,omitempty" doc:"A new glyph key; the console falls back to map-pin when empty"`
 		AllowedParentTypes *[]string `json:"allowed_parent_types,omitempty" doc:"Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained"`
+		LabelRule          *string   `json:"label_rule,omitempty" doc:"A new label template for locations of this type; omit to leave unchanged, \"\" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels"`
 	}
 }
 
@@ -147,6 +150,7 @@ type renameLocationInput struct {
 // caller's per-action scope and hands it to the gateway, which expands it to the
 // row filter and writes audit. The capability is necessary, the scope decides.
 func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
+	registerLabelRecomputeRoutes(api, a, gw, "location", "/locations")
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-locations",
 		Method:      http.MethodGet,
@@ -197,7 +201,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		for i := range types {
 			out.Body.LocationTypes = append(out.Body.LocationTypes, locationTypeBody{
 				ID: types[i].ID, Name: types[i].Name, DisplayName: types[i].DisplayName, Icon: types[i].Icon,
-				AllowedParentTypes: types[i].AllowedParentTypes, Official: types[i].Official,
+				AllowedParentTypes: types[i].AllowedParentTypes, LabelRule: derefStr(types[i].LabelRule), Official: types[i].Official,
 			})
 		}
 		return out, nil
@@ -209,18 +213,18 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Path:          "/location-types",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a location type",
-		Description:   "Creates a custom (non-official) location_type. Gated by location_type:create.",
+		Description:   "Creates a custom (non-official) location_type, optionally with the label_rule locations of that type get. An unparseable rule is a 422. Gated by location_type:create.",
 	}, "location_type", "create"), func(ctx context.Context, in *createLocationTypeInput) (*locationTypeOutput, error) {
 		lt, err := gw.CreateLocationType(ctx, actorID(ctx), storage.LocationType{
 			Name: in.Body.Name, DisplayName: in.Body.DisplayName, Icon: in.Body.Icon,
-			AllowedParentTypes: in.Body.AllowedParentTypes,
+			AllowedParentTypes: in.Body.AllowedParentTypes, LabelRule: ptrOrNil(in.Body.LabelRule),
 		})
 		if err != nil {
 			return nil, mapTypeErr(err, "location_type")
 		}
 		return &locationTypeOutput{Body: locationTypeBody{
 			ID: lt.ID, Name: lt.Name, DisplayName: lt.DisplayName, Icon: lt.Icon,
-			AllowedParentTypes: lt.AllowedParentTypes, Official: lt.Official,
+			AllowedParentTypes: lt.AllowedParentTypes, LabelRule: derefStr(lt.LabelRule), Official: lt.Official,
 		}}, nil
 	})
 
@@ -229,18 +233,18 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPatch,
 		Path:        "/location-types/{id}",
 		Summary:     "Update a location type",
-		Description: "Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by location_type:update.",
+		Description: "Patches a location_type's display_name, icon, allowed parents, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by location_type:update.",
 	}, "location_type", "update"), func(ctx context.Context, in *updateLocationTypeInput) (*locationTypeOutput, error) {
 		lt, err := gw.UpdateLocationType(ctx, actorID(ctx), in.ID, storage.LocationTypePatch{
 			DisplayName: in.Body.DisplayName, Icon: in.Body.Icon,
-			AllowedParentTypes: in.Body.AllowedParentTypes,
+			AllowedParentTypes: in.Body.AllowedParentTypes, LabelRule: in.Body.LabelRule,
 		})
 		if err != nil {
 			return nil, mapTypeErr(err, "location_type")
 		}
 		return &locationTypeOutput{Body: locationTypeBody{
 			ID: lt.ID, Name: lt.Name, DisplayName: lt.DisplayName, Icon: lt.Icon,
-			AllowedParentTypes: lt.AllowedParentTypes, Official: lt.Official,
+			AllowedParentTypes: lt.AllowedParentTypes, LabelRule: derefStr(lt.LabelRule), Official: lt.Official,
 		}}, nil
 	})
 
