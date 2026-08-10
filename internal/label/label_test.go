@@ -243,9 +243,23 @@ func TestParseRefusesTheConstructsThatMakeWorkUnbounded(t *testing.T) {
 	}
 	nested = `{{` + nested + ` | slug}}`
 
+	// The same doubling in ARGUMENT position behind an allowed function, so
+	// the forbidden identifier is not the first thing the walk sees. A checker
+	// that inspected only a command's head, or only the outermost call, would
+	// pass this one, and it is the compact form: no assignment, no growth in
+	// the source.
+	inArg := `(printf "%1000s" .TypeName)`
+	for range 8 {
+		inArg = `(printf "%s%s" ` + inArg + ` ` + inArg + `)`
+	}
+	inArg = `{{slug ` + inArg + `}}`
+
 	for _, tc := range []struct{ name, src string }{
 		{"the assignment form", assign},
 		{"the nested-pipeline form, which needs no assignment", nested},
+		{"a forbidden function in a non-first argument", inArg},
+		{"a forbidden function one level down in an argument", `{{slug (printf "%1000s" .TypeName)}}`},
+		{"a bare declaration nothing refers to", `{{$a := .TypeName}}ok`},
 		{"printf on its own", `{{printf "%100000s" .TypeName}}`},
 		{"print", `{{print .TypeName .TypeName}}`},
 		{"println", `{{println .TypeName}}`},
