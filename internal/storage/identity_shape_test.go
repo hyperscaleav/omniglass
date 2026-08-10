@@ -93,7 +93,9 @@ func TestEveryTableHasADeclaredIdentityShape(t *testing.T) {
 			"  ShapeKeyspace      an operator types its name, on the dotted rule\n"+
 			"  ShapeHumanNotAKey  a human identifier that is not a name: a username, a filename,\n"+
 			"                     a content hash. Each looks name-shaped from a distance\n"+
-			"  ShapeIDOnly        nobody names it; it is addressed by uuid", table)
+			"  ShapeIDOnly        nobody names it; it is addressed by uuid\n"+
+			"  ShapeFixedKey      nobody names it and there is no uuid either: the primary key is\n"+
+			"                     one of a closed vocabulary the platform declares", table)
 	}
 
 	// A declaration naming a table that no longer exists is stale, and a stale entry

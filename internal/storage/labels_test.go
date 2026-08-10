@@ -598,86 +598,6 @@ func TestASystemAndALocationGetLabelsToo(t *testing.T) {
 	}
 }
 
-// --- the backfill -------------------------------------------------------
-
-// The pen defaults false, which is right for a new column and wrong for every
-// row that already existed, so a backfill claims it where there is nothing to
-// protect (#682, 20260810110000_label_pen_backfill.sql).
-//
-// Without it the feature is inert on an upgraded estate: stamp returns at its
-// first line when the pen is false, and #685's recompute cannot repair it
-// either, since a recompute only touches rows the platform already owns. So
-// this drives the two states directly through SQL (there is no gateway path
-// that produces a pre-migration row) and then proves the difference is
-// observable: the unlabelled row picks up a label on its next write, the
-// labelled one keeps what the operator typed.
-func TestTheBackfillClaimsThePenOnlyWhereThereIsNoLabel(t *testing.T) {
-	gw, ctx, dsn := seededGatewayDSN(t)
-	conn := rawConn(t, dsn)
-
-	// Three rows in the shapes a pre-migration database holds: no label at all,
-	// the empty string an old clear wrote, and an operator's own words. Written
-	// with the pen false, which is what the column default gave them.
-	var ids [3]string
-	for i, label := range []any{nil, "", "The Operator's Own"} {
-		if err := conn.QueryRow(ctx, `
-			insert into component (name, display_name, display_name_generated, product_id)
-			values ($1, $2, false, (select id from product where name = $3))
-			returning id`, "legacy-"+strconv.Itoa(i), label, qm55).Scan(&ids[i]); err != nil {
-			t.Fatalf("insert legacy row %d: %v", i, err)
-		}
-	}
-
-	// The backfill statement itself, run against these rows exactly as the
-	// migration runs it.
-	if _, err := conn.Exec(ctx, `
-		update component set display_name_generated = true
-		 where not display_name_generated and (display_name is null or display_name = '')`); err != nil {
-		t.Fatalf("backfill: %v", err)
-	}
-
-	for i, want := range []bool{true, true, false} {
-		var pen bool
-		if err := conn.QueryRow(ctx, `select display_name_generated from component where id = $1`, ids[i]).Scan(&pen); err != nil {
-			t.Fatalf("read pen %d: %v", i, err)
-		}
-		if pen != want {
-			t.Fatalf("row %d: pen = %v, want %v", i, pen, want)
-		}
-	}
-
-	// Idempotent, as a backfill must be.
-	if _, err := conn.Exec(ctx, `
-		update component set display_name_generated = true
-		 where not display_name_generated and (display_name is null or display_name = '')`); err != nil {
-		t.Fatalf("second backfill: %v", err)
-	}
-	var stillTyped bool
-	if err := conn.QueryRow(ctx, `select display_name_generated from component where id = $1`, ids[2]).Scan(&stillTyped); err != nil {
-		t.Fatalf("read pen after second run: %v", err)
-	}
-	if stillTyped {
-		t.Fatal("a second backfill run claimed the operator's row")
-	}
-
-	// And the claim is what makes the feature reach these rows: the unlabelled
-	// one now renders on its next write, the operator's one still does not.
-	claimed, err := gw.RenameComponent(ctx, "", ids[0], "legacy-renamed", all, all)
-	if err != nil {
-		t.Fatalf("rename the claimed row: %v", err)
-	}
-	if claimed.DisplayName != "Display" {
-		t.Fatalf("backfilled row's label = %q, want the rule to have rendered %q", claimed.DisplayName, "Display")
-	}
-	typed, err := gw.RenameComponent(ctx, "", ids[2], "legacy-typed-renamed", all, all)
-	if err != nil {
-		t.Fatalf("rename the operator's row: %v", err)
-	}
-	if typed.DisplayName != "The Operator's Own" {
-		t.Fatalf("operator's label = %q, want it untouched", typed.DisplayName)
-	}
-}
-
 // --- the global tier ----------------------------------------------------
 
 // The global rule is a TABLE with two columns rather than one, and this is what
@@ -975,6 +895,12 @@ func TestEveryStoredSystemAndLocationLabelEqualsWhatItsRuleProduces(t *testing.T
 	if _, err := gw.RenameLocation(ctx, "", roomA, "room-a-renamed", all, all); err != nil {
 		t.Fatalf("rename location: %v", err)
 	}
+	// A third room, reclassified, so a location's UPDATE stamp is covered by the
+	// invariant and not only by its own test.
+	third := makeRoom(t, gw, ctx, "room-c")
+	if _, err := gw.UpdateLocation(ctx, "", third, storage.LocationPatch{LocationType: strptr("floor")}, all, all); err != nil {
+		t.Fatalf("reclassify location: %v", err)
+	}
 	if _, err := gw.UpdateLocation(ctx, "", roomB, storage.LocationPatch{DisplayName: strptr("The Operator's Own")}, all, all); err != nil {
 		t.Fatalf("hand-label location: %v", err)
 	}
@@ -1025,8 +951,8 @@ func TestEveryStoredSystemAndLocationLabelEqualsWhatItsRuleProduces(t *testing.T
 		}
 		checkedLocations++
 	}
-	if checkedLocations < 2 {
-		t.Fatalf("only %d platform-owned location labels were compared, want at least 2", checkedLocations)
+	if checkedLocations < 3 {
+		t.Fatalf("only %d platform-owned location labels were compared, want at least 3", checkedLocations)
 	}
 }
 

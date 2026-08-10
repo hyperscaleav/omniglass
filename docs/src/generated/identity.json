@@ -79,8 +79,8 @@
     },
     {
       "table": "label_rule",
-      "shape": "id only",
-      "reason": "keyed by the entity kind it applies to, a closed platform set, never named"
+      "shape": "fixed key, declared by the platform",
+      "reason": "keyed by the entity kind it applies to (component, system, location), a closed set the table's own CHECK enforces"
     },
     {
       "table": "location",

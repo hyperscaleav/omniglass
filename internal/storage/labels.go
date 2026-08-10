@@ -233,9 +233,9 @@ func (p *PG) GetLabelRule(ctx context.Context, kind string) (*LabelRule, error) 
 // Clearing is restore-to-defaults, and it needs no verb of its own the way
 // :resetName does: unlike a name, a rule HAS a representable unset state, so
 // the empty string says it.
-func (p *PG) SetLabelRule(ctx context.Context, actorID, kind, template string) (*LabelRule, error) {
-	if !validLabelRuleKind(kind) {
-		return nil, fmt.Errorf("%w: %q", ErrLabelRuleKindUnknown, kind)
+func (p *PG) SetLabelRule(ctx context.Context, actorID, entityKind, template string) (*LabelRule, error) {
+	if !validLabelRuleKind(entityKind) {
+		return nil, fmt.Errorf("%w: %q", ErrLabelRuleKindUnknown, entityKind)
 	}
 	if err := validateLabelRule(&template); err != nil {
 		return nil, err
@@ -246,21 +246,21 @@ func (p *PG) SetLabelRule(ctx context.Context, actorID, kind, template string) (
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	before, err := scanLabelRule(tx.QueryRow(ctx, `select `+labelRuleCols+` from label_rule where entity_kind = $1`, kind))
+	before, err := scanLabelRule(tx.QueryRow(ctx, `select `+labelRuleCols+` from label_rule where entity_kind = $1`, entityKind))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
 		}
-		return nil, fmt.Errorf("storage: load label rule %q: %w", kind, err)
+		return nil, fmt.Errorf("storage: load label rule %q: %w", entityKind, err)
 	}
 	after, err := scanLabelRule(tx.QueryRow(ctx, `
 		update label_rule set template = $2, updated_at = now()
 		where entity_kind = $1
-		returning `+labelRuleCols, kind, nilIfEmptyRule(&template)))
+		returning `+labelRuleCols, entityKind, nilIfEmptyRule(&template)))
 	if err != nil {
-		return nil, fmt.Errorf("storage: set label rule %q: %w", kind, err)
+		return nil, fmt.Errorf("storage: set label rule %q: %w", entityKind, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "label_rule", kind, before, after); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "label_rule", entityKind, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {

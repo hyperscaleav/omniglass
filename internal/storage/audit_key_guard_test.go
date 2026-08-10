@@ -37,7 +37,7 @@ var auditKeyAllowed = map[string]string{
 	"gid":              "the grant uuid returned by the insert",
 	`fmt.Sprintf("%d"`: "command's primary key is a bigint, not a uuid",
 	`""`:               "the settings delete-all leg addresses no single row",
-	"kind":             "label_rule is keyed by entity kind: one row per labelled entity kind, no surrogate id",
+	"entityKind":       "label_rule is keyed by entity kind: one row per labelled entity kind, and no surrogate id exists to use instead",
 }
 
 func TestEveryAuditRowIsKeyedOnAPrimaryKey(t *testing.T) {
