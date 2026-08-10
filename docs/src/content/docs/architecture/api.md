@@ -375,7 +375,15 @@ display name, and each list and per-id `GET` sits on the viewer floor (`vendor:r
 `component_type:read` / `product:read` / `standard:read`, which `*:read` carries); `POST` mints a custom
 row (201) and `PATCH` updates and `DELETE` removes (204), gated `<resource>:create` /
 `<resource>:update` / `<resource>:delete`, all at the admin tier. An **official** row refuses the write
-(`PATCH` and `DELETE` both 422).
+(`PATCH` and `DELETE` both 422), except on a registry that has adopted the **fork**
+([ADR-0095](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it)):
+there a `PATCH` of a shipped row succeeds without writing it, storing the caller's version over it and
+answering 200 with `forked: true` under the same id, `DELETE` is still 422 (a fork is an overlay, not
+ownership), and `POST /component-types/{id}:restore` discards the fork (409 when there is none) so later
+releases reach the row again. `component_type` is the first adopter; `official` and `forked` together
+are the row's origin (shipped, yours, or yours overriding shipped). The `{ref}` grammar is unchanged
+either way: one uuid and one name per logical row, forked or not, and the namespace never appears in a
+URL.
 
 A registry body carries **both handles** like every other name-bearing resource
 ([above](#shape-resources-and-verb-methods),

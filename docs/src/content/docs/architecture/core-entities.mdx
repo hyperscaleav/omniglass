@@ -374,11 +374,36 @@ Shipped content is two kinds, never conflated:
   the `event_type`
   and `command_type` registries) is the shared namespace a driver maps onto, identical install to
   install: seeded `official: true` through an **authoritative upsert** (`ON CONFLICT DO UPDATE`),
-  read-only in the API. The classification catalogs (`vendor`, `driver`, `component_type`, `product`)
-  ride that path today.
+  never written by an operator. The classification catalogs (`vendor`, `driver`, `component_type`,
+  `product`) ride that path today.
 
 **Forking applies to template -> row, never to classifier -> instance**: a system conforms, never
 forks.
+
+#### An operator forks a shipped row instead of the platform writing it
+
+A shipped `official: true` row was flatly read-only, which is correct as far as it goes and left an
+operator with nowhere to go: they could neither correct a display name nor change an icon on a row
+the release owns. They now **fork** it
+([ADR-0095](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it),
+[#655](https://github.com/hyperscaleav/omniglass/issues/655)):
+
+- An edit stores the operator's whole version of the row's **mutable columns** in `registry_shadow`,
+  keyed on the shipped row's own uuid, and every read resolves the shadow over the official row.
+- The shipped row is **never written**, so the next release can still improve it, and **restore**
+  (`POST /component-types/{id}:restore`) discards the shadow to take those improvements back.
+- The **address never changes**: one uuid and one name per logical row, forked or not, so foreign
+  keys, the tree walks, the audit trail and the URL all keep naming what they already named. The
+  namespace is not an addressing concept and never reaches a caller.
+- A fork restates **facts**, never **structure**: the uuid, the name, the `official` flag and the
+  parent link stay official. On a nested registry that makes inheritance resolvable **per node**, so
+  forking an ancestor reaches every descendant that does not override the field, and forking a leaf
+  does not cut it off from what it inherits.
+- The console reads it as three origins: **official** (shipped, untouched), **custom** (yours), and
+  **overridden** (a shipped row carrying your version).
+
+`component_type` is the first adopter. The other registries carrying `official` adopt as their
+slices land; the primitive is registry-agnostic and needs no schema of its own per adopter.
 
 ## The variable-depth trees
 
