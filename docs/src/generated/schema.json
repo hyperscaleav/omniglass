@@ -1029,6 +1029,45 @@
      }
     ]
    },
+   "label_rule": {
+    "columns": [
+     {
+      "name": "entity_kind",
+      "type": "text",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "default_template",
+      "type": "text",
+      "nullable": false,
+      "default": "''::text"
+     },
+     {
+      "name": "template",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ],
+    "checks": [
+     {
+      "name": "label_rule_entity_kind_check",
+      "expr": "CHECK ((entity_kind = ANY (ARRAY['component'::text, 'system'::text, 'location'::text])))"
+     }
+    ]
+   },
    "secret": {
     "columns": [
      {
@@ -3776,47 +3815,6 @@
      {
       "name": "property_type_handle_key",
       "definition": "CREATE UNIQUE INDEX property_type_handle_key ON public.property_type USING btree (name)"
-     }
-    ]
-   }
-  },
-  "unclustered": {
-   "label_rule": {
-    "columns": [
-     {
-      "name": "entity_kind",
-      "type": "text",
-      "nullable": false,
-      "pk": true
-     },
-     {
-      "name": "default_template",
-      "type": "text",
-      "nullable": false,
-      "default": "''::text"
-     },
-     {
-      "name": "template",
-      "type": "text",
-      "nullable": true
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "updated_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     }
-    ],
-    "checks": [
-     {
-      "name": "label_rule_entity_kind_check",
-      "expr": "CHECK ((entity_kind = ANY (ARRAY['component'::text, 'system'::text, 'location'::text])))"
      }
     ]
    }

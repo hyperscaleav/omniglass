@@ -110,6 +110,12 @@ var IdentityShapes = map[string]TableIdentity{
 	// (registry, row_id), and row_id is that row's uuid. Operators never see it
 	// at all, since every read resolves it over the official row.
 	"registry_shadow": {Shape: ShapeIDOnly, Reason: "addressed by the registry row it shadows, never named"},
+	// label_rule holds the global tier of the label rules (#682, ADR-0098), one
+	// row per labelled entity kind. Nobody names it: the key is the entity kind
+	// itself, a closed set the platform declares and the table's own CHECK
+	// enforces, so there is no operator-typed identifier here and no uuid to
+	// address one by either.
+	"label_rule": {Shape: ShapeIDOnly, Reason: "keyed by the entity kind it applies to, a closed platform set, never named"},
 }
 
 // KeyProvedElsewhere excuses a name-bearing table from the behavioural create sweep,

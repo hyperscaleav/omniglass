@@ -340,6 +340,10 @@ config: {
     id: uuid {constraint: primary_key}
     principal_id: uuid {constraint: foreign_key}
   }
+  label_rule: {
+    shape: sql_table
+    entity_kind: text {constraint: primary_key}
+  }
   secret: {
     shape: sql_table
     id: uuid {constraint: primary_key}
@@ -396,13 +400,6 @@ audit: {
     id: uuid {constraint: primary_key}
     actor_principal_id: uuid {constraint: foreign_key}
     real_actor_principal_id: uuid {constraint: foreign_key}
-  }
-}
-
-unclustered: {
-  label_rule: {
-    shape: sql_table
-    entity_kind: text {constraint: primary_key}
   }
 }
 

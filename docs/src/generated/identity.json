@@ -78,6 +78,11 @@
       "proved_elsewhere": "seeded only, no create path on the gateway"
     },
     {
+      "table": "label_rule",
+      "shape": "id only",
+      "reason": "keyed by the entity kind it applies to, a closed platform set, never named"
+    },
+    {
       "table": "location",
       "shape": "key-bearing"
     },
