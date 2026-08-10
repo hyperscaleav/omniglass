@@ -337,14 +337,7 @@ func defaultSettingsService(gw storage.Gateway) *settings.Service {
 		if err != nil {
 			return nil, nil, err
 		}
-		doc := settings.Doc{}
-		locks := map[string][]string{}
-		for _, r := range rows {
-			doc[r.Namespace] = r.Doc
-			if len(r.Locks) > 0 {
-				locks[r.Namespace] = r.Locks
-			}
-		}
+		doc, locks := storage.SettingLevel(rows)
 		return doc, locks, nil
 	})
 }

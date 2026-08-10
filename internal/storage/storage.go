@@ -767,15 +767,23 @@ func NewPG(ctx context.Context, dsn string, opts ...Option) (*PG, error) {
 	return p, nil
 }
 
-// settingLevel adapts the override rows at a scope into the shape the settings
-// resolver takes: one document per namespace, plus the locked key-paths. The
-// querier is a parameter because a gateway path resolving a setting inside its
-// own transaction must read it there.
+// settingLevel reads the override rows at a scope and adapts them into a
+// settings level. The querier is a parameter because a gateway path resolving a
+// setting inside its own transaction must read it there.
 func (p *PG) settingLevel(ctx context.Context, q querier, scope string) (settings.Doc, map[string][]string, error) {
 	rows, err := settingOverridesOn(ctx, q, scope)
 	if err != nil {
 		return nil, nil, err
 	}
+	doc, locks := SettingLevel(rows)
+	return doc, locks, nil
+}
+
+// SettingLevel adapts override rows into the shape the settings resolver takes:
+// one document per namespace, plus the locked key-paths. Pure, and exported
+// because every caller building a settings.Service over this gateway needs the
+// same adaptation and there is no reason for each to spell it out.
+func SettingLevel(rows []SettingOverride) (settings.Doc, map[string][]string) {
 	doc := settings.Doc{}
 	locks := map[string][]string{}
 	for _, r := range rows {
@@ -784,7 +792,7 @@ func (p *PG) settingLevel(ctx context.Context, q querier, scope string) (setting
 			locks[r.Namespace] = r.Locks
 		}
 	}
-	return doc, locks, nil
+	return doc, locks
 }
 
 // Settings is the gateway's settings resolver: the declared defaults, the
