@@ -717,6 +717,23 @@ uniqueness that has to be satisfied is the name's. Asking the mint for candidate
 siblings apart is also what makes a name that is nothing but its ordinal expressible, which is what a
 positional type (a floor, a rack unit) will need.
 
+**A system names itself too, and the first of a kind carries no number**
+([ADR-0101](/architecture/decisions/#adr-0101-the-first-of-its-stem-in-a-bucket-carries-no-ordinal-and-the-mint-that-says-so-is-the-one-allocation-tests)).
+The pen, `:rename` and `:resetName` are the same three things on a system and a location that they
+are on a component. A system left nameless on create mints its `system_type` chain's `stem` plus the
+lowest free ordinal in its placement bucket, and **suppresses the ordinal on the first of that stem
+there**: a room's only boardroom is `boardroom` and the second is `boardroom-2`. Allocation stays
+lowest-free, so deleting the bare one while the second survives frees the bare name for the next
+create, and `boardroom-1` never exists at all. A hand-typed `boardroom` blocks the generator exactly
+as a hand-typed `display-1` blocks a component's, because what has to be unique is the name. A
+system with no `system_type` cannot be named this way (422 naming the reason), and neither can it be
+un-classified while the platform owns its name: `:rename` claims the name first.
+
+A **location** carries the pen and both verbs and generates nothing: `location_type` has no stem, so
+`:resetName` on a location refuses (422) with the missing fact named rather than reporting a reset
+that did not happen. The pen ships ahead of the generator on purpose, so a location an operator
+names today is already frozen when a positional type learns to name its own rows.
+
 **A label generates itself too, from a rule an operator can change**
 ([ADR-0098](/architecture/decisions/#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits)).
 `display_name` gains the same stored pair the name has: `display_name_generated` is the pen, true

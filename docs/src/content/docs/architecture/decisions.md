@@ -136,6 +136,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0098](#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits) | 2026-08-10 | Accepted | A label rule is Go `text/template` over a **closed `map[string]string`** AND a **closed grammar**: the sandbox is the data map (a secret is absent rather than filtered) plus an allowlist over the parsed tree (a closed set of node types and function names, so `printf` and friends are refused at rule-edit time; a length cap bounds output, which is not the same as bounding work). The map carries the entity's own columns and its resolved classification facts, and deliberately **no placement**: every input then changes on exactly five of the entity's own acts (create, rename, move, reclassify, reset), which is what makes the stored label's recompute-and-compare invariant provable. Exposing a location's name would put a location rename in that set and stale every label under it. The global tier is one row per entity kind with TWO columns, `default_template` (boot-seed space, authoritative) and `template` (operator space, nullable) |
 | [ADR-0099](#adr-0099-the-acronym-list-is-one-replaceable-setting-not-a-shipped-list-plus-operator-additions) | 2026-08-10 | Accepted | The acronym dictionary `title` consults is ONE key, `label.acronyms`, in a new `platform,client` settings namespace; an operator's list REPLACES the shipped one and provenance tells them apart, rather than a union of shipped plus additions (which would give one key a merge rule no other setting has, make the wire value a fragment rather than the effective dictionary, and make a shipped entry unremovable). The engine resolves the dictionary at render time and caches the compiled engine against the dictionary ITSELF, so a change builds a replacement rather than mutating one and no writer has a generation counter to forget; validation uses a dictionary-less engine, since whether a rule parses is a fact about the rule alone |
 | [ADR-0100](#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate) | 2026-08-10 | Accepted | A label rule reads its entity's PLACEMENT (a component's location label and its primary system's type label, a system's location label), reversing ADR-0098's exclusion, and the write paths that keep those honest are derived from the map rather than enumerated. The line is BLAST RADIUS, not ownership: bounded by a placement (the rows at one location, one system's members, one component's membership) it cascades inside the act's own transaction; bounded only by the estate (a rule at any tier, a classification row's display_name, the acronym list) it waits for the preview-then-apply verb. A preview is an apply that rolls back, so it lists exactly what the apply changes including the second hop. One audit row per operation, keyed on the rule, never one per changed entity |
+| [ADR-0101](#adr-0101-the-first-of-its-stem-in-a-bucket-carries-no-ordinal-and-the-mint-that-says-so-is-the-one-allocation-tests) | 2026-08-10 | Accepted | A generated **system** name suppresses the ordinal on the first of its stem in a placement bucket (`boardroom`, then `boardroom-2`), and the order dependence is accepted: deleting the bare one while the second survives frees the bare name again, and `boardroom-1` never exists. Suppression is a field on the MINT rather than a change to the shape (a component still reads `display-1`), and the ALLOCATOR takes that same mint, so a suppressing mint and a non-suppressing allocator cannot disagree on ordinal 1 and turn the second create into a `23505`. A placement bucket becomes a value per entity kind, so a location's two buckets cannot be written as a system's three. The pen and both verbs spread to system and location; only a system generates, and a location's `:resetName` refuses with the missing fact named. No backfill: the default false is the right value for a row an operator already named |
 
 ## Entries
 
@@ -3939,4 +3940,93 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   placed, system-bound, generated component create costs nineteen statements, of which exactly one is
   this decision's.
 - **Tracked under** [#685](https://github.com/hyperscaleav/omniglass/issues/685), the fifth slice of
+  epic [#657](https://github.com/hyperscaleav/omniglass/issues/657).
+
+### ADR-0101: The first of its stem in a bucket carries no ordinal, and the mint that says so is the one allocation tests
+
+- **Date:** 2026-08-10 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
+  [storage](/architecture/storage/), [glossary](/architecture/glossary/)
+- **Decision (epic D3, ordinal suppression):** A generated **system** name suppresses the ordinal on
+  the first of its stem in a placement bucket: a room's only boardroom is `boardroom` and the second
+  is `boardroom-2`. The order dependence this buys is accepted rather than mitigated, and it is
+  worth stating in full rather than in the abstract. Allocation is lowest-free
+  ([ADR-0097](#adr-0097-allocation-tests-the-name-it-would-mint-rather-than-reading-the-ordinal-it-stored)
+  preserved it), so **deleting `boardroom` while `boardroom-2` survives lets the next create take
+  `boardroom` again**, and `boardroom-1` never exists at any point in that sequence. The same rule
+  therefore yields different names for the same estate depending on the order it was built in. The
+  operator-facing string is what this epic exists to improve, and a room called `boardroom-1` when
+  there is only one of it is the defect the epic was filed about.
+- **Decision (suppression is a property of the MINT, not of the shape function):** `mintName` became
+  a `nameMint` value: a resolved stem plus a `bareFirst` flag, with the shape as a method on it. It
+  is NOT a branch inside the shape function, and it is not a global change to the shape, because a
+  component that suppressed at ordinal 1 would rename every generated component that already exists
+  (`display-1` is the shape #681 has been minting) and would break the no-expected-value-changes
+  rule this epic runs under. Components are counted things in a rack, where `display-1` beside
+  `display-2` is what an operator writes on the label; a system is a room, and a room with one
+  boardroom in it does not call it `boardroom-1`.
+- **Decision (the allocator takes the mint, not the stem):** `pickOrdinal` takes the `nameMint` and
+  tests `mint.name(n)` for each candidate. This is the load-bearing half. A mint that suppressed
+  while the allocator still tested `<stem>-<n>` would disagree on exactly ordinal 1, so the first
+  create would take `boardroom` and the second would test a free `boardroom-1`, mint `boardroom`,
+  and hit the scoped-name unique index as a `23505` the transaction cannot recover from. Passing one
+  value to both is what makes that disagreement unrepresentable rather than merely unlikely: there
+  is no second spelling of the shape to keep in step.
+- **Decision (where the choice comes from, and the seam for the next slice):** `bareFirst` is a
+  field on the mint, resolved per entity kind today (`componentMint` false, `systemMint` true) and
+  intended to be resolved per TYPE.
+  [#687](https://github.com/hyperscaleav/omniglass/issues/687) gives `location_type` a nullable name
+  rule, and a rule that produces a positional name fills this same field from a per-type fact: it
+  consumes the seam rather than replacing it. A per-kind default is where the fact lives until a
+  type carries one, not a competing mechanism. A stem-less mint ignores the flag outright, since
+  suppressing the ordinal of a name that IS its ordinal (a floor called `1`) would leave nothing at
+  all.
+- **Decision (a placement bucket is a value, not a pair of pointers):** The lock key and the sibling
+  filter became one `nameScope` per entity kind, because the kinds do not agree on how many buckets
+  there are. `component` and `system` have three (a parent, else a location, else unplaced) and
+  `location` has TWO (a parent, else root), since a location carries no located-at column. The
+  location constructor takes no location id, so pairing a location with the three-way shape is not a
+  mistake to avoid at each call site, it is a value that cannot be constructed. The key carries the
+  table too, so a system and a component sharing a parent uuid never serialize against each other.
+- **Decision (the pen spreads to both trees, generation to one):** `name_generated` and both verbs
+  (`:rename` freezes it false, `:resetName` returns it) land on **system and location**; only a
+  system generates. `location_type` carries no stem to mint from, so `:resetName` on a location
+  refuses with a typed error naming the missing fact (422) rather than reporting a reset that did
+  not happen. The pen still ships on that tier ahead of its generator, and that is the point: a
+  location an operator names today is already frozen when #687's rule arrives, where a pen added
+  later would have to decide retroactively who had named every existing row.
+- **Decision (no backfill, unlike the label pen):** The column defaults `false` and no one-time
+  migration touches it, which is the argument the component column already records: every row that
+  exists when the migration runs was named by an operator, so claiming the pen retroactively would
+  let the first `:move` silently rename real estate. That is the opposite of
+  [#682](https://github.com/hyperscaleav/omniglass/issues/682)'s label pen, which WAS backfilled,
+  and the difference is the field rather than a change of mind: "no label" is a state the platform
+  may safely claim, while a row always has a name and somebody typed it.
+- **Decision (the system bare render stays unwired, and this is not an oversight):** Both halves of
+  the compact render's substitution now exist for a system (`system_type.abbrev` from
+  [ADR-0096](#adr-0096-the-system_type-name-returns-as-the-coarse-space-taxonomy), and a stored
+  ordinal from this slice), and `attachSystemPaths` still passes neither. `RenderBare` substitutes
+  whenever it is given both, with no shape check, which is what makes
+  [#654](https://github.com/hyperscaleav/omniglass/issues/654)'s guarantee structural for a
+  component. A suppressed name carries no digits while owning ordinal 1, so wiring it would print
+  `brd1` for a room named `boardroom`: a number on a physical label that appears nowhere in the
+  entity's name, the exact defect the ordinal column's own migration cites. Correcting it means
+  teaching the render which mint produced the name, which is a rendering decision, not a naming one.
+- **Consequence (the write paths were derived, not listed):** The acts that must re-mint a
+  platform-owned system name are the ones that change an INPUT to the mint, and the mint reads
+  exactly two things: the `system_type` chain's stem and the placement bucket. That yields create,
+  `:resetName`, `:move` (both the relocate and the reparent arm, since a parent wins over a
+  location) and the `system_type` half of a reclassify, and it also settles two cases a list would
+  have missed. Un-classifying a platform-named system reaches the generator with no type and is
+  REFUSED there rather than silently keeping the name and handing back the pen. And a `stem` edited
+  on a shared `system_type` row is bounded by the estate rather than by a placement, so it does not
+  cascade, which is
+  [ADR-0100](#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate)'s
+  line applied to the name side. The database agrees: `system.location_id` and `system.parent_id`
+  are both `ON DELETE RESTRICT`, so no placement changes without one of these acts running.
+- **Consequence:** `Ordinal` joins the system label data map, widening
+  [ADR-0098](#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits)'s closed map by one
+  key, and the shipped global system rule deliberately does not use it: for a suppressed first name
+  the number and the name disagree, so whether a label says "Boardroom" or "Boardroom 1" is an
+  authoring choice an operator makes, not a platform default.
+- **Tracked under** [#686](https://github.com/hyperscaleav/omniglass/issues/686), the sixth slice of
   epic [#657](https://github.com/hyperscaleav/omniglass/issues/657).
