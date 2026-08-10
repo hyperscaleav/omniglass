@@ -567,6 +567,17 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 	if after, err = p.stampLocationLabel(ctx, tx, after); err != nil {
 		return nil, err
 	}
+	// What a component or system reads for .LocationLabel is this location's
+	// read ladder, so the cascade fires on the LADDER moving rather than on the
+	// column moving: clearing a typed label hands the pen back and the ladder
+	// falls through to the name, which is a different string for every row
+	// below even though the column ends up empty. Compared after the stamp,
+	// because the stamp is what settles the column (#685).
+	if locationReadLabel(before) != locationReadLabel(after) {
+		if err := p.cascadeLocationLabels(ctx, tx, after.ID); err != nil {
+			return nil, err
+		}
+	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "location", after.ID, before, after); err != nil {
 		return nil, err
 	}
@@ -701,6 +712,14 @@ func (p *PG) RenameLocation(ctx context.Context, actorID, name, newName string, 
 	// rename (#682).
 	if after, err = p.stampLocationLabel(ctx, tx, after); err != nil {
 		return nil, err
+	}
+	// And so does everything placed here, when the rename moved what this
+	// location READS as: an unlabelled location reads as its name, which is the
+	// state every shipped estate is in (#685).
+	if locationReadLabel(before) != locationReadLabel(after) {
+		if err := p.cascadeLocationLabels(ctx, tx, after.ID); err != nil {
+			return nil, err
+		}
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "rename", "location", after.ID, before, after); err != nil {
 		return nil, err

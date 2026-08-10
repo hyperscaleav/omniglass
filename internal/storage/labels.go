@@ -44,23 +44,56 @@ import (
 // there is no location-side counterpart of a product, because a location is not
 // an instance of a catalog row.
 //
-// # What is NOT in a data map, and why
+// # What a rule reads about PLACEMENT, and what that cost (#685)
 //
-// Every fact a rule can read is either the entity's own column or something
-// resolved from its classification chain. Nothing about its PLACEMENT is
-// exposed: not the location it sits in, not its parent, not the system it
-// staffs.
+// A component's map carries the label of the location it sits at and the label
+// of its primary system's TYPE; a system's map carries the label of the
+// location it sits at. That is the worked example this epic exists to serve:
 //
-// That is a deliberate narrowing of what the epic's acceptance text could be
-// read to ask for, and the reason is the invariant rather than the cost. A
-// stored value must equal what its rule produces, so every input to a rule is
-// something a write path must re-render on. The inputs above change on exactly
-// five acts, all of them the entity's own: create, rename, move (which re-mints
-// the ordinal), reclassify, and reset. Adding the location's name would add a
-// sixth: renaming a LOCATION would silently stale every label under it, and the
-// recompute-and-compare test would be right to fail. That cascade belongs with
-// the slice that owns bulk recompute (#685), not to a data map that quietly
-// assumes it.
+//	Boardroom 204B Display   from   {{.SystemTypeLabel}} {{.LocationLabel}} {{.TypeName}}
+//
+// The keys are FLAT, never dotted. The map is a closed map[string]string and
+// that flatness is half the sandbox argument in ADR-0098: a value that is a
+// string cannot be traversed through, so there is no {{.Location.Label}} to
+// widen into a handle on another row.
+//
+// Which location, precisely: the row's OWN location_id, not an ancestor of it
+// and not the location its plane root sits at. A component's label says where
+// that component is, so it reads the column that says so; a nested component
+// with no location of its own reads placement as absent, exactly as an unplaced
+// one does. The alternative (walk to the plane root, read that) would make a
+// label depend on an ANCESTOR COMPONENT's placement, so moving a parent would
+// stale every descendant, and it costs a recursive walk per row on a path that
+// already runs on every create.
+//
+// LocationLabel is the location's READ LADDER, the label an operator typed else
+// the location's own name, not the raw column. A shipped estate has no location
+// labels at all (the shipped location rule is deliberately empty), so reading
+// the column alone would render placement as blank for every row in it.
+//
+// # The cost of that, which is this whole slice
+//
+// Slice 2 could enumerate five write paths and call the set complete, because
+// every fact its map held was the labelled row's own. That argument is void
+// now, and it was weaker than it looked even then: TypeName, ProductName,
+// VendorName, Stem and TypeAbbrev were already columns on OTHER rows (a
+// registry's), and so was the rule itself. What placement changes is that the
+// other row is now an ESTATE row an operator edits daily rather than a catalog
+// row they edit rarely.
+//
+// The set of acts is therefore derived from the map rather than asserted, and
+// split by blast radius (see label_recompute.go):
+//
+//   - Bounded by placement, so cascaded EAGERLY inside the act's own
+//     transaction: the labelled row's own create/rename/move/reclassify/reset,
+//     a location's rename or relabel or reclassify (the rows AT it), a system's
+//     reclassify (its member components), and every act that moves a
+//     component's primary membership.
+//   - Bounded only by the estate, so left to the preview-then-apply verb: a
+//     rule changing at any tier, a classification row's display_name, stem or
+//     abbrev changing, and the acronym list changing. Rewriting 15,000 rows as
+//     a side effect of one catalog edit is exactly what the epic refuses to do
+//     silently.
 
 // ErrInvalidLabelRule is a label rule that does not parse. It is refused at the
 // surface that accepts the text (a 422 at rule-edit time), which is the whole
@@ -410,17 +443,129 @@ func componentLabelChain(ctx context.Context, q querier, productID string) (comp
 // This function IS the sandbox (see internal/label). Adding a key here is the
 // only way to widen what a rule can see, so a key that is a secret, a
 // credential, or a handle to another entity is not filtered out somewhere
-// downstream, it is simply never added.
-func componentLabelData(c *Component, in componentLabelInputs) label.Data {
+// downstream, it is simply never added. It is also the only place the three
+// halves of a component's inputs (its own row, its classification, its
+// placement) are combined, so the single-row stamp and the bulk recompute
+// cannot drift on what a rule sees: they resolve the halves differently, one
+// row at a time versus a page at a time, and then call this.
+func componentLabelData(c *Component, in componentLabelInputs, pl componentPlacement) label.Data {
 	return label.Data{
-		"Name":        c.Name,
-		"Ordinal":     ordinalText(c.Ordinal),
-		"TypeName":    in.typeName,
-		"TypeAbbrev":  in.abbrev,
-		"Stem":        in.stem,
-		"ProductName": in.productName,
-		"VendorName":  in.vendorName,
+		"Name":            c.Name,
+		"Ordinal":         ordinalText(c.Ordinal),
+		"TypeName":        in.typeName,
+		"TypeAbbrev":      in.abbrev,
+		"Stem":            in.stem,
+		"ProductName":     in.productName,
+		"VendorName":      in.vendorName,
+		"LocationLabel":   pl.locationLabel,
+		"SystemTypeLabel": pl.systemTypeLabel,
 	}
+}
+
+// componentPlacement is the per-ROW half of a component's label inputs: the two
+// facts that live on rows the component does not own. Kept apart from
+// componentLabelInputs because the two have different batching shapes, which is
+// the whole difficulty of the bulk recompute: the classification half is
+// identical for every component sharing a product, and this half is identical
+// for nobody.
+type componentPlacement struct {
+	locationLabel   string
+	systemTypeLabel string
+}
+
+// systemPlacement is componentPlacement on the system tier. A system reads only
+// its location: its own type is already TypeName, and giving one fact two
+// spellings is a trap for a rule author rather than a convenience.
+type systemPlacement struct {
+	locationLabel string
+}
+
+// locationReadLadder is the SQL for "what does this location READ as", the
+// first two rungs of the ladder the console applies (the label an operator
+// typed, else the location's own name). It is a fragment rather than a helper
+// call because every use is inside a join in a larger query.
+//
+// The third rung, a label the platform generated, is the same column as the
+// first: the pen tells them apart and a rule does not care which of the two it
+// is reading, only that it is what an operator sees.
+const locationReadLadder = `coalesce(nullif(l.display_name, ''), l.name, '')`
+
+// locationReadLabel is locationReadLadder in Go, for the write paths that have
+// the row in hand and need to know whether what a rule reads about this
+// location just MOVED. The two must agree, and a test holds them to it: a
+// cascade that fires on the column rather than on the ladder misses the case
+// that matters most, an operator clearing a typed label so the name shows
+// through.
+func locationReadLabel(l *Location) string {
+	if l.DisplayName != "" {
+		return l.DisplayName
+	}
+	return l.Name
+}
+
+// componentPlacements resolves the placement facts for a whole page in ONE
+// statement, whatever the page size. The single-row stamp calls it with one id
+// rather than having a query of its own, so there is one definition of what
+// LocationLabel and SystemTypeLabel mean and no second one to drift.
+//
+// The primary membership is a left join with the is_primary predicate ON the
+// join, not in the WHERE: a component in no system at all must still come back
+// with a row, carrying its location and an absent system type, or the caller
+// would read "unbound" as "missing" and skip the stamp entirely.
+func componentPlacements(ctx context.Context, q querier, ids []string) (map[string]componentPlacement, error) {
+	out := make(map[string]componentPlacement, len(ids))
+	seeds := distinctIDs(ids)
+	if len(seeds) == 0 {
+		return out, nil
+	}
+	rows, err := q.Query(ctx, `
+		select c.id, `+locationReadLadder+`, coalesce(st.display_name, '')
+		from component c
+		left join location l on l.id = c.location_id
+		left join system_member m on m.component_id = c.id and m.is_primary
+		left join system s on s.id = m.system_id
+		left join system_type st on st.id = s.system_type_id
+		where c.id = any($1::uuid[])`, seeds)
+	if err != nil {
+		return nil, fmt.Errorf("storage: resolve placement facts for %d components: %w", len(seeds), err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		var pl componentPlacement
+		if err := rows.Scan(&id, &pl.locationLabel, &pl.systemTypeLabel); err != nil {
+			return nil, fmt.Errorf("storage: scan component placement facts: %w", err)
+		}
+		out[id] = pl
+	}
+	return out, rows.Err()
+}
+
+// systemPlacements is componentPlacements on the system tier.
+func systemPlacements(ctx context.Context, q querier, ids []string) (map[string]systemPlacement, error) {
+	out := make(map[string]systemPlacement, len(ids))
+	seeds := distinctIDs(ids)
+	if len(seeds) == 0 {
+		return out, nil
+	}
+	rows, err := q.Query(ctx, `
+		select s.id, `+locationReadLadder+`
+		from system s
+		left join location l on l.id = s.location_id
+		where s.id = any($1::uuid[])`, seeds)
+	if err != nil {
+		return nil, fmt.Errorf("storage: resolve placement facts for %d systems: %w", len(seeds), err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		var pl systemPlacement
+		if err := rows.Scan(&id, &pl.locationLabel); err != nil {
+			return nil, fmt.Errorf("storage: scan system placement facts: %w", err)
+		}
+		out[id] = pl
+	}
+	return out, rows.Err()
 }
 
 // renderComponentLabel returns the label a component's rules produce, or "" for
@@ -435,7 +580,11 @@ func renderComponentLabel(ctx context.Context, q querier, eng *label.Engine, c *
 	if err != nil {
 		return "", err
 	}
-	return renderLabel(eng, in.rule, componentLabelData(c, in)), nil
+	places, err := componentPlacements(ctx, q, []string{c.ID})
+	if err != nil {
+		return "", err
+	}
+	return renderLabel(eng, in.rule, componentLabelData(c, in, places[c.ID])), nil
 }
 
 // stampComponentLabel re-renders a platform-owned label and writes it, returning
@@ -480,25 +629,42 @@ type systemLabelInputs struct {
 	standardName           string
 }
 
-// systemLabelChain resolves a system's rule and classification facts. Both
-// classifiers are optional (a one-off system conforms to no standard, and the
-// system_type floor has not landed), so each leg is skipped rather than
-// defaulted when its id is absent.
+// systemLabelChain resolves a system's rule and classification facts, reading
+// the global tier itself. It is the single-row entry point; a bulk recompute
+// calls systemLabelChainWith with a global rule it read once for the whole
+// page, which is why the two are split.
 func systemLabelChain(ctx context.Context, q querier, s *System) (systemLabelInputs, error) {
+	global, err := globalLabelRule(ctx, q, "system")
+	if err != nil {
+		return systemLabelInputs{}, err
+	}
+	return systemLabelChainWith(ctx, q, s.StandardID, s.SystemTypeID, global)
+}
+
+// systemLabelChainWith resolves a system's rule and classification facts from
+// its two classifier ids. Both are optional (a one-off system conforms to no
+// standard, and a system need not be typed), so each leg is skipped rather than
+// defaulted when its id is absent.
+//
+// It takes the ids rather than the *System because the answer depends on
+// nothing else about the row: every system sharing a (standard, system_type)
+// pair gets the identical result, which is what lets a recompute over 15,000
+// systems resolve it once per distinct pair instead of once per row.
+func systemLabelChainWith(ctx context.Context, q querier, standardID, systemTypeID *string, global string) (systemLabelInputs, error) {
 	var in systemLabelInputs
 	var standardRule, typeRule string
-	if s.StandardID != nil {
+	if standardID != nil {
 		var rule *string
-		if err := q.QueryRow(ctx, `select display_name, label_rule from standard where id = $1`, *s.StandardID).
+		if err := q.QueryRow(ctx, `select display_name, label_rule from standard where id = $1`, *standardID).
 			Scan(&in.standardName, &rule); err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return in, fmt.Errorf("storage: resolve label facts for standard %q: %w", *s.StandardID, err)
+			return in, fmt.Errorf("storage: resolve label facts for standard %q: %w", *standardID, err)
 		}
 		standardRule = derefRule(rule)
 	}
-	if s.SystemTypeID != nil {
-		typeID, err := uuid.Parse(*s.SystemTypeID)
+	if systemTypeID != nil {
+		typeID, err := uuid.Parse(*systemTypeID)
 		if err != nil {
-			return in, fmt.Errorf("storage: system_type id %q is not a uuid: %w", *s.SystemTypeID, err)
+			return in, fmt.Errorf("storage: system_type id %q is not a uuid: %w", *systemTypeID, err)
 		}
 		if err := q.QueryRow(ctx, `select display_name from system_type where id = $1`, typeID).Scan(&in.typeName); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return in, fmt.Errorf("storage: resolve label facts for system_type %q: %w", typeID, err)
@@ -509,10 +675,6 @@ func systemLabelChain(ctx context.Context, q querier, s *System) (systemLabelInp
 		}
 		in.stem, in.abbrev, typeRule = stem, abbrev, chainRule
 	}
-	global, err := globalLabelRule(ctx, q, "system")
-	if err != nil {
-		return in, err
-	}
 	in.rule = firstRule(standardRule, typeRule, global)
 	return in, nil
 }
@@ -520,13 +682,14 @@ func systemLabelChain(ctx context.Context, q querier, s *System) (systemLabelInp
 // systemLabelData is the closed data map for one system. No Ordinal: a system
 // does not generate a name yet, so there is no number the platform allocated
 // for it (#686 is the slice that brings one, and the key with it).
-func systemLabelData(s *System, in systemLabelInputs) label.Data {
+func systemLabelData(s *System, in systemLabelInputs, pl systemPlacement) label.Data {
 	return label.Data{
-		"Name":         s.Name,
-		"TypeName":     in.typeName,
-		"TypeAbbrev":   in.abbrev,
-		"Stem":         in.stem,
-		"StandardName": in.standardName,
+		"Name":          s.Name,
+		"TypeName":      in.typeName,
+		"TypeAbbrev":    in.abbrev,
+		"Stem":          in.stem,
+		"StandardName":  in.standardName,
+		"LocationLabel": pl.locationLabel,
 	}
 }
 
@@ -535,7 +698,11 @@ func renderSystemLabel(ctx context.Context, q querier, eng *label.Engine, s *Sys
 	if err != nil {
 		return "", err
 	}
-	return renderLabel(eng, in.rule, systemLabelData(s, in)), nil
+	places, err := systemPlacements(ctx, q, []string{s.ID})
+	if err != nil {
+		return "", err
+	}
+	return renderLabel(eng, in.rule, systemLabelData(s, in, places[s.ID])), nil
 }
 
 // stampSystemLabel is stampComponentLabel on the system tier; see that function
@@ -571,19 +738,27 @@ type locationLabelInputs struct {
 	typeName string
 }
 
-// locationLabelChain resolves a location's rule and classification facts. Two
-// tiers rather than three: there is no location-side counterpart of a product,
-// because a location is not an instance of a catalog row.
+// locationLabelChain resolves a location's rule and classification facts,
+// reading the global tier itself. Split from locationLabelChainWith for the
+// reason systemLabelChain is: a recompute reads the global rule once.
 func locationLabelChain(ctx context.Context, q querier, l *Location) (locationLabelInputs, error) {
-	var in locationLabelInputs
-	var typeRule *string
-	if err := q.QueryRow(ctx, `select display_name, label_rule from location_type where id = $1`, l.LocationTypeID).
-		Scan(&in.typeName, &typeRule); err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return in, fmt.Errorf("storage: resolve label facts for location_type %q: %w", l.LocationTypeID, err)
-	}
 	global, err := globalLabelRule(ctx, q, "location")
 	if err != nil {
-		return in, err
+		return locationLabelInputs{}, err
+	}
+	return locationLabelChainWith(ctx, q, l.LocationTypeID, global)
+}
+
+// locationLabelChainWith resolves a location's rule and classification facts
+// from its type id. Two tiers rather than three: there is no location-side
+// counterpart of a product, because a location is not an instance of a catalog
+// row.
+func locationLabelChainWith(ctx context.Context, q querier, locationTypeID, global string) (locationLabelInputs, error) {
+	var in locationLabelInputs
+	var typeRule *string
+	if err := q.QueryRow(ctx, `select display_name, label_rule from location_type where id = $1`, locationTypeID).
+		Scan(&in.typeName, &typeRule); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return in, fmt.Errorf("storage: resolve label facts for location_type %q: %w", locationTypeID, err)
 	}
 	in.rule = firstRule(derefRule(typeRule), global)
 	return in, nil

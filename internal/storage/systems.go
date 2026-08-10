@@ -672,6 +672,17 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	if after, err = p.stampSystemLabel(ctx, tx, after); err != nil {
 		return nil, err
 	}
+	// A system's TYPE is a fact its member components read (.SystemTypeLabel,
+	// #685), so a reclassify stales every one of them. Bounded by the system's
+	// own membership rather than by the estate, which is why it cascades here
+	// instead of waiting for the recompute verb. The label lock is taken before
+	// any health lock below, the fixed order that keeps the two from
+	// deadlocking (see label_recompute.go).
+	if !sameOptional(before.SystemTypeID, after.SystemTypeID) {
+		if err := p.cascadeSystemMemberLabels(ctx, tx, after.ID); err != nil {
+			return nil, err
+		}
+	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "system", after.ID, before, after); err != nil {
 		return nil, err
 	}
@@ -838,6 +849,13 @@ func (p *PG) MoveSystem(ctx context.Context, actorID, name string, move SystemMo
 		before.ID, locationPatch, parentPatch))
 	if err != nil {
 		return nil, mapSystemWriteErr(err)
+	}
+	// A relocate changes .LocationLabel, which a rule reads (#685). This was
+	// the one write path on these three tiers that stamped no label at all,
+	// correctly so while a system's map carried nothing a move could touch; the
+	// placement key is what made it a write path.
+	if after, err = p.stampSystemLabel(ctx, tx, after); err != nil {
+		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "move", "system", after.ID, before, after); err != nil {
 		return nil, err

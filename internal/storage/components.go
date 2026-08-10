@@ -444,9 +444,6 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
 	}
-	if c, err = p.stampComponentLabel(ctx, tx, c); err != nil {
-		return nil, err
-	}
 	// The membership after the row exists, both ids already in hand (sysID
 	// above, c.ID from the insert just returned). Re-read so the returned
 	// component carries the primary it just gained.
@@ -458,6 +455,15 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 			`select `+componentCols+` from component where id = $1`, c.ID)); err != nil {
 			return nil, fmt.Errorf("storage: re-read component after membership: %w", err)
 		}
+	}
+	// The stamp runs AFTER the membership, not before it (#685). A label can
+	// read its primary system's type, and the membership above is what decides
+	// which system that is: stamping first rendered every create-with-a-system
+	// against no system at all, wrote that, and left the row stale until some
+	// later write happened to touch it. This is also why the membership path
+	// below does not need a cascade of its own for a create.
+	if c, err = p.stampComponentLabel(ctx, tx, c); err != nil {
+		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "create", "component", c.ID, nil, c); err != nil {
 		return nil, err

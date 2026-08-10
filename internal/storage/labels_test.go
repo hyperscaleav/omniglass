@@ -417,7 +417,11 @@ func TestASecretIsNotReachableFromARule(t *testing.T) {
 	if err != nil {
 		t.Fatalf("label data: %v", err)
 	}
-	wantKeys := []string{"Name", "Ordinal", "ProductName", "Stem", "TypeAbbrev", "TypeName", "VendorName"}
+	// LocationLabel and SystemTypeLabel joined the map in #685, with the
+	// cascade that keeps them from going stale. They are listed here rather
+	// than exempted, because this list IS the sandbox: widening it is the only
+	// way to widen what an operator-authored rule can read.
+	wantKeys := []string{"LocationLabel", "Name", "Ordinal", "ProductName", "Stem", "SystemTypeLabel", "TypeAbbrev", "TypeName", "VendorName"}
 	if got := sortedKeys(data); !equalStrings(got, wantKeys) {
 		t.Fatalf("the component data map carries %v, want exactly %v. A key added here widens what every operator-authored rule can read; add it deliberately, with this list", got, wantKeys)
 	}
@@ -460,7 +464,7 @@ func TestTheSystemAndLocationDataMapsAreClosedToo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("system label data: %v", err)
 	}
-	wantSys := []string{"Name", "StandardName", "Stem", "TypeAbbrev", "TypeName"}
+	wantSys := []string{"LocationLabel", "Name", "StandardName", "Stem", "TypeAbbrev", "TypeName"}
 	if got := sortedKeys(sysData); !equalStrings(got, wantSys) {
 		t.Fatalf("the system data map carries %v, want exactly %v", got, wantSys)
 	}

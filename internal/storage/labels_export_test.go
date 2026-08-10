@@ -78,7 +78,11 @@ func (p *PG) ExportComponentLabelData(ctx context.Context, id string) (label.Dat
 	if err != nil {
 		return nil, err
 	}
-	return componentLabelData(c, in), nil
+	places, err := componentPlacements(ctx, p.pool, []string{c.ID})
+	if err != nil {
+		return nil, err
+	}
+	return componentLabelData(c, in, places[c.ID]), nil
 }
 
 // ExportSystemLabelData is ExportComponentLabelData on the system tier.
@@ -91,7 +95,11 @@ func (p *PG) ExportSystemLabelData(ctx context.Context, id string) (label.Data, 
 	if err != nil {
 		return nil, err
 	}
-	return systemLabelData(s, in), nil
+	places, err := systemPlacements(ctx, p.pool, []string{s.ID})
+	if err != nil {
+		return nil, err
+	}
+	return systemLabelData(s, in, places[s.ID]), nil
 }
 
 // ExportLocationLabelData is ExportComponentLabelData on the location tier.

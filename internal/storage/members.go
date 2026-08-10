@@ -70,6 +70,14 @@ func (p *PG) AddMember(ctx context.Context, actorID, systemName, componentName s
 	if err := addMemberTx(ctx, tx, systemID, componentID); err != nil {
 		return err
 	}
+	// A component's label can read its PRIMARY system's type (#685), and the
+	// first membership a component gets becomes that primary with nobody
+	// asking, so a bind is a label write path. Restamped here rather than
+	// inside addMemberTx because CreateComponent's own stamp already runs after
+	// its membership, and a cascade there would render the same row twice.
+	if err := p.cascadeComponentLabel(ctx, tx, componentID); err != nil {
+		return err
+	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "system_member", systemID, nil,
 		map[string]string{"system": systemName, "component": componentName}); err != nil {
 		return err
@@ -153,6 +161,12 @@ func (p *PG) RemoveMember(ctx context.Context, actorID, systemName, componentNam
 	if err := promoteSolePrimary(ctx, tx, componentID); err != nil {
 		return err
 	}
+	// Unbinding moves the primary twice over: away from the system just
+	// removed, and (via the promotion above) possibly onto the sole survivor.
+	// Either way what .SystemTypeLabel reads has changed (#685).
+	if err := p.cascadeComponentLabel(ctx, tx, componentID); err != nil {
+		return err
+	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "system_member", systemID,
 		map[string]string{"system": systemName, "component": componentName}, nil); err != nil {
 		return err
@@ -228,6 +242,13 @@ func (p *PG) SetPrimaryMember(ctx context.Context, actorID, systemName, componen
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrMemberNotFound
+	}
+	// Re-defaulting is the purest case of the membership write path: nothing
+	// about the component or its systems changed except WHICH one answers a
+	// question asked without a system in hand, and that is exactly what
+	// .SystemTypeLabel reads (#685).
+	if err := p.cascadeComponentLabel(ctx, tx, componentID); err != nil {
+		return err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "system_member", systemID, nil,
 		map[string]string{"system": systemName, "component": componentName, "primary": "true"}); err != nil {
