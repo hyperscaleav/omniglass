@@ -598,6 +598,86 @@ func TestASystemAndALocationGetLabelsToo(t *testing.T) {
 	}
 }
 
+// --- the backfill -------------------------------------------------------
+
+// The pen defaults false, which is right for a new column and wrong for every
+// row that already existed, so a backfill claims it where there is nothing to
+// protect (#682, 20260810110000_label_pen_backfill.sql).
+//
+// Without it the feature is inert on an upgraded estate: stamp returns at its
+// first line when the pen is false, and #685's recompute cannot repair it
+// either, since a recompute only touches rows the platform already owns. So
+// this drives the two states directly through SQL (there is no gateway path
+// that produces a pre-migration row) and then proves the difference is
+// observable: the unlabelled row picks up a label on its next write, the
+// labelled one keeps what the operator typed.
+func TestTheBackfillClaimsThePenOnlyWhereThereIsNoLabel(t *testing.T) {
+	gw, ctx, dsn := seededGatewayDSN(t)
+	conn := rawConn(t, dsn)
+
+	// Three rows in the shapes a pre-migration database holds: no label at all,
+	// the empty string an old clear wrote, and an operator's own words. Written
+	// with the pen false, which is what the column default gave them.
+	var ids [3]string
+	for i, label := range []any{nil, "", "The Operator's Own"} {
+		if err := conn.QueryRow(ctx, `
+			insert into component (name, display_name, display_name_generated, product_id)
+			values ($1, $2, false, (select id from product where name = $3))
+			returning id`, "legacy-"+strconv.Itoa(i), label, qm55).Scan(&ids[i]); err != nil {
+			t.Fatalf("insert legacy row %d: %v", i, err)
+		}
+	}
+
+	// The backfill statement itself, run against these rows exactly as the
+	// migration runs it.
+	if _, err := conn.Exec(ctx, `
+		update component set display_name_generated = true
+		 where not display_name_generated and (display_name is null or display_name = '')`); err != nil {
+		t.Fatalf("backfill: %v", err)
+	}
+
+	for i, want := range []bool{true, true, false} {
+		var pen bool
+		if err := conn.QueryRow(ctx, `select display_name_generated from component where id = $1`, ids[i]).Scan(&pen); err != nil {
+			t.Fatalf("read pen %d: %v", i, err)
+		}
+		if pen != want {
+			t.Fatalf("row %d: pen = %v, want %v", i, pen, want)
+		}
+	}
+
+	// Idempotent, as a backfill must be.
+	if _, err := conn.Exec(ctx, `
+		update component set display_name_generated = true
+		 where not display_name_generated and (display_name is null or display_name = '')`); err != nil {
+		t.Fatalf("second backfill: %v", err)
+	}
+	var stillTyped bool
+	if err := conn.QueryRow(ctx, `select display_name_generated from component where id = $1`, ids[2]).Scan(&stillTyped); err != nil {
+		t.Fatalf("read pen after second run: %v", err)
+	}
+	if stillTyped {
+		t.Fatal("a second backfill run claimed the operator's row")
+	}
+
+	// And the claim is what makes the feature reach these rows: the unlabelled
+	// one now renders on its next write, the operator's one still does not.
+	claimed, err := gw.RenameComponent(ctx, "", ids[0], "legacy-renamed", all, all)
+	if err != nil {
+		t.Fatalf("rename the claimed row: %v", err)
+	}
+	if claimed.DisplayName != "Display" {
+		t.Fatalf("backfilled row's label = %q, want the rule to have rendered %q", claimed.DisplayName, "Display")
+	}
+	typed, err := gw.RenameComponent(ctx, "", ids[2], "legacy-typed-renamed", all, all)
+	if err != nil {
+		t.Fatalf("rename the operator's row: %v", err)
+	}
+	if typed.DisplayName != "The Operator's Own" {
+		t.Fatalf("operator's label = %q, want it untouched", typed.DisplayName)
+	}
+}
+
 // --- the global tier ----------------------------------------------------
 
 // The global rule is a TABLE with two columns rather than one, and this is what
@@ -666,6 +746,70 @@ func TestTheGlobalRuleIsSeededAuthoritativelyAndStillOperatorOwned(t *testing.T)
 	// a tier rule is.
 	if _, err := gw.SetLabelRule(ctx, "", "component", "{{.TypeName"); !errors.Is(err, storage.ErrInvalidLabelRule) {
 		t.Fatalf("SetLabelRule with a broken template = %v, want ErrInvalidLabelRule", err)
+	}
+}
+
+// The system and location stamps, each proved by a rule that reads a fact the
+// act actually changes. Review found all three deletable with the suite still
+// green: `Name` is a pinned key of both maps, but every rename test ran against
+// rows whose effective rule read nothing a rename touches, so the stamps were
+// asserted by the key list and by nothing else.
+func TestASystemsLabelFollowsItsRenameAndItsReclassify(t *testing.T) {
+	gw, ctx := seededGateway(t)
+	if _, err := gw.SetLabelRule(ctx, "", "system", "{{.TypeName}}/{{.Name}}"); err != nil {
+		t.Fatalf("set the global system rule: %v", err)
+	}
+	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-a", SystemTypeID: strptr("board")}, all)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if sys.DisplayName != "Boardroom/sys-a" {
+		t.Fatalf("on create = %q, want %q", sys.DisplayName, "Boardroom/sys-a")
+	}
+	renamed, err := gw.RenameSystem(ctx, "", sys.ID, "sys-b", all, all)
+	if err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	if renamed.DisplayName != "Boardroom/sys-b" {
+		t.Fatalf("after rename = %q, want %q", renamed.DisplayName, "Boardroom/sys-b")
+	}
+	reclassified, err := gw.UpdateSystem(ctx, "", renamed.ID, storage.SystemPatch{SystemTypeID: strptr("class")}, all, all)
+	if err != nil {
+		t.Fatalf("reclassify: %v", err)
+	}
+	if reclassified.DisplayName != "Classroom/sys-b" {
+		t.Fatalf("after reclassify = %q, want %q", reclassified.DisplayName, "Classroom/sys-b")
+	}
+}
+
+func TestALocationsLabelFollowsItsRenameAndItsReclassify(t *testing.T) {
+	gw, ctx := seededGateway(t)
+	if _, err := gw.SetLabelRule(ctx, "", "location", "{{.TypeName}}/{{.Name}}"); err != nil {
+		t.Fatalf("set the global location rule: %v", err)
+	}
+	room := makeRoom(t, gw, ctx, "room-a")
+	loc, err := gw.GetLocation(ctx, room, all)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if loc.DisplayName != "Room/room-a" {
+		t.Fatalf("on create = %q, want %q", loc.DisplayName, "Room/room-a")
+	}
+	renamed, err := gw.RenameLocation(ctx, "", loc.ID, "room-b", all, all)
+	if err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	if renamed.DisplayName != "Room/room-b" {
+		t.Fatalf("after rename = %q, want %q", renamed.DisplayName, "Room/room-b")
+	}
+	// A location_type is seed-if-absent example content an operator owns, so
+	// reclassifying to a second seeded type needs no custom registry row.
+	reclassified, err := gw.UpdateLocation(ctx, "", renamed.ID, storage.LocationPatch{LocationType: strptr("floor")}, all, all)
+	if err != nil {
+		t.Fatalf("reclassify: %v", err)
+	}
+	if reclassified.DisplayName != "Floor/room-b" {
+		t.Fatalf("after reclassify = %q, want %q", reclassified.DisplayName, "Floor/room-b")
 	}
 }
 
@@ -783,7 +927,106 @@ func TestEveryStoredLabelEqualsWhatItsRuleProduces(t *testing.T) {
 		checked++
 	}
 	if checked < 7 {
-		t.Fatalf("only %d platform-owned labels were compared, want at least 6: an invariant that checks nothing passes for the wrong reason", checked)
+		t.Fatalf("only %d platform-owned labels were compared, want at least 7: an invariant that checks nothing passes for the wrong reason", checked)
+	}
+}
+
+// The same invariant on the other two tiers. It was component-only at first,
+// which made the claim that every write path re-renders provable on one tier
+// and decorative on the other two: review deleted the system and location
+// rename stamps and the suite stayed green.
+//
+// Both rules here read .Name, so a rename that fails to re-render is a
+// mismatch, and both estates are edited rather than only created.
+func TestEveryStoredSystemAndLocationLabelEqualsWhatItsRuleProduces(t *testing.T) {
+	gw, ctx := seededGateway(t)
+	if _, err := gw.SetLabelRule(ctx, "", "system", "{{.TypeName}} {{.Name | upper}}"); err != nil {
+		t.Fatalf("system rule: %v", err)
+	}
+	if _, err := gw.SetLabelRule(ctx, "", "location", "{{.TypeName}} {{.Name | upper}}"); err != nil {
+		t.Fatalf("location rule: %v", err)
+	}
+	roomA := makeRoom(t, gw, ctx, "room-a")
+	roomB := makeRoom(t, gw, ctx, "room-b")
+
+	var systems []string
+	for i, spec := range []storage.SystemSpec{
+		{Name: "sys-a", SystemTypeID: strptr("board"), LocationName: &roomA},
+		{Name: "sys-b", SystemTypeID: strptr("class"), LocationName: &roomB},
+		{Name: "sys-c", LocationName: &roomA},
+		{Name: "sys-d", DisplayName: "The Operator's Own", SystemTypeID: strptr("board"), LocationName: &roomB},
+	} {
+		s, err := gw.CreateSystem(ctx, "", spec, all)
+		if err != nil {
+			t.Fatalf("create system %d: %v", i, err)
+		}
+		systems = append(systems, s.ID)
+	}
+	if _, err := gw.RenameSystem(ctx, "", systems[0], "sys-a-renamed", all, all); err != nil {
+		t.Fatalf("rename system: %v", err)
+	}
+	if _, err := gw.UpdateSystem(ctx, "", systems[1], storage.SystemPatch{SystemTypeID: strptr("huddle")}, all, all); err != nil {
+		t.Fatalf("reclassify system: %v", err)
+	}
+	if _, err := gw.MoveSystem(ctx, "", systems[2], storage.SystemMove{LocationName: &roomB}, all, all); err != nil {
+		t.Fatalf("move system: %v", err)
+	}
+
+	if _, err := gw.RenameLocation(ctx, "", roomA, "room-a-renamed", all, all); err != nil {
+		t.Fatalf("rename location: %v", err)
+	}
+	if _, err := gw.UpdateLocation(ctx, "", roomB, storage.LocationPatch{DisplayName: strptr("The Operator's Own")}, all, all); err != nil {
+		t.Fatalf("hand-label location: %v", err)
+	}
+
+	sys, err := gw.ListSystems(ctx, all)
+	if err != nil {
+		t.Fatalf("list systems: %v", err)
+	}
+	checkedSystems := 0
+	for i := range sys {
+		if !sys[i].DisplayNameGenerated {
+			if sys[i].DisplayName != "The Operator's Own" {
+				t.Errorf("system %s: pen with the operator but label %q", sys[i].Name, sys[i].DisplayName)
+			}
+			continue
+		}
+		want, err := gw.ExportRenderSystemLabel(ctx, sys[i].ID)
+		if err != nil {
+			t.Fatalf("recompute system %s: %v", sys[i].Name, err)
+		}
+		if sys[i].DisplayName != want {
+			t.Errorf("system %s: stored label %q, rule now produces %q", sys[i].Name, sys[i].DisplayName, want)
+		}
+		checkedSystems++
+	}
+	if checkedSystems < 3 {
+		t.Fatalf("only %d platform-owned system labels were compared, want at least 3", checkedSystems)
+	}
+
+	locs, err := gw.ListLocations(ctx, all)
+	if err != nil {
+		t.Fatalf("list locations: %v", err)
+	}
+	checkedLocations := 0
+	for i := range locs {
+		if !locs[i].DisplayNameGenerated {
+			if locs[i].DisplayName != "The Operator's Own" {
+				t.Errorf("location %s: pen with the operator but label %q", locs[i].Name, locs[i].DisplayName)
+			}
+			continue
+		}
+		want, err := gw.ExportRenderLocationLabel(ctx, locs[i].ID)
+		if err != nil {
+			t.Fatalf("recompute location %s: %v", locs[i].Name, err)
+		}
+		if locs[i].DisplayName != want {
+			t.Errorf("location %s: stored label %q, rule now produces %q", locs[i].Name, locs[i].DisplayName, want)
+		}
+		checkedLocations++
+	}
+	if checkedLocations < 2 {
+		t.Fatalf("only %d platform-owned location labels were compared, want at least 2", checkedLocations)
 	}
 }
 
