@@ -3829,6 +3829,15 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   round trips deep. A caller rendering many rows (the bulk recompute, [#685](https://github.com/hyperscaleav/omniglass/issues/685))
   resolves the engine once and passes it down, which is why the render functions take an engine
   rather than reaching for one.
+- **Decision (the gateway reads that override in the caller's transaction, not off the pool):** A
+  stamp runs inside a transaction, so it is already holding a connection; issuing the settings read
+  against the pool acquires a second one, and a pool whose connections are all held by writers each
+  waiting for a second connection is **deadlocked**, not slow. It needs no unusual code to reach (a
+  bulk import of the estate sizes this epic exists for is enough) and it fails as a hang. So
+  `Service.ResolveOverride` takes an override level the caller has already read, over the same level
+  stack `Resolve` builds, and the gateway reads it on its own transaction; the dictionary and the row
+  being stamped then come from one snapshot as well. A one-connection pool is the whole population of
+  that race, which is how the regression test reaches it deterministically rather than under load.
 - **Decision (parse and render need different engines):** Rule **validation** uses a
   dictionary-less engine, because `label.New` binds the same four function names whatever dictionary
   it is given and the grammar check walks a static allowlist: whether a rule parses is a fact about

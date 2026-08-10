@@ -3389,6 +3389,15 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   operator's edit reaches the next write with no restart, and the render functions take an engine so
   the bulk recompute can resolve one for fifteen thousand rows instead of fifteen thousand.
 
+  One defect found by reading rather than by a failing test, and worth the slice's most careful test.
+  The dictionary read was issued against the pool from inside the transaction that was stamping the
+  row, so it took a SECOND connection while holding one. A pool whose connections are all held by
+  writers each waiting for a second connection is deadlocked, not slow, and a bulk import of the
+  estate sizes this epic exists for is enough to reach it. The resolver now takes an override level
+  the caller read on its own transaction, and a pool of exactly one connection is the whole
+  population of that race, so the regression test reaches the deadlock deterministically rather than
+  hoping for it under load.
+
   Splitting parse from render is what kept the ripple small. `label.New` binds the same four function
   names whatever dictionary it holds and the grammar check walks a static allowlist, so whether a
   rule parses is a fact about the rule alone: the ten rule-validation call sites keep a
