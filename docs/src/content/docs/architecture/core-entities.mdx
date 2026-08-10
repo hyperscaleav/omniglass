@@ -717,3 +717,35 @@ uniqueness that has to be satisfied is the name's. Asking the mint for candidate
 siblings apart is also what makes a name that is nothing but its ordinal expressible, which is what a
 positional type (a floor, a rack unit) will need.
 
+**A label generates itself too, from a rule an operator can change**
+([ADR-0098](/architecture/decisions/#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits)).
+`display_name` gains the same stored pair the name has: `display_name_generated` is the pen, true
+meaning the platform owns the field. Reading a label is three rungs, the one an operator typed, else
+the one the rule produced, else the entity's name; the first two are the same column, told apart by
+the pen. Typing a label clears the pen, clearing the field returns it and the rule renders again, and
+a rule with nothing to say leaves the field unset rather than blank.
+
+Rules resolve most-specific-first, and `NULL` at a tier means "no opinion, ask the next one out":
+`product` then the `component_type` chain then the global rule for components, `standard` then the
+`system_type` chain then the global rule for systems, and `location_type` then the global rule for
+locations. Locations have two tiers rather than three because there is no location-side counterpart
+of a product, not because one is missing. On a nested registry the rule inherits by the same
+first-non-null walk `stem` and `abbrev` follow, per node across the fork boundary
+([ADR-0095](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it)),
+so setting a rule on a shipped type forks that row and leaves the official one byte-identical.
+
+The rule language is Go `text/template` over a **closed map of strings** and a closed set of four
+functions (`title`, `upper`, `lower`, `slug`). The map is the sandbox: a component's rule can read
+`Name`, `Ordinal`, `TypeName`, `TypeAbbrev`, `Stem`, `ProductName` and `VendorName`, and there is no
+mechanism by which any other name resolves to anything, so a secret is unreachable because it was
+never put in rather than because a filter refused it. A rule that does not parse is refused at
+rule-edit time (422) and never stored; a rule that fails while rendering one entity degrades to no
+label rather than failing the write it was riding.
+
+What a rule deliberately **cannot** read is the entity's placement. Every fact above changes on
+exactly five acts, all of them the entity's own (create, rename, move, reclassify, reset), and each
+of those re-renders, which is what lets a recompute-and-compare invariant prove no stored label has
+drifted. A location's name in the map would make renaming a location stale every label under it. The
+ancestry is not lost: it is the `path` and the two renders above, beside the label rather than inside
+it.
+

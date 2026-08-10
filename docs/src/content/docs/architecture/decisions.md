@@ -133,6 +133,7 @@ below from the project's history. From here it grows one slice at a time.
 
 | [ADR-0096](#adr-0096-the-system_type-name-returns-as-the-coarse-space-taxonomy) | 2026-08-09 | Accepted | A nested, universally seeded **`system_type`** registry lands beside `standard` (not inside it): the coarse taxonomy of what kind of space a system is (`av / room / {board, class, ...}`, `av / sign / {...}`), with `stem`, `abbrev`, and `icon` inherited down `parent_id` and overridable at any node, and `system.system_type_id` nullable for now. The identifier is reused deliberately (it was ADR-0048's retired column name for `standard_id`), so its docs-lint denylist entry is removed on ADR-0085's precedent |
 | [ADR-0097](#adr-0097-allocation-tests-the-name-it-would-mint-rather-than-reading-the-ordinal-it-stored) | 2026-08-10 | Accepted | The generated ordinal becomes a stored nullable `component.ordinal`, but sibling allocation does **not** read it: it reads sibling NAMES and returns the lowest ordinal whose MINTED name is free. An operator can hold a generated-shaped name with no ordinal, and the unique index is on the name, so an ordinal-only allocator would remint a taken name as a `23505`. Minting candidates instead of parsing siblings is what makes a stem-less name (a floor called `1`) possible, not the column; the column is what every reader DOWNSTREAM of allocation consumes. No scoped-unique index on the ordinal |
+| [ADR-0098](#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits) | 2026-08-10 | Accepted | A label rule is Go `text/template` over a **closed `map[string]string`**: the sandbox is the data map, so a secret is absent rather than filtered, and field traversal, `call` and `index` cannot reach past a string. The map carries the entity's own columns and its resolved classification facts, and deliberately **no placement**: every input then changes on exactly five of the entity's own acts (create, rename, move, reclassify, reset), which is what makes the stored label's recompute-and-compare invariant provable. Exposing a location's name would put a location rename in that set and stale every label under it. The global tier is one row per entity kind with TWO columns, `default_template` (boot-seed space, authoritative) and `template` (operator space, nullable) |
 
 ## Entries
 
@@ -3686,4 +3687,80 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   comes from an operator-editable rule rather than `<stem>-<n>`, the allocator changes its mint and
   nothing else, where a parser would have needed a matching second implementation.
 - **Tracked under** [#681](https://github.com/hyperscaleav/omniglass/issues/681), the first slice of
+  epic [#657](https://github.com/hyperscaleav/omniglass/issues/657).
+
+### ADR-0098: A label rule reads what an entity IS, never where it sits
+
+- **Date:** 2026-08-10 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
+  [storage](/architecture/storage/), [glossary](/architecture/glossary/)
+- **Decision:** A label rule is an operator-authored Go `text/template` evaluated over a **closed,
+  flat `map[string]string`** and a **closed FuncMap** (`title`, `upper`, `lower`, `slug`). The map
+  carries the entity's own columns and the facts resolved from its **classification** chain, and
+  carries **nothing about its placement**: not its location, not its parent, not the system it
+  staffs.
+
+  | entity | keys |
+  | --- | --- |
+  | component | `Name`, `Ordinal`, `TypeName`, `TypeAbbrev`, `Stem`, `ProductName`, `VendorName` |
+  | system | `Name`, `TypeName`, `TypeAbbrev`, `Stem`, `StandardName` |
+  | location | `Name`, `TypeName` |
+
+- **Decision (the sandbox is the data map):** Nothing filters a syntax, escapes a value, or denies a
+  field name. The value type is `string`, so field traversal, a method call, and the `call` builtin
+  all fail at execution rather than reaching further, and `index` can only reach what the map already
+  holds. A key the map does not carry renders as the empty string (`missingkey=zero`, set explicitly
+  rather than relied on). A secret, a credential and a token are absent **structurally**, never put
+  in, which is why a general template engine was chosen over a custom interpolation DSL: the security
+  property a label rule needs is not a syntax that cannot express dangerous things, it is an
+  environment that contains nothing dangerous, and the environment is ours entirely. Adding a key is
+  the only way to widen what a rule can read, so the key set is pinned by a test.
+
+- **Context (why placement is excluded):** The label is **stored**, so a stored value must equal what
+  its rule produces, and every input to a rule is therefore something a write path has to re-render
+  on. The keys above change on exactly five acts, all of them the entity's own: create, rename, move
+  (which re-mints the ordinal), reclassify, and reset. That closed set is what makes the
+  recompute-and-compare invariant provable rather than hopeful.
+
+  Adding the location's name would add a sixth, and it would not be the entity's own: renaming a
+  **location** would silently stale every label under it, and the invariant would be right to fail.
+  The epic's acceptance text ("a component created with a product and a location gets a label")
+  reads either way, and is satisfied by the classification alone. The cascade that would make
+  placement facts safe belongs with the slice that owns bulk recompute
+  ([#685](https://github.com/hyperscaleav/omniglass/issues/685)), which can then add the keys and the
+  cascade together. Ancestry is not lost meanwhile: it is already the entity's `path` and its two
+  renders, beside the label rather than inside it.
+
+- **Decision (the global tier is two columns, not one):** The global rule is one row per labelled
+  entity kind in `label_rule`, carrying `default_template` (boot-seed space, rewritten
+  authoritatively on every start) and `template` (operator space, nullable), resolved as
+  `coalesce(template, default_template)`. Clearing `template` is restore-to-defaults.
+
+  One column could not be both. An authoritative boot seed over a single column stomps an operator's
+  rule on the next restart; a seed-if-absent freezes the shipped default at whatever the first boot
+  wrote and no release can improve it. That is the problem
+  [ADR-0095](#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it)
+  solves for a shipped registry row, and this is the same answer at the smallest scale that expresses
+  it: shipped values and operator values live apart and reads resolve one over the other. It is two
+  columns rather than a `registry_shadow` row because this table is keyed on an entity kind rather
+  than a uuid, and three rows do not earn an overlay of their own.
+
+- **Decision (a rule inherits per node, like every other type fact):** On a nested registry a
+  `label_rule` is nullable and resolves by the first-non-null walk `stem`, `icon` and `abbrev`
+  already follow, crossing the fork boundary **per node** with the chain always the official one
+  (ADR-0095 decision 3). So forking a shipped ancestor's rule reaches every descendant that declares
+  none, and a descendant that declares one overrides for itself alone. The analogous question
+  ADR-0095 settled for facts has the same answer for rules, because a rule **is** a fact of the node
+  that declares it.
+
+- **Decision (an empty render stores NULL and keeps the pen):** A rule with nothing to say about a
+  row stores SQL `NULL`, not a blank string, and `display_name_generated` stays true. Marking the row
+  operator-owned because a rule once rendered nothing would exclude it forever from the recompute
+  that exists to fix exactly that.
+
+- **Consequence:** `label_rule` columns land on `component_type`, `system_type`, `location_type`,
+  `product` and `standard`, but only `component_type` carries the fork today, so a rule on a
+  **shipped** row of the other four is not operator-editable until each adopts ADR-0095's primitive.
+  That is the pre-existing state of those registries rather than a new restriction, and the tier that
+  matters most for components (`component_type`) is forkable now.
+- **Tracked under** [#682](https://github.com/hyperscaleav/omniglass/issues/682), the second slice of
   epic [#657](https://github.com/hyperscaleav/omniglass/issues/657).

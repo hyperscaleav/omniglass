@@ -3252,3 +3252,48 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   of them exposed that the recompute-and-compare invariant was passing for the wrong reason (its
   estate had no row that stayed renamed, and its one move never left its placement bucket), so the
   estate grew both cases before either mutation counted as caught.
+- **A label rule renders a label, over a data map that is the sandbox**
+  ([#682](https://github.com/hyperscaleav/omniglass/issues/682), the second slice of
+  [#657](https://github.com/hyperscaleav/omniglass/issues/657),
+  [ADR-0098](/architecture/decisions/#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits)).
+  `display_name` gains the pen `display_name_generated` on component, system and location, the shape
+  `name_generated` already had, and a nullable `label_rule` lands on `component_type`, `system_type`,
+  `location_type`, `product` and `standard` with the global tier in its own small table. Rules
+  resolve most-specific-first and inherit down a nested registry by the same first-non-null walk
+  `stem` and `abbrev` follow, per node across the fork boundary, so setting a rule on a shipped type
+  forks that row and the official one stays byte-identical.
+
+  The rule language is Go `text/template`, and a custom interpolation DSL was designed and rejected,
+  because the security property a label rule needs is not a syntax that cannot express dangerous
+  things but an environment that contains nothing dangerous. The environment is a
+  `map[string]string` we build key by key: field traversal, a method call and `call` all fail at
+  execution over a string, `index` reaches only what the map already holds, an undefined key renders
+  as nothing, and a secret is absent structurally rather than filtered. The test that tries to reach
+  one pins the key set exactly and then asks for every word a credential might be called, over a
+  database holding a real sealed secret.
+
+  What the map deliberately omits is placement, and that is the slice's one divergence from how the
+  definition's acceptance text could be read. Because the label is stored, every input to a rule is
+  something a write path must re-render on, and the keys chosen change on exactly five acts, all of
+  them the entity's own: create, rename, move, reclassify, reset. Adding a location's name would add
+  a sixth that is somebody else's, staling every label under a renamed room, and the
+  recompute-and-compare invariant would be right to fail. The cascade that would make placement facts
+  safe belongs with the bulk recompute ([#685](https://github.com/hyperscaleav/omniglass/issues/685)),
+  which can add the keys and the cascade in one piece.
+
+  The global tier is one row per entity kind with **two** columns, `default_template` for what the
+  release ships and `template` for what the operator chose, because one column cannot be both
+  authoritatively re-seeded and operator-owned. The location kind ships an empty rule on purpose: a
+  campus, a building and a room have real-world names, and every fact a rule could reach is either
+  the type ("Room", for every room) or the name itself, so any rule that ran would be a constant or a
+  restatement, and the read ladder's fallback to the name is already the better answer. That is the
+  same argument the epic makes for refusing to auto-name a nominal location type.
+
+  Twenty-three mutations back the assertions, and two of them were surviving at first for the reason
+  slice 1 warned about. The empty-render test asserted a `NULL` column after a create whose rule
+  produced nothing, but the stamp skips a write when the render equals what is stored, so nothing was
+  written and the assertion held whatever the write would have done; it now drives a labelled row
+  into a rule that stops producing one. And the recompute-and-compare invariant did not notice a
+  `:move` that fails to re-render, because its fixture moved a component into a bucket where the same
+  ordinal was free, so name, number and label were all unchanged; the bucket is now stocked to force
+  a re-mint, and its reset is preceded by a rename for the same reason.

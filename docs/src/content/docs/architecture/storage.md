@@ -96,6 +96,15 @@ the two in one migration. Three buckets, never conflated:
   ([ADR-0087](/architecture/decisions/#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability)).
   Absent both preconditions, an operator-writable or unordered table keeps the ordinary
   insert-if-absent rule above.
+
+  **A row that is both shipped and operator-owned splits into two columns.** The global label rules
+  (`label_rule`, one row per labelled entity kind) carry `default_template` and `template`: the seed
+  writes only the first, authoritatively, and the second is the operator's, resolved over it. Neither
+  single-column arrangement works, since an authoritative seed stomps the operator on the next
+  restart and a seed-if-absent freezes the shipped default at the first boot. It is the same
+  shipped-values-and-operator-values-live-apart shape the registry fork gives a registry row, at the
+  scale where an overlay table would be more machinery than the three rows are worth
+  ([ADR-0098](/architecture/decisions/#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits)).
 - **One-time data backfills** (dbmate, data-only): transforming existing operator rows to match a new
   constraint, run once, and idempotent on a second run (a repeat changes nothing, proven by a test that
   executes the migration's up-SQL twice).
