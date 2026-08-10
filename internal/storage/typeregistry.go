@@ -107,7 +107,12 @@ func countTypeRefs(ctx context.Context, q querier, ref typeRef, id string) (int,
 // official row (ErrTypeOfficial), refuses a row still referenced by inventory
 // (ErrTypeInUse), deletes, and audits. resource is the audit label
 // (e.g. "location_type").
-func deleteTypeRow(ctx context.Context, p *PG, table, resource string, ref typeRef, actorID, id string) error {
+//
+// refs is variadic because a registry can be pinned from more than one side.
+// system_type is the first with two (its own children AND the systems it
+// classifies) and both must come back as the clean ErrTypeInUse a caller can
+// map to a 409, not as whichever raw foreign-key error happened to fire first.
+func deleteTypeRow(ctx context.Context, p *PG, table, resource, actorID, id string, refs ...typeRef) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin delete %s: %w", table, err)
@@ -123,12 +128,14 @@ func deleteTypeRow(ctx context.Context, p *PG, table, resource string, ref typeR
 	if err := tx.QueryRow(ctx, `select id from `+table+` where `+registryRefCol(id)+` = $1`, id).Scan(&uid); err != nil {
 		return ErrTypeNotFound
 	}
-	n, err := countTypeRefs(ctx, tx, ref, uid)
-	if err != nil {
-		return err
-	}
-	if n > 0 {
-		return ErrTypeInUse
+	for _, ref := range refs {
+		n, err := countTypeRefs(ctx, tx, ref, uid)
+		if err != nil {
+			return err
+		}
+		if n > 0 {
+			return ErrTypeInUse
+		}
 	}
 	before, err := registryAuditImage(ctx, tx, table, uid)
 	if err != nil {

@@ -585,6 +585,74 @@
      }
     ]
    },
+   "system_type": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "gen_random_uuid()",
+      "pk": true
+     },
+     {
+      "name": "name",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "display_name",
+      "type": "text",
+      "nullable": false,
+      "default": "''::text"
+     },
+     {
+      "name": "stem",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "icon",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "abbrev",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "official",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+     },
+     {
+      "name": "parent_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "system_type.id"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "system_type_name_key",
+      "definition": "CREATE UNIQUE INDEX system_type_name_key ON public.system_type USING btree (name)"
+     }
+    ]
+   },
    "vendor": {
     "columns": [
      {
@@ -1931,6 +1999,13 @@
       "nullable": true,
       "fk": true,
       "fk_target": "standard.id"
+     },
+     {
+      "name": "system_type_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "system_type.id"
      }
     ],
     "uniques": [

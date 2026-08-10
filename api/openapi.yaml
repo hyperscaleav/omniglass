@@ -1263,8 +1263,50 @@ components:
         standard_id:
           description: The standard it conforms to, by handle or uuid; omit for a one-off system
           type: string
+        system_type_id:
+          description: The system_type it is classified as (what kind of space it is), by name or uuid; omit to leave it unclassified
+          type: string
       required:
         - name
+      type: object
+    CreateSystemTypeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateSystemTypeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        abbrev:
+          description: A compact form of display_name; omit to inherit the parent's
+          type: string
+        display_name:
+          description: What an operator reads in pickers and lists
+          minLength: 1
+          type: string
+        icon:
+          description: A glyph key; omit to inherit the parent's
+          type: string
+        name:
+          description: The globally unique name
+          maxLength: 100
+          minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
+        parent_id:
+          description: The parent system_type, by name or uuid; omit for a root type
+          type: string
+        stem:
+          description: The prefix a generated system name is built from; omit to inherit the parent's. Lowercase letters, digits, and hyphens. Required for a root type, which has no ancestor to inherit one from.
+          maxLength: 100
+          minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
+      required:
+        - name
+        - display_name
       type: object
     CreateTagInputBody:
       additionalProperties: false
@@ -2966,6 +3008,25 @@ components:
       required:
         - system
         - roles
+      type: object
+    ListSystemTypesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListSystemTypesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        system_types:
+          items:
+            $ref: "#/components/schemas/SystemTypeBody"
+          type:
+            - array
+            - "null"
+      required:
+        - system_types
       type: object
     ListSystemsOutputBody:
       additionalProperties: false
@@ -5156,6 +5217,12 @@ components:
         standard_id:
           description: The standard's uuid; the stable form of standard
           type: string
+        system_type:
+          description: "The system_type's name, for display: what kind of space this is (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the blueprint it is built to."
+          type: string
+        system_type_id:
+          description: The system_type's uuid; the stable form of system_type
+          type: string
       required:
         - id
         - name
@@ -5315,6 +5382,47 @@ components:
         - accepted_types
         - pinned_products
         - impact
+      type: object
+    SystemTypeBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SystemTypeBody.json
+          format: uri
+          readOnly: true
+          type: string
+        abbrev:
+          description: A compact form of display_name; empty inherits the nearest ancestor's
+          type: string
+        display_name:
+          type: string
+        icon:
+          description: A glyph key; empty inherits the nearest ancestor's
+          type: string
+        id:
+          description: The system_type's uuid, the stable handle that survives a rename
+          type: string
+        name:
+          description: The name an operator reads and types; renameable
+          type: string
+        official:
+          type: boolean
+        parent:
+          description: The parent system_type's name, for display; absent for a root type
+          type: string
+        parent_id:
+          description: The parent system_type's id, the canonical handle; absent for a root type
+          type: string
+        stem:
+          description: The prefix a generated system name is built from; empty inherits the nearest ancestor's
+          type: string
+      required:
+        - id
+        - name
+        - display_name
+        - official
       type: object
     TagBindingBody:
       additionalProperties: false
@@ -5829,6 +5937,35 @@ components:
           type: string
         standard_id:
           description: A new standard, by handle or uuid; "" clears it (a one-off system)
+          type: string
+        system_type_id:
+          description: A new system_type, by name or uuid; "" clears it (an unclassified system)
+          type: string
+      type: object
+    UpdateSystemTypeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateSystemTypeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        abbrev:
+          description: A new compact form
+          type: string
+        display_name:
+          description: A new operator-facing label
+          type: string
+        icon:
+          description: A new glyph key
+          type: string
+        stem:
+          description: A new name prefix. Lowercase letters, digits, and hyphens.
+          maxLength: 100
+          minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
       type: object
     UpdateTagInputBody:
@@ -11155,6 +11292,102 @@ paths:
           description: Error
       summary: Declare a role on a standard
       x-omniglass-permission: standard:update
+  /system-types:
+    get:
+      description: "Lists the system_type registry (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by display name. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read."
+      operationId: list-system-types
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListSystemTypesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List system types
+      x-omniglass-permission: system_type:read
+    post:
+      description: Creates a custom (non-official) system_type, optionally under a parent. A root type must carry a stem, since it has no ancestor to inherit one from. Gated by system_type:create.
+      operationId: create-system-type
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSystemTypeInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemTypeBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a system type
+      x-omniglass-permission: system_type:create
+  /system-types/{id}:
+    delete:
+      description: Deletes a custom system_type, refused if official (422), still a parent of another system_type (409), or still classifying a system (409). Gated by system_type:delete.
+      operationId: delete-system-type
+      parameters:
+        - description: The system_type id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The system_type id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a system type
+      x-omniglass-permission: system_type:delete
+    patch:
+      description: Patches a custom system_type's display_name, stem, icon, or abbrev. Official types are read-only (422). Gated by system_type:update.
+      operationId: update-system-type
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSystemTypeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemTypeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a system type
+      x-omniglass-permission: system_type:update
   /systems:
     get:
       description: Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.
@@ -11175,7 +11408,7 @@ paths:
       summary: List systems in scope
       x-omniglass-permission: system:read
     post:
-      description: Creates a system, optionally under a parent (a root needs an all-scoped grant) and at a location. Gated by system:create.
+      description: Creates a system, optionally under a parent (a root needs an all-scoped grant), at a location, conforming to a standard, and classified as a system_type. Gated by system:create.
       operationId: create-system
       requestBody:
         content:
@@ -11248,7 +11481,7 @@ paths:
       summary: Get a system
       x-omniglass-permission: system:read
     patch:
-      description: "Patches a system's display_name or standard. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard field follows the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system), a name sets. Gated by system:update; read and update scopes drive the 404 versus 403 split."
+      description: "Patches a system's display_name, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. Gated by system:update; read and update scopes drive the 404 versus 403 split."
       operationId: update-system
       parameters:
         - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)

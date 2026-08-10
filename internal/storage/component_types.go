@@ -520,7 +520,7 @@ func (p *PG) RestoreComponentType(ctx context.Context, actorID, ref string) (*Co
 // the fork is an overlay, not ownership. RestoreComponentType is the delete
 // that shipped row admits, and it removes the shadow, not the row.
 func (p *PG) DeleteComponentType(ctx context.Context, actorID, ref string) error {
-	return deleteTypeRow(ctx, p, "component_type", "component_type", typeRef{table: "component_type", col: "parent_id"}, actorID, ref)
+	return deleteTypeRow(ctx, p, "component_type", "component_type", actorID, ref, typeRef{table: "component_type", col: "parent_id"})
 }
 
 // componentTypeWalkRow is the minimal per-row projection ResolveTypeFacts and

@@ -4896,10 +4896,11 @@ func generatedCommands() []*cobra.Command {
 				var fName string
 				var fParent string
 				var fStandardId string
+				var fSystemTypeId string
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a system",
-					Long:    "Creates a system, optionally under a parent (a root needs an all-scoped grant) and at a location. Gated by system:create.",
+					Long:    "Creates a system, optionally under a parent (a root needs an all-scoped grant), at a location, conforming to a standard, and classified as a system_type. Gated by system:create.",
 					Example: "  omniglass system create --name name",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4920,6 +4921,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("standard-id") {
 							body["standard_id"] = fStandardId
 						}
+						if cmd.Flags().Changed("system-type-id") {
+							body["system_type_id"] = fSystemTypeId
+						}
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
@@ -4929,6 +4933,7 @@ func generatedCommands() []*cobra.Command {
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParent, "parent", "", "Parent system name; omit for a root system")
 				cmd.Flags().StringVar(&fStandardId, "standard-id", "", "The standard it conforms to, by handle or uuid; omit for a one-off system")
+				cmd.Flags().StringVar(&fSystemTypeId, "system-type-id", "", "The system_type it is classified as (what kind of space it is), by name or uuid; omit to leave it unclassified")
 				return cmd
 			}()
 			return cmd
@@ -5474,10 +5479,11 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var fDisplayName string
 				var fStandardId string
+				var fSystemTypeId string
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a system",
-					Long:    "Patches a system's display_name or standard. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard field follows the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system), a name sets. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+					Long:    "Patches a system's display_name, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 					Example: "  omniglass system update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5489,11 +5495,144 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("standard-id") {
 							body["standard_id"] = fStandardId
 						}
+						if cmd.Flags().Changed("system-type-id") {
+							body["system_type_id"] = fSystemTypeId
+						}
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
 				cmd.Flags().StringVar(&fStandardId, "standard-id", "", "A new standard, by handle or uuid; \"\" clears it (a one-off system)")
+				cmd.Flags().StringVar(&fSystemTypeId, "system-type-id", "", "A new system_type, by name or uuid; \"\" clears it (an unclassified system)")
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
+			Use:   "system-type",
+			Short: "Commands for the system-type resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fAbbrev string
+				var fDisplayName string
+				var fIcon string
+				var fName string
+				var fParentId string
+				var fStem string
+				cmd := &cobra.Command{
+					Use:     "create",
+					Short:   "Create a system type",
+					Long:    "Creates a custom (non-official) system_type, optionally under a parent. A root type must carry a stem, since it has no ancestor to inherit one from. Gated by system_type:create.",
+					Example: "  omniglass system-type create --display-name display_name --name name",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/system-types")
+						body := map[string]any{}
+						if cmd.Flags().Changed("abbrev") {
+							body["abbrev"] = fAbbrev
+						}
+						if cmd.Flags().Changed("display-name") {
+							body["display_name"] = fDisplayName
+						}
+						if cmd.Flags().Changed("icon") {
+							body["icon"] = fIcon
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						if cmd.Flags().Changed("parent-id") {
+							body["parent_id"] = fParentId
+						}
+						if cmd.Flags().Changed("stem") {
+							body["stem"] = fStem
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fAbbrev, "abbrev", "", "A compact form of display_name; omit to inherit the parent's")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads in pickers and lists")
+				_ = cmd.MarkFlagRequired("display-name")
+				cmd.Flags().StringVar(&fIcon, "icon", "", "A glyph key; omit to inherit the parent's")
+				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name")
+				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fParentId, "parent-id", "", "The parent system_type, by name or uuid; omit for a root type")
+				cmd.Flags().StringVar(&fStem, "stem", "", "The prefix a generated system name is built from; omit to inherit the parent's. Lowercase letters, digits, and hyphens. Required for a root type, which has no ancestor to inherit one from.")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "delete <id>",
+					Short:   "Delete a system type",
+					Long:    "Deletes a custom system_type, refused if official (422), still a parent of another system_type (409), or still classifying a system (409). Gated by system_type:delete.",
+					Example: "  omniglass system-type delete <id>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/system-types/%s", url.PathEscape(args[0]))
+						return runAPICommand(cmd, "DELETE", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "List system types",
+					Long:    "Lists the system_type registry (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by display name. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read.",
+					Example: "  omniglass system-type list",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/system-types")
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fAbbrev string
+				var fDisplayName string
+				var fIcon string
+				var fStem string
+				cmd := &cobra.Command{
+					Use:     "update <id>",
+					Short:   "Update a system type",
+					Long:    "Patches a custom system_type's display_name, stem, icon, or abbrev. Official types are read-only (422). Gated by system_type:update.",
+					Example: "  omniglass system-type update <id>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/system-types/%s", url.PathEscape(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("abbrev") {
+							body["abbrev"] = fAbbrev
+						}
+						if cmd.Flags().Changed("display-name") {
+							body["display_name"] = fDisplayName
+						}
+						if cmd.Flags().Changed("icon") {
+							body["icon"] = fIcon
+						}
+						if cmd.Flags().Changed("stem") {
+							body["stem"] = fStem
+						}
+						return runAPICommand(cmd, "PATCH", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fAbbrev, "abbrev", "", "A new compact form")
+				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
+				cmd.Flags().StringVar(&fIcon, "icon", "", "A new glyph key")
+				cmd.Flags().StringVar(&fStem, "stem", "", "A new name prefix. Lowercase letters, digits, and hyphens.")
 				return cmd
 			}()
 			return cmd

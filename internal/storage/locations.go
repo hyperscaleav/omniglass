@@ -359,7 +359,7 @@ func (p *PG) UpdateLocationType(ctx context.Context, actorID, id string, patch L
 // DeleteLocationType removes a custom location_type, refusing an official row and
 // a row still referenced by a location.
 func (p *PG) DeleteLocationType(ctx context.Context, actorID, id string) error {
-	return deleteTypeRow(ctx, p, "location_type", "location_type", typeRef{table: "location", col: "location_type"}, actorID, id)
+	return deleteTypeRow(ctx, p, "location_type", "location_type", actorID, id, typeRef{table: "location", col: "location_type"})
 }
 
 // locationCols is the column list every location read scans, in struct order.

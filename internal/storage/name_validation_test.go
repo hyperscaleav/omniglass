@@ -75,6 +75,14 @@ func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key str
 			_, err := gw.CreateComponentType(ctx, "", storage.ComponentType{Name: s, DisplayName: "X"})
 			return err
 		},
+		// Stem set: a root with none is refused by its own structural guard
+		// (ErrRootSystemTypeNeedsStem) before the name rule is ever consulted,
+		// which would prove the wrong refusal.
+		"system_type": func(s string) error {
+			stem := "x"
+			_, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: s, DisplayName: "X", Stem: &stem})
+			return err
+		},
 		// A role's key arrives as a bare {role} path param on PUT
 		// /systems/{name}/roles/{role}, so an operator types it directly.
 		"system_role": func(s string) error {

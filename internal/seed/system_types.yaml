@@ -1,0 +1,77 @@
+# The system_type taxonomy: the coarse registry that says what KIND OF SPACE a
+# system is (ADR-0096). It is the system-side counterpart of component_type, and
+# it is not `standard`: a standard is the blueprint a system is built to, and one
+# estate can hold ten signage standards and six classroom standards under a
+# single coarse type here. Official (ON CONFLICT DO UPDATE, authoritative),
+# like component_types.yaml and unlike location_types.yaml's seed-if-absent
+# example content.
+#
+# Litmus test for a node: an operator would say "this is a <node>" about a whole
+# room or surface, and would expect every one of them to be named and labelled
+# the same way. That is what stem and abbrev are for. stem is the prefix a
+# generated system name is built from ("boardroom-2"); abbrev is the compact
+# form a label render uses ("br"). Both inherit down the tree and are overridden
+# at the node that needs its own, so `board` states both while leaving icon to
+# come from `room`.
+#
+# Order matters: a child's parent_id must name an id that appears earlier in
+# this list.
+system_types:
+  - id: av
+    display_name: AV
+    stem: av
+    abbrev: av
+    icon: layers
+  - id: room
+    display_name: Room
+    parent_id: av
+    stem: room
+    abbrev: rm
+    icon: door-open
+  - id: board
+    display_name: Boardroom
+    parent_id: room
+    stem: boardroom
+    abbrev: br
+  - id: class
+    display_name: Classroom
+    parent_id: room
+    stem: classroom
+    abbrev: cls
+  - id: meeting
+    display_name: Meeting Room
+    parent_id: room
+    stem: meeting
+    abbrev: mtg
+  - id: training
+    display_name: Training Room
+    parent_id: room
+    stem: training
+    abbrev: trn
+  - id: conference
+    display_name: Conference Room
+    parent_id: room
+    stem: conference
+    abbrev: conf
+  - id: huddle
+    display_name: Huddle Room
+    parent_id: room
+    stem: huddle
+    abbrev: hud
+  - id: sign
+    display_name: Signage
+    parent_id: av
+    stem: signage
+    abbrev: sgn
+    icon: tv
+  - id: video-wall
+    display_name: Video Wall
+    parent_id: sign
+    stem: video-wall
+    abbrev: vw
+  - id: interactive-sign
+    display_name: Interactive Sign
+    parent_id: sign
+    stem: interactive-sign
+    abbrev: isgn
+    icon: touchpad

@@ -17,6 +17,8 @@ type systemBody struct {
 	DisplayName   string            `json:"display_name,omitempty"`
 	Standard      string            `json:"standard,omitempty" doc:"The standard's handle, for display; omitted for a one-off system"`
 	StandardID    string            `json:"standard_id,omitempty" doc:"The standard's uuid; the stable form of standard"`
+	SystemType    string            `json:"system_type,omitempty" doc:"The system_type's name, for display: what kind of space this is (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the blueprint it is built to."`
+	SystemTypeID  string            `json:"system_type_id,omitempty" doc:"The system_type's uuid; the stable form of system_type"`
 	ParentID      *string           `json:"parent_id,omitempty" doc:"The parent system's id, the canonical handle"`
 	Parent        *string           `json:"parent,omitempty" doc:"The parent system's name, for display; absent for a root system"`
 	LocationID    *string           `json:"location_id,omitempty" doc:"The location's id, the canonical handle"`
@@ -32,7 +34,9 @@ type systemBody struct {
 func toSystemBody(s *storage.System) systemBody {
 	return systemBody{
 		ID: s.ID, Name: s.Name, DisplayName: s.DisplayName,
-		Standard: derefStr(s.StandardName), StandardID: derefStr(s.StandardID), ParentID: s.ParentID, Parent: s.ParentName, LocationID: s.LocationID, Location: s.LocationName,
+		Standard: derefStr(s.StandardName), StandardID: derefStr(s.StandardID),
+		SystemType: derefStr(s.SystemTypeName), SystemTypeID: derefStr(s.SystemTypeID),
+		ParentID: s.ParentID, Parent: s.ParentName, LocationID: s.LocationID, Location: s.LocationName,
 		MemberCount: s.MemberCount,
 		Path:        s.Path, PathSegments: s.PathSegments, Renders: toRenderBody(s.Path, s.Renders),
 	}
@@ -103,11 +107,14 @@ type systemPathInput struct {
 
 type createSystemInput struct {
 	Body struct {
-		Name        string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens)"`
-		DisplayName string  `json:"display_name,omitempty" doc:"What an operator reads; the name is the address"`
-		StandardID  string  `json:"standard_id,omitempty" doc:"The standard it conforms to, by handle or uuid; omit for a one-off system"`
-		Parent      *string `json:"parent,omitempty" doc:"Parent system name; omit for a root system"`
-		Location    *string `json:"location,omitempty" doc:"Location name this system is placed at"`
+		Name        string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens)"`
+		DisplayName string `json:"display_name,omitempty" doc:"What an operator reads; the name is the address"`
+		StandardID  string `json:"standard_id,omitempty" doc:"The standard it conforms to, by handle or uuid; omit for a one-off system"`
+		// Nullable for now: a floor on system_type_id waits until the shipped
+		// tree has proven out.
+		SystemTypeID string  `json:"system_type_id,omitempty" doc:"The system_type it is classified as (what kind of space it is), by name or uuid; omit to leave it unclassified"`
+		Parent       *string `json:"parent,omitempty" doc:"Parent system name; omit for a root system"`
+		Location     *string `json:"location,omitempty" doc:"Location name this system is placed at"`
 	}
 }
 
@@ -119,8 +126,9 @@ type createSystemInput struct {
 type updateSystemInput struct {
 	Name string `path:"name" doc:"The system's name, or a dotted address (e.g. boi.17c.$sys.av)"`
 	Body struct {
-		DisplayName *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
-		StandardID  *string `json:"standard_id,omitempty" doc:"A new standard, by handle or uuid; \"\" clears it (a one-off system)"`
+		DisplayName  *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
+		StandardID   *string `json:"standard_id,omitempty" doc:"A new standard, by handle or uuid; \"\" clears it (a one-off system)"`
+		SystemTypeID *string `json:"system_type_id,omitempty" doc:"A new system_type, by name or uuid; \"\" clears it (an unclassified system)"`
 	}
 }
 
@@ -230,12 +238,13 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Path:          "/systems",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a system",
-		Description:   "Creates a system, optionally under a parent (a root needs an all-scoped grant) and at a location. Gated by system:create.",
+		Description:   "Creates a system, optionally under a parent (a root needs an all-scoped grant), at a location, conforming to a standard, and classified as a system_type. Gated by system:create.",
 	}, "system", "create"), func(ctx context.Context, in *createSystemInput) (*systemOutput, error) {
 		s, err := gw.CreateSystem(ctx, actorID(ctx), storage.SystemSpec{
 			Name:         in.Body.Name,
 			DisplayName:  in.Body.DisplayName,
 			StandardID:   ptrOrNil(in.Body.StandardID),
+			SystemTypeID: ptrOrNil(in.Body.SystemTypeID),
 			ParentName:   in.Body.Parent,
 			LocationName: in.Body.Location,
 		}, a.scopeFor(ctx, "system", "create"))
@@ -250,14 +259,15 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodPatch,
 		Path:        "/systems/{name}",
 		Summary:     "Update a system",
-		Description: "Patches a system's display_name or standard. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard field follows the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system), a name sets. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+		Description: "Patches a system's display_name, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 	}, "system", "update"), func(ctx context.Context, in *updateSystemInput) (*systemOutput, error) {
 		s, err := gw.UpdateSystem(ctx, actorID(ctx), in.Name, storage.SystemPatch{
 			DisplayName: in.Body.DisplayName,
 			// Deliberately NOT emptyPtrToNil: that collapses an explicit "" into
 			// "omitted", which would make clearing (declassify) impossible. The
-			// storage layer reads "" as clear.
-			StandardID: in.Body.StandardID,
+			// storage layer reads "" as clear. Same for SystemTypeID.
+			StandardID:   in.Body.StandardID,
+			SystemTypeID: in.Body.SystemTypeID,
 		}, a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update"))
 		if err != nil {
 			return nil, mapSystemErr(err)
@@ -391,6 +401,8 @@ func mapSystemErr(err error) error {
 		return huma.Error422UnprocessableEntity("cannot move a system under itself or a descendant")
 	case errors.Is(err, storage.ErrUnknownStandard):
 		return huma.Error422UnprocessableEntity("unknown standard")
+	case errors.Is(err, storage.ErrUnknownSystemType):
+		return huma.Error422UnprocessableEntity("unknown system_type")
 	case errors.Is(err, storage.ErrLocationNotFound):
 		return huma.Error422UnprocessableEntity("location not found")
 	default:

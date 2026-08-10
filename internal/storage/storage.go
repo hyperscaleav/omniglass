@@ -313,6 +313,19 @@ type Gateway interface {
 	ResolveTypeFacts(ctx context.Context, id uuid.UUID) (stem, icon, abbrev string, tags []string, err error)
 	TypeIsWithin(ctx context.Context, id, ancestor uuid.UUID) (bool, error)
 
+	// The system_type registry: the coarse taxonomy of what kind of space a
+	// system is (a boardroom, a classroom, a video wall), the system-side
+	// counterpart of component_type and a different question from standard,
+	// which stays the blueprint a system conforms to.
+	// ResolveSystemTypeFacts walks the tree in Go; no DB logic.
+	UpsertSystemType(ctx context.Context, st SystemType) error
+	ListSystemTypes(ctx context.Context) ([]SystemType, error)
+	GetSystemType(ctx context.Context, ref string) (*SystemType, error)
+	CreateSystemType(ctx context.Context, actorID string, st SystemType) (*SystemType, error)
+	UpdateSystemType(ctx context.Context, actorID, ref string, patch SystemTypePatch) (*SystemType, error)
+	DeleteSystemType(ctx context.Context, actorID, ref string) error
+	ResolveSystemTypeFacts(ctx context.Context, id uuid.UUID) (stem, icon, abbrev string, err error)
+
 	UpsertProduct(ctx context.Context, m Product) error
 	ListProducts(ctx context.Context) ([]Product, error)
 	GetProduct(ctx context.Context, id string) (*Product, error)

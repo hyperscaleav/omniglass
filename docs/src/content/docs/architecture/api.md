@@ -365,14 +365,17 @@ owning entity's own write. The tag vocabulary and an entity's tags read on the v
   resolves `platform`, its system tree, and the location it is placed at. Provenance lives in the
   per-entity effective-tags detail, not the row.
 
-The **component-classification catalogs** ([core entities](/architecture/core-entities/#catalog-reference-data-vendor-driver-component_type))
-are official-vs-custom registries the `product` layer references, on the same pattern as the
+The **classification catalogs** ([core entities](/architecture/core-entities/#catalog-reference-data-vendor-driver-component_type))
+are official-vs-custom registries the inventory layer references, on the same pattern as the
 `*_type` registries; `vendor` and `driver` are flat, `component_type` a hierarchy above `product`
-([core entities](/architecture/core-entities/#catalog-reference-data-component_type)). Each is its own
+([core entities](/architecture/core-entities/#catalog-reference-data-component_type)), and
+`system_type` its system-side counterpart, the coarse taxonomy of what kind of space a system is
+([core entities](/architecture/core-entities/#catalog-reference-data-system_type)). Each is its own
 resource with one shared CRUD shape: the list routes
-(`GET /vendors`, `/drivers`, `/component-types`, `/products`, `/standards`) order alphabetically by
-display name, and each list and per-id `GET` sits on the viewer floor (`vendor:read` / `driver:read` /
-`component_type:read` / `product:read` / `standard:read`, which `*:read` carries); `POST` mints a custom
+(`GET /vendors`, `/drivers`, `/component-types`, `/products`, `/standards`, `/system-types`) order
+alphabetically by display name, and each list and per-id `GET` sits on the viewer floor
+(`vendor:read` / `driver:read` / `component_type:read` / `product:read` / `standard:read` /
+`system_type:read`, which `*:read` carries); `POST` mints a custom
 row (201) and `PATCH` updates and `DELETE` removes (204), gated `<resource>:create` /
 `<resource>:update` / `<resource>:delete`, all at the admin tier. An **official** row refuses the write
 (`PATCH` and `DELETE` both 422), except on a registry that has adopted the **fork**
@@ -384,6 +387,13 @@ releases reach the row again. `component_type` is the first adopter; `official` 
 are the row's origin (shipped, yours, or yours overriding shipped). The `{ref}` grammar is unchanged
 either way: one uuid and one name per logical row, forked or not, and the namespace never appears in a
 URL.
+
+A **nested** registry (`component_type`, `system_type`) returns the flat set with each row's parent
+link in both forms, so the console reconstructs the tree client-side; the row carries its **own**
+`stem` / `abbrev` / `icon`, unresolved, because inheritance is the resolver's job and a read that
+silently filled a blank from an ancestor would make the override invisible. `DELETE` on one is refused
+with a 409 while it still parents another node or still classifies a row (`system_type` counts both
+sides).
 
 A registry body carries **both handles** like every other name-bearing resource
 ([above](#shape-resources-and-verb-methods),

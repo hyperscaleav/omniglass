@@ -38,6 +38,7 @@ var referenceFields = map[string]string{
 	"product_id":         "product",
 	"parent_product_id":  "parent_product",
 	"component_type_id":  "component_type",
+	"system_type_id":     "system_type",
 	"vendor_id":          "vendor",
 	"driver_id":          "driver",
 	"standard_id":        "standard",

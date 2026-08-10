@@ -7,6 +7,7 @@ import { SYSTEMS_KEY, type System } from "../lib/systems";
 import { LOCATIONS_KEY } from "../lib/locations";
 import { COMPONENTS_KEY } from "../lib/components";
 import { STANDARDS_KEY, type Standard } from "../lib/standards";
+import { SYSTEM_TYPES_KEY, type SystemType } from "../lib/system_types";
 import { ownerPropertiesKey, type EffectiveProperty } from "../lib/owner_properties";
 import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY, entityTagsKey } from "../lib/tags";
@@ -21,7 +22,16 @@ import { systemHealthKey, type EstateHealth } from "../lib/health";
 // detail's Properties panel resolves. Data is seeded into the query cache so no
 // server is needed; `>` grants every permission.
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const sys: System = { id: uuidFor("s-1"), name: "boardroom", display_name: "Boardroom", standard: "meeting-room", standard_id: uuidFor("std-meeting-room"), member_count: 2, effective_tags: {} };
+const sys: System = { id: uuidFor("s-1"), name: "boardroom", display_name: "Boardroom", standard: "meeting-room", standard_id: uuidFor("std-meeting-room"), system_type: "class", system_type_id: uuidFor("st-class"), member_count: 2, effective_tags: {} };
+// The coarse space taxonomy (ADR-0096), nested: the picker renders it as a
+// tree, not a flat list, so the fixture is two levels deep. Deliberately NOT
+// named "Boardroom": the system's own display name already is, and a collision
+// would make the type assertions pass on the wrong element.
+const systemTypes: SystemType[] = [
+  { id: uuidFor("st-av"), name: "av", display_name: "AV", official: true, stem: "av", abbrev: "av", icon: "layers" },
+  { id: uuidFor("st-room"), name: "room", display_name: "Room", official: true, parent: "av", parent_id: uuidFor("st-av"), stem: "room", abbrev: "rm", icon: "door-open" },
+  { id: uuidFor("st-class"), name: "class", display_name: "Classroom", official: true, parent: "room", parent_id: uuidFor("st-room"), stem: "classroom", abbrev: "cls" },
+];
 const standards: Standard[] = [
   { id: uuidFor("meeting-room"), name: "meeting-room", display_name: "Meeting room", official: true },
   { id: uuidFor("huddle-space"), name: "huddle-space", display_name: "Huddle space", official: false },
@@ -39,6 +49,7 @@ function mount(path: string) {
   qc.setQueryData([...LOCATIONS_KEY], []);
   qc.setQueryData([...COMPONENTS_KEY], []);
   qc.setQueryData([...STANDARDS_KEY], standards);
+  qc.setQueryData([...SYSTEM_TYPES_KEY], systemTypes);
   // Keyed by uuid (#627 review finding 1): the detail page's panels now
   // address by sys.id, not sys.name.
   qc.setQueryData([...ownerPropertiesKey("system", sys.id)], properties);
@@ -78,6 +89,51 @@ describe("Systems create-as-route", () => {
     const picker = (await waitFor(() => screen.getByLabelText("Standard"))) as HTMLSelectElement;
     // Conforming to no standard is first class, so it heads the list.
     expect(Array.from(picker.options).map((o) => o.value)).toEqual(["", "huddle-space", "meeting-room"]);
+  });
+
+  it("offers the system_type tree on the create form, indented, with an unclassified option", async () => {
+    mount("/systems/create");
+    const picker = (await waitFor(() => screen.getByLabelText("Type"))) as HTMLSelectElement;
+    // Unclassified heads the list (the column is nullable), then the tree in
+    // depth-first order, each level indented by a non-breaking-space run. The
+    // indent is the assertion that this is the TREE picker and not a flat
+    // <select> over the same rows.
+    expect(Array.from(picker.options).map((o) => o.value)).toEqual(["", "av", "room", "class"]);
+    const labels = Array.from(picker.options).map((o) => o.textContent);
+    expect(labels[1]).toBe("AV");
+    expect(labels[2]).toBe("\u00A0\u00A0\u00A0Room");
+    expect(labels[3]).toBe("\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0Classroom");
+  });
+
+  it("shows the system's type by display name beside its standard", async () => {
+    mount("/systems/boardroom");
+    await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
+    expect(screen.getByText("Type")).toBeTruthy();
+    // The registry's display name, not the raw handle the row carries.
+    expect(screen.getAllByText("Classroom").length).toBeGreaterThan(0);
+    expect(screen.queryByText("class")).toBeNull();
+  });
+
+  it("sends system_type_id on save, always keyed so an unclassify actually clears", async () => {
+    let sent: unknown;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "PATCH" && req.url.includes("/systems/")) {
+        sent = JSON.parse(await req.clone().text());
+        return new Response(JSON.stringify({}), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({}), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    mount("/systems/boardroom");
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    const picker = (await waitFor(() => screen.getByLabelText("Type"))) as HTMLSelectElement;
+    // Seeded from the row, then re-pointed at an ancestor node.
+    expect(picker.value).toBe("class");
+    fireEvent.change(picker, { target: { value: "room" } });
+    fireEvent.click(screen.getByText("Save changes"));
+    await waitFor(() => expect(sent).toBeTruthy());
+    expect(sent).toMatchObject({ system_type_id: "room" });
   });
 
   it("wears a colour dot derived from its uuid on the list row", async () => {
@@ -171,6 +227,7 @@ describe("Systems create-as-route", () => {
     qc.setQueryData([...LOCATIONS_KEY], []);
     qc.setQueryData([...COMPONENTS_KEY], []);
     qc.setQueryData([...STANDARDS_KEY], standards);
+    qc.setQueryData([...SYSTEM_TYPES_KEY], systemTypes);
     qc.setQueryData([...ownerPropertiesKey("system", twinA.id)], []);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
@@ -263,6 +320,7 @@ describe("Systems list survives duplicate names across placements (#627)", () =>
     qc.setQueryData([...LOCATIONS_KEY], []);
     qc.setQueryData([...COMPONENTS_KEY], []);
     qc.setQueryData([...STANDARDS_KEY], standards);
+    qc.setQueryData([...SYSTEM_TYPES_KEY], systemTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     window.history.pushState({}, "", "/systems");
@@ -308,6 +366,7 @@ describe("Systems list health badge (#627 review round 3, regression 3)", () => 
     qc.setQueryData([...LOCATIONS_KEY], []);
     qc.setQueryData([...COMPONENTS_KEY], []);
     qc.setQueryData([...STANDARDS_KEY], standards);
+    qc.setQueryData([...SYSTEM_TYPES_KEY], systemTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     qc.setQueryData([...systemHealthKey(sys.id)], health);

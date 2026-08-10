@@ -130,6 +130,7 @@ export const OFF_RAIL: { path: string; label: string; hint: string; resource?: s
   { path: "/drivers", label: "Drivers", resource: "driver", hint: "The implementations that get, emit, and set a product's signals." },
   { path: "/component-types", label: "Component types", resource: "component_type", hint: "The device-class genus registry: display, projector, mic, and your own, each carrying the icon, stem, and abbreviation its products inherit." },
   { path: "/standards", label: "Standards", resource: "standard", hint: "The blueprints a system conforms to, each declaring the properties every conforming system exposes." },
+  { path: "/system-types", label: "System types", resource: "system_type", hint: "The coarse space registry: what kind of space a system is (a boardroom, a classroom, a video wall), each carrying the icon, stem, and abbreviation its systems inherit." },
   { path: "/location-types", label: "Location types", resource: "location_type", hint: "The place classifier registry: campus, building, floor, room, and your own." },
   { path: "/secret-types", label: "Secret types", resource: "secret", hint: "The shapes a secret can take, read-only reference data that ships with Omniglass." },
   { path: "/metrics", label: "Metrics", resource: "metric_type", hint: "The numeric signal catalog: the canonical series a sample measures, each carrying its unit and precision." },

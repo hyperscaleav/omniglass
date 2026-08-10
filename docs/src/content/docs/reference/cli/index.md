@@ -3817,7 +3817,7 @@ Create a system
 omniglass system create [flags]
 ```
 
-Creates a system, optionally under a parent (a root needs an all-scoped grant) and at a location. Gated by system:create.
+Creates a system, optionally under a parent (a root needs an all-scoped grant), at a location, conforming to a standard, and classified as a system_type. Gated by system:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -3826,6 +3826,7 @@ Creates a system, optionally under a parent (a root needs an all-scoped grant) a
 | `--name` | string | (none) | Name, unique within its placement (the address; lowercase letters, digits, hyphens) |
 | `--parent` | string | (none) | Parent system name; omit for a root system |
 | `--standard-id` | string | (none) | The standard it conforms to, by handle or uuid; omit for a one-off system |
+| `--system-type-id` | string | (none) | The system_type it is classified as (what kind of space it is), by name or uuid; omit to leave it unclassified |
 
 Example:
 
@@ -4272,17 +4273,102 @@ Update a system
 omniglass system update <name> [flags]
 ```
 
-Patches a system's display_name or standard. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard field follows the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system), a name sets. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+Patches a system's display_name, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. Gated by system:update; read and update scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) | A new operator-facing label |
 | `--standard-id` | string | (none) | A new standard, by handle or uuid; "" clears it (a one-off system) |
+| `--system-type-id` | string | (none) | A new system_type, by name or uuid; "" clears it (an unclassified system) |
 
 Example:
 
 ```sh
 omniglass system update <name>
+```
+
+## `omniglass system-type`
+
+Commands for the system-type resource
+
+### `omniglass system-type create`
+
+Create a system type
+
+```
+omniglass system-type create [flags]
+```
+
+Creates a custom (non-official) system_type, optionally under a parent. A root type must carry a stem, since it has no ancestor to inherit one from. Gated by system_type:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--abbrev` | string | (none) | A compact form of display_name; omit to inherit the parent's |
+| `--display-name` | string | (none) | What an operator reads in pickers and lists |
+| `--icon` | string | (none) | A glyph key; omit to inherit the parent's |
+| `--name` | string | (none) | The globally unique name |
+| `--parent-id` | string | (none) | The parent system_type, by name or uuid; omit for a root type |
+| `--stem` | string | (none) | The prefix a generated system name is built from; omit to inherit the parent's. Lowercase letters, digits, and hyphens. Required for a root type, which has no ancestor to inherit one from. |
+
+Example:
+
+```sh
+omniglass system-type create --display-name display_name --name name
+```
+
+### `omniglass system-type delete`
+
+Delete a system type
+
+```
+omniglass system-type delete <id>
+```
+
+Deletes a custom system_type, refused if official (422), still a parent of another system_type (409), or still classifying a system (409). Gated by system_type:delete.
+
+Example:
+
+```sh
+omniglass system-type delete <id>
+```
+
+### `omniglass system-type list`
+
+List system types
+
+```
+omniglass system-type list
+```
+
+Lists the system_type registry (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by display name. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read.
+
+Example:
+
+```sh
+omniglass system-type list
+```
+
+### `omniglass system-type update`
+
+Update a system type
+
+```
+omniglass system-type update <id> [flags]
+```
+
+Patches a custom system_type's display_name, stem, icon, or abbrev. Official types are read-only (422). Gated by system_type:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--abbrev` | string | (none) | A new compact form |
+| `--display-name` | string | (none) | A new operator-facing label |
+| `--icon` | string | (none) | A new glyph key |
+| `--stem` | string | (none) | A new name prefix. Lowercase letters, digits, and hyphens. |
+
+Example:
+
+```sh
+omniglass system-type update <id>
 ```
 
 ## `omniglass tag`

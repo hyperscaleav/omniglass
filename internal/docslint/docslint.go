@@ -112,11 +112,15 @@ var Banned = []BannedTerm{
 	// not an exemption; the term's dead sense (component.component_type, the
 	// flat table) survives only in the historical ADR-0047 prose, which the
 	// retirement-marker exemption below already protects.
-	{
-		Pattern:     regexp.MustCompile(`\bsystem_type\b`),
-		Replacement: "standard",
-		Origin:      "ADR-0048",
-	},
+	//
+	// system_type is NOT here either, and left for exactly the same reason
+	// (ADR-0096). ADR-0048 retired it as the COLUMN name for what is now
+	// system.standard_id; ADR-0096 reuses the identifier for a new TABLE, the
+	// coarse space taxonomy, with a system.system_type_id pointing at it. The
+	// two are different objects and the live one is current vocabulary, so the
+	// entry had to go rather than gain an exemption every sentence about the
+	// registry would need. The dead sense survives in the historical ADR-0048
+	// prose, under the same retirement-marker exemption.
 	{
 		Pattern:     regexp.MustCompile(`\bfield_definition\b`),
 		Replacement: "product_property (the declared-property contract)",
@@ -409,12 +413,11 @@ var retiringProse = regexp.MustCompile(`(?i)\b(retire[ds]?|retirement|was|were|o
 // purpose: a long line can easily mention some unrelated thing that "was
 // replaced" while still making a current-tense claim about the retired term,
 // and a whole-line escape would wave that through. Wide enough for the real
-// phrasings ("the `system_type` registry was promoted to standard"),
-// narrow enough that a clause about something else does not license it. Every
-// real phrasing in the corpus puts the marker within ~25 characters ("the
-// `system_type` registry was promoted...", "replaces the old `field_definition`",
-// "was `property_value`, built"), so 30 fits them all while a mention two
-// clauses away does not reach.
+// phrasings ("the `field_definition` registry was replaced"), narrow enough
+// that a clause about something else does not license it. Every real phrasing
+// in the corpus puts the marker within ~25 characters ("replaces the old
+// `field_definition`", "was `property_value`, built", "the former `field_value`
+// store"), so 30 fits them all while a mention two clauses away does not reach.
 const retirementWindow = 30
 
 // nearRetirementMarker reports whether a retirement word sits within

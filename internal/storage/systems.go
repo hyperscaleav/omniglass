@@ -23,6 +23,12 @@ var (
 	ErrSystemCycle            = errors.New("storage: cannot move a system under itself or a descendant")
 	ErrUnknownStandard        = errors.New("storage: unknown standard")
 	ErrParentStandardNotFound = errors.New("storage: parent standard not found")
+	// ErrUnknownSystemType is a create or patch naming a system_type that
+	// resolves to nothing. Deliberately separate from ErrUnknownStandard: the
+	// two fields answer different questions (what kind of space this is versus
+	// which blueprint it is built to), so a refusal that named the wrong one
+	// would send an operator to the wrong picker.
+	ErrUnknownSystemType = errors.New("storage: unknown system_type")
 
 	// ErrSystemExistsUnderParent / ErrSystemExistsInLocation / ErrSystemExistsUnplaced
 	// name which placement bucket a 23505 collided in, mirroring the component
@@ -55,14 +61,24 @@ type Standard struct {
 // conforming to a standard. StandardID is nil for a one-off system, mirroring
 // component.product_id: a system that matches no blueprint carries only its own
 // ad-hoc values.
+//
+// SystemTypeID/SystemTypeName are the coarse classifier (a boardroom, a
+// classroom, a video wall), the system-side counterpart of a product's
+// component_type and a different question from the standard: the type says what
+// kind of space this is, the standard says which blueprint it is built to. Both
+// forms are carried for the same reason the standard pair is, the uuid being
+// the stable handle and the name the one an operator reads. Nullable, and
+// nullable it stays until the floor slice.
 type System struct {
-	ID           string
-	Name         string
-	DisplayName  string
-	StandardID   *string
-	StandardName *string
-	ParentID     *string
-	LocationID   *string
+	ID             string
+	Name           string
+	DisplayName    string
+	StandardID     *string
+	StandardName   *string
+	SystemTypeID   *string
+	SystemTypeName *string
+	ParentID       *string
+	LocationID     *string
 	// MemberCount is how many components are bound into this system. It comes from
 	// system_member, not from any pointer on the component: membership is the
 	// relation that says what is in a system, and reading it from anywhere else is
@@ -84,11 +100,13 @@ type System struct {
 
 // SystemSpec is the create input. ParentName nil makes a root system (which only
 // an all-scoped create grant may place); LocationName optionally places it at a
-// location; StandardID optionally names the blueprint it conforms to.
+// location; StandardID optionally names the blueprint it conforms to and
+// SystemTypeID the coarse kind of space it is, each by name or uuid.
 type SystemSpec struct {
 	Name         string
 	DisplayName  string
 	StandardID   *string
+	SystemTypeID *string
 	ParentName   *string
 	LocationName *string
 }
@@ -102,9 +120,13 @@ type SystemSpec struct {
 // this system. There is deliberately no LocationName or ParentName here either
 // (#627 Task 13): a placement change is its own act, MoveSystem, gated by
 // system:move rather than system:update; see that function's doc comment.
+// SystemTypeID follows the same three-state convention StandardID does, and for
+// the same reason: reclassifying a room and un-classifying it are different
+// acts, and coalesce alone cannot tell "omitted" from "clear".
 type SystemPatch struct {
-	DisplayName *string
-	StandardID  *string
+	DisplayName  *string
+	StandardID   *string
+	SystemTypeID *string
 }
 
 // SystemMove is the :move input: nil fields unchanged, an explicit empty string
@@ -310,13 +332,18 @@ func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch Stand
 // still referenced by a system. Child standards are not a refusal: the parent FK
 // is ON DELETE SET NULL, so a variant survives its base as a standalone.
 func (p *PG) DeleteStandard(ctx context.Context, actorID, id string) error {
-	return deleteTypeRow(ctx, p, "standard", "standard", typeRef{table: "system", col: "standard_id"}, actorID, id)
+	return deleteTypeRow(ctx, p, "standard", "standard", actorID, id, typeRef{table: "system", col: "standard_id"})
 }
 
 // --- system CRUD -------------------------------------------------------------
 
+// The system_type handle is a live subselect, not a stored copy: the row is
+// pinned by uuid, so renaming the registry row moves the projected name with it
+// and can never orphan the classification.
 const systemCols = `id, name, coalesce(display_name, ''), standard_id,
 	(select st.name from standard st where st.id = system.standard_id) as standard_handle,
+	system_type_id,
+	(select ty.name from system_type ty where ty.id = system.system_type_id) as system_type_handle,
 	parent_id, location_id,
 	(select count(*) from system_member m where m.system_id = system.id) as member_count,
 	(select p.name from system p where p.id = system.parent_id) as parent_name,
@@ -325,7 +352,8 @@ const systemCols = `id, name, coalesce(display_name, ''), standard_id,
 
 func scanSystem(row pgx.Row) (*System, error) {
 	var s System
-	if err := row.Scan(&s.ID, &s.Name, &s.DisplayName, &s.StandardID, &s.StandardName, &s.ParentID, &s.LocationID,
+	if err := row.Scan(&s.ID, &s.Name, &s.DisplayName, &s.StandardID, &s.StandardName,
+		&s.SystemTypeID, &s.SystemTypeName, &s.ParentID, &s.LocationID,
 		&s.MemberCount, &s.ParentName, &s.LocationName, &s.CreatedAt, &s.UpdatedAt); err != nil {
 		return nil, err
 	}
@@ -336,9 +364,12 @@ func scanSystem(row pgx.Row) (*System, error) {
 // 15), in one batch walk however long the page (#643). A system's address
 // has the identical shape a component's does (its own plane root's location,
 // never a location derived from anything else), but no bare-render
-// abbreviation source: a standard (the system-side counterpart of a product)
-// carries no abbrev column the way component_type does, so RenderBare always
-// gets "" here and falls back to its no-abbrev concatenation. full is unused
+// abbreviation source WIRED YET: a standard (the system-side counterpart of a
+// product) carries no abbrev column the way component_type does, and the
+// system_type registry that now does carry one (ADR-0096) is not read here,
+// because the rules that consume a resolved stem and abbrev are the naming epic
+// (#657). So RenderBare still gets "" here and falls back to its no-abbrev
+// concatenation. full is unused
 // here (nothing to gate: the walk is the whole cost); it exists so this
 // matches scopedConfig.attachPaths' shared signature, which
 // attachComponentPaths' own full does need (review finding 3,
@@ -466,11 +497,26 @@ func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, 
 		standardID = &sid
 	}
 
+	// system_type is a registry on the same footing: resolved by name or uuid,
+	// an unknown ref refused here as ErrUnknownSystemType (-> 422) rather than
+	// left to surface as an opaque foreign-key error at insert time.
+	var systemTypeID *string
+	if spec.SystemTypeID != nil {
+		var tid string
+		err := tx.QueryRow(ctx, `select id from system_type where `+registryRefCol(*spec.SystemTypeID)+` = $1`, *spec.SystemTypeID).Scan(&tid)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUnknownSystemType
+		} else if err != nil {
+			return nil, fmt.Errorf("storage: resolve system_type %q: %w", *spec.SystemTypeID, err)
+		}
+		systemTypeID = &tid
+	}
+
 	s, err := scanSystem(tx.QueryRow(ctx, `
-		insert into system (name, display_name, standard_id, parent_id, location_id)
-		values ($1, $2, $3, $4, $5)
+		insert into system (name, display_name, standard_id, system_type_id, parent_id, location_id)
+		values ($1, $2, $3, $4, $5, $6)
 		returning `+systemCols,
-		spec.Name, nullize(spec.DisplayName), standardID, parentID, locationID))
+		spec.Name, nullize(spec.DisplayName), standardID, systemTypeID, parentID, locationID))
 	if err != nil {
 		return nil, mapSystemWriteErr(err)
 	}
@@ -544,6 +590,14 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 		}
 		standardPatchID = &sid
 	}
+	var systemTypePatchID *string
+	if patch.SystemTypeID != nil && *patch.SystemTypeID != "" {
+		var tid string
+		if err := tx.QueryRow(ctx, `select id from system_type where `+registryRefCol(*patch.SystemTypeID)+` = $1`, *patch.SystemTypeID).Scan(&tid); err != nil {
+			return nil, ErrUnknownSystemType
+		}
+		systemTypePatchID = &tid
+	}
 	after, err := scanSystem(tx.QueryRow(ctx, `
 		update system set
 			display_name = coalesce($2, display_name),
@@ -556,10 +610,18 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 				when $3 = '' then null
 				else $4::uuid
 			end,
+			-- system_type_id, same three states: omitted leaves the classification
+			-- alone, "" un-classifies the system (legal while the column is
+			-- nullable), a ref reclassifies it.
+			system_type_id = case
+				when $5::text is null then system_type_id
+				when $5 = '' then null
+				else $6::uuid
+			end,
 			updated_at   = now()
 		where id = $1
 		returning `+systemCols,
-		before.ID, patch.DisplayName, patch.StandardID, standardPatchID))
+		before.ID, patch.DisplayName, patch.StandardID, standardPatchID, patch.SystemTypeID, systemTypePatchID))
 	if err != nil {
 		return nil, mapSystemWriteErr(err)
 	}
@@ -819,6 +881,14 @@ func mapSystemWriteErr(err error) error {
 			// schema squash would emit the standard_id one.
 			case "system_system_type_fkey", "system_standard_id_fkey":
 				return ErrUnknownStandard
+			// NOT the same constraint as the two above, despite how it reads:
+			// those name the STANDARD foreign key (system_type was the old
+			// column name for standard_id, ADR-0048), while this one names the
+			// system_type registry that came back as its own table (ADR-0096).
+			// The _id_ makes them distinct strings, which is why the reuse is
+			// safe at the schema level; it is only the prose that collides.
+			case "system_system_type_id_fkey":
+				return ErrUnknownSystemType
 			case "system_location_id_fkey":
 				// The located-at location was removed between resolve and insert
 				// (a race); report it like the resolve-time miss (422).

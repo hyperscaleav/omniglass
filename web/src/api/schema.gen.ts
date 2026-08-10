@@ -2844,6 +2844,54 @@ export interface paths {
         patch: operations["set-standard-role"];
         trace?: never;
     };
+    "/system-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List system types
+         * @description Lists the system_type registry (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by display name. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read.
+         */
+        get: operations["list-system-types"];
+        put?: never;
+        /**
+         * Create a system type
+         * @description Creates a custom (non-official) system_type, optionally under a parent. A root type must carry a stem, since it has no ancestor to inherit one from. Gated by system_type:create.
+         */
+        post: operations["create-system-type"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/system-types/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a system type
+         * @description Deletes a custom system_type, refused if official (422), still a parent of another system_type (409), or still classifying a system (409). Gated by system_type:delete.
+         */
+        delete: operations["delete-system-type"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a system type
+         * @description Patches a custom system_type's display_name, stem, icon, or abbrev. Official types are read-only (422). Gated by system_type:update.
+         */
+        patch: operations["update-system-type"];
+        trace?: never;
+    };
     "/systems": {
         parameters: {
             query?: never;
@@ -2859,7 +2907,7 @@ export interface paths {
         put?: never;
         /**
          * Create a system
-         * @description Creates a system, optionally under a parent (a root needs an all-scoped grant) and at a location. Gated by system:create.
+         * @description Creates a system, optionally under a parent (a root needs an all-scoped grant), at a location, conforming to a standard, and classified as a system_type. Gated by system:create.
          */
         post: operations["create-system"];
         delete?: never;
@@ -2891,7 +2939,7 @@ export interface paths {
         head?: never;
         /**
          * Update a system
-         * @description Patches a system's display_name or standard. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard field follows the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system), a name sets. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+         * @description Patches a system's display_name, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. Gated by system:update; read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-system"];
         trace?: never;
@@ -4248,6 +4296,28 @@ export interface components {
             parent?: string;
             /** @description The standard it conforms to, by handle or uuid; omit for a one-off system */
             standard_id?: string;
+            /** @description The system_type it is classified as (what kind of space it is), by name or uuid; omit to leave it unclassified */
+            system_type_id?: string;
+        };
+        CreateSystemTypeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateSystemTypeInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description A compact form of display_name; omit to inherit the parent's */
+            abbrev?: string;
+            /** @description What an operator reads in pickers and lists */
+            display_name: string;
+            /** @description A glyph key; omit to inherit the parent's */
+            icon?: string;
+            /** @description The globally unique name */
+            name: string;
+            /** @description The parent system_type, by name or uuid; omit for a root type */
+            parent_id?: string;
+            /** @description The prefix a generated system name is built from; omit to inherit the parent's. Lowercase letters, digits, and hyphens. Required for a root type, which has no ancestor to inherit one from. */
+            stem?: string;
         };
         CreateTagInputBody: {
             /**
@@ -5142,6 +5212,15 @@ export interface components {
             readonly $schema?: string;
             roles: components["schemas"]["EffectiveRoleBody"][] | null;
             system: string;
+        };
+        ListSystemTypesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListSystemTypesOutputBody.json
+             */
+            readonly $schema?: string;
+            system_types: components["schemas"]["SystemTypeBody"][] | null;
         };
         ListSystemsOutputBody: {
             /**
@@ -6360,6 +6439,10 @@ export interface components {
             standard?: string;
             /** @description The standard's uuid; the stable form of standard */
             standard_id?: string;
+            /** @description The system_type's name, for display: what kind of space this is (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the blueprint it is built to. */
+            system_type?: string;
+            /** @description The system_type's uuid; the stable form of system_type */
+            system_type_id?: string;
         };
         SystemMemberBody: {
             /** @description Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
@@ -6441,6 +6524,30 @@ export interface components {
              * @description How many components must fill the role
              */
             quorum: number;
+        };
+        SystemTypeBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SystemTypeBody.json
+             */
+            readonly $schema?: string;
+            /** @description A compact form of display_name; empty inherits the nearest ancestor's */
+            abbrev?: string;
+            display_name: string;
+            /** @description A glyph key; empty inherits the nearest ancestor's */
+            icon?: string;
+            /** @description The system_type's uuid, the stable handle that survives a rename */
+            id: string;
+            /** @description The name an operator reads and types; renameable */
+            name: string;
+            official: boolean;
+            /** @description The parent system_type's name, for display; absent for a root type */
+            parent?: string;
+            /** @description The parent system_type's id, the canonical handle; absent for a root type */
+            parent_id?: string;
+            /** @description The prefix a generated system name is built from; empty inherits the nearest ancestor's */
+            stem?: string;
         };
         TagBindingBody: {
             /**
@@ -6774,6 +6881,24 @@ export interface components {
             display_name?: string;
             /** @description A new standard, by handle or uuid; "" clears it (a one-off system) */
             standard_id?: string;
+            /** @description A new system_type, by name or uuid; "" clears it (an unclassified system) */
+            system_type_id?: string;
+        };
+        UpdateSystemTypeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateSystemTypeInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description A new compact form */
+            abbrev?: string;
+            /** @description A new operator-facing label */
+            display_name?: string;
+            /** @description A new glyph key */
+            icon?: string;
+            /** @description A new name prefix. Lowercase letters, digits, and hyphens. */
+            stem?: string;
         };
         UpdateTagInputBody: {
             /**
@@ -13192,6 +13317,133 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemRoleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-system-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListSystemTypesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-system-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSystemTypeInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-system-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system_type id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-system-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSystemTypeInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemTypeBody"];
                 };
             };
             /** @description Error */

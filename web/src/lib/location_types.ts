@@ -7,10 +7,11 @@ import { api } from "../api/client";
 // types (#598). Each registry now stands alone, so neither page's failure can
 // take down the other; secret types live in lib/secret_types.ts.
 //
-// A system's shape is NOT here: system_type was promoted to the STANDARD, a
-// first-class catalog entity with its own registry and a declared-property
-// contract (lib/standards.ts). A component's shape is likewise the product it
-// is an instance of.
+// A system's shape is NOT here: the old system_type COLUMN was promoted to the
+// STANDARD, a first-class catalog entity with its own registry and a
+// declared-property contract (lib/standards.ts). A component's shape is
+// likewise the product it is an instance of. The system_type NAME now belongs
+// to a different object, the coarse space taxonomy in lib/system_types.ts.
 
 // ROOT_PLACEMENT is the reserved allowed_parent_types member meaning "may sit
 // at the top, no parent" (mirrors storage.RootPlacement). CreateLocationType

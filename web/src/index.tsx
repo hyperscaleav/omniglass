@@ -32,6 +32,7 @@ import CatalogOverview from "./pages/CatalogOverview";
 import { CATALOG_STUB_PATHS } from "./lib/catalog";
 import LocationTypes from "./pages/LocationTypes";
 import ComponentTypes from "./pages/ComponentTypes";
+import SystemTypes from "./pages/SystemTypes";
 import SecretTypes from "./pages/SecretTypes";
 import Standards from "./pages/Standards";
 import Vendors from "./pages/Vendors";
@@ -120,6 +121,7 @@ render(
             <Route path="/drivers" component={Drivers} />
             <Route path="/component-types" component={ComponentTypes} />
             <Route path="/standards" component={Standards} />
+            <Route path="/system-types" component={SystemTypes} />
             <Route path="/location-types" component={LocationTypes} />
             <Route path="/secret-types" component={SecretTypes} />
             <Route path="/tags" component={Tags} />
