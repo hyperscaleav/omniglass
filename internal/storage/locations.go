@@ -505,7 +505,7 @@ func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSp
 	if err != nil {
 		return nil, mapLocationWriteErr(err)
 	}
-	if l, err = stampLocationLabel(ctx, tx, l); err != nil {
+	if l, err = p.stampLocationLabel(ctx, tx, l); err != nil {
 		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "create", "location", l.ID, nil, l); err != nil {
@@ -564,7 +564,7 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 	}
 	// A reclassify changes the location_type facts a rule reads, and clearing
 	// the label hands the pen back; both are settled by now (#682).
-	if after, err = stampLocationLabel(ctx, tx, after); err != nil {
+	if after, err = p.stampLocationLabel(ctx, tx, after); err != nil {
 		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "location", after.ID, before, after); err != nil {
@@ -699,7 +699,7 @@ func (p *PG) RenameLocation(ctx context.Context, actorID, name, newName string, 
 	}
 	// .Name is a fact a rule can read, so a platform-owned label follows the
 	// rename (#682).
-	if after, err = stampLocationLabel(ctx, tx, after); err != nil {
+	if after, err = p.stampLocationLabel(ctx, tx, after); err != nil {
 		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "rename", "location", after.ID, before, after); err != nil {

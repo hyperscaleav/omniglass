@@ -73,11 +73,43 @@ var ErrInvalidLabelRule = errors.New("storage: label rule does not parse")
 // the same refusal before the round trip, and with the offending kind named).
 var ErrLabelRuleKindUnknown = errors.New("storage: unknown label rule entity kind")
 
-// labelEngine is the compiled rule engine every path here shares. It carries no
-// acronym dictionary yet: #684 is the slice that builds the platform acronym
-// list, and it replaces this construction with one fed from settings. The seam
-// is label.New's argument, so that slice changes this line and nothing else.
-var labelEngine = label.Basic
+// grammarEngine compiles a rule for VALIDATION, and carries no dictionary on
+// purpose.
+//
+// Parsing and rendering need different engines, and it is worth being precise
+// about why, because it is the whole reason an operator-editable dictionary did
+// not ripple through every write path in this file. [label.New] binds the same
+// four function NAMES whatever dictionary it is given, and the grammar check
+// walks a static allowlist, so whether a rule parses is a fact about the rule
+// alone: every engine agrees, and a validator needs no current one. What the
+// dictionary changes is what `title` DOES when the compiled rule executes, which
+// only the render path cares about.
+//
+// The corollary is a rule this file keeps: a template compiled here is thrown
+// away. Rendering with it would render with an empty dictionary, and the failure
+// would be a quietly mis-cased label rather than an error.
+var grammarEngine = label.Basic
+
+// labelEngine returns the engine for the acronym dictionary in force RIGHT NOW,
+// resolved from the settings cascade (the shipped list, the operator file, the
+// platform override) and cached against that dictionary, so an unchanged list
+// costs a comparison rather than a rebuild.
+//
+// It resolves the setting per call rather than per process, which is what makes
+// "an operator adds an acronym and it takes effect without a restart" true for
+// free instead of true by way of an invalidation protocol somebody has to
+// remember to fire. The cost is one read of a table with a row per overridden
+// namespace, on a write path that is already several round trips deep. A caller
+// rendering MANY rows (the bulk recompute, #685) resolves the engine once and
+// passes it down; that is why the render functions below take one rather than
+// reaching for it themselves.
+func (p *PG) labelEngine(ctx context.Context) (*label.Engine, error) {
+	s, err := p.settings.EffectiveTyped(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: resolve the acronym dictionary: %w", err)
+	}
+	return p.labelEngines.For(s.Label.Acronyms), nil
+}
 
 // LabelRuleKinds are the entity kinds that carry a global label rule, matching
 // the label_rule table's CHECK. Node is deliberately absent: its name is a NATS
@@ -101,7 +133,7 @@ func validateLabelRule(rule *string) error {
 	if rule == nil || *rule == "" {
 		return nil
 	}
-	if _, err := labelEngine.Parse(*rule); err != nil {
+	if _, err := grammarEngine.Parse(*rule); err != nil {
 		return fmt.Errorf("%w: %s", ErrInvalidLabelRule, err)
 	}
 	return nil
@@ -128,11 +160,14 @@ func nilIfEmptyRule(rule *string) *string {
 // name. It never propagates, because the alternative is a create that fails on
 // a template typo, or a bulk recompute that stops at whichever row first
 // tripped it.
-func renderLabel(rule string, data label.Data) string {
+// The engine is passed in rather than fetched, because it carries the acronym
+// dictionary and the dictionary is a setting: resolving it here would put a
+// settings read inside every row of a bulk recompute.
+func renderLabel(eng *label.Engine, rule string, data label.Data) string {
 	if rule == "" {
 		return ""
 	}
-	compiled, err := labelEngine.Parse(rule)
+	compiled, err := eng.Parse(rule)
 	if err != nil {
 		return ""
 	}
@@ -178,7 +213,7 @@ func (p *PG) UpsertLabelRuleDefault(ctx context.Context, kind, template string) 
 	if !validLabelRuleKind(kind) {
 		return fmt.Errorf("%w: %q", ErrLabelRuleKindUnknown, kind)
 	}
-	if _, err := labelEngine.Parse(template); err != nil {
+	if _, err := grammarEngine.Parse(template); err != nil {
 		return fmt.Errorf("%w: shipped rule for %s: %s", ErrInvalidLabelRule, kind, err)
 	}
 	if _, err := p.pool.Exec(ctx, `
@@ -380,7 +415,7 @@ func componentLabelData(c *Component, in componentLabelInputs) label.Data {
 // no rule, an unrenderable rule, or a rule with nothing to say about this row.
 // A component with no product (unreachable through the API, which requires one)
 // has no classification to resolve a rule from and gets no label.
-func renderComponentLabel(ctx context.Context, q querier, c *Component) (string, error) {
+func renderComponentLabel(ctx context.Context, q querier, eng *label.Engine, c *Component) (string, error) {
 	if c.ProductID == nil {
 		return "", nil
 	}
@@ -388,7 +423,7 @@ func renderComponentLabel(ctx context.Context, q querier, c *Component) (string,
 	if err != nil {
 		return "", err
 	}
-	return renderLabel(in.rule, componentLabelData(c, in)), nil
+	return renderLabel(eng, in.rule, componentLabelData(c, in)), nil
 }
 
 // stampComponentLabel re-renders a platform-owned label and writes it, returning
@@ -401,11 +436,15 @@ func renderComponentLabel(ctx context.Context, q querier, c *Component) (string,
 // row today says something tomorrow, and a row marked operator-owned because a
 // rule once rendered empty would never be reconsidered by the recompute that
 // exists to fix exactly that.
-func stampComponentLabel(ctx context.Context, tx pgx.Tx, c *Component) (*Component, error) {
+func (p *PG) stampComponentLabel(ctx context.Context, tx pgx.Tx, c *Component) (*Component, error) {
 	if !c.DisplayNameGenerated {
 		return c, nil
 	}
-	rendered, err := renderComponentLabel(ctx, tx, c)
+	eng, err := p.labelEngine(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rendered, err := renderComponentLabel(ctx, tx, eng, c)
 	if err != nil {
 		return nil, err
 	}
@@ -479,21 +518,25 @@ func systemLabelData(s *System, in systemLabelInputs) label.Data {
 	}
 }
 
-func renderSystemLabel(ctx context.Context, q querier, s *System) (string, error) {
+func renderSystemLabel(ctx context.Context, q querier, eng *label.Engine, s *System) (string, error) {
 	in, err := systemLabelChain(ctx, q, s)
 	if err != nil {
 		return "", err
 	}
-	return renderLabel(in.rule, systemLabelData(s, in)), nil
+	return renderLabel(eng, in.rule, systemLabelData(s, in)), nil
 }
 
 // stampSystemLabel is stampComponentLabel on the system tier; see that function
 // for the pen and empty-render reasoning.
-func stampSystemLabel(ctx context.Context, tx pgx.Tx, s *System) (*System, error) {
+func (p *PG) stampSystemLabel(ctx context.Context, tx pgx.Tx, s *System) (*System, error) {
 	if !s.DisplayNameGenerated {
 		return s, nil
 	}
-	rendered, err := renderSystemLabel(ctx, tx, s)
+	eng, err := p.labelEngine(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rendered, err := renderSystemLabel(ctx, tx, eng, s)
 	if err != nil {
 		return nil, err
 	}
@@ -543,21 +586,25 @@ func locationLabelData(l *Location, in locationLabelInputs) label.Data {
 	}
 }
 
-func renderLocationLabel(ctx context.Context, q querier, l *Location) (string, error) {
+func renderLocationLabel(ctx context.Context, q querier, eng *label.Engine, l *Location) (string, error) {
 	in, err := locationLabelChain(ctx, q, l)
 	if err != nil {
 		return "", err
 	}
-	return renderLabel(in.rule, locationLabelData(l, in)), nil
+	return renderLabel(eng, in.rule, locationLabelData(l, in)), nil
 }
 
 // stampLocationLabel is stampComponentLabel on the location tier; see that
 // function for the pen and empty-render reasoning.
-func stampLocationLabel(ctx context.Context, tx pgx.Tx, l *Location) (*Location, error) {
+func (p *PG) stampLocationLabel(ctx context.Context, tx pgx.Tx, l *Location) (*Location, error) {
 	if !l.DisplayNameGenerated {
 		return l, nil
 	}
-	rendered, err := renderLocationLabel(ctx, tx, l)
+	eng, err := p.labelEngine(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rendered, err := renderLocationLabel(ctx, tx, eng, l)
 	if err != nil {
 		return nil, err
 	}

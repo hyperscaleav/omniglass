@@ -549,7 +549,7 @@ func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, 
 	if err != nil {
 		return nil, mapSystemWriteErr(err)
 	}
-	if s, err = stampSystemLabel(ctx, tx, s); err != nil {
+	if s, err = p.stampSystemLabel(ctx, tx, s); err != nil {
 		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "create", "system", s.ID, nil, s); err != nil {
@@ -669,7 +669,7 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	// A reclassify changes the standard and system_type facts a rule reads, and
 	// clearing the label hands the pen back; both are settled by now, so the
 	// stamp runs before the audit image is taken (#682).
-	if after, err = stampSystemLabel(ctx, tx, after); err != nil {
+	if after, err = p.stampSystemLabel(ctx, tx, after); err != nil {
 		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "system", after.ID, before, after); err != nil {
@@ -725,7 +725,7 @@ func (p *PG) RenameSystem(ctx context.Context, actorID, name, newName string, re
 	}
 	// .Name is a fact a rule can read, so a platform-owned label follows the
 	// rename (#682).
-	if after, err = stampSystemLabel(ctx, tx, after); err != nil {
+	if after, err = p.stampSystemLabel(ctx, tx, after); err != nil {
 		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "rename", "system", after.ID, before, after); err != nil {

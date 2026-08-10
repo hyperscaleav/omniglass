@@ -444,7 +444,7 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
 	}
-	if c, err = stampComponentLabel(ctx, tx, c); err != nil {
+	if c, err = p.stampComponentLabel(ctx, tx, c); err != nil {
 		return nil, err
 	}
 	// The membership after the row exists, both ids already in hand (sysID
@@ -598,7 +598,7 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 	// A reclassify changes the type, product and vendor facts a rule reads, and
 	// clearing the label hands the pen back; both land here, after the row is
 	// final, so the audit image below carries the label it just changed (#682).
-	if after, err = stampComponentLabel(ctx, tx, after); err != nil {
+	if after, err = p.stampComponentLabel(ctx, tx, after); err != nil {
 		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "component", after.ID, before, after); err != nil {
@@ -766,7 +766,7 @@ func (p *PG) MoveComponent(ctx context.Context, actorID, name string, move Compo
 	}
 	// A move re-mints the ordinal, which a rule reads, so a platform-owned
 	// label follows it (#682).
-	if after, err = stampComponentLabel(ctx, tx, after); err != nil {
+	if after, err = p.stampComponentLabel(ctx, tx, after); err != nil {
 		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "move", "component", after.ID, before, after); err != nil {
@@ -831,7 +831,7 @@ func (p *PG) RenameComponent(ctx context.Context, actorID, name, newName string,
 	// a platform-owned label is re-rendered against the new pair (#682). The
 	// LABEL's pen is untouched here: a rename is a claim on the name, and an
 	// operator who wants the label too says so by typing one.
-	if after, err = stampComponentLabel(ctx, tx, after); err != nil {
+	if after, err = p.stampComponentLabel(ctx, tx, after); err != nil {
 		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "rename", "component", after.ID, before, after); err != nil {
@@ -884,7 +884,7 @@ func (p *PG) ResetComponentName(ctx context.Context, actorID, name string, read,
 	}
 	// Same pair as a rename, in the other direction: a fresh name and a freshly
 	// allocated ordinal, so a platform-owned label follows (#682).
-	if after, err = stampComponentLabel(ctx, tx, after); err != nil {
+	if after, err = p.stampComponentLabel(ctx, tx, after); err != nil {
 		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "reset", "component", after.ID, before, after); err != nil {

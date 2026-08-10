@@ -18,8 +18,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/blob"
+	"github.com/hyperscaleav/omniglass/internal/label"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
+	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -657,6 +659,15 @@ type PG struct {
 	secret secret.Provider
 	blob   blob.Store
 	tracer pgx.QueryTracer
+
+	// The settings the gateway itself reads. Today that is the acronym
+	// dictionary the label engine titles with (#684); the file layer is captured
+	// at construction and the platform layer is read live off the pool, so an
+	// operator's edit reaches the next render without a restart. labelEngines
+	// holds the engine built from whatever the last read resolved.
+	settingsFile settings.Doc
+	settings     *settings.Service
+	labelEngines label.EngineCache
 }
 
 // Option configures a PG at construction. The secret provider is optional so
@@ -677,6 +688,21 @@ func WithSecretProvider(prov secret.Provider) Option {
 // Unset, the gateway uses the pgblobs backend over its own pool.
 func WithBlobStore(store blob.Store) Option {
 	return func(p *PG) { p.blob = store }
+}
+
+// WithSettingsFile installs the operator settings file layer the gateway's own
+// settings reads resolve through, the same parsed document the API's settings
+// service is built from.
+//
+// The gateway needs it because it reads a setting itself (the acronym
+// dictionary), and it needs it passed IN rather than loaded here because the
+// file's path is a bootstrap config the server owns and the other run modes do
+// not have. A lane that passes none resolves the declared defaults and the
+// database override, which is every layer that lane HAS; the alternative,
+// skipping the file quietly, would render labels from one dictionary while the
+// settings read served another.
+func WithSettingsFile(doc settings.Doc) Option {
+	return func(p *PG) { p.settingsFile = doc }
 }
 
 // WithQueryTracer installs a pgx query tracer on every connection the pool
@@ -730,8 +756,40 @@ func NewPG(ctx context.Context, dsn string, opts ...Option) (*PG, error) {
 	if p.blob == nil {
 		p.blob = NewPGBlobStore(pool)
 	}
+	// The gateway's own settings resolver. It is built here rather than injected
+	// because the only thing it needs beyond the file layer is a reader for the
+	// platform override, which is this gateway: injecting a service that closes
+	// over the gateway would make the two mutually constructing, and the settings
+	// package deliberately does not import storage.
+	p.settings = settings.NewService(p.settingsFile, func(ctx context.Context, scope string) (settings.Doc, map[string][]string, error) {
+		return p.settingLevel(ctx, scope)
+	})
 	return p, nil
 }
+
+// settingLevel adapts the override rows at a scope into the shape the settings
+// resolver takes: one document per namespace, plus the locked key-paths.
+func (p *PG) settingLevel(ctx context.Context, scope string) (settings.Doc, map[string][]string, error) {
+	rows, err := p.GetSettingOverrides(ctx, scope)
+	if err != nil {
+		return nil, nil, err
+	}
+	doc := settings.Doc{}
+	locks := map[string][]string{}
+	for _, r := range rows {
+		doc[r.Namespace] = r.Doc
+		if len(r.Locks) > 0 {
+			locks[r.Namespace] = r.Locks
+		}
+	}
+	return doc, locks, nil
+}
+
+// Settings is the gateway's settings resolver: the declared defaults, the
+// operator file captured at construction, and the platform override read live
+// off the pool. It is exported so the server wires ONE resolver into the API
+// rather than building a second one over the same rows.
+func (p *PG) Settings() *settings.Service { return p.settings }
 
 // Ping checks backend reachability through the pool.
 func (p *PG) Ping(ctx context.Context) error {

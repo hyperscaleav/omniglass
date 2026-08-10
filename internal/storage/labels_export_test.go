@@ -30,7 +30,11 @@ func (p *PG) ExportRenderComponentLabel(ctx context.Context, id string) (string,
 	if err != nil {
 		return "", fmt.Errorf("storage: load component %q for label recompute: %w", id, err)
 	}
-	return renderComponentLabel(ctx, p.pool, c)
+	eng, err := p.labelEngine(ctx)
+	if err != nil {
+		return "", err
+	}
+	return renderComponentLabel(ctx, p.pool, eng, c)
 }
 
 // ExportRenderSystemLabel is ExportRenderComponentLabel on the system tier.
@@ -39,7 +43,11 @@ func (p *PG) ExportRenderSystemLabel(ctx context.Context, id string) (string, er
 	if err != nil {
 		return "", fmt.Errorf("storage: load system %q for label recompute: %w", id, err)
 	}
-	return renderSystemLabel(ctx, p.pool, s)
+	eng, err := p.labelEngine(ctx)
+	if err != nil {
+		return "", err
+	}
+	return renderSystemLabel(ctx, p.pool, eng, s)
 }
 
 // ExportRenderLocationLabel is ExportRenderComponentLabel on the location tier.
@@ -48,7 +56,11 @@ func (p *PG) ExportRenderLocationLabel(ctx context.Context, id string) (string, 
 	if err != nil {
 		return "", fmt.Errorf("storage: load location %q for label recompute: %w", id, err)
 	}
-	return renderLocationLabel(ctx, p.pool, l)
+	eng, err := p.labelEngine(ctx)
+	if err != nil {
+		return "", err
+	}
+	return renderLocationLabel(ctx, p.pool, eng, l)
 }
 
 // ExportComponentLabelData returns the whole closed data map a component's
