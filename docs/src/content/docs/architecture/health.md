@@ -140,6 +140,7 @@ the cause and the verdict commit together or not at all:
 | **create** a system | its opening verdict gives its history a beginning |
 | change the **standard** a system conforms to | the whole inherited role set is swapped |
 | change a system's **location** | the contribution moves between rollups, so **both** are recomputed |
+| change a **location's parent** | its whole subtree's contribution moves, so **both** ancestor chains are recomputed |
 | **delete** a system | the location it sat in loses a contributor and may have just improved |
 
 A standard change moves **every conforming system** at once. The relocation case names the location
@@ -148,6 +149,14 @@ as real as a failure; **deleting** a system is the same shape). A component's **
 `component_type`) governs the typed-slot guard checked once at **assignment**; changing it after the
 fact does not, by itself, move any assigned role's health (#626: the guard is not part of the health
 chain, so this row that used to reach the whole estate on a catalog edit is retired along with it).
+
+A **location move** is the relocation shape one tier up
+([ADR-0092](/architecture/decisions/#adr-0092-a-location-move-recomputes-both-ancestor-chains)): a
+location's verdict folds every system in its own **subtree**, so moving it carries that whole
+contribution from one ancestor chain to the other, and the **parent it left** is named for the same
+reason the location a system left is. One row per side is the whole input, not a walk: each named
+location **seeds** a recursive ancestry walk, so naming the moved location covers its new chain and
+naming the old parent covers the old one. A `:move` that changes no parent recomputes nothing.
 Deleting a **location** needs no trigger: a location holding anything cannot be deleted (`on delete
 restrict` throughout), so a deletable location is empty and already healthy.
 

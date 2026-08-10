@@ -220,7 +220,10 @@ type Gateway interface {
 	RenameLocation(ctx context.Context, actorID, name, newName string, read, action scope.Set) (*Location, error)
 	// MoveLocation re-parents the location, scoped exactly as the update is. Its
 	// own function, not a patch field (#627 Task 13), because a placement change
-	// is an authorization act; the API gates it on location:move.
+	// is an authorization act; the API gates it on location:move. A reparent
+	// recomputes health over BOTH ancestor chains, the one it joined and the one
+	// it left, inside its own transaction (#642): a location's rollup folds every
+	// system in its own subtree, so the move carries that contribution across.
 	MoveLocation(ctx context.Context, actorID, name string, move LocationMove, read, action scope.Set) (*Location, error)
 	LocationNameTaken(ctx context.Context, name string, parentRef *string) (bool, error)
 	DeleteLocation(ctx context.Context, actorID, name string, read, action scope.Set) error

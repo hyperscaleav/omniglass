@@ -61,8 +61,11 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   `PATCH` body of all three carries neither `parent` nor `location` any more. Clearing `parent` to
   root under `:move` requires an all-scoped grant, the same authorization creating a root row already
   requires: a `PATCH` used to skip that check entirely on the clear branch. `:move` writes its own
-  audit verb, `move`, and never recomputes health except a system's own `location` field, which keeps
-  moving health at both ends exactly as its old combined `PATCH` did.
+  audit verb, `move`, and never recomputes health except where the rollup genuinely depends on the
+  placement it changes: a system's own `location` field, which keeps moving health at both ends
+  exactly as its old combined `PATCH` did, and a location's `parent`, which carries its whole
+  subtree's contribution between two ancestor chains and recomputes both
+  ([ADR-0092](/architecture/decisions/#adr-0092-a-location-move-recomputes-both-ancestor-chains)).
 - **Custom methods carry a colon**, `:verb` not `/verb`, for anything that is not CRUD:
   `/components/{name}/commands:issue`, `/auth/me/sessions/{id}:revoke`, `/nodes:claim`. The verb
   is also the **permission**: `:issue` is gated by `command:issue`, so the route and the

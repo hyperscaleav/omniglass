@@ -599,17 +599,22 @@ func (p *PG) MoveLocation(ctx context.Context, actorID, name string, move Locati
 	if err := writeAuditRes(ctx, tx, actorID, "move", "location", after.ID, before, after); err != nil {
 		return nil, err
 	}
-	// No RecomputeHealth, per the ruling this whole verb applies uniformly
-	// (component, system, location): a placement move never recomputes. This
-	// carries forward UpdateLocation's own reparent branch, which never called
-	// recompute either. Note this is NOT the same claim UpdateComponent's
-	// doc comment makes: locationVerdict DOES roll up recursively through the
-	// location tree (locationsOver walks a system's location upward,
-	// locationVerdict folds every system in a location's own subtree
-	// downward), so a location with placed descendants moving to a new parent
-	// really does change what its old and new ancestors' rollups should read.
-	// That staleness is not new here; MoveLocation just carries the gap
-	// UpdateLocation already had. Tracked, not fixed here: #642.
+	// A reparent recomputes both ancestor chains (#642), the one exception to
+	// ":move never recomputes health" on this tier, and the same exception a
+	// system's relocate already carries one level down. locationVerdict rolls
+	// up recursively through the location tree (locationsOver walks a system's
+	// location upward, locationVerdict folds every system in a location's own
+	// subtree downward), so a location with placed descendants moving to a new
+	// parent really does change what its old and new ancestors' rollups read:
+	// the chain it left has lost that whole subtree's contribution and the
+	// chain it joined has gained it. A reparent that changes nothing (a nil
+	// ParentName, the documented no-op) recomputes nothing, the same guard
+	// MoveSystem's relocate applies.
+	if reparented := !sameOptional(before.ParentID, after.ParentID); reparented {
+		if err := p.recomputeMovedLocation(ctx, tx, ownerRef{ID: after.ID, Name: after.Name}, before.ParentID); err != nil {
+			return nil, err
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit move location: %w", err)
 	}
