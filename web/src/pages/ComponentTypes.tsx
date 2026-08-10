@@ -18,9 +18,10 @@ import {
   createComponentType,
   updateComponentType,
   deleteComponentType,
+  restoreComponentType,
 } from "../lib/component_types";
 import { useMe, can } from "../lib/auth";
-import { registryLock } from "../lib/catalog";
+import { registryLock, registryOrigin } from "../lib/catalog";
 import { createIdentity } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
@@ -36,10 +37,20 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // no reparent leg: a custom type's placement is fixed at create, so the edit
 // blade revises a node's own facts only.
 
-function officialBadge(official: boolean): JSX.Element {
-  return official
-    ? <span class="badge badge-ghost badge-sm">official</span>
-    : <span class="badge badge-outline badge-sm">custom</span>;
+// Origin is three-state on this registry, the first to adopt the fork (#655,
+// ADR-0095): a row this release ships, a row the operator made, or a shipped
+// row the operator has overridden. The third is the one that has to read
+// unambiguously, because it is the only state where what an operator sees is
+// not what the release ships.
+function originBadge(row: { official: boolean; forked?: boolean }): JSX.Element {
+  switch (registryOrigin(row)) {
+    case "yours":
+      return <span class="badge badge-outline badge-sm">custom</span>;
+    case "overridden":
+      return <span class="badge badge-warning badge-sm">overridden</span>;
+    default:
+      return <span class="badge badge-ghost badge-sm">official</span>;
+  }
 }
 
 // Depth-indented identity cell: the tree reads without a dedicated tree
@@ -93,7 +104,7 @@ export default function ComponentTypes() {
     { key: "stem", label: "Stem", width: "110px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.stem ?? "—"}</span> },
     { key: "abbrev", label: "Abbrev", width: "90px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.abbrev ?? "—"}</span> },
     { key: "icon", label: "Icon", width: "150px", cell: (r) => <IconCell row={r} resolvedIcon={resolvedIconOf(r)} /> },
-    { key: "official", label: "Origin", width: "100px", sortVal: (r) => String(r.official), cell: (r) => officialBadge(r.official) },
+    { key: "official", label: "Origin", width: "110px", sortVal: (r) => registryOrigin(r), cell: (r) => originBadge(r) },
   ];
 
   const canCreate = () => can(me.data, "component_type", "create");
@@ -107,7 +118,7 @@ export default function ComponentTypes() {
         error: () => types.error,
         filterKeys: [
           { key: "name", type: "string", hint: "substring", get: (r) => `${r.name} ${r.display_name}`, values: () => [] },
-          { key: "official", type: "string", hint: "exact", get: (r) => (r.official ? "official" : "custom"), values: () => ["official", "custom"] },
+          { key: "official", type: "string", hint: "exact", get: (r) => registryOrigin(r), values: () => ["shipped", "yours", "overridden"] },
         ],
         filterPlaceholder: "filter component types by name…",
         columns,
@@ -130,8 +141,10 @@ export default function ComponentTypes() {
   );
 }
 
-// componentTypeBlade renders one registry row on the shared blade stack. An
-// official row is read-only; a custom row carries Edit + Delete.
+// componentTypeBlade renders one registry row on the shared blade stack. A
+// custom row carries Edit + Delete; a shipped row carries Edit too, because an
+// edit forks it rather than writing it, and its destructive action is Restore
+// (discard the fork), never Delete.
 export const componentTypeBlade: BladeDef = {
   Title: (p) => <ComponentTypeBladeTitle id={p.id} />,
   Body: (p) => <ComponentTypeBladeBody id={p.id} />,
@@ -182,6 +195,22 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
     }
   }
 
+  // Restore keeps the blade open: the row survives, it just goes back to the
+  // shipped values, so closing would hide the very change the operator asked
+  // for.
+  async function restoreType() {
+    const r = row();
+    if (!r) return;
+    if (!confirm(`Discard your changes to "${r.name}" and go back to the shipped values?`)) return;
+    setErr(null);
+    try {
+      await restoreComponentType(r.id);
+      await qc.invalidateQueries({ queryKey: COMPONENT_TYPES_KEY });
+    } catch (e) {
+      setErr(describeError(e));
+    }
+  }
+
   async function save() {
     const r = row();
     if (!r) return;
@@ -201,13 +230,25 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
   }
 
   edit.bind({
-    editable: () => !!row() && !row()!.official && can(me.data, "component_type", "update"),
+    editable: () => !!row() && can(me.data, "component_type", "update"),
     save,
-    destructive: () =>
-      row() && !row()!.official && can(me.data, "component_type", "delete")
-        ? { label: "Delete", tone: "danger", onClick: removeType }
-        : undefined,
-    locked: () => registryLock(row(), me.data, "component_type"),
+    // One destructive slot, two meanings, chosen by what the row IS: a custom
+    // row is deleted, a forked shipped row has the fork discarded, and a
+    // pristine shipped row offers nothing (there is neither a row to delete
+    // nor changes to discard).
+    destructive: () => {
+      const r = row();
+      if (!r) return undefined;
+      if (r.official) {
+        return r.forked && can(me.data, "component_type", "update")
+          ? { label: "Restore shipped", tone: "danger" as const, onClick: restoreType }
+          : undefined;
+      }
+      return can(me.data, "component_type", "delete")
+        ? { label: "Delete", tone: "danger" as const, onClick: removeType }
+        : undefined;
+    },
+    locked: () => registryLock(row(), me.data, "component_type", { forkable: true }),
   });
 
   return (
@@ -218,7 +259,7 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <KVStacked label="Origin" value={officialBadge(r().official)} />
+            <KVStacked label="Origin" value={originBadge(r())} />
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
             <KVStacked
               label="Parent"

@@ -1267,7 +1267,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <id>",
 					Short:   "Delete a component type",
-					Long:    "Deletes a custom component_type, refused if official (422) or still a parent of another component_type (409). Gated by component_type:delete.",
+					Long:    "Deletes a custom component_type, refused if official (422, forked or not: a fork is an overlay, not ownership) or still a parent of another component_type (409). `:restore` is the only removal a shipped row admits, and it removes your fork, not the row. Gated by component_type:delete.",
 					Example: "  omniglass component-type delete <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1298,6 +1298,23 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "restore <id>",
+					Short:   "Restore a component type's shipped values",
+					Long:    "Discards your fork of a shipped component_type, so reads return the values this release ships and later releases can improve them again. 409 when the row carries no fork of yours. Gated by component_type:update, the same permission that took the fork: restoring is undoing your own edit, not deleting a row.",
+					Example: "  omniglass component-type restore <id>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/component-types/%s:restore", url.PathEscape(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
 				var fAbbrev string
 				var fDefaultTags string
 				var fDisplayName string
@@ -1306,7 +1323,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <id>",
 					Short:   "Update a component type",
-					Long:    "Patches a custom component_type's display_name, stem, icon, abbrev, or default_tags. Official types are read-only (422). Gated by component_type:update.",
+					Long:    "Patches a component_type's display_name, stem, icon, abbrev, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update.",
 					Example: "  omniglass component-type update <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {

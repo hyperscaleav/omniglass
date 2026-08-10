@@ -11,7 +11,11 @@ export type ComponentType = {
   id: string;
   name: string;
   display_name: string;
+  // True for a row this release ships. A shipped row is never written by an
+  // operator: an edit forks it (#655, ADR-0095), and `forked` says whether this
+  // one carries the operator's version over the shipped values.
   official: boolean;
+  forked: boolean;
   // The parent's name (for display) and id (the canonical handle); both
   // absent for a root type.
   parent?: string;
@@ -36,6 +40,7 @@ export async function listComponentTypes(): Promise<ComponentType[]> {
     name: t.name,
     display_name: t.display_name,
     official: t.official,
+    forked: t.forked,
     parent: t.parent,
     parent_id: t.parent_id,
     stem: t.stem,
@@ -65,6 +70,7 @@ export async function createComponentType(body: CreateComponentType): Promise<Co
     name: t.name,
     display_name: t.display_name,
     official: t.official,
+    forked: t.forked,
     parent: t.parent,
     parent_id: t.parent_id,
     stem: t.stem,
@@ -92,6 +98,15 @@ export async function updateComponentType(id: string, body: UpdateComponentType)
 
 export async function deleteComponentType(id: string): Promise<void> {
   const { error } = await api.DELETE("/component-types/{id}", { params: { path: { id } } });
+  if (error) throw error;
+}
+
+// restoreComponentType discards the operator's fork of a shipped row, so reads
+// return the values this release ships and later releases can improve them
+// again. It is the only removal a shipped row admits: it removes the fork, not
+// the row.
+export async function restoreComponentType(id: string): Promise<void> {
+  const { error } = await api.POST("/component-types/{id}:restore", { params: { path: { id } } });
   if (error) throw error;
 }
 

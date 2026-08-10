@@ -22,6 +22,11 @@ var Subsystems = []Cluster{
 	{Name: "catalog", Tables: []string{
 		"vendor", "product", "product_property", "product_metric",
 		"component_type", "driver", "standard", "standard_property", "standard_metric",
+		// registry_shadow holds an operator's version of a shipped registry row
+		// (#655, ADR-0095). It sits with the catalog because component_type is
+		// its first adopter, though it is registry-agnostic by design and the
+		// other registries carrying `official` join it here as they adopt.
+		"registry_shadow",
 	}},
 	{Name: "telemetry", Tables: []string{
 		"property_type", "metric_type", "metric", "property",

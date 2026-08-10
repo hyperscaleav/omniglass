@@ -376,16 +376,36 @@ export interface paths {
         post?: never;
         /**
          * Delete a component type
-         * @description Deletes a custom component_type, refused if official (422) or still a parent of another component_type (409). Gated by component_type:delete.
+         * @description Deletes a custom component_type, refused if official (422, forked or not: a fork is an overlay, not ownership) or still a parent of another component_type (409). `:restore` is the only removal a shipped row admits, and it removes your fork, not the row. Gated by component_type:delete.
          */
         delete: operations["delete-component-type"];
         options?: never;
         head?: never;
         /**
          * Update a component type
-         * @description Patches a custom component_type's display_name, stem, icon, abbrev, or default_tags. Official types are read-only (422). Gated by component_type:update.
+         * @description Patches a component_type's display_name, stem, icon, abbrev, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update.
          */
         patch: operations["update-component-type"];
+        trace?: never;
+    };
+    "/component-types/{id}:restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore a component type's shipped values
+         * @description Discards your fork of a shipped component_type, so reads return the values this release ships and later releases can improve them again. 409 when the row carries no fork of yours. Gated by component_type:update, the same permission that took the fork: restoring is undoing your own edit, not deleting a row.
+         */
+        post: operations["restore-component-type"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/components": {
@@ -3796,12 +3816,15 @@ export interface components {
             /** @description Tags every instance of this type (or a descendant that does not override) starts with */
             default_tags: string[] | null;
             display_name: string;
+            /** @description True when this shipped row carries changes of yours overriding it. Restore discards them */
+            forked: boolean;
             /** @description A glyph key; empty inherits the nearest ancestor's */
             icon?: string;
             /** @description The component_type's uuid, the stable handle that survives a rename */
             id: string;
             /** @description The name an operator reads and types; renameable */
             name: string;
+            /** @description True for a row this release ships. A shipped row is never written by an operator: an edit forks it */
             official: boolean;
             /** @description The parent component_type's name, for display; absent for a root type */
             parent?: string;
@@ -7623,6 +7646,38 @@ export interface operations {
                 "application/json": components["schemas"]["UpdateComponentTypeInputBody"];
             };
         };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "restore-component-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component_type id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {

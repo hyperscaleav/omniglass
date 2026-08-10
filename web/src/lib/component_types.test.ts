@@ -61,12 +61,12 @@ describe("component_types data layer", () => {
 // children that leave every fact blank (inherit). parent_id links by uuid
 // (the canonical handle); parent carries the name for display and is what
 // resolveComponentTypeIcon's ancestor walk actually follows.
-const mic: ComponentType = { id: uuidFor("ct-mic"), name: "mic", display_name: "Microphone", official: true, stem: "mic", abbrev: "mic", icon: "mic", default_tags: [] };
-const wirelessMic: ComponentType = { id: uuidFor("ct-wireless-mic"), name: "wireless-mic", display_name: "Wireless Microphone", official: true, parent: "mic", parent_id: uuidFor("ct-mic"), default_tags: [] };
-const ceilingMic: ComponentType = { id: uuidFor("ct-ceiling-mic"), name: "ceiling-mic", display_name: "Ceiling Microphone", official: true, parent: "mic", parent_id: uuidFor("ct-mic"), default_tags: [] };
-const display: ComponentType = { id: uuidFor("ct-display"), name: "display", display_name: "Display", official: true, stem: "display", abbrev: "fp", icon: "monitor", default_tags: [] };
-const interactiveDisplay: ComponentType = { id: uuidFor("ct-interactive-display"), name: "interactive-display", display_name: "Interactive Display", official: true, parent: "display", parent_id: uuidFor("ct-display"), default_tags: [] };
-const genericDevice: ComponentType = { id: uuidFor("ct-generic-device"), name: "generic-device", display_name: "Generic Device", official: true, stem: "device", abbrev: "dev", icon: "box", default_tags: [] };
+const mic: ComponentType = { id: uuidFor("ct-mic"), name: "mic", display_name: "Microphone", official: true, forked: false, stem: "mic", abbrev: "mic", icon: "mic", default_tags: [] };
+const wirelessMic: ComponentType = { id: uuidFor("ct-wireless-mic"), name: "wireless-mic", display_name: "Wireless Microphone", official: true, forked: false, parent: "mic", parent_id: uuidFor("ct-mic"), default_tags: [] };
+const ceilingMic: ComponentType = { id: uuidFor("ct-ceiling-mic"), name: "ceiling-mic", display_name: "Ceiling Microphone", official: true, forked: false, parent: "mic", parent_id: uuidFor("ct-mic"), default_tags: [] };
+const display: ComponentType = { id: uuidFor("ct-display"), name: "display", display_name: "Display", official: true, forked: false, stem: "display", abbrev: "fp", icon: "monitor", default_tags: [] };
+const interactiveDisplay: ComponentType = { id: uuidFor("ct-interactive-display"), name: "interactive-display", display_name: "Interactive Display", official: true, forked: false, parent: "display", parent_id: uuidFor("ct-display"), default_tags: [] };
+const genericDevice: ComponentType = { id: uuidFor("ct-generic-device"), name: "generic-device", display_name: "Generic Device", official: true, forked: false, stem: "device", abbrev: "dev", icon: "box", default_tags: [] };
 
 const seededTree: ComponentType[] = [mic, wirelessMic, ceilingMic, display, interactiveDisplay, genericDevice];
 

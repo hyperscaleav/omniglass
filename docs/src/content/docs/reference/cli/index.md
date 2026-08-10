@@ -972,7 +972,7 @@ Delete a component type
 omniglass component-type delete <id>
 ```
 
-Deletes a custom component_type, refused if official (422) or still a parent of another component_type (409). Gated by component_type:delete.
+Deletes a custom component_type, refused if official (422, forked or not: a fork is an overlay, not ownership) or still a parent of another component_type (409). `:restore` is the only removal a shipped row admits, and it removes your fork, not the row. Gated by component_type:delete.
 
 Example:
 
@@ -996,6 +996,22 @@ Example:
 omniglass component-type list
 ```
 
+### `omniglass component-type restore`
+
+Restore a component type's shipped values
+
+```
+omniglass component-type restore <id>
+```
+
+Discards your fork of a shipped component_type, so reads return the values this release ships and later releases can improve them again. 409 when the row carries no fork of yours. Gated by component_type:update, the same permission that took the fork: restoring is undoing your own edit, not deleting a row.
+
+Example:
+
+```sh
+omniglass component-type restore <id>
+```
+
 ### `omniglass component-type update`
 
 Update a component type
@@ -1004,7 +1020,7 @@ Update a component type
 omniglass component-type update <id> [flags]
 ```
 
-Patches a custom component_type's display_name, stem, icon, abbrev, or default_tags. Official types are read-only (422). Gated by component_type:update.
+Patches a component_type's display_name, stem, icon, abbrev, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|

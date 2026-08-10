@@ -34,7 +34,7 @@ const catalog: PropertyRow[] = [
 // standard's uuid, which is what the page passes it), plus the component_type
 // and product registries its typed-slot pickers read (#626).
 const roles: DeclaredRole[] = [{ name: "table-mic", display_name: "Table microphone", quorum: 2, accepted_types: ["video-bar"], pinned_products: [], position_labels: [], impact: "degraded" }];
-const componentTypes: ComponentType[] = [{ id: uuidFor("ct-video-bar"), name: "video-bar", display_name: "Video Bar", official: true, default_tags: [] }];
+const componentTypes: ComponentType[] = [{ id: uuidFor("ct-video-bar"), name: "video-bar", display_name: "Video Bar", official: true, forked: false, default_tags: [] }];
 const products: Product[] = [{ id: uuidFor("prod-cisco-room-bar"), name: "cisco-room-bar", display_name: "Cisco Room Bar", kind: "device", component_type: "video-bar", component_type_id: uuidFor("ct-video-bar"), official: true }];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };

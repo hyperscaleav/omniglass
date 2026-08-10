@@ -392,6 +392,39 @@
      }
     ]
    },
+   "registry_shadow": {
+    "columns": [
+     {
+      "name": "registry",
+      "type": "text",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "row_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "image",
+      "type": "jsonb",
+      "nullable": false
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ]
+   },
    "standard": {
     "columns": [
      {

@@ -16,10 +16,14 @@ import { uuidFor } from "../lib/testids";
 // gateway does not offer one yet), so a custom type's placement in the tree
 // is fixed at create; the edit blade may only revise a node's own facts.
 const seed: ComponentType[] = [
-  { id: uuidFor("ct-display"), name: "display", display_name: "Display", official: true, stem: "display", abbrev: "fp", icon: "monitor", default_tags: [] },
-  { id: uuidFor("ct-interactive-display"), name: "interactive-display", display_name: "Interactive Display", official: true, parent: "display", parent_id: uuidFor("ct-display"), default_tags: [] },
-  { id: uuidFor("ct-mic"), name: "mic", display_name: "Microphone", official: true, stem: "mic", abbrev: "mic", icon: "mic", default_tags: [] },
-  { id: uuidFor("ct-ceiling-mic"), name: "ceiling-mic", display_name: "Ceiling Microphone", official: false, parent: "mic", parent_id: uuidFor("ct-mic"), default_tags: [] },
+  { id: uuidFor("ct-display"), name: "display", display_name: "Display", official: true, forked: false, stem: "display", abbrev: "fp", icon: "monitor", default_tags: [] },
+  { id: uuidFor("ct-interactive-display"), name: "interactive-display", display_name: "Interactive Display", official: true, forked: false, parent: "display", parent_id: uuidFor("ct-display"), default_tags: [] },
+  { id: uuidFor("ct-mic"), name: "mic", display_name: "Microphone", official: true, forked: false, stem: "mic", abbrev: "mic", icon: "mic", default_tags: [] },
+  { id: uuidFor("ct-ceiling-mic"), name: "ceiling-mic", display_name: "Ceiling Microphone", official: false, forked: false, parent: "mic", parent_id: uuidFor("ct-mic"), default_tags: [] },
+  // A shipped row the operator has overridden (#655, ADR-0095): the third
+  // origin state, and the only one where what the console shows is not what
+  // the release ships.
+  { id: uuidFor("ct-projector"), name: "projector", display_name: "House Projector", official: true, forked: true, stem: "projector", abbrev: "proj", icon: "projector", default_tags: [] },
 ];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
@@ -102,15 +106,15 @@ describe("ComponentTypes page", () => {
     expect(sent).toMatchObject({ name: "boundary-mic", display_name: "Boundary Mic", parent_id: "mic" });
   });
 
-  it("an official row greys Edit and Delete; a custom row carries both", async () => {
-    mount();
+  it("a shipped row offers Edit (the edit forks it) to a caller holding update, and none to a viewer", async () => {
+    mount(admin);
     fireEvent.click(screen.getByText("Display"));
     const officialBlade = await waitFor(() => {
       const el = asides()[0];
       if (!el) throw new Error("no blade yet");
       return el as HTMLElement;
     });
-    expect((within(officialBlade).getByLabelText("Edit") as HTMLButtonElement).disabled).toBe(true);
+    expect((within(officialBlade).getByLabelText("Edit") as HTMLButtonElement).disabled).toBe(false);
 
     fireEvent.click(screen.getByText("Ceiling Microphone"));
     const customBlade = await waitFor(() => {
@@ -120,6 +124,68 @@ describe("ComponentTypes page", () => {
       return el as HTMLElement;
     });
     expect((within(customBlade).getByLabelText("Edit") as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("a viewer cannot edit a shipped row, so cannot fork one", async () => {
+    mount(viewer);
+    fireEvent.click(screen.getByText("Display"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    expect((within(blade).getByLabelText("Edit") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("names the three origins: official, custom, and overridden", () => {
+    mount();
+    const rows = screen.getAllByRole("row").slice(1);
+    const originOf = (label: string) => {
+      const row = rows.find((r) => within(r).getAllByRole("cell")[0].textContent?.includes(label));
+      if (!row) throw new Error(`no row for ${label}`);
+      const cells = within(row).getAllByRole("cell").map((c) => c.textContent?.trim());
+      return cells.find((t) => t === "official" || t === "custom" || t === "overridden");
+    };
+    expect(originOf("Interactive Display")).toBe("official");
+    expect(originOf("Ceiling Microphone")).toBe("custom");
+    expect(originOf("House Projector")).toBe("overridden");
+  });
+
+  it("a forked shipped row offers Restore shipped, and a pristine one offers nothing to discard", async () => {
+    let restored: string | undefined;
+    vi.spyOn(globalThis, "confirm").mockReturnValue(true);
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes(":restore")) {
+        restored = req.url;
+        return new Response(JSON.stringify({}), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ component_types: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    mount();
+
+    fireEvent.click(screen.getByText("Display"));
+    const pristine = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    expect(within(pristine).queryByText("Restore shipped")).toBeNull();
+    // A shipped row that is still pristine greys its destructive slot with the
+    // official sentence: nothing to delete, nothing yet to discard.
+    expect((within(pristine).getByLabelText("Delete") as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(screen.getByText("House Projector"));
+    const forked = await waitFor(() => {
+      const els = asides();
+      const el = els[els.length - 1];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    expect(within(forked).queryByLabelText("Delete")).toBeNull();
+    fireEvent.click(within(forked).getByText("Restore shipped"));
+    await waitFor(() => expect(restored).toBeTruthy());
+    expect(restored).toContain(`${uuidFor("ct-projector")}:restore`);
   });
 
   it("edit mode exposes stem/abbrev/icon fields and saves them, never the parent", async () => {
