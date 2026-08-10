@@ -40,6 +40,8 @@ coverage.txt
 
 # Superpowers
 .claude/superpowers/
+# SDD scratch: briefs, reports and review packages, written per worktree.
+.superpowers/
 
 # Playwright MCP scratch (screenshots, logs)
 /.playwright-mcp/
