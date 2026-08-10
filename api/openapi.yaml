@@ -896,7 +896,7 @@ components:
           minLength: 1
           type: string
         name:
-          description: Name, unique within its placement (the address; lowercase letters, digits, hyphens)
+          description: Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the location_type's name rule.
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
@@ -905,7 +905,6 @@ components:
           description: Parent location name; omit for a root location
           type: string
       required:
-        - name
         - location_type
       type: object
     CreateLocationTypeInputBody:
@@ -941,6 +940,9 @@ components:
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
+        name_rule:
+          $ref: "#/components/schemas/NameRuleBody"
+          description: How the platform NAMES locations of this type; omit to have an operator name every one of them. Refused (422) if it cannot mint a legal name
       required:
         - name
         - display_name
@@ -3270,7 +3272,7 @@ components:
         name:
           type: string
         name_generated:
-          description: "Whether the platform picked this name rather than an operator typing it. Always false today: a location_type carries no name rule yet, so every location name is operator-typed."
+          description: Whether the platform picked this name (from the location_type's name rule) rather than an operator typing it.
           type: boolean
         parent:
           description: The parent location's name, for display; absent for a site root
@@ -3401,6 +3403,9 @@ components:
         name:
           description: The name an operator reads and types; renameable
           type: string
+        name_rule:
+          $ref: "#/components/schemas/NameRuleBody"
+          description: How the platform NAMES locations of this type; absent means an operator names every one of them
         official:
           type: boolean
       required:
@@ -3669,6 +3674,20 @@ components:
         parent:
           description: Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system (requires an all-scoped move grant).
           type: string
+      type: object
+    NameRuleBody:
+      additionalProperties: false
+      properties:
+        bare_first:
+          description: Suppress the ordinal on the first of this stem in a parent, so the only wing there is wing and the second is wing-2. Ignored when stem is empty.
+          type: boolean
+        stem:
+          description: The generated name's prefix (wing gives wing, wing-2); empty makes the type positional, so the name is the ordinal alone (1, 2, 3)
+          maxLength: 90
+          pattern: ^([a-z0-9][a-z0-9-]*)?$
+          type: string
+      required:
+        - stem
       type: object
     NodeBody:
       additionalProperties: false
@@ -5890,6 +5909,9 @@ components:
         label_rule:
           description: "A new label template for locations of this type; omit to leave unchanged, \"\" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels"
           type: string
+        name_rule:
+          $ref: "#/components/schemas/NameRuleBody"
+          description: "A new name rule for locations of this type; omit to leave unchanged. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row"
       type: object
     UpdateMeInputBody:
       additionalProperties: false
@@ -8535,7 +8557,7 @@ paths:
       summary: List locations in scope
       x-omniglass-permission: location:read
     post:
-      description: Creates a location, optionally under a parent (a root needs an all-scoped grant). Gated by location:create.
+      description: Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. Gated by location:create.
       operationId: create-location
       requestBody:
         content:
@@ -8913,7 +8935,7 @@ paths:
       x-omniglass-permission: location:rename
   /locations/{name}:resetName:
     post:
-      description: "Hands the pen back to the platform, the same verb components and systems carry. It refuses today, 422: a location_type carries no name rule, so there is nothing to regenerate the name from. Gated by location:rename, the same token :rename uses."
+      description: "Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is most of them: only a positional kind of place (a floor) has a name the platform can generate. Gated by location:rename, the same token :rename uses."
       operationId: reset-location-name
       parameters:
         - description: The location's name, or a dotted address (e.g. boi.17c.415a)

@@ -39,7 +39,13 @@ func TestNewCountingDBObservesTheListPath(t *testing.T) {
 	if n := counter.N(); n != 1 {
 		t.Fatalf("ListLocations on an empty estate cost %d statements, want exactly 1: %q", n, counter.Summary())
 	}
-	if got := counter.Summary()[0]; !strings.Contains(got, "from location") {
+	// Read against the RAW statement rather than the Summary, which truncates at
+	// a fixed width: this matched the summary's tail until a column was added to
+	// the location select list and pushed the table name past the cut, so the
+	// assertion was measuring how long the select list is rather than which
+	// table was read. Statements() carries the whole SQL and cannot drift that
+	// way.
+	if got := counter.Statements()[0]; !strings.Contains(got, "from location") {
 		t.Errorf("the counted statement is %q, want the scoped list of location: the counter must be seeing the gateway's own query, not something else on the pool", got)
 	}
 }

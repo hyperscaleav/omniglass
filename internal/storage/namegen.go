@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -102,6 +103,90 @@ func (m nameMint) name(n int) string {
 	return m.stem + "-" + strconv.Itoa(n)
 }
 
+// ErrInvalidNameRule is a name rule that cannot mint a legal name, refused at
+// RULE-EDIT time (a 422) rather than at the create it would have broken. It is
+// the name-side counterpart of ErrInvalidLabelRule, and the reason a name rule
+// is a declaration rather than a template (ADR-0102): the refusal is provable
+// here, because the rule IS the mint and the mint's whole output space can be
+// tested, where a template's output could only be sampled.
+var ErrInvalidNameRule = errors.New("storage: name rule cannot mint a legal name")
+
+// NameRule is a TYPE's opt-in to naming the rows it classifies: the declaration
+// a nameMint is built from, carried as jsonb on location_type (#687) and absent
+// (SQL null) when an operator names every row of that type. There is no boolean
+// beside it, so "this type generates" and "this is what it generates" cannot
+// disagree; the rule's presence is the opt-in.
+//
+// It is a DECLARATION and deliberately not a Go template, which is the one
+// design call of this slice and is argued in full in ADR-0102. The short form:
+// a name is not a label. It has to satisfy validateEntityName, it lands in a
+// scoped-unique index, and other things reference it, so an unrenderable rule
+// has no safe way to degrade the way an unrenderable label rule does (it falls
+// through to the entity's name; a name has no next rung). A declaration's
+// output space is small enough to test exhaustively at edit time, which is what
+// makes "a rule that would mint an illegal name is refused when the rule is
+// edited" a guarantee rather than a sample.
+//
+// Stem empty is a POSITIONAL type, whose ordinal genuinely IS its name: a floor
+// called "1", then "2". That falls out of the mint rather than being a mode
+// beside it, which is why there is no third field saying so.
+type NameRule struct {
+	Stem      string `json:"stem"`
+	BareFirst bool   `json:"bare_first"`
+}
+
+// mint is the whole of the rule's meaning: a NameRule IS a nameMint, with no
+// reshaping between the stored fact and the value allocation tests against.
+// That is what keeps ADR-0101's guarantee true here, that the shape a caller
+// mints and the shape pickOrdinal tests cannot disagree, without this tier
+// having to restate it.
+func (r NameRule) mint() nameMint { return nameMint{stem: r.Stem, bareFirst: r.BareFirst} }
+
+// normalized collapses the one pair of fields that can spell the same rule two
+// ways: a stem-less mint ignores bareFirst (suppressing the ordinal of a name
+// that IS its ordinal leaves nothing), so a positional rule stores it false.
+// The same reasoning nilIfEmptyRule applies to a label rule: two spellings of
+// one state give a reader a difference to misinterpret and an equality test a
+// false negative.
+func (r NameRule) normalized() NameRule {
+	if r.Stem == "" {
+		r.BareFirst = false
+	}
+	return r
+}
+
+// maxProvableOrdinal is the largest ordinal a rule is proven legal for when it
+// is written. Together with ordinal 1 it bounds the mint's whole output space:
+// every candidate between them has the same character class and a length
+// between the two, so a rule legal at both ends is legal everywhere in it.
+//
+// A ceiling has to exist because "<stem>-<n>" grows with n, and
+// validateEntityName has a length cap: a 97-character stem mints legally at 1
+// and illegally at 100. Nine digits is a bucket of a billion siblings under one
+// parent, so the rule that passes here is one no estate can reach the end of.
+const maxProvableOrdinal = 999999999
+
+// validateNameRule refuses a rule that cannot mint a legal name, by MINTING
+// from it rather than by inspecting its fields. That is ADR-0097's principle
+// (test the name you would produce, never a restatement of the shape) applied
+// to validation: a rule and the allocator agree here for the same structural
+// reason they agree at allocation time, because both ask the same nameMint.
+//
+// A nil rule is the opt-out and is fine; validating it is the caller asking
+// "may this type generate", which is a different question.
+func validateNameRule(r *NameRule) error {
+	if r == nil {
+		return nil
+	}
+	m := r.normalized().mint()
+	for _, n := range []int{1, maxProvableOrdinal} {
+		if err := validateEntityName(m.name(n)); err != nil {
+			return fmt.Errorf("%w: it would mint %q: %w", ErrInvalidNameRule, m.name(n), err)
+		}
+	}
+	return nil
+}
+
 // componentMint and systemMint are the mints this slice resolves. The
 // difference between them is the whole of D3: a system suppresses its first
 // ordinal, a component does not.
@@ -112,10 +197,12 @@ func (m nameMint) name(n int) string {
 // suppress would rename every generated component that exists. A system is a
 // room, and a room with one boardroom in it does not call it "boardroom-1".
 //
-// Where the choice COMES FROM is the seam #687 needs. It is a field on the mint
-// resolved per type, and until a type carries the fact the per-kind default
-// below is where that fact lives. #687 gives location_type a name rule and
-// fills this same field from it, replacing nothing here.
+// Where the choice COMES FROM is the seam #687 filled. It is a field on the
+// mint resolved per type, and until a type carries the fact the per-kind
+// default below is where that fact lives. A location_type's NameRule now
+// carries it per type (see NameRule.mint above), which consumed the seam and
+// replaced nothing here: these two are still the defaults for the two kinds
+// whose types carry a stem column rather than a rule.
 func componentMint(stem string) nameMint { return nameMint{stem: stem} }
 
 func systemMint(stem string) nameMint { return nameMint{stem: stem, bareFirst: true} }
@@ -417,4 +504,57 @@ func generateNameForSystemType(ctx context.Context, tx pgx.Tx, systemTypeID *str
 		return "", 0, fmt.Errorf("%w: system_type %s", ErrSystemTypeNoStem, typeID)
 	}
 	return generateName(ctx, tx, systemMint(stem), systemNameScope(parentID, locationID), excludeID)
+}
+
+// locationNameRule reads a location_type's name rule inside the caller's
+// transaction, returning nil when the type carries none (the opt-out, and the
+// state every seeded type except floor is in).
+//
+// The querier is the caller's for the reason resolveTypeFacts takes one: a rule
+// written earlier in the same transaction has to be the rule this read sees, or
+// a create and the type edit before it would disagree about who names the row.
+func locationNameRule(ctx context.Context, q querier, locationTypeID string) (*NameRule, error) {
+	var raw []byte
+	err := q.QueryRow(ctx, `select name_rule from location_type where `+registryRefCol(locationTypeID)+` = $1`, locationTypeID).Scan(&raw)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrUnknownType
+	}
+	if err != nil {
+		return nil, fmt.Errorf("storage: resolve name rule for location_type %q: %w", locationTypeID, err)
+	}
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	var r NameRule
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return nil, fmt.Errorf("storage: decode name rule for location_type %q: %w", locationTypeID, err)
+	}
+	r = r.normalized()
+	return &r, nil
+}
+
+// generateNameForLocationType is generateNameForSystemType's location-tier twin
+// (#687): resolve the location_type's name rule, then mint the ordinal within
+// the location's own placement bucket. The same two steps in the same order,
+// one function, so a location's name has exactly one implementation across the
+// four sites that (re)generate it (create, :resetName, a move, a reclassify).
+//
+// The rule replaces the stem-then-mint walk the other two tiers do, because
+// location_type is flat: it has no parent to inherit from, so there is no chain
+// and nothing to resolve up. What it does NOT replace is the mint: the rule IS
+// one, so allocation still tests exactly what this returns.
+//
+// A type with no rule is ErrLocationTypeNoNameRule (a 422), the same refusal
+// :resetName carried on its own before this slice, and it names the missing
+// fact rather than inventing a stem: a room's real-world name is ground truth
+// the platform does not have, so guessing one is worse than declining.
+func generateNameForLocationType(ctx context.Context, tx pgx.Tx, locationTypeID string, parentID, excludeID *string) (string, int, error) {
+	rule, err := locationNameRule(ctx, tx, locationTypeID)
+	if err != nil {
+		return "", 0, err
+	}
+	if rule == nil {
+		return "", 0, fmt.Errorf("%w: location_type %s", ErrLocationTypeNoNameRule, locationTypeID)
+	}
+	return generateName(ctx, tx, rule.mint(), locationNameScope(parentID), excludeID)
 }

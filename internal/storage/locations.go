@@ -29,14 +29,19 @@ var (
 	ErrLocationCycle       = errors.New("storage: cannot move a location under itself or a descendant")
 	ErrReservedTypeID      = errors.New("storage: \"root\" is a reserved location_type id")
 
-	// ErrLocationTypeNoNameRule is :resetName on a location today (#686). The
-	// pen and both verbs spread to this tier so the shape is the same one on
-	// all three trees, but a location has nothing to regenerate FROM:
-	// location_type carries no stem, unlike component_type and system_type, so
-	// there is no mint. The seam is #687's nullable per-type name rule, which
-	// is also the reason this is a typed refusal naming the missing fact rather
-	// than a silent no-op: a no-op would report success for a name that never
-	// changed and would make the verb untestable the day the rule lands.
+	// ErrLocationTypeNoNameRule is asking the platform to name a location whose
+	// location_type carries no name rule (#687): a nameless create, or
+	// :resetName. It is a refusal by POLICY, not a gap. Of the shipped place
+	// vocabulary only a floor is genuinely auto-nameable; a building's or a
+	// room's name is ground truth an operator holds ("17c" is a fact, not a
+	// default), so generating one would be the platform guessing. Naming the
+	// missing fact beats a silent no-op, which would report a reset that never
+	// happened.
+	//
+	// It refused unconditionally on this tier for one slice (#686 shipped the
+	// pen and the verbs ahead of the generator, so a location an operator named
+	// then is already frozen now). What changed here is only which types it
+	// applies to.
 	ErrLocationTypeNoNameRule = errors.New("storage: this location_type has no name rule, so the platform cannot generate a name for it")
 
 	// ErrLocationExistsUnderParent / ErrLocationExistsAtRoot name which
@@ -129,13 +134,17 @@ type Location struct {
 	Name        string
 	DisplayName string
 	// NameGenerated is the NAME's pen (#686); see System's own field for the
-	// polarity. False on every location today and written only false: a
-	// location cannot generate a name until its type carries a name rule
-	// (#687), so this tier has the pen and the verbs without a generator yet.
-	// It ships now rather than with the generator because the pen is what makes
-	// a later generated name safe: :rename freezes it false, so a row an
-	// operator named before #687 lands can never be re-minted afterwards.
+	// polarity. True only when the row's location_type carried a name rule at
+	// the moment the platform minted the name (#687). Every location that
+	// predates that rule holds the pen, since :rename froze it false a slice
+	// before the generator existed.
 	NameGenerated bool
+	// Ordinal is the number the generator allocated for this row's name (#687),
+	// null for a name an operator typed or renamed; see System's own field. It
+	// is the number itself, never the digits in the name: a positional
+	// location's name IS its ordinal, and a stemmed one with a suppressed first
+	// ordinal ("wing", ordinal 1) has no digits in its name at all.
+	Ordinal *int
 	// DisplayNameGenerated is the label's pen (#682); see System's own field
 	// for the polarity and what a write does with it.
 	DisplayNameGenerated bool
@@ -158,6 +167,11 @@ type Location struct {
 
 // LocationSpec is the create input. ParentName nil makes a root location, which
 // only an all-scoped create grant may place.
+//
+// Name is optional (#687), exactly as a component's and a system's are: empty
+// asks the platform to mint one from the location_type's name rule, and a type
+// carrying no rule refuses (ErrLocationTypeNoNameRule) rather than inventing a
+// name for a place whose real one an operator holds.
 type LocationSpec struct {
 	Name         string
 	DisplayName  string
@@ -213,6 +227,13 @@ type LocationType struct {
 	// the global tier. A location_type is flat (no parent link), so there is
 	// nothing to inherit from and the two tiers are the whole ladder.
 	LabelRule *string
+	// NameRule is this type's opt-in to GENERATING the names of the locations
+	// it classifies (#687), nullable: null means an operator names every one of
+	// them, which is where three of the four shipped types stay. Unlike
+	// LabelRule it is a declaration rather than a template, and unlike
+	// LabelRule it has no tier above it to defer to: a name either comes from
+	// this rule or from the operator (ADR-0102).
+	NameRule *NameRule
 }
 
 // UpsertLocationType installs or updates a location type by id, the boot-seed
@@ -223,32 +244,60 @@ type LocationType struct {
 // UpsertLocationType, whose ON CONFLICT DO UPDATE is the authoritative behavior
 // the canonical catalogs want.
 func (p *PG) SeedLocationType(ctx context.Context, lt LocationType) error {
-	_, err := p.pool.Exec(ctx, `
-		insert into location_type (name, official, display_name, icon, allowed_parent_types, label_rule)
-		values ($1, $2, $3, $4, $5, $6)
-		on conflict (name) do nothing`,
-		lt.Name, lt.Official, lt.DisplayName, lt.Icon, normalizeAllowedParentTypes(lt.AllowedParentTypes), nilIfEmptyRule(lt.LabelRule))
+	rule, err := nameRuleJSON(lt.NameRule)
 	if err != nil {
+		return fmt.Errorf("storage: seed location_type %q: %w", lt.Name, err)
+	}
+	if _, err := p.pool.Exec(ctx, `
+		insert into location_type (name, official, display_name, icon, allowed_parent_types, label_rule, name_rule)
+		values ($1, $2, $3, $4, $5, $6, $7)
+		on conflict (name) do nothing`,
+		lt.Name, lt.Official, lt.DisplayName, lt.Icon, normalizeAllowedParentTypes(lt.AllowedParentTypes), nilIfEmptyRule(lt.LabelRule), rule); err != nil {
 		return fmt.Errorf("storage: seed location_type %q: %w", lt.Name, err)
 	}
 	return nil
 }
 
 func (p *PG) UpsertLocationType(ctx context.Context, lt LocationType) error {
-	_, err := p.pool.Exec(ctx, `
-		insert into location_type (name, official, display_name, icon, allowed_parent_types, label_rule)
-		values ($1, $2, $3, $4, $5, $6)
+	rule, err := nameRuleJSON(lt.NameRule)
+	if err != nil {
+		return fmt.Errorf("storage: upsert location_type %q: %w", lt.Name, err)
+	}
+	if _, err := p.pool.Exec(ctx, `
+		insert into location_type (name, official, display_name, icon, allowed_parent_types, label_rule, name_rule)
+		values ($1, $2, $3, $4, $5, $6, $7)
 		on conflict (name) do update
 			set official             = excluded.official,
 			    display_name         = excluded.display_name,
 			    icon                 = excluded.icon,
 			    allowed_parent_types = excluded.allowed_parent_types,
-			    label_rule           = excluded.label_rule`,
-		lt.Name, lt.Official, lt.DisplayName, lt.Icon, normalizeAllowedParentTypes(lt.AllowedParentTypes), nilIfEmptyRule(lt.LabelRule))
-	if err != nil {
+			    label_rule           = excluded.label_rule,
+			    name_rule            = excluded.name_rule`,
+		lt.Name, lt.Official, lt.DisplayName, lt.Icon, normalizeAllowedParentTypes(lt.AllowedParentTypes), nilIfEmptyRule(lt.LabelRule), rule); err != nil {
 		return fmt.Errorf("storage: upsert location_type %q: %w", lt.Name, err)
 	}
 	return nil
+}
+
+// nameRuleJSON encodes a name rule for its jsonb column, refusing one that
+// cannot mint a legal name BEFORE it is stored (ErrInvalidNameRule, a 422).
+// Every write path funnels through it, the boot seed included, so a shipped
+// rule is held to the same bar an operator's is: a stored rule that cannot mint
+// would surface as a failed create on a path that supplied nothing wrong.
+//
+// nil is no rule, written as SQL null: the opt-out, and the one spelling of it.
+func nameRuleJSON(r *NameRule) (any, error) {
+	if r == nil {
+		return nil, nil
+	}
+	if err := validateNameRule(r); err != nil {
+		return nil, err
+	}
+	b, err := json.Marshal(r.normalized())
+	if err != nil {
+		return nil, fmt.Errorf("storage: encode name rule: %w", err)
+	}
+	return b, nil
 }
 
 // normalizeAllowedParentTypes returns a non-nil slice so a nil set writes and
@@ -265,21 +314,46 @@ func normalizeAllowedParentTypes(s []string) []string {
 // display_name then id, for the registry view and validation.
 func (p *PG) ListLocationTypes(ctx context.Context) ([]LocationType, error) {
 	rows, err := p.pool.Query(ctx,
-		`select id, name, official, display_name, icon, allowed_parent_types, label_rule from location_type order by display_name, name`)
+		`select `+locationTypeCols+` from location_type order by display_name, name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list location_types: %w", err)
 	}
 	defer rows.Close()
 	var out []LocationType
 	for rows.Next() {
-		var lt LocationType
-		if err := rows.Scan(&lt.ID, &lt.Name, &lt.Official, &lt.DisplayName, &lt.Icon, &lt.AllowedParentTypes, &lt.LabelRule); err != nil {
+		lt, err := scanLocationType(rows)
+		if err != nil {
 			return nil, fmt.Errorf("storage: scan location_type: %w", err)
 		}
-		lt.AllowedParentTypes = normalizeAllowedParentTypes(lt.AllowedParentTypes)
-		out = append(out, lt)
+		out = append(out, *lt)
 	}
 	return out, rows.Err()
+}
+
+// locationTypeCols is the column list every location_type read scans, in struct
+// order, and scanLocationType is the one decode of it. They exist because
+// name_rule arrived as the second column needing more than a straight scan (the
+// first being allowed_parent_types' nil-to-empty normalization), and two call
+// sites decoding jsonb by hand is how a list and a write path start disagreeing
+// about what an absent rule reads as.
+const locationTypeCols = `id, name, official, display_name, icon, allowed_parent_types, label_rule, name_rule`
+
+func scanLocationType(row pgx.Row) (*LocationType, error) {
+	var lt LocationType
+	var rule []byte
+	if err := row.Scan(&lt.ID, &lt.Name, &lt.Official, &lt.DisplayName, &lt.Icon, &lt.AllowedParentTypes, &lt.LabelRule, &rule); err != nil {
+		return nil, err
+	}
+	lt.AllowedParentTypes = normalizeAllowedParentTypes(lt.AllowedParentTypes)
+	if len(rule) > 0 {
+		var r NameRule
+		if err := json.Unmarshal(rule, &r); err != nil {
+			return nil, fmt.Errorf("decode name rule: %w", err)
+		}
+		r = r.normalized()
+		lt.NameRule = &r
+	}
+	return &lt, nil
 }
 
 // LocationTypePatch carries the mutable fields of a location_type update; a nil
@@ -292,6 +366,13 @@ type LocationTypePatch struct {
 	Icon               *string
 	AllowedParentTypes *[]string
 	LabelRule          *string
+	// NameRule sets the type's name rule; nil leaves it alone. There is no
+	// spelling that CLEARS it back to operator-named, the same limit
+	// component_type.stem's patch already carries (its wire field is
+	// minLength 1, so an inherited stem cannot be cleared either). Adding one
+	// means a three-state on an object field, which JSON cannot give a Go
+	// struct: an omitted key and an explicit null both decode to nil.
+	NameRule *NameRule
 }
 
 // CreateLocationType inserts a custom (official=false) location_type and audits
@@ -310,6 +391,17 @@ func (p *PG) CreateLocationType(ctx context.Context, actorID string, lt Location
 	lt.Official = false
 	lt.AllowedParentTypes = normalizeAllowedParentTypes(lt.AllowedParentTypes)
 	lt.LabelRule = nilIfEmptyRule(lt.LabelRule)
+	// Refused here, at rule-EDIT time, which is the whole point of a rule that
+	// is a declaration: a rule that cannot mint a legal name never reaches a
+	// column some later create would have executed it from (ADR-0102).
+	rule, err := nameRuleJSON(lt.NameRule)
+	if err != nil {
+		return nil, err
+	}
+	if lt.NameRule != nil {
+		norm := lt.NameRule.normalized()
+		lt.NameRule = &norm
+	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin create location_type: %w", err)
@@ -317,8 +409,8 @@ func (p *PG) CreateLocationType(ctx context.Context, actorID string, lt Location
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	if _, err := tx.Exec(ctx,
-		`insert into location_type (name, official, display_name, icon, allowed_parent_types, label_rule) values ($1, false, $2, $3, $4, $5) returning id`,
-		lt.Name, lt.DisplayName, lt.Icon, lt.AllowedParentTypes, lt.LabelRule); err != nil {
+		`insert into location_type (name, official, display_name, icon, allowed_parent_types, label_rule, name_rule) values ($1, false, $2, $3, $4, $5, $6) returning id`,
+		lt.Name, lt.DisplayName, lt.Icon, lt.AllowedParentTypes, lt.LabelRule, rule); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrTypeExists
 		}
@@ -338,6 +430,10 @@ func (p *PG) CreateLocationType(ctx context.Context, actorID string, lt Location
 // read-only (ErrTypeOfficial); an unknown id is ErrTypeNotFound.
 func (p *PG) UpdateLocationType(ctx context.Context, actorID, id string, patch LocationTypePatch) (*LocationType, error) {
 	if err := validateLabelRule(patch.LabelRule); err != nil {
+		return nil, err
+	}
+	rule, err := nameRuleJSON(patch.NameRule)
+	if err != nil {
 		return nil, err
 	}
 	tx, err := p.pool.Begin(ctx)
@@ -361,8 +457,7 @@ func (p *PG) UpdateLocationType(ctx context.Context, actorID, id string, patch L
 		v := normalizeAllowedParentTypes(*patch.AllowedParentTypes)
 		allowed = &v
 	}
-	var lt LocationType
-	if err := tx.QueryRow(ctx, `
+	lt, err := scanLocationType(tx.QueryRow(ctx, `
 		update location_type set
 			display_name         = coalesce($2, display_name),
 			icon                 = coalesce($3, icon),
@@ -373,17 +468,20 @@ func (p *PG) UpdateLocationType(ctx context.Context, actorID, id string, patch L
 				when $5::text is null then label_rule
 				when $5 = '' then null
 				else $5::text
-			end
+			end,
+			-- A plain coalesce, unlike label_rule above: a name rule has no
+			-- "clear" spelling on the wire (see LocationTypePatch.NameRule), so
+			-- there is no third state for a CASE to tell apart.
+			name_rule            = coalesce($6::jsonb, name_rule)
 		where `+registryRefCol(id)+` = $1
-		returning id, name, official, display_name, icon, allowed_parent_types, label_rule`,
-		id, patch.DisplayName, patch.Icon, allowed, patch.LabelRule).
-		Scan(&lt.ID, &lt.Name, &lt.Official, &lt.DisplayName, &lt.Icon, &lt.AllowedParentTypes, &lt.LabelRule); err != nil {
+		returning `+locationTypeCols,
+		id, patch.DisplayName, patch.Icon, allowed, patch.LabelRule, rule))
+	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
 		}
 		return nil, fmt.Errorf("storage: update location_type %q: %w", id, err)
 	}
-	lt.AllowedParentTypes = normalizeAllowedParentTypes(lt.AllowedParentTypes)
 	after, err := registryAuditImage(ctx, tx, "location_type", id)
 	if err != nil {
 		return nil, fmt.Errorf("storage: audit image location_type %q: %w", id, err)
@@ -394,7 +492,7 @@ func (p *PG) UpdateLocationType(ctx context.Context, actorID, id string, patch L
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit update location_type: %w", err)
 	}
-	return &lt, nil
+	return lt, nil
 }
 
 // DeleteLocationType removes a custom location_type, refusing an official row and
@@ -404,14 +502,14 @@ func (p *PG) DeleteLocationType(ctx context.Context, actorID, id string) error {
 }
 
 // locationCols is the column list every location read scans, in struct order.
-const locationCols = `id, name, coalesce(display_name, ''), name_generated, display_name_generated,
+const locationCols = `id, name, coalesce(display_name, ''), name_generated, ordinal, display_name_generated,
 	(select t.name from location_type t where t.id = location.location_type) as location_type, location.location_type as location_type_id, parent_id,
 	(select p.name from location p where p.id = location.parent_id) as parent_name,
 	created_at, updated_at`
 
 func scanLocation(row pgx.Row) (*Location, error) {
 	var l Location
-	if err := row.Scan(&l.ID, &l.Name, &l.DisplayName, &l.NameGenerated, &l.DisplayNameGenerated, &l.LocationType, &l.LocationTypeID, &l.ParentID, &l.ParentName,
+	if err := row.Scan(&l.ID, &l.Name, &l.DisplayName, &l.NameGenerated, &l.Ordinal, &l.DisplayNameGenerated, &l.LocationType, &l.LocationTypeID, &l.ParentID, &l.ParentName,
 		&l.CreatedAt, &l.UpdatedAt); err != nil {
 		return nil, err
 	}
@@ -421,11 +519,15 @@ func scanLocation(row pgx.Row) (*Location, error) {
 // attachLocationPaths fills every l's Path/.PathSegments/.Renders (#627 Task
 // 15), in one batch walk however long the page (#643, and one query rather
 // than the accessor planes' three: a location's address is its own ancestor
-// chain, with no plane root to cross to). A location has no accessor, no
-// type-level abbreviation (location_type carries no abbrev column the way
-// component_type does), and no generated name to have allocated an ordinal for
-// (#657 slices 6 and 7 bring both), so RenderBare always gets nil and ""
-// here. full is unused
+// chain, with no plane root to cross to). A location has no accessor and no
+// type-level abbreviation: location_type carries no abbrev column the way
+// component_type does, so RenderBare gets nil and "" here and substitutes
+// nothing. It now HAS an ordinal to pass (#687), and it is deliberately not
+// passed: the render substitutes when it is given an abbrev and an ordinal
+// together, so without the abbrev half there is nothing to compact, and a
+// positional location's name already IS its ordinal. That is the same ruling
+// ADR-0101 records for a system's bare render, reached for a different reason.
+// full is unused
 // (see attachSystemPaths' own doc comment for why the parameter exists
 // anyway).
 func attachLocationPaths(ctx context.Context, q querier, ls []*Location, full bool) error {
@@ -483,8 +585,15 @@ func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSp
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := ValidateName("location", spec.Name); err != nil {
-		return nil, err
+	// An operator-typed name is validated now, before any other resolve, so a
+	// bad slug fails fast (the existing behavior). A generated one is validated
+	// too, but later, inside generateName, the one place every generation site
+	// funnels through: it is not knowable until the type and the parent below
+	// resolve. See CreateSystem's own comment on the same split.
+	if spec.Name != "" {
+		if err := ValidateName("location", spec.Name); err != nil {
+			return nil, err
+		}
 	}
 
 	var parentID *string
@@ -513,13 +622,29 @@ func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSp
 		return nil, err
 	}
 
+	// An empty name means "generate one" (#687): resolved now, after the type
+	// and the parent are both known, since the mint comes from the type's name
+	// rule and the ordinal from siblings in this exact bucket.
+	name := spec.Name
+	generated := name == ""
+	// nil unless the platform picked the name: an operator-typed name has no
+	// ordinal the platform owns, and the column says so by being absent.
+	var ordinal *int
+	if generated {
+		genName, n, err := generateNameForLocationType(ctx, tx, spec.LocationType, parentID, nil)
+		if err != nil {
+			return nil, err
+		}
+		name, ordinal = genName, &n
+	}
+
 	// An empty display_name hands the LABEL's pen to the platform (#682); the
 	// row is inserted with no label and stamped below.
 	l, err := scanLocation(tx.QueryRow(ctx, `
-		insert into location (name, display_name, location_type, parent_id, display_name_generated)
-		values ($1, $2, (select id from location_type where `+registryRefCol(spec.LocationType)+` = $3), $4, $5)
+		insert into location (name, display_name, location_type, parent_id, name_generated, ordinal, display_name_generated)
+		values ($1, $2, (select id from location_type where `+registryRefCol(spec.LocationType)+` = $3), $4, $5, $6, $7)
 		returning `+locationCols,
-		spec.Name, nullize(spec.DisplayName), spec.LocationType, parentID, spec.DisplayName == ""))
+		name, nullize(spec.DisplayName), spec.LocationType, parentID, generated, ordinal, spec.DisplayName == ""))
 	if err != nil {
 		return nil, mapLocationWriteErr(err)
 	}
@@ -560,8 +685,39 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 	if patch.LocationType != nil {
 		typeRefCol = registryRefCol(*patch.LocationType)
 	}
+	// A reclassify that leaves the location still platform-named (#687) may no
+	// longer fit its old type's rule: a floor reclassified as a wing needs the
+	// wing rule, not the one it was minted from. before.NameGenerated is the
+	// read of record, so an operator-typed name (RenameLocation clears the flag
+	// forever) is never touched by a reclassify.
+	//
+	// The guard is the classification CHANGING, not the field being present,
+	// and that distinction is load-bearing rather than tidy: the console sends
+	// location_type on every save (web/src/pages/Locations.tsx), so a presence
+	// test would re-mint on an edit to the display name alone, and with a lower
+	// ordinal freed in the meantime by a rename that re-mint MOVES the name
+	// under location:update with no rename asked for. That is the defect review
+	// caught on the system tier one slice ago (ADR-0101); it is not repeated
+	// here.
+	var (
+		namePatch    *string
+		ordinalPatch *int
+	)
+	typePatchID, err := resolveLocationTypeID(ctx, tx, patch.LocationType)
+	if err != nil {
+		return nil, err
+	}
+	if typePatchID != nil && before.NameGenerated && *typePatchID != before.LocationTypeID {
+		newName, newOrdinal, err := generateNameForLocationType(ctx, tx, *typePatchID, before.ParentID, &before.ID)
+		if err != nil {
+			return nil, err
+		}
+		namePatch, ordinalPatch = &newName, &newOrdinal
+	}
 	after, err := scanLocation(tx.QueryRow(ctx, `
 		update location set
+			name    = coalesce($5, name),
+			ordinal = coalesce($6::integer, ordinal),
 			-- Three-state, not a coalesce: a value is the operator typing a
 			-- label and taking the pen ($4), an explicit empty string clears it
 			-- and hands the pen back (#682).
@@ -576,7 +732,7 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 		where id = $1
 		returning `+locationCols,
 		before.ID, patch.DisplayName, patch.LocationType,
-		labelPen(before.DisplayNameGenerated, patch.DisplayName)))
+		labelPen(before.DisplayNameGenerated, patch.DisplayName), namePatch, ordinalPatch))
 	if err != nil {
 		return nil, mapLocationWriteErr(err)
 	}
@@ -603,6 +759,31 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 		return nil, fmt.Errorf("storage: commit update location: %w", err)
 	}
 	return after, nil
+}
+
+// resolveLocationTypeID resolves a location_type patch field (a name or a uuid)
+// to the row's uuid, so a caller can ask whether the classification actually
+// CHANGED before acting on it.
+//
+// A ref that names no row resolves to nil rather than to an error, which looks
+// like swallowing one and is not: the UPDATE below keeps the current type for
+// an unresolved ref (its coalesce over a NULL subselect), and that has been
+// this path's behavior since it was written. Refusing it is a defensible change
+// and is not this slice's; making the two disagree, so a nameless ref refused
+// here but was accepted there, would be a third behavior nobody chose.
+func resolveLocationTypeID(ctx context.Context, q querier, ref *string) (*string, error) {
+	if ref == nil || *ref == "" {
+		return nil, nil
+	}
+	var id string
+	err := q.QueryRow(ctx, `select id from location_type where `+registryRefCol(*ref)+` = $1`, *ref).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("storage: resolve location_type %q: %w", *ref, err)
+	}
+	return &id, nil
 }
 
 // MoveLocation re-parents a location addressed by name, the same three-way scope
@@ -663,11 +844,59 @@ func (p *PG) MoveLocation(ctx context.Context, actorID, name string, move Locati
 		parentID = &newParent.ID
 	}
 
+	// A reparent changes the placement BUCKET, which is one of the mint's two
+	// inputs, so a still-platform-owned name is re-minted in the destination
+	// (#687). The other input, the type's rule, is unchanged by a move, so the
+	// rule is simply re-read for the same type.
+	//
+	// Guarded on the bucket actually moving, not merely on the row being
+	// platform-named: a no-op move (a nil ParentName, this verb's documented
+	// no-op) changes no input to the mint, and re-minting anyway would move the
+	// NAME whenever a lower ordinal had been freed in the meantime. That is the
+	// weaker cousin of the reclassify defect ADR-0101 records, left standing on
+	// the system tier only because narrowing it there would change an existing
+	// expected value. Nothing generates a location name before this slice, so
+	// there is nothing here to preserve, and the narrow form is the correct one.
+	var (
+		namePatch    *string
+		ordinalPatch *int
+	)
+	if before.NameGenerated && !sameOptional(before.ParentID, parentID) {
+		newName, newOrdinal, err := generateNameForLocationType(ctx, tx, before.LocationTypeID, parentID, &before.ID)
+		if err != nil {
+			return nil, err
+		}
+		namePatch, ordinalPatch = &newName, &newOrdinal
+	}
 	after, err := scanLocation(tx.QueryRow(ctx, `
-		update location set parent_id = $2, updated_at = now() where id = $1 returning `+locationCols,
-		before.ID, parentID))
+		update location set
+			parent_id = $2,
+			name      = coalesce($3, name),
+			-- The number the new name was minted from, recorded with it: a move
+			-- changes the bucket, so the old bucket's ordinal is no more true of
+			-- the row than the old name was.
+			ordinal   = coalesce($4::integer, ordinal),
+			updated_at = now()
+		where id = $1
+		returning `+locationCols,
+		before.ID, parentID, namePatch, ordinalPatch))
 	if err != nil {
 		return nil, mapLocationWriteErr(err)
+	}
+	// A re-minted name is a fact a label rule reads (.Name), so a
+	// platform-owned label follows it (#682), and so does everything placed
+	// here when the rename moved what this location READS as (#685). The same
+	// two steps in the same order RenameLocation runs, for the same reason: a
+	// move that re-mints IS a rename, it is just not the operator's.
+	if before.Name != after.Name {
+		if after, err = p.stampLocationLabel(ctx, tx, after); err != nil {
+			return nil, err
+		}
+		if locationReadLabel(before) != locationReadLabel(after) {
+			if err := p.cascadeLocationLabels(ctx, tx, after.ID); err != nil {
+				return nil, err
+			}
+		}
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "move", "location", after.ID, before, after); err != nil {
 		return nil, err
@@ -723,11 +952,10 @@ func (p *PG) RenameLocation(ctx context.Context, actorID, name, newName string, 
 	// name_generated is cleared here whether or not it was already set (#686),
 	// the same freeze a component's and a system's rename applies: an operator
 	// who types a name is claiming the pen for good, and :resetName is the only
-	// way back. It writes false today over false, because nothing generates a
-	// location name yet; it is here so the row an operator names TODAY is still
-	// protected the day #687 gives its type a name rule.
+	// way back. The ordinal goes with it (#687): the platform owns no number for
+	// a name it did not pick, and absent is how that is written down.
 	after, err := scanLocation(tx.QueryRow(ctx,
-		`update location set name = $2, name_generated = false, updated_at = now() where id = $1 returning `+locationCols,
+		`update location set name = $2, name_generated = false, ordinal = null, updated_at = now() where id = $1 returning `+locationCols,
 		before.ID, newName))
 	if err != nil {
 		return nil, mapLocationWriteErr(err)
@@ -754,26 +982,70 @@ func (p *PG) RenameLocation(ctx context.Context, actorID, name, newName string, 
 	return after, nil
 }
 
-// ResetLocationName is the location tier's half of the pen (#686), and today it
-// always refuses: ErrLocationTypeNoNameRule (a 422 naming the missing fact).
+// ResetLocationName hands the pen back to the platform (#687), the location
+// tier's twin of ResetSystemName: it regenerates the name from the location's
+// CURRENT type rule and parent, the exact rule a nameless create applies, and
+// marks the result name_generated again, recording the ordinal it was minted
+// from. It does not matter whether the name was already platform-owned or an
+// operator had typed one: either way the answer is a fresh mint. Scoped exactly
+// as RenameLocation (the same read-then-action split), because it is the same
+// act from the permission's point of view: it changes the name, gated by
+// location:rename, no new token.
 //
-// The verb exists on all three trees so the contract is one shape rather than
-// two, and it refuses HERE, in the gateway, rather than being left off the API:
-// a location has no stem source at all (location_type carries none, unlike
-// component_type and system_type), so there is no mint for it to run and no
-// honest success to report. The alternative, returning the row unchanged, would
-// report a reset that did not happen and would leave nothing for #687's first
-// test to flip.
+// A type with no name rule is refused (ErrLocationTypeNoNameRule -> 422) rather
+// than left half-reset, which is what this verb did for EVERY type for one
+// slice (#686 shipped the pen and the verbs ahead of the generator). The
+// refusal is not a gap: a building's name is ground truth an operator holds, so
+// a reset that invented one would be worse than declining, and a reset that
+// silently kept the operator's name while claiming the pen would be a lie about
+// who owns the field.
 //
-// It resolves the target first, under the same read-then-action split
-// RenameLocation uses, so an operator learns "this type cannot generate a name"
-// only about a location they can actually see and rename. An unreadable one is
-// still the non-disclosing 404 it would be for any other act.
+// The target resolves first, so an operator learns "this type cannot generate a
+// name" only about a location they can actually see and rename; an unreadable
+// one is still the non-disclosing 404 it would be for any other act.
+//
+// The audit verb is "reset", distinct from "rename": the row records what
+// actually happened (the platform picked the name, not the caller), the same
+// reasoning that gave move its own verb apart from update.
 func (p *PG) ResetLocationName(ctx context.Context, actorID, name string, read, action scope.Set) (*Location, error) {
-	if _, err := p.resolveForAction(ctx, p.pool, name, read, action); err != nil {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin reset location name: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	before, err := p.resolveForAction(ctx, tx, name, read, action)
+	if err != nil {
 		return nil, err
 	}
-	return nil, ErrLocationTypeNoNameRule
+	newName, newOrdinal, err := generateNameForLocationType(ctx, tx, before.LocationTypeID, before.ParentID, &before.ID)
+	if err != nil {
+		return nil, err
+	}
+	after, err := scanLocation(tx.QueryRow(ctx,
+		`update location set name = $2, name_generated = true, ordinal = $3, updated_at = now() where id = $1 returning `+locationCols,
+		before.ID, newName, newOrdinal))
+	if err != nil {
+		return nil, mapLocationWriteErr(err)
+	}
+	// The same pair a rename settles, in the other direction: a fresh name is a
+	// fact a rule reads, so a platform-owned label follows it, and so does
+	// everything placed here when the read ladder moved (#682, #685).
+	if after, err = p.stampLocationLabel(ctx, tx, after); err != nil {
+		return nil, err
+	}
+	if locationReadLabel(before) != locationReadLabel(after) {
+		if err := p.cascadeLocationLabels(ctx, tx, after.ID); err != nil {
+			return nil, err
+		}
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "reset", "location", after.ID, before, after); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit reset location name: %w", err)
+	}
+	return after, nil
 }
 
 // DeleteLocation removes a location addressed by name, with the same three-way

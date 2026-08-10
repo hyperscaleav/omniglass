@@ -85,6 +85,14 @@ type locationTypesDoc struct {
 		DisplayName        string   `yaml:"display_name"`
 		Icon               string   `yaml:"icon"`
 		AllowedParentTypes []string `yaml:"allowed_parent_types"`
+		// NameRule is the type's opt-in to generating the names of the
+		// locations it classifies (#687). A pointer, so absent in the YAML is
+		// absent in the column: no rule means an operator names them, which is
+		// where three of the four shipped types stay.
+		NameRule *struct {
+			Stem      string `yaml:"stem"`
+			BareFirst bool   `yaml:"bare_first"`
+		} `yaml:"name_rule"`
 	} `yaml:"location_types"`
 }
 
@@ -777,12 +785,17 @@ func seedLocationTypes(ctx context.Context, gw storage.Gateway) error {
 		return fmt.Errorf("seed: parse location_types: %w", err)
 	}
 	for _, lt := range doc.LocationTypes {
+		var rule *storage.NameRule
+		if lt.NameRule != nil {
+			rule = &storage.NameRule{Stem: lt.NameRule.Stem, BareFirst: lt.NameRule.BareFirst}
+		}
 		if err := gw.SeedLocationType(ctx, storage.LocationType{
 			Name:               lt.ID,
 			Official:           false,
 			DisplayName:        lt.DisplayName,
 			Icon:               lt.Icon,
 			AllowedParentTypes: lt.AllowedParentTypes,
+			NameRule:           rule,
 		}); err != nil {
 			return err
 		}

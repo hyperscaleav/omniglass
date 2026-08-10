@@ -131,3 +131,110 @@ func TestLocationResetNameRefusesAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/locations/reset-room:resetName", nil, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodPost, "/locations/no-such-room:resetName", nil, http.StatusNotFound)
 }
+
+// TestLocationGeneratedNameAPI drives #687 over HTTP as an operator meets it: a
+// floor created with no name comes back named, the second takes the next
+// ordinal, :rename claims the pen and :resetName returns it, and the type's own
+// rule round-trips on the registry surface so a console can show which kinds of
+// place the platform names.
+//
+// It is the wire that is under test rather than the gateway. name_generated has
+// to reach the console for it to show who owns the name, and a create body that
+// still required a name would leave the whole feature unreachable from the
+// outside whatever the storage layer can do.
+func TestLocationGeneratedNameAPI(t *testing.T) {
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatalf("mint owner: %v", err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "boi", "location_type": "campus"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "17c", "location_type": "building", "parent": "boi"}, http.StatusCreated)
+
+	var first nameBody
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/locations",
+		map[string]any{"location_type": "floor", "parent": "17c"}, http.StatusCreated), &first); err != nil {
+		t.Fatalf("decode the nameless create: %v", err)
+	}
+	if first.Name != "1" || !first.NameGenerated {
+		t.Fatalf("nameless create = %+v, want name=1 name_generated=true", first)
+	}
+
+	var second nameBody
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/locations",
+		map[string]any{"location_type": "floor", "parent": "17c"}, http.StatusCreated), &second); err != nil {
+		t.Fatalf("decode the second create: %v", err)
+	}
+	if second.Name != "2" {
+		t.Fatalf("the second nameless create = %+v, want name=2", second)
+	}
+
+	// A nameless create under a type with no rule is a 422 naming the reason,
+	// not a 500 and not a row with a blank name.
+	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"location_type": "room", "parent": "17c"}, http.StatusUnprocessableEntity)
+
+	// The pen round trip, addressed by the dotted path: a positional name is
+	// only unique within its parent, so "1" on its own is an ambiguous address
+	// the moment a second building has a first floor.
+	var renamed nameBody
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/locations/boi.17c.1:rename",
+		map[string]any{"name": "ground"}, http.StatusOK), &renamed); err != nil {
+		t.Fatalf("decode rename: %v", err)
+	}
+	if renamed.Name != "ground" || renamed.NameGenerated {
+		t.Fatalf("rename = %+v, want name=ground name_generated=false", renamed)
+	}
+	var reset nameBody
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/locations/boi.17c.ground:resetName", nil, http.StatusOK), &reset); err != nil {
+		t.Fatalf("decode resetName: %v", err)
+	}
+	if reset.Name != "1" || !reset.NameGenerated {
+		t.Fatalf("resetName = %+v, want name=1 name_generated=true", reset)
+	}
+
+	// The registry surface carries the rule, so a console can tell which types
+	// name themselves, and a rule that cannot mint a legal name is refused
+	// where it is written rather than at some later create.
+	var types struct {
+		LocationTypes []struct {
+			Name     string `json:"name"`
+			NameRule *struct {
+				Stem      string `json:"stem"`
+				BareFirst bool   `json:"bare_first"`
+			} `json:"name_rule"`
+		} `json:"location_types"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/location-types", nil, http.StatusOK), &types); err != nil {
+		t.Fatalf("decode location types: %v", err)
+	}
+	seen := map[string]bool{}
+	for _, lt := range types.LocationTypes {
+		seen[lt.Name] = lt.NameRule != nil
+		if lt.Name == "floor" && (lt.NameRule == nil || lt.NameRule.Stem != "") {
+			t.Fatalf("the floor type's name_rule = %+v, want a positional rule", lt.NameRule)
+		}
+	}
+	if seen["room"] {
+		t.Error("the room type carries a name_rule on the wire, want none: a room's name is the operator's")
+	}
+
+	c.do(ownerTok, http.MethodPost, "/location-types",
+		map[string]any{"name": "wing", "display_name": "Wing", "name_rule": map[string]any{"stem": "Wing"}}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPost, "/location-types",
+		map[string]any{"name": "wing", "display_name": "Wing", "name_rule": map[string]any{"stem": "wing", "bare_first": true}}, http.StatusCreated)
+}

@@ -64,10 +64,19 @@ type factsLabelRule struct {
 }
 
 type factsLocationType struct {
-	ID                 string   `json:"id"`
-	DisplayName        string   `json:"display_name"`
-	Icon               string   `json:"icon,omitempty"`
-	AllowedParentTypes []string `json:"allowed_parent_types,omitempty"`
+	ID                 string         `json:"id"`
+	DisplayName        string         `json:"display_name"`
+	Icon               string         `json:"icon,omitempty"`
+	AllowedParentTypes []string       `json:"allowed_parent_types,omitempty"`
+	NameRule           *factsNameRule `json:"name_rule,omitempty"`
+}
+
+// factsNameRule is a location_type's name rule as the docs render it (#687):
+// absent where an operator names every location of that type, and an empty stem
+// where the type is positional and the ordinal alone is the name.
+type factsNameRule struct {
+	Stem      string `json:"stem"`
+	BareFirst bool   `json:"bare_first,omitempty"`
 }
 
 type factsStandardRole struct {
@@ -255,8 +264,13 @@ func FactsJSON() ([]byte, error) {
 		return nil, fmt.Errorf("seed facts: location types: %w", err)
 	}
 	for _, lt := range lts.LocationTypes {
+		var rule *factsNameRule
+		if lt.NameRule != nil {
+			rule = &factsNameRule{Stem: lt.NameRule.Stem, BareFirst: lt.NameRule.BareFirst}
+		}
 		doc.LocationTypes = append(doc.LocationTypes, factsLocationType{
 			ID: lt.ID, DisplayName: lt.DisplayName, Icon: lt.Icon, AllowedParentTypes: lt.AllowedParentTypes,
+			NameRule: rule,
 		})
 	}
 

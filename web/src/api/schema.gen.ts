@@ -1323,7 +1323,7 @@ export interface paths {
         put?: never;
         /**
          * Create a location
-         * @description Creates a location, optionally under a parent (a root needs an all-scoped grant). Gated by location:create.
+         * @description Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. Gated by location:create.
          */
         post: operations["create-location"];
         delete?: never;
@@ -1535,7 +1535,7 @@ export interface paths {
         put?: never;
         /**
          * Regenerate a location's name
-         * @description Hands the pen back to the platform, the same verb components and systems carry. It refuses today, 422: a location_type carries no name rule, so there is nothing to regenerate the name from. Gated by location:rename, the same token :rename uses.
+         * @description Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is most of them: only a positional kind of place (a floor) has a name the platform can generate. Gated by location:rename, the same token :rename uses.
          */
         post: operations["reset-location-name"];
         delete?: never;
@@ -4245,8 +4245,8 @@ export interface components {
             display_name?: string;
             /** @description The location_type, by name or uuid (campus, building, ...) */
             location_type: string;
-            /** @description Name, unique within its placement (the address; lowercase letters, digits, hyphens) */
-            name: string;
+            /** @description Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the location_type's name rule. */
+            name?: string;
             /** @description Parent location name; omit for a root location */
             parent?: string;
         };
@@ -4267,6 +4267,8 @@ export interface components {
             label_rule?: string;
             /** @description The globally unique name (e.g. wing); "root" is reserved */
             name: string;
+            /** @description How the platform NAMES locations of this type; omit to have an operator name every one of them. Refused (422) if it cannot mint a legal name */
+            name_rule?: components["schemas"]["NameRuleBody"];
         };
         CreateMeTokenInputBody: {
             /**
@@ -5526,7 +5528,7 @@ export interface components {
             /** @description The location_type's uuid, the stable form of location_type */
             location_type_id: string;
             name: string;
-            /** @description Whether the platform picked this name rather than an operator typing it. Always false today: a location_type carries no name rule yet, so every location name is operator-typed. */
+            /** @description Whether the platform picked this name (from the location_type's name rule) rather than an operator typing it. */
             name_generated: boolean;
             /** @description The parent location's name, for display; absent for a site root */
             parent?: string;
@@ -5591,6 +5593,8 @@ export interface components {
             label_rule?: string;
             /** @description The name an operator reads and types; renameable */
             name: string;
+            /** @description How the platform NAMES locations of this type; absent means an operator names every one of them */
+            name_rule?: components["schemas"]["NameRuleBody"];
             official: boolean;
         };
         LocationTypeMetricBody: {
@@ -5744,6 +5748,12 @@ export interface components {
             location?: string;
             /** @description Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system (requires an all-scoped move grant). */
             parent?: string;
+        };
+        NameRuleBody: {
+            /** @description Suppress the ordinal on the first of this stem in a parent, so the only wing there is wing and the second is wing-2. Ignored when stem is empty. */
+            bare_first?: boolean;
+            /** @description The generated name's prefix (wing gives wing, wing-2); empty makes the type positional, so the name is the ordinal alone (1, 2, 3) */
+            stem: string;
         };
         NodeBody: {
             /**
@@ -7005,6 +7015,8 @@ export interface components {
             icon?: string;
             /** @description A new label template for locations of this type; omit to leave unchanged, "" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels */
             label_rule?: string;
+            /** @description A new name rule for locations of this type; omit to leave unchanged. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row */
+            name_rule?: components["schemas"]["NameRuleBody"];
         };
         UpdateMeInputBody: {
             /**

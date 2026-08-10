@@ -7,6 +7,11 @@ import (
 
 // The name rule. There is one, and it applies to every name-bearing table.
 //
+// Not to be confused with [NameRule] in namegen.go, which #687 named after the
+// location_type column it is stored in: that one says how a TYPE generates the
+// names of the rows it classifies, and whatever it produces is validated by
+// this one before it reaches a row.
+//
 // There were three, then two, now one. A keyspace name used to be a dot-joined path
 // of segments (icmp.rtt-avg) while an entity name was a single segment, selected by
 // the table's declared shape. That distinction is retired (#586): a name is one kebab

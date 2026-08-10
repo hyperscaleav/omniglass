@@ -52,6 +52,23 @@ func (p *PG) ExportGenerateSystemName(ctx context.Context, systemTypeID, parentI
 	return generateNameForSystemType(ctx, tx, systemTypeID, parentID, locationID, excludeID)
 }
 
+// ExportGenerateLocationName is ExportGenerateName on the location tier
+// (#687): it runs the real two-step generator (resolve the location_type's name
+// rule, mint the ordinal in the row's parent bucket) and rolls back, so the
+// recompute-and-compare invariant can ask "what would this location be called".
+//
+// It takes the location_type id rather than a rule, for the reason the system
+// shim takes a type id rather than a stem: a test that resolved the rule itself
+// would be comparing against a restatement of it rather than against the rule.
+func (p *PG) ExportGenerateLocationName(ctx context.Context, locationTypeID string, parentID, excludeID *string) (string, int, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return "", 0, fmt.Errorf("storage: begin export generate location name: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	return generateNameForLocationType(ctx, tx, locationTypeID, parentID, excludeID)
+}
+
 // ExportStemForProduct resolves the stem a product's component_type chain
 // yields, the input the generator mints from. The chain walk is the same one
 // generateNameForProduct runs, so a test comparing against it is comparing

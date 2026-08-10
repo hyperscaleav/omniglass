@@ -16,11 +16,10 @@ type locationBody struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	DisplayName string `json:"display_name,omitempty"`
-	// The NAME's pen (#686); see systemBody for why it is read-only. False on
-	// every location today: the pen and the verbs ship on this tier ahead of a
-	// generator, so a name an operator types now is already frozen by the time
-	// #687 gives a location_type a name rule.
-	NameGenerated bool `json:"name_generated" doc:"Whether the platform picked this name rather than an operator typing it. Always false today: a location_type carries no name rule yet, so every location name is operator-typed."`
+	// The NAME's pen (#686); see systemBody for why it is read-only. True only
+	// where the location's type carries a name rule (#687), which of the
+	// shipped place vocabulary is the floor alone.
+	NameGenerated bool `json:"name_generated" doc:"Whether the platform picked this name (from the location_type's name rule) rather than an operator typing it."`
 	// The LABEL's pen (#682); see componentBody for why it is read-only.
 	DisplayNameGenerated bool              `json:"display_name_generated" doc:"Whether the platform rendered this display name from a label rule rather than an operator typing it. Read-only: write display_name to claim it, write an empty display_name to hand it back."`
 	LocationType         string            `json:"location_type" doc:"The location_type name"`
@@ -56,13 +55,53 @@ type listLocationsOutput struct {
 // "root" sentinel; empty means unconstrained), and whether it ships with the
 // binary. The registry lists alphabetically by display_name.
 type locationTypeBody struct {
-	ID                 string   `json:"id" doc:"The location type's uuid, the stable handle that survives a rename"`
-	Name               string   `json:"name" doc:"The name an operator reads and types; renameable"`
-	DisplayName        string   `json:"display_name"`
-	Icon               string   `json:"icon"`
-	AllowedParentTypes []string `json:"allowed_parent_types"`
-	LabelRule          string   `json:"label_rule,omitempty" doc:"The label template locations of this type get; empty falls back to the global rule for locations"`
-	Official           bool     `json:"official"`
+	ID                 string        `json:"id" doc:"The location type's uuid, the stable handle that survives a rename"`
+	Name               string        `json:"name" doc:"The name an operator reads and types; renameable"`
+	DisplayName        string        `json:"display_name"`
+	Icon               string        `json:"icon"`
+	AllowedParentTypes []string      `json:"allowed_parent_types"`
+	LabelRule          string        `json:"label_rule,omitempty" doc:"The label template locations of this type get; empty falls back to the global rule for locations"`
+	NameRule           *nameRuleBody `json:"name_rule,omitempty" doc:"How the platform NAMES locations of this type; absent means an operator names every one of them"`
+	Official           bool          `json:"official"`
+}
+
+// nameRuleBody is the wire shape of a location_type's name rule (#687): a
+// DECLARATION, deliberately not a template like label_rule beside it, because a
+// name has to satisfy the slug rule and lands in a unique index other rows
+// reference, so it is refused at rule-edit time by minting from it (ADR-0102).
+//
+// An empty stem is a POSITIONAL type, whose ordinal genuinely is its name: a
+// floor called 1, then 2. bare_first is ignored there, since suppressing the
+// ordinal of a name that IS its ordinal would leave nothing.
+type nameRuleBody struct {
+	Stem      string `json:"stem" maxLength:"90" pattern:"^([a-z0-9][a-z0-9-]*)?$" doc:"The generated name's prefix (wing gives wing, wing-2); empty makes the type positional, so the name is the ordinal alone (1, 2, 3)"`
+	BareFirst bool   `json:"bare_first,omitempty" doc:"Suppress the ordinal on the first of this stem in a parent, so the only wing there is wing and the second is wing-2. Ignored when stem is empty."`
+}
+
+// toLocationTypeBody is the one projection of a registry row onto the wire.
+// The three routes that return one used to spell it out each time, which is
+// fine for five columns and a trap at seven: a rule added to two of the three
+// is a field that reads back empty from whichever one was missed.
+func toLocationTypeBody(lt *storage.LocationType) locationTypeBody {
+	return locationTypeBody{
+		ID: lt.ID, Name: lt.Name, DisplayName: lt.DisplayName, Icon: lt.Icon,
+		AllowedParentTypes: lt.AllowedParentTypes, LabelRule: derefStr(lt.LabelRule),
+		NameRule: toNameRuleBody(lt.NameRule), Official: lt.Official,
+	}
+}
+
+func toNameRuleBody(r *storage.NameRule) *nameRuleBody {
+	if r == nil {
+		return nil
+	}
+	return &nameRuleBody{Stem: r.Stem, BareFirst: r.BareFirst}
+}
+
+func toStorageNameRule(r *nameRuleBody) *storage.NameRule {
+	if r == nil {
+		return nil
+	}
+	return &storage.NameRule{Stem: r.Stem, BareFirst: r.BareFirst}
 }
 
 type listLocationTypesOutput struct {
@@ -82,6 +121,10 @@ type createLocationTypeInput struct {
 		Icon               string   `json:"icon,omitempty" doc:"A glyph key; the console falls back to map-pin when empty"`
 		AllowedParentTypes []string `json:"allowed_parent_types,omitempty" doc:"location_type names and/or the reserved root sentinel this type may be placed under; empty means unconstrained"`
 		LabelRule          string   `json:"label_rule,omitempty" doc:"The label template locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile"`
+		// A declaration, not a template: see nameRuleBody. Omit it and an
+		// operator names every location of this type, which is the default and
+		// the state three of the four shipped types stay in.
+		NameRule *nameRuleBody `json:"name_rule,omitempty" doc:"How the platform NAMES locations of this type; omit to have an operator name every one of them. Refused (422) if it cannot mint a legal name"`
 	}
 }
 
@@ -92,6 +135,11 @@ type updateLocationTypeInput struct {
 		Icon               *string   `json:"icon,omitempty" doc:"A new glyph key; the console falls back to map-pin when empty"`
 		AllowedParentTypes *[]string `json:"allowed_parent_types,omitempty" doc:"Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained"`
 		LabelRule          *string   `json:"label_rule,omitempty" doc:"A new label template for locations of this type; omit to leave unchanged, \"\" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels"`
+		// Omitted leaves the rule alone. There is no spelling that CLEARS it,
+		// the same limit component_type's stem patch carries: an omitted key and
+		// an explicit null both decode to nil, so an object field has no third
+		// state to read.
+		NameRule *nameRuleBody `json:"name_rule,omitempty" doc:"A new name rule for locations of this type; omit to leave unchanged. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row"`
 	}
 }
 
@@ -109,7 +157,12 @@ type locationPathInput struct {
 
 type createLocationInput struct {
 	Body struct {
-		Name         string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens)"`
+		// Name is optional (#687), exactly as a component's and a system's are:
+		// omit it and the platform mints one from the location_type's name
+		// rule, and marks name_generated. Supplied, it is validated exactly as
+		// before. Omitting it for a type carrying no rule is a 422: only some
+		// kinds of place have a name the platform can know.
+		Name         string  `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the location_type's name rule."`
 		DisplayName  string  `json:"display_name,omitempty" doc:"What an operator reads; the name is the address"`
 		LocationType string  `json:"location_type" minLength:"1" doc:"The location_type, by name or uuid (campus, building, ...)"`
 		Parent       *string `json:"parent,omitempty" doc:"Parent location name; omit for a root location"`
@@ -205,10 +258,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		out := &listLocationTypesOutput{}
 		out.Body.LocationTypes = make([]locationTypeBody, 0, len(types))
 		for i := range types {
-			out.Body.LocationTypes = append(out.Body.LocationTypes, locationTypeBody{
-				ID: types[i].ID, Name: types[i].Name, DisplayName: types[i].DisplayName, Icon: types[i].Icon,
-				AllowedParentTypes: types[i].AllowedParentTypes, LabelRule: derefStr(types[i].LabelRule), Official: types[i].Official,
-			})
+			out.Body.LocationTypes = append(out.Body.LocationTypes, toLocationTypeBody(&types[i]))
 		}
 		return out, nil
 	})
@@ -224,14 +274,12 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		lt, err := gw.CreateLocationType(ctx, actorID(ctx), storage.LocationType{
 			Name: in.Body.Name, DisplayName: in.Body.DisplayName, Icon: in.Body.Icon,
 			AllowedParentTypes: in.Body.AllowedParentTypes, LabelRule: ptrOrNil(in.Body.LabelRule),
+			NameRule: toStorageNameRule(in.Body.NameRule),
 		})
 		if err != nil {
 			return nil, mapTypeErr(err, "location_type")
 		}
-		return &locationTypeOutput{Body: locationTypeBody{
-			ID: lt.ID, Name: lt.Name, DisplayName: lt.DisplayName, Icon: lt.Icon,
-			AllowedParentTypes: lt.AllowedParentTypes, LabelRule: derefStr(lt.LabelRule), Official: lt.Official,
-		}}, nil
+		return &locationTypeOutput{Body: toLocationTypeBody(lt)}, nil
 	})
 
 	huma.Register(api, a.gated(huma.Operation{
@@ -244,14 +292,12 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		lt, err := gw.UpdateLocationType(ctx, actorID(ctx), in.ID, storage.LocationTypePatch{
 			DisplayName: in.Body.DisplayName, Icon: in.Body.Icon,
 			AllowedParentTypes: in.Body.AllowedParentTypes, LabelRule: in.Body.LabelRule,
+			NameRule: toStorageNameRule(in.Body.NameRule),
 		})
 		if err != nil {
 			return nil, mapTypeErr(err, "location_type")
 		}
-		return &locationTypeOutput{Body: locationTypeBody{
-			ID: lt.ID, Name: lt.Name, DisplayName: lt.DisplayName, Icon: lt.Icon,
-			AllowedParentTypes: lt.AllowedParentTypes, LabelRule: derefStr(lt.LabelRule), Official: lt.Official,
-		}}, nil
+		return &locationTypeOutput{Body: toLocationTypeBody(lt)}, nil
 	})
 
 	huma.Register(api, a.gated(huma.Operation{
@@ -288,7 +334,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Path:          "/locations",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a location",
-		Description:   "Creates a location, optionally under a parent (a root needs an all-scoped grant). Gated by location:create.",
+		Description:   "Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. Gated by location:create.",
 	}, "location", "create"), func(ctx context.Context, in *createLocationInput) (*locationOutput, error) {
 		l, err := gw.CreateLocation(ctx, actorID(ctx), storage.LocationSpec{
 			Name:         in.Body.Name,
@@ -364,7 +410,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPost,
 		Path:        "/locations/{name}:resetName",
 		Summary:     "Regenerate a location's name",
-		Description: "Hands the pen back to the platform, the same verb components and systems carry. It refuses today, 422: a location_type carries no name rule, so there is nothing to regenerate the name from. Gated by location:rename, the same token :rename uses.",
+		Description: "Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is most of them: only a positional kind of place (a floor) has a name the platform can generate. Gated by location:rename, the same token :rename uses.",
 	}, "location", "rename"), func(ctx context.Context, in *locationPathInput) (*locationOutput, error) {
 		l, err := gw.ResetLocationName(ctx, actorID(ctx), in.Name,
 			a.scopeFor(ctx, "location", "read"), a.scopeFor(ctx, "location", "rename"))

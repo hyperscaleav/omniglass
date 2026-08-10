@@ -66,16 +66,23 @@ func TestNamePenSpreadsWithoutClaimingExistingRows(t *testing.T) {
 	if ordinal != nil {
 		t.Errorf("an existing system carries ordinal %d after the migration, want absent", *ordinal)
 	}
-	// location gets the pen and NOT an ordinal: there is no mint to allocate one
-	// until #687 gives a location_type a name rule, and a column no writer can
-	// fill is a fact waiting to be read wrongly.
-	var has bool
-	if err := conn.QueryRow(ctx, `select exists (
-	        select 1 from information_schema.columns
-	         where table_name = 'location' and column_name = 'ordinal')`).Scan(&has); err != nil {
-		t.Fatalf("check for a location ordinal column: %v", err)
+	// A location's ordinal is the same non-event. The column itself arrives one
+	// migration later, with the generator that fills it (#687, and see
+	// TestLocationNameRuleArrivesClaimingNothing, which holds THAT migration to
+	// the same bar); what this asserts is that migrating the whole way forward
+	// leaves an existing location's number absent, exactly as it leaves the
+	// system's.
+	//
+	// This assertion used to read "location has no ordinal column at all",
+	// which was the honest statement of #686's own restraint (a column no
+	// writer can fill is a fact waiting to be read wrongly) and became false
+	// the moment the writer landed. migrate.Run has no bounded form, so it
+	// always runs every migration; the surviving invariant is the value, not
+	// the column's absence.
+	if err := conn.QueryRow(ctx, `select ordinal from location where name = $1`, "legacy-room").Scan(&ordinal); err != nil {
+		t.Fatalf("read the location ordinal: %v", err)
 	}
-	if has {
-		t.Error("location carries an ordinal column with no writer: the generator that fills one is #687's")
+	if ordinal != nil {
+		t.Errorf("an existing location carries ordinal %d after the migrations, want absent", *ordinal)
 	}
 }

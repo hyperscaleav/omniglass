@@ -84,6 +84,12 @@ func mapTypeErr(err error, kind string) error {
 		return huma.Error409Conflict(kind + " has no changes of yours to discard")
 	case errors.Is(err, storage.ErrReservedTypeID):
 		return huma.Error422UnprocessableEntity("\"root\" is a reserved " + kind + " id")
+	// Before the two name cases below, deliberately: a name rule that cannot
+	// mint a legal name wraps the very error the mint failed with, so a later
+	// arm would match it first and report the TYPE's own name as the problem
+	// when the type's name is fine (#687).
+	case errors.Is(err, storage.ErrInvalidNameRule):
+		return huma.Error422UnprocessableEntity("name rule cannot generate a legal name: " + err.Error())
 	case errors.Is(err, storage.ErrEntityNameIsUUID):
 		return huma.Error422UnprocessableEntity(kind + " name may not be a uuid")
 	case errors.Is(err, storage.ErrInvalidEntityName):

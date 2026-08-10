@@ -1959,8 +1959,8 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a location",
-					Long:    "Creates a location, optionally under a parent (a root needs an all-scoped grant). Gated by location:create.",
-					Example: "  omniglass location create --location-type location_type --name name",
+					Long:    "Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. Gated by location:create.",
+					Example: "  omniglass location create --location-type location_type",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/locations")
@@ -1983,8 +1983,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads; the name is the address")
 				cmd.Flags().StringVar(&fLocationType, "location-type", "", "The location_type, by name or uuid (campus, building, ...)")
 				_ = cmd.MarkFlagRequired("location-type")
-				cmd.Flags().StringVar(&fName, "name", "", "Name, unique within its placement (the address; lowercase letters, digits, hyphens)")
-				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fName, "name", "", "Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the location_type's name rule.")
 				cmd.Flags().StringVar(&fParent, "parent", "", "Parent location name; omit for a root location")
 				return cmd
 			}()
@@ -2281,7 +2280,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "resetName <name>",
 					Short:   "Regenerate a location's name",
-					Long:    "Hands the pen back to the platform, the same verb components and systems carry. It refuses today, 422: a location_type carries no name rule, so there is nothing to regenerate the name from. Gated by location:rename, the same token :rename uses.",
+					Long:    "Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is most of them: only a positional kind of place (a floor) has a name the platform can generate. Gated by location:rename, the same token :rename uses.",
 					Example: "  omniglass location resetName <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2365,6 +2364,7 @@ func generatedCommands() []*cobra.Command {
 				var fIcon string
 				var fLabelRule string
 				var fName string
+				var fNameRule string
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a location type",
@@ -2389,6 +2389,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
+						if cmd.Flags().Changed("name-rule") {
+							body["name_rule"] = jsonOrString(fNameRule)
+						}
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
@@ -2399,6 +2402,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "The label template locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name (e.g. wing); \"root\" is reserved")
 				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fNameRule, "name-rule", "", "How the platform NAMES locations of this type; omit to have an operator name every one of them. Refused (422) if it cannot mint a legal name")
 				return cmd
 			}()
 			return cmd
@@ -2581,6 +2585,7 @@ func generatedCommands() []*cobra.Command {
 				var fDisplayName string
 				var fIcon string
 				var fLabelRule string
+				var fNameRule string
 				cmd := &cobra.Command{
 					Use:     "update <id>",
 					Short:   "Update a location type",
@@ -2602,6 +2607,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("label-rule") {
 							body["label_rule"] = fLabelRule
 						}
+						if cmd.Flags().Changed("name-rule") {
+							body["name_rule"] = jsonOrString(fNameRule)
+						}
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
@@ -2609,6 +2617,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A new glyph key; the console falls back to map-pin when empty")
 				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label template for locations of this type; omit to leave unchanged, \"\" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels")
+				cmd.Flags().StringVar(&fNameRule, "name-rule", "", "A new name rule for locations of this type; omit to leave unchanged. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row")
 				return cmd
 			}()
 			return cmd

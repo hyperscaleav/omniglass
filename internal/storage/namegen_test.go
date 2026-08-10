@@ -1,6 +1,10 @@
 package storage
 
-import "testing"
+import (
+	"errors"
+	"strings"
+	"testing"
+)
 
 // display is the component mint every allocation case below shares: a stem, no
 // suppression, the shape #681 already mints thousands of names in.
@@ -295,3 +299,130 @@ func TestLocationNameScopeHasTwoBuckets(t *testing.T) {
 		t.Errorf("the root bucket binds %v, want nothing", got)
 	}
 }
+
+// A location_type's name rule is a DECLARATION, and the cases below are what
+// that buys over a template (#687, ADR-0102): its whole output space is
+// enumerable, so "this rule can only mint legal names" is decidable when the
+// rule is written rather than sampled.
+
+// TestNameRuleIsItsMint proves the rule and the mint are the same value rather
+// than two shapes kept in step by hand. That is what carries ADR-0101's
+// guarantee onto this tier for free: pickOrdinal tests the mint, and the mint
+// IS the stored rule, so a rule cannot mean one name to the allocator and
+// another to the caller.
+func TestNameRuleIsItsMint(t *testing.T) {
+	cases := []struct {
+		name    string
+		rule    NameRule
+		want    []string // the names at ordinals 1, 2, 3
+		whyItIs string
+	}{
+		{
+			name:    "positional",
+			rule:    NameRule{},
+			want:    []string{"1", "2", "3"},
+			whyItIs: "an empty stem is the floor whose ordinal genuinely is its name",
+		},
+		{
+			name:    "stemmed, counted from one",
+			rule:    NameRule{Stem: "wing"},
+			want:    []string{"wing-1", "wing-2", "wing-3"},
+			whyItIs: "a stem with no suppression counts from 1, like a component",
+		},
+		{
+			name:    "stemmed, first suppressed",
+			rule:    NameRule{Stem: "wing", BareFirst: true},
+			want:    []string{"wing", "wing-2", "wing-3"},
+			whyItIs: "the per-type form of D3: the only wing in a building is just wing",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			m := c.rule.normalized().mint()
+			for i, want := range c.want {
+				if got := m.name(i + 1); got != want {
+					t.Errorf("rule %+v mints %q at ordinal %d, want %q (%s)", c.rule, got, i+1, want, c.whyItIs)
+				}
+			}
+			// And the allocator agrees with it over its own output, which is
+			// the property that stops the second create in a bucket from being
+			// a 23505.
+			if got := pickOrdinal(c.want[:2], m); got != 3 {
+				t.Errorf("pickOrdinal over the rule's own first two names = %d, want 3: the allocator and the mint disagree", got)
+			}
+		})
+	}
+}
+
+// TestNameRuleNormalizesTheIgnoredFlag proves a positional rule has exactly one
+// spelling. bareFirst is meaningless without a stem (suppressing the ordinal of
+// a name that IS its ordinal leaves nothing), so storing it true would give two
+// rules that mint identically and compare unequal.
+func TestNameRuleNormalizesTheIgnoredFlag(t *testing.T) {
+	got := NameRule{Stem: "", BareFirst: true}.normalized()
+	if got != (NameRule{}) {
+		t.Errorf("NameRule{stem:\"\", bareFirst:true}.normalized() = %+v, want the zero rule", got)
+	}
+	// The normalization is cosmetic only where the mint is concerned, which is
+	// the point: it changes the stored spelling, never the name.
+	if name := (NameRule{Stem: "", BareFirst: true}).mint().name(1); name != "1" {
+		t.Errorf("an unnormalized positional rule mints %q at ordinal 1, want 1", name)
+	}
+}
+
+// TestValidateNameRuleRefusesWhatItCannotMint is the acceptance behavior "a
+// rule that would render an illegal name is refused when the rule is edited,
+// not when a location is created". It refuses by MINTING, so the check and the
+// generator cannot disagree about what the rule produces.
+func TestValidateNameRuleRefusesWhatItCannotMint(t *testing.T) {
+	ok := []NameRule{
+		{},                              // positional
+		{Stem: "wing"},                  // counted
+		{Stem: "wing", BareFirst: true}, // suppressed
+		{Stem: "b1"},                    // digits are legal in a stem
+		{Stem: stemOfLen(90)},           // the longest stem that still leaves room for the ordinal
+	}
+	for _, r := range ok {
+		if err := validateNameRule(&r); err != nil {
+			t.Errorf("validateNameRule(%+v) = %v, want nil", r, err)
+		}
+	}
+	bad := []struct {
+		rule NameRule
+		why  string
+	}{
+		{NameRule{Stem: "Wing"}, "an upper-case stem mints an illegal name"},
+		{NameRule{Stem: "wing_1"}, "an underscore is not in the name character set"},
+		{NameRule{Stem: "-wing"}, "a name may not start with a hyphen"},
+		{NameRule{Stem: "wing floor"}, "a space is not in the name character set"},
+		{
+			NameRule{Stem: stemOfLen(95)},
+			"a 95-character stem mints legally at ordinal 1 and illegally further up, which is exactly the case a check that only tried ordinal 1 would wave through",
+		},
+	}
+	for _, c := range bad {
+		err := validateNameRule(&c.rule)
+		if err == nil {
+			t.Errorf("validateNameRule(stem %d chars, %q) = nil, want a refusal (%s)", len(c.rule.Stem), c.rule.Stem, c.why)
+			continue
+		}
+		if !errors.Is(err, ErrInvalidNameRule) {
+			t.Errorf("validateNameRule(%q) = %v, want ErrInvalidNameRule (%s)", c.rule.Stem, err, c.why)
+		}
+	}
+	// The 95-character stem is legal AS A NAME, which is what makes it the
+	// interesting case: the rule is refused for what it would MINT, not for
+	// what it is.
+	if err := validateEntityName(stemOfLen(95)); err != nil {
+		t.Fatalf("precondition: a 95-character stem is itself an illegal name (%v), so the case above proves nothing", err)
+	}
+	// nil is the opt-out, not a broken rule.
+	if err := validateNameRule(nil); err != nil {
+		t.Errorf("validateNameRule(nil) = %v, want nil: no rule is the opt-out", err)
+	}
+}
+
+// stemOfLen builds a legal stem of exactly n characters, for the length cases
+// above: the rule's ceiling is about how long the MINTED name gets, so the stem
+// itself has to be legal for those cases to be testing what they claim.
+func stemOfLen(n int) string { return "w" + strings.Repeat("a", n-1) }

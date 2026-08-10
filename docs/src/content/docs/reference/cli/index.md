@@ -1499,19 +1499,19 @@ Create a location
 omniglass location create [flags]
 ```
 
-Creates a location, optionally under a parent (a root needs an all-scoped grant). Gated by location:create.
+Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. Gated by location:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) | What an operator reads; the name is the address |
 | `--location-type` | string | (none) | The location_type, by name or uuid (campus, building, ...) |
-| `--name` | string | (none) | Name, unique within its placement (the address; lowercase letters, digits, hyphens) |
+| `--name` | string | (none) | Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the location_type's name rule. |
 | `--parent` | string | (none) | Parent location name; omit for a root location |
 
 Example:
 
 ```sh
-omniglass location create --location-type location_type --name name
+omniglass location create --location-type location_type
 ```
 
 ### `omniglass location delete`
@@ -1774,7 +1774,7 @@ Regenerate a location's name
 omniglass location resetName <name>
 ```
 
-Hands the pen back to the platform, the same verb components and systems carry. It refuses today, 422: a location_type carries no name rule, so there is nothing to regenerate the name from. Gated by location:rename, the same token :rename uses.
+Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is most of them: only a positional kind of place (a floor) has a name the platform can generate. Gated by location:rename, the same token :rename uses.
 
 Example:
 
@@ -1845,6 +1845,7 @@ Creates a custom (non-official) location_type, optionally with the label_rule lo
 | `--icon` | string | (none) | A glyph key; the console falls back to map-pin when empty |
 | `--label-rule` | string | (none) | The label template locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile |
 | `--name` | string | (none) | The globally unique name (e.g. wing); "root" is reserved |
+| `--name-rule` | string | (none) | How the platform NAMES locations of this type; omit to have an operator name every one of them. Refused (422) if it cannot mint a legal name |
 
 Example:
 
@@ -2014,6 +2015,7 @@ Patches a location_type's display_name, icon, allowed parents, or label_rule. An
 | `--display-name` | string | (none) | A new operator-facing label |
 | `--icon` | string | (none) | A new glyph key; the console falls back to map-pin when empty |
 | `--label-rule` | string | (none) | A new label template for locations of this type; omit to leave unchanged, "" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels |
+| `--name-rule` | string | (none) | A new name rule for locations of this type; omit to leave unchanged. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row |
 
 Example:
 
