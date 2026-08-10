@@ -699,9 +699,21 @@ abbrev in full.
 **A component's name can generate itself**
 ([ADR-0090](/architecture/decisions/#adr-0090-a-derived-value-is-a-default-that-tracks-until-touched)).
 Left blank on create, the platform mints `<component_type stem>-<n>` from the resolved type and the
-next free ordinal among siblings sharing that stem in the component's placement scope; while
+lowest free ordinal in the component's placement scope; while
 `name_generated` stays true the name
 recomputes on a `:move` or a product reclassify, riding that write's own audit event. `:rename` freezes
 it; `:resetName` hands the pen back and regenerates from the component's current facts, gated by the
 same `component:rename` permission `:rename` uses.
+
+**The ordinal is stored, and it says who owns the name**
+([ADR-0097](/architecture/decisions/#adr-0097-allocation-tests-the-name-it-would-mint-rather-than-reading-the-ordinal-it-stored)).
+`component.ordinal` records the number a generated name was minted from, and it is `NULL` on every
+row the platform did not name: an operator-typed name, or a row `:rename` handed over (which clears
+the column in the same statement it clears `name_generated`). That is what the bare render above
+reads, so a component an operator called `rack-3` has no number to compact and keeps its own words.
+Allocation itself still reads sibling **names**, not this column, and returns the lowest ordinal
+whose minted name is free: an operator can hold `display-1` by hand while owning no ordinal, and the
+uniqueness that has to be satisfied is the name's. Asking the mint for candidates rather than picking
+siblings apart is also what makes a name that is nothing but its ordinal expressible, which is what a
+positional type (a floor, a rack unit) will need.
 

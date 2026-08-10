@@ -1608,6 +1608,17 @@
       "type": "boolean",
       "nullable": false,
       "default": "false"
+     },
+     {
+      "name": "ordinal",
+      "type": "integer",
+      "nullable": true
+     }
+    ],
+    "checks": [
+     {
+      "name": "component_ordinal_check",
+      "expr": "CHECK (((ordinal IS NULL) OR (ordinal \u003e= 1)))"
      }
     ],
     "uniques": [

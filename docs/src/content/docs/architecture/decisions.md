@@ -132,6 +132,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0095](#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it) | 2026-08-09 | Accepted | An operator's edit of a shipped (`official: true`) registry row does not write that row: it forks it into `registry_shadow`, one registry-agnostic table keyed `(registry, row_id)` on the shipped row's OWN uuid, and reads resolve the shadow over the official row; restore is deleting the shadow. One uuid and one name per logical row either way, so no foreign key, walk, audit row or URL learns about the fork. A fork captures the whole mutable row and never the structure, which makes inheritance on a nested registry resolvable per node. `component_type` is the first adopter |
 
 | [ADR-0096](#adr-0096-the-system_type-name-returns-as-the-coarse-space-taxonomy) | 2026-08-09 | Accepted | A nested, universally seeded **`system_type`** registry lands beside `standard` (not inside it): the coarse taxonomy of what kind of space a system is (`av / room / {board, class, ...}`, `av / sign / {...}`), with `stem`, `abbrev`, and `icon` inherited down `parent_id` and overridable at any node, and `system.system_type_id` nullable for now. The identifier is reused deliberately (it was ADR-0048's retired column name for `standard_id`), so its docs-lint denylist entry is removed on ADR-0085's precedent |
+| [ADR-0097](#adr-0097-allocation-tests-the-name-it-would-mint-rather-than-reading-the-ordinal-it-stored) | 2026-08-10 | Accepted | The generated ordinal becomes a stored nullable `component.ordinal`, but sibling allocation does **not** read it: it reads sibling NAMES and returns the lowest ordinal whose MINTED name is free. An operator can hold a generated-shaped name with no ordinal, and the unique index is on the name, so an ordinal-only allocator would remint a taken name as a `23505`. Minting candidates instead of parsing siblings is what makes a stem-less name (a floor called `1`) possible, not the column; the column is what every reader DOWNSTREAM of allocation consumes. No scoped-unique index on the ordinal |
 
 ## Entries
 
@@ -3627,3 +3628,62 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   the whole naming arc will render from.
 - **Tracked under** [#656](https://github.com/hyperscaleav/omniglass/issues/656), the second
   prerequisite of epic [#657](https://github.com/hyperscaleav/omniglass/issues/657).
+
+### ADR-0097: Allocation tests the name it would mint, rather than reading the ordinal it stored
+
+- **Date:** 2026-08-10 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
+  [storage](/architecture/storage/), [glossary](/architecture/glossary/)
+- **Decision:** The number a generated name is minted from becomes a **stored, nullable**
+  `component.ordinal`, written in the same advisory-locked transaction that already computed it.
+  Nullable is the load-bearing part: a name an operator typed, and a name an operator renamed
+  (`:rename` clears the column in the same statement it clears `name_generated`), have no ordinal the
+  platform owns, and absent is how that is written down.
+
+  **Sibling allocation does not read that column.** It reads sibling **names** and returns the lowest
+  ordinal whose **minted** name no sibling in the placement bucket already holds. One pure function
+  (`mintName`) owns the name's shape, and the allocator asks it for candidates instead of picking
+  siblings apart.
+- **Decision (no scoped-unique index):** The ordinal gets no unique constraint of its own, only a
+  `>= 1` domain check. A "one ordinal per (bucket, stem)" index cannot be expressed, since the stem is
+  resolved from the `component_type` chain rather than stored, and it would be redundant if it could:
+  for a platform-named row the name **is** the stem and the ordinal formatted together, so two rows
+  colliding on both already collide on the name, which the scoped-name unique indexes
+  ([ADR-0088](#adr-0088-a-placement-change-is-an-authorization-act-so-a-move-is-its-own-verb)'s
+  placement buckets) refuse. A redundant constraint would add a second `23505` to map and a second way
+  for a race to surface as a 500.
+- **Context:** [#657](https://github.com/hyperscaleav/omniglass/issues/657) proposed that storing the
+  ordinal would let sibling allocation "stop being a string-prefix scan and become a lookup keyed on
+  type and placement". Building it exposed two problems with reading the column, and one thing the
+  column was being credited with that it does not actually do.
+
+  **An ordinal-only allocator is unsound.** The rows holding a NAME are not the rows holding an
+  ordinal. An operator can type `display-1` by hand: that row owns the name and, correctly, no
+  ordinal. An allocator consulting stored ordinals sees an empty set, picks 1, mints `display-1`, and
+  hits the scoped-name unique index. The generator deliberately takes an advisory lock rather than
+  retrying a `23505` (retry was rejected when the generator landed, since the abort takes the whole
+  transaction with it), so that collision is a 500 on an ordinary create. Mutating the allocator to
+  read only rows with a stored ordinal reproduces it exactly, and the test that catches it is now
+  part of the suite.
+
+  **Keying on the type would be worse than keying on the stem.** A stem is inherited, so two sibling
+  component types can resolve the same one; giving each its own ordinal space would have both mint
+  `display-1`. The uniqueness that matters is the name's, so the space that matters is the name's.
+
+  **The column is not what unblocks a stem-less name.** The prefix scan could not count a stem-less
+  sibling because its filter was a bare `-` that no name matched, which is a property of *parsing*,
+  not of *storage*. Inverting the loop fixes that on its own: `mintName("", 1)` is `1`, and the
+  allocator tests it like any other candidate. So a floor whose ordinal genuinely is its name
+  ([#657](https://github.com/hyperscaleav/omniglass/issues/657) slice 7) is now expressible, and it is
+  asserted at the storage layer against a real database ahead of its first caller.
+
+  What the stored ordinal does buy is everything **downstream** of allocation, which is what the rest
+  of the epic needs: the bare render reads a fact instead of re-deriving one from the string it is
+  about to replace (finishing what
+  [#654](https://github.com/hyperscaleav/omniglass/issues/654) left half-done, and making its
+  never-restamp-an-operator's-name guarantee structural rather than defensive), a label rule can read
+  `.Ordinal` without parsing it back out, and a recompute-and-compare invariant test can prove no
+  stored ordinal has drifted from what allocation would produce. It also generalizes: when a name
+  comes from an operator-editable rule rather than `<stem>-<n>`, the allocator changes its mint and
+  nothing else, where a parser would have needed a matching second implementation.
+- **Tracked under** [#681](https://github.com/hyperscaleav/omniglass/issues/681), the first slice of
+  epic [#657](https://github.com/hyperscaleav/omniglass/issues/657).
