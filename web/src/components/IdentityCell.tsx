@@ -1,5 +1,5 @@
 import { Show } from "solid-js";
-import { entityLabel, hasDisplayName, type Labelled } from "../lib/entities";
+import { entityLabel, hasDisplayName, labelGenerated, labelIsName, type Labelled } from "../lib/entities";
 
 // How an entity's identity reads in a list, in one place.
 //
@@ -38,17 +38,47 @@ import { entityLabel, hasDisplayName, type Labelled } from "../lib/entities";
 // like a typo rather than an absence. When the display name IS the name it renders
 // once, in the data face, which marks it as an identifier rather than a friendly
 // string somebody chose.
+//
+// The pen split the one flag this cell used to read into three states (#683). A
+// label a RULE rendered (#682) differs from the name exactly as an operator's
+// does, so the old "the label differs from the name" would have put a second
+// identifier line under every row in a 15,000-component estate. The three states,
+// and what each renders:
+//
+//   no label            the name, once, in the data face (it IS an identifier)
+//   operator's label    the label in the prose face, the name beneath it
+//   platform's label    the label in the prose face, marked, no second line
+//
+// The face follows the LABEL, not the second line: a rendered label is prose, so
+// it must not drop into the data face merely because no identifier follows it.
 export function IdentityCell(props: { entity: Labelled; weight?: number }) {
   const label = () => entityLabel(props.entity);
   const showName = () => hasDisplayName(props.entity);
+  const generated = () => labelGenerated(props.entity);
+  // The label IS the name, so it reads as an identifier and takes the data face.
+  const isIdentifier = () => labelIsName(props.entity);
   return (
     <span class="flex min-w-0 flex-col gap-0.5 py-0.5">
-      <span
-        class="truncate"
-        classList={{ "font-data text-[13px]": !showName() }}
-        style={{ "font-weight": props.weight ?? 500 }}
-      >
-        {label()}
+      <span class="flex min-w-0 items-baseline gap-1.5">
+        <span
+          class="truncate"
+          classList={{ "font-data text-[13px]": isIdentifier() }}
+          style={{ "font-weight": props.weight ?? 500 }}
+        >
+          {label()}
+        </span>
+        {/* The label pen's tracking chip, the same vocabulary the name's pen
+            already wears on the component blade. Typing a label claims it and
+            clearing the field hands it back, so this is the mark that says which
+            rows a rule edit would rewrite. */}
+        <Show when={generated()}>
+          <span
+            class="badge badge-ghost badge-xs shrink-0"
+            title="The platform generated this label from a label rule. Typing one of your own claims it; clearing the field hands it back."
+          >
+            Generated
+          </span>
+        </Show>
       </span>
       <Show when={showName()}>
         <span class="truncate font-data text-[11px] text-base-content/40">{props.entity.name}</span>

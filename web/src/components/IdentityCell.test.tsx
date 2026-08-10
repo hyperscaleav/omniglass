@@ -41,6 +41,55 @@ describe("IdentityCell", () => {
     expect(screen.queryByText("Hq boardroom dsp")).toBeNull();
     expect(screen.queryByText("Hq Boardroom Dsp")).toBeNull();
   });
+
+  // The pen (#683). A label a rule rendered differs from the name exactly as an
+  // operator's does, so the old string comparison would have put a second
+  // identifier line under every row in the estate.
+  it("does not repeat the name beneath a label the platform rendered", () => {
+    render(() => <IdentityCell entity={{ name: "display-1", display_name: "Display 1", display_name_generated: true }} />);
+    expect(screen.getByText("Display 1")).toBeTruthy();
+    expect(screen.queryByText("display-1")).toBeNull();
+  });
+
+  // The same row with the pen the other way round: the operator typed it, so the
+  // identifier is theirs to read and copy.
+  it("still shows the name beneath a label the operator typed", () => {
+    render(() => <IdentityCell entity={{ name: "display-1", display_name: "Display 1", display_name_generated: false }} />);
+    expect(screen.getByText("display-1")).toBeTruthy();
+  });
+
+  // Distinguishable, which is the other half: a row whose label the platform owns
+  // is marked, so an operator can see which labels a rule edit would rewrite.
+  it("marks a platform-rendered label as generated", () => {
+    render(() => <IdentityCell entity={{ name: "display-1", display_name: "Display 1", display_name_generated: true }} />);
+    expect(screen.getByTitle(/platform/i)).toBeTruthy();
+  });
+
+  it("does not mark a label the operator typed", () => {
+    render(() => <IdentityCell entity={{ name: "display-1", display_name: "Display 1" }} />);
+    expect(screen.queryByTitle(/platform/i)).toBeNull();
+  });
+
+  // Holding the pen over a rule that rendered nothing is not a generated label:
+  // what shows IS the name, so marking it would claim credit for the fallback.
+  it("does not mark a row whose rule rendered nothing", () => {
+    render(() => <IdentityCell entity={{ name: "codec-1", display_name: "", display_name_generated: true }} />);
+    expect(screen.queryByTitle(/platform/i)).toBeNull();
+    expect(screen.getAllByText("codec-1")).toHaveLength(1);
+  });
+
+  // The face is the label's, not the pen's. A rendered label is prose ("Display
+  // 1"), so it must not fall into the data face just because no second line
+  // follows it; an unlabelled row is an identifier and must.
+  it("renders a generated label in the prose face and a bare name in the data face", () => {
+    const { unmount } = render(() => (
+      <IdentityCell entity={{ name: "display-1", display_name: "Display 1", display_name_generated: true }} />
+    ));
+    expect(screen.getByText("Display 1").className).not.toContain("font-data");
+    unmount();
+    render(() => <IdentityCell entity={{ name: "codec-1" }} />);
+    expect(screen.getByText("codec-1").className).toContain("font-data");
+  });
 });
 
 describe("identityColumn", () => {

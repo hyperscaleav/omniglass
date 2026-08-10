@@ -19,6 +19,26 @@ describe("BladeTitle", () => {
     expect(getByText("acme-av").className).toContain("font-data");
   });
 
+  // The face follows the label, not the pen (#683): a label a rule rendered is
+  // prose, so it must not sit in the identifier face just because no operator
+  // typed it. The heading asked "is display_name blank" by hand, which was the
+  // same question as "is this an identifier" only while every label was typed.
+  it("shows a platform-rendered label in the prose face", () => {
+    const { getByText } = render(() => (
+      <BladeTitle row={() => ({ name: "display-1", display_name: "Display 1", display_name_generated: true })} fallback="display-1" />
+    ));
+    expect(getByText("Display 1").className).not.toContain("font-data");
+  });
+
+  // A rule with nothing to say about a row keeps the pen and stores no label
+  // (ADR-0098), so the heading is the name and belongs in the data face.
+  it("keeps the data face when the platform holds the pen but rendered nothing", () => {
+    const { getByText } = render(() => (
+      <BladeTitle row={() => ({ name: "codec-1", display_name: "", display_name_generated: true })} fallback="codec-1" />
+    ));
+    expect(getByText("codec-1").className).toContain("font-data");
+  });
+
   it("shows the fallback before the row resolves", () => {
     const { getByText } = render(() => <BladeTitle row={() => undefined} fallback="acme-av" />);
     expect(getByText("acme-av")).toBeTruthy();

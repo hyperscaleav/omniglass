@@ -1,5 +1,5 @@
 import { createMemo, type JSX } from "solid-js";
-import { entityLabel, type Labelled } from "../lib/entities";
+import { entityLabel, labelIsName, type Labelled } from "../lib/entities";
 
 // BladeTitle is the console's one blade heading: the display name of the row the
 // operator clicked, falling back to the identifier when the row carries no
@@ -27,9 +27,12 @@ export default function BladeTitle(p: {
   fallback: string;
 }): JSX.Element {
   const row = createMemo(() => p.row());
-  return (
-    <span classList={{ "font-data": !row()?.display_name?.trim() }}>
-      {row() ? entityLabel(row()!) : p.fallback}
-    </span>
-  );
+  // The face follows the LABEL, through the primitive, not a second reading of
+  // display_name here. The two agreed while every label was operator-typed and
+  // would have parted the moment one of them learned about the pen (#683).
+  const dataFace = () => {
+    const r = row();
+    return r ? labelIsName(r) : true; // the fallback is always an identifier
+  };
+  return <span classList={{ "font-data": dataFace() }}>{row() ? entityLabel(row()!) : p.fallback}</span>;
 }

@@ -11,6 +11,10 @@ export type Component = {
   id: string;
   name: string;
   display_name?: string;
+  // The LABEL's pen (#682/#683): true means the platform rendered this display
+  // name from a label rule, false means an operator typed it. Read-only; the
+  // console reads it through lib/entities so nothing branches on it by hand.
+  display_name_generated?: boolean;
   location?: string;
   // location_id is the location's uuid, the stable handle the tree builder
   // keys and resolves on (#627: name uniqueness is scoped to placement, so
