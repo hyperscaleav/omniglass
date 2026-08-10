@@ -1,8 +1,12 @@
 // Package storagetest provides the shared real-Postgres test harness. Every
 // integration test runs against an ephemeral, fully isolated database: one
-// container is started lazily per test binary (sync.Once), and each NewDB call
-// creates a fresh database, so tests never share mutable state and never
-// collide on a host port.
+// container is started lazily per test binary, and each NewDB call creates a
+// fresh database, so tests never share mutable state and never collide on a
+// host port.
+//
+// Both pieces of per-binary work, the container and the template, cache their
+// success and never their failure, so a transient hiccup costs the one test
+// that hit it rather than every test after it.
 //
 // The migration chain runs once per test binary, into a template database, and
 // each test's database is a CREATE DATABASE ... TEMPLATE copy of it. A copy is
@@ -16,12 +20,15 @@
 // testcontainers reaper (ryuk) is only a backstop for hard kills; it cannot be
 // relied on alone (it is disabled or torn down early in some environments, for
 // example Docker Desktop on WSL2), which is why teardown lives in the harness.
+// That requirement is enforced rather than documented: [NewDSN] refuses to hand
+// out a database to a test binary that is not running under Main.
 //
 // There is no in-memory double. The doctrine is: do not mock the database.
 package storagetest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -45,22 +52,55 @@ import (
 const templateName = "og_template"
 
 var (
-	startOnce sync.Once
 	ctr       *tcpostgres.PostgresContainer // shared container, terminated by Main
 	adminDSN  string                        // DSN to the container's default db, for CREATE DATABASE
-	startErr  error
 	dbCounter atomic.Int64
+
+	containerMu    sync.Mutex
+	containerReady bool
 
 	templateMu    sync.Mutex
 	templateReady bool
+
+	// mainRan records that this test binary is running under Main, the only
+	// thing that reclaims the shared container in-process. Set before m.Run, so
+	// every test goroutine it spawns observes it; atomic anyway, because a
+	// harness that is itself racy is worse than no harness.
+	mainRan atomic.Bool
 )
 
-// startContainer starts one ephemeral Postgres container and returns it with
-// the admin DSN to its default database. It is the capability primitive behind
-// the shared harness: the single place that talks to Docker, isolated so the
-// start-and-terminate lifecycle is directly testable.
-func startContainer(ctx context.Context) (*tcpostgres.PostgresContainer, string, error) {
-	c, err := tcpostgres.Run(ctx, "postgres:18",
+// reclaimGuard refuses to provision a database for a test binary that is not
+// running under [Main].
+//
+// Main is the only thing that terminates the shared container on normal exit,
+// and the testcontainers reaper cannot be trusted to finish the job here, so a
+// consuming package that forgets its TestMain leaks a Postgres for the life of
+// the machine. The package comment has said so since the harness was written,
+// and three packages had drifted off it by the time anyone counted the strays:
+// a doc comment is not a mechanism.
+//
+// The check sits exactly on the defect. The call that would otherwise start an
+// unreclaimed container is the call that fails, inside the offending package,
+// with the fix in the message.
+func reclaimGuard() error {
+	if mainRan.Load() {
+		return nil
+	}
+	return errors.New("storagetest: this package uses the Postgres harness but does not run its tests " +
+		"under storagetest.Main, so the container it starts would never be reclaimed. " +
+		"Add a TestMain to the package:\n\n" +
+		"\tfunc TestMain(m *testing.M) { os.Exit(storagetest.Main(m)) }")
+}
+
+// runPostgres is the harness's one call to Docker. It is a var so the harness's
+// own tests can drive the failure shapes real Docker will not produce on
+// demand, above all a start that hands back a container ALONGSIDE an error,
+// which is the shape that leaks. Everything else, in every consuming package,
+// gets runPostgresContainer.
+var runPostgres = runPostgresContainer
+
+func runPostgresContainer(ctx context.Context) (*tcpostgres.PostgresContainer, error) {
+	return tcpostgres.Run(ctx, "postgres:18",
 		tcpostgres.WithDatabase("postgres"),
 		tcpostgres.WithUsername("omniglass"),
 		tcpostgres.WithPassword("omniglass"),
@@ -68,7 +108,24 @@ func startContainer(ctx context.Context) (*tcpostgres.PostgresContainer, string,
 			wait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).WithStartupTimeout(60*time.Second)),
 	)
+}
+
+// startContainer starts one ephemeral Postgres container and returns it with
+// the admin DSN to its default database. It is the capability primitive behind
+// the shared harness: the single place that talks to Docker, isolated so the
+// start-and-terminate lifecycle is directly testable.
+//
+// On any error it returns a nil container, having reclaimed whatever it was
+// handed. That is a contract its callers depend on, not a detail.
+func startContainer(ctx context.Context) (*tcpostgres.PostgresContainer, string, error) {
+	c, err := runPostgres(ctx)
 	if err != nil {
+		// testcontainers returns the container alongside the error when the
+		// create succeeded and the start or the wait strategy did not, so the
+		// caller can read its logs. Dropping it here leaks a live Postgres, and
+		// since a failed start is retried rather than cached, it would leak one
+		// per attempt. TerminateContainer is nil-safe, so this covers both shapes.
+		_ = testcontainers.TerminateContainer(c)
 		return nil, "", err
 	}
 	dsn, err := c.ConnectionString(ctx, "sslmode=disable")
@@ -79,41 +136,65 @@ func startContainer(ctx context.Context) (*tcpostgres.PostgresContainer, string,
 	return c, dsn, nil
 }
 
-func ensureContainer() {
-	startOnce.Do(func() {
-		// Escape hatch for environments without a Docker daemon (some CI runners,
-		// sandboxes): OMNIGLASS_TEST_ADMIN_DSN points the harness at an already
-		// running Postgres (its default/admin database), and NewDSN creates and
-		// migrates a fresh, isolated database per test on it exactly as it does on
-		// the container. Unset (the default), the harness starts an ephemeral
-		// testcontainer, so nothing changes for a normal `make test` with Docker.
-		if dsn := config.Get("OMNIGLASS_TEST_ADMIN_DSN"); dsn != "" {
-			adminDSN = dsn
-			return
-		}
-		ctr, adminDSN, startErr = startContainer(context.Background())
-	})
+// ensureContainer starts the shared container once per test binary, returning
+// the error rather than storing it.
+//
+// Success is cached; failure deliberately is not, for exactly the reason
+// [ensureTemplate] caches only success. A sync.Once here remembered a transient
+// start failure for the life of the binary and replayed it into every later
+// caller, so one hiccup on a box where the container is known to flap failed
+// every remaining test in the package rather than the one that hit it. Worse
+// than the cost, it buried the diagnostic under hundreds of identical cached
+// errors. Returning the error lets the next test retry. The mutex serializes
+// the start so two callers cannot race two containers into existence, which
+// would leak whichever one lost.
+func ensureContainer() error {
+	containerMu.Lock()
+	defer containerMu.Unlock()
+	if containerReady {
+		return nil
+	}
+	// Escape hatch for environments without a Docker daemon (some CI runners,
+	// sandboxes): OMNIGLASS_TEST_ADMIN_DSN points the harness at an already
+	// running Postgres (its default/admin database), and NewDSN creates and
+	// migrates a fresh, isolated database per test on it exactly as it does on
+	// the container. Unset (the default), the harness starts an ephemeral
+	// testcontainer, so nothing changes for a normal `make test` with Docker.
+	if dsn := config.Get("OMNIGLASS_TEST_ADMIN_DSN"); dsn != "" {
+		adminDSN = dsn
+		containerReady = true
+		return nil
+	}
+	c, dsn, err := startContainer(context.Background())
+	if err != nil {
+		// Nothing is recorded on this path, which is what makes the retry safe:
+		// startContainer reclaims whatever it was handed before returning an
+		// error, so there is no half-started container for ctr to point at.
+		return err
+	}
+	ctr, adminDSN = c, dsn
+	containerReady = true
+	return nil
 }
 
 // ensureTemplate starts the container and builds the template database once per
 // test binary, returning the error rather than storing it.
 //
-// Success is cached; failure deliberately is not. A sync.Once here would
-// remember a transient failure forever and fail every remaining test in the
-// binary from it, turning a one-test blip into a whole-binary wipeout. Before
-// the template existed each test connected and migrated on its own, so a
-// hiccup cost exactly one test; retrying on the next call keeps that blast
-// radius. The mutex serializes the build so t.Parallel tests cannot race two
-// of them.
+// Success is cached; failure deliberately is not, the same rule
+// [ensureContainer] follows. A sync.Once here would remember a transient
+// failure forever and fail every remaining test in the binary from it, turning
+// a one-test blip into a whole-binary wipeout. Before the template existed each
+// test connected and migrated on its own, so a hiccup cost exactly one test;
+// retrying on the next call keeps that blast radius. The mutex serializes the
+// build so t.Parallel tests cannot race two of them.
 func ensureTemplate() error {
 	templateMu.Lock()
 	defer templateMu.Unlock()
 	if templateReady {
 		return nil
 	}
-	ensureContainer()
-	if startErr != nil {
-		return fmt.Errorf("start postgres container: %w", startErr)
+	if err := ensureContainer(); err != nil {
+		return fmt.Errorf("start postgres container: %w", err)
 	}
 	if err := buildTemplate(context.Background()); err != nil {
 		return fmt.Errorf("build template database: %w", err)
@@ -220,12 +301,22 @@ func dropTemplate(ctx context.Context, admin *pgx.Conn) error {
 // container is reaped on process exit. Use this when the test needs the raw DSN
 // (e.g. to launch the server binary against it).
 //
+// It refuses outright if the calling package's tests are not running under
+// [Main], because the container it would start would then never be reclaimed.
+//
 // The parameter is testing.TB rather than *testing.T so a BENCHMARK can
 // provision an estate to measure against (#651). Nothing else changes: every
 // method used here (Helper, Skip, Fatal, Cleanup) is on TB, and a *testing.T
 // caller compiles unchanged.
 func NewDSN(t testing.TB) string {
 	t.Helper()
+	// Ahead of the -short skip deliberately. Reclaiming the container is a
+	// property of the consuming PACKAGE, true whether or not this particular run
+	// provisions anything, so `make test-short` catches a missing TestMain too
+	// rather than waiting for the full gate to leak one.
+	if err := reclaimGuard(); err != nil {
+		t.Fatal(err)
+	}
 	if testing.Short() {
 		t.Skip("storage: skipped under -short (Postgres testcontainer)")
 	}
@@ -302,7 +393,11 @@ func withDBName(dsn, db string) string {
 //
 // This reclaims the container in-process on normal exit, independent of the
 // testcontainers reaper. Main returns the exit code to pass to os.Exit.
+//
+// Running under Main is not advisory: it is what [NewDSN]'s reclaim guard
+// checks, and a package that skips it fails on its first provision.
 func Main(m *testing.M) int {
+	mainRan.Store(true)
 	code := m.Run()
 	if err := testcontainers.TerminateContainer(ctr); err != nil {
 		fmt.Fprintf(os.Stderr, "storagetest: terminate container: %v\n", err)

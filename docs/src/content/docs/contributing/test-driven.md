@@ -53,9 +53,9 @@ No mocking the system under test. No tests-within-tests.
 ## The storage test harness
 
 Integration and end-to-end tests share one real-Postgres harness,
-`internal/storage/storagetest`. It starts a single container per test binary
-(lazily, via `sync.Once`) and hands each test a fresh, migrated, isolated
-database, so tests never share mutable state or collide on a host port.
+`internal/storage/storagetest`. It starts a single container per test binary,
+lazily, and hands each test a fresh, migrated, isolated database, so tests never
+share mutable state or collide on a host port.
 
 The migration chain is applied **once per test binary**, into a template
 database, and each test's database is a `CREATE DATABASE ... TEMPLATE` copy of
@@ -64,11 +64,16 @@ carries `schema_migrations` with it, so a provisioned database is
 indistinguishable from a migrated one, including to dbmate. Isolation is
 unchanged: every test still gets its own database.
 
-Building the template is per-binary work, so the harness caches its **success
-and never its failure**. A `sync.Once` here would remember one transient hiccup
-(a flapping container, a refused admin connection) and fail every remaining test
-in the binary from it; retrying on the next call keeps a blip costing one test,
-which is what the per-test migration replay used to give for free.
+Starting the container and building the template are both per-binary work, so
+the harness caches **success and never failure** on each. A `sync.Once` here
+remembers one transient hiccup (a flapping container, a refused admin
+connection) and fails every remaining test in the binary from it, all at 0.00s
+with the same replayed message, which buries the one failure that was real.
+Retrying on the next call keeps a blip costing one test, which is what the
+per-test migration replay used to give for free. A start that fails terminates
+whatever container it was handed on the way out: testcontainers returns the
+container alongside the error when the create succeeded and the wait did not, so
+a retry over a caller that drops it leaks one Postgres per attempt.
 
 Postgres refuses to copy a template that has live connections, and
 `internal/migrate` builds a `dbmate.DB` it never explicitly closes, so the
@@ -90,8 +95,15 @@ exit. This is the reason cleanup is reliable: it does not depend on the
 testcontainers reaper (ryuk), which is only a backstop for hard kills and cannot
 be relied on alone. In some environments (for example Docker Desktop on WSL2)
 ryuk is disabled or torn down before it can reap, so a container with no
-in-process teardown leaks and stays running indefinitely. A new harness-using
-package that omits its `TestMain` reintroduces that leak.
+in-process teardown leaks and stays running indefinitely.
+
+That contract is **enforced, not documented**. `NewDSN` refuses to provision a
+database for a test binary that is not running under `Main`, and fails with the
+`TestMain` to add. The paragraph above was already true and already written when
+three packages drifted off it anyway, leaving one stray container each per gate
+run; a doc comment is not a mechanism. The check sits exactly on the defect,
+since the call that would start an unreclaimed container is the one that fails,
+inside the offending package.
 
 For orphans left by a genuinely hard kill (a `SIGKILL` or a Docker restart before
 either mechanism fires), sweep them with `make clean-testcontainers`. It
