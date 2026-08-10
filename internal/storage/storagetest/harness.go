@@ -219,7 +219,12 @@ func dropTemplate(ctx context.Context, admin *pgx.Conn) error {
 // without replaying a single migration. It is discarded when the shared
 // container is reaped on process exit. Use this when the test needs the raw DSN
 // (e.g. to launch the server binary against it).
-func NewDSN(t *testing.T) string {
+//
+// The parameter is testing.TB rather than *testing.T so a BENCHMARK can
+// provision an estate to measure against (#651). Nothing else changes: every
+// method used here (Helper, Skip, Fatal, Cleanup) is on TB, and a *testing.T
+// caller compiles unchanged.
+func NewDSN(t testing.TB) string {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("storage: skipped under -short (Postgres testcontainer)")
@@ -245,7 +250,7 @@ func NewDSN(t *testing.T) string {
 
 // NewDB returns a Gateway backed by a fresh, migrated, isolated database.
 // Skipped under -short. The gateway is closed on test cleanup.
-func NewDB(t *testing.T) storage.Gateway {
+func NewDB(t testing.TB) storage.Gateway {
 	t.Helper()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, NewDSN(t))
@@ -268,7 +273,7 @@ func NewDB(t *testing.T) storage.Gateway {
 // The counter is reset before it is returned, so the pool's own connectivity
 // ping is not charged to the first measurement. Reset it again between
 // measurements: it counts everything the gateway does, fixture writes included.
-func NewCountingDB(t *testing.T) (storage.Gateway, *querycount.Counter) {
+func NewCountingDB(t testing.TB) (storage.Gateway, *querycount.Counter) {
 	t.Helper()
 	counter := querycount.New()
 	gw, err := storage.NewPG(context.Background(), NewDSN(t), storage.WithQueryTracer(counter))

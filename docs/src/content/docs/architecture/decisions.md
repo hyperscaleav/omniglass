@@ -127,6 +127,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0090](#adr-0090-a-derived-value-is-a-default-that-tracks-until-touched) | 2026-08-08 | Accepted | A derivable value fills at create, tracks live while the platform holds the pen, freezes on the operator's first edit, and resumes tracking only on an explicit reset; `component.name_generated` ships `DEFAULT false`, not the epic's `DEFAULT true`, so no pre-existing operator-typed name is silently claimed by the platform |
 | [ADR-0091](#adr-0091-an-update_mask-says-which-fields-a-patch-writes) | 2026-08-09 | Accepted | A `PATCH` body may carry an optional `update_mask` with AIP-134 semantics exactly (absent is the implied mask of populated fields, present writes exactly what it names so a zero value clears, `["*"]` is full replacement, an unknown field is a 422 naming it); it rides in the body, the three-state string sentinel stays, the other 108 `PATCH` routes are not retrofitted, and the role declarations convert from `PUT` to `PATCH` as its first consumer |
 | [ADR-0092](#adr-0092-a-location-move-recomputes-both-ancestor-chains) | 2026-08-09 | Accepted | `MoveLocation` recomputes health over both ancestor chains (joined and left) inside its own transaction, the second and last member of the exception class ADR-0088 carved out for a system's relocate; one named row per side seeds the recursive ancestry walk the query already performs, and a no-op move recomputes nothing |
+| [ADR-0093](#adr-0093-benchmarks-are-the-second-performance-instrument-and-they-gate-nothing) | 2026-08-09 | Accepted | Performance has two instruments: round-trip counting gates in `make test`, wall-clock benchmarks (`make bench`, two estate sizes, fixtures outside the timed section) are diagnostic and gate nothing; no CI perf job, no stored baseline, no `EXPLAIN` assertions (deferred), no timing assertion anywhere, and one candidate benchmark was measured as three-quarters transport and dropped rather than shipped |
 
 ## Entries
 
@@ -3406,3 +3407,50 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   is. The reads never lied (both health reads compute the verdict they serve), so the cost was
   confined to the recorded history, which is exactly the "a missing trigger is a hole in the history"
   cost the health page enumerates its trigger list to avoid.
+
+### ADR-0093: Benchmarks are the second performance instrument, and they gate nothing
+
+- **Date:** 2026-08-09 | **Status:** Accepted | **Pages:** [test-driven](/contributing/test-driven/)
+- **Decision:** Performance has two instruments, and only one of them gates. **Round-trip counting**
+  (`internal/storage/storagetest/querycount`, asserted in `list_cost_test.go`) stays the deterministic
+  net that runs in `make test` and blocks a merge. **Wall-clock benchmarks** (`make bench`, ten
+  benchmarks over the real Gateway at two estate sizes) are diagnostic only: run deliberately before
+  and after a change that claims a performance effect, and compared with `benchstat`. Counting catches
+  the N+1 exactly; benchmarks catch what counting is blind to, which is everything inside a single
+  statement (a dropped index, a plan flip to a sequential scan, a recursive CTE that stops being
+  bounded, a predicate that stops being sargable). Every benchmark runs at a small estate and a larger
+  one, because one size cannot tell a constant apart from a linear cost, and every fixture is built
+  outside the timed section, because a benchmark that provisions inside its own loop measures the
+  harness.
+- **Not chosen, and why each was refused rather than deferred by accident:**
+  - **No CI job and no merge gate on a duration.** A wall-clock threshold on a shared runner either
+    sits so loose it catches nothing or it flakes and gets muted. A perf job everybody ignores is
+    worse than none, because it reads as coverage. A Go benchmark is inert without `-bench`, so this
+    is the natural shape rather than a compromise.
+  - **No stored baseline artifact.** `benchstat` comparison needs a baseline per commit or per
+    release plus a policy for when a regression blocks a merge, which is real infrastructure that
+    should be built because it is needed, not because benchmarks felt like diligence. A number
+    committed to the tree is a number from a different machine on a different day.
+  - **No `EXPLAIN` plan assertions,** deliberately deferred rather than dropped. They are the sharpest
+    tool for the dropped-index class and cost no timing at all, but a plan depends on table
+    statistics, so a fixture too small plans differently from production and the assertion pins the
+    wrong shape. Revisit when a fixture is realistic enough for the planner to agree with production,
+    or when a specific plan regression proves the benchmarks insufficient.
+  - **No timing assertion anywhere,** in a benchmark or a test. This is a standing invariant, not a
+    property of this slice.
+- **What the first run measured, because a benchmark set is only as honest as its floor.** One pool
+  acquire and one empty statement costs about 265us on the dev box, and every other number contains
+  one copy of that per statement the call issues. The reads land between 0.7ms and 5.7ms with a
+  run-to-run spread near 5%, so a plan regression in them is visible. The health RECOMPUTE chain does
+  not: a raise-and-clear pair costs about 22ms across 58 statements, so roughly three quarters of it
+  is transport that no planner decision can move, and its spread is three times the reads'. It was
+  built, measured, and deliberately not shipped, because a benchmark that cannot detect the regression
+  it appears to watch is worse than none. A path that round-trip-bound is counted, not timed, which is
+  the same reasoning that made counting the first instrument.
+- **Context:** [#651](https://github.com/hyperscaleav/omniglass/issues/651), filed out of Fred's
+  question during [#643](https://github.com/hyperscaleav/omniglass/issues/643): "how do we know if
+  performance decreased or increased". [#650](https://github.com/hyperscaleav/omniglass/issues/650)
+  answered the counting half. This is the half counting cannot answer, and it was deliberately
+  sequenced after [#649](https://github.com/hyperscaleav/omniglass/issues/649) replaced per-test
+  migration with a template-database copy: while provisioning was about 90% of a storage run, timing
+  anything on top of it measured the harness.

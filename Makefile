@@ -1,7 +1,7 @@
 # Local dev loop + the build/run flow for the single binary. Production deploy
 # is BYO Postgres; tests use ephemeral testcontainer Postgres.
 
-.PHONY: build build-web web image gen gen-proto gen-web test test-web test-short test-e2e clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify
+.PHONY: build build-web web image gen gen-proto gen-web test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify
 
 # Build the single binary (no console embedded; serves the build-the-console
 # placeholder under /web).
@@ -88,6 +88,34 @@ test-web:
 # Postgres container or builds the binary.
 test-short:
 	go test -short ./...
+
+# Wall-clock benchmarks over the real Storage Gateway, at two estate sizes.
+# DIAGNOSTIC, never a gate: nothing here runs in `make test` (a Go benchmark is
+# inert without -bench), nothing asserts a duration, and no baseline is stored.
+# The instrument that DOES gate is round-trip counting, which is an ordinary test
+# (internal/storage/list_cost_test.go). Two instruments, different jobs: counting
+# catches the N+1 exactly and deterministically, benchmarks catch what counting is
+# blind to, a dropped index, a plan flip, a recursive CTE that stops being bounded.
+#
+# Run it deliberately, before and after a change that claims a performance
+# effect, and COMPARE the two runs rather than reading either one alone:
+#
+#	make bench > /tmp/before.txt
+#	# ...make the change...
+#	make bench > /tmp/after.txt
+#	benchstat /tmp/before.txt /tmp/after.txt
+#
+# benchstat is a separate install and is NOT on this box by default:
+#
+#	go install golang.org/x/perf/cmd/benchstat@latest
+#
+# -count=5 is what gives benchstat enough samples to say whether a difference is
+# real; -run '^$$' keeps the tests from running alongside; -benchmem adds the
+# allocation columns, which are the one part of the output the host cannot make
+# noisy. Compare on an otherwise idle machine: a concurrent `make test` in
+# another worktree moves these numbers more than most regressions would.
+bench:
+	go test -run '^$$' -bench . -benchmem -count=5 ./internal/storage/...
 
 # Browser-driven e2e of the console against the built binary: brings up the dev
 # Postgres, embeds + serves the console, mints a token, and drives it with

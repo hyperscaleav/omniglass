@@ -27,7 +27,7 @@ import (
 // so it sits in its own package UNDER the harness rather than in it, and an
 // internal test file can consume it without the cycle the harness itself would
 // bring. That is why the counter lives one directory down (#650).
-var HarnessDSN func(t *testing.T) string
+var HarnessDSN func(t testing.TB) string
 
 // batchPathPool opens a pool on a fresh migrated database. Not boot-seeded:
 // the fixture below inserts the one reference row it needs (a location_type)
