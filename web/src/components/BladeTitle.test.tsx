@@ -30,6 +30,17 @@ describe("BladeTitle", () => {
     expect(getByText("Display 1").className).not.toContain("font-data");
   });
 
+  // The heading used to ask "is display_name blank", which said prose face for a
+  // label that merely repeats the name. IdentityCell has always called that an
+  // identifier and rendered it once, in the data face; the two surfaces now agree
+  // because they ask the same primitive.
+  it("keeps the data face when the label merely repeats the name", () => {
+    const { getByText } = render(() => (
+      <BladeTitle row={() => ({ name: "codec-1", display_name: "codec-1" })} fallback="codec-1" />
+    ));
+    expect(getByText("codec-1").className).toContain("font-data");
+  });
+
   // A rule with nothing to say about a row keeps the pen and stores no label
   // (ADR-0098), so the heading is the name and belongs in the data face.
   it("keeps the data face when the platform holds the pen but rendered nothing", () => {
