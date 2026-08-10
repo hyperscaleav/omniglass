@@ -98,6 +98,56 @@ either mechanism fires), sweep them with `make clean-testcontainers`. It
 force-removes leftover Postgres test containers, scoped by the testcontainers
 label and the `postgres:18` image so it never touches the compose dev stack.
 
+## Two performance instruments, one of which gates
+
+Performance has two instruments in this repo, and they are deliberately not the same
+thing. Knowing which answers a given question is most of the value:
+
+| | **Round-trip counting** | **Wall-clock benchmarks** |
+|---|---|---|
+| Catches | N+1s: cost that grows with row count | Cost inside one statement: a dropped index, a plan flip to a sequential scan, a recursive CTE that stops being bounded, a predicate that stops being sargable |
+| Blind to | Anything a single statement does | Anything smaller than the host's own noise |
+| Determinism | Exact. Same number every run | Noisy. Interpreted by comparison, never by threshold |
+| Gates a merge | **Yes.** Ordinary tests in `make test` | **No.** Inert without `-bench` |
+| How you run it | `make test` | `make bench`, deliberately, before and after |
+
+The two are complements, not alternatives. A dropped index issues exactly as many
+statements as the index scan it replaced, so counting never moves; an N+1 that doubles
+from twenty to forty statements is well inside the wall clock's noise on a laptop, so the
+benchmark never notices. Each is the only instrument that sees its own class.
+
+### Benchmarks are diagnostic, never a gate
+
+`make bench` runs `go test -bench` over `internal/storage`, at a small estate and a larger
+one, against real Postgres through the same harness the integration tests use. What it
+deliberately does **not** do is as much of the design as what it does:
+
+- **No CI job and no merge gate.** A wall-clock threshold on a shared runner either sits so
+  loose it catches nothing or it flakes and gets muted, and a perf job everybody ignores is
+  worse than none because it reads as coverage.
+- **No stored baseline.** Comparison is between two runs *you* took, on one machine,
+  minutes apart, with [`benchstat`](https://pkg.go.dev/golang.org/x/perf/cmd/benchstat)
+  (a separate install: `go install golang.org/x/perf/cmd/benchstat@latest`). A baseline
+  committed to the tree would be a number from a different machine on a different day.
+- **No timing assertion, anywhere.** Not in a benchmark, not in a test. Timing assertions
+  flake on a dev laptop, and that flake is the reason the counting instrument exists.
+
+Three rules make a benchmark here mean anything:
+
+1. **Setup is outside the timed section.** Provisioning a database and seeding it costs far
+   more than any query being measured, so a benchmark that includes its own fixture build
+   measures the harness and moves whenever the harness does. Fixtures are built once per
+   size and shared; `b.ResetTimer` runs before the loop.
+2. **Two sizes, always.** One number cannot tell a constant apart from a linear cost, and
+   the growth curve is the whole question: a list *should* grow with the estate, a tag
+   cascade walking one component's ancestors should *not*, and only the pair says whether
+   that is still true.
+3. **Subtract the floor.** `BenchmarkRoundTripFloor` measures one pool acquire and one
+   empty statement, and every other number contains one copy of it per statement issued. A
+   call that issues dozens of statements is mostly transport, so a plan regression inside
+   it moves the total by very little. That is a real limit on what this instrument can see,
+   and a path measured to sit past it should be counted rather than timed.
+
 ## Counting round trips, not timing them
 
 Read performance is asserted as a **count of SQL statements**, not as a duration.
@@ -107,8 +157,8 @@ queries each. A count is deterministic. It needs no stored baseline, no threshol
 policy, and no warm-up, and it fails with an exact number that names the defect,
 where a wall-clock measurement on a laptop or a shared runner has variance that
 swamps anything short of a catastrophe. What a count cannot see is a missing index
-or a sequential scan inside one query; that is a different instrument, not a reason
-to skip this one.
+or a sequential scan inside one query; that is the other instrument above, not a
+reason to skip this one.
 
 `internal/storage/storagetest/querycount` is the primitive.
 `storagetest.NewCountingDB` hands back a gateway plus a `querycount.Counter`, and
