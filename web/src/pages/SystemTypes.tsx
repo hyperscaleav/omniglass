@@ -180,11 +180,23 @@ function SystemTypeBladeBody(p: { id: string }): JSX.Element {
     if (!r) return;
     setErr(null);
     try {
+      // An empty box means "this node inherits", which on the wire is the field
+      // OMITTED, never an empty string. The three inherited facts are nullable
+      // and the walk treats only NULL as inherit
+      // (resolveSystemTypeFacts), while the patch coalesces, so sending "" would
+      // write a real empty value that STOPS the walk for this node and every
+      // descendant under it. That is silent and permanent, and it lands on the
+      // facts #657's name and label rules read. `stem` would also 422 outright
+      // on a child that legitimately has none, since it carries a minLength.
+      //
+      // Clearing a fact back to inherit is therefore not expressible here yet;
+      // that needs the explicit update_mask (ADR-0091) this route has not
+      // adopted. Tracked separately rather than papered over with a sentinel.
       await updateSystemType(r.id, {
         display_name: displayName(),
-        stem: stem(),
-        abbrev: abbrev(),
-        icon: icon(),
+        stem: stem().trim() || undefined,
+        abbrev: abbrev().trim() || undefined,
+        icon: icon().trim() || undefined,
       });
       await qc.invalidateQueries({ queryKey: SYSTEM_TYPES_KEY });
     } catch (e) {

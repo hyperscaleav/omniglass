@@ -141,5 +141,12 @@ describe("SystemTypes page", () => {
     await waitFor(() => expect(sent).toBeTruthy());
     expect(sent).toMatchObject({ abbrev: "lb" });
     expect(sent).not.toHaveProperty("parent_id");
+    // An inherited fact must ride as OMITTED, never as "". The columns are
+    // nullable and the server's walk treats only NULL as inherit while the
+    // patch coalesces, so an empty string would write a real value that stops
+    // the walk for this node and every descendant, silently and permanently.
+    // Lab carries no icon of its own, so this is the inherited case.
+    expect(sent).not.toHaveProperty("icon");
+    expect(Object.values(sent as Record<string, unknown>)).not.toContain("");
   });
 });
