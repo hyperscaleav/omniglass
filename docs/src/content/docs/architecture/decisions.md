@@ -127,7 +127,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0090](#adr-0090-a-derived-value-is-a-default-that-tracks-until-touched) | 2026-08-08 | Accepted | A derivable value fills at create, tracks live while the platform holds the pen, freezes on the operator's first edit, and resumes tracking only on an explicit reset; `component.name_generated` ships `DEFAULT false`, not the epic's `DEFAULT true`, so no pre-existing operator-typed name is silently claimed by the platform |
 | [ADR-0091](#adr-0091-an-update_mask-says-which-fields-a-patch-writes) | 2026-08-09 | Accepted | A `PATCH` body may carry an optional `update_mask` with AIP-134 semantics exactly (absent is the implied mask of populated fields, present writes exactly what it names so a zero value clears, `["*"]` is full replacement, an unknown field is a 422 naming it); it rides in the body, the three-state string sentinel stays, the other 108 `PATCH` routes are not retrofitted, and the role declarations convert from `PUT` to `PATCH` as its first consumer |
 | [ADR-0092](#adr-0092-a-location-move-recomputes-both-ancestor-chains) | 2026-08-09 | Accepted | `MoveLocation` recomputes health over both ancestor chains (joined and left) inside its own transaction, the second and last member of the exception class ADR-0088 carved out for a system's relocate; one named row per side seeds the recursive ancestry walk the query already performs, and a no-op move recomputes nothing |
-| [ADR-0093](#adr-0093-benchmarks-are-the-second-performance-instrument-and-they-gate-nothing) | 2026-08-09 | Accepted | Performance has two instruments: round-trip counting gates in `make test`, wall-clock benchmarks (`make bench`, two estate sizes, fixtures outside the timed section) are diagnostic and gate nothing; no CI perf job, no stored baseline, no `EXPLAIN` assertions (deferred), no timing assertion anywhere, and one candidate benchmark was measured as three-quarters transport and dropped rather than shipped |
+| [ADR-0094](#adr-0094-benchmarks-are-the-second-performance-instrument-and-they-gate-nothing) | 2026-08-09 | Accepted | Performance has two instruments: round-trip counting gates in `make test`, wall-clock benchmarks (`make bench`, two estate sizes, fixtures outside the timed section) are diagnostic and gate nothing; no CI perf job, no stored baseline, no `EXPLAIN` assertions (deferred), no timing assertion anywhere, and one candidate benchmark was measured as three-quarters transport and dropped rather than shipped |
 
 ## Entries
 
@@ -3408,7 +3408,7 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   confined to the recorded history, which is exactly the "a missing trigger is a hole in the history"
   cost the health page enumerates its trigger list to avoid.
 
-### ADR-0093: Benchmarks are the second performance instrument, and they gate nothing
+### ADR-0094: Benchmarks are the second performance instrument, and they gate nothing
 
 - **Date:** 2026-08-09 | **Status:** Accepted | **Pages:** [test-driven](/contributing/test-driven/)
 - **Decision:** Performance has two instruments, and only one of them gates. **Round-trip counting**

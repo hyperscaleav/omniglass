@@ -3069,7 +3069,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   under a test whose name says it pins a defect and whose failure message says the fix is to delete it.
 
 - **The second performance instrument: benchmarks that measure, and gate nothing**
-  ([#651](https://github.com/hyperscaleav/omniglass/issues/651), [ADR-0093](/architecture/decisions/)).
+  ([#651](https://github.com/hyperscaleav/omniglass/issues/651), [ADR-0094](/architecture/decisions/)).
   Counting round trips catches the N+1 exactly and deterministically, and is blind to everything that
   happens inside one statement: a dropped index, a plan flip to a sequential scan, a recursive CTE that
   stops being bounded. `make bench` is the instrument for that blind spot. Ten benchmarks run over the
