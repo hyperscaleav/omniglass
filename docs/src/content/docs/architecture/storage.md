@@ -105,6 +105,15 @@ the two in one migration. Three buckets, never conflated:
   shipped-values-and-operator-values-live-apart shape the registry fork gives a registry row, at the
   scale where an overlay table would be more machinery than the three rows are worth
   ([ADR-0098](/architecture/decisions/#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits)).
+  **A derived column is maintained by the gateway and proved by a recompute-and-compare.** The
+  generated label is the worked example: it is stored, so sort, filter and search stay in SQL, and the
+  staleness that buys is paid for by an invariant rather than by a trigger (logic lives in Go, never
+  in the database). What that invariant is stopped being an enumeration of write paths when a rule
+  gained the ability to read facts on OTHER rows: it is now an estate-wide question the gateway
+  answers, `PreviewLabelRecompute` returning nothing, so a write path nobody thought of fails it
+  rather than a list nobody updated passing
+  ([ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate)).
+
 - **One-time data backfills** (dbmate, data-only): transforming existing operator rows to match a new
   constraint, run once, and idempotent on a second run (a repeat changes nothing, proven by a test that
   executes the migration's up-SQL twice).
