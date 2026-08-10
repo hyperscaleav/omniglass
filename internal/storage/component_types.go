@@ -446,7 +446,8 @@ func (p *PG) forkComponentType(ctx context.Context, tx pgx.Tx, actorID string, c
 	if err := putShadowImage(ctx, tx, componentTypeRegistry, current.ID, after); err != nil {
 		return nil, err
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", componentTypeRegistry, current.ID.String(),
+	resID := current.ID.String()
+	if err := writeAuditRes(ctx, tx, actorID, "update", componentTypeRegistry, resID,
 		json.RawMessage(before), json.RawMessage(after)); err != nil {
 		return nil, err
 	}
@@ -499,7 +500,8 @@ func (p *PG) RestoreComponentType(ctx context.Context, actorID, ref string) (*Co
 	if err != nil {
 		return nil, fmt.Errorf("storage: reload component_type %q: %w", ref, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "restore", componentTypeRegistry, current.ID.String(),
+	resID := current.ID.String()
+	if err := writeAuditRes(ctx, tx, actorID, "restore", componentTypeRegistry, resID,
 		json.RawMessage(before), nil); err != nil {
 		return nil, err
 	}

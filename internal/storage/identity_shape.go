@@ -104,6 +104,11 @@ var IdentityShapes = map[string]TableIdentity{
 	"system_role_assignment": {Shape: ShapeIDOnly},
 	"system_role_product":    {Shape: ShapeIDOnly}, "system_role_type": {Shape: ShapeIDOnly},
 	"tag_binding": {Shape: ShapeIDOnly},
+	// registry_shadow holds an operator's version of a shipped registry row
+	// (#655, ADR-0095). Nobody names it: it is addressed by the row it shadows,
+	// (registry, row_id), and row_id is that row's uuid. Operators never see it
+	// at all, since every read resolves it over the official row.
+	"registry_shadow": {Shape: ShapeIDOnly, Reason: "addressed by the registry row it shadows, never named"},
 }
 
 // KeyProvedElsewhere excuses a name-bearing table from the behavioural create sweep,

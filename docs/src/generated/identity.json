@@ -152,6 +152,11 @@
       "reason": "serial-number, a signal name referenced from drivers and templates"
     },
     {
+      "table": "registry_shadow",
+      "shape": "id only",
+      "reason": "addressed by the registry row it shadows, never named"
+    },
+    {
       "table": "role",
       "shape": "key-bearing",
       "proved_elsewhere": "seeded only, no create path on the gateway"
