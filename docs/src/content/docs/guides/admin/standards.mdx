@@ -16,9 +16,18 @@ by the database, the internal address the handle resolves to
 
 A standard is the **system-side counterpart of a [product](/guides/admin/products/)**. A product says
 what a component *is* and what it carries; a standard says what a system is built to be and what it
-carries. This is the promotion of the old `system_type` registry, which was only a label: a standard
-declares a contract, so it earned its own catalog page and its own `standard:*` permission rather than
-sitting under the shared type registry.
+carries. It was formerly a bare label registry that carried no contract, and its promotion into a
+first-class catalog entity is why it has its own page and its own `standard:*` permission rather than
+sitting under the shared type registry
+([ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)).
+
+**A standard is not a system type.** They are two axes and a system can carry either, both, or
+neither. The **[system type](/architecture/core-entities/#catalog-reference-data-system_type)**
+(Catalog, under Systems: Types) is the coarse genus of what kind of space a system **is**, a
+boardroom, a classroom, a video wall; the standard is the blueprint it is **built to**. One estate
+holds ten signage standards and six classroom standards under a single coarse type, which is why the
+classifier is its own registry rather than a use of a standard's own parent-variant chain
+([ADR-0096](/architecture/decisions/#adr-0096-the-system_type-name-returns-as-the-coarse-space-taxonomy)).
 
 - **Conforming is optional.** A system points at a standard through its **Standard** field, and
   leaving it empty is legitimate: a **one-off system** that matches no blueprint carries only its own

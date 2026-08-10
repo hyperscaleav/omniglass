@@ -169,6 +169,7 @@ estate: {
     location_id: uuid {constraint: foreign_key}
     parent_id: uuid {constraint: foreign_key}
     standard_id: uuid {constraint: foreign_key}
+    system_type_id: uuid {constraint: foreign_key}
   }
   system_member: {
     shape: sql_table
@@ -229,6 +230,11 @@ catalog: {
     id: uuid {constraint: primary_key}
     property_type_id: uuid {constraint: foreign_key}
     standard_id: uuid {constraint: foreign_key}
+  }
+  system_type: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+    parent_id: uuid {constraint: foreign_key}
   }
   vendor: {
     shape: sql_table
@@ -409,6 +415,7 @@ catalog.standard_metric.metric_type_id -> telemetry.metric_type.id
 catalog.standard_metric.standard_id -> catalog.standard.id
 catalog.standard_property.property_type_id -> telemetry.property_type.id
 catalog.standard_property.standard_id -> catalog.standard.id
+catalog.system_type.parent_id -> catalog.system_type.id
 collection.node.location_id -> estate.location.id
 collection.node.principal_id -> identity.principal.id
 collection.node_log.node_id -> collection.node.principal_id
@@ -442,6 +449,7 @@ estate.location_type_property.property_type_id -> telemetry.property_type.id
 estate.system.location_id -> estate.location.id
 estate.system.parent_id -> estate.system.id
 estate.system.standard_id -> catalog.standard.id
+estate.system.system_type_id -> catalog.system_type.id
 estate.system_member.component_id -> estate.component.id
 estate.system_member.system_id -> estate.system.id
 identity.choice_alternate.choice_id -> identity.role_choice.id

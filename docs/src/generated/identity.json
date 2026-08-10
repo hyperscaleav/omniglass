@@ -220,6 +220,10 @@
       "shape": "id only"
     },
     {
+      "table": "system_type",
+      "shape": "key-bearing"
+    },
+    {
       "table": "tag",
       "shape": "key-bearing"
     },

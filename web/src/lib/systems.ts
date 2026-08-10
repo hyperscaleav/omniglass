@@ -8,6 +8,11 @@ import { api } from "../api/client";
 // A system optionally conforms to a STANDARD (the blueprint that declares its
 // property contract, the system-side counterpart of a product). It is optional: a
 // one-off system that conforms to no standard is first class.
+//
+// It is separately classified by a SYSTEM_TYPE: what kind of space it is (a
+// boardroom, a classroom, a video wall). The two answer different questions,
+// and an estate can hold many standards under one coarse type. Also optional
+// while the column is nullable.
 export type System = {
   id: string;
   name: string;
@@ -16,6 +21,10 @@ export type System = {
   // the name an operator reads, standard_id the uuid it resolves to.
   standard?: string;
   standard_id?: string;
+  // The coarse space classifier, in both forms: system_type is the name an
+  // operator reads, system_type_id the uuid it resolves to.
+  system_type?: string;
+  system_type_id?: string;
   location?: string;
   // location_id and parent_id are the placement's uuids, the stable handles
   // the tree builder keys and resolves on (#627: name uniqueness is scoped
@@ -56,6 +65,8 @@ export type CreateSystem = {
   name: string;
   // Omit for a one-off system that conforms to no standard.
   standard_id?: string;
+  // Omit to leave the system unclassified.
+  system_type_id?: string;
   display_name?: string;
   parent?: string;
   location?: string;
@@ -67,9 +78,12 @@ export async function createSystem(body: CreateSystem): Promise<System> {
   return data as System;
 }
 
+// Both classifier fields follow the API's three-state convention: omitted
+// leaves the field alone, "" clears it, a name sets it.
 export type UpdateSystem = {
   display_name?: string;
   standard_id?: string;
+  system_type_id?: string;
 };
 
 export async function updateSystem(name: string, body: UpdateSystem): Promise<System> {

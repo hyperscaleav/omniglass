@@ -475,6 +475,24 @@ func (UnimplementedGateway) TypeIsWithin(context.Context, uuid.UUID, uuid.UUID) 
 	return false, nil
 }
 
+func (UnimplementedGateway) UpsertSystemType(context.Context, SystemType) error { return nil }
+func (UnimplementedGateway) ListSystemTypes(context.Context) ([]SystemType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) GetSystemType(context.Context, string) (*SystemType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateSystemType(context.Context, string, SystemType) (*SystemType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateSystemType(context.Context, string, string, SystemTypePatch) (*SystemType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteSystemType(context.Context, string, string) error { return nil }
+func (UnimplementedGateway) ResolveSystemTypeFacts(context.Context, uuid.UUID) (string, string, string, error) {
+	return "", "", "", nil
+}
+
 func (UnimplementedGateway) UpsertProduct(context.Context, Product) error    { return nil }
 func (UnimplementedGateway) ListProducts(context.Context) ([]Product, error) { return nil, nil }
 func (UnimplementedGateway) GetProduct(context.Context, string) (*Product, error) {

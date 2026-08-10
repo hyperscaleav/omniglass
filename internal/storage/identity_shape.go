@@ -66,6 +66,7 @@ var IdentityShapes = map[string]TableIdentity{
 	"system": {Shape: ShapeKeyBearing}, "system_role": {Shape: ShapeKeyBearing},
 	"tag": {Shape: ShapeKeyBearing}, "variable": {Shape: ShapeKeyBearing},
 	"vendor": {Shape: ShapeKeyBearing}, "component_type": {Shape: ShapeKeyBearing},
+	"system_type": {Shape: ShapeKeyBearing},
 	// role_choice is named the same way system_role is: within its owner
 	// arc (owner_kind, standard_id, system_id). choice_alternate is named
 	// within its choice (choice_id, name), one level narrower, the same

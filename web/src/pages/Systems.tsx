@@ -22,6 +22,8 @@ import {
 } from "../lib/systems";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { STANDARDS_KEY, listStandards } from "../lib/standards";
+import { SYSTEM_TYPES_KEY, listSystemTypes } from "../lib/system_types";
+import SystemTypeSelect from "../components/SystemTypeSelect";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { openInEdit, consumePendingEdit } from "../lib/pendingedit";
@@ -69,6 +71,7 @@ export default function Systems() {
   const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
+  const systemTypes = useQuery(() => ({ queryKey: SYSTEM_TYPES_KEY, queryFn: listSystemTypes }));
 
   const locById = createMemo(() => new Map((locations.data ?? []).map((l) => [l.id, l] as const)));
   // The standard picker's options, and the id -> display-name lookup the tree and
@@ -78,6 +81,11 @@ export default function Systems() {
   );
   const standardLabel = (handle?: string) =>
     handle ? (standards.data ?? []).find((s) => s.name === handle)?.display_name ?? handle : "";
+  // The system_type picker reads through SystemTypeSelect (the tree, indented),
+  // not a flat <select>: the taxonomy nests and the nesting is the point. The
+  // label lookup is the same shape the standard's is.
+  const systemTypeLabel = (handle?: string) =>
+    handle ? (systemTypes.data ?? []).find((t) => t.name === handle)?.display_name ?? handle : "";
   // Keyed AND valued on uuid, not name (#627): two same-named locations or
   // systems would otherwise render as visually identical, value-identical
   // options, and posting either would name an ambiguous ref. The API
@@ -166,6 +174,7 @@ export default function Systems() {
 
     const [display, setDisplay] = createSignal(n().raw.display_name ?? "");
     const [standard, setStandard] = createSignal(n().raw.standard ?? "");
+    const [systemType, setSystemType] = createSignal(n().raw.system_type ?? "");
     const [name, setName] = createSignal(n().raw.name);
     const [nameCheck, setNameCheck] = createSignal<NameCheck | null>(null);
     const [checking, setChecking] = createSignal(false);
@@ -179,7 +188,7 @@ export default function Systems() {
     // Seed the inputs from the node each time edit begins (this also reverts a Cancel,
     // since Cancel exits edit and the next begin re-seeds).
     createEffect(on(editing, (isEditing) => {
-      if (isEditing) { setDisplay(n().raw.display_name ?? ""); setStandard(n().raw.standard ?? ""); setName(n().raw.name); setNameCheck(null); }
+      if (isEditing) { setDisplay(n().raw.display_name ?? ""); setStandard(n().raw.standard ?? ""); setSystemType(n().raw.system_type ?? ""); setName(n().raw.name); setNameCheck(null); }
     }));
     // Consume a pending "open in edit" handoff (from create or the row pencil) once
     // the node has resolved.
@@ -198,6 +207,9 @@ export default function Systems() {
             // as "clear", which is how the operator converts this system back to a
             // one-off. Omitting it would silently leave the old standard in place.
             standard_id: standard(),
+            // Same reason as standard_id above: "" is how the operator
+            // un-classifies the system, so the key is always sent.
+            system_type_id: systemType(),
           });
           // The rename is a second call and it goes LAST, because it is the one that
           // can be refused on its own: it needs <resource>:rename, and a duplicate
@@ -251,6 +263,14 @@ export default function Systems() {
             fallback={
               <div class="grid grid-cols-2 gap-5">
                 <KVStacked
+                  label="Type"
+                  value={
+                    n().raw.system_type
+                      ? <span class="badge badge-ghost badge-sm">{systemTypeLabel(n().raw.system_type)}</span>
+                      : <span class="text-sm text-base-content/50">Unclassified</span>
+                  }
+                />
+                <KVStacked
                   label="Standard"
                   value={
                     n().standard
@@ -265,6 +285,12 @@ export default function Systems() {
             <div class="flex flex-col gap-3">
               <FieldRow bind="display_name">
                 <input class="input input-bordered w-full" value={display()} placeholder="Executive Boardroom" onInput={(e) => setDisplay(e.currentTarget.value)} />
+              </FieldRow>
+              <FieldRow
+                label="Type"
+                info="What kind of space this is (a boardroom, a classroom, a video wall). Separate from the standard below: the type is what it IS, the standard is what it is built to."
+              >
+                <SystemTypeSelect types={systemTypes.data ?? []} value={systemType()} onChange={setSystemType} emptyLabel="Unclassified" />
               </FieldRow>
               <FieldRow
                 label="Standard"
@@ -434,6 +460,7 @@ export default function Systems() {
     // operator edits the key by hand (lib/entities).
     const { display, setDisplay, name, setName, nameDerived } = createIdentity();
     const [standard, setStandard] = createSignal("");
+    const [systemType, setSystemType] = createSignal("");
     const [location, setLocation] = createSignal("");
     const [parent, setParent] = createSignal("");
     const [busy, setBusy] = createSignal(false);
@@ -448,7 +475,7 @@ export default function Systems() {
         // Bind the create response (#627 Task 15c): see Components.tsx's
         // own create() for why the id, not the locally typed name, is what
         // this hands off to openInEdit and navigate.
-        const created = await createSystem({ name: nm, standard_id: standard() || undefined, display_name: display().trim() || undefined, location: location() || undefined, parent: parent() || undefined });
+        const created = await createSystem({ name: nm, standard_id: standard() || undefined, system_type_id: systemType() || undefined, display_name: display().trim() || undefined, location: location() || undefined, parent: parent() || undefined });
         await qc.invalidateQueries({ queryKey: SYSTEMS_KEY });
         openInEdit(created.id);
         navigate(`/systems/${encodeURIComponent(created.id)}`);
@@ -482,6 +509,12 @@ export default function Systems() {
               hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."}
             >
               <input class="input input-bordered w-full font-data" value={name()} placeholder="exec-boardroom" onInput={(e) => setName(e.currentTarget.value)} />
+            </FieldRow>
+            <FieldRow
+              label="Type"
+              hint="What kind of space this is (a boardroom, a classroom, a video wall). Separate from the standard: the type is what it IS, the standard is what it is built to. Optional."
+            >
+              <SystemTypeSelect types={systemTypes.data ?? []} value={systemType()} onChange={setSystemType} emptyLabel="Unclassified" />
             </FieldRow>
             <FieldRow
               label="Standard"

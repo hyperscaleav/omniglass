@@ -220,7 +220,7 @@ describe("Catalog single entry", () => {
 
   it("keeps every former registry page reachable off-rail with its gate intact", () => {
     const paths = OFF_RAIL.map((o) => o.path);
-    for (const p of ["/products", "/vendors", "/drivers", "/component-types", "/standards", "/location-types", "/secret-types", "/metrics", "/properties", "/event-types", "/command-types", "/tags"]) {
+    for (const p of ["/products", "/vendors", "/drivers", "/component-types", "/standards", "/system-types", "/location-types", "/secret-types", "/metrics", "/properties", "/event-types", "/command-types", "/tags"]) {
       expect(paths).toContain(p);
     }
     // The gates did not loosen when the rail entries vanished: the sensitive
@@ -268,6 +268,7 @@ describe("Catalog single entry", () => {
       "/drivers": ["driver", "read"],
       "/component-types": ["component_type", "read"],
       "/standards": ["standard", "read"],
+      "/system-types": ["system_type", "read"],
       "/location-types": ["location_type", "read"],
       "/secret-types": ["secret", "read"],
       "/tags": ["tag", "read"],

@@ -3,6 +3,7 @@ import { COMPONENT_TYPES_KEY, listComponentTypes } from "./component_types";
 import { VENDORS_KEY, listVendors } from "./vendors";
 import { DRIVERS_KEY, listDrivers } from "./drivers";
 import { STANDARDS_KEY, listStandards } from "./standards";
+import { SYSTEM_TYPES_KEY, listSystemTypes } from "./system_types";
 import { LOCATION_TYPES_KEY, listLocationTypes } from "./location_types";
 import { METRICS_KEY, listMetricTypes } from "./metric_types";
 import { PROPERTIES_KEY, listProperties } from "./properties";
@@ -94,9 +95,13 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
   },
   {
     header: "Systems",
-    copy: "A standard is the blueprint a system conforms to: the properties every conforming system exposes.",
+    copy: "A system type is the coarse kind of space a system is (a boardroom, a classroom, a video wall); a standard is the blueprint it conforms to, the properties every conforming system exposes.",
     entries: [
       { label: "Standards", path: "/standards", gate: ["standard", "read"], key: STANDARDS_KEY, list: listStandards },
+      // "Types": the Systems header already says where it lives (mirrors the
+      // Components and Locations groups). The coarse space taxonomy
+      // (ADR-0096): a system is classified as one of its nodes.
+      { label: "Types", path: "/system-types", gate: ["system_type", "read"], key: SYSTEM_TYPES_KEY, list: listSystemTypes },
       { label: "Templates", soon: true, issue: 616 },
     ],
   },

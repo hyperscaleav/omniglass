@@ -56,8 +56,11 @@ on a location. The **`component_type`** registry, retired in the fields fold
 **returns as the product's genus**
 ([ADR-0085](/architecture/decisions/#adr-0085-the-component_type-registry-returns-as-the-device-class-genus)):
 a nested taxonomy above the product (`product.component_type_id`, required), not a second classifier
-on the component. `system_type` was promoted to `standard`,
-[ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model).
+on the component. The old `system_type` COLUMN was promoted to `standard`,
+[ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model);
+the name now belongs to a different object, the nested **`system_type` registry** that says what kind
+of space a system is (`system.system_type_id`, nullable for now,
+[ADR-0096](/architecture/decisions/#adr-0096-the-system_type-name-returns-as-the-coarse-space-taxonomy)).
 The **exclusive-arc** owner columns are real, carrying the sample lanes (**`metric`**,
 **`property`**), **`event`**, and **`command`**,
 and a recorded **[health](/architecture/health/)** series per component, system, and location. A
@@ -214,6 +217,37 @@ A component's `component_type` is never stored on the component itself; it is re
 product (`component.product_id -> product.component_type_id`). See the
 [Products guide](/guides/admin/products/).
 
+### Catalog reference data: `system_type`
+
+A **`system_type`** (`board`, `class`, `meeting`, `video-wall`, ...) is the **coarse space genus**:
+what kind of space a system **is**. It is the system-side counterpart of `component_type` and it
+nests the same way, by `parent_id`, on the same official/custom pattern, operator-graftable at any
+node ([ADR-0096](/architecture/decisions/#adr-0096-the-system_type-name-returns-as-the-coarse-space-taxonomy)).
+The shipped tree is universal: `av` over `room` over `board` / `class` / `meeting` / `training` /
+`conference` / `huddle`, and `av` over `sign` over `video-wall` / `interactive-sign`.
+
+The row carries the identity facts that span every space of that kind, **inheriting down the tree
+with override at any node**: the naming **`stem`** (the prefix a generated system name is built from,
+e.g. `boardroom-2`), **`display_name`**, **`icon`** (the console glyph), and **`abbrev`** (the compact
+label form: `br`, `cls`, `vw`). A blank fact on a child means "inherit the nearest ancestor's", so
+`board` states its own stem and abbrev while taking its icon from `room`, which overrides `av`'s. A
+**root** must carry a stem of its own: it has no ancestor to inherit one from, so a blank there is not
+"inherit", it is "nothing".
+
+A **`system`** is classified through **`system.system_type_id`**, **nullable for now** (a floor waits
+until the shipped tree has proven out). It is **`on delete restrict`**, as `parent_id` is: a type that
+still classifies a system, or still parents another type, cannot be deleted.
+
+Unlike `component_type`, it carries no **`default_tags`**. A product's instances start from its type's
+tag set, while a system's effective tags come from the platform, its location, and its own system
+tree, so the column would have no reader.
+
+The **type is not the standard**, and both stay. The type says what a system **is**; the standard
+below says which blueprint it is **built to**. One estate holds ten signage standards and six
+classroom standards under a single coarse type, which is exactly why standard's own
+`parent_standard_id` inheritance (which expresses **design forks**, two ways to build the same kind of
+room) is the wrong axis for this question.
+
 ### Catalog reference data: `standard`
 
 A **`standard`** (Huddle Room, Classroom, ...) is the **blueprint a system conforms to**: a stable
@@ -222,7 +256,8 @@ the `official` boolean; the promotion of the former `system_type` label registry
 ([ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)).
 
 A **`system`** conforms through the optional **`system.standard_id`**; a **one-off system** is
-first-class and carries no contract. Conformance is **not** a copy: the standard's contract defaults
+first-class and carries no contract. The standard is a separate axis from `system_type` above: a
+system can carry either, both, or neither. Conformance is **not** a copy: the standard's contract defaults
 resolve **live** for every conforming system until it overrides one. See the
 [Standards guide](/guides/admin/standards/).
 

@@ -50,6 +50,9 @@ var driversYAML []byte
 //go:embed component_types.yaml
 var componentTypesYAML []byte
 
+//go:embed system_types.yaml
+var systemTypesYAML []byte
+
 //go:embed products.yaml
 var productsYAML []byte
 
@@ -173,6 +176,17 @@ type componentTypesDoc struct {
 	} `yaml:"component_types"`
 }
 
+type systemTypesDoc struct {
+	SystemTypes []struct {
+		ID          string `yaml:"id"`
+		DisplayName string `yaml:"display_name"`
+		Stem        string `yaml:"stem"`
+		Icon        string `yaml:"icon"`
+		Abbrev      string `yaml:"abbrev"`
+		ParentID    string `yaml:"parent_id"`
+	} `yaml:"system_types"`
+}
+
 type productsDoc struct {
 	Products []struct {
 		ID              string `yaml:"id"`
@@ -242,6 +256,9 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 		return err
 	}
 	if err := seedComponentTypes(ctx, gw); err != nil {
+		return err
+	}
+	if err := seedSystemTypes(ctx, gw); err != nil {
 		return err
 	}
 	// Products before either role step: a pinned product is a role's
@@ -482,6 +499,47 @@ func seedComponentTypes(ctx context.Context, gw storage.Gateway) error {
 			return fmt.Errorf("seed: component_type %s: reload after upsert: %w", ct.ID, err)
 		}
 		resolved[ct.ID] = got.ID
+	}
+	return nil
+}
+
+// seedSystemTypes installs the ship-with system_type taxonomy, on exactly the
+// pass seedComponentTypes runs: authoritative on conflict, parents listed
+// before the children that name them, and each row reloaded after its upsert to
+// learn the uuid the database assigned it, because SystemType.ParentID is a
+// real uuid rather than a name reference resolved in SQL.
+func seedSystemTypes(ctx context.Context, gw storage.Gateway) error {
+	var doc systemTypesDoc
+	if err := yaml.Unmarshal(systemTypesYAML, &doc); err != nil {
+		return fmt.Errorf("seed: parse system_types: %w", err)
+	}
+	nz := func(s string) *string {
+		if s == "" {
+			return nil
+		}
+		return &s
+	}
+	resolved := make(map[string]uuid.UUID, len(doc.SystemTypes))
+	for _, st := range doc.SystemTypes {
+		var parentID *uuid.UUID
+		if st.ParentID != "" {
+			pid, ok := resolved[st.ParentID]
+			if !ok {
+				return fmt.Errorf("seed: system_type %s: parent %s not seeded yet (list parents before children)", st.ID, st.ParentID)
+			}
+			parentID = &pid
+		}
+		if err := gw.UpsertSystemType(ctx, storage.SystemType{
+			Name: st.ID, Official: true, DisplayName: st.DisplayName,
+			Stem: nz(st.Stem), Icon: nz(st.Icon), Abbrev: nz(st.Abbrev), ParentID: parentID,
+		}); err != nil {
+			return fmt.Errorf("seed: system_type %s: %w", st.ID, err)
+		}
+		got, err := gw.GetSystemType(ctx, st.ID)
+		if err != nil {
+			return fmt.Errorf("seed: system_type %s: reload after upsert: %w", st.ID, err)
+		}
+		resolved[st.ID] = got.ID
 	}
 	return nil
 }

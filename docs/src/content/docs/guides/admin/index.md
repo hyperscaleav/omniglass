@@ -52,7 +52,11 @@ Every task on these pages has two front doors, and they call the same API with t
   **[location types](/guides/admin/location-types/)** for locations, **[standards](/guides/admin/standards/)** for
   systems, and **[products](/guides/admin/products/)** for components, with
   **[vendors](/guides/admin/vendors/)** and **[drivers](/guides/admin/drivers/)** the reference
-  registries a product ties together.
+  registries a product ties together. Beside standards sit the two coarse genus registries the
+  console calls **Types**: the
+  [component type](/architecture/core-entities/#catalog-reference-data-component_type) tree above
+  products, and the [system type](/architecture/core-entities/#catalog-reference-data-system_type)
+  tree that says what kind of space a system is.
 
 The model behind all of this is [identity and access](/architecture/identity-access/) and
 [config and credentials](/architecture/variables/); those pages say how it is built, these say
