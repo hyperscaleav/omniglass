@@ -119,7 +119,9 @@ func TestSettingALabelTakesThePenAndClearingItGivesItBack(t *testing.T) {
 // "someone else's field".
 func TestARuleRenderingNothingLeavesTheLabelUnsetRatherThanBlank(t *testing.T) {
 	gw, ctx, dsn := seededGatewayDSN(t)
-	// A rule that is syntactically fine and produces nothing over any row.
+
+	// First the create case, where the row starts with no label and the rule
+	// adds none.
 	if _, err := gw.UpdateComponentType(ctx, "", "display", storage.ComponentTypePatch{LabelRule: strptr("{{.NoSuchFact}}")}); err != nil {
 		t.Fatalf("set empty-producing rule: %v", err)
 	}
@@ -131,7 +133,39 @@ func TestARuleRenderingNothingLeavesTheLabelUnsetRatherThanBlank(t *testing.T) {
 		t.Fatal("an empty render took the pen away from the platform")
 	}
 	if raw := rawLabel(t, ctx, dsn, c.ID); raw != nil {
-		t.Fatalf("stored label = %q, want SQL NULL rather than a blank string", *raw)
+		t.Fatalf("on create the stored label is %q, want SQL NULL rather than a blank string", *raw)
+	}
+
+	// Then the case that actually WRITES the empty value, which is the one a
+	// create cannot reach: a row that already carries a label, whose rule then
+	// stops producing one. Without this the assertion above passes because
+	// nothing was written at all, which proves nothing about what an empty
+	// render stores.
+	if _, err := gw.UpdateComponentType(ctx, "", "display", storage.ComponentTypePatch{LabelRule: strptr("Panel {{.Ordinal}}")}); err != nil {
+		t.Fatalf("set a producing rule: %v", err)
+	}
+	labelled, err := gw.ResetComponentName(ctx, "", c.ID, all, all)
+	if err != nil {
+		t.Fatalf("reset to pick up the producing rule: %v", err)
+	}
+	if labelled.DisplayName != "Panel 1" {
+		t.Fatalf("precondition: label = %q, want %q", labelled.DisplayName, "Panel 1")
+	}
+	if _, err := gw.UpdateComponentType(ctx, "", "display", storage.ComponentTypePatch{LabelRule: strptr("{{.NoSuchFact}}")}); err != nil {
+		t.Fatalf("back to the empty-producing rule: %v", err)
+	}
+	emptied, err := gw.RenameComponent(ctx, "", c.ID, "hand-picked", all, all)
+	if err != nil {
+		t.Fatalf("rename to re-render: %v", err)
+	}
+	if emptied.DisplayName != "" {
+		t.Fatalf("label = %q, want none", emptied.DisplayName)
+	}
+	if !emptied.DisplayNameGenerated {
+		t.Fatal("an empty re-render took the pen away from the platform")
+	}
+	if raw := rawLabel(t, ctx, dsn, c.ID); raw != nil {
+		t.Fatalf("after an empty re-render the stored label is %q, want SQL NULL rather than a blank string", *raw)
 	}
 }
 
@@ -616,14 +650,20 @@ func TestEveryStoredLabelEqualsWhatItsRuleProduces(t *testing.T) {
 	roomA := makeRoom(t, gw, ctx, "room-a")
 	roomB := makeRoom(t, gw, ctx, "room-b")
 
+	// The bucket contents are chosen so the move below actually SHIFTS an
+	// ordinal: room-b already holds display-1 and display-2, so the display-2
+	// arriving from room-a is re-minted as display-3. Without that the mover
+	// keeps its number, its label does not change, and the invariant would pass
+	// whether or not a move re-renders at all.
 	var built []string
 	for _, spec := range []storage.ComponentSpec{
-		{ProductName: strptr(qm55), LocationName: &roomA},
-		{ProductName: strptr(qm55), LocationName: &roomA},
-		{ProductName: strptr(qm55), LocationName: &roomB},
-		{ProductName: &mine.Name, LocationName: &roomA},
-		{ProductName: &mine.Name, LocationName: &roomB},
-		{ProductName: strptr("shure-mxa920"), LocationName: &roomA},
+		{ProductName: strptr(qm55), LocationName: &roomA},           // 0 renamed
+		{ProductName: strptr(qm55), LocationName: &roomA},           // 1 moved
+		{ProductName: strptr(qm55), LocationName: &roomB},           // 2 reclassified
+		{ProductName: strptr(qm55), LocationName: &roomB},           // 3 the blocker
+		{ProductName: &mine.Name, LocationName: &roomA},             // 4 reset
+		{ProductName: &mine.Name, LocationName: &roomB},             // 5 hand-labelled
+		{ProductName: strptr("shure-mxa920"), LocationName: &roomA}, // 6 renamed then reset
 		{Name: "hand-named", ProductName: strptr(qm55), LocationName: &roomB},
 	} {
 		c, err := gw.CreateComponent(ctx, "", spec, all)
@@ -643,18 +683,36 @@ func TestEveryStoredLabelEqualsWhatItsRuleProduces(t *testing.T) {
 	if _, err := gw.UpdateComponent(ctx, "", built[2], storage.ComponentPatch{ProductName: &mine.Name}, all, all); err != nil {
 		t.Fatalf("reclassify: %v", err)
 	}
-	if _, err := gw.ResetComponentName(ctx, "", built[3], all, all); err != nil {
+	if _, err := gw.ResetComponentName(ctx, "", built[4], all, all); err != nil {
 		t.Fatalf("reset: %v", err)
 	}
-	if _, err := gw.UpdateComponent(ctx, "", built[4], storage.ComponentPatch{DisplayName: strptr("The Operator's Own")}, all, all); err != nil {
+	// Renamed and then reset, so the reset genuinely moves the name and the
+	// ordinal back: a reset onto a row that would re-mint what it already holds
+	// changes nothing, and would leave this act unchecked.
+	if _, err := gw.RenameComponent(ctx, "", built[6], "hand-mic", all, all); err != nil {
+		t.Fatalf("rename before reset: %v", err)
+	}
+	if _, err := gw.ResetComponentName(ctx, "", built[6], all, all); err != nil {
+		t.Fatalf("reset after rename: %v", err)
+	}
+	if _, err := gw.UpdateComponent(ctx, "", built[5], storage.ComponentPatch{DisplayName: strptr("The Operator's Own")}, all, all); err != nil {
 		t.Fatalf("hand-label: %v", err)
+	}
+	// The mover's label must have MOVED with it, or the fixture is not exercising
+	// what the invariant below is meant to catch.
+	moved, err := gw.GetComponent(ctx, built[1], all)
+	if err != nil {
+		t.Fatalf("re-read the mover: %v", err)
+	}
+	if moved.Name != "display-3" {
+		t.Fatalf("the mover is named %q, want display-3: the fixture must force a re-mint or the move case proves nothing", moved.Name)
 	}
 
 	components, err := gw.ListComponents(ctx, all)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
-	if len(components) < 7 {
+	if len(components) < 8 {
 		t.Fatalf("built %d components, want the whole fixture: an invariant over too few rows proves too little", len(components))
 	}
 	checked := 0
@@ -677,7 +735,7 @@ func TestEveryStoredLabelEqualsWhatItsRuleProduces(t *testing.T) {
 		}
 		checked++
 	}
-	if checked < 6 {
+	if checked < 7 {
 		t.Fatalf("only %d platform-owned labels were compared, want at least 6: an invariant that checks nothing passes for the wrong reason", checked)
 	}
 }
