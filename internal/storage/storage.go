@@ -311,6 +311,14 @@ type Gateway interface {
 	GetLabelRule(ctx context.Context, kind string) (*LabelRule, error)
 	SetLabelRule(ctx context.Context, actorID, kind, template string) (*LabelRule, error)
 
+	// The bulk recompute (#685), the verb a rule change is applied through.
+	// PreviewLabelRecompute lists exactly the rows an apply would change and
+	// leaves the estate as it found it; RecomputeLabels applies and returns
+	// what it changed. Both are scope-injected, and a location recompute
+	// reports the components and systems its new location labels stale.
+	PreviewLabelRecompute(ctx context.Context, kind string, read scope.Set) ([]LabelChange, error)
+	RecomputeLabels(ctx context.Context, actorID, kind string, read, action scope.Set) ([]LabelChange, error)
+
 	UpsertComponentType(ctx context.Context, ct ComponentType) error
 	ListComponentTypes(ctx context.Context) ([]ComponentType, error)
 	GetComponentType(ctx context.Context, ref string) (*ComponentType, error)

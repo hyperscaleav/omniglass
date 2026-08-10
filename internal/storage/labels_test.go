@@ -485,10 +485,19 @@ func TestTheSystemAndLocationDataMapsAreClosedToo(t *testing.T) {
 
 // --- the write paths ----------------------------------------------------
 
-// The five acts that can change a component rule's inputs, each proved to
-// re-render. This is the enumeration the data map's contents commit us to: no
-// fact in that map changes by any other route, which is what makes the
-// invariant below provable rather than hopeful.
+// The five acts on the ROW ITSELF that change a component rule's inputs, each
+// proved to re-render.
+//
+// This test's claim was once larger than it is now, and the correction is worth
+// keeping rather than quietly rewording. Slice 2 read it as the whole
+// enumeration the data map commits us to, on the reasoning that no fact in that
+// map changes by any other route. That reasoning was already thin (TypeName,
+// ProductName, VendorName and the rule itself are columns on registry rows, not
+// on this one) and #685 ended it outright: a component's map now reads its
+// location's label and its primary system's type, so acts on OTHER rows stale
+// it too. Those acts, and the cascade that answers them, are
+// labels_placement_test.go; the estate-wide invariant that no longer takes any
+// enumeration on trust is TestNoActLeavesALabelStaleAnywhere.
 func TestALabelFollowsEveryActThatChangesItsInputs(t *testing.T) {
 	gw, ctx := seededGateway(t)
 	if _, err := gw.UpdateComponentType(ctx, "", "display", storage.ComponentTypePatch{

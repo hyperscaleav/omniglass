@@ -737,3 +737,199 @@ func assertNoLabelDrift(t *testing.T, gw *storage.PG, ctx context.Context) {
 		}
 	}
 }
+
+// --- the invariant ------------------------------------------------------
+
+// The recompute-and-compare invariant, over an estate that has been PUT
+// THROUGH every act this slice knows of, on all three tiers, with rules that
+// read placement on two of them.
+//
+// It is deliberately not an enumeration of write paths the way slice 2's was.
+// An enumeration is only as good as the argument that it is complete, and this
+// slice is here because that argument turned out to be false. This test makes
+// no such argument: it drives the estate and then asks the gateway itself
+// whether any stored label disagrees with what its rules produce. A write path
+// nobody thought of fails it, which is the property an enumeration cannot have.
+func TestNoActLeavesALabelStaleAnywhere(t *testing.T) {
+	gw, ctx := seededGateway(t)
+	// Rules that read everything a rule can read about placement, so an act
+	// that fails to restamp is a visible mismatch rather than a coincidence.
+	if _, err := gw.SetLabelRule(ctx, "", "component", "{{.SystemTypeLabel}}/{{.LocationLabel}}/{{.TypeName}}/{{.Name}}/{{if .Ordinal}}{{.Ordinal}}{{else}}-{{end}}"); err != nil {
+		t.Fatalf("component rule: %v", err)
+	}
+	if _, err := gw.SetLabelRule(ctx, "", "system", "{{.LocationLabel}}/{{.TypeName}}/{{.Name}}"); err != nil {
+		t.Fatalf("system rule: %v", err)
+	}
+	if _, err := gw.SetLabelRule(ctx, "", "location", "{{.TypeName}} {{.Name | upper}}"); err != nil {
+		t.Fatalf("location rule: %v", err)
+	}
+
+	roomA := makeRoomWithLabel(t, gw, ctx, "room-a", "204A")
+	roomB := makeRoom(t, gw, ctx, "room-b")
+	roomC := makeRoom(t, gw, ctx, "room-c")
+
+	board, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-board", SystemTypeID: strptr("board"), LocationName: &roomA.Name}, all)
+	if err != nil {
+		t.Fatalf("create board: %v", err)
+	}
+	huddle, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-huddle", SystemTypeID: strptr("huddle"), LocationName: &roomB}, all)
+	if err != nil {
+		t.Fatalf("create huddle: %v", err)
+	}
+	mover, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-mover", SystemTypeID: strptr("class"), LocationName: &roomA.Name}, all)
+	if err != nil {
+		t.Fatalf("create mover: %v", err)
+	}
+
+	var comps []string
+	for _, spec := range []storage.ComponentSpec{
+		{ProductName: strptr(qm55), LocationName: &roomA.Name, SystemName: &board.Name},  // 0 stays put
+		{ProductName: strptr(qm55), LocationName: &roomA.Name, SystemName: &board.Name},  // 1 moves rooms
+		{ProductName: strptr(qm55), LocationName: &roomB, SystemName: &huddle.Name},      // 2 re-defaulted
+		{ProductName: strptr(qm55), LocationName: &roomB},                                // 3 bound later
+		{ProductName: strptr("shure-mxa920"), LocationName: &roomC},                      // 4 renamed then reset
+		{ProductName: strptr(qm55), LocationName: &roomC, DisplayName: "Operator's Own"}, // 5 the pen stays theirs
+		{ProductName: strptr(qm55), LocationName: &roomC, SystemName: &mover.Name},       // 6 its system moves
+	} {
+		c, err := gw.CreateComponent(ctx, "", spec, all)
+		if err != nil {
+			t.Fatalf("create %+v: %v", spec, err)
+		}
+		comps = append(comps, c.ID)
+	}
+
+	// Every act, in an order that makes each one actually move something.
+	acts := []struct {
+		what string
+		run  func() error
+	}{
+		{"rename the location the labels read", func() error {
+			_, err := gw.RenameLocation(ctx, "", roomA.Name, "room-204a", all, all)
+			return err
+		}},
+		{"relabel that location", func() error {
+			_, err := gw.UpdateLocation(ctx, "", "room-204a", storage.LocationPatch{DisplayName: strptr("204A West")}, all, all)
+			return err
+		}},
+		{"clear that label so the ladder falls through to the name", func() error {
+			_, err := gw.UpdateLocation(ctx, "", "room-204a", storage.LocationPatch{DisplayName: strptr("")}, all, all)
+			return err
+		}},
+		{"reclassify a location", func() error {
+			_, err := gw.UpdateLocation(ctx, "", roomC, storage.LocationPatch{LocationType: strptr("floor")}, all, all)
+			return err
+		}},
+		{"move a location", func() error {
+			_, err := gw.MoveLocation(ctx, "", roomB, storage.LocationMove{ParentName: strptr("hq")}, all, all)
+			return err
+		}},
+		{"move a component to another room", func() error {
+			_, err := gw.MoveComponent(ctx, "", comps[1], storage.ComponentMove{LocationName: &roomB}, all, all)
+			return err
+		}},
+		{"rename a component", func() error {
+			_, err := gw.RenameComponent(ctx, "", comps[4], "hand-mic", all, all)
+			return err
+		}},
+		{"reset a component name", func() error {
+			_, err := gw.ResetComponentName(ctx, "", comps[4], all, all)
+			return err
+		}},
+		{"reclassify a component", func() error {
+			_, err := gw.UpdateComponent(ctx, "", comps[0], storage.ComponentPatch{ProductName: strptr("shure-mxa920")}, all, all)
+			return err
+		}},
+		{"bind a component to a system", func() error {
+			return gw.AddMember(ctx, "", huddle.Name, comps[3], all)
+		}},
+		{"bind a second system and re-default to it", func() error {
+			if err := gw.AddMember(ctx, "", board.Name, comps[2], all); err != nil {
+				return err
+			}
+			return gw.SetPrimaryMember(ctx, "", board.Name, comps[2], all)
+		}},
+		{"unbind the default", func() error {
+			return gw.RemoveMember(ctx, "", board.Name, comps[2], all)
+		}},
+		{"reclassify a system", func() error {
+			_, err := gw.UpdateSystem(ctx, "", huddle.ID, storage.SystemPatch{SystemTypeID: strptr("training")}, all, all)
+			return err
+		}},
+		{"move a system to another room", func() error {
+			_, err := gw.MoveSystem(ctx, "", mover.ID, storage.SystemMove{LocationName: &roomB}, all, all)
+			return err
+		}},
+		{"rename a system", func() error {
+			_, err := gw.RenameSystem(ctx, "", board.ID, "sys-board-renamed", all, all)
+			return err
+		}},
+	}
+	for _, act := range acts {
+		if err := act.run(); err != nil {
+			t.Fatalf("%s: %v", act.what, err)
+		}
+		for _, kind := range []string{"component", "system", "location"} {
+			drift, err := gw.PreviewLabelRecompute(ctx, kind, all)
+			if err != nil {
+				t.Fatalf("preview %s after %q: %v", kind, act.what, err)
+			}
+			if len(drift) != 0 {
+				t.Fatalf("after %q, %d %s label(s) disagree with their rules: %+v", act.what, len(drift), kind, drift)
+			}
+		}
+	}
+
+	// The operator's own label is untouched by all of it, and the invariant
+	// above must not be passing because nothing is platform-owned.
+	if got := labelOf(t, gw, ctx, comps[5]); got != "Operator's Own" {
+		t.Errorf("the operator's label became %q", got)
+	}
+	owned := 0
+	cs, err := gw.ListComponents(ctx, all)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	for _, c := range cs {
+		if c.DisplayNameGenerated {
+			owned++
+		}
+	}
+	if owned < 6 {
+		t.Fatalf("only %d component labels are platform-owned, so the invariant above checked too little", owned)
+	}
+}
+
+// Staffing a role IS membership (AssignRole binds the component into the system
+// on the operator's behalf), so it is a label write path with no membership
+// call in it. It gets its own test rather than a line in the invariant loop,
+// because a role assignment needs a standard, and the fixture that gives it one
+// would drown the loop it sits in.
+func TestStaffingARoleRestampsTheComponentItBinds(t *testing.T) {
+	gw, ctx := seededGateway(t)
+	if _, err := gw.SetLabelRule(ctx, "", "component", "[{{.SystemTypeLabel}}]"); err != nil {
+		t.Fatalf("component rule: %v", err)
+	}
+	room := makeRoom(t, gw, ctx, "room-a")
+	s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
+		Name: "sys-a", SystemTypeID: strptr("board"), StandardID: strptr("huddle-room"), LocationName: &room,
+	}, all)
+	if err != nil {
+		t.Fatalf("create system: %v", err)
+	}
+	bar, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
+		ProductName: strptr("cisco-room-bar"), LocationName: &room,
+	}, all)
+	if err != nil {
+		t.Fatalf("create video bar: %v", err)
+	}
+	if bar.DisplayName != "[]" {
+		t.Fatalf("an unbound component reads %q, want %q", bar.DisplayName, "[]")
+	}
+	if err := gw.AssignRole(ctx, "", s.Name, "conf-bar", bar.ID, all); err != nil {
+		t.Fatalf("assign role: %v", err)
+	}
+	if got := labelOf(t, gw, ctx, bar.ID); got != "[Boardroom]" {
+		t.Fatalf("after staffing a role = %q, want %q: the implicit membership is a label write path too", got, "[Boardroom]")
+	}
+	assertNoLabelDrift(t, gw, ctx)
+}

@@ -185,13 +185,9 @@ func labelScanQuery(tbl scopeTable, cols string, read, action scope.Set, n label
 // estate; the placement half is one statement for the whole page; the global
 // rule and the acronym dictionary are read once each. The counting instrument
 // from #650 is what holds that to being true rather than intended.
-func (p *PG) labelDrift(ctx context.Context, q querier, kind string, n labelNarrow, read, action scope.Set, forUpdate bool) ([]LabelChange, error) {
+func (p *PG) labelDrift(ctx context.Context, q querier, eng *label.Engine, kind string, n labelNarrow, read, action scope.Set, forUpdate bool) ([]LabelChange, error) {
 	if read.Empty() || action.Empty() {
 		return nil, nil
-	}
-	eng, err := p.labelEngine(ctx, q)
-	if err != nil {
-		return nil, err
 	}
 	switch kind {
 	case "component":
@@ -487,7 +483,16 @@ func (p *PG) recomputeInTx(ctx context.Context, tx pgx.Tx, kind string, read, ac
 	if err != nil {
 		return nil, err
 	}
-	changes, err := p.lockedRecompute(ctx, tx, tbl, kind, labelNarrow{}, read, action)
+	// The acronym dictionary is resolved ONCE for the whole operation and
+	// passed down, rather than per row or even per kind: it is a settings read,
+	// and a recompute that took one per rendered row would have reintroduced
+	// the N+1 through the back door (ADR-0099 names this as the reason the
+	// render functions take an engine rather than reaching for one).
+	eng, err := p.labelEngine(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	changes, err := p.lockedRecompute(ctx, tx, eng, tbl, kind, labelNarrow{}, read, action)
 	if err != nil {
 		return nil, err
 	}
@@ -506,7 +511,7 @@ func (p *PG) recomputeInTx(ctx context.Context, tx pgx.Tx, kind string, read, ac
 	// Scoped exactly as the recompute that caused it, rather than estate-wide
 	// the way a rename's cascade is: this is still the operator's own bulk
 	// gesture, and its blast radius is the one their scope allows.
-	downstream, err := p.cascadeLocationLabelsScoped(ctx, tx, moved, read, action)
+	downstream, err := p.cascadeLocationLabelsWith(ctx, tx, eng, moved, read, action)
 	if err != nil {
 		return nil, err
 	}
@@ -527,11 +532,11 @@ func ladderOf(label, name string) string {
 // cascade's: take the operation lock, read the drift with the rows locked, and
 // write it. Everything above it differs only in the narrowing and in what, if
 // anything, it audits.
-func (p *PG) lockedRecompute(ctx context.Context, tx pgx.Tx, tbl scopeTable, kind string, n labelNarrow, read, action scope.Set) ([]LabelChange, error) {
+func (p *PG) lockedRecompute(ctx context.Context, tx pgx.Tx, eng *label.Engine, tbl scopeTable, kind string, n labelNarrow, read, action scope.Set) ([]LabelChange, error) {
 	if err := lockAdvisory(ctx, tx, labelRecomputeKey); err != nil {
 		return nil, err
 	}
-	changes, err := p.labelDrift(ctx, tx, kind, n, read, action, true)
+	changes, err := p.labelDrift(ctx, tx, eng, kind, n, read, action, true)
 	if err != nil {
 		return nil, err
 	}
@@ -600,23 +605,27 @@ func writeLabelRecomputeAudit(ctx context.Context, tx pgx.Tx, actorID, entityKin
 // function that grows a subtree arm, and TestMovingALocationChangesNoLabelUnderIt
 // is the test that fails first.
 func (p *PG) cascadeLocationLabels(ctx context.Context, tx pgx.Tx, locationID string) error {
-	_, err := p.cascadeLocationLabelsScoped(ctx, tx, []string{locationID}, scope.Set{All: true}, scope.Set{All: true})
+	eng, err := p.labelEngine(ctx, tx)
+	if err != nil {
+		return err
+	}
+	_, err = p.cascadeLocationLabelsWith(ctx, tx, eng, []string{locationID}, scope.Set{All: true}, scope.Set{All: true})
 	return err
 }
 
-// cascadeLocationLabelsScoped is the same cascade over a SET of locations, and
-// with the scope the caller decides. The verb passes its operator's own scope
-// (their bulk gesture, their blast radius); a rename passes all-scope, because
-// there the cascade is not a query anyone asked for but the rest of a write
-// they already made.
-func (p *PG) cascadeLocationLabelsScoped(ctx context.Context, tx pgx.Tx, locationIDs []string, read, action scope.Set) ([]LabelChange, error) {
+// cascadeLocationLabelsWith is the same cascade over a SET of locations, with
+// the engine already resolved and with the scope the caller decides. The verb
+// passes its operator's own scope (their bulk gesture, their blast radius); a
+// rename passes all-scope, because there the cascade is not a query anyone
+// asked for but the rest of a write they already made.
+func (p *PG) cascadeLocationLabelsWith(ctx context.Context, tx pgx.Tx, eng *label.Engine, locationIDs []string, read, action scope.Set) ([]LabelChange, error) {
 	n := labelNarrow{locationIDs: locationIDs}
 	var out []LabelChange
 	for _, at := range []struct {
 		kind string
 		tbl  scopeTable
 	}{{"component", componentTable}, {"system", systemTable}} {
-		changes, err := p.lockedRecompute(ctx, tx, at.tbl, at.kind, n, read, action)
+		changes, err := p.lockedRecompute(ctx, tx, eng, at.tbl, at.kind, n, read, action)
 		if err != nil {
 			return nil, err
 		}
@@ -628,7 +637,11 @@ func (p *PG) cascadeLocationLabelsScoped(ctx context.Context, tx pgx.Tx, locatio
 // cascadeSystemMemberLabels restamps the components whose PRIMARY system is
 // this one, for a system whose type just changed.
 func (p *PG) cascadeSystemMemberLabels(ctx context.Context, tx pgx.Tx, systemID string) error {
-	_, err := p.lockedRecompute(ctx, tx, componentTable, "component",
+	eng, err := p.labelEngine(ctx, tx)
+	if err != nil {
+		return err
+	}
+	_, err = p.lockedRecompute(ctx, tx, eng, componentTable, "component",
 		labelNarrow{primarySystemID: &systemID}, scope.Set{All: true}, scope.Set{All: true})
 	return err
 }
@@ -640,7 +653,11 @@ func (p *PG) cascadeSystemMemberLabels(ctx context.Context, tx pgx.Tx, systemID 
 // all, and re-reading one to stamp it would be a second definition of the same
 // thing.
 func (p *PG) cascadeComponentLabel(ctx context.Context, tx pgx.Tx, componentID string) error {
-	_, err := p.lockedRecompute(ctx, tx, componentTable, "component",
+	eng, err := p.labelEngine(ctx, tx)
+	if err != nil {
+		return err
+	}
+	_, err = p.lockedRecompute(ctx, tx, eng, componentTable, "component",
 		labelNarrow{rowID: &componentID}, scope.Set{All: true}, scope.Set{All: true})
 	return err
 }
