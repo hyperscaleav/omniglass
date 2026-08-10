@@ -205,3 +205,76 @@ func TestAViewerCannotPreviewOrRecomputeLabels(t *testing.T) {
 		t.Fatalf("hq = %+v", loc)
 	}
 }
+
+// The apply is bounded by the caller's UPDATE scope, not only by their read
+// scope, and the two are wired to different grants rather than to one.
+//
+// It has its own test because the owner every other case here uses holds both
+// at "all", so a handler that passed the read scope twice would be
+// indistinguishable. That is not hypothetical: it is exactly the mutation that
+// survived the first pass of this file.
+func TestAnApplyIsBoundedByTheUpdateScopeNotTheReadScope(t *testing.T) {
+	c, tok, dsn, stop := recomputeHarness(t)
+	defer stop()
+	ctx := context.Background()
+
+	c.do(tok, http.MethodPost, "/locations",
+		map[string]any{"name": "hq", "location_type": "building"}, http.StatusCreated)
+	c.do(tok, http.MethodPost, "/locations",
+		map[string]any{"name": "room-a", "location_type": "room", "parent": "hq"}, http.StatusCreated)
+	c.do(tok, http.MethodPost, "/locations",
+		map[string]any{"name": "room-b", "location_type": "room", "parent": "hq"}, http.StatusCreated)
+	mine := decodePen(t, "mine", c.do(tok, http.MethodPost, "/components",
+		map[string]any{"name": "mine", "product": "samsung-qm55", "location": "room-a"}, http.StatusCreated))
+	theirs := decodePen(t, "theirs", c.do(tok, http.MethodPost, "/components",
+		map[string]any{"name": "theirs", "product": "samsung-qm55", "location": "room-b"}, http.StatusCreated))
+	_ = theirs
+
+	// A rule everything drifts against.
+	c.do(tok, http.MethodPatch, "/component-types/display",
+		map[string]any{"label_rule": "{{.LocationLabel}} {{.TypeName}}"}, http.StatusOK)
+
+	// Reads the whole estate, may update exactly one component.
+	mineID := decodeID(t, c.do(tok, http.MethodGet, "/components/mine", nil, http.StatusOK))
+	narrowTok := principalWithGrants(t, ctx, dsn, "narrow-writer", []grant{
+		{role: "viewer", scopeKind: "all"},
+		{role: "operator", scopeKind: "component", scopeID: mineID, scopeOp: "self"},
+	})
+
+	// The preview is the READ scope, so it sees both.
+	preview := decodeRecompute(t, "narrow preview", c.do(narrowTok, http.MethodPost, "/components:previewLabels", nil, http.StatusOK))
+	if preview.Count != 2 {
+		t.Fatalf("the preview lists %d rows, want both: it is bounded by the read scope: %+v", preview.Count, preview.Changed)
+	}
+
+	// The apply is the UPDATE scope, so it changes only one.
+	applied := decodeRecompute(t, "narrow apply", c.do(narrowTok, http.MethodPost, "/components:recomputeLabels", nil, http.StatusOK))
+	if applied.Count != 1 || applied.Changed[0].Name != "mine" {
+		t.Fatalf("the apply changed %+v, want only the one component in the caller's update scope", applied.Changed)
+	}
+	// Both were hand-named, so neither carries an ordinal and the shipped rule
+	// labelled them "Display". The one outside the update scope still does.
+	after := decodePen(t, "theirs after", c.do(tok, http.MethodGet, "/components/theirs", nil, http.StatusOK))
+	if after.DisplayName != "Display" {
+		t.Fatalf("a component outside the caller's update scope was restamped to %q", after.DisplayName)
+	}
+	mineAfter := decodePen(t, "mine after", c.do(tok, http.MethodGet, "/components/mine", nil, http.StatusOK))
+	if mineAfter.DisplayName != "room-a Display" {
+		t.Fatalf("the component inside the update scope reads %q, want %q: the apply must have done something, or the assertion above passes for the wrong reason", mineAfter.DisplayName, "room-a Display")
+	}
+	_ = mine
+}
+
+func decodeID(t *testing.T, raw []byte) string {
+	t.Helper()
+	var body struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		t.Fatalf("decode id: %v", err)
+	}
+	if body.ID == "" {
+		t.Fatalf("no id in %s", raw)
+	}
+	return body.ID
+}
