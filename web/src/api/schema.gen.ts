@@ -4920,6 +4920,44 @@ export interface components {
              */
             open_edit: string;
         };
+        LabelSettings: {
+            /**
+             * @description Words a generated label title-cases to a fixed form, whole-word and case-insensitive
+             * @default [
+             *       "AV",
+             *       "BYOD",
+             *       "DSP",
+             *       "EDID",
+             *       "HDBaseT",
+             *       "HDCP",
+             *       "HDMI",
+             *       "IP",
+             *       "IR",
+             *       "KVM",
+             *       "LAN",
+             *       "LCD",
+             *       "LED",
+             *       "MTR",
+             *       "NDI",
+             *       "NVR",
+             *       "OLED",
+             *       "PC",
+             *       "PoE",
+             *       "PTZ",
+             *       "RF",
+             *       "SDI",
+             *       "SIP",
+             *       "TV",
+             *       "UC",
+             *       "USB",
+             *       "VC",
+             *       "VLAN",
+             *       "4K",
+             *       "8K"
+             *     ]
+             */
+            acronyms: string[];
+        };
         ListAlarmsOutputBody: {
             /**
              * Format: uri
@@ -6313,6 +6351,7 @@ export interface components {
         };
         Settings: {
             keybindings: components["schemas"]["Keybindings"];
+            label: components["schemas"]["LabelSettings"];
             ui: components["schemas"]["UISettings"];
         };
         SettingsMeOutputBody: {

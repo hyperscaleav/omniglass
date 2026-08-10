@@ -2383,6 +2383,48 @@ components:
         - close_blade
         - command_palette
       type: object
+    LabelSettings:
+      additionalProperties: false
+      properties:
+        acronyms:
+          default:
+            - AV
+            - BYOD
+            - DSP
+            - EDID
+            - HDBaseT
+            - HDCP
+            - HDMI
+            - IP
+            - IR
+            - KVM
+            - LAN
+            - LCD
+            - LED
+            - MTR
+            - NDI
+            - NVR
+            - OLED
+            - PC
+            - PoE
+            - PTZ
+            - RF
+            - SDI
+            - SIP
+            - TV
+            - UC
+            - USB
+            - VC
+            - VLAN
+            - 4K
+            - 8K
+          description: Words a generated label title-cases to a fixed form, whole-word and case-insensitive
+          items:
+            type: string
+          type: array
+      required:
+        - acronyms
+      type: object
     ListAlarmsOutputBody:
       additionalProperties: false
       properties:
@@ -5010,11 +5052,14 @@ components:
       properties:
         keybindings:
           $ref: "#/components/schemas/Keybindings"
+        label:
+          $ref: "#/components/schemas/LabelSettings"
         ui:
           $ref: "#/components/schemas/UISettings"
       required:
         - ui
         - keybindings
+        - label
       type: object
     SettingsMeOutputBody:
       additionalProperties: false
