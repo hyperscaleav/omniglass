@@ -33,6 +33,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/config"
 	"github.com/hyperscaleav/omniglass/internal/migrate"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/storage/storagetest/querycount"
 	"github.com/jackc/pgx/v5"
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -253,6 +254,30 @@ func NewDB(t *testing.T) storage.Gateway {
 	}
 	t.Cleanup(gw.Close)
 	return gw
+}
+
+// NewCountingDB returns a Gateway backed by a fresh, migrated, isolated database
+// whose pool counts every statement it issues, together with the counter. This
+// is the seam a round-trip assertion on a gateway READ needs: the scoped read
+// paths query the pool directly (scopedList reaches for p.pool, and the exported
+// List methods take a scope.Set, not a querier), so a counter wrapped around
+// some argument would observe nothing at all and report a flat, fictional
+// number. See [querycount] for that hazard in full; it is the reason this
+// constructor exists rather than a wrapper.
+//
+// The counter is reset before it is returned, so the pool's own connectivity
+// ping is not charged to the first measurement. Reset it again between
+// measurements: it counts everything the gateway does, fixture writes included.
+func NewCountingDB(t *testing.T) (storage.Gateway, *querycount.Counter) {
+	t.Helper()
+	counter := querycount.New()
+	gw, err := storage.NewPG(context.Background(), NewDSN(t), storage.WithQueryTracer(counter))
+	if err != nil {
+		t.Fatalf("storage.NewPG (counting): %v", err)
+	}
+	t.Cleanup(gw.Close)
+	counter.Reset()
+	return gw, counter
 }
 
 func withDBName(dsn, db string) string {

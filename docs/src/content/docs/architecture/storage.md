@@ -253,6 +253,13 @@ The **Storage Gateway is the only door to the database** (no direct access, no P
 - **default**: Postgres for everything (samples, ground-truth records, views, registries). Postgres is **BYO today**.
 - **blobs**: opaque bytes (a firmware image, a config dump, a capture, later a large `log_line` body or a `collection.failed` raw payload) live in the content-addressed [blob store](/architecture/files/), a `blob.Store` seam behind the same gateway. The default **pgblobs** backend holds bytes inline in Postgres; a row references a blob by its `sha256`, never inline bytes.
 
+The gateway also accepts a **query tracer** (`storage.WithQueryTracer`), installed on the pool's
+connection config so it observes every statement the gateway issues, whichever method issued it.
+That whole-pool reach is the point: the read paths query the pool directly, so a wrapper around a
+call argument cannot see them. It is where an OpenTelemetry pgx tracer attaches, and it is the seam
+the test harness counts round trips through, which is how a LIST is held to a constant number of
+queries rather than an N+1 ([counting round trips](/contributing/test-driven/#counting-round-trips-not-timing-them)).
+
 :::design[Embedded Postgres, tracked in #19]
 Embedded Postgres in the single binary replaces BYO for the all-in-one run mode; the data lane's
 persistence consumer and the record lane's CDC publisher (#430) target this one backend through the

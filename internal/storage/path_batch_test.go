@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/hyperscaleav/omniglass/internal/storage/storagetest/querycount"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -21,6 +21,12 @@ import (
 // which already routes this package through that harness, assigns it here
 // instead. Nothing outside the test binary can see it (the declaration lives
 // in a _test.go file).
+//
+// storagetest/querycount, imported below, is the same rule read the other way:
+// the counting primitive deliberately imports nothing of storage's (only pgx),
+// so it sits in its own package UNDER the harness rather than in it, and an
+// internal test file can consume it without the cycle the harness itself would
+// bring. That is why the counter lives one directory down (#650).
 var HarnessDSN func(t *testing.T) string
 
 // batchPathPool opens a pool on a fresh migrated database. Not boot-seeded:
@@ -232,32 +238,20 @@ func TestPathsOfMatchesPathOfRowForRow(t *testing.T) {
 	}
 }
 
-// countingQuerier counts the round trips an attach makes. querier is two
-// methods, so wrapping it is the whole measurement: nothing about the
-// database is faked, every call still runs against real Postgres.
-type countingQuerier struct {
-	inner  querier
-	nCalls int
-}
-
-func (c *countingQuerier) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
-	c.nCalls++
-	return c.inner.QueryRow(ctx, sql, args...)
-}
-
-func (c *countingQuerier) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
-	c.nCalls++
-	return c.inner.Query(ctx, sql, args...)
-}
-
 // countAttach runs one attach over vs and returns how many queries it cost.
+//
+// The counter is querycount's, not a local one (#650): the wrapper seam is
+// honest HERE, and only here, because an attach takes the querier it uses as a
+// parameter. The gateway's list paths do not, which is why their own count
+// assertions (list_cost_test.go) take the pool-tracer seam instead. That
+// distinction is the primitive's doc comment, and the reason it is a primitive.
 func countAttach[T any](t *testing.T, pool *pgxpool.Pool, attach func(context.Context, querier, []*T, bool) error, vs []*T) int {
 	t.Helper()
-	c := &countingQuerier{inner: pool}
-	if err := attach(context.Background(), c, vs, false); err != nil {
+	c := querycount.New()
+	if err := attach(context.Background(), c.Wrap(pool), vs, false); err != nil {
 		t.Fatalf("attach over %d rows: %v", len(vs), err)
 	}
-	return c.nCalls
+	return c.N()
 }
 
 // TestAttachPathsCostIsFlatInPageSize is the #643 defect itself, made
