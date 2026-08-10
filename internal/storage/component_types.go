@@ -147,19 +147,30 @@ func applyComponentTypeImage(ct ComponentType, image []byte) (ComponentType, err
 	if fields == nil {
 		return ct, nil
 	}
-	for _, f := range []struct {
-		key string
-		dst any
-	}{
-		{"display_name", &ct.DisplayName},
-		{"stem", &ct.Stem},
-		{"icon", &ct.Icon},
-		{"abbrev", &ct.Abbrev},
-		{"default_tags", &ct.DefaultTags},
-	} {
-		if err := shadowField(fields, f.key, f.dst); err != nil {
-			return ct, err
-		}
+	if v, ok, err := shadowValue[string](fields, "display_name"); err != nil {
+		return ct, err
+	} else if ok {
+		ct.DisplayName = v
+	}
+	if v, ok, err := shadowValue[*string](fields, "stem"); err != nil {
+		return ct, err
+	} else if ok {
+		ct.Stem = v
+	}
+	if v, ok, err := shadowValue[*string](fields, "icon"); err != nil {
+		return ct, err
+	} else if ok {
+		ct.Icon = v
+	}
+	if v, ok, err := shadowValue[*string](fields, "abbrev"); err != nil {
+		return ct, err
+	} else if ok {
+		ct.Abbrev = v
+	}
+	if v, ok, err := shadowValue[[]string](fields, "default_tags"); err != nil {
+		return ct, err
+	} else if ok {
+		ct.DefaultTags = v
 	}
 	ct.DefaultTags = normalizeComponentTypeTags(ct.DefaultTags)
 	return ct, nil

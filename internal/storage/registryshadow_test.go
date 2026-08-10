@@ -72,13 +72,30 @@ func TestShadowOverlayDistinguishesAbsentFromNull(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := applyComponentTypeImage(official, []byte(tc.image))
+			// A fresh official row per case, and the overlay must not touch it.
+			// encoding/json writes THROUGH a non-nil pointer, so an overlay that
+			// decoded into the official row's own *string would rewrite the
+			// string every reader of that row shares. Reusing one row across
+			// the cases would hide exactly that: each case would compare
+			// against an expectation already corrupted the same way.
+			in := official
+			in.Stem, in.Icon, in.Abbrev = strPtr(*official.Stem), strPtr(*official.Icon), strPtr(*official.Abbrev)
+			in.DefaultTags = append([]string(nil), official.DefaultTags...)
+
+			got, err := applyComponentTypeImage(in, []byte(tc.image))
 			if err != nil {
 				t.Fatalf("applyComponentTypeImage: %v", err)
 			}
 			want := tc.want(official)
 			if !sameComponentType(got, want) {
 				t.Fatalf("overlay = %s, want %s", showComponentType(got), showComponentType(want))
+			}
+			if *in.Stem != *official.Stem || *in.Icon != *official.Icon || *in.Abbrev != *official.Abbrev {
+				t.Fatalf("the overlay wrote through the official row's pointers: stem/icon/abbrev now %q/%q/%q, want %q/%q/%q",
+					*in.Stem, *in.Icon, *in.Abbrev, *official.Stem, *official.Icon, *official.Abbrev)
+			}
+			if len(in.DefaultTags) != len(official.DefaultTags) || (len(in.DefaultTags) > 0 && in.DefaultTags[0] != official.DefaultTags[0]) {
+				t.Fatalf("the overlay wrote through the official row's tag slice: %v, want %v", in.DefaultTags, official.DefaultTags)
 			}
 		})
 	}

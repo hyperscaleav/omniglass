@@ -103,15 +103,25 @@ func shadowFields(image []byte) (map[string]json.RawMessage, error) {
 	return fields, nil
 }
 
-// shadowField decodes one key of a shadow image into dst, leaving dst untouched
-// when the image does not carry that key.
-func shadowField(fields map[string]json.RawMessage, key string, dst any) error {
+// shadowValue reads one key of a shadow image, reporting whether the image
+// carries it at all so the caller can leave the official value in place when it
+// does not.
+//
+// It decodes into a FRESH T rather than into the official row's field, which
+// matters more than it looks: encoding/json unmarshals into an existing non-nil
+// pointer by writing through it, so decoding a shadow's stem straight into the
+// official row's *string would rewrite the string the official row itself
+// points at. Every read shares that row, so the overlay would leak across
+// callers. Decoding fresh and assigning keeps the official values immutable,
+// which is the whole premise of the fork.
+func shadowValue[T any](fields map[string]json.RawMessage, key string) (T, bool, error) {
+	var v T
 	raw, ok := fields[key]
 	if !ok {
-		return nil
+		return v, false, nil
 	}
-	if err := json.Unmarshal(raw, dst); err != nil {
-		return fmt.Errorf("storage: decode shadow field %q: %w", key, err)
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return v, false, fmt.Errorf("storage: decode shadow field %q: %w", key, err)
 	}
-	return nil
+	return v, true, nil
 }
