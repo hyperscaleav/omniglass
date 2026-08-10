@@ -208,6 +208,11 @@ catalog: {
     product_id: uuid {constraint: foreign_key}
     property_type_id: uuid {constraint: foreign_key}
   }
+  registry_shadow: {
+    shape: sql_table
+    registry: text {constraint: primary_key}
+    row_id: uuid {constraint: primary_key}
+  }
   standard: {
     shape: sql_table
     id: uuid {constraint: primary_key}

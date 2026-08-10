@@ -24,6 +24,7 @@ type componentTypeWire struct {
 	Abbrev      string   `json:"abbrev"`
 	DefaultTags []string `json:"default_tags"`
 	Official    bool     `json:"official"`
+	Forked      bool     `json:"forked"`
 	ParentID    string   `json:"parent_id"`
 	Parent      string   `json:"parent"`
 }
@@ -31,9 +32,8 @@ type componentTypeWire struct {
 // TestComponentTypesAPI drives the component_type registry over HTTP: list
 // shows the seeded tree with parent links (a child's parent id AND name), a
 // viewer creates nothing (403), an admin (owner) creates a custom child under
-// an existing root (mic), the seeded official rows are read-only like every
-// other registry, and delete refuses an official row and a row still parenting
-// another. Skipped under -short.
+// an existing root (mic), and delete refuses an official row and a row still
+// parenting another. Skipped under -short.
 func TestComponentTypesAPI(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -129,10 +129,10 @@ func TestComponentTypesAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPatch, "/component-types/custom-mic",
 		map[string]any{"display_name": "Custom Mic Pro"}, http.StatusOK)
 
-	// The seeded official row (mic) is read-only: 422 on patch, and delete
-	// refuses it too (still official, independent of its children).
-	c.do(ownerTok, http.MethodPatch, "/component-types/mic",
-		map[string]any{"display_name": "X"}, http.StatusUnprocessableEntity)
+	// The seeded official row (mic) is not writable but is no longer a dead
+	// end: a patch forks it (#655, ADR-0095), covered end to end by
+	// TestComponentTypeForkAndRestoreAPI below. Delete still refuses it (still
+	// official, independent of its children and of any fork).
 	c.do(ownerTok, http.MethodDelete, "/component-types/mic", nil, http.StatusUnprocessableEntity)
 
 	// A row still parenting another cannot be deleted (409): custom-mic has no
@@ -182,4 +182,112 @@ func TestComponentTypeStemRejectsBadNames(t *testing.T) {
 	// The same guard applies to an update of an existing row.
 	c.do(ownerTok, http.MethodPatch, "/component-types/stem-ok",
 		map[string]any{"stem": "also bad"}, http.StatusUnprocessableEntity)
+}
+
+// TestComponentTypeForkAndRestoreAPI drives #655 over HTTP: patching a shipped
+// row forks it under the SAME id, every read (by name and by uuid, list and
+// blade alike) returns the operator's version with no namespace anywhere in
+// the address, the shipped row is still shipped, `:restore` puts the shipped
+// values back, and a caller who cannot update cannot fork.
+func TestComponentTypeForkAndRestoreAPI(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ownerTok := bootstrapOwnerTok(t, ctx, gw)
+
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	find := func(tok, name string) componentTypeWire {
+		out := c.do(tok, http.MethodGet, "/component-types", nil, http.StatusOK)
+		var body struct {
+			ComponentTypes []componentTypeWire `json:"component_types"`
+		}
+		if err := json.Unmarshal(out, &body); err != nil {
+			t.Fatalf("decode list: %v", err)
+		}
+		var hits []componentTypeWire
+		for _, r := range body.ComponentTypes {
+			if r.Name == name {
+				hits = append(hits, r)
+			}
+		}
+		if len(hits) != 1 {
+			t.Fatalf("%q appears %d times in the list, want exactly 1 (a fork is an overlay, not a second row)", name, len(hits))
+		}
+		return hits[0]
+	}
+
+	shipped := find(ownerTok, "mic")
+	if !shipped.Official || shipped.Forked {
+		t.Fatalf("mic = official:%v forked:%v, want shipped and unforked", shipped.Official, shipped.Forked)
+	}
+
+	// A viewer holds component_type:read but not :update, so they cannot fork
+	// a row they could not have written either.
+	viewerTok := principalWithGrants(t, ctx, dsn, "fork-viewer", []grant{{role: "viewer", scopeKind: "all"}})
+	c.do(viewerTok, http.MethodPatch, "/component-types/mic",
+		map[string]any{"display_name": "Viewer Mic"}, http.StatusForbidden)
+	c.do(viewerTok, http.MethodPost, "/component-types/mic:restore", nil, http.StatusForbidden)
+	if again := find(ownerTok, "mic"); again.Forked || again.DisplayName != shipped.DisplayName {
+		t.Fatalf("mic = %+v after the refused viewer patch, want untouched", again)
+	}
+
+	// The owner's patch forks: 200, the same id, the operator's values, and
+	// forked=true beside a still-true official.
+	var forked componentTypeWire
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/component-types/mic",
+		map[string]any{"display_name": "House Microphone", "abbrev": "hm"}, http.StatusOK), &forked); err != nil {
+		t.Fatalf("decode fork: %v", err)
+	}
+	if forked.ID != shipped.ID {
+		t.Fatalf("forked id = %q, want the shipped id %q (a fork never re-addresses the row)", forked.ID, shipped.ID)
+	}
+	if !forked.Official || !forked.Forked {
+		t.Fatalf("forked = official:%v forked:%v, want both true (yours, overriding shipped)", forked.Official, forked.Forked)
+	}
+	if forked.DisplayName != "House Microphone" || forked.Abbrev != "hm" {
+		t.Fatalf("forked = %+v, want the operator's display_name and abbrev", forked)
+	}
+	if listed := find(ownerTok, "mic"); listed.DisplayName != "House Microphone" || !listed.Forked {
+		t.Fatalf("relisted mic = %+v, want the forked values", listed)
+	}
+
+	// Addressing by uuid resolves the same logical row: no namespace in the
+	// URL, no second handle for the operator's copy.
+	var byUUID componentTypeWire
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/component-types/"+shipped.ID,
+		map[string]any{"icon": "mic-house"}, http.StatusOK), &byUUID); err != nil {
+		t.Fatalf("decode fork by uuid: %v", err)
+	}
+	if byUUID.ID != shipped.ID || byUUID.DisplayName != "House Microphone" || byUUID.Icon != "mic-house" {
+		t.Fatalf("patch by uuid = %+v, want the same row carrying both edits", byUUID)
+	}
+
+	// Delete is still refused on a shipped row, forked or not.
+	c.do(ownerTok, http.MethodDelete, "/component-types/mic", nil, http.StatusUnprocessableEntity)
+
+	// Restore discards the fork and the shipped values come back.
+	var restored componentTypeWire
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/component-types/mic:restore", nil, http.StatusOK), &restored); err != nil {
+		t.Fatalf("decode restore: %v", err)
+	}
+	if restored.Forked || restored.DisplayName != shipped.DisplayName || restored.Abbrev != shipped.Abbrev || restored.Icon != shipped.Icon {
+		t.Fatalf("restored = %+v, want the shipped row %+v unforked", restored, shipped)
+	}
+	if listed := find(ownerTok, "mic"); listed.Forked || listed.DisplayName != shipped.DisplayName {
+		t.Fatalf("relisted mic after restore = %+v, want the shipped values", listed)
+	}
+
+	// Restoring again has nothing to discard.
+	c.do(ownerTok, http.MethodPost, "/component-types/mic:restore", nil, http.StatusConflict)
+	c.do(ownerTok, http.MethodPost, "/component-types/no-such-type:restore", nil, http.StatusNotFound)
 }

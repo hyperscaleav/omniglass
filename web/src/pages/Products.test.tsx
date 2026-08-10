@@ -31,9 +31,9 @@ const seed: Product[] = [
 // internal/seed/component_types.yaml): display is a root with its own icon,
 // interactive-display a child that inherits it, touch-panel a sibling root.
 const componentTypes: ComponentType[] = [
-  { id: uuidFor("ct-display"), name: "display", display_name: "Display", official: true, stem: "display", abbrev: "fp", icon: "monitor", default_tags: [] },
-  { id: uuidFor("ct-interactive-display"), name: "interactive-display", display_name: "Interactive Display", official: true, parent: "display", parent_id: uuidFor("ct-display"), default_tags: [] },
-  { id: uuidFor("ct-touch-panel"), name: "touch-panel", display_name: "Touch Panel", official: true, stem: "panel", abbrev: "tp", icon: "touchpad", default_tags: [] },
+  { id: uuidFor("ct-display"), name: "display", display_name: "Display", official: true, forked: false, stem: "display", abbrev: "fp", icon: "monitor", default_tags: [] },
+  { id: uuidFor("ct-interactive-display"), name: "interactive-display", display_name: "Interactive Display", official: true, forked: false, parent: "display", parent_id: uuidFor("ct-display"), default_tags: [] },
+  { id: uuidFor("ct-touch-panel"), name: "touch-panel", display_name: "Touch Panel", official: true, forked: false, stem: "panel", abbrev: "tp", icon: "touchpad", default_tags: [] },
 ];
 
 const vendors: Vendor[] = [

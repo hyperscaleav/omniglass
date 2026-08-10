@@ -464,6 +464,9 @@ func (UnimplementedGateway) CreateComponentType(context.Context, string, Compone
 func (UnimplementedGateway) UpdateComponentType(context.Context, string, string, ComponentTypePatch) (*ComponentType, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) RestoreComponentType(context.Context, string, string) (*ComponentType, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) DeleteComponentType(context.Context, string, string) error { return nil }
 func (UnimplementedGateway) ResolveTypeFacts(context.Context, uuid.UUID) (string, string, string, []string, error) {
 	return "", "", "", nil, nil

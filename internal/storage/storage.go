@@ -305,7 +305,10 @@ type Gateway interface {
 	ListComponentTypes(ctx context.Context) ([]ComponentType, error)
 	GetComponentType(ctx context.Context, ref string) (*ComponentType, error)
 	CreateComponentType(ctx context.Context, actorID string, ct ComponentType) (*ComponentType, error)
+	// UpdateComponentType forks a shipped (official) row rather than writing
+	// it, and RestoreComponentType discards that fork (#655, ADR-0095).
 	UpdateComponentType(ctx context.Context, actorID, ref string, patch ComponentTypePatch) (*ComponentType, error)
+	RestoreComponentType(ctx context.Context, actorID, ref string) (*ComponentType, error)
 	DeleteComponentType(ctx context.Context, actorID, ref string) error
 	ResolveTypeFacts(ctx context.Context, id uuid.UUID) (stem, icon, abbrev string, tags []string, err error)
 	TypeIsWithin(ctx context.Context, id, ancestor uuid.UUID) (bool, error)

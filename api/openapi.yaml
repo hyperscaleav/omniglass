@@ -518,6 +518,9 @@ components:
             - "null"
         display_name:
           type: string
+        forked:
+          description: True when this shipped row carries changes of yours overriding it. Restore discards them
+          type: boolean
         icon:
           description: A glyph key; empty inherits the nearest ancestor's
           type: string
@@ -528,6 +531,7 @@ components:
           description: The name an operator reads and types; renameable
           type: string
         official:
+          description: "True for a row this release ships. A shipped row is never written by an operator: an edit forks it"
           type: boolean
         parent:
           description: The parent component_type's name, for display; absent for a root type
@@ -544,6 +548,7 @@ components:
         - display_name
         - default_tags
         - official
+        - forked
       type: object
     CreateCommandTypeInputBody:
       additionalProperties: false
@@ -6509,7 +6514,7 @@ paths:
       x-omniglass-permission: component_type:create
   /component-types/{id}:
     delete:
-      description: Deletes a custom component_type, refused if official (422) or still a parent of another component_type (409). Gated by component_type:delete.
+      description: "Deletes a custom component_type, refused if official (422, forked or not: a fork is an overlay, not ownership) or still a parent of another component_type (409). `:restore` is the only removal a shipped row admits, and it removes your fork, not the row. Gated by component_type:delete."
       operationId: delete-component-type
       parameters:
         - description: The component_type id
@@ -6531,7 +6536,7 @@ paths:
       summary: Delete a component type
       x-omniglass-permission: component_type:delete
     patch:
-      description: Patches a custom component_type's display_name, stem, icon, abbrev, or default_tags. Official types are read-only (422). Gated by component_type:update.
+      description: "Patches a component_type's display_name, stem, icon, abbrev, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update."
       operationId: update-component-type
       parameters:
         - in: path
@@ -6559,6 +6564,33 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update a component type
+      x-omniglass-permission: component_type:update
+  /component-types/{id}:restore:
+    post:
+      description: "Discards your fork of a shipped component_type, so reads return the values this release ships and later releases can improve them again. 409 when the row carries no fork of yours. Gated by component_type:update, the same permission that took the fork: restoring is undoing your own edit, not deleting a row."
+      operationId: restore-component-type
+      parameters:
+        - description: The component_type id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The component_type id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentTypeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Restore a component type's shipped values
       x-omniglass-permission: component_type:update
   /components:
     get:

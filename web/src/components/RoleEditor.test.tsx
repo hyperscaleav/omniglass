@@ -23,9 +23,9 @@ const declared: DeclaredRole[] = [
 ];
 
 const typeCatalog: ComponentType[] = [
-  { id: uuidFor("t-video-bar"), name: "video-bar", display_name: "Video Bar", official: true, default_tags: [] },
-  { id: uuidFor("t-display"), name: "display", display_name: "Display", official: true, default_tags: [] },
-  { id: uuidFor("t-mic"), name: "mic", display_name: "Mic", official: true, default_tags: [] },
+  { id: uuidFor("t-video-bar"), name: "video-bar", display_name: "Video Bar", official: true, forked: false, default_tags: [] },
+  { id: uuidFor("t-display"), name: "display", display_name: "Display", official: true, forked: false, default_tags: [] },
+  { id: uuidFor("t-mic"), name: "mic", display_name: "Mic", official: true, forked: false, default_tags: [] },
 ];
 
 const productCatalog: Product[] = [

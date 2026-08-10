@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CATALOG_GROUPS, CATALOG_STUB_PATHS, OFFICIAL_LOCK, registryLock, visibleGroups } from "./catalog";
+import { CATALOG_GROUPS, CATALOG_STUB_PATHS, OFFICIAL_LOCK, registryLock, registryOrigin, visibleGroups } from "./catalog";
 import { type Me } from "./auth";
 import { navByPath, routeTokens, STUBS } from "./nav";
 
@@ -128,6 +128,35 @@ describe("registryLock", () => {
 
   it("locks nothing while the row has not resolved", () => {
     expect(registryLock(undefined, viewer, "vendor")).toBeNull();
+  });
+
+  // A registry that has adopted the fork (#655, ADR-0095) opts in with
+  // forkable. Edit stops being flatly locked on a shipped row, because an edit
+  // there forks rather than writes, and is judged on update like any other row.
+  // Delete keeps the official sentence while the row is pristine (a shipped row
+  // is never deleted and there is nothing yet to discard) and unlocks once the
+  // row is forked, where the page puts Restore in that slot.
+  it("opens Edit on a shipped row for a fork-adopting registry, judged on update", () => {
+    expect(registryLock({ official: true }, owner, "component_type", { forkable: true }))
+      .toEqual({ edit: null, delete: OFFICIAL_LOCK });
+    expect(registryLock({ official: true }, viewer, "component_type", { forkable: true }))
+      .toEqual({ edit: "Requires component_type:update", delete: OFFICIAL_LOCK });
+  });
+
+  it("unlocks the destructive slot on a forked shipped row, for Restore", () => {
+    expect(registryLock({ official: true, forked: true }, owner, "component_type", { forkable: true }))
+      .toEqual({ edit: null, delete: null });
+  });
+
+  it("leaves a registry that has not adopted the fork flatly locked, forked flag or not", () => {
+    expect(registryLock({ official: true, forked: true }, owner, "vendor")).toBe(OFFICIAL_LOCK);
+  });
+
+  // The three-state origin a fork-adopting registry shows.
+  it("names the origin from the two wire booleans", () => {
+    expect(registryOrigin({ official: true, forked: false })).toBe("shipped");
+    expect(registryOrigin({ official: true, forked: true })).toBe("overridden");
+    expect(registryOrigin({ official: false, forked: false })).toBe("yours");
   });
 
   it("treats a row without an official flag (a tag) on the permission arm alone", () => {

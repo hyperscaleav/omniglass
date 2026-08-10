@@ -133,16 +133,41 @@ export const OFFICIAL_LOCK = "Official: ships with Omniglass and updates with it
 // lock; the body's live bindings render untouched). A row that has not
 // resolved locks nothing; a row with no official flag (a tag) is judged on
 // the permission arm alone.
+//
+// `forkable` is the opt-in for a registry that has adopted the fork (#655,
+// ADR-0095): an edit there does not write the shipped row, it stores the
+// operator's version over it, so Edit is live on a shipped row and judged on
+// the update permission like any other. Delete stays locked with the official
+// sentence, because a shipped row still cannot be deleted (restoring, which
+// discards the operator's version, is the footer's destructive action
+// instead). Default false: the registries that have not adopted yet keep the
+// flat read-only verdict, which is still the truth for them.
 export function registryLock(
-  row: { official?: boolean } | undefined,
+  row: { official?: boolean; forked?: boolean } | undefined,
   me: Me | null | undefined,
   resource: string,
+  opts?: { forkable?: boolean },
 ): BladeLock {
   if (!row) return null;
-  if (row.official) return OFFICIAL_LOCK;
   const edit = can(me, resource, "update") ? null : `Requires ${resource}:update`;
+  if (row.official) {
+    if (!opts?.forkable) return OFFICIAL_LOCK;
+    // A shipped row is never deleted, so the destructive slot is greyed with
+    // the official sentence while the row is still pristine: there is neither
+    // a row to remove nor changes to discard. Once forked it unlocks, because
+    // the page puts Restore (discard the fork) in that slot.
+    return { edit, delete: row.forked ? null : OFFICIAL_LOCK };
+  }
   const del = can(me, resource, "delete") ? null : `Requires ${resource}:delete`;
   return edit == null && del == null ? null : { edit, delete: del };
+}
+
+// registryOrigin is the three-state provenance a fork-adopting registry shows:
+// a row this release ships, a row the operator made, or a shipped row the
+// operator has overridden. Two booleans on the wire, one word on the page.
+export function registryOrigin(row: { official?: boolean; forked?: boolean }): "shipped" | "yours" | "overridden" {
+  if (!row.official) return "yours";
+  return row.forked ? "overridden" : "shipped";
 }
 
 // The Overview landing's route, the subrail's first entry.

@@ -25,7 +25,8 @@ type componentTypeBody struct {
 	Icon        string   `json:"icon,omitempty" doc:"A glyph key; empty inherits the nearest ancestor's"`
 	Abbrev      string   `json:"abbrev,omitempty" doc:"A compact form of display_name; empty inherits the nearest ancestor's"`
 	DefaultTags []string `json:"default_tags" doc:"Tags every instance of this type (or a descendant that does not override) starts with"`
-	Official    bool     `json:"official"`
+	Official    bool     `json:"official" doc:"True for a row this release ships. A shipped row is never written by an operator: an edit forks it"`
+	Forked      bool     `json:"forked" doc:"True when this shipped row carries changes of yours overriding it. Restore discards them"`
 	ParentID    *string  `json:"parent_id,omitempty" doc:"The parent component_type's id, the canonical handle; absent for a root type"`
 	Parent      *string  `json:"parent,omitempty" doc:"The parent component_type's name, for display; absent for a root type"`
 }
@@ -34,7 +35,7 @@ func toComponentTypeBody(ct *storage.ComponentType, parentName *string) componen
 	b := componentTypeBody{
 		ID: ct.ID.String(), Name: ct.Name, DisplayName: ct.DisplayName,
 		Stem: derefStr(ct.Stem), Icon: derefStr(ct.Icon), Abbrev: derefStr(ct.Abbrev),
-		DefaultTags: ct.DefaultTags, Official: ct.Official,
+		DefaultTags: ct.DefaultTags, Official: ct.Official, Forked: ct.Forked,
 	}
 	if ct.ParentID != nil {
 		pid := ct.ParentID.String()
@@ -185,7 +186,7 @@ func registerComponentTypeRoutes(api huma.API, a *authenticator, gw storage.Gate
 		Method:      http.MethodPatch,
 		Path:        "/component-types/{id}",
 		Summary:     "Update a component type",
-		Description: "Patches a custom component_type's display_name, stem, icon, abbrev, or default_tags. Official types are read-only (422). Gated by component_type:update.",
+		Description: "Patches a component_type's display_name, stem, icon, abbrev, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update.",
 	}, "component_type", "update"), func(ctx context.Context, in *updateComponentTypeInput) (*componentTypeOutput, error) {
 		ct, err := gw.UpdateComponentType(ctx, actorID(ctx), in.ID, storage.ComponentTypePatch{
 			DisplayName: in.Body.DisplayName, Stem: in.Body.Stem, Icon: in.Body.Icon, Abbrev: in.Body.Abbrev,
@@ -204,12 +205,32 @@ func registerComponentTypeRoutes(api huma.API, a *authenticator, gw storage.Gate
 	})
 
 	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "restore-component-type",
+		Method:      http.MethodPost,
+		Path:        "/component-types/{id}:restore",
+		Summary:     "Restore a component type's shipped values",
+		Description: "Discards your fork of a shipped component_type, so reads return the values this release ships and later releases can improve them again. 409 when the row carries no fork of yours. Gated by component_type:update, the same permission that took the fork: restoring is undoing your own edit, not deleting a row.",
+	}, "component_type", "update"), func(ctx context.Context, in *componentTypePathInput) (*componentTypeOutput, error) {
+		ct, err := gw.RestoreComponentType(ctx, actorID(ctx), in.ID)
+		if err != nil {
+			return nil, mapComponentTypeErr(err)
+		}
+		var parentName *string
+		if ct.ParentID != nil {
+			if parent, err := gw.GetComponentType(ctx, ct.ParentID.String()); err == nil {
+				parentName = &parent.Name
+			}
+		}
+		return &componentTypeOutput{Body: toComponentTypeBody(ct, parentName)}, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-component-type",
 		Method:        http.MethodDelete,
 		Path:          "/component-types/{id}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a component type",
-		Description:   "Deletes a custom component_type, refused if official (422) or still a parent of another component_type (409). Gated by component_type:delete.",
+		Description:   "Deletes a custom component_type, refused if official (422, forked or not: a fork is an overlay, not ownership) or still a parent of another component_type (409). `:restore` is the only removal a shipped row admits, and it removes your fork, not the row. Gated by component_type:delete.",
 	}, "component_type", "delete"), func(ctx context.Context, in *componentTypePathInput) (*struct{}, error) {
 		if err := gw.DeleteComponentType(ctx, actorID(ctx), in.ID); err != nil {
 			return nil, mapComponentTypeErr(err)
